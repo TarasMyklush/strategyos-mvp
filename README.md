@@ -16,6 +16,7 @@ Production-shaped MVP scaffold for the StrategyOS finance-agent POC.
 - Knowledge Graph Builder agent with a local strong-node graph export.
 - LangGraph-compatible workflow adapter with a local fallback when LangGraph is not installed.
 - Case file, working-capital memo, Q&A transcript, knowledge graph, and ping-pong audit log generation.
+- Cloud-agnostic configuration, API, S3-compatible artifact sync, Postgres schema, Docker image, and Docker Compose deployment scaffold.
 
 ## Run
 
@@ -35,3 +36,5 @@ outputs/StrategyOS MVP Run/
 ## Production Notes
 
 The local fallback workflow is deliberately deterministic. For production, install LangGraph and wire the same nodes through the LangGraph adapter with a durable checkpointer and human approval interrupt.
+
+Cloud deployment assets are under `deploy/`. The default deployment target is a Hetzner VM or any Docker host using Postgres, Redis, Neo4j, MinIO/S3-compatible storage, Caddy, and Linux OCR via Tesseract.

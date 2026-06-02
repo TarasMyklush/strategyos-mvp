@@ -1,0 +1,9 @@
+.git
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
+dist/
+build/
+*.egg-info/
+deploy/.env

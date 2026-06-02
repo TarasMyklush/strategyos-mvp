@@ -1,0 +1,114 @@
+services:
+  strategyos-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://strategyos:strategyos@postgres:5432/strategyos}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-strategyos_neo4j}
+      STRATEGYOS_OBJECT_ENDPOINT: ${STRATEGYOS_OBJECT_ENDPOINT:-http://minio:9000}
+      STRATEGYOS_OBJECT_BUCKET: ${STRATEGYOS_OBJECT_BUCKET:-strategyos}
+      STRATEGYOS_OBJECT_ACCESS_KEY_ID: ${STRATEGYOS_OBJECT_ACCESS_KEY_ID:-strategyos}
+      STRATEGYOS_OBJECT_SECRET_ACCESS_KEY: ${STRATEGYOS_OBJECT_SECRET_ACCESS_KEY:-strategyos_minio_password}
+      STRATEGYOS_OBJECT_REGION: ${STRATEGYOS_OBJECT_REGION:-us-east-1}
+      STRATEGYOS_OBJECT_PREFIX: ${STRATEGYOS_OBJECT_PREFIX:-strategyos}
+      STRATEGYOS_OBJECT_FORCE_PATH_STYLE: ${STRATEGYOS_OBJECT_FORCE_PATH_STYLE:-true}
+      STRATEGYOS_SYNC_ARTIFACTS: ${STRATEGYOS_SYNC_ARTIFACTS:-true}
+      STRATEGYOS_OCR_ENGINE: ${STRATEGYOS_OCR_ENGINE:-tesseract}
+      STRATEGYOS_SOURCE_DATASET: ${STRATEGYOS_SOURCE_DATASET:-/app/workspace/source_dataset}
+      STRATEGYOS_AGENT_INPUT_DIR: ${STRATEGYOS_AGENT_INPUT_DIR:-/app/workspace/agent_input}
+      STRATEGYOS_EVALUATION_DIR: ${STRATEGYOS_EVALUATION_DIR:-/app/workspace/evaluation}
+      STRATEGYOS_RUN_DIR: ${STRATEGYOS_RUN_DIR:-/app/workspace/outputs/latest}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_started
+      minio-create-bucket:
+        condition: service_completed_successfully
+    volumes:
+      - strategyos-workspace:/app/workspace
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-strategyos}
+      POSTGRES_USER: ${POSTGRES_USER:-strategyos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strategyos}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U strategyos -d strategyos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-strategyos_neo4j}
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1G
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-strategyos}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-strategyos_minio_password}
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  minio-create-bucket:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-strategyos} ${MINIO_ROOT_PASSWORD:-strategyos_minio_password}; do sleep 2; done;
+      mc mb --ignore-existing local/${STRATEGYOS_OBJECT_BUCKET:-strategyos};
+      mc anonymous set none local/${STRATEGYOS_OBJECT_BUCKET:-strategyos};
+      "
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - strategyos-api
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+volumes:
+  strategyos-workspace:
+  postgres-data:
+  redis-data:
+  neo4j-data:
+  neo4j-logs:
+  minio-data:
+  caddy-data:
+  caddy-config:

@@ -7,6 +7,8 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from .config import CONFIG
+
 
 TOOLS_DIR = Path(__file__).resolve().parent / "tools"
 MACOS_VISION_SCRIPT = TOOLS_DIR / "macos_vision_ocr.swift"
@@ -57,17 +59,36 @@ def ocr_empty_pdf_pages(pdf_path: Path, pages: list[str]) -> tuple[list[str], di
                 status["pages"].append(asdict(result))
         OCR_CACHE[cache_key] = (list(updated), deepcopy(status))
         return updated, status
+    if status["engine"] == "tesseract":
+        updated = list(pages)
+        with tempfile.TemporaryDirectory(prefix="strategyos_ocr_") as tmp:
+            tmp_dir = Path(tmp)
+            rendered = render_pdf_pages(pdf_path, tmp_dir)
+            for page_no in empty_pages:
+                image_path = rendered.get(page_no)
+                if image_path is None:
+                    result = OcrPageResult(page_no, "failed", "tesseract", "", "PDF page render missing.")
+                else:
+                    result = run_tesseract_ocr(image_path, page_no)
+                    if result.text.strip():
+                        updated[page_no - 1] = result.text
+                status["pages"].append(asdict(result))
+        OCR_CACHE[cache_key] = (list(updated), deepcopy(status))
+        return updated, status
     status["blocked_reason"] = f"Unsupported OCR engine: {status['engine']}"
     OCR_CACHE[cache_key] = (list(pages), deepcopy(status))
     return pages, status
 
 
 def detect_ocr_engine() -> str | None:
-    if shutil.which("swift") and shutil.which("pdftoppm") and MACOS_VISION_SCRIPT.exists():
-        return "macos_vision"
-    if shutil.which("tesseract") and shutil.which("pdftoppm"):
+    requested = CONFIG.ocr_engine
+    if requested in {"none", "off", "disabled"}:
+        return None
+    if requested in {"tesseract", "auto"} and shutil.which("tesseract") and shutil.which("pdftoppm"):
         return "tesseract"
-    if shutil.which("ocrmypdf"):
+    if requested in {"macos_vision", "vision", "auto"} and shutil.which("swift") and shutil.which("pdftoppm") and MACOS_VISION_SCRIPT.exists():
+        return "macos_vision"
+    if requested in {"ocrmypdf", "auto"} and shutil.which("ocrmypdf"):
         return "ocrmypdf"
     return None
 
@@ -106,3 +127,21 @@ def run_macos_vision_ocr(image_path: Path, page_no: int) -> OcrPageResult:
     if completed.returncode != 0:
         return OcrPageResult(page_no, "failed", "macos_vision", text, completed.stderr.strip())
     return OcrPageResult(page_no, "ok" if text else "empty", "macos_vision", text, completed.stderr.strip())
+
+
+def run_tesseract_ocr(image_path: Path, page_no: int) -> OcrPageResult:
+    try:
+        completed = subprocess.run(
+            ["tesseract", str(image_path), "stdout", "-l", "eng", "--psm", "6"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=90,
+        )
+    except Exception as exc:  # pragma: no cover - defensive subprocess guard
+        return OcrPageResult(page_no, "failed", "tesseract", "", str(exc))
+    text = completed.stdout.strip()
+    if completed.returncode != 0:
+        return OcrPageResult(page_no, "failed", "tesseract", text, completed.stderr.strip())
+    return OcrPageResult(page_no, "ok" if text else "empty", "tesseract", text, completed.stderr.strip())

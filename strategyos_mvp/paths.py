@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .config import CONFIG, PACKAGE_ROOT
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-WORKSPACE_ROOT = PACKAGE_ROOT.parent
-POC_ROOT = WORKSPACE_ROOT / "strategy os" / "StrategyOS POC"
-SOURCE_DATASET = POC_ROOT / "01_Synthetic_Dataset"
-OUTPUT_ROOT = WORKSPACE_ROOT / "outputs"
-DEFAULT_RUN_DIR = OUTPUT_ROOT / "StrategyOS MVP Run"
-AGENT_INPUT_DIR = OUTPUT_ROOT / "StrategyOS Agent Input"
-EVALUATION_DIR = OUTPUT_ROOT / "StrategyOS Evaluation"
-
+WORKSPACE_ROOT: Path = CONFIG.workspace_root
+POC_ROOT: Path = CONFIG.poc_root
+SOURCE_DATASET: Path = CONFIG.source_dataset
+OUTPUT_ROOT: Path = CONFIG.output_root
+DEFAULT_RUN_DIR: Path = CONFIG.default_run_dir
+AGENT_INPUT_DIR: Path = CONFIG.agent_input_dir
+EVALUATION_DIR: Path = CONFIG.evaluation_dir

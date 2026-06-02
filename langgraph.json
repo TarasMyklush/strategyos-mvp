@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "strategyos": "./strategyos_mvp/workflow.py:build_workflow"
+  },
+  "env": ".env"
+}
