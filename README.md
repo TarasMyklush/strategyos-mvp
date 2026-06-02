@@ -7,6 +7,8 @@ Production-shaped MVP scaffold for the StrategyOS finance-agent POC.
 - Sanitized `agent_input` preparation.
 - Human-only evaluation answer-key separation.
 - Source hash manifest.
+- Citation resolver and citation audit.
+- Data-quality and OCR gap report.
 - Structured ingestion for AP, AR, GL, trial balance, master data, POs, and treasury workbook.
 - PDF/text evidence extraction with citation IDs.
 - Deterministic finance skills for planted leakage classes.

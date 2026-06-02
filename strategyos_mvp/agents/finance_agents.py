@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ..citation_resolver import save_citation_audit
 from ..ingestion import DataBundle
 from ..knowledge_graph import build_knowledge_graph, save_knowledge_graph
 from ..models import AuditEvent, Finding
+from ..quality import build_data_quality_report, save_data_quality_report
 from ..skills.finance_controls import compute_working_capital_drifts, run_all_finance_skills
 
 
@@ -47,6 +49,16 @@ class KnowledgeGraphAgent:
     def build(self, bundle: DataBundle, findings: list[Finding], run_dir: Path) -> Path:
         graph = build_knowledge_graph(bundle, findings)
         return save_knowledge_graph(graph, run_dir / "StrategyOS Knowledge Graph.json")
+
+
+class EvidenceQAAgent:
+    name = "Evidence QA"
+
+    def write_reports(self, bundle: DataBundle, findings: list[Finding], run_dir: Path) -> dict[str, Path]:
+        report = build_data_quality_report(bundle, findings)
+        artifacts = save_data_quality_report(report, run_dir)
+        artifacts["citation_audit"] = save_citation_audit(bundle, findings, run_dir / "StrategyOS Citation Audit.json")
+        return artifacts
 
 
 class CaseFileWriter:

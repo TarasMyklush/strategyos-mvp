@@ -1,3 +1,3 @@
-from .finance_agents import CaseFileWriter, FinanceAnalystAgent, FinanceAuditorAgent, KnowledgeGraphAgent
+from .finance_agents import CaseFileWriter, EvidenceQAAgent, FinanceAnalystAgent, FinanceAuditorAgent, KnowledgeGraphAgent
 
-__all__ = ["FinanceAnalystAgent", "FinanceAuditorAgent", "KnowledgeGraphAgent", "CaseFileWriter"]
+__all__ = ["FinanceAnalystAgent", "FinanceAuditorAgent", "EvidenceQAAgent", "KnowledgeGraphAgent", "CaseFileWriter"]
