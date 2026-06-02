@@ -27,3 +27,12 @@ def test_findings_have_minimum_shape():
     assert all(f.title for f in findings)
     assert sum(f.recoverable_sar for f in findings) > 600_000
 
+
+def test_fx_finding_uses_ocr_bank_statement_when_available():
+    bundle = load_dataset(SOURCE_DATASET)
+    findings = run_all_finance_skills(bundle)
+    fx = next(f for f in findings if f.pattern_type == "fx_hedge_unapplied")
+    status = bundle.evidence.ocr_status.get("01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf")
+    if not status or any(page.get("status") != "ok" for page in status.get("pages", [])):
+        return
+    assert any(c.source_path == "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf" for c in fx.citations)

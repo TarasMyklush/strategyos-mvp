@@ -382,6 +382,10 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     invoice_pdf = rel_invoice_pdf("BordeauxWines", bundle)
     if invoice_pdf:
         citations.append(bundle.evidence.citation(invoice_pdf, "PDF EUR invoice", bundle.evidence.pdf_excerpt(invoice_pdf, [str(target.Invoice_ID)])))
+    bank_rel = "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf"
+    bank_excerpt = bundle.evidence.pdf_excerpt(bank_rel, ["Bordeaux Wines", "89,400.00", "4.2100"])
+    if bank_excerpt:
+        citations.append(bundle.evidence.citation(bank_rel, "OCR bank statement settlement row", bank_excerpt))
     email_rel = "06_Email_Correspondence/Email_2_BordeauxWines_Payment_May_2026.txt"
     if email_rel in bundle.evidence.manifest:
         text = (bundle.dataset_root / email_rel).read_text(encoding="utf-8", errors="ignore")
@@ -485,4 +489,3 @@ def compute_working_capital_drifts(bundle: DataBundle) -> list[dict]:
                     }
                 )
     return sorted(signals, key=lambda x: abs(x["drift_days"]), reverse=True)[:3]
-

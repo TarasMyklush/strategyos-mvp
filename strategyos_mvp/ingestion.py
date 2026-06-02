@@ -82,9 +82,16 @@ def check_quality(bundle: DataBundle) -> list[DataQualityIssue]:
         missing = [c for c in cols if c not in frames[name].columns]
         if missing:
             issues.append(DataQualityIssue("critical", name, f"Missing required columns: {missing}"))
-    if "EmiratesNBD_EUR_Jan-Jun_2026.pdf" in " ".join(bundle.evidence.pdf_text.keys()):
-        for rel, pages in bundle.evidence.pdf_text.items():
-            if "EmiratesNBD_EUR_Jan-Jun_2026.pdf" in rel and any(not p.strip() for p in pages[:2]):
-                issues.append(DataQualityIssue("warning", rel, "First pages have no extractable text; OCR required."))
+    for rel, status in bundle.evidence.ocr_status.items():
+        failed_pages = [
+            page
+            for page in status.get("pages", [])
+            if page.get("status") not in {"ok"}
+        ]
+        if status.get("blocked_reason"):
+            issues.append(DataQualityIssue("warning", rel, status["blocked_reason"]))
+        elif failed_pages:
+            issues.append(DataQualityIssue("warning", rel, f"OCR attempted but unresolved pages remain: {failed_pages}"))
+        else:
+            issues.append(DataQualityIssue("info", rel, f"OCR completed with {status.get('engine')} for pages {status.get('empty_pages')}."))
     return issues
-

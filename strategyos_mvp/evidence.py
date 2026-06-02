@@ -10,6 +10,7 @@ from typing import Iterable
 from pypdf import PdfReader
 
 from .models import Citation
+from .ocr import ocr_empty_pdf_pages
 
 
 IGNORED_NAMES = {".DS_Store"}
@@ -20,11 +21,13 @@ class EvidenceStore:
     dataset_root: Path
     manifest: dict[str, dict]
     pdf_text: dict[str, list[str]]
+    ocr_status: dict[str, dict]
 
     @classmethod
     def build(cls, dataset_root: Path) -> "EvidenceStore":
         manifest: dict[str, dict] = {}
         pdf_text: dict[str, list[str]] = {}
+        ocr_status: dict[str, dict] = {}
         ingested_at = datetime.now(UTC).isoformat()
         for path in iter_source_files(dataset_root):
             rel = str(path.relative_to(dataset_root))
@@ -37,8 +40,12 @@ class EvidenceStore:
                 "ingested_at": ingested_at,
             }
             if path.suffix.lower() == ".pdf":
-                pdf_text[rel] = extract_pdf_pages(path)
-        return cls(dataset_root=dataset_root, manifest=manifest, pdf_text=pdf_text)
+                pages = extract_pdf_pages(path)
+                pages, status = ocr_empty_pdf_pages(path, pages)
+                pdf_text[rel] = pages
+                if status["required"]:
+                    ocr_status[rel] = status
+        return cls(dataset_root=dataset_root, manifest=manifest, pdf_text=pdf_text, ocr_status=ocr_status)
 
     def hash_for(self, rel_path: str) -> str | None:
         return self.manifest.get(rel_path, {}).get("sha256")

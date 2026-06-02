@@ -24,6 +24,7 @@ def build_data_quality_report(bundle: DataBundle, findings: list[Finding]) -> di
         "structured_sources": structured_sources,
         "pdf_sources": pdf_sources,
         "ocr_required": [item for item in pdf_sources if item["needs_ocr"]],
+        "ocr_completed": [item for item in pdf_sources if item["ocr_used"] and not item["needs_ocr"]],
         "quality_issues": [asdict(issue) for issue in bundle.quality_issues],
         "citation_summary": {
             "citation_count": len(citation_records),
@@ -61,7 +62,8 @@ def render_data_quality_report(report: dict[str, Any]) -> str:
         f"- Manifest file count: {report['manifest_file_count']}",
         f"- Citation resolved: {report['citation_summary']['resolved_count']} of {report['citation_summary']['citation_count']}",
         f"- Citation hash matches: {report['citation_summary']['hash_match_count']} of {report['citation_summary']['citation_count']}",
-        f"- OCR required sources: {len(report['ocr_required'])}",
+        f"- OCR completed sources: {len(report['ocr_completed'])}",
+        f"- OCR still required sources: {len(report['ocr_required'])}",
         "",
         "## Structured Sources",
         "",
@@ -70,7 +72,12 @@ def render_data_quality_report(report: dict[str, Any]) -> str:
         lines.append(f"- {source['name']}: {source['rows']} rows, {source['columns']} columns")
     lines.extend(["", "## OCR / PDF Extraction", ""])
     for source in report["pdf_sources"]:
-        marker = "OCR REQUIRED" if source["needs_ocr"] else "text extracted"
+        if source["needs_ocr"]:
+            marker = "OCR STILL REQUIRED"
+        elif source["ocr_used"]:
+            marker = f"OCR completed ({source['ocr_engine']})"
+        else:
+            marker = "text extracted"
         lines.append(f"- {source['source_path']}: {marker}; pages={source['pages']}; empty_pages={source['empty_pages']}; chars={source['text_chars']}")
     if report["quality_issues"]:
         lines.extend(["", "## Quality Issues", ""])
@@ -109,6 +116,11 @@ def structured_source_summary(bundle: DataBundle) -> list[dict[str, Any]]:
 def pdf_source_summary(bundle: DataBundle) -> list[dict[str, Any]]:
     summary = []
     for rel_path, pages in sorted(bundle.evidence.pdf_text.items()):
+        ocr_status = bundle.evidence.ocr_status.get(rel_path, {})
+        unresolved_ocr = [
+            page for page in ocr_status.get("pages", [])
+            if page.get("status") != "ok"
+        ]
         text_chars = sum(len(page.strip()) for page in pages)
         empty_pages = sum(1 for page in pages if not page.strip())
         summary.append(
@@ -117,7 +129,10 @@ def pdf_source_summary(bundle: DataBundle) -> list[dict[str, Any]]:
                 "pages": len(pages),
                 "empty_pages": empty_pages,
                 "text_chars": text_chars,
-                "needs_ocr": bool(empty_pages or text_chars == 0),
+                "ocr_used": bool(ocr_status.get("required")),
+                "ocr_engine": ocr_status.get("engine"),
+                "ocr_status": ocr_status,
+                "needs_ocr": bool(ocr_status.get("blocked_reason") or unresolved_ocr or empty_pages or text_chars == 0),
             }
         )
     return summary

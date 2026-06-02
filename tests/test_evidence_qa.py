@@ -22,4 +22,9 @@ def test_quality_report_tracks_ocr_and_citation_health():
     report = build_data_quality_report(bundle, findings)
     assert report["citation_summary"]["citation_count"] > 0
     assert report["citation_summary"]["resolved_count"] > 0
-    assert any("EmiratesNBD_EUR_Jan-Jun_2026.pdf" in item["source_path"] for item in report["ocr_required"])
+    emirates = [
+        item for item in report["pdf_sources"]
+        if "EmiratesNBD_EUR_Jan-Jun_2026.pdf" in item["source_path"]
+    ]
+    assert emirates
+    assert emirates[0]["ocr_used"] or emirates[0]["needs_ocr"]
