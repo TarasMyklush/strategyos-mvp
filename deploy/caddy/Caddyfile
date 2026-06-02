@@ -1,4 +1,4 @@
-:80 {
+{$STRATEGYOS_SITE_ADDRESS} {
     encode gzip
     reverse_proxy strategyos-api:8000
 }

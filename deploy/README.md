@@ -51,3 +51,44 @@ curl -X POST http://localhost/runs \
 - Add upload API and source-pack validation.
 - Load `StrategyOS Knowledge Graph.json` into Neo4j with constraints and indexes.
 - Add CI/CD and smoke tests for `/health`, `/runs`, artifact sync, and citation audit.
+
+## Repeatable Hetzner Deployment Scripts
+
+Generate a local env file:
+
+```bash
+deploy/scripts/generate_env.sh
+```
+
+Bootstrap a clean Ubuntu VM:
+
+```bash
+TARGET_HOST=root@YOUR_SERVER_IP deploy/scripts/bootstrap_hetzner.sh
+```
+
+Deploy the stack:
+
+```bash
+TARGET_HOST=root@YOUR_SERVER_IP deploy/scripts/deploy_stack.sh
+```
+
+Sync the synthetic source dataset into the Docker workspace volume:
+
+```bash
+TARGET_HOST=root@YOUR_SERVER_IP \
+SOURCE_DATASET="/Users/taras/Desktop/Taras/sp soft/Enterprise OS/strategy os/StrategyOS POC/01_Synthetic_Dataset" \
+deploy/scripts/sync_source_dataset.sh
+```
+
+Check health and run the workflow:
+
+```bash
+TARGET_HOST=root@YOUR_SERVER_IP deploy/scripts/check_health.sh
+TARGET_HOST=root@YOUR_SERVER_IP deploy/scripts/run_remote_workflow.sh
+```
+
+Rollback to the latest pre-deploy backup:
+
+```bash
+TARGET_HOST=root@YOUR_SERVER_IP deploy/scripts/rollback_stack.sh
+```

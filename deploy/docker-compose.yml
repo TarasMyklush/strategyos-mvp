@@ -1,3 +1,5 @@
+name: strategyos
+
 services:
   strategyos-api:
     build:
@@ -94,6 +96,8 @@ services:
     image: caddy:2-alpine
     depends_on:
       - strategyos-api
+    environment:
+      STRATEGYOS_SITE_ADDRESS: ${STRATEGYOS_SITE_ADDRESS:-:80}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
