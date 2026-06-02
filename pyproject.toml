@@ -1,0 +1,18 @@
+[project]
+name = "strategyos-mvp"
+version = "0.1.0"
+description = "StrategyOS production-ready MVP scaffold for finance leakage discovery."
+requires-python = ">=3.11"
+dependencies = [
+  "pandas",
+  "openpyxl",
+  "pypdf",
+  "pydantic",
+  "reportlab",
+  "langgraph>=0.2; python_version >= '3.11'",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
