@@ -46,7 +46,13 @@ def run_strategyos_workflow(
         summary["object_store_uploads"] = uploaded
         summary["source_uploads"] = source_uploads
         summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    summary["state_store"] = persist_run_summary(summary)
+    summary["state_store"] = persist_run_summary(
+        summary,
+        bundle=result.get("bundle"),
+        findings=result.get("findings", []),
+        artifacts=result.get("artifacts", {}),
+        audit_events=result.get("audit_events", []),
+    )
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary
 

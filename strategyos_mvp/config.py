@@ -42,6 +42,9 @@ class ObjectStoreConfig:
 
 @dataclass(frozen=True)
 class StrategyOSConfig:
+    tenant_slug: str
+    tenant_name: str
+    source_system_name: str
     workspace_root: Path
     poc_root: Path
     source_dataset: Path
@@ -65,6 +68,9 @@ def load_config() -> StrategyOSConfig:
     poc_root = env_path("STRATEGYOS_POC_ROOT", workspace_root / "strategy os" / "StrategyOS POC")
     output_root = env_path("STRATEGYOS_OUTPUT_ROOT", workspace_root / "outputs")
     return StrategyOSConfig(
+        tenant_slug=env("STRATEGYOS_TENANT_SLUG", "local-poc") or "local-poc",
+        tenant_name=env("STRATEGYOS_TENANT_NAME", "StrategyOS Local POC") or "StrategyOS Local POC",
+        source_system_name=env("STRATEGYOS_SOURCE_SYSTEM_NAME", "Synthetic Finance Dataset") or "Synthetic Finance Dataset",
         workspace_root=workspace_root,
         poc_root=poc_root,
         source_dataset=env_path("STRATEGYOS_SOURCE_DATASET", poc_root / "01_Synthetic_Dataset"),

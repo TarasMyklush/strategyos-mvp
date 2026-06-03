@@ -15,6 +15,7 @@ except Exception as exc:  # pragma: no cover - optional cloud dependency
 from .config import CONFIG
 from .prepare_inputs import prepare_agent_input
 from .run_poc import run_strategyos_workflow
+from .state_store import data_management_status
 from .storage import object_store_status
 
 
@@ -42,6 +43,7 @@ def _status_label(value: bool) -> str:
 @app.get("/", response_class=HTMLResponse)
 def dashboard() -> str:
     latest = _latest_summary()
+    data_status = data_management_status()
     latest_html = (
         """
         <section class="panel empty">
@@ -80,6 +82,34 @@ def dashboard() -> str:
         </div>
         """
         for name, enabled in services
+    )
+    data_counts = data_status.get("counts", {}) if data_status.get("status") == "ready" else {}
+    data_status_html = (
+        f"""
+        <section class="panel">
+          <div class="panel-title">
+            <h2>Data Layer</h2>
+            <a href="/data/status">Status JSON</a>
+          </div>
+          <dl class="metrics compact">
+            <div><dt>Evidence</dt><dd>{html.escape(str(data_counts.get("evidence_documents", 0)))}</dd></div>
+            <div><dt>Finance Rows</dt><dd>{html.escape(str(data_counts.get("finance_entities", 0) + data_counts.get("finance_transactions", 0) + data_counts.get("finance_balances", 0)))}</dd></div>
+            <div><dt>Citations</dt><dd>{html.escape(str(data_counts.get("citations", 0)))}</dd></div>
+            <div><dt>KG Links</dt><dd>{html.escape(str(data_counts.get("kg_edges", 0)))}</dd></div>
+          </dl>
+          <p class="path">Tenant: {html.escape(str(data_status.get("tenant", CONFIG.tenant_slug)))}</p>
+        </section>
+        """
+        if data_status.get("status") == "ready"
+        else f"""
+        <section class="panel empty">
+          <div class="panel-title">
+            <h2>Data Layer</h2>
+            <a href="/data/status">Status JSON</a>
+          </div>
+          <p>{html.escape(str(data_status.get("reason", "Run the workflow once to populate the managed data layer.")))}</p>
+        </section>
+        """
     )
     return f"""
     <!doctype html>
@@ -151,6 +181,7 @@ def dashboard() -> str:
                 <a href="/docs">API Docs</a>
               </div>
             </section>
+            {data_status_html}
           </div>
         </main>
       </body>
@@ -190,6 +221,11 @@ def latest_run() -> dict[str, Any]:
     if summary is None:
         return {"status": "missing", "run_dir": str(CONFIG.default_run_dir)}
     return summary
+
+
+@app.get("/data/status")
+def data_status() -> dict[str, Any]:
+    return data_management_status()
 
 
 @app.post("/inputs/prepare")
