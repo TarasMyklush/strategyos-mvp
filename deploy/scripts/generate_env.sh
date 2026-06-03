@@ -11,16 +11,17 @@ fi
 
 cp "${EXAMPLE_FILE}" "${ENV_FILE}"
 
-replace_secret() {
+replace_value() {
   local key="$1"
-  local value
-  value="$(openssl rand -hex 24)"
+  local value="$2"
   sed -i.bak "s|^${key}=.*|${key}=${value}|" "${ENV_FILE}"
 }
 
-replace_secret "NEO4J_PASSWORD"
-replace_secret "STRATEGYOS_OBJECT_SECRET_ACCESS_KEY"
-replace_secret "MINIO_ROOT_PASSWORD"
+neo4j_password="$(openssl rand -hex 24)"
+object_password="$(openssl rand -hex 24)"
+replace_value "NEO4J_PASSWORD" "${neo4j_password}"
+replace_value "STRATEGYOS_OBJECT_SECRET_ACCESS_KEY" "${object_password}"
+replace_value "MINIO_ROOT_PASSWORD" "${object_password}"
 
 rm -f "${ENV_FILE}.bak"
 echo "Created ${ENV_FILE}. Review domains, object-store settings, and passwords before deployment."
