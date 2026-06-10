@@ -10,6 +10,11 @@ Production-shaped MVP scaffold for the StrategyOS finance-analysis POC, now cent
 - Citation resolver and citation audit.
 - Data-quality and OCR gap report.
 - Structured ingestion for AP, AR, GL, trial balance, master data, POs, and treasury workbook.
+- Folder/upload source-pack intake (`POST /source-packs`, `/source-packs/from-path`, `/source-packs/validate`) with content-based (filename-independent) role classification and per-task readiness.
+- Schema-tolerant ingestion: per-role column-alias contracts (`detector_contracts.py`) match differently-named real files and rename columns to canonical so detectors stay unchanged; roles can be discovered by columns/sheet-names.
+- Operator-confirm mapping gate: low-confidence role mappings block the run until confirmed via `POST /source-packs/confirm-mapping` (editable per-column UI).
+- True-skip partial runs (`allow_partial_source_pack`): absent roles load as empty canonical frames, dependent detectors are skipped and reported in `run_summary.json`; no synthetic baseline is ever injected.
+- Untrusted-input guarding (`prompt_injection.py`) and sensitive-ID pseudonymization (`sensitive_ids.py`).
 - PDF/text evidence extraction with citation IDs.
 - Deterministic finance skills for planted leakage classes.
 - Deterministic finance analysis and challenge-review stages.
@@ -50,9 +55,9 @@ Traceability source: `docs/flexible-invoice-architecture-plan.md`.
 - **Optional LLM review is a secondary path only.** If enabled later, it must stay behind the provider boundary, remain disabled by default, and never replace the deterministic evidence path.
 - **Generated Q&A is not a live chat product surface today.** The current MVP emits a precomputed transcript from run artifacts rather than an interactive conversational interface.
 
-- **Execution order now starts with source-pack intake, not invoice normalization.** The next MVP-critical tranche is folder/source-pack intake with recursive file registration, stable source ids, and filename-independent classification.
+- **Source-pack intake is implemented (2026-06-09/10).** Folder/upload intake with recursive file registration, stable source ids, and filename-independent classification is live (`source_pack.py`, `detector_contracts.py`); schema-tolerant column mapping, operator-confirm gating, and true-skip partial runs are in place. See `docs/flexible-invoice-architecture-plan.md` Phase 1 (now delivered).
 - **OCR stays inside StrategyOS and runs before document-role classification for scanned PDFs/images.** OCR is treated as evidence infrastructure, not as an external model-provider responsibility.
-- **Current manual dataset replacement remains a temporary demo path only.** It does not satisfy the new user-facing requirement that a user can choose a folder with arbitrary filenames and have StrategyOS process all supported files.
+- **A user can choose a folder with arbitrary filenames and have StrategyOS process all supported files.** Manual dataset replacement remains only as the legacy fixed-dataset convenience path.
 - **Canonical invoice work follows intake as an additive seam.** The next invoice-domain change is an optional canonical invoice-header collection in `DataBundle`, populated from the current AP workbook and qualifying scan-derived invoice sources without breaking current runs.
 - **Current finance controls, reviewer flow, and workflow orchestration stay unchanged in the first invoice tranche.** Consumer migration to canonical invoices is deferred until intake plus additive normalization are stable.
 - **Quality/reporting constraints are explicit.** Unknown or unsupported files must be reported, not dropped; missing task-critical source roles must be surfaced as clear task-readiness limits instead of silent failure.

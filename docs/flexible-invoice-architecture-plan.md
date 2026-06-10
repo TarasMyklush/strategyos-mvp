@@ -4,12 +4,12 @@
 
 This document is the controlling plan for invoice-path expansion in the current StrategyOS MVP. It is intentionally aligned to the repo's as-built implementation truth, the current canonical README/deployment guidance, and the active controlled-pilot readiness posture.
 
-Current status:
+Current status (updated 2026-06-10):
 
 - The product/runtime baseline is broader than invoice work: protected API, governed human review, Postgres-backed run state, Neo4j sync, Qdrant retrieval, MinIO artifact storage, and recovery-proof evidence are already part of the local broader-testing baseline.
-- The invoice path is still workbook-native today.
-- Source-pack intake, filename-independent classification, and additive canonical invoice headers are not yet implemented in the repo.
-- Therefore this plan is an execution-order and blast-radius control document, not a claim that flexible-invoice architecture is already delivered.
+- **Phase 1 is delivered.** Source-pack intake (folder + upload), filename-independent content classification, OCR-before-classification, schema-tolerant column-alias mapping with operator confirmation, and true-skip partial runs are implemented (`source_pack.py`, `detector_contracts.py`, `ingestion.py`, `api.py`).
+- The invoice path remains workbook-native; the **additive canonical invoice-header collection (Phase 2)** is not yet implemented. Downstream consumer migration (Phase 3) is unstarted.
+- This plan remains the execution-order and blast-radius control document; Phases 2-3 below are still forward-looking.
 
 ## Current as-built StrategyOS architecture
 
