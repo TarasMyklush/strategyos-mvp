@@ -2590,13 +2590,27 @@ def _dashboard_html() -> str:
                 return fallback;
               }}
             }}
+            // /health/ready returns 503 (with a valid body) when posture is
+            // "failed" — that is degraded posture, not missing data. Recover the
+            // body so it does not trip the "Partial backend data" warning; the
+            // dedicated readiness banner reports posture instead.
+            async function readinessProbe() {{
+              try {{
+                return await requestJson('/health/ready');
+              }} catch (error) {{
+                if (error.status === 503 && error.payload && error.payload.status) {{
+                  return error.payload;
+                }}
+                throw error;
+              }}
+            }}
             const [queue, runs, latestRun, dataStatus, liveStatus, readyStatus, configStatus] = await Promise.all([
               guarded('Queue', requestJson('/reviewer/pending-reviews').then((payload) => payload.items || []), []),
               guarded('Runs index', requestJson('/reviewer/runs?limit=12').then((payload) => payload.items || []), []),
               guarded('Latest run', requestJson('/runs/latest'), null),
               guarded('Data status', requestJson('/data/status'), null),
               guarded('Live health', requestJson('/health/live'), null),
-              guarded('Readiness', requestJson('/health/ready'), null),
+              guarded('Readiness', readinessProbe(), null),
               guarded('Config', requestJson('/health/config'), null),
             ]);
             state.queue = queue;
@@ -3249,17 +3263,31 @@ def health_dependencies(
     return JSONResponse(content=payload, status_code=status_code)
 
 
+def _store_list_or_empty(
+    record: dict[str, Any] | list[dict[str, Any]] | None,
+) -> tuple[list[dict[str, Any]], str]:
+    """List endpoints tolerate an unconfigured local store.
+
+    When the state store is simply not configured (local-only mode, no
+    DATABASE_URL), there is genuinely nothing persisted to list, so we return an
+    empty list with a ``store_status`` of ``skipped`` rather than a 503. A real
+    store error still surfaces as 503 via _require_store_record.
+    """
+    if isinstance(record, dict) and record.get("status") in {"skipped", "missing"}:
+        return [], str(record.get("status"))
+    items = _require_store_record(record, missing_detail="Records are unavailable.")
+    assert isinstance(items, list)
+    return items, "ok"
+
+
 @app.get("/reviewer/pending-reviews")
 def pending_reviews(
     principal: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
-    items = _require_store_record(
-        state_store.list_pending_reviews(),
-        missing_detail="Pending reviews are unavailable.",
-    )
-    assert isinstance(items, list)
+    items, store_status = _store_list_or_empty(state_store.list_pending_reviews())
     return {
         "items": items,
+        "store_status": store_status,
         "viewer_role": principal.get("role"),
         "viewer_subject": principal.get("subject"),
     }
@@ -3270,13 +3298,10 @@ def reviewer_runs(
     limit: int = 12,
     principal: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
-    items = _require_store_record(
-        state_store.list_recent_runs(limit=limit),
-        missing_detail="Runs are unavailable.",
-    )
-    assert isinstance(items, list)
+    items, store_status = _store_list_or_empty(state_store.list_recent_runs(limit=limit))
     return {
         "items": items,
+        "store_status": store_status,
         "viewer_role": principal.get("role"),
         "viewer_subject": principal.get("subject"),
     }

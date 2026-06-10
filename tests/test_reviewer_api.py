@@ -105,6 +105,29 @@ def test_pending_reviews_returns_items_for_reviewer(monkeypatch):
         _restore_env(original)
 
 
+def test_reviewer_lists_tolerate_unconfigured_store(monkeypatch):
+    # Local-only mode (no DATABASE_URL): the dashboard list endpoints must return
+    # an empty list with store_status='skipped', NOT a 503 that would trip the
+    # "Partial backend data loaded" warning banner.
+    original, client = _client_with_auth_env()
+    try:
+        skipped = {"status": "skipped", "reason": "DATABASE_URL is not configured."}
+        monkeypatch.setattr(api_module.state_store, "list_pending_reviews", lambda: skipped)
+        monkeypatch.setattr(api_module.state_store, "list_recent_runs", lambda limit=12: skipped)
+
+        pending = client.get("/reviewer/pending-reviews", headers=_auth_header("reviewer-a111"))
+        runs = client.get("/reviewer/runs?limit=5", headers=_auth_header("reviewer-a111"))
+
+        assert pending.status_code == 200
+        assert pending.json()["items"] == []
+        assert pending.json()["store_status"] == "skipped"
+        assert runs.status_code == 200
+        assert runs.json()["items"] == []
+        assert runs.json()["store_status"] == "skipped"
+    finally:
+        _restore_env(original)
+
+
 def test_reviewer_runs_returns_recent_run_index(monkeypatch):
     original, client = _client_with_auth_env()
     try:
