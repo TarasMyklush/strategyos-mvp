@@ -1,0 +1,13 @@
+{
+  "expected_pattern_types": [
+    "auto_renewal_escalation",
+    "duplicate_payment",
+    "dormant_credit_balance",
+    "entity_resolution_duplicate",
+    "missed_early_pay_discount",
+    "fx_hedge_unapplied",
+    "price_variance",
+    "off_contract_single_approver"
+  ],
+  "expected_total_recoverable_sar": 794108.0
+}

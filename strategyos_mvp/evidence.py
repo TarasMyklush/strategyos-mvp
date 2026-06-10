@@ -11,6 +11,7 @@ from pypdf import PdfReader
 
 from .models import Citation
 from .ocr import ocr_empty_pdf_pages
+from .prompt_injection import guard_untrusted_document_text
 
 
 IGNORED_NAMES = {".DS_Store"}
@@ -51,10 +52,19 @@ class EvidenceStore:
         return self.manifest.get(rel_path, {}).get("sha256")
 
     def citation(self, rel_path: str, locator: str, excerpt: str = "") -> Citation:
+        guarded_excerpt = (
+            excerpt[:500]
+            if "BEGIN_UNTRUSTED_EVIDENCE" in excerpt
+            else guard_untrusted_document_text(
+                excerpt,
+                source_name=rel_path,
+                max_chars=500,
+            )["guarded_text"]
+        )
         return Citation(
             source_path=rel_path,
             locator=locator,
-            excerpt=excerpt[:500],
+            excerpt=guarded_excerpt,
             source_hash=self.hash_for(rel_path),
         )
 
@@ -65,7 +75,16 @@ class EvidenceStore:
             low = text.lower()
             if all(term in low for term in lowered_terms):
                 compact = " ".join(text.split())
-                return f"page {page_no}: {compact[:max_chars]}"
+                compact_low = compact.lower()
+                anchor_positions = [compact_low.find(term) for term in lowered_terms if term in compact_low]
+                anchor = max(anchor_positions) if anchor_positions else 0
+                start = max(anchor - 220, 0)
+                excerpt = f"page {page_no}: {compact[start:start + max_chars]}"
+                return guard_untrusted_document_text(
+                    excerpt,
+                    source_name=rel_path,
+                    max_chars=max_chars,
+                )["guarded_text"]
         return ""
 
     def save_manifest(self, output_path: Path) -> None:
@@ -99,3 +118,7 @@ def extract_pdf_pages(path: Path) -> list[str]:
 
 def row_locator(row_index: int, header_row: int = 1) -> str:
     return f"Excel row {row_index + header_row + 1}"
+
+
+def page_locator(page_number: int, label: str = "PDF page") -> str:
+    return f"{label} page {page_number}"

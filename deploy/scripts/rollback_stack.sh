@@ -17,6 +17,6 @@ if [ -d "${TARGET_DIR}/app" ]; then
 fi
 cp -a "${latest}" "${TARGET_DIR}/app"
 cd "${TARGET_DIR}/app"
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env --env-file deploy/.env.secrets up -d --build
 echo "Rolled back to ${latest}"
 REMOTE

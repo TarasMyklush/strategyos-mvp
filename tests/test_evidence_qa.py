@@ -1,8 +1,18 @@
-from strategyos_mvp.citation_resolver import resolve_citation
+from pathlib import Path
+
+import pytest
+
+from strategyos_mvp.citation_resolver import resolve_citation, validate_quantitative_claims
 from strategyos_mvp.ingestion import load_dataset
 from strategyos_mvp.paths import SOURCE_DATASET
 from strategyos_mvp.quality import build_data_quality_report
 from strategyos_mvp.skills.finance_controls import run_all_finance_skills
+
+
+OCR_CRITICAL_PDFS = (
+    "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf",
+    "08_Invoices/Invoice_AlRashidCo_V1187_INV-2026-1404.pdf",
+)
 
 
 def test_citation_resolver_resolves_structured_row():
@@ -22,9 +32,52 @@ def test_quality_report_tracks_ocr_and_citation_health():
     report = build_data_quality_report(bundle, findings)
     assert report["citation_summary"]["citation_count"] > 0
     assert report["citation_summary"]["resolved_count"] > 0
+    assert report["quantitative_claim_summary"]["failed_count"] == 0
     emirates = [
         item for item in report["pdf_sources"]
         if "EmiratesNBD_EUR_Jan-Jun_2026.pdf" in item["source_path"]
     ]
     assert emirates
     assert emirates[0]["ocr_used"] or emirates[0]["needs_ocr"]
+    assert emirates[0]["verification"]["verified"]
+    invoice = [
+        item for item in report["pdf_sources"]
+        if "Invoice_AlRashidCo_V1187_INV-2026-1404.pdf" in item["source_path"]
+    ]
+    assert invoice
+    assert invoice[0]["verification"]["verified"]
+
+
+@pytest.mark.parametrize("rel_path", OCR_CRITICAL_PDFS)
+def test_ocr_acceptance_harness_verifies_default_dataset_critical_pdfs(rel_path: str):
+    target = SOURCE_DATASET / Path(rel_path)
+    assert target.exists(), f"Missing OCR-critical file under default dataset path: {target}"
+
+    bundle = load_dataset(SOURCE_DATASET)
+    findings = run_all_finance_skills(bundle)
+    report = build_data_quality_report(bundle, findings)
+
+    pdf_source = next(item for item in report["pdf_sources"] if item["source_path"] == rel_path)
+    verification = pdf_source["verification"]
+    ocr_status = bundle.evidence.ocr_status.get(rel_path)
+
+    assert ocr_status, f"Expected OCR status for acceptance-critical PDF: {rel_path}"
+    assert ocr_status["required"]
+    assert pdf_source["ocr_used"]
+    assert not pdf_source["needs_ocr"]
+    assert verification and verification["verified"]
+    assert verification["excerpt"]
+    assert all(page["status"] == "ok" for page in ocr_status.get("pages", []))
+
+
+def test_quantitative_claim_validations_pass_for_repaired_findings():
+    bundle = load_dataset(SOURCE_DATASET)
+    findings = run_all_finance_skills(bundle)
+    validations = {
+        item["pattern_type"]: item
+        for item in validate_quantitative_claims(bundle, findings)
+        if item["pattern_type"] in {"duplicate_payment", "entity_resolution_duplicate", "price_variance"}
+    }
+    assert validations["duplicate_payment"]["status"] == "pass"
+    assert validations["entity_resolution_duplicate"]["status"] == "pass"
+    assert validations["price_variance"]["status"] == "pass"

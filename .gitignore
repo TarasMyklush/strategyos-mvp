@@ -6,4 +6,12 @@ dist/
 build/
 *.egg-info/
 deploy/.env
+deploy/.env.secrets
 deploy/.env.local
+.last_recovery_proof_dir
+artifacts/
+outputs/
+.venv/
+.phase8-venv/
+.tmp-venv/
+.ruff_cache/

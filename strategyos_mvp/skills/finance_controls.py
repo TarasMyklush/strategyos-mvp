@@ -2,19 +2,66 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Iterable
 
 import pandas as pd
 
-from ..evidence import row_locator
+from ..config import CONFIG
+from ..evidence import page_locator, row_locator
 from ..ingestion import DataBundle
 from ..models import Citation, Finding
+from ..sensitive_ids import tokenize_sensitive_identifier
+from ..quality import apply_fail_closed_evidence_policy
 
-USD_RATE = 3.75
+
+@dataclass(frozen=True)
+class DetectorMetadata:
+    name: str
+    pattern_type: str
+    required_roles: tuple[str, ...]
+    runner: Callable[[DataBundle], list[Finding]]
+
+
+DETECTOR_REGISTRY: list[DetectorMetadata] = []
+KNOWN_PATTERN_TYPES: frozenset[str] = frozenset()
+
+ROLE_PATH_DEFAULTS = {
+    "ap_ledger": "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
+    "ar_ledger": "02_ERP_Extracts/AR_Invoices_H1_2026.xlsx",
+    "gl_extract": "02_ERP_Extracts/GL_Extract_H1_2026.csv",
+    "vendor_master": "03_Master_Data/Vendor_Master.xlsx",
+    "purchase_orders": "05_Purchase_Orders/PO_Log_H1_2026.csv",
+    "cash_forecast": "07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx",
+}
+
+
+def register_detector(pattern_type: str, required_roles: Iterable[str]):
+    normalized_roles = tuple(str(role) for role in required_roles)
+
+    def decorator(runner: Callable[[DataBundle], list[Finding]]) -> Callable[[DataBundle], list[Finding]]:
+        global KNOWN_PATTERN_TYPES
+
+        metadata = DetectorMetadata(
+            name=runner.__name__,
+            pattern_type=str(pattern_type),
+            required_roles=normalized_roles,
+            runner=runner,
+        )
+        if any(existing.name == metadata.name for existing in DETECTOR_REGISTRY):
+            raise ValueError(f"Detector '{metadata.name}' is already registered.")
+        if any(existing.pattern_type == metadata.pattern_type for existing in DETECTOR_REGISTRY):
+            raise ValueError(f"Pattern type '{metadata.pattern_type}' is already registered.")
+        DETECTOR_REGISTRY.append(metadata)
+        KNOWN_PATTERN_TYPES = frozenset(detector.pattern_type for detector in DETECTOR_REGISTRY)
+        return runner
+
+    return decorator
 
 
 def usd(sar: float) -> float:
-    return round(float(sar) / USD_RATE, 2)
+    return round(float(sar) / CONFIG.finance_usd_rate, 2)
 
 
 def rel_invoice_pdf(name_contains: str, bundle: DataBundle) -> str | None:
@@ -37,26 +84,233 @@ def excel_citation(bundle: DataBundle, rel_path: str, row_index: int, excerpt: s
     return bundle.evidence.citation(rel_path, row_locator(row_index), excerpt)
 
 
+def pdf_citation(bundle: DataBundle, rel_path: str, label: str, terms: Iterable[str]) -> Citation | None:
+    excerpt = bundle.evidence.pdf_excerpt(rel_path, terms)
+    if not excerpt:
+        return None
+    page_match = re.search(r"page\s+(\d+)", excerpt, re.I)
+    locator = page_locator(int(page_match.group(1)), label) if page_match else label
+    return bundle.evidence.citation(rel_path, locator, excerpt)
+
+
+def pdf_citation_with_anchor(
+    bundle: DataBundle,
+    rel_path: str,
+    label: str,
+    required_terms: Iterable[str],
+    preferred_terms: Iterable[str] = (),
+    max_chars: int = 500,
+) -> Citation | None:
+    pages = bundle.evidence.pdf_text.get(rel_path, [])
+    lowered_required = [str(term).lower() for term in required_terms if str(term).strip()]
+    lowered_preferred = [str(term).lower() for term in preferred_terms if str(term).strip()]
+    for page_no, text in enumerate(pages, start=1):
+        compact = " ".join(text.split())
+        compact_low = compact.lower()
+        if not all(term in compact_low for term in lowered_required):
+            continue
+        anchor_term = next((term for term in lowered_preferred if term in compact_low), None)
+        if anchor_term is not None:
+            anchor = compact_low.rfind(anchor_term)
+        else:
+            anchor_positions = [compact_low.rfind(term) for term in lowered_required if term in compact_low]
+            anchor = max(anchor_positions) if anchor_positions else 0
+        start = max(anchor - 80, 0)
+        excerpt = f"page {page_no}: {compact[start:start + max_chars]}"
+        return bundle.evidence.citation(rel_path, page_locator(page_no, label), excerpt)
+    return None
+
+
+def unique_citations(citations: Iterable[Citation | None]) -> list[Citation]:
+    ordered: list[Citation] = []
+    seen: set[tuple[str, str, str, str | None]] = set()
+    for citation in citations:
+        if citation is None:
+            continue
+        key = (citation.source_path, citation.locator, citation.excerpt, citation.source_hash)
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(citation)
+    return ordered
+
+
+def first_matching_ap_row(bundle: DataBundle, vendor_id: str, po_id: str) -> tuple[int, pd.Series] | None:
+    matches = bundle.ap[
+        bundle.ap["Vendor_ID"].astype(str).eq(str(vendor_id))
+        & bundle.ap["PO_Reference"].astype(str).eq(str(po_id))
+    ].copy()
+    if matches.empty:
+        return None
+    row = matches.sort_values(["Payment_Date", "Invoice_Date"], na_position="last").iloc[0]
+    return int(row.name), row
+
+
+def bank_payment_leg_citations(
+    bundle: DataBundle,
+    invoice_id: str,
+    vendor_name: str,
+    amount: float,
+    payment_dates: Iterable[pd.Timestamp],
+    payment_memos: Iterable[str] = (),
+) -> list[Citation]:
+    amount_text = f"{amount:,.2f}"
+    paired_memos = list(payment_memos)
+    citations: list[Citation] = []
+    for position, payment_date in enumerate(payment_dates):
+        if pd.isna(payment_date):
+            continue
+        date_text = payment_date.date().isoformat()
+        memo_text = str(paired_memos[position]).strip() if position < len(paired_memos) else ""
+        memo_terms: list[str] = []
+        token_match = re.search(r"\b(?:WIRE|CHQ)-[A-Z0-9-]+\b", memo_text, re.I)
+        if token_match:
+            memo_terms.append(token_match.group(0))
+        if re.search(r"che(?:q|ck)", memo_text, re.I):
+            memo_terms.append("cheque payment")
+        elif memo_text:
+            memo_terms.append("wire payment")
+        if memo_text:
+            memo_terms.append(memo_text)
+        match: Citation | None = None
+        for rel in sorted(bundle.evidence.manifest):
+            if not rel.startswith("01_Bank_Statements/") or not rel.lower().endswith(".pdf"):
+                continue
+            match = None
+            for memo_term in memo_terms:
+                match = pdf_citation_with_anchor(
+                    bundle,
+                    rel,
+                    "bank statement payment leg",
+                    [date_text, memo_term, amount_text],
+                    [memo_term, date_text, invoice_id, vendor_name],
+                )
+                if match:
+                    break
+            if not match:
+                match = pdf_citation_with_anchor(
+                    bundle,
+                    rel,
+                    "bank statement payment leg",
+                    [date_text, invoice_id, amount_text],
+                    [date_text, invoice_id, vendor_name],
+                )
+            if not match and vendor_name:
+                match = pdf_citation_with_anchor(
+                    bundle,
+                    rel,
+                    "bank statement payment leg",
+                    [date_text, vendor_name, amount_text],
+                    [date_text, vendor_name],
+                )
+            if match:
+                citations.append(match)
+                break
+    return unique_citations(citations)
+
+
+def missing_ocr_required_evidence(bundle: DataBundle, rel_path: str, terms: Iterable[str]) -> bool:
+    status = bundle.evidence.ocr_status.get(rel_path, {})
+    if not status.get("required"):
+        return False
+    return not bool(bundle.evidence.pdf_excerpt(rel_path, terms))
+
+
+def _available_roles(bundle: DataBundle) -> set[str] | None:
+    available_roles = bundle.run_metadata.get("available_roles")
+    if not isinstance(available_roles, list):
+        return None
+    return {str(role) for role in available_roles}
+
+
+def _missing_required_roles(bundle: DataBundle, required_roles: Iterable[str]) -> list[str]:
+    available_roles = _available_roles(bundle)
+    if available_roles is None:
+        return []
+    return sorted(str(role) for role in required_roles if str(role) not in available_roles)
+
+
+def detector_registry() -> tuple[DetectorMetadata, ...]:
+    return tuple(DETECTOR_REGISTRY)
+
+
+def _role_source_path(bundle: DataBundle, role: str) -> str:
+    contract = bundle.data_contracts.get(role) if hasattr(bundle, "data_contracts") else None
+    if isinstance(contract, dict) and contract.get("relative_path"):
+        return str(contract["relative_path"])
+    return ROLE_PATH_DEFAULTS[role]
+
+
+def _first_manifest_entry(bundle: DataBundle, prefix: str, suffix: str = "") -> str | None:
+    for rel in sorted(bundle.evidence.manifest):
+        if rel.startswith(prefix) and (not suffix or rel.lower().endswith(suffix.lower())):
+            return rel
+    return None
+
+
+def _find_email_text_citation(bundle: DataBundle, *terms: str) -> Citation | None:
+    lowered_terms = [term.lower() for term in terms if term]
+    for rel in sorted(bundle.evidence.manifest):
+        if not rel.startswith("06_Email_Correspondence/"):
+            continue
+        text = (bundle.dataset_root / rel).read_text(encoding="utf-8", errors="ignore")
+        compact = " ".join(text.split())
+        lowered = compact.lower()
+        if lowered_terms and not all(term in lowered for term in lowered_terms):
+            continue
+        return bundle.evidence.citation(rel, "text file", compact[:400])
+    return None
+
+
+def _find_pdf_by_excerpt(bundle: DataBundle, prefix: str, label: str, terms: Iterable[str]) -> tuple[str, Citation] | None:
+    for rel in sorted(bundle.evidence.manifest):
+        if not rel.startswith(prefix) or not rel.lower().endswith(".pdf"):
+            continue
+        citation = pdf_citation(bundle, rel, label, terms)
+        if citation is not None:
+            return rel, citation
+    return None
+
+
 def run_all_finance_skills(bundle: DataBundle) -> list[Finding]:
-    skills = [
-        detect_duplicate_payments,
-        detect_entity_resolution_duplicates,
-        detect_off_contract_single_approver,
-        detect_price_variance,
-        detect_missed_early_pay_discounts,
-        detect_auto_renewal_escalation,
-        detect_fx_hedge_unapplied,
-        detect_dormant_credit_balance,
-    ]
     findings: list[Finding] = []
-    for skill in skills:
-        findings.extend(skill(bundle))
+    executed_detectors: list[dict[str, object]] = []
+    skipped_detectors: list[dict[str, object]] = []
+    for detector in detector_registry():
+        missing_roles = _missing_required_roles(bundle, detector.required_roles)
+        if missing_roles:
+            skipped_detectors.append(
+                {
+                    "detector": detector.name,
+                    "pattern_type": detector.pattern_type,
+                    "required_roles": list(detector.required_roles),
+                    "missing_roles": missing_roles,
+                    "reason": "Source pack did not provide all required structured roles for this detector.",
+                }
+            )
+            continue
+        detector_findings = detector.runner(bundle)
+        findings.extend(detector_findings)
+        executed_detectors.append(
+            {
+                "detector": detector.name,
+                "pattern_type": detector.pattern_type,
+                "required_roles": list(detector.required_roles),
+                "finding_count": len(detector_findings),
+            }
+        )
     findings.sort(key=lambda f: (f.recoverable_sar, f.leakage_sar), reverse=True)
     for i, finding in enumerate(findings, start=1):
         finding.finding_id = f"F-{i:03d}"
+    apply_fail_closed_evidence_policy(bundle, findings)
+    bundle.detector_report = {
+        "executed_detectors": executed_detectors,
+        "skipped_detectors": skipped_detectors,
+    }
     return findings
 
 
+@register_detector("duplicate_payment", ("ap_ledger",))
 def detect_duplicate_payments(bundle: DataBundle) -> list[Finding]:
     ap = bundle.ap[bundle.ap["Status"].eq("Paid")].copy()
     results: list[Finding] = []
@@ -75,15 +329,37 @@ def detect_duplicate_payments(bundle: DataBundle) -> list[Finding]:
         citations = [
             excel_citation(
                 bundle,
-                "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
+                _role_source_path(bundle, "ap_ledger"),
                 int(idx),
-                f"{invoice_id} paid {row.Amount_SAR:,.2f} on {row.Payment_Date.date() if pd.notna(row.Payment_Date) else 'n/a'}",
+                f"{invoice_id}; {row.PO_Reference}; paid {row.Amount_SAR:,.2f} on {row.Payment_Date.date().isoformat() if pd.notna(row.Payment_Date) else 'n/a'}; memo {row.Memo}",
             )
             for idx, row in rows.iterrows()
         ]
         pdf = rel_invoice_pdf(str(invoice_id).replace("INV-", "").replace("2026-", ""), bundle)
         if pdf:
-            citations.append(bundle.evidence.citation(pdf, "PDF invoice", bundle.evidence.pdf_excerpt(pdf, [str(invoice_id)])))
+            citations.append(pdf_citation(bundle, pdf, "invoice page", [str(invoice_id)]))
+        vendor_rows = bundle.vendors[bundle.vendors["Vendor_ID"].astype(str).eq(vendor_id)]
+        if not vendor_rows.empty:
+            vendor_row = vendor_rows.iloc[0]
+            citations.append(
+                excel_citation(
+                    bundle,
+                    _role_source_path(bundle, "vendor_master"),
+                    int(vendor_row.name),
+                    f"{vendor_row.Vendor_ID}; {vendor_row.Vendor_Name}; contract={vendor_row.Contract_Reference}",
+                )
+            )
+        citations.extend(
+            bank_payment_leg_citations(
+                bundle,
+                str(invoice_id),
+                vendor_name,
+                amount,
+                rows["Payment_Date"].tolist(),
+                rows["Memo"].astype(str).tolist(),
+            )
+        )
+        citations = unique_citations(citations)
         results.append(
             Finding(
                 finding_id="draft",
@@ -105,6 +381,7 @@ def detect_duplicate_payments(bundle: DataBundle) -> list[Finding]:
     return results
 
 
+@register_detector("entity_resolution_duplicate", ("ap_ledger", "vendor_master"))
 def detect_entity_resolution_duplicates(bundle: DataBundle) -> list[Finding]:
     vendors = bundle.vendors.copy()
     candidates: list[Finding] = []
@@ -118,24 +395,30 @@ def detect_entity_resolution_duplicates(bundle: DataBundle) -> list[Finding]:
                 continue
             paid = ap_rows[ap_rows["Status"].eq("Paid")]
             exposure = float(paid["Amount_SAR"].sum())
+            shared_token = tokenize_sensitive_identifier(key, field_name=field) or "none"
             citations = [
                 excel_citation(
                     bundle,
-                    "03_Master_Data/Vendor_Master.xlsx",
+                    _role_source_path(bundle, "vendor_master"),
                     int(idx),
-                    f"{row.Vendor_ID} {row.Vendor_Name}; {field}={key}; contract={row.Contract_Reference}",
+                    f"{row.Vendor_ID}; {row.Vendor_Name}; Tax_ID_token={tokenize_sensitive_identifier(row.Tax_ID, field_name='Tax_ID') or 'none'}; Bank_Account_token={tokenize_sensitive_identifier(row.Bank_Account, field_name='Bank_Account') or 'none'}; shared_{field.lower()}_token={shared_token}; contract={row.Contract_Reference}",
                 )
                 for idx, row in group.iterrows()
             ]
-            for idx, row in paid.head(3).iterrows():
+            for vendor_id in vendor_ids:
+                vendor_paid = paid[paid["Vendor_ID"].astype(str).eq(vendor_id)].sort_values("Payment_Date")
+                if vendor_paid.empty:
+                    continue
+                idx, row = int(vendor_paid.iloc[0].name), vendor_paid.iloc[0]
                 citations.append(
                     excel_citation(
                         bundle,
-                        "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
-                        int(idx),
-                        f"{row.Invoice_ID} {row.Vendor_ID} {row.Amount_SAR:,.2f}",
+                        _role_source_path(bundle, "ap_ledger"),
+                        idx,
+                        f"{row.Invoice_ID}; {row.Vendor_ID}; shared_{field.lower()}_token={shared_token}; paid SAR {row.Amount_SAR:,.2f}; memo {row.Memo}",
                     )
                 )
+            citations = unique_citations(citations)
             candidates.append(
                 Finding(
                     finding_id="draft",
@@ -151,7 +434,7 @@ def detect_entity_resolution_duplicates(bundle: DataBundle) -> list[Finding]:
                     rationale=f"Multiple active vendor records share the same {field}, creating duplicate-payment and contract-bypass risk.",
                     remediation="Vendor master owner should merge the duplicate records, freeze the non-contract vendor, and review paid invoices for duplicate or off-contract recovery.",
                     citations=citations,
-                    calculation={"identity_field": field, "identity_value": str(key), "paid_exposure_sar": exposure},
+                    calculation={"identity_field": field, "identity_value": shared_token, "paid_exposure_sar": exposure},
                 )
             )
     unique: dict[str, Finding] = {}
@@ -160,32 +443,30 @@ def detect_entity_resolution_duplicates(bundle: DataBundle) -> list[Finding]:
     return list(unique.values())
 
 
+@register_detector("off_contract_single_approver", ("ap_ledger", "vendor_master"))
 def detect_off_contract_single_approver(bundle: DataBundle) -> list[Finding]:
     vm = bundle.vendors[["Vendor_ID", "Contract_Reference"]]
     ap = bundle.ap.merge(vm, on="Vendor_ID", how="left")
     no_contract = ap[ap["Contract_Reference"].isna() & ap["PO_Reference"].isna() & ap["Status"].eq("Paid")]
     findings: list[Finding] = []
     for vendor_id, rows in no_contract.groupby("Vendor_ID"):
-        if len(rows) < 5:
+        if len(rows) < CONFIG.finance_off_contract_min_invoices:
             continue
         top_approver = rows["Approver_Email"].mode().iloc[0]
         approver_rows = rows[rows["Approver_Email"].eq(top_approver)]
-        if len(approver_rows) / len(rows) < 0.8:
+        if len(approver_rows) / len(rows) < CONFIG.finance_off_contract_single_approver_ratio:
             continue
         exposure = float(rows["Amount_SAR"].sum())
         vendor_name = str(rows.iloc[0]["Vendor_Name"])
         citations = []
         vm_rows = bundle.vendors[bundle.vendors["Vendor_ID"].astype(str).eq(str(vendor_id))]
         for idx, row in vm_rows.iterrows():
-            citations.append(excel_citation(bundle, "03_Master_Data/Vendor_Master.xlsx", int(idx), f"{row.Vendor_ID} has no contract reference."))
+            citations.append(excel_citation(bundle, _role_source_path(bundle, "vendor_master"), int(idx), f"{row.Vendor_ID} has no contract reference."))
         for idx, row in rows.head(3).iterrows():
-            citations.append(excel_citation(bundle, "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx", int(idx), f"{row.Invoice_ID}; no PO; approver {row.Approver_Email}; SAR {row.Amount_SAR:,.2f}"))
-        for rel in bundle.evidence.manifest:
-            if rel.startswith("06_Email_Correspondence/"):
-                text = (bundle.dataset_root / rel).read_text(encoding="utf-8", errors="ignore")
-                if vendor_name.split()[0].lower() in text.lower() or str(top_approver).split("@")[0].lower() in text.lower():
-                    citations.append(bundle.evidence.citation(rel, "text file", " ".join(text.split())[:400]))
-                    break
+            citations.append(excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(idx), f"{row.Invoice_ID}; no PO; approver {row.Approver_Email}; SAR {row.Amount_SAR:,.2f}"))
+        email_citation = _find_email_text_citation(bundle, vendor_name.split()[0], str(top_approver).split("@")[0])
+        if email_citation is not None:
+            citations.append(email_citation)
         findings.append(
             Finding(
                 finding_id="draft",
@@ -207,6 +488,7 @@ def detect_off_contract_single_approver(bundle: DataBundle) -> list[Finding]:
     return findings
 
 
+@register_detector("price_variance", ("ap_ledger", "purchase_orders"))
 def detect_price_variance(bundle: DataBundle) -> list[Finding]:
     po = bundle.po.copy()
     po["month"] = po["PO_Date"].dt.to_period("M")
@@ -221,19 +503,41 @@ def detect_price_variance(bundle: DataBundle) -> list[Finding]:
         high_rows = rows[rows["Unit_Price"].eq(max_price)]
         vendor_name = str(rows.iloc[0]["Vendor_Name"])
         excess = float(((high_rows["Unit_Price"] - min_price) * high_rows["Quantity"]).sum())
-        if excess < 10000:
+        if excess < CONFIG.finance_price_variance_min_excess_sar:
             continue
+        baseline_row = rows.sort_values(["Unit_Price", "PO_Date", "PO_ID"]).iloc[0]
+        high_row = high_rows.sort_values(["PO_Date", "PO_ID"]).iloc[0]
         citations = [
-            excel_citation(bundle, "05_Purchase_Orders/PO_Log_H1_2026.csv", int(idx), f"{row.PO_ID}; {sku}; {row.Quantity} units @ SAR {row.Unit_Price:,.2f}")
-            for idx, row in rows.iterrows()
+            excel_citation(
+                bundle,
+                _role_source_path(bundle, "purchase_orders"),
+                int(baseline_row.name),
+                f"{baseline_row.PO_ID}; {sku}; {baseline_row.Quantity} units @ SAR {baseline_row.Unit_Price:,.2f}; vendor {vendor_id}",
+            ),
+            excel_citation(
+                bundle,
+                _role_source_path(bundle, "purchase_orders"),
+                int(high_row.name),
+                f"{high_row.PO_ID}; {sku}; {high_row.Quantity} units @ SAR {high_row.Unit_Price:,.2f}; vendor {vendor_id}",
+            ),
         ]
         contract = rel_contract_pdf(vendor_name.split()[0], bundle)
         if contract:
-            citations.append(bundle.evidence.citation(contract, "PDF contract", bundle.evidence.pdf_excerpt(contract, [str(sku)])))
-        for po_id in rows["PO_ID"].astype(str):
-            inv = bundle.ap[bundle.ap["PO_Reference"].astype(str).eq(po_id)]
-            for idx, row in inv.head(1).iterrows():
-                citations.append(excel_citation(bundle, "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx", int(idx), f"{row.Invoice_ID}; {row.Memo}; SAR {row.Amount_SAR:,.2f}"))
+            citations.append(pdf_citation(bundle, contract, "contract price schedule", [str(sku), f"{min_price:.2f}"]))
+        for po_row in [baseline_row, high_row]:
+            match = first_matching_ap_row(bundle, str(vendor_id), str(po_row.PO_ID))
+            if match is None:
+                continue
+            idx, row = match
+            citations.append(
+                excel_citation(
+                    bundle,
+                    _role_source_path(bundle, "ap_ledger"),
+                    idx,
+                    f"{row.Invoice_ID}; {row.PO_Reference}; SAR {row.Amount_SAR:,.2f}; memo {row.Memo}",
+                )
+            )
+        citations = unique_citations(citations)
         findings.append(
             Finding(
                 finding_id="draft",
@@ -255,6 +559,7 @@ def detect_price_variance(bundle: DataBundle) -> list[Finding]:
     return findings
 
 
+@register_detector("missed_early_pay_discount", ("ap_ledger",))
 def detect_missed_early_pay_discounts(bundle: DataBundle) -> list[Finding]:
     discount_vendors = []
     for rel, pages in bundle.evidence.pdf_text.items():
@@ -273,16 +578,21 @@ def detect_missed_early_pay_discounts(bundle: DataBundle) -> list[Finding]:
             & bundle.ap["Payment_Date"].notna()
         ].copy()
         rows["days_to_pay"] = (rows["Payment_Date"] - rows["Invoice_Date"]).dt.days
-        missed = rows[(rows["days_to_pay"] > 10) & (rows["Memo"].astype(str).str.contains("2/10", na=False))]
+        missed = rows[
+            (rows["days_to_pay"] > CONFIG.finance_early_pay_discount_window_days)
+            & (rows["Memo"].astype(str).str.contains("2/10", na=False))
+        ]
         if missed.empty:
             continue
-        recoverable = float((missed["Amount_SAR"] * 0.02).sum())
+        recoverable = float(
+            (missed["Amount_SAR"] * CONFIG.finance_early_pay_discount_rate).sum()
+        )
         vendor_name = str(missed.iloc[0]["Vendor_Name"])
         citations = [
             bundle.evidence.citation(contract, "PDF contract payment terms", bundle.evidence.pdf_excerpt(contract, ["2/10", "net 30"]))
         ]
         for idx, row in missed.head(5).iterrows():
-            citations.append(excel_citation(bundle, "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx", int(idx), f"{row.Invoice_ID}; paid in {int(row.days_to_pay)} days; SAR {row.Amount_SAR:,.2f}; 2%={row.Amount_SAR*0.02:,.2f}"))
+            citations.append(excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(idx), f"{row.Invoice_ID}; paid in {int(row.days_to_pay)} days; SAR {row.Amount_SAR:,.2f}; {CONFIG.finance_early_pay_discount_rate:.0%}={row.Amount_SAR*CONFIG.finance_early_pay_discount_rate:,.2f}"))
         findings.append(
             Finding(
                 finding_id="draft",
@@ -298,12 +608,13 @@ def detect_missed_early_pay_discounts(bundle: DataBundle) -> list[Finding]:
                 rationale="Contract and invoice memos establish 2/10 net 30 terms, but invoices were paid after the discount window.",
                 remediation="Treasury/AP should prioritize these invoices in payment runs and negotiate any retroactive recovery with the vendor.",
                 citations=citations,
-                calculation={"discount_rate": 0.02, "invoice_count": len(missed), "recoverable_sar": recoverable},
+                calculation={"discount_rate": CONFIG.finance_early_pay_discount_rate, "invoice_count": len(missed), "recoverable_sar": recoverable},
             )
         )
     return findings
 
 
+@register_detector("auto_renewal_escalation", ("ap_ledger",))
 def detect_auto_renewal_escalation(bundle: DataBundle) -> list[Finding]:
     findings: list[Finding] = []
     for rel, pages in bundle.evidence.pdf_text.items():
@@ -331,7 +642,7 @@ def detect_auto_renewal_escalation(bundle: DataBundle) -> list[Finding]:
         if invoice_pdf:
             citations.append(bundle.evidence.citation(invoice_pdf, "PDF invoice rate basis", bundle.evidence.pdf_excerpt(invoice_pdf, ["base monthly fee", "2026 escalation"])))
         for idx, row in rows.head(3).iterrows():
-            citations.append(excel_citation(bundle, "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx", int(idx), f"{row.Invoice_ID}; SAR {row.Amount_SAR:,.2f}; base SAR {base_fee:,.2f}"))
+            citations.append(excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(idx), f"{row.Invoice_ID}; SAR {row.Amount_SAR:,.2f}; base SAR {base_fee:,.2f}"))
         findings.append(
             Finding(
                 finding_id="draft",
@@ -353,6 +664,7 @@ def detect_auto_renewal_escalation(bundle: DataBundle) -> list[Finding]:
     return findings
 
 
+@register_detector("fx_hedge_unapplied", ("ap_ledger", "cash_forecast"))
 def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     findings: list[Finding] = []
     hedges = bundle.cash_forecast.get("Hedges")
@@ -360,7 +672,7 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
         return findings
     hedge_text = " ".join(str(x) for x in hedges.fillna("").to_numpy().ravel())
     rate_values = [float(x) for x in re.findall(r"\b3\.\d{2,4}\b", hedge_text)]
-    hedge_rate = min(rate_values) if rate_values else 3.73
+    hedge_rate = min(rate_values) if rate_values else CONFIG.finance_fx_hedge_default_rate
     rows = bundle.ap[
         bundle.ap["Currency"].astype(str).str.upper().eq("EUR")
         & bundle.ap["Vendor_Name"].astype(str).str.contains("Bordeaux Wines", case=False, na=False)
@@ -376,20 +688,34 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     if exposure <= 0:
         return findings
     citations = [
-        excel_citation(bundle, "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx", int(target.name), f"{target.Invoice_ID}; EUR {target.Amount_Original_Currency:,.2f}; SAR {target.Amount_SAR:,.2f}; applied rate {target.applied_rate:.4f}"),
-        bundle.evidence.citation("07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx", "Hedges sheet", hedge_text[:400]),
+        excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(target.name), f"{target.Invoice_ID}; EUR {target.Amount_Original_Currency:,.2f}; SAR {target.Amount_SAR:,.2f}; applied rate {target.applied_rate:.4f}"),
+        bundle.evidence.citation(_role_source_path(bundle, "cash_forecast"), "Hedges sheet", hedge_text[:400]),
     ]
     invoice_pdf = rel_invoice_pdf("BordeauxWines", bundle)
     if invoice_pdf:
         citations.append(bundle.evidence.citation(invoice_pdf, "PDF EUR invoice", bundle.evidence.pdf_excerpt(invoice_pdf, [str(target.Invoice_ID)])))
     bank_rel = "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf"
-    bank_excerpt = bundle.evidence.pdf_excerpt(bank_rel, ["Bordeaux Wines", "89,400.00", "4.2100"])
-    if bank_excerpt:
-        citations.append(bundle.evidence.citation(bank_rel, "OCR bank statement settlement row", bank_excerpt))
-    email_rel = "06_Email_Correspondence/Email_2_BordeauxWines_Payment_May_2026.txt"
-    if email_rel in bundle.evidence.manifest:
-        text = (bundle.dataset_root / email_rel).read_text(encoding="utf-8", errors="ignore")
-        citations.append(bundle.evidence.citation(email_rel, "text file", " ".join(text.split())[:400]))
+    bank_match = None
+    missing_bank_ocr = False
+    if bank_rel in bundle.evidence.manifest:
+        missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, ["Bordeaux Wines", "89,400.00", "4.2100"])
+        bank_citation = pdf_citation(bundle, bank_rel, "OCR bank statement settlement row", ["Bordeaux Wines", "89,400.00", "4.2100"])
+        if bank_citation is not None:
+            bank_match = (bank_rel, bank_citation)
+    if bank_match is None:
+        bank_match = _find_pdf_by_excerpt(bundle, "01_Bank_Statements/", "OCR bank statement settlement row", ["Bordeaux Wines", "89,400.00", "4.2100"])
+    if bank_match is not None:
+        bank_rel, bank_citation = bank_match
+        citations.append(bank_citation)
+        if not missing_bank_ocr:
+            missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, ["Bordeaux Wines", "89,400.00", "4.2100"])
+    email_citation = _find_email_text_citation(bundle, "bordeaux wines")
+    if email_citation is not None:
+        citations.append(email_citation)
+    confidence = "LOW" if missing_bank_ocr else "HIGH" if len(citations) >= 3 else "MEDIUM"
+    rationale = "EUR invoice was settled at a rate above an available hedge rate in the treasury forecast."
+    if missing_bank_ocr:
+        rationale += " OCR-required bank statement evidence is missing, so the finding is downgraded pending verified OCR output."
     findings.append(
         Finding(
             finding_id="draft",
@@ -400,9 +726,9 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
             leakage_sar=exposure,
             recoverable_sar=exposure,
             recoverable_usd=usd(exposure),
-            confidence="HIGH" if len(citations) >= 3 else "MEDIUM",
+            confidence=confidence,
             classification="CASH (recoverable going-forward)",
-            rationale="EUR invoice was settled at a rate above an available hedge rate in the treasury forecast.",
+            rationale=rationale,
             remediation="Treasury and AP should enforce hedge application checks before EUR vendor settlement and include hedge IDs in payment approval.",
             citations=citations,
             calculation={"applied_rate": float(target.applied_rate), "hedge_rate": hedge_rate, "eur_amount": float(target.Amount_Original_Currency), "exposure_sar": exposure},
@@ -411,6 +737,7 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     return findings
 
 
+@register_detector("dormant_credit_balance", ("ap_ledger", "gl_extract"))
 def detect_dormant_credit_balance(bundle: DataBundle) -> list[Finding]:
     gl = bundle.gl.copy()
     candidates = gl[
@@ -430,13 +757,13 @@ def detect_dormant_credit_balance(bundle: DataBundle) -> list[Finding]:
         vendor_id = str(ap_rows.iloc[0]["Vendor_ID"])
         vendor_name = str(ap_rows.iloc[0]["Vendor_Name"])
         citations = [
-            bundle.evidence.citation("02_ERP_Extracts/GL_Extract_H1_2026.csv", "CSV row with credit reference", f"{reference}; credit SAR {amount:,.2f}")
+            bundle.evidence.citation(_role_source_path(bundle, "gl_extract"), "CSV row with credit reference", f"{reference}; credit SAR {amount:,.2f}")
         ]
         credit_pdf = rel_invoice_pdf(reference, bundle)
         if credit_pdf:
             citations.append(bundle.evidence.citation(credit_pdf, "PDF credit note", bundle.evidence.pdf_excerpt(credit_pdf, [reference])))
         for idx, row in ap_rows.head(3).iterrows():
-            citations.append(excel_citation(bundle, "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx", int(idx), f"{row.Invoice_ID}; paid SAR {row.Amount_SAR:,.2f}; memo references {reference}"))
+            citations.append(excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(idx), f"{row.Invoice_ID}; paid SAR {row.Amount_SAR:,.2f}; memo references {reference}"))
         findings.append(
             Finding(
                 finding_id="draft",
@@ -458,34 +785,161 @@ def detect_dormant_credit_balance(bundle: DataBundle) -> list[Finding]:
     return findings
 
 
-def compute_working_capital_drifts(bundle: DataBundle) -> list[dict]:
-    ar = bundle.ar[bundle.ar["Collection_Date"].notna()].copy()
-    ar["days_to_collect"] = (ar["Collection_Date"] - ar["Invoice_Date"]).dt.days
-    ap = bundle.ap[bundle.ap["Payment_Date"].notna()].copy()
-    ap["days_to_pay"] = (ap["Payment_Date"] - ap["Invoice_Date"]).dt.days
-    signals = []
-    for label, df, metric, id_col in [
-        ("DSO", ar, "days_to_collect", "Invoice_ID"),
-        ("DPO", ap, "days_to_pay", "Invoice_ID"),
-    ]:
-        df["month"] = df["Invoice_Date"].dt.to_period("M").astype(str)
-        monthly = df.groupby("month").agg(days=(metric, "mean"), amount=("Amount_SAR", "sum")).reset_index()
-        if len(monthly) < 2:
+def _task1_invoice_index(findings: Iterable[Finding]) -> dict[str, set[str]]:
+    pattern = re.compile(r"\b(?:INV|AR)-\d{4}-\d+\b")
+    invoice_index: dict[str, set[str]] = {}
+    for finding in findings:
+        text = " ".join(c.excerpt for c in finding.citations) + f" {finding.calculation}"
+        for invoice_id in pattern.findall(text):
+            invoice_index.setdefault(invoice_id, set()).add(finding.finding_id)
+    return invoice_index
+
+
+def _classify_signal(
+    qualifying: pd.DataFrame,
+    position: int,
+    week_amount: float,
+    driver_amount: float,
+) -> tuple[str, str]:
+    same_sign = 1
+    for offset in (-1, 1):
+        pointer = position + offset
+        while 0 <= pointer < len(qualifying):
+            peer = qualifying.iloc[pointer]
+            if int(peer["sign"]) != int(qualifying.iloc[position]["sign"]):
+                break
+            same_sign += 1
+            pointer += offset
+    concentration = driver_amount / week_amount if week_amount else 0.0
+    if (
+        qualifying.iloc[position]["count"]
+        < CONFIG.finance_working_capital_min_weekly_invoice_count
+        or week_amount < CONFIG.finance_working_capital_min_weekly_amount_sar
+        or concentration >= CONFIG.finance_working_capital_max_driver_concentration
+    ):
+        return "one-time", f"thin/concentrated week (top drivers {concentration:.0%} of weekly SAR amount)."
+    if same_sign >= CONFIG.finance_working_capital_min_consecutive_drift_weeks:
+        return "systemic", f"same-direction drift persisted for {same_sign} consecutive qualifying invoice weeks."
+    return "one-time", "adjacent weeks do not show the same-direction drift pattern."
+
+
+def compute_working_capital_drifts(bundle: DataBundle, findings: list[Finding] | None = None) -> list[dict]:
+    findings = findings or []
+    task1_invoice_index = _task1_invoice_index(findings)
+    candidates: list[dict] = []
+    metric_configs = [
+        (
+            "DSO",
+            bundle.ar[bundle.ar["Collection_Date"].notna()].copy(),
+            "Collection_Date",
+            "Customer_Name",
+            _role_source_path(bundle, "ar_ledger"),
+        ),
+        (
+            "DPO",
+            bundle.ap[bundle.ap["Payment_Date"].notna()].copy(),
+            "Payment_Date",
+            "Vendor_Name",
+            _role_source_path(bundle, "ap_ledger"),
+        ),
+    ]
+    for label, df, settlement_col, counterparty_col, source_path in metric_configs:
+        if df.empty:
             continue
-        baseline = float(monthly.iloc[:3]["days"].mean())
-        for _, row in monthly.iloc[3:].iterrows():
-            drift = float(row["days"] - baseline)
-            if abs(drift) >= 3:
-                drivers = df[df["month"].eq(row["month"])].sort_values(metric, ascending=False).head(5)
-                signals.append(
+        metric = "days_to_collect" if label == "DSO" else "days_to_pay"
+        df[metric] = (df[settlement_col] - df["Invoice_Date"]).dt.days
+        df["week_end"] = df["Invoice_Date"].dt.to_period("W-SUN").dt.end_time.dt.normalize()
+        trailing = (
+            df.groupby("week_end")
+            .agg(days=(metric, "mean"), amount=("Amount_SAR", "sum"), count=("Amount_SAR", "size"))
+            .reset_index()
+            .sort_values("week_end")
+            .tail(13)
+            .reset_index(drop=True)
+        )
+        if len(trailing) < 4:
+            continue
+        baseline = float(trailing["days"].mean())
+        trailing["drift_days"] = trailing["days"] - baseline
+        qualifying = trailing[
+            trailing["drift_days"].abs()
+            >= CONFIG.finance_working_capital_min_drift_days
+        ].copy().reset_index(drop=True)
+        if qualifying.empty:
+            continue
+        qualifying["sign"] = qualifying["drift_days"].apply(lambda value: 1 if value > 0 else -1)
+        for position, row in qualifying.iterrows():
+            drivers = df[df["week_end"].eq(row["week_end"])].sort_values(metric, ascending=False).head(3)
+            driver_records = []
+            overlap_invoices: set[str] = set()
+            overlap_findings: set[str] = set()
+            for idx, driver in drivers.iterrows():
+                invoice_id = str(driver["Invoice_ID"])
+                linked_findings = sorted(task1_invoice_index.get(invoice_id, set()))
+                overlap_invoices.update([invoice_id] if linked_findings else [])
+                overlap_findings.update(linked_findings)
+                driver_records.append(
                     {
-                        "metric": label,
-                        "period": row["month"],
-                        "baseline_days": round(baseline, 2),
-                        "current_days": round(float(row["days"]), 2),
-                        "drift_days": round(drift, 2),
-                        "cash_impact_sar": round(float(row["amount"]) * drift / max(float(row["days"]), 1), 2),
-                        "drivers": drivers[id_col].astype(str).tolist(),
+                        "invoice_id": invoice_id,
+                        "counterparty": str(driver[counterparty_col]),
+                        "amount_sar": round(float(driver["Amount_SAR"]), 2),
+                        "days": int(driver[metric]),
+                        "citation": excel_citation(
+                            bundle,
+                            source_path,
+                            int(idx),
+                            f"{invoice_id}; {driver[counterparty_col]}; SAR {float(driver['Amount_SAR']):,.2f}; {metric}={int(driver[metric])}",
+                        ),
+                        "task1_overlap_findings": linked_findings,
                     }
                 )
-    return sorted(signals, key=lambda x: abs(x["drift_days"]), reverse=True)[:3]
+            classification, reason = _classify_signal(
+                qualifying,
+                position,
+                float(row["amount"]),
+                float(drivers["Amount_SAR"].sum()) if not drivers.empty else 0.0,
+            )
+            cash_effect = "absorbed" if label == "DSO" and row["drift_days"] > 0 else "released"
+            if label == "DPO":
+                cash_effect = "released" if row["drift_days"] > 0 else "absorbed"
+            candidates.append(
+                {
+                    "metric": label,
+                    "week_end": row["week_end"].date().isoformat(),
+                    "baseline_days": round(baseline, 2),
+                    "current_days": round(float(row["days"]), 2),
+                    "drift_days": round(float(row["drift_days"]), 2),
+                    "weekly_amount_sar": round(float(row["amount"]), 2),
+                    "cash_impact_sar": round(float(row["amount"]) * abs(float(row["drift_days"])) / max(float(row["days"]), 1), 2),
+                    "cash_effect": cash_effect,
+                    "classification": classification,
+                    "classification_reason": reason,
+                    "drivers": driver_records,
+                    "task1_overlap": {
+                        "invoice_ids": sorted(overlap_invoices),
+                        "finding_ids": sorted(overlap_findings),
+                    },
+                }
+            )
+    if not candidates:
+        return []
+    ranked = sorted(candidates, key=lambda item: item["cash_impact_sar"], reverse=True)
+    selected: list[dict] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for metric in ("DSO", "DPO"):
+        metric_best = next((item for item in ranked if item["metric"] == metric), None)
+        if metric_best is None:
+            continue
+        key = (metric_best["metric"], metric_best["week_end"])
+        if key not in seen_keys:
+            selected.append(metric_best)
+            seen_keys.add(key)
+    for item in ranked:
+        key = (item["metric"], item["week_end"])
+        if key in seen_keys:
+            continue
+        selected.append(item)
+        seen_keys.add(key)
+        if len(selected) == 3:
+            break
+    return sorted(selected[:3], key=lambda item: item["cash_impact_sar"], reverse=True)

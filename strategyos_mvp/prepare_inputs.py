@@ -11,7 +11,7 @@ def prepare_agent_input(
     agent_input_dir: Path = AGENT_INPUT_DIR,
     evaluation_dir: Path = EVALUATION_DIR,
 ) -> tuple[Path, Path]:
-    """Create separated agent-visible and human-only evaluation folders."""
+    """Create separated runtime-visible analysis input and human-only evaluation folders."""
     if agent_input_dir.exists():
         shutil.rmtree(agent_input_dir)
     if evaluation_dir.exists():
@@ -33,12 +33,11 @@ def prepare_agent_input(
         shutil.copy2(readme, evaluation_dir / "HUMAN_ONLY_validation_readme.md")
 
     (agent_input_dir / "README_AGENT_INPUT.md").write_text(
-        "StrategyOS agent-visible input pack. Validation answer keys and human-only notes are intentionally excluded.\n",
+        "StrategyOS runtime input pack for deterministic analysis. Validation answer keys and human-only notes are intentionally excluded.\n",
         encoding="utf-8",
     )
     (evaluation_dir / "README_HUMAN_ONLY.md").write_text(
-        "Human-only evaluation material. Do not expose this folder to agents or model context.\n",
+        "Human-only evaluation material. Do not expose this folder to runtime processing or optional model review.\n",
         encoding="utf-8",
     )
     return agent_input_dir, evaluation_dir
-

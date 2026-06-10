@@ -6,6 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
   "boto3",
   "fastapi",
+  "python-multipart",
+  "neo4j",
   "pandas",
   "openpyxl",
   "psycopg[binary]",
@@ -29,3 +31,6 @@ strategyos_mvp = ["tools/*.swift"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+  "integration: opt-in local integration checks that require external services",
+]

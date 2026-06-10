@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -10,6 +9,7 @@ import pandas as pd
 
 from .ingestion import DataBundle
 from .models import Finding
+from .sensitive_ids import tokenize_sensitive_identifier
 
 
 @dataclass(frozen=True)
@@ -92,8 +92,8 @@ def vendor_nodes(bundle: DataBundle, add_node, add_edge) -> None:
             vendor_name=row.get("Vendor_Name"),
             status=row.get("Status"),
             contract_reference=row.get("Contract_Reference"),
-            tax_id_hash=hash_identifier(row.get("Tax_ID")),
-            bank_account_hash=hash_identifier(row.get("Bank_Account")),
+            tax_id_hash=hash_identifier(row.get("Tax_ID"), field_name="Tax_ID"),
+            bank_account_hash=hash_identifier(row.get("Bank_Account"), field_name="Bank_Account"),
         )
         add_edge(node_id, f"Evidence:03_Master_Data/Vendor_Master.xlsx", "SOURCED_FROM", locator=f"Excel row {int(row.name) + 2}")
 
@@ -173,8 +173,8 @@ def entity_resolution_edges(bundle: DataBundle, add_node, add_edge) -> None:
                 for _, row in group.iterrows()
             ]
             for left, right in pairwise(vendor_nodes):
-                add_edge(left, right, label, identifier_hash=hash_identifier(key))
-                add_edge(right, left, label, identifier_hash=hash_identifier(key))
+                add_edge(left, right, label, identifier_hash=hash_identifier(key, field_name=field))
+                add_edge(right, left, label, identifier_hash=hash_identifier(key, field_name=field))
 
 
 def finding_nodes(bundle: DataBundle, findings: list[Finding], add_node, add_edge) -> None:
@@ -223,10 +223,10 @@ def pairwise(values: list[str]) -> list[tuple[str, str]]:
     return pairs
 
 
-def hash_identifier(value: Any) -> str | None:
+def hash_identifier(value: Any, *, field_name: str = "identifier") -> str | None:
     if is_empty(value):
         return None
-    return hashlib.sha256(str(value).strip().encode("utf-8")).hexdigest()
+    return tokenize_sensitive_identifier(value, field_name=field_name)
 
 
 def normalize_value(value: Any) -> Any:

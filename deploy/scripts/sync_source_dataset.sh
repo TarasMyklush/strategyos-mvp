@@ -11,6 +11,6 @@ if [ ! -d "${SOURCE_DATASET}" ]; then
   exit 1
 fi
 
-tar -C "${SOURCE_DATASET}" -czf - . | ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm -T --volume strategyos_strategyos-workspace:/workspace alpine sh -c 'mkdir -p /workspace/source_dataset && rm -rf /workspace/source_dataset/* && tar -xzf - -C /workspace/source_dataset'"
+tar -C "${SOURCE_DATASET}" -czf - . | ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose -f deploy/docker-compose.yml --env-file deploy/.env --env-file deploy/.env.secrets run --rm -T --volume strategyos_strategyos-workspace:/workspace alpine sh -c 'mkdir -p /workspace/source_dataset && rm -rf /workspace/source_dataset/* && tar -xzf - -C /workspace/source_dataset'"
 
 echo "Source dataset synced into strategyos_strategyos-workspace:/source_dataset on ${TARGET_HOST}."
