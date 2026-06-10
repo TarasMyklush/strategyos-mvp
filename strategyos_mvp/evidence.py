@@ -51,16 +51,23 @@ class EvidenceStore:
     def hash_for(self, rel_path: str) -> str | None:
         return self.manifest.get(rel_path, {}).get("sha256")
 
+    # Evidence-content budget per citation excerpt. The prompt-injection guard
+    # wrapper (prefix + markers) is added on top of this and must NOT count
+    # against it, otherwise the wrapper evicts the actual evidence text.
+    EXCERPT_EVIDENCE_BUDGET = 500
+
     def citation(self, rel_path: str, locator: str, excerpt: str = "") -> Citation:
-        guarded_excerpt = (
-            excerpt[:500]
-            if "BEGIN_UNTRUSTED_EVIDENCE" in excerpt
-            else guard_untrusted_document_text(
+        if "BEGIN_UNTRUSTED_EVIDENCE" in excerpt:
+            # Already wrapped upstream (e.g. by pdf_excerpt); the inner evidence
+            # was already bounded there. Keep it intact rather than truncating
+            # through the guard wrapper.
+            guarded_excerpt = excerpt
+        else:
+            guarded_excerpt = guard_untrusted_document_text(
                 excerpt,
                 source_name=rel_path,
-                max_chars=500,
+                max_chars=self.EXCERPT_EVIDENCE_BUDGET,
             )["guarded_text"]
-        )
         return Citation(
             source_path=rel_path,
             locator=locator,
