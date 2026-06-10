@@ -14,9 +14,23 @@ import pandas as pd
 from pypdf import PdfReader
 
 from .config import CONFIG
+from .data_roles import (
+    cash_forecast_sheet_names,
+    document_target_folders,
+    role_labels,
+    role_target_paths,
+    run_model_required_roles,
+    tabular_role_aliases,
+    tabular_role_columns,
+)
 from .evidence import sha256_file
 from .ocr import ocr_empty_pdf_pages, ocr_image_file
+from .plugins import load_configured_plugins
 from .prompt_injection import guard_untrusted_document_text, raw_document_text
+from .tasks import (
+    blocked_task_items_for_empty_source_pack,
+    evaluate_task_readiness_items,
+)
 
 SUPPORTED_EXTENSIONS = {
     ".csv",
@@ -39,119 +53,39 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 IGNORED_NAMES = {".DS_Store"}
 OVERRIDE_FILENAME = "mapping_overrides.json"
 
-TASK_LABELS = {
-    "cash_leakage_discovery": "Cash Leakage Discovery",
-    "working_capital_drift_check": "Working Capital Drift Check",
-    "drill_down_qa": "Drill-Down Q&A",
-}
-
-ROLE_LABELS = {
-    "ap_ledger": "AP invoice ledger",
-    "ar_ledger": "AR invoice ledger",
-    "gl_extract": "GL extract",
-    "trial_balance": "Trial balance",
-    "vendor_master": "Vendor master",
-    "customer_master": "Customer master",
-    "chart_of_accounts": "Chart of accounts",
-    "purchase_orders": "Purchase orders",
-    "cash_forecast": "Cash forecast workbook",
-    "bank_statement": "Bank statement",
-    "contract": "Contract",
-    "email_correspondence": "Email correspondence",
-    "invoice_document": "Invoice document",
-}
-
-ROLE_TARGET_PATHS = {
-    "ap_ledger": "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
-    "ar_ledger": "02_ERP_Extracts/AR_Invoices_H1_2026.xlsx",
-    "gl_extract": "02_ERP_Extracts/GL_Extract_H1_2026.csv",
-    "trial_balance": "02_ERP_Extracts/Trial_Balance_June_2026.xlsx",
-    "vendor_master": "03_Master_Data/Vendor_Master.xlsx",
-    "customer_master": "03_Master_Data/Customer_Master.xlsx",
-    "chart_of_accounts": "03_Master_Data/Chart_of_Accounts.xlsx",
-    "purchase_orders": "05_Purchase_Orders/PO_Log_H1_2026.csv",
-    "cash_forecast": "07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx",
-}
-
-DOCUMENT_TARGET_FOLDERS = {
-    "bank_statement": "01_Bank_Statements",
-    "contract": "04_Contracts",
-    "email_correspondence": "06_Email_Correspondence",
-    "invoice_document": "08_Invoices",
-}
-
-RUN_MODEL_REQUIRED_ROLES = tuple(ROLE_TARGET_PATHS)
-
-TABULAR_ROLE_COLUMNS = {
-    "ap_ledger": ("Invoice_ID", "Vendor_ID", "Amount_SAR", "Payment_Date", "PO_Reference"),
-    "ar_ledger": ("Invoice_ID", "Customer_ID", "Amount_SAR", "Collection_Date"),
-    "gl_extract": ("Date", "Account", "Debit", "Credit", "Reference"),
-    "trial_balance": ("Account", "Debit_Total", "Credit_Total", "Net"),
-    "vendor_master": ("Vendor_ID", "Vendor_Name", "Tax_ID", "Bank_Account"),
-    "customer_master": ("Customer_ID", "Customer_Name", "Credit_Limit_SAR", "Payment_Terms"),
-    "chart_of_accounts": ("Account", "Account_Description", "Type", "Normal_Balance"),
-    "purchase_orders": ("PO_ID", "Vendor_ID", "SKU", "Unit_Price", "Total"),
-}
+ROLE_LABELS = role_labels()
+ROLE_TARGET_PATHS = role_target_paths()
+DOCUMENT_TARGET_FOLDERS = document_target_folders()
+RUN_MODEL_REQUIRED_ROLES = run_model_required_roles()
+TABULAR_ROLE_COLUMNS = tabular_role_columns()
 
 TABULAR_ROLE_SIGNATURES = {
     role: set(columns) for role, columns in TABULAR_ROLE_COLUMNS.items()
 }
 
-ROLE_COLUMN_ALIASES = {
-    "ap_ledger": {
-        "Invoice_ID": ["invoice id", "invoice number", "invoice no", "invoice #", "inv #"],
-        "Vendor_ID": ["vendor id", "supplier id", "supplier code"],
-        "Amount_SAR": ["amount sar", "amount (sar)", "invoice amount", "gross amount"],
-        "Payment_Date": ["payment date", "settlement date", "paid date"],
-        "PO_Reference": ["po reference", "po ref", "po number", "purchase order"],
-    },
-    "ar_ledger": {
-        "Invoice_ID": ["invoice id", "invoice number", "invoice no", "invoice #"],
-        "Customer_ID": ["customer id", "customer code", "client id"],
-        "Amount_SAR": ["amount sar", "amount (sar)", "invoice amount"],
-        "Collection_Date": ["collection date", "receipt date", "settlement date"],
-    },
-    "gl_extract": {
-        "Date": ["posting date", "entry date", "gl date"],
-        "Account": ["account code", "gl account"],
-        "Debit": ["debit amount"],
-        "Credit": ["credit amount"],
-        "Reference": ["document reference", "memo reference", "journal reference"],
-    },
-    "trial_balance": {
-        "Account": ["account code", "gl account"],
-        "Debit_Total": ["debit total", "total debit"],
-        "Credit_Total": ["credit total", "total credit"],
-        "Net": ["net balance", "closing net"],
-    },
-    "vendor_master": {
-        "Vendor_ID": ["vendor id", "supplier id", "supplier code"],
-        "Vendor_Name": ["vendor name", "supplier name"],
-        "Tax_ID": ["tax id", "vat id", "tax registration number"],
-        "Bank_Account": ["bank account", "iban", "bank account number"],
-    },
-    "customer_master": {
-        "Customer_ID": ["customer id", "customer code", "client id"],
-        "Customer_Name": ["customer name", "client name"],
-        "Credit_Limit_SAR": ["credit limit sar", "credit limit", "customer limit sar"],
-        "Payment_Terms": ["payment terms", "terms"],
-    },
-    "chart_of_accounts": {
-        "Account": ["account code", "gl account"],
-        "Account_Description": ["account description", "description"],
-        "Type": ["account type"],
-        "Normal_Balance": ["normal balance", "balance side"],
-    },
-    "purchase_orders": {
-        "PO_ID": ["po id", "purchase order id", "po number"],
-        "Vendor_ID": ["vendor id", "supplier id", "supplier code"],
-        "SKU": ["sku code", "item sku", "item code"],
-        "Unit_Price": ["unit price", "price per unit"],
-        "Total": ["po total", "line total", "total amount"],
-    },
-}
+ROLE_COLUMN_ALIASES = tabular_role_aliases()
+CASH_FORECAST_SHEET_NAMES = cash_forecast_sheet_names()
 
-CASH_FORECAST_SHEET_NAMES = {"summary", "cash_position", "hedges", "vendor_cf_forecast", "notes"}
+
+def refresh_source_pack_role_constants() -> None:
+    global ROLE_LABELS
+    global ROLE_TARGET_PATHS
+    global DOCUMENT_TARGET_FOLDERS
+    global RUN_MODEL_REQUIRED_ROLES
+    global TABULAR_ROLE_COLUMNS
+    global TABULAR_ROLE_SIGNATURES
+    global ROLE_COLUMN_ALIASES
+    global CASH_FORECAST_SHEET_NAMES
+    ROLE_LABELS = role_labels()
+    ROLE_TARGET_PATHS = role_target_paths()
+    DOCUMENT_TARGET_FOLDERS = document_target_folders()
+    RUN_MODEL_REQUIRED_ROLES = run_model_required_roles()
+    TABULAR_ROLE_COLUMNS = tabular_role_columns()
+    TABULAR_ROLE_SIGNATURES = {
+        role: set(columns) for role, columns in TABULAR_ROLE_COLUMNS.items()
+    }
+    ROLE_COLUMN_ALIASES = tabular_role_aliases()
+    CASH_FORECAST_SHEET_NAMES = cash_forecast_sheet_names()
 
 
 def _path_is_within(path: Path, root: Path) -> bool:
@@ -987,22 +921,6 @@ def _manifest_summary(manifest: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _task_item(
-    key: str,
-    *,
-    status_value: str,
-    reasons: list[str],
-    missing: list[str],
-) -> dict[str, Any]:
-    return {
-        "task_key": key,
-        "label": TASK_LABELS[key],
-        "status": status_value,
-        "reasons": reasons,
-        "missing": missing,
-    }
-
-
 def _unconfirmed_roles(manifest: list[dict[str, Any]]) -> list[str]:
     """Structured roles whose auto-mapping is uncertain and not yet confirmed.
 
@@ -1038,15 +956,7 @@ def build_task_readiness(manifest: list[dict[str, Any]]) -> dict[str, Any]:
     run_ready = supported_count > 0 and not missing_run_roles and not structured_duplicates
 
     if supported_count == 0:
-        tasks = [
-            _task_item(
-                key,
-                status_value="blocked",
-                reasons=["No supported files were staged from the selected source pack."],
-                missing=["supported source files"],
-            )
-            for key in TASK_LABELS
-        ]
+        tasks = blocked_task_items_for_empty_source_pack()
         overall = "blocked"
         ready_for_run = False
         classification_status = "empty"
@@ -1054,63 +964,7 @@ def build_task_readiness(manifest: list[dict[str, Any]]) -> dict[str, Any]:
             "No supported files were registered in the staged source pack.",
         ]
     else:
-        tasks = [
-            _task_item(
-                "cash_leakage_discovery",
-                status_value=(
-                    "ready"
-                    if has_role("ap_ledger") and has_role("vendor_master") and has_role("gl_extract") and has_role("purchase_orders") and has_role("cash_forecast")
-                    else "partial"
-                    if has_role("ap_ledger")
-                    else "blocked"
-                ),
-                reasons=[
-                    "Cash leakage baseline is runnable when AP, vendor, GL, PO, and cash-forecast sources are classified into the current run model."
-                ],
-                missing=[
-                    label
-                    for role, label in [
-                        ("ap_ledger", "classified AP coverage"),
-                        ("vendor_master", "classified vendor master coverage"),
-                        ("gl_extract", "classified GL coverage"),
-                        ("purchase_orders", "classified PO coverage"),
-                        ("cash_forecast", "classified cash-forecast coverage"),
-                    ]
-                    if not has_role(role)
-                ],
-            ),
-            _task_item(
-                "working_capital_drift_check",
-                status_value="ready" if has_role("ap_ledger") and has_role("ar_ledger") else "blocked",
-                reasons=[
-                    "Working capital drift requires classified AP and AR ledgers with invoice and settlement timing fields."
-                ],
-                missing=[
-                    label
-                    for role, label in [
-                        ("ap_ledger", "classified AP coverage"),
-                        ("ar_ledger", "classified AR coverage"),
-                    ]
-                    if not has_role(role)
-                ],
-            ),
-            _task_item(
-                "drill_down_qa",
-                status_value="ready" if run_ready and has_role("gl_extract") and has_role("trial_balance") else "blocked",
-                reasons=[
-                    "Drill-down Q&A becomes runnable when the current run model can execute and classify GL plus trial-balance baseline sources."
-                ],
-                missing=[
-                    label
-                    for role, label in [
-                        ("gl_extract", "classified GL coverage"),
-                        ("trial_balance", "classified trial-balance coverage"),
-                    ]
-                    if not has_role(role)
-                ]
-                + ([] if run_ready else ["current run-model normalization coverage"]),
-            ),
-        ]
+        tasks = evaluate_task_readiness_items(has_role=has_role, run_ready=run_ready)
         overall = "ready" if run_ready else "partial"
         ready_for_run = run_ready
         classified_count = sum(
@@ -1194,6 +1048,8 @@ def _write_summary(source_pack_id: str, payload: dict[str, Any]) -> None:
 
 
 def _payload_for(source_pack_id: str, raw_root: Path, *, source_kind: str) -> dict[str, Any]:
+    load_configured_plugins()
+    refresh_source_pack_role_constants()
     manifest = _build_manifest(raw_root, source_pack_id=source_pack_id)
     _classify_manifest(manifest, raw_root, source_pack_id=source_pack_id)
     normalization = _normalize_manifest(manifest, raw_root, source_pack_id=source_pack_id)

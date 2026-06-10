@@ -16,6 +16,7 @@ from .ingestion import RUN_CONTEXT_FILENAME
 from .models import AuditEvent
 from .neo4j_store import sync_knowledge_graph
 from .paths import AGENT_INPUT_DIR, DEFAULT_RUN_DIR
+from .plugins import load_configured_plugins, plugin_status
 from .prepare_inputs import prepare_agent_input
 from .run_registry import allocate_run_dir, update_run_pointers
 from .runtime_artifacts import AUDIT_LOG_FILENAME, remove_legacy_artifacts
@@ -216,6 +217,7 @@ def _execute_strategyos_workflow(
     require_human_review: bool | None = None,
     allow_partial_source_pack: bool = False,
 ) -> tuple[dict, dict]:
+    load_configured_plugins()
     source_pack_payload: dict | None = None
     if source_pack_id:
         source_pack_payload = resolve_source_pack_for_run(
@@ -307,6 +309,7 @@ def _execute_strategyos_workflow(
         result.get("audit_verification", {})
     )
     summary["runtime"] = dict(getattr(workflow, "runtime_metadata", {}))
+    summary["plugins"] = plugin_status()
     summary["run_policy"] = {
         "mode": CONFIG.run_policy.mode,
         "approved_external_modes": list(CONFIG.run_policy.approved_external_modes),

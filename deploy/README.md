@@ -5,7 +5,7 @@ This deployment package is designed for Hetzner first, but keeps the runtime por
 ## Stack
 
 - StrategyOS API container
-- Postgres for run metadata, approvals, artifacts, and future LangGraph checkpoint storage
+- Postgres for run metadata, approvals, artifacts, and LangGraph checkpoint storage
 - Redis for LangGraph/runtime queues and cache
 - Neo4j for the production knowledge graph
 - Qdrant for persistent vector retrieval over StrategyOS run data
@@ -49,7 +49,7 @@ deploy/scripts/generate_env.sh
 ```
 
 2. Review `deploy/.env` for local defaults and `deploy/.env.secrets` for injected secrets. Do not commit either file.
-3. Mount or copy the source dataset into the `strategyos-workspace` volume path. This remains the temporary manual demo path until source-pack intake and folder-validation endpoints land; the controlling plan for that work is `docs/flexible-invoice-architecture-plan.md`.
+3. Mount or copy the source dataset into the `strategyos-workspace` volume path, or stage a source pack through the folder/upload intake endpoints. Source-pack intake and validation are implemented; the fixed dataset path remains the canonical fixture/regression path.
 4. Start the stack:
 
 ```bash
@@ -86,6 +86,23 @@ curl -X POST http://localhost:${STRATEGYOS_HTTP_PORT:-80}/runs \
   -H "Content-Type: application/json" \
   -d '{"skip_prepare": true, "sync_artifacts": true}'
 ```
+
+## Local Postgres Proof Target
+
+`make postgres-proof` runs the governed source-pack pause/approve/resume e2e against Postgres. It intentionally fails fast unless `STRATEGYOS_POSTGRES_E2E_DATABASE_URL` is set, because the test truncates all `strategyos_*` tables before and after the proof. Use a dedicated disposable proof database, for example:
+
+```bash
+export STRATEGYOS_POSTGRES_E2E_DATABASE_URL="postgresql://strategyos:strategyos@localhost:55432/strategyos_proof"
+make postgres-proof
+```
+
+This target proves persisted run/checkpoint/approval behavior. For LangGraph proof, add `STRATEGYOS_RUNTIME_BACKEND=langgraph`; the test asserts `runtime.actual_backend = "langgraph"` and `runtime.fallback_used = false` for the created run.
+
+Latest local proof recorded on 2026-06-10:
+- `make postgres-proof` with `STRATEGYOS_RUNTIME_BACKEND=langgraph`: `1 passed, 0 skipped`
+- proof pack: `../outputs/StrategyOS Runtime Proofs/20260610T184252Z-langgraph-postgres/`
+- direct proof run: `runtime.actual_backend=langgraph`, `runtime.fallback_used=false`, `state_store.status=persisted`
+- boundary: Neo4j and Qdrant were not configured for this proof, so graph/vector sync remain covered only by the older broader-testing proof until re-run with those services active.
 
 ## Hetzner Notes
 
@@ -245,7 +262,7 @@ Key proof points:
 - Keep OCR local and wire PDF/image extraction ahead of content-based document-role classification.
 - Add additive canonical invoice-header normalization only after source-pack intake is in place; keep current invoice-consuming controls unchanged in that tranche.
 - Replace the local identity provider with the production SSO authority before exposing reviewer endpoints.
-- Add durable LangGraph checkpoint wiring into Postgres.
+- Extend the 2026-06-10 LangGraph/Postgres proof to a full active Neo4j/Qdrant/object-store sync proof.
 - Add CI/CD and smoke tests for `/health/live`, `/health/ready`, `/runs`, source-pack validation, artifact sync, and citation audit.
 
 ## Current Flexible-Invoice Control Constraints

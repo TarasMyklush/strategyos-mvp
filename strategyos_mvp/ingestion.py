@@ -11,11 +11,14 @@ from .detector_contracts import (
     CONTRACTS_BY_ROLE,
     empty_role_frame,
     load_structured_role,
+    refresh_detector_role_contracts,
     resolve_detector_contracts,
     resolve_detector_contracts_partial,
 )
+from .data_roles import role_attribute_names, role_date_columns
 from .evidence import EvidenceStore
 from .models import DataQualityIssue
+from .plugins import load_configured_plugins
 
 
 OCR_REQUIRED_VERIFICATIONS: dict[str, tuple[str, tuple[str, ...]]] = {
@@ -50,26 +53,14 @@ class DataBundle:
     quality_issues: list[DataQualityIssue] = field(default_factory=list)
 
 
-# role -> DataBundle attribute name
-_ROLE_ATTRIBUTES: dict[str, str] = {
-    "ap_ledger": "ap",
-    "ar_ledger": "ar",
-    "gl_extract": "gl",
-    "trial_balance": "trial_balance",
-    "vendor_master": "vendors",
-    "customer_master": "customers",
-    "chart_of_accounts": "coa",
-    "purchase_orders": "po",
-    "cash_forecast": "cash_forecast",
-}
+_ROLE_ATTRIBUTES: dict[str, str] = role_attribute_names()
+_ROLE_DATE_COLUMNS: dict[str, list[str]] = role_date_columns()
 
-_ROLE_DATE_COLUMNS: dict[str, list[str]] = {
-    "ap_ledger": ["Invoice_Date", "Due_Date", "Payment_Date"],
-    "ar_ledger": ["Invoice_Date", "Due_Date", "Collection_Date"],
-    "gl_extract": ["Date"],
-    "vendor_master": ["Created_Date"],
-    "purchase_orders": ["PO_Date", "Delivery_Date"],
-}
+
+def refresh_ingestion_role_maps() -> None:
+    global _ROLE_ATTRIBUTES, _ROLE_DATE_COLUMNS
+    _ROLE_ATTRIBUTES = role_attribute_names()
+    _ROLE_DATE_COLUMNS = role_date_columns()
 
 
 def load_dataset(dataset_root: Path, *, strict: bool | None = None) -> DataBundle:
@@ -85,6 +76,9 @@ def load_dataset(dataset_root: Path, *, strict: bool | None = None) -> DataBundl
     a source-pack run written with ``run_mode='partial'`` loads non-strict;
     everything else stays strict to preserve current behavior.
     """
+    load_configured_plugins()
+    refresh_detector_role_contracts()
+    refresh_ingestion_role_maps()
     evidence = EvidenceStore.build(dataset_root)
     run_metadata = _load_run_metadata(dataset_root)
     if strict is None:

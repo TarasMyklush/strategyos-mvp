@@ -4,6 +4,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
+from .agents.pipeline import is_review_gate_stage, is_terminal_stage
 from .state_store import create_run, persist_checkpoint
 
 RUNNING_STATUS = "running"
@@ -97,14 +98,14 @@ class RuntimeGovernance:
         }
 
     def _workflow_status_for_stage(self, stage: str, state: dict[str, Any]) -> str:
-        if stage == AWAITING_REVIEW_STAGE:
+        if is_review_gate_stage(stage):
             return AWAITING_REVIEW_STATUS
-        if stage == "writer":
+        if is_terminal_stage(stage):
             return COMPLETED_STATUS
         return str(state.get("workflow_status") or RUNNING_STATUS)
 
     def _approval_status_for_stage(self, stage: str, state: dict[str, Any]) -> str:
-        if stage == AWAITING_REVIEW_STAGE and self.requires_human_review:
+        if is_review_gate_stage(stage) and self.requires_human_review:
             return "pending"
         return str(state.get("approval_status") or "not_required")
 
@@ -218,11 +219,11 @@ def _normalize_value(value: Any) -> Any:
 def _run_outcome(workflow_status: Any, current_stage: Any) -> str:
     normalized_status = str(workflow_status or "").lower()
     normalized_stage = str(current_stage or "").lower()
-    if normalized_status == COMPLETED_STATUS or normalized_stage == "writer":
+    if normalized_status == COMPLETED_STATUS or is_terminal_stage(normalized_stage):
         return "completed"
     if (
         normalized_status == AWAITING_REVIEW_STATUS
-        or normalized_stage == AWAITING_REVIEW_STAGE
+        or is_review_gate_stage(normalized_stage)
     ):
         return "awaiting_review"
     return "in_progress"
@@ -253,7 +254,7 @@ def _review_state(
     if normalized_approval == "rejected":
         return "rejected"
     if (
-        normalized_stage == AWAITING_REVIEW_STAGE
+        is_review_gate_stage(normalized_stage)
         or normalized_status == AWAITING_REVIEW_STATUS
     ):
         return "awaiting_decision"
@@ -271,12 +272,12 @@ def _resume_state(
     normalized_approval = approval_status.lower()
     normalized_status = str(workflow_status or "").lower()
     normalized_stage = str(current_stage or "").lower()
-    if normalized_stage == "writer" or normalized_status == COMPLETED_STATUS:
+    if is_terminal_stage(normalized_stage) or normalized_status == COMPLETED_STATUS:
         return "completed"
-    if normalized_approval == "approved" and normalized_stage == AWAITING_REVIEW_STAGE:
+    if normalized_approval == "approved" and is_review_gate_stage(normalized_stage):
         return "ready"
     if normalized_approval == "rejected":
         return "blocked_rejected"
-    if normalized_stage == AWAITING_REVIEW_STAGE:
+    if is_review_gate_stage(normalized_stage):
         return "blocked_pending_review"
     return "not_available"

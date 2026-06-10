@@ -6,6 +6,8 @@ from typing import Any
 
 import pandas as pd
 
+from .data_roles import run_model_role_specs
+
 
 @dataclass(frozen=True)
 class DetectorRoleContract:
@@ -42,121 +44,33 @@ class ResolvedDetectorContract:
         }
 
 
-DETECTOR_ROLE_CONTRACTS: tuple[DetectorRoleContract, ...] = (
-    DetectorRoleContract(
-        role="ap_ledger",
-        attribute_name="ap",
-        default_relative_path="02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
-        required_columns=("Invoice_ID", "Vendor_ID", "Amount_SAR", "Payment_Date", "PO_Reference"),
-        date_columns=("Invoice_Date", "Due_Date", "Payment_Date"),
-        column_aliases={
-            "Invoice_ID": ("invoice id", "invoice number", "invoice no", "invoice #", "inv #"),
-            "Vendor_ID": ("vendor id", "supplier id", "supplier code"),
-            "Amount_SAR": ("amount sar", "amount (sar)", "invoice amount", "gross amount"),
-            "Payment_Date": ("payment date", "settlement date", "paid date"),
-            "PO_Reference": ("po reference", "po ref", "po number", "purchase order"),
-        },
-    ),
-    DetectorRoleContract(
-        role="ar_ledger",
-        attribute_name="ar",
-        default_relative_path="02_ERP_Extracts/AR_Invoices_H1_2026.xlsx",
-        required_columns=("Invoice_ID", "Customer_ID", "Amount_SAR", "Collection_Date"),
-        date_columns=("Invoice_Date", "Due_Date", "Collection_Date"),
-        column_aliases={
-            "Invoice_ID": ("invoice id", "invoice number", "invoice no", "invoice #"),
-            "Customer_ID": ("customer id", "customer code", "client id"),
-            "Amount_SAR": ("amount sar", "amount (sar)", "invoice amount"),
-            "Collection_Date": ("collection date", "receipt date", "settlement date"),
-        },
-    ),
-    DetectorRoleContract(
-        role="gl_extract",
-        attribute_name="gl",
-        default_relative_path="02_ERP_Extracts/GL_Extract_H1_2026.csv",
-        required_columns=("Date", "Account", "Debit", "Credit", "Reference"),
-        date_columns=("Date",),
-        column_aliases={
-            "Date": ("posting date", "entry date", "gl date"),
-            "Account": ("account code", "gl account"),
-            "Debit": ("debit amount",),
-            "Credit": ("credit amount",),
-            "Reference": ("document reference", "memo reference", "journal reference"),
-        },
-    ),
-    DetectorRoleContract(
-        role="trial_balance",
-        attribute_name="trial_balance",
-        default_relative_path="02_ERP_Extracts/Trial_Balance_June_2026.xlsx",
-        required_columns=("Account", "Debit_Total", "Credit_Total", "Net"),
-        column_aliases={
-            "Account": ("account code", "gl account"),
-            "Debit_Total": ("debit total", "total debit"),
-            "Credit_Total": ("credit total", "total credit"),
-            "Net": ("net balance", "closing net"),
-        },
-    ),
-    DetectorRoleContract(
-        role="vendor_master",
-        attribute_name="vendors",
-        default_relative_path="03_Master_Data/Vendor_Master.xlsx",
-        required_columns=("Vendor_ID", "Vendor_Name", "Tax_ID", "Bank_Account"),
-        date_columns=("Created_Date",),
-        column_aliases={
-            "Vendor_ID": ("vendor id", "supplier id", "supplier code"),
-            "Vendor_Name": ("vendor name", "supplier name"),
-            "Tax_ID": ("tax id", "vat id", "tax registration number"),
-            "Bank_Account": ("bank account", "iban", "bank account number"),
-        },
-    ),
-    DetectorRoleContract(
-        role="customer_master",
-        attribute_name="customers",
-        default_relative_path="03_Master_Data/Customer_Master.xlsx",
-        required_columns=("Customer_ID", "Customer_Name", "Credit_Limit_SAR", "Payment_Terms"),
-        column_aliases={
-            "Customer_ID": ("customer id", "customer code", "client id"),
-            "Customer_Name": ("customer name", "client name"),
-            "Credit_Limit_SAR": ("credit limit sar", "credit limit", "customer limit sar"),
-            "Payment_Terms": ("payment terms", "terms"),
-        },
-    ),
-    DetectorRoleContract(
-        role="chart_of_accounts",
-        attribute_name="coa",
-        default_relative_path="03_Master_Data/Chart_of_Accounts.xlsx",
-        required_columns=("Account", "Account_Description", "Type", "Normal_Balance"),
-        column_aliases={
-            "Account": ("account code", "gl account"),
-            "Account_Description": ("account description", "description"),
-            "Type": ("account type",),
-            "Normal_Balance": ("normal balance", "balance side"),
-        },
-    ),
-    DetectorRoleContract(
-        role="purchase_orders",
-        attribute_name="po",
-        default_relative_path="05_Purchase_Orders/PO_Log_H1_2026.csv",
-        required_columns=("PO_ID", "Vendor_ID", "SKU", "Unit_Price", "Total"),
-        date_columns=("PO_Date", "Delivery_Date"),
-        column_aliases={
-            "PO_ID": ("po id", "purchase order id", "po number"),
-            "Vendor_ID": ("vendor id", "supplier id", "supplier code"),
-            "SKU": ("sku code", "item sku", "item code"),
-            "Unit_Price": ("unit price", "price per unit"),
-            "Total": ("po total", "line total", "total amount"),
-        },
-    ),
-    DetectorRoleContract(
-        role="cash_forecast",
-        attribute_name="cash_forecast",
-        default_relative_path="07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx",
-        expected_sheet_names=("summary", "cash_position", "hedges", "vendor_cf_forecast", "notes"),
-    ),
-)
+def _build_detector_role_contracts() -> tuple[DetectorRoleContract, ...]:
+    return tuple(
+        DetectorRoleContract(
+            role=spec.role,
+            attribute_name=str(spec.attribute_name),
+            default_relative_path=str(spec.target_path),
+            required_columns=spec.required_columns,
+            date_columns=spec.date_columns,
+            column_aliases=dict(spec.column_aliases),
+            expected_sheet_names=spec.expected_sheet_names,
+        )
+        for spec in run_model_role_specs()
+    )
+
+
+DETECTOR_ROLE_CONTRACTS: tuple[DetectorRoleContract, ...] = _build_detector_role_contracts()
 
 
 CONTRACTS_BY_ROLE = {contract.role: contract for contract in DETECTOR_ROLE_CONTRACTS}
+
+
+def refresh_detector_role_contracts() -> None:
+    global DETECTOR_ROLE_CONTRACTS, CONTRACTS_BY_ROLE
+    DETECTOR_ROLE_CONTRACTS = _build_detector_role_contracts()
+    CONTRACTS_BY_ROLE = {
+        contract.role: contract for contract in DETECTOR_ROLE_CONTRACTS
+    }
 
 
 def _normalize_column_name(value: str) -> str:

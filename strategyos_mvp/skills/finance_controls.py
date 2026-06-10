@@ -9,9 +9,11 @@ from typing import Iterable
 import pandas as pd
 
 from ..config import CONFIG
+from ..data_roles import role_target_paths
 from ..evidence import page_locator, row_locator
 from ..ingestion import DataBundle
 from ..models import Citation, Finding
+from ..plugins import load_configured_plugins
 from ..sensitive_ids import tokenize_sensitive_identifier
 from ..quality import apply_fail_closed_evidence_policy
 
@@ -27,14 +29,12 @@ class DetectorMetadata:
 DETECTOR_REGISTRY: list[DetectorMetadata] = []
 KNOWN_PATTERN_TYPES: frozenset[str] = frozenset()
 
-ROLE_PATH_DEFAULTS = {
-    "ap_ledger": "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
-    "ar_ledger": "02_ERP_Extracts/AR_Invoices_H1_2026.xlsx",
-    "gl_extract": "02_ERP_Extracts/GL_Extract_H1_2026.csv",
-    "vendor_master": "03_Master_Data/Vendor_Master.xlsx",
-    "purchase_orders": "05_Purchase_Orders/PO_Log_H1_2026.csv",
-    "cash_forecast": "07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx",
-}
+ROLE_PATH_DEFAULTS = role_target_paths()
+
+
+def refresh_role_path_defaults() -> None:
+    global ROLE_PATH_DEFAULTS
+    ROLE_PATH_DEFAULTS = role_target_paths()
 
 
 def register_detector(pattern_type: str, required_roles: Iterable[str]):
@@ -273,6 +273,8 @@ def _find_pdf_by_excerpt(bundle: DataBundle, prefix: str, label: str, terms: Ite
 
 
 def run_all_finance_skills(bundle: DataBundle) -> list[Finding]:
+    load_configured_plugins()
+    refresh_role_path_defaults()
     findings: list[Finding] = []
     executed_detectors: list[dict[str, object]] = []
     skipped_detectors: list[dict[str, object]] = []
@@ -588,9 +590,15 @@ def detect_missed_early_pay_discounts(bundle: DataBundle) -> list[Finding]:
             (missed["Amount_SAR"] * CONFIG.finance_early_pay_discount_rate).sum()
         )
         vendor_name = str(missed.iloc[0]["Vendor_Name"])
-        citations = [
-            bundle.evidence.citation(contract, "PDF contract payment terms", bundle.evidence.pdf_excerpt(contract, ["2/10", "net 30"]))
-        ]
+        citations = []
+        contract_citation = pdf_citation(
+            bundle,
+            contract,
+            "contract payment terms",
+            ["2/10", "net 30"],
+        )
+        if contract_citation is not None:
+            citations.append(contract_citation)
         for idx, row in missed.head(5).iterrows():
             citations.append(excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(idx), f"{row.Invoice_ID}; paid in {int(row.days_to_pay)} days; SAR {row.Amount_SAR:,.2f}; {CONFIG.finance_early_pay_discount_rate:.0%}={row.Amount_SAR*CONFIG.finance_early_pay_discount_rate:,.2f}"))
         findings.append(
@@ -637,10 +645,25 @@ def detect_auto_renewal_escalation(bundle: DataBundle) -> list[Finding]:
         if excess <= 0:
             continue
         vendor_name = str(rows.iloc[0]["Vendor_Name"])
-        citations = [bundle.evidence.citation(rel, "PDF contract renewal/escalation", bundle.evidence.pdf_excerpt(rel, ["Automatic Renewal", "CPI"]))]
+        citations = []
+        contract_citation = pdf_citation(
+            bundle,
+            rel,
+            "contract renewal/escalation",
+            ["Automatic Renewal", "CPI"],
+        )
+        if contract_citation is not None:
+            citations.append(contract_citation)
         invoice_pdf = rel_invoice_pdf("GulfLogistics", bundle)
         if invoice_pdf:
-            citations.append(bundle.evidence.citation(invoice_pdf, "PDF invoice rate basis", bundle.evidence.pdf_excerpt(invoice_pdf, ["base monthly fee", "2026 escalation"])))
+            invoice_citation = pdf_citation(
+                bundle,
+                invoice_pdf,
+                "invoice rate basis",
+                ["base monthly fee", "2026 escalation"],
+            )
+            if invoice_citation is not None:
+                citations.append(invoice_citation)
         for idx, row in rows.head(3).iterrows():
             citations.append(excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(idx), f"{row.Invoice_ID}; SAR {row.Amount_SAR:,.2f}; base SAR {base_fee:,.2f}"))
         findings.append(
@@ -693,7 +716,14 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     ]
     invoice_pdf = rel_invoice_pdf("BordeauxWines", bundle)
     if invoice_pdf:
-        citations.append(bundle.evidence.citation(invoice_pdf, "PDF EUR invoice", bundle.evidence.pdf_excerpt(invoice_pdf, [str(target.Invoice_ID)])))
+        invoice_citation = pdf_citation(
+            bundle,
+            invoice_pdf,
+            "EUR invoice",
+            [str(target.Invoice_ID)],
+        )
+        if invoice_citation is not None:
+            citations.append(invoice_citation)
     bank_rel = "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf"
     bank_match = None
     missing_bank_ocr = False
@@ -745,7 +775,7 @@ def detect_dormant_credit_balance(bundle: DataBundle) -> list[Finding]:
         & (gl["Credit"].fillna(0) > 0)
     ]
     findings: list[Finding] = []
-    for _, credit in candidates.iterrows():
+    for idx, credit in candidates.iterrows():
         reference = str(credit["Reference"])
         amount = float(credit["Credit"])
         ap_rows = bundle.ap[
@@ -757,11 +787,18 @@ def detect_dormant_credit_balance(bundle: DataBundle) -> list[Finding]:
         vendor_id = str(ap_rows.iloc[0]["Vendor_ID"])
         vendor_name = str(ap_rows.iloc[0]["Vendor_Name"])
         citations = [
-            bundle.evidence.citation(_role_source_path(bundle, "gl_extract"), "CSV row with credit reference", f"{reference}; credit SAR {amount:,.2f}")
+            excel_citation(
+                bundle,
+                _role_source_path(bundle, "gl_extract"),
+                int(idx),
+                f"{reference}; credit SAR {amount:,.2f}",
+            )
         ]
         credit_pdf = rel_invoice_pdf(reference, bundle)
         if credit_pdf:
-            citations.append(bundle.evidence.citation(credit_pdf, "PDF credit note", bundle.evidence.pdf_excerpt(credit_pdf, [reference])))
+            credit_citation = pdf_citation(bundle, credit_pdf, "credit note", [reference])
+            if credit_citation is not None:
+                citations.append(credit_citation)
         for idx, row in ap_rows.head(3).iterrows():
             citations.append(excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(idx), f"{row.Invoice_ID}; paid SAR {row.Amount_SAR:,.2f}; memo references {reference}"))
         findings.append(

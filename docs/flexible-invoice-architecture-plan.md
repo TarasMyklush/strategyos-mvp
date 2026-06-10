@@ -8,6 +8,7 @@ Current status (updated 2026-06-10):
 
 - The product/runtime baseline is broader than invoice work: protected API, governed human review, Postgres-backed run state, Neo4j sync, Qdrant retrieval, MinIO artifact storage, and recovery-proof evidence are already part of the local broader-testing baseline.
 - **Phase 1 is delivered.** Source-pack intake (folder + upload), filename-independent content classification, OCR-before-classification, schema-tolerant column-alias mapping with operator confirmation, and true-skip partial runs are implemented (`source_pack.py`, `detector_contracts.py`, `ingestion.py`, `api.py`).
+- **Deterministic Data Q&A is delivered.** `strategyos_mvp/qa.py` plus `POST /qa` and the dashboard Data Q&A panel provide interactive deterministic finance answers over the selected/latest run data. This is not an LLM chat surface.
 - The invoice path remains workbook-native; the **additive canonical invoice-header collection (Phase 2)** is not yet implemented. Downstream consumer migration (Phase 3) is unstarted.
 - This plan remains the execution-order and blast-radius control document; Phases 2-3 below are still forward-looking.
 
@@ -26,12 +27,13 @@ This matters for invoice work because invoice-path changes must preserve the exi
 
 ## Current implementation truth for invoices and evidence
 
-The repo still depends on fixed dataset assumptions for finance ingestion and invoice-consuming logic:
+The repo still depends on workbook-native finance structures for the deterministic controls, but source-pack staging now feeds those structures where possible:
 
 - `strategyos_mvp/ingestion.py`
-  - `load_dataset()` reads fixed known files from the dataset root.
+  - `load_dataset()` reads workbook-native role paths from the dataset root.
+  - Source-pack staging can create a normalized run-model dataset from arbitrary supported filenames.
   - `DataBundle` contains workbook-native AP/AR/GL/TB/master-data/PO/cash-forecast collections.
-  - There is no source-pack manifest and no canonical invoice header collection today.
+  - There is a source-pack manifest/readiness flow today, but no separate canonical invoice header collection yet.
 - `strategyos_mvp/skills/finance_controls.py`
   - Deterministic controls read directly from `bundle.ap`.
 - `strategyos_mvp/knowledge_graph.py`
@@ -42,7 +44,7 @@ The repo still depends on fixed dataset assumptions for finance ingestion and in
   - Structured citation mapping still assumes the current fixed workbook/document paths.
 - `strategyos_mvp/api.py`
   - `/runs` executes against a dataset path.
-  - There is no source-pack validation endpoint and no folder-upload intake flow yet.
+  - Source-pack folder/upload validation and mapping confirmation endpoints exist.
 - `strategyos_mvp/evidence.py`, `strategyos_mvp/ocr.py`, and `strategyos_mvp/quality.py`
   - Evidence extraction, OCR status capture, and OCR-quality reporting already exist and remain the correct foundation for the next intake tranche.
 
@@ -93,22 +95,25 @@ That means flexible-invoice work must strengthen the evidence path first and mus
 
 ### Phase 0 - Current as-built baseline (already true)
 
-- Fixed dataset-root ingestion is the active path.
-- Manual dataset replacement remains the temporary demo mechanism.
+- Fixed dataset-root ingestion remains supported for the canonical synthetic baseline and regression tests.
+- Source-pack intake is also active for folder/upload-based runs and stages classified sources into the current run model where possible.
+- Manual dataset replacement remains only a legacy convenience path.
 - OCR/evidence quality, governed review, Neo4j sync, Qdrant retrieval, and recovery proof are already part of the broader-testing baseline.
 
-### Phase 1 - Source-pack intake and validation (next active tranche)
+### Phase 1 - Source-pack intake and validation (delivered)
 
 Goal: let a user select or upload a folder-shaped source pack and have StrategyOS register every supported file without relying on filenames.
 
-Required scope:
+Delivered scope:
 
-1. Add source-pack intake for workspace-bounded folder paths and uploaded folder payloads.
-2. Recursively enumerate supported files and build a manifest with stable source ids, hashes, relative paths, file type hints, and extraction status.
-3. Run text extraction/OCR before role classification for PDFs/images.
-4. Classify document roles from content, not filenames.
-5. Add validation/reporting for unsupported files, ambiguous roles, OCR failures, and task-readiness gaps.
-6. Add UI/API validation flow before run execution.
+1. Source-pack intake for workspace-bounded folder paths and uploaded folder payloads.
+2. Recursive supported-file enumeration with stable source ids, hashes, relative paths, file type hints, and extraction status.
+3. Text extraction/OCR before role classification for PDFs/images.
+4. Structured and document role classification from content signals rather than filenames.
+5. Validation/reporting for unsupported files, ambiguous roles, OCR failures, duplicate roles, unconfirmed mappings, and task-readiness gaps.
+6. UI/API validation flow before run execution.
+7. Schema-tolerant structured column mapping with operator confirmation.
+8. True-skip partial runs for missing roles, with detector skips reported.
 
 Acceptance bar:
 
@@ -154,8 +159,9 @@ Invoice expansion remains subordinate to the broader controlled-pilot hardening 
 ### Phase 1 direct surfaces
 
 - `strategyos_mvp/api.py`
-- new `strategyos_mvp/source_pack.py`
-- new `strategyos_mvp/document_classifier.py`
+- `strategyos_mvp/source_pack.py`
+- `strategyos_mvp/data_roles.py`
+- `strategyos_mvp/tasks.py`
 - `strategyos_mvp/evidence.py`
 - `strategyos_mvp/ocr.py`
 - `strategyos_mvp/quality.py`
@@ -177,39 +183,32 @@ Invoice expansion remains subordinate to the broader controlled-pilot hardening 
 - `strategyos_mvp/knowledge_graph.py`
 - `strategyos_mvp/skills/finance_controls.py`
 
-## Implementation review: missing work and developer guidance
+## Implementation review: status and remaining developer guidance
 
 This review is scoped to the requested local demo:
 
 `user selects a folder with scans/files -> StrategyOS processes supported files regardless of filenames -> user gets Cash Leakage Discovery, Working Capital Drift Check, and Drill-Down Q&A outputs.`
 
-### P0 findings
+### Delivered P0 findings
 
-#### P0-1. Missing folder/source-pack intake API and UI
+#### P0-1. Folder/source-pack intake API and UI — delivered
 
 Current evidence:
 
-- `strategyos_mvp/api.py` exposes `/runs`, but `RunRequest` only accepts `dataset`, `run_dir`, `skip_prepare`, and `sync_artifacts`.
-- The UI start-run form only has a text input for `Dataset path`.
-- There is no `UploadFile`, multipart route, `source_pack.py`, browser directory picker, or source-pack validation route.
+- `strategyos_mvp/api.py` exposes source-pack upload, path staging, validation, mapping confirmation, and source-pack-backed run creation.
+- `RunRequest` accepts `source_pack_id` and `allow_partial_source_pack`.
+- `strategyos_mvp/source_pack.py` builds manifests, classifies supported files, attaches OCR/text extraction, writes task readiness, and stages normalized datasets.
+- The dashboard exposes source-pack upload/path staging, validation, mapping confirmation, and partial-run controls.
 
 Impact:
 
-- A user cannot select or upload a folder from the browser.
-- The current workaround is manual replacement of the fixed dataset folder or typing a server-local path.
-- This does not meet the filename-independent scan-folder requirement.
+- The filename-independent source-pack requirement is implemented for supported file extensions.
+- Unsupported files are retained and reported rather than silently dropped.
 
 Guidance:
 
-- Add `strategyos_mvp/source_pack.py`.
-- Add API routes:
-  - `POST /source-packs/validate` for operator-only preflight validation.
-  - `POST /source-packs` for uploaded folder payloads.
-  - Optional local-dev route: `POST /source-packs/from-path` accepting a workspace-bounded folder path.
-- For browser upload, use multipart files and preserve relative paths when the browser provides them.
-- For local path mode, enforce the same workspace-boundary rules already used by `_resolve_dataset_path()`.
-- Store staged packs under a deterministic local folder such as `CONFIG.output_root / "source_packs" / <source_pack_id>`.
-- Return a manifest and task-readiness payload before allowing run execution.
+- Preserve the current source-pack boundary as the controlling intake path.
+- Add first-class parsing for currently unsupported office/email/archive formats only after the current supported path remains green.
 
 Acceptance tests:
 
@@ -218,11 +217,11 @@ Acceptance tests:
 - Unsupported files are returned as unsupported, not silently dropped.
 - A path outside `CONFIG.workspace_root` is rejected.
 
-#### P0-2. Fixed-filename ingestion still blocks arbitrary folders
+#### P0-2. Legacy fixed-path ingestion is retained, source-pack staging handles arbitrary filenames
 
 Current evidence:
 
-- `strategyos_mvp/ingestion.py::load_dataset()` directly reads fixed paths such as:
+- `strategyos_mvp/ingestion.py::load_dataset()` still supports the canonical fixed paths used by the regression fixture:
   - `02_ERP_Extracts/AP_Invoices_H1_2026.xlsx`
   - `02_ERP_Extracts/AR_Invoices_H1_2026.xlsx`
   - `02_ERP_Extracts/GL_Extract_H1_2026.csv`
@@ -230,55 +229,46 @@ Current evidence:
   - `03_Master_Data/Vendor_Master.xlsx`
   - `05_Purchase_Orders/PO_Log_H1_2026.csv`
   - `07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx`
+- `strategyos_mvp/source_pack.py` now stages arbitrary supported filenames into those canonical target paths when content-based role classification succeeds.
+- `strategyos_mvp/data_roles.py` centralizes run-model roles, target paths, labels, column signatures, aliases, and document role folders.
 
 Impact:
 
-- Renamed source files fail even if content is valid.
-- Scan-only folders cannot be processed into the current `DataBundle`.
-- The three business outputs depend on this workbook-native `DataBundle`.
+- Renamed structured source files can run through source-pack staging when their columns map to required roles.
+- Scan-only/document-only folders can be classified as evidence, but they still do not by themselves populate every workbook-native `DataBundle` frame needed for all current deterministic controls.
+- The three business outputs still depend on compatible workbook-native run-model data until Phase 2 canonical invoice headers and later consumer migration are implemented.
 
 Guidance:
 
 - Keep `load_dataset()` for backward compatibility.
-- Add a new intake path that builds a `SourcePackManifest`.
-- Add a normalization/staging step that maps classified sources into either:
-  - the existing workbook-native `DataBundle` fields for MVP compatibility, or
-  - additive canonical collections that controls can later consume.
-- Do not remove the fixed dataset path until source-pack tests cover the existing synthetic dataset.
+- Preserve source-pack staging as the primary arbitrary-folder path.
+- Keep using registered `DataRoleSpec` metadata for new structured/document roles rather than adding per-role constants in multiple modules.
+- Add additive canonical invoice headers in Phase 2 before migrating consumers away from workbook-native AP/AR frames.
 
 Acceptance tests:
 
 - Copy the current synthetic dataset to a temp folder, rename every source file, and prove classification still identifies the roles needed for the tasks.
 - The old fixed dataset path still passes current finance-control tests.
 
-#### P0-3. Missing content-based document classifier
+#### P0-3. Content-based classifier is implemented inside source-pack staging
 
 Current evidence:
 
-- No `strategyos_mvp/document_classifier.py`.
-- No `DocumentRole` or equivalent role enum.
-- Current logic relies on fixed paths and source groups rather than content signatures.
+- `strategyos_mvp/source_pack.py` classifies structured sources from workbook/sheet/column signals and document sources from extracted/OCR text indicators.
+- `strategyos_mvp/data_roles.py` defines document roles such as invoice documents, bank statements, contracts, and email correspondence alongside structured run-model roles.
+- Filenames remain provenance/display metadata rather than the routing source of truth.
 
 Impact:
 
-- The system cannot decide whether arbitrary scanned files are invoices, bank statements, contracts, ledgers, trial balances, PO logs, or unknown evidence.
+- Supported structured and text-bearing document inputs can be classified independently of filenames.
+- Ambiguous or unknown evidence is reported in the manifest instead of silently promoted.
+- The classifier is intentionally rule-based and bounded; unsupported office/email/archive formats and weak OCR text remain known limitations.
 
 Guidance:
 
-- Add a classifier that uses content signals first:
-  - workbook sheet names and headers,
-  - CSV headers,
-  - extracted PDF/OCR text,
-  - table-like cues,
-  - known finance terms such as invoice number, due date, vendor, amount, VAT, IBAN, debit, credit, GL account, trial balance, purchase order.
-- Treat extension and filename as weak hints only.
-- Return:
-  - `document_role`,
-  - confidence,
-  - evidence snippets that justify the role,
-  - parser candidates,
-  - ambiguity reasons.
-- Do not auto-promote low-confidence classifications into task-critical inputs without validation warnings.
+- Keep classification content-first and registry-driven through `DataRoleSpec`.
+- Treat new roles as additive registrations with tests for aliases, required columns, target paths, and task-readiness effects.
+- Do not auto-promote low-confidence classifications into task-critical inputs without validation warnings or operator confirmation.
 
 Acceptance tests:
 
@@ -286,31 +276,25 @@ Acceptance tests:
 - An ambiguous file returns an ambiguous role with reasons.
 - Unknown evidence appears in the manifest.
 
-#### P0-4. OCR is not yet a complete scan-folder intake layer
+#### P0-4. OCR-backed PDF/image source-pack intake — delivered with known precision limits
 
 Current evidence:
 
 - `strategyos_mvp/evidence.py` extracts PDF text and calls OCR for PDF pages.
-- `strategyos_mvp/ocr.py` supports local OCR paths, but the source-pack flow for arbitrary PDFs/images is absent.
-- There is no general image-file OCR registration for selected folders.
+- `strategyos_mvp/ocr.py` supports local Tesseract and macOS Vision fallback.
+- `strategyos_mvp/source_pack.py` attaches text extraction for supported PDFs and images before document-role classification.
+- Supported OCR image inputs are `.png`, `.jpg`, `.jpeg`, `.tif`, and `.tiff`.
 
 Impact:
 
-- Scanned images or image-only PDFs cannot reliably feed document classification and task validation.
-- OCR status is not yet tied to a source-pack manifest.
+- Scanned PDFs/images can feed document classification when OCR succeeds.
+- OCR status and failure reasons are tied to the source-pack manifest.
+- OCR does not currently provide numeric word/page accuracy confidence, so important finance amounts still require reviewer inspection.
 
 Guidance:
 
-- Extend OCR intake to support PDF plus PNG/JPG/TIFF.
-- Cache OCR by source hash, engine, and version.
-- Store OCR results per source and page/image:
-  - status,
-  - engine,
-  - extracted text,
-  - failure reason,
-  - verification snippets.
-- Run OCR before classification for scans.
-- Feed only verified OCR text into parsers, controls, and optional model prompts.
+- Keep OCR local and auditable.
+- Future work: add numeric OCR confidence scoring or stronger OCR quality checks for scan-heavy finance documents.
 
 Acceptance tests:
 
@@ -318,29 +302,32 @@ Acceptance tests:
 - OCR failure does not crash the run; it appears as a data-quality issue.
 - OCR cache is reused for identical file content.
 
-#### P0-5. Missing task-readiness validator
+#### P0-5. Task-readiness validator — delivered
 
 Current evidence:
 
 - `/health/ready` checks infrastructure readiness.
-- There is no source-pack task-readiness endpoint for Cash Leakage Discovery, Working Capital Drift Check, or Drill-Down Q&A.
+- Source-pack validation returns a task-readiness payload.
+- Readiness records supported/unsupported files, role inventory, missing roles, duplicate structured roles, and unconfirmed mappings.
+- Partial-run mode records available and missing roles; dependent detectors are skipped instead of crashing or injecting synthetic data.
 
 Impact:
 
-- The UI cannot tell the user whether a selected folder can support the requested analyses before run.
+- The UI can show whether a selected pack is ready, partial, blocked, or needs operator mapping confirmation before run.
 - "Processed all files" can be confused with "all tasks are computable."
 
 Guidance:
 
-- Add a task-readiness model with statuses:
+- Preserve the registered `TaskSpec` readiness model and keep statuses explicit:
   - `ready`,
   - `partial`,
   - `blocked`.
-- Validate minimum role coverage:
+- Validate minimum role coverage through task/data-role metadata:
   - Cash Leakage Discovery needs AP data and supporting evidence; richer leakage classes also need vendor master, contracts, bank statements, GL, PO, and cash forecast depending on pattern.
   - Working Capital Drift Check needs AP and AR invoice/settlement dates and amounts.
   - Drill-Down Q&A needs generated findings plus GL/TB baseline fields for EBITDA bridge quality.
 - Return missing role names and concrete guidance, not generic errors.
+- Add new cases through `TaskSpec` registrations rather than one-off readiness branches.
 
 Acceptance tests:
 
@@ -353,12 +340,11 @@ Acceptance tests:
 Current evidence:
 
 - `state_store.py` returns skipped state when `DATABASE_URL` is absent.
-- The currently running local server reports `database_configured=false`.
 - Reviewer queue, claim/unclaim, approvals, and operator resume all depend on persisted run/checkpoint state.
 
 Impact:
 
-- Direct local `uvicorn` can show latest artifacts and partial UI state, but cannot properly demo governed queue -> claim -> approve -> resume e2e without Postgres.
+- Direct local `uvicorn` without `DATABASE_URL` can show latest artifacts and partial UI state, but cannot properly demo governed queue -> claim -> approve -> resume e2e without Postgres.
 
 Guidance:
 
@@ -441,30 +427,32 @@ Acceptance tests:
 - Existing synthetic dataset results remain stable.
 - Source-pack-staged equivalent dataset produces the same or intentionally explained result deltas.
 
-#### P1-3. Drill-Down Q&A is a generated transcript, not interactive Q&A
+#### P1-3. Deterministic interactive Q&A — delivered
 
 Current evidence:
 
 - `CaseFileWriter` writes `Drill-down Q&A transcript.md`.
-- No `/qa` endpoint exists.
-- No UI chat surface exists for follow-up questions.
+- `strategyos_mvp/qa.py` implements a deterministic intent registry and answer handlers.
+- `POST /qa` accepts `{question, run_id?}` and returns answer, value, unit, basis, intent, citations, and suggestions.
+- The dashboard **Data Q&A** panel submits questions and renders a thread with basis/source lines.
 
 Impact:
 
-- The current artifact proves precomputed Q&A depth, not live conversational depth.
+- The product now supports deterministic interactive finance Q&A over the selected/latest run data.
+- The Q&A surface is intentionally bounded; unsupported questions return suggestions instead of guessed answers.
 
 Guidance:
 
-- If live conversational proof is required, add `/runs/{run_id}/qa` or `/qa` over selected run artifacts.
-- Product messaging must label the shipped surface as a generated evidence review transcript until a real interactive endpoint exists.
-- Start deterministic: retrieve from run summary, findings, citations, working-capital memo, and data-quality report.
-- Add optional LLM review only behind provider boundary and audit flag.
+- Keep `/qa` deterministic and local-first.
+- Do not add LLM-backed Q&A unless it is explicitly behind the provider boundary and audit flag.
+- Future work: add more curated intents only where answers can be computed and cited.
 
 Acceptance tests:
 
-- Ask "largest single-event leakage" and get answer with finding id and citation.
-- Ask "top-five EBITDA impact" and get answer with GL/TB baseline reference.
-- Ask unsupported question and receive a bounded "not supported by current evidence" answer.
+- Ask `What is the total amount of invoices?` and get the exact AP total with basis/citations.
+- Ask `Top 5 vendors by spend` and get ranked vendors.
+- Ask `What is the total recoverable?` and get the deterministic recoverable amount.
+- Ask unsupported text and receive suggestions, not a fabricated answer.
 
 #### P1-4. Source-pack persistence schema is not defined
 
@@ -491,49 +479,33 @@ Acceptance tests:
 - Manifest artifact exists for every source-pack run.
 - When Postgres is enabled, source-pack id is linked to the run.
 
-### Suggested implementation order
+### Remaining implementation order
 
-1. Add models/contracts for `SourcePackManifest`, `SourceFileRecord`, `DocumentRole`, `TaskReadiness`, and `CanonicalInvoiceHeader`.
-2. Implement `source_pack.py` for recursive intake, hashing, manifest writing, and workspace-boundary validation.
-3. Extend OCR/text extraction for source-pack PDFs/images and attach results to source records.
-4. Implement `document_classifier.py` with content-first rules and confidence scoring.
-5. Add task-readiness validation for the three requested scenarios.
-6. Add operator-only API routes and UI validation before `/runs`.
-7. Add compatibility staging so current `load_dataset()` or a new loader can consume classified source packs.
-8. Add canonical invoice headers as an additive `DataBundle` field.
-9. Wire source-pack id into run summary, data-quality report, and artifacts.
-10. Add minimal Postgres local-stack instructions for governed e2e.
+1. Add canonical invoice headers as an additive `DataBundle` field.
+2. Populate canonical headers from the current AP workbook first.
+3. Populate canonical headers from high-confidence source-pack invoice documents where reliable fields are available.
+4. Wire source traceability from source-pack ids/locators into canonical invoice headers.
+5. Add minimal Postgres local-stack instructions for governed e2e if the existing compose guidance is too broad for demo use.
+6. Migrate invoice-consuming controls only after canonical headers are test-backed and non-breaking.
 
-### Developer-ready test checklist
+### Current and remaining test checklist
 
-- `tests/test_source_pack.py`
-  - recursive folder intake,
-  - source hashing,
-  - unsupported-file reporting,
-  - outside-workspace rejection.
-- `tests/test_document_classifier.py`
-  - role classification from workbook headers,
-  - role classification from OCR text,
-  - renamed-file stability,
-  - ambiguity reporting.
-- `tests/test_task_readiness.py`
-  - ready/partial/blocked coverage for the three scenarios.
-- `tests/test_flexible_invoices.py`
-  - AP workbook to canonical headers,
-  - scan-derived invoice header where confidence is sufficient,
-  - source traceability.
-- `tests/test_frontend_shell.py`
-  - folder/source-pack validation controls render,
-  - run submission can reference validated source-pack id.
-- Existing tests must remain green:
-  - `tests/test_finance_controls.py`,
-  - `tests/test_case_file_writer.py`,
-  - `tests/test_run_poc_audit_log.py`,
-  - `tests/test_reviewer_api.py`.
+Current coverage:
 
-## Definition of done for the currently active invoice plan
+- `tests/test_source_pack.py` and `tests/test_source_pack_api.py` cover recursive intake, hashing, unsupported-file reporting, workspace-boundary rejection, role classification, staging, API validation, and mapping confirmation behavior.
+- `tests/test_task_registry.py` covers registered readiness tasks.
+- `tests/test_data_roles.py` covers registered source/data roles and role-derived metadata.
+- `tests/test_plugins.py` covers plugin module registration for stages, tasks, data roles, and detectors.
+- `tests/test_frontend_shell.py` covers source-pack/dashboard controls.
+- Existing non-regression coverage remains in `tests/test_finance_controls.py`, `tests/test_case_file_writer.py`, `tests/test_run_poc_audit_log.py`, and `tests/test_reviewer_api.py`.
 
-The current plan is satisfied only when all of the following are true:
+Remaining coverage for Phase 2:
+
+- `tests/test_flexible_invoices.py` for AP workbook to canonical headers, scan-derived invoice headers where confidence is sufficient, and source traceability.
+
+## Definition of done for the remaining invoice plan
+
+The remaining plan is satisfied only when all of the following are true:
 
 - The repo still supports the current workbook-native run path with no regression.
 - A user-selected folder/source pack can be registered and validated without filename dependence.

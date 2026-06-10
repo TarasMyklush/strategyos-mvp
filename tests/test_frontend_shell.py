@@ -174,6 +174,22 @@ def test_dashboard_renders_vector_search_utility_panel_and_fetch_hook():
     assert "requestJson(`/data/vector-search?${params.toString()}`)" in response.text
 
 
+def test_dashboard_renders_qa_panel_and_fetch_hook():
+    client = TestClient(api_module.app)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Data Q&A" in response.text
+    assert "POST /qa" in response.text
+    assert 'id="qa-form"' in response.text
+    assert 'id="qa-input"' in response.text
+    assert 'id="qa-thread"' in response.text
+    assert 'id="qa-payload-preview"' in response.text
+    assert "activeQaRunId()" in response.text
+    assert "requestJson('/qa'" in response.text
+
+
 def test_dashboard_renders_operator_start_run_form_slice_and_submit_hook():
     client = TestClient(api_module.app)
 

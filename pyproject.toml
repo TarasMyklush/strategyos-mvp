@@ -15,6 +15,7 @@ dependencies = [
   "pydantic",
   "reportlab",
   "langgraph>=0.2; python_version >= '3.11'",
+  "langgraph-checkpoint-postgres>=2.0; python_version >= '3.11'",
   "uvicorn[standard]",
 ]
 

@@ -9,5 +9,6 @@
     "price_variance",
     "off_contract_single_approver"
   ],
-  "expected_total_recoverable_sar": 794108.0
+  "expected_total_recoverable_sar": 794108.0,
+  "expected_citation_resolution_min_rate": 1.0
 }

@@ -38,6 +38,59 @@ def _check_by_name(checks: list[dict[str, Any]], name: str) -> dict[str, Any]:
     return {"name": name, "passed": False, "detail": "check missing from acceptance report"}
 
 
+def _load_json(path: Path) -> dict[str, Any]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _green_acceptance_run_dirs(current_run_dir: Path) -> list[Path]:
+    run_dirs: list[Path] = []
+    for candidate in CONFIG.output_root.glob("StrategyOS MVP Run-*"):
+        if not candidate.is_dir():
+            continue
+        if candidate.resolve() == current_run_dir.resolve():
+            continue
+        report = _load_json(candidate / "StrategyOS POC Acceptance Report.json")
+        if report.get("passed") is True:
+            run_dirs.append(candidate.resolve())
+    return sorted(run_dirs, key=lambda path: (path.stat().st_mtime, path.name))
+
+
+def _active_evidence_source_run_dir() -> Path | None:
+    summary = _load_json(
+        CONFIG.output_root / ACTIVE_EVIDENCE_DIRNAME / "run_summary.json"
+    )
+    run_dir = summary.get("run_dir")
+    if not run_dir:
+        return None
+    return Path(str(run_dir)).expanduser().resolve()
+
+
+def build_promotion_freshness_warning(current_run_dir: Path) -> dict[str, Any]:
+    previous_green_runs = _green_acceptance_run_dirs(current_run_dir)
+    newest_previous_green = previous_green_runs[-1] if previous_green_runs else None
+    active_run_dir = _active_evidence_source_run_dir()
+    warning = None
+    if newest_previous_green and active_run_dir != newest_previous_green:
+        warning = (
+            "A newer green local run existed before this final-gate run and was not "
+            "the promoted active evidence pack."
+        )
+    return {
+        "passed": True,
+        "warning": warning,
+        "active_run_dir": str(active_run_dir) if active_run_dir else None,
+        "newest_previous_green_run_dir": (
+            str(newest_previous_green) if newest_previous_green else None
+        ),
+        "current_gate_run_dir": str(current_run_dir.resolve()),
+        "detail": warning
+        or "Promoted active evidence already matched the newest previous green local run, or no previous green run exists.",
+    }
+
+
 def _run_pytest_suite(*test_paths: str) -> dict[str, Any]:
     command = [sys.executable, "-m", "pytest", "-q", *test_paths]
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
@@ -84,16 +137,24 @@ def build_final_gate_report(
     checks = acceptance.get("checks", [])
     deliverable_check = _check_by_name(checks, "deliverable_presence")
     citation_check = _check_by_name(checks, "resolved_citations_per_finding")
+    citation_resolution_rate_check = _check_by_name(checks, "citation_resolution_rate")
     ocr_check = _check_by_name(checks, "ocr_required_extraction_or_failure_handling")
     ping_pong_check = _check_by_name(checks, "challenged_findings_when_ping_pong_active")
     pattern_check = _check_by_name(checks, "planted_patterns_medium_plus")
     total_check = _check_by_name(checks, "total_recoverable_within_tolerance")
 
+    evidence_chain_passed = all(
+        (
+            citation_check.get("passed", False),
+            citation_resolution_rate_check.get("passed", False),
+        )
+    )
     phase7_passed = all(
         (
             acceptance.get("passed", False),
             deliverable_check.get("passed", False),
             citation_check.get("passed", False),
+            citation_resolution_rate_check.get("passed", False),
             ping_pong_check.get("passed", False),
             pattern_check.get("passed", False),
             total_check.get("passed", False),
@@ -120,12 +181,19 @@ def build_final_gate_report(
             generic_health_passed,
         )
     )
+    promotion_freshness = build_promotion_freshness_warning(
+        Path(str(acceptance_payload.get("run_dir") or "."))
+    )
+    warnings = []
+    if promotion_freshness.get("warning"):
+        warnings.append(promotion_freshness["warning"])
     return {
         "passed": final_gate_passed,
         "decision": "go" if final_gate_passed else "no-go",
         "baseline": "canonical local acceptance harness + OCR baseline",
         "run_dir": acceptance_payload.get("run_dir"),
         "command": "make final-gate",
+        "warnings": warnings,
         "summary": {
             "run_id": summary.get("run_id"),
             "status": summary.get("status"),
@@ -150,8 +218,15 @@ def build_final_gate_report(
                 "detail": ocr_check.get("detail"),
             },
             "phase_4_evidence_chain": {
-                "passed": citation_check.get("passed", False),
-                "detail": citation_check.get("detail"),
+                "passed": evidence_chain_passed,
+                "detail": (
+                    f"{citation_check.get('detail')}; "
+                    f"{citation_resolution_rate_check.get('detail')}"
+                ),
+                "checks": {
+                    "resolved_citations_per_finding": citation_check,
+                    "citation_resolution_rate": citation_resolution_rate_check,
+                },
             },
             "phase_7_task3": {
                 "passed": phase7_passed,
@@ -176,6 +251,7 @@ def build_final_gate_report(
                 ),
                 "validation": generic_health_validation,
             },
+            "promotion_freshness": promotion_freshness,
             "phase_9_final_gate": {
                 "passed": final_gate_passed,
                 "detail": (
@@ -207,6 +283,10 @@ def render_final_gate_report(report: dict[str, Any]) -> str:
         lines.append(f"- {status} - {phase_name}: {payload.get('detail')}")
     fixture_regression = report["phase_status"]["fixture_regression"]["validation"]
     generic_health = report["phase_status"]["generic_health"]["validation"]
+    if report.get("warnings"):
+        lines.extend(["", "## Warnings", ""])
+        for warning in report["warnings"]:
+            lines.append(f"- {warning}")
     lines.extend(
         [
             "",
@@ -256,7 +336,7 @@ def promote_active_evidence(run_dir: Path, report: dict[str, Any]) -> Path:
     readme_lines = [
         "# StrategyOS Active Run Evidence",
         "",
-        "Date: 2026-06-08",
+        "Date: 2026-06-10",
         "Status: Canonical current local-only evidence set",
         "",
         "## Promoted source pack",
@@ -306,24 +386,29 @@ def refresh_canonical_set_readme(active_dir: Path, run_dir: Path) -> Path:
             [
                 "# StrategyOS Canonical Set README",
                 "",
-                "Date: 2026-06-08",
+                "Date: 2026-06-10",
                 "Status: Canonical outputs index after local final-gate refresh",
                 "",
                 "## Canonical/current set to use now",
                 "",
-                "1. `StrategyOS Current As-Built Architecture (Canonical).md` — controlling as-built architecture",
-                "2. `StrategyOS Prod-Readiness Gap-Closure Plan (Controlled).md` — controlling phase plan",
-                "3. `StrategyOS Data Management Model.md` — current supporting data model reference",
-                "4. `StrategyOS End-User Guides/` — current user/operator/reviewer guides",
-                "5. `StrategyOS Agent Input/` — active runtime input pack for deterministic analysis",
-                "6. `StrategyOS Evaluation/` — human-only evaluation pack kept outside runtime and optional model review",
-                f"7. `{ACTIVE_EVIDENCE_DIRNAME}/` — canonical current run evidence from `{run_dir.name}`",
+                "1. `StrategyOS Current As-Built Architecture (Canonical).md` — controlling as-built architecture and current open-gap register",
+                "2. `StrategyOS Data Management Model.md` — current supporting data model reference",
+                "3. `StrategyOS End-User Guides/` — current user/operator/reviewer guides",
+                "4. `StrategyOS Agent Input/` — active runtime input pack for deterministic analysis",
+                "5. `StrategyOS Evaluation/` — human-only evaluation pack kept outside runtime and optional model review",
+                f"6. `{ACTIVE_EVIDENCE_DIRNAME}/` — canonical current run evidence from `{run_dir.name}`",
+                "7. `StrategyOS Runtime Proofs/` — targeted runtime proof packs separate from promoted active evidence",
                 "8. `Archive/` — historical/stale/transitional items retained for traceability",
                 "",
                 "## Active run evidence status",
                 "",
                 f"`{ACTIVE_EVIDENCE_DIRNAME}/` now mirrors the latest local final-gate run at `{run_dir}`.",
                 "Trust this folder over older phase-labelled packs when evidence conflicts.",
+                "",
+                "## Promotion rule",
+                "",
+                "Canonical evidence numbers may only be quoted from `StrategyOS Active Run Evidence/`.",
+                "Promotion happens through `make final-gate`; direct `run_poc` runs are experimental until promoted.",
                 "",
                 "## Use rule",
                 "",

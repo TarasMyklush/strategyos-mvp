@@ -125,6 +125,10 @@ def test_postgres_backed_governed_source_pack_flow(tmp_path: Path):
         assert created_payload["current_stage"] == "awaiting_review"
         assert created_payload["review_state"] == "awaiting_decision"
         assert created_payload["resume_state"] == "blocked_pending_review"
+        if api_module.CONFIG.runtime_backend == "langgraph":
+            runtime = created_payload.get("runtime") or {}
+            assert runtime.get("actual_backend") == "langgraph"
+            assert runtime.get("fallback_used") is False
 
         pending = client.get(
             "/reviewer/pending-reviews",

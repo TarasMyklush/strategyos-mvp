@@ -25,9 +25,12 @@ from .auth import (
     require_role,
 )
 from .config import CONFIG
+from .ingestion import load_dataset
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
+from . import qa as qa_engine
+from .skills.finance_controls import run_all_finance_skills
 from .reviewer_runtime import resume_reviewed_run
 from .run_registry import load_latest_run_summary, update_run_pointers
 from .run_poc import run_strategyos_workflow
@@ -76,6 +79,11 @@ class SourcePackMappingConfirmRequest(BaseModel):
     relative_path: str
     role: str | None = None
     column_mapping: dict[str, str] | None = None
+
+
+class QaRequest(BaseModel):
+    question: str
+    run_id: str | None = None
 
 
 app = FastAPI(title="StrategyOS MVP API", version="0.1.0")
@@ -891,6 +899,11 @@ def _dashboard_html() -> str:
           .result-item-head {{ display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }}
           .result-item-head strong {{ font-size: 14px; }}
           .result-meta {{ display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }}
+          .qa-thread {{ max-height: 420px; overflow: auto; padding-right: 4px; }}
+          .qa-entry {{ border: 1px solid #edf1f5; border-radius: 12px; padding: 12px; background: #fbfcfe; display: grid; gap: 10px; }}
+          .qa-question {{ color: var(--ink); font-weight: 700; }}
+          .qa-answer {{ color: var(--ink); line-height: 1.5; }}
+          .qa-basis {{ color: var(--muted); font-size: 13px; line-height: 1.4; }}
           .code-block {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 12px; overflow: auto; }}
           .surface-summary {{ display: grid; gap: 12px; }}
           .surface-summary .summary-line {{ display: flex; justify-content: space-between; gap: 12px; align-items: center; }}
@@ -1407,6 +1420,37 @@ def _dashboard_html() -> str:
                   <pre id="vector-search-payload-preview" class="code-block">Awaiting vector search payload.</pre>
                 </article>
               </div>
+              <div class="detail-grid" style="margin-top:16px;">
+                <article class="detail-card">
+                  <div class="panel-head">
+                    <h3>Data Q&A</h3>
+                    <p><span class="mono">POST /qa</span></p>
+                  </div>
+                  <form id="qa-form" class="inline-form">
+                    <label>
+                      Question
+                      <input id="qa-input" type="text" placeholder="What is the total amount of invoices?" autocomplete="off" />
+                    </label>
+                    <div class="button-row">
+                      <button class="button" id="qa-submit" type="submit">Ask</button>
+                    </div>
+                    <div id="qa-context" class="muted">Awaiting run context.</div>
+                  </form>
+                  <div id="qa-summary" class="surface-summary">
+                    <div class="summary-line"><strong>Awaiting question</strong><span>Answers will render with basis and sources.</span></div>
+                  </div>
+                </article>
+                <article class="detail-card">
+                  <div class="panel-head">
+                    <h3>Q&A thread</h3>
+                    <p>Deterministic answers from the selected run.</p>
+                  </div>
+                  <div id="qa-thread" class="result-list qa-thread">
+                    <div class="result-item"><strong>No questions yet</strong><span class="muted">Ask a finance question to begin.</span></div>
+                  </div>
+                  <pre id="qa-payload-preview" class="code-block">Awaiting Q&A payload.</pre>
+                </article>
+              </div>
             </section>
 
             <section id="health-section" class="section-view hidden">
@@ -1487,6 +1531,8 @@ def _dashboard_html() -> str:
             selectedArtifact: null,
             artifactPreview: null,
             vectorSearch: {{ status: 'idle', query: '', results: [], payload: null, error: '' }},
+            qaThread: [],
+            qaStatus: {{ status: 'idle', payload: null, error: '' }},
             startRunPanelOpen: false,
             startRunSubmitting: false,
             sourcePack: null,
@@ -1575,6 +1621,13 @@ def _dashboard_html() -> str:
             vectorSearchSummary: document.getElementById('vector-search-summary'),
             vectorSearchResults: document.getElementById('vector-search-results'),
             vectorSearchPayloadPreview: document.getElementById('vector-search-payload-preview'),
+            qaForm: document.getElementById('qa-form'),
+            qaInput: document.getElementById('qa-input'),
+            qaSubmit: document.getElementById('qa-submit'),
+            qaContext: document.getElementById('qa-context'),
+            qaSummary: document.getElementById('qa-summary'),
+            qaThread: document.getElementById('qa-thread'),
+            qaPayloadPreview: document.getElementById('qa-payload-preview'),
             healthSummary: document.getElementById('health-summary'),
             healthChecksKv: document.getElementById('health-checks-kv'),
             healthConfigKv: document.getElementById('health-config-kv'),
@@ -2139,6 +2192,80 @@ def _dashboard_html() -> str:
             els.vectorSearchPayloadPreview.textContent = compactJson(vectorState.payload);
           }}
 
+          function activeQaRunId() {{
+            return state.selectedRunId || state.latestRun?.run_id || state.dataStatus?.run_id || null;
+          }}
+
+          function qaRunAvailable() {{
+            return Boolean(state.selectedRun || state.latestRun || state.dataStatus?.run_id || state.dataStatus?.dataset_root);
+          }}
+
+          function renderQa() {{
+            const runId = activeQaRunId();
+            const qaStatus = state.qaStatus || {{ status: 'idle', payload: null, error: '' }};
+            els.qaContext.textContent = runId
+              ? `Answer scope: run ${{runId}}.`
+              : (qaRunAvailable() ? 'Answer scope: latest completed run.' : 'No completed run context is loaded yet.');
+
+            if (bootstrap.api_auth_enabled && !state.session?.authenticated) {{
+              els.qaSummary.innerHTML = '<div class="summary-line"><strong>Session required</strong><span>Connect with reviewer/operator access to call /qa.</span></div>';
+              els.qaThread.innerHTML = '<div class="result-item"><strong>Session required</strong><span class="muted">Authenticate to ask questions.</span></div>';
+              els.qaPayloadPreview.textContent = 'Connect a session to inspect Q&A payloads.';
+              els.qaSubmit.disabled = true;
+              return;
+            }}
+
+            const disabled = qaStatus.status === 'loading' || !qaRunAvailable();
+            els.qaSubmit.disabled = disabled;
+
+            if (!qaRunAvailable()) {{
+              els.qaSummary.innerHTML = '<div class="summary-line"><strong>No run loaded</strong><span>Start or select a completed run before asking.</span></div>';
+              els.qaThread.innerHTML = '<div class="result-item"><strong>No run context</strong><span class="muted">Q&A needs a completed run dataset.</span></div>';
+              els.qaPayloadPreview.textContent = 'No Q&A payload.';
+              return;
+            }}
+
+            if (qaStatus.status === 'loading') {{
+              els.qaSummary.innerHTML = '<div class="summary-line"><strong>Answering</strong><span>Computing from the run data.</span></div>';
+            }} else if (qaStatus.status === 'failed') {{
+              els.qaSummary.innerHTML = `<div class="summary-line"><strong>${{statusPill('failed')}}</strong><span>${{escapeHtml(qaStatus.error || 'Q&A failed.')}}</span></div>`;
+            }} else if (state.qaThread.length) {{
+              const latest = state.qaThread[state.qaThread.length - 1]?.payload || {{}};
+              els.qaSummary.innerHTML = `
+                <div class="summary-line"><strong>${{statusPill(latest.matched === false ? 'unmatched' : 'answered')}}</strong><span>${{escapeHtml(latest.intent || latest.question || 'latest answer')}}</span></div>
+                <div class="summary-line"><strong>Run</strong><span class="mono">${{escapeHtml(latest.run_id || runId || 'latest')}}</span></div>
+              `;
+            }} else {{
+              els.qaSummary.innerHTML = '<div class="summary-line"><strong>Awaiting question</strong><span>Answers will render with basis and sources.</span></div>';
+            }}
+
+            const entries = state.qaThread || [];
+            if (!entries.length) {{
+              els.qaThread.innerHTML = '<div class="result-item"><strong>No questions yet</strong><span class="muted">Ask a finance question to begin.</span></div>';
+            }} else {{
+              els.qaThread.innerHTML = entries.map((entry) => {{
+                const payload = entry.payload || {{}};
+                const suggestions = Array.isArray(payload.suggestions) && payload.suggestions.length
+                  ? `<div class="result-meta">${{payload.suggestions.map((item) => `<span class="pill">${{escapeHtml(item)}}</span>`).join('')}}</div>`
+                  : '';
+                const citations = Array.isArray(payload.citations) && payload.citations.length
+                  ? `<div class="result-meta">${{payload.citations.map((item) => `<span class="pill">${{escapeHtml(item.source_path || item.source || 'source')}}${{item.locator ? ` · ${{escapeHtml(item.locator)}}` : ''}}</span>`).join('')}}</div>`
+                  : '';
+                return `
+                  <div class="qa-entry">
+                    <div class="qa-question">${{escapeHtml(entry.question || payload.question || 'Question')}}</div>
+                    <div class="qa-answer">${{escapeHtml(payload.answer || entry.error || 'No answer returned.')}}</div>
+                    ${{payload.basis ? `<div class="qa-basis">Basis: ${{escapeHtml(payload.basis)}}</div>` : ''}}
+                    ${{suggestions}}
+                    ${{citations}}
+                  </div>
+                `;
+              }}).join('');
+              els.qaThread.scrollTop = els.qaThread.scrollHeight;
+            }}
+            els.qaPayloadPreview.textContent = compactJson(qaStatus.payload || entries[entries.length - 1]?.payload || {{ status: qaStatus.status || 'idle' }});
+          }}
+
           function renderHealthConsole() {{
             if (bootstrap.api_auth_enabled && !state.session?.authenticated) {{
               els.healthSummary.innerHTML = '<div class="summary-line"><strong>Session required</strong><span>Connect with reviewer/operator access to load readiness and config surfaces.</span></div>';
@@ -2510,6 +2637,7 @@ def _dashboard_html() -> str:
             renderRunDetail();
             renderReviewConsole();
             renderVectorSearch();
+            renderQa();
             syncHashRoute();
           }}
 
@@ -2525,6 +2653,7 @@ def _dashboard_html() -> str:
               renderReviewConsole();
               renderArtifactInspector();
               renderVectorSearch();
+              renderQa();
               return;
             }}
             const nextRunId = state.selectedRunId || state.latestRun?.run_id || state.queue[0]?.run_id || null;
@@ -2534,6 +2663,7 @@ def _dashboard_html() -> str:
               renderReviewConsole();
               renderArtifactInspector();
               renderVectorSearch();
+              renderQa();
               return;
             }}
             await selectRun(nextRunId, nextCheckpointId);
@@ -2575,6 +2705,7 @@ def _dashboard_html() -> str:
                 renderServices();
                 renderDataStatus();
                 renderVectorSearch();
+                renderQa();
                 renderHealthConsole();
                 renderRunDetail();
                 renderReviewConsole();
@@ -2628,6 +2759,7 @@ def _dashboard_html() -> str:
             renderServices();
             renderDataStatus();
             renderVectorSearch();
+            renderQa();
             renderHealthConsole();
             renderPosture();
             if (failures.length) {{
@@ -2657,6 +2789,7 @@ def _dashboard_html() -> str:
               renderServices();
               renderDataStatus();
               renderVectorSearch();
+              renderQa();
               renderHealthConsole();
               renderArtifactInspector();
               setBanner(error?.status === 401 ? 'warn' : 'danger', error?.status === 401 ? 'Authentication required' : 'Failed to load shell data', message);
@@ -2697,6 +2830,36 @@ def _dashboard_html() -> str:
                 error: error?.message || 'Vector search failed.',
               }};
               renderVectorSearch();
+            }}
+          }}
+
+          async function submitQa(event) {{
+            event?.preventDefault?.();
+            const question = els.qaInput.value.trim();
+            if (!question) return;
+            const runId = activeQaRunId();
+            state.qaStatus = {{ status: 'loading', payload: {{ question }}, error: '' }};
+            renderQa();
+            try {{
+              const body = {{ question }};
+              if (runId) body.run_id = runId;
+              const payload = await requestJson('/qa', {{
+                method: 'POST',
+                body: JSON.stringify(body),
+              }});
+              state.qaThread.push({{ question, payload }});
+              state.qaStatus = {{ status: 'ready', payload, error: '' }};
+              els.qaInput.value = '';
+              renderQa();
+            }} catch (error) {{
+              const payload = error?.payload || {{ status: 'failed', detail: error?.message || 'Q&A failed.' }};
+              state.qaThread.push({{ question, payload, error: error?.message || 'Q&A failed.' }});
+              state.qaStatus = {{
+                status: 'failed',
+                payload,
+                error: error?.message || 'Q&A failed.',
+              }};
+              renderQa();
             }}
           }}
 
@@ -2952,6 +3115,8 @@ def _dashboard_html() -> str:
             state.selectedArtifact = null;
             state.artifactPreview = null;
             state.vectorSearch = {{ status: 'idle', query: '', results: [], payload: null, error: '' }};
+            state.qaThread = [];
+            state.qaStatus = {{ status: 'idle', payload: null, error: '' }};
             state.startRunPanelOpen = false;
             state.startRunSubmitting = false;
             state.sourcePack = null;
@@ -2968,6 +3133,7 @@ def _dashboard_html() -> str:
           }});
           document.getElementById('refresh-home').addEventListener('click', refreshAll);
           els.vectorSearchForm.addEventListener('submit', submitVectorSearch);
+          els.qaForm.addEventListener('submit', submitQa);
           els.startRun.addEventListener('click', () => toggleStartRunPanel());
           els.sourcePackUploadForm.addEventListener('submit', submitSourcePackUpload);
           els.sourcePackPathForm.addEventListener('submit', submitSourcePackPath);
@@ -3040,6 +3206,7 @@ def _dashboard_html() -> str:
           renderServices();
           renderDataStatus();
           renderVectorSearch();
+          renderQa();
           renderHealthConsole();
           renderStartRunPanel();
           renderSourcePackPanel();
@@ -3552,6 +3719,113 @@ def vector_search(
         latest_summary = _latest_summary() or {}
         run_id = latest_summary.get("run_id")
     return search_run_vectors(str(run_id) if run_id else None, query, limit=limit)
+
+
+# Cache reloaded Q&A contexts by a stable run key so repeated chat questions do
+# not reload the dataset each time. Keyed by (dataset_root, run_mode).
+_QA_CONTEXT_CACHE: dict[tuple[str, str, str], dict[str, Any]] = {}
+
+
+def _qa_summary_for_run(run_id: str | None) -> dict[str, Any]:
+    if run_id:
+        record = state_store.get_run_detail(run_id)
+        if isinstance(record, dict) and record.get("status") == "missing":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Run '{run_id}' was not found.",
+            )
+        if isinstance(record, dict) and record.get("status") == "skipped":
+            latest = _latest_summary() or {}
+            if str(latest.get("run_id") or "") == str(run_id):
+                return latest
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Run lookup is unavailable because the state store is not configured. "
+                    "Omit run_id to use the latest local run."
+                ),
+            )
+        if not isinstance(record, dict):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Run '{run_id}' was not found.",
+            )
+        summary = dict(record.get("summary_json") or {})
+        if record.get("dataset_root") and not summary.get("dataset"):
+            summary["dataset"] = record["dataset_root"]
+        if record.get("run_dir") and not summary.get("run_dir"):
+            summary["run_dir"] = record["run_dir"]
+        summary["run_id"] = run_id
+        return summary
+    return _latest_summary() or {}
+
+
+def _resolve_qa_context(run_id: str | None) -> dict[str, Any]:
+    """Reload the bundle + findings for a run so Q&A can compute fresh answers.
+
+    Uses the latest run when run_id is omitted. Returns a context dict with the
+    bundle, findings, and the resolved run identifiers, or raises HTTPException
+    with actionable guidance when no answerable run exists.
+    """
+    summary = _qa_summary_for_run(run_id)
+    resolved_run_id = summary.get("run_id") or run_id
+    dataset_root = summary.get("dataset") or summary.get("dataset_root")
+    run_mode = str(summary.get("run_mode") or "full")
+    if not dataset_root:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No completed run is available to answer questions yet. Start a run first.",
+        )
+    cache_run_key = str(resolved_run_id or dataset_root)
+    cache_key = (cache_run_key, str(dataset_root), run_mode)
+    cached = _QA_CONTEXT_CACHE.get(cache_key)
+    if cached is None:
+        dataset_path = Path(str(dataset_root))
+        if not dataset_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"The run's source data is no longer available at {dataset_root}.",
+            )
+        try:
+            bundle = load_dataset(dataset_path, strict=(run_mode != "partial"))
+            findings = run_all_finance_skills(bundle)
+        except Exception as exc:  # pragma: no cover - defensive reload guard
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Could not reload the run's data for Q&A: {exc}",
+            ) from exc
+        cached = {"bundle": bundle, "findings": findings}
+        _QA_CONTEXT_CACHE[cache_key] = cached
+    return {
+        "bundle": cached["bundle"],
+        "findings": cached["findings"],
+        "run_id": resolved_run_id,
+        "run_mode": run_mode,
+    }
+
+
+@app.post("/qa")
+def data_qa(
+    request: QaRequest,
+    _: dict[str, Any] = require_role("operator", "reviewer"),
+) -> dict[str, Any]:
+    question = (request.question or "").strip()
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ask a question, e.g. 'What is the total amount of invoices?'.",
+        )
+    context = _resolve_qa_context(request.run_id)
+    result = qa_engine.answer_question(
+        question, bundle=context["bundle"], findings=context["findings"]
+    )
+    return {
+        "status": "ok",
+        "run_id": context["run_id"],
+        "run_mode": context["run_mode"],
+        "question": question,
+        **result,
+    }
 
 
 @app.post("/inputs/prepare")

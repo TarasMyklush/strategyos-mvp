@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -27,6 +28,7 @@ def test_build_final_gate_report_marks_phase7_phase8_and_gate_green(tmp_path: Pa
             "checks": [
                 {"name": "deliverable_presence", "passed": True, "detail": "ok"},
                 {"name": "resolved_citations_per_finding", "passed": True, "detail": "ok"},
+                {"name": "citation_resolution_rate", "passed": True, "detail": "ok"},
                 {"name": "ocr_required_extraction_or_failure_handling", "passed": True, "detail": "ok"},
                 {"name": "challenged_findings_when_ping_pong_active", "passed": True, "detail": "ok"},
                 {"name": "planted_patterns_medium_plus", "passed": True, "detail": "ok"},
@@ -58,6 +60,7 @@ def test_build_final_gate_report_marks_phase7_phase8_and_gate_green(tmp_path: Pa
     assert report["passed"] is True
     assert report["decision"] == "go"
     assert report["phase_status"]["phase_7_task3"]["passed"] is True
+    assert report["phase_status"]["phase_4_evidence_chain"]["passed"] is True
     assert report["phase_status"]["fixture_regression"]["passed"] is True
     assert report["phase_status"]["generic_health"]["passed"] is True
     assert report["phase_status"]["phase_9_final_gate"]["passed"] is True
@@ -98,3 +101,86 @@ def test_promote_active_evidence_replaces_stale_files_and_writes_readme(tmp_path
     assert (active_dir / "run_summary.json").exists()
     assert (active_dir / "StrategyOS Final Gate Report.md").exists()
     assert "latest local final-gate run" in (active_dir / "README.md").read_text(encoding="utf-8")
+
+
+def test_final_gate_report_warns_when_newer_green_run_is_unpromoted(tmp_path: Path, monkeypatch):
+    output_root = tmp_path / "outputs"
+    active_dir = output_root / "StrategyOS Active Run Evidence"
+    active_dir.mkdir(parents=True)
+    old_run = output_root / "StrategyOS MVP Run-20260610T080000Z"
+    newer_green_run = output_root / "StrategyOS MVP Run-20260610T090000Z"
+    current_gate_run = output_root / "StrategyOS MVP Run-20260610T100000Z"
+    for run_dir in (old_run, newer_green_run, current_gate_run):
+        run_dir.mkdir(parents=True)
+    (active_dir / "run_summary.json").write_text(
+        json.dumps({"run_dir": str(old_run)}),
+        encoding="utf-8",
+    )
+    (old_run / "StrategyOS POC Acceptance Report.json").write_text(
+        json.dumps({"passed": True}),
+        encoding="utf-8",
+    )
+    (newer_green_run / "StrategyOS POC Acceptance Report.json").write_text(
+        json.dumps({"passed": True}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "strategyos_mvp.final_gate.CONFIG",
+        SimpleNamespace(output_root=output_root),
+    )
+
+    acceptance_payload = {
+        "run_dir": str(current_gate_run),
+        "summary": {
+            "run_id": None,
+            "status": "completed",
+            "current_stage": "writer",
+            "run_outcome": "completed",
+            "deliverables_status": "complete",
+            "findings": 8,
+            "locked_findings": 8,
+            "total_recoverable_sar": 794108.0,
+            "checkpoint_count": 6,
+            "runtime": {"actual_backend": "local"},
+            "state_store": {"status": "skipped"},
+            "neo4j": {"status": "skipped"},
+            "qdrant": {"status": "skipped"},
+        },
+        "acceptance": {
+            "passed": True,
+            "checks": [
+                {"name": "deliverable_presence", "passed": True, "detail": "ok"},
+                {"name": "resolved_citations_per_finding", "passed": True, "detail": "ok"},
+                {"name": "citation_resolution_rate", "passed": True, "detail": "ok"},
+                {"name": "ocr_required_extraction_or_failure_handling", "passed": True, "detail": "ok"},
+                {"name": "challenged_findings_when_ping_pong_active", "passed": True, "detail": "ok"},
+                {"name": "planted_patterns_medium_plus", "passed": True, "detail": "ok"},
+                {"name": "total_recoverable_within_tolerance", "passed": True, "detail": "ok"},
+            ],
+        },
+    }
+
+    report = build_final_gate_report(
+        acceptance_payload=acceptance_payload,
+        fixture_regression_validation={
+            "passed": True,
+            "command": "pytest",
+            "returncode": 0,
+            "output": "passed",
+            "tests": [],
+        },
+        generic_health_validation={
+            "passed": True,
+            "command": "pytest",
+            "returncode": 0,
+            "output": "passed",
+            "tests": [],
+        },
+    )
+
+    freshness = report["phase_status"]["promotion_freshness"]
+    assert report["passed"] is True
+    assert freshness["warning"]
+    assert freshness["newest_previous_green_run_dir"] == str(newer_green_run.resolve())
+    assert report["warnings"] == [freshness["warning"]]

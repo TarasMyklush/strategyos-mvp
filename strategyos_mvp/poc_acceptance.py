@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .citation_resolver import resolve_findings
+from .config import CONFIG
 from .ingestion import DataBundle
 from .models import AuditEvent, Finding
 from .paths import DEFAULT_RUN_DIR, SOURCE_DATASET
@@ -36,6 +37,12 @@ def load_tamween_answer_key(answer_key_path: Path = ANSWER_KEY_PATH) -> dict[str
     return {
         "expected_pattern_types": set(payload["expected_pattern_types"]),
         "expected_total_recoverable_sar": float(payload["expected_total_recoverable_sar"]),
+        "expected_citation_resolution_min_rate": float(
+            payload.get(
+                "expected_citation_resolution_min_rate",
+                CONFIG.acceptance_generic_citation_resolution_min_rate,
+            )
+        ),
         "answer_key_path": str(answer_key_path),
     }
 
@@ -56,9 +63,20 @@ def evaluate_poc_acceptance(
     expectations = answer_key or load_tamween_answer_key()
     expected_pattern_types = expectations["expected_pattern_types"]
     expected_total_recoverable_sar = expectations["expected_total_recoverable_sar"]
+    citation_resolution_min_rate = float(
+        expectations.get(
+            "expected_citation_resolution_min_rate",
+            CONFIG.acceptance_generic_citation_resolution_min_rate,
+        )
+    )
 
     findings_by_pattern = {finding.pattern_type: finding for finding in findings}
     resolved_citations = resolve_findings(bundle, findings)
+    citation_count = len(resolved_citations)
+    resolved_citation_count = sum(1 for item in resolved_citations if item.get("resolved"))
+    citation_resolution_rate = (
+        1.0 if citation_count == 0 else resolved_citation_count / citation_count
+    )
     resolved_counts: Counter[str] = Counter(
         item["finding_id"] for item in resolved_citations if item.get("resolved")
     )
@@ -104,6 +122,15 @@ def evaluate_poc_acceptance(
             "all findings resolved at least three citations"
             if not citation_failures
             else f"failures={citation_failures}"
+        ),
+    }
+    citation_resolution_rate_check = {
+        "name": "citation_resolution_rate",
+        "passed": citation_resolution_rate >= citation_resolution_min_rate,
+        "detail": (
+            f"resolved={resolved_citation_count}/{citation_count} "
+            f"rate={citation_resolution_rate:.3f} "
+            f"required={citation_resolution_min_rate:.3f}"
         ),
     }
 
@@ -186,6 +213,7 @@ def evaluate_poc_acceptance(
         pattern_check,
         total_recoverable_check,
         citation_check,
+        citation_resolution_rate_check,
         challenge_check,
         deliverable_check,
         ocr_check,
@@ -208,6 +236,10 @@ def evaluate_poc_acceptance(
         "answer_key_path": expectations.get("answer_key_path"),
         "expected_total_recoverable_sar": expected_total_recoverable_sar,
         "actual_total_recoverable_sar": total_recoverable,
+        "citation_count": citation_count,
+        "resolved_citation_count": resolved_citation_count,
+        "citation_resolution_rate": citation_resolution_rate,
+        "citation_resolution_min_rate": citation_resolution_min_rate,
         "checks": checks,
         "findings": finding_summaries,
         "quality_report_status": quality_report["status"],
@@ -231,6 +263,11 @@ def render_acceptance_report(report: dict[str, Any]) -> str:
         f"- Run ID: {report.get('run_id')}",
         f"- Run dir: {report.get('run_dir')}",
         f"- Recoverable SAR: {report['actual_total_recoverable_sar']:.2f}",
+        (
+            f"- Citation resolution: {report.get('resolved_citation_count', 0)}/"
+            f"{report.get('citation_count', 0)} "
+            f"({float(report.get('citation_resolution_rate', 0.0)):.3f})"
+        ),
         f"- Data quality status: {report.get('quality_report_status')}",
         "",
         "## Checks",

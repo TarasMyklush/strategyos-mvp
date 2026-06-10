@@ -144,6 +144,8 @@ class StrategyOSConfig:
     runtime_dep_tesseract_version: str
     runtime_dep_tesseract_eng_version: str
     runtime_backend: str
+    plugin_modules: tuple[str, ...]
+    plugin_failure_mode: str
     run_policy: RunPolicyConfig
     sync_artifacts: bool
     sync_source_files: bool
@@ -152,6 +154,7 @@ class StrategyOSConfig:
     hosted_ocr_vision_enabled: bool
     source_pack_structured_candidate_threshold: float
     source_pack_document_indicator_threshold: int
+    acceptance_generic_citation_resolution_min_rate: float
     finance_usd_rate: float
     finance_fx_hedge_default_rate: float
     finance_off_contract_min_invoices: int
@@ -181,6 +184,15 @@ def _runtime_backend() -> str:
     if backend in {"local", "langgraph", "auto"}:
         return backend
     return "local"
+
+
+def _plugin_failure_mode() -> str:
+    mode = (
+        env("STRATEGYOS_PLUGIN_FAILURE_MODE", "strict") or "strict"
+    ).strip().lower()
+    if mode in {"strict", "permissive"}:
+        return mode
+    return "strict"
 
 
 def _run_policy_mode() -> str:
@@ -309,6 +321,8 @@ def load_config() -> StrategyOSConfig:
             or "1:4.1.0-2"
         ),
         runtime_backend=_runtime_backend(),
+        plugin_modules=env_csv("STRATEGYOS_PLUGIN_MODULES"),
+        plugin_failure_mode=_plugin_failure_mode(),
         run_policy=RunPolicyConfig(
             mode=_run_policy_mode(),
             approved_external_modes=_approved_external_modes(),
@@ -323,6 +337,9 @@ def load_config() -> StrategyOSConfig:
         ),
         source_pack_document_indicator_threshold=env_int(
             "STRATEGYOS_SOURCE_PACK_DOCUMENT_INDICATOR_THRESHOLD", 2
+        ),
+        acceptance_generic_citation_resolution_min_rate=env_float(
+            "STRATEGYOS_ACCEPTANCE_GENERIC_CITATION_RESOLUTION_MIN_RATE", 0.9
         ),
         finance_usd_rate=env_float("STRATEGYOS_FINANCE_USD_RATE", 3.75),
         finance_fx_hedge_default_rate=env_float(
