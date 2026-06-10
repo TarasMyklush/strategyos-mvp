@@ -113,20 +113,29 @@ def _tesseract_languages() -> tuple[list[str], str | None]:
 def runtime_dependency_status() -> dict[str, Any]:
     checks: dict[str, dict[str, Any]] = {}
     overall = "ok"
+    # The expected versions are Debian package pins verified via dpkg-query (the
+    # deploy image is Debian). On a non-Debian host (e.g. macOS) there is no
+    # dpkg-query, so the exact-version comparison is meaningless. There, verify
+    # the tool actually works (on PATH + version probe succeeds) instead of
+    # demanding a Debian package version.
+    dpkg_available = shutil.which("dpkg-query") is not None
     for spec in RUNTIME_DEPENDENCY_SPECS:
         expected_version = str(getattr(CONFIG, spec["config_field"]))
-        installed_version, package_error = _package_version(spec["package"])
         check: dict[str, Any] = {
             "status": "ok",
             "package": spec["package"],
             "expected_version": expected_version,
-            "installed_version": installed_version,
+            "version_check_mode": "debian_pin" if dpkg_available else "host_functional",
         }
-        if package_error or installed_version != expected_version:
-            check["status"] = "failed"
-            check["reason"] = package_error or (
-                f"Installed version '{installed_version}' does not match expected '{expected_version}'."
-            )
+        if dpkg_available:
+            installed_version, package_error = _package_version(spec["package"])
+            check["installed_version"] = installed_version
+            if package_error or installed_version != expected_version:
+                check["status"] = "failed"
+                check["reason"] = package_error or (
+                    f"Installed version '{installed_version}' does not match expected '{expected_version}'."
+                )
+
         binary_name = spec["binary"]
         version_command = spec["version_command"]
         if binary_name:
@@ -142,6 +151,11 @@ def runtime_dependency_status() -> dict[str, Any]:
                 if version_error:
                     check["status"] = "failed"
                     check["reason"] = version_error
+        elif not dpkg_available:
+            # No binary to probe and no dpkg to verify the package version. The
+            # companion binary check covers functional readiness (e.g. the
+            # tesseract language probe below), so do not hard-fail here.
+            check["status"] = "ok"
         checks[spec["key"]] = check
         if check["status"] != "ok":
             overall = "failed"

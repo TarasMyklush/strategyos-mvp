@@ -4,6 +4,37 @@ from types import SimpleNamespace
 from strategyos_mvp import ocr
 
 
+def test_runtime_dependency_status_is_host_functional_without_dpkg(monkeypatch):
+    # On a non-Debian host (no dpkg-query) with working binaries, the runtime
+    # check must verify the tools function rather than demand a Debian package
+    # version pin it cannot resolve.
+    bins = {
+        "curl": "/usr/bin/curl",
+        "pdftoppm": "/opt/homebrew/bin/pdftoppm",
+        "tesseract": "/opt/homebrew/bin/tesseract",
+        # dpkg-query intentionally absent
+    }
+    monkeypatch.setattr(ocr.shutil, "which", lambda name: bins.get(name))
+    monkeypatch.setattr(ocr, "_binary_version", lambda cmd: ("tool 1.0", None))
+    monkeypatch.setattr(ocr, "_tesseract_languages", lambda: (["eng", "osd"], None))
+
+    status = ocr.runtime_dependency_status()
+    assert status["status"] == "ok"
+    assert all(c["version_check_mode"] == "host_functional" for c in status["checks"].values())
+
+
+def test_runtime_dependency_status_fails_when_binary_missing(monkeypatch):
+    # Missing tesseract must still fail even in host-functional mode.
+    bins = {"curl": "/usr/bin/curl", "pdftoppm": "/opt/homebrew/bin/pdftoppm"}
+    monkeypatch.setattr(ocr.shutil, "which", lambda name: bins.get(name))
+    monkeypatch.setattr(ocr, "_binary_version", lambda cmd: ("tool 1.0", None))
+    monkeypatch.setattr(ocr, "_tesseract_languages", lambda: ([], "tesseract not found"))
+
+    status = ocr.runtime_dependency_status()
+    assert status["status"] == "failed"
+    assert status["checks"]["tesseract"]["status"] == "failed"
+
+
 def test_detect_ocr_engine_prefers_tesseract_then_macos_vision(monkeypatch):
     monkeypatch.setattr(ocr, "CONFIG", replace(ocr.CONFIG, ocr_engine="tesseract"))
     monkeypatch.setattr(ocr, "MACOS_VISION_SCRIPT", ocr.Path(__file__))
