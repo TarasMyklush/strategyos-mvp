@@ -7,7 +7,13 @@ from typing import Any
 
 import pandas as pd
 
-from .detector_contracts import load_structured_role, resolve_detector_contracts
+from .detector_contracts import (
+    CONTRACTS_BY_ROLE,
+    empty_role_frame,
+    load_structured_role,
+    resolve_detector_contracts,
+    resolve_detector_contracts_partial,
+)
 from .evidence import EvidenceStore
 from .models import DataQualityIssue
 
@@ -44,35 +50,88 @@ class DataBundle:
     quality_issues: list[DataQualityIssue] = field(default_factory=list)
 
 
-def load_dataset(dataset_root: Path) -> DataBundle:
+# role -> DataBundle attribute name
+_ROLE_ATTRIBUTES: dict[str, str] = {
+    "ap_ledger": "ap",
+    "ar_ledger": "ar",
+    "gl_extract": "gl",
+    "trial_balance": "trial_balance",
+    "vendor_master": "vendors",
+    "customer_master": "customers",
+    "chart_of_accounts": "coa",
+    "purchase_orders": "po",
+    "cash_forecast": "cash_forecast",
+}
+
+_ROLE_DATE_COLUMNS: dict[str, list[str]] = {
+    "ap_ledger": ["Invoice_Date", "Due_Date", "Payment_Date"],
+    "ar_ledger": ["Invoice_Date", "Due_Date", "Collection_Date"],
+    "gl_extract": ["Date"],
+    "vendor_master": ["Created_Date"],
+    "purchase_orders": ["PO_Date", "Delivery_Date"],
+}
+
+
+def load_dataset(dataset_root: Path, *, strict: bool | None = None) -> DataBundle:
+    """Load a finance dataset into a DataBundle.
+
+    Strictness controls how absent structured roles are handled:
+    - strict=True: every role must resolve (legacy fixed-dataset path).
+    - strict=False: absent roles load as empty canonical-column frames and are
+      recorded as unavailable in ``run_metadata['available_roles']`` so
+      dependent detectors are skipped (partial source-pack runs).
+
+    When ``strict`` is None (default) it is inferred from the run-context file:
+    a source-pack run written with ``run_mode='partial'`` loads non-strict;
+    everything else stays strict to preserve current behavior.
+    """
     evidence = EvidenceStore.build(dataset_root)
     run_metadata = _load_run_metadata(dataset_root)
-    contracts = resolve_detector_contracts(dataset_root)
-    ap = load_structured_role(dataset_root, contracts["ap_ledger"])
-    ar = load_structured_role(dataset_root, contracts["ar_ledger"])
-    gl = load_structured_role(dataset_root, contracts["gl_extract"])
-    tb = load_structured_role(dataset_root, contracts["trial_balance"])
-    vendors = load_structured_role(dataset_root, contracts["vendor_master"])
-    customers = load_structured_role(dataset_root, contracts["customer_master"])
-    coa = load_structured_role(dataset_root, contracts["chart_of_accounts"])
-    po = load_structured_role(dataset_root, contracts["purchase_orders"])
-    cash_forecast = load_structured_role(dataset_root, contracts["cash_forecast"])
+    if strict is None:
+        strict = str(run_metadata.get("run_mode") or "full") != "partial"
+
+    if strict:
+        contracts = resolve_detector_contracts(dataset_root)
+        unresolved: list[str] = []
+    else:
+        contracts, unresolved = resolve_detector_contracts_partial(dataset_root)
+
+    frames: dict[str, Any] = {}
+    for role, attribute in _ROLE_ATTRIBUTES.items():
+        if role in contracts:
+            value = load_structured_role(dataset_root, contracts[role])
+        elif role == "cash_forecast":
+            value = {}
+        else:
+            value = empty_role_frame(role)
+        date_columns = _ROLE_DATE_COLUMNS.get(role)
+        if date_columns and isinstance(value, pd.DataFrame):
+            value = normalize_dates(value, date_columns)
+        frames[attribute] = value
+
+    available_roles = sorted(contracts)
     run_metadata.setdefault(
         "detector_data_contracts",
         {role: resolved.artifact() for role, resolved in contracts.items()},
     )
+    # Availability is derived here at load time (single source of truth) so the
+    # detector role-guards skip exactly the absent roles. Honor a stricter set
+    # already present in the run context if one was written upstream.
+    run_metadata.setdefault("available_roles", available_roles)
+    run_metadata.setdefault("missing_roles", sorted(unresolved))
+
     bundle = DataBundle(
         dataset_root=dataset_root,
         evidence=evidence,
-        ap=normalize_dates(ap, ["Invoice_Date", "Due_Date", "Payment_Date"]),
-        ar=normalize_dates(ar, ["Invoice_Date", "Due_Date", "Collection_Date"]),
-        gl=normalize_dates(gl, ["Date"]),
-        trial_balance=tb,
-        vendors=normalize_dates(vendors, ["Created_Date"]),
-        customers=customers,
-        coa=coa,
-        po=normalize_dates(po, ["PO_Date", "Delivery_Date"]),
-        cash_forecast=cash_forecast,
+        ap=frames["ap"],
+        ar=frames["ar"],
+        gl=frames["gl"],
+        trial_balance=frames["trial_balance"],
+        vendors=frames["vendors"],
+        customers=frames["customers"],
+        coa=frames["coa"],
+        po=frames["po"],
+        cash_forecast=frames["cash_forecast"],
         data_contracts={role: resolved.artifact() for role, resolved in contracts.items()},
         run_metadata=run_metadata,
     )

@@ -222,15 +222,44 @@ def _candidate_paths(dataset_root: Path, contract: DetectorRoleContract) -> list
 
 
 def resolve_detector_contracts(dataset_root: Path) -> dict[str, ResolvedDetectorContract]:
+    resolved, unresolved = resolve_detector_contracts_partial(dataset_root)
+    if unresolved:
+        raise FileNotFoundError(
+            "Could not resolve detector data contracts for roles "
+            f"{sorted(unresolved)} under '{dataset_root}'."
+        )
+    return resolved
+
+
+def resolve_detector_contracts_partial(
+    dataset_root: Path,
+) -> tuple[dict[str, ResolvedDetectorContract], list[str]]:
+    """Resolve what is present; return (resolved_by_role, unresolved_roles).
+
+    Unlike ``resolve_detector_contracts`` this never raises for a missing role,
+    so partial source packs can run only the detectors whose roles are present.
+    """
     resolved: dict[str, ResolvedDetectorContract] = {}
+    unresolved: list[str] = []
     for contract in DETECTOR_ROLE_CONTRACTS:
         match = _resolve_detector_contract(dataset_root, contract)
         if match is None:
-            raise FileNotFoundError(
-                f"Could not resolve detector data contract for role '{contract.role}' under '{dataset_root}'."
-            )
+            unresolved.append(contract.role)
+            continue
         resolved[contract.role] = match
-    return resolved
+    return resolved, unresolved
+
+
+def empty_role_frame(role: str) -> pd.DataFrame:
+    """Empty DataFrame carrying a role's canonical required columns.
+
+    Used as the stand-in for an absent role so column reads in quality checks
+    and detectors do not KeyError; detectors needing the role are skipped
+    upstream via the available-roles set.
+    """
+    contract = CONTRACTS_BY_ROLE.get(role)
+    columns = list(contract.required_columns) if contract else []
+    return pd.DataFrame(columns=columns)
 
 
 def _resolve_detector_contract(dataset_root: Path, contract: DetectorRoleContract) -> ResolvedDetectorContract | None:

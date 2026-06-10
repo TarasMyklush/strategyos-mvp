@@ -377,14 +377,31 @@ class CaseFileWriter:
             for assessment in assess_finding_evidence(bundle, findings)
             if not assessment["publishable"]
         ]
+        run_mode = str((getattr(bundle, "run_metadata", {}) or {}).get("run_mode") or "full")
         if blocked:
             detail = "; ".join(
                 f"{item['finding_id']}: {', '.join(item['reasons'])}"
                 for item in blocked
             )
-            raise ValueError(
-                "Cannot produce polished outputs from weak evidence. " + detail
-            )
+            if run_mode != "partial":
+                # Full run against a complete dataset: a finding that cannot meet
+                # the evidence bar is a genuine regression — fail closed.
+                raise ValueError(
+                    "Cannot produce polished outputs from weak evidence. " + detail
+                )
+            # Partial run: corroborating roles may be legitimately absent. Withhold
+            # the weak findings from the published case file (they are already
+            # marked blocked/LOW by the fail-closed policy) rather than crashing.
+            blocked_ids = {item["finding_id"] for item in blocked}
+            withheld = [f for f in findings if f.finding_id in blocked_ids]
+            findings = [f for f in findings if f.finding_id not in blocked_ids]
+            bundle.run_metadata["withheld_findings"] = [
+                {
+                    "finding_id": item["finding_id"],
+                    "reasons": item["reasons"],
+                }
+                for item in blocked
+            ]
         case_file_md = run_dir / "Final consolidated case file.md"
         case_file_pdf = run_dir / "Final consolidated case file.pdf"
         wc_memo = run_dir / "Working capital drift memo.md"
@@ -551,10 +568,19 @@ def render_qa(findings: list[Finding], bundle: DataBundle) -> str:
         "## Q2. What is the top-five recovery impact?",
         "",
         f"Top-five gross recoverable opportunity: SAR {sum(f.recoverable_sar for f in top_five):,.2f} across {', '.join(f.finding_id for f in top_five)}.",
-        f"Baseline H1 EBITDA from GL/TB: SAR {ebitda['baseline_ebitda_sar']:,.2f} on revenue SAR {ebitda['revenue_sar']:,.2f}, for an EBITDA margin of {ebitda['baseline_margin']:.2%} before recovery.",
-        f"Of the top five, SAR {ebitda_recovery:,.2f} maps directly to current-period EBITDA lines; pro-forma EBITDA becomes SAR {ebitda['baseline_ebitda_sar'] + ebitda_recovery:,.2f} and margin becomes {((ebitda['baseline_ebitda_sar'] + ebitda_recovery) / ebitda['revenue_sar']):.2%}.",
-        f"The remaining SAR {non_ebitda_recovery:,.2f} is recovery value, but not H1 EBITDA uplift: prior-period credit / balance-sheet recovery plus control-dependent exposure remain outside the EBITDA bridge until separately realized.",
-        f"Baseline citations: {_format_ebitda_citations(ebitda)}.",
+    ])
+    if ebitda.get("available"):
+        lines.extend([
+            f"Baseline H1 EBITDA from GL/TB: SAR {ebitda['baseline_ebitda_sar']:,.2f} on revenue SAR {ebitda['revenue_sar']:,.2f}, for an EBITDA margin of {ebitda['baseline_margin']:.2%} before recovery.",
+            f"Of the top five, SAR {ebitda_recovery:,.2f} maps directly to current-period EBITDA lines; pro-forma EBITDA becomes SAR {ebitda['baseline_ebitda_sar'] + ebitda_recovery:,.2f} and margin becomes {((ebitda['baseline_ebitda_sar'] + ebitda_recovery) / ebitda['revenue_sar']):.2%}.",
+            f"The remaining SAR {non_ebitda_recovery:,.2f} is recovery value, but not H1 EBITDA uplift: prior-period credit / balance-sheet recovery plus control-dependent exposure remain outside the EBITDA bridge until separately realized.",
+            f"Baseline citations: {_format_ebitda_citations(ebitda)}.",
+        ])
+    else:
+        lines.append(
+            "EBITDA bridge not computed for this run: it requires the trial balance, chart of accounts, and GL extract, which were not all present in the selected source pack."
+        )
+    lines.extend([
         "Top-five finding citations:",
         "",
     ])
@@ -675,7 +701,23 @@ def _render_detector_coverage(bundle: DataBundle) -> list[str]:
     return lines
 
 
+def _ebitda_inputs_available(bundle: DataBundle) -> bool:
+    """EBITDA bridge needs trial balance, chart of accounts, and GL together."""
+    for frame, columns in (
+        (bundle.trial_balance, ("Account", "Credit_Total", "Debit_Total")),
+        (bundle.coa, ("Account", "Account_Description", "Type")),
+        (bundle.gl, ("Account", "Debit", "Credit")),
+    ):
+        if frame is None or frame.empty:
+            return False
+        if any(column not in frame.columns for column in columns):
+            return False
+    return True
+
+
 def _compute_ebitda_baseline(bundle: DataBundle) -> dict[str, float | bool | list[int]]:
+    if not _ebitda_inputs_available(bundle):
+        return {"available": False}
     tb = bundle.trial_balance.merge(
         bundle.coa[["Account", "Account_Description", "Type"]],
         on=["Account", "Account_Description"],
@@ -698,6 +740,7 @@ def _compute_ebitda_baseline(bundle: DataBundle) -> dict[str, float | bool | lis
     debit_variance = float((reconciliation["Debit_Total"] - reconciliation["Debit"]).abs().max())
     credit_variance = float((reconciliation["Credit_Total"] - reconciliation["Credit"]).abs().max())
     return {
+        "available": True,
         "revenue_sar": revenue_sar,
         "expense_total_sar": expense_total_sar,
         "addbacks_sar": addbacks_sar,

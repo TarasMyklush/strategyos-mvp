@@ -1085,7 +1085,7 @@ def _dashboard_html() -> str:
                       <div class="button-row">
                         <label><input id="start-run-skip-prepare" type="checkbox" /> Skip input preparation</label>
                         <label><input id="start-run-sync-artifacts" type="checkbox" checked /> Sync artifacts when configured</label>
-                        <label><input id="start-run-allow-partial-source-pack" type="checkbox" /> Allow partial source-pack run with baseline fill</label>
+                        <label><input id="start-run-allow-partial-source-pack" type="checkbox" /> Allow partial source-pack run (missing roles skipped, no synthetic fill)</label>
                       </div>
                       <div class="button-row">
                         <button class="button" id="start-run-submit" type="submit">Submit run</button>
@@ -1754,11 +1754,16 @@ def _dashboard_html() -> str:
             els.startRunSkipPrepare.disabled = disabled;
             els.startRunSyncArtifacts.disabled = disabled;
             els.startRunAllowPartialSourcePack.disabled = disabled;
-            els.startRunSubmit.disabled = disabled;
+            // Block submission while any low-confidence role mapping is unconfirmed.
+            const unconfirmed = (state.sourcePack?.task_readiness?.unconfirmed_roles) || [];
+            const blockedByMapping = state.sourcePack && unconfirmed.length > 0;
+            els.startRunSubmit.disabled = disabled || blockedByMapping;
             els.startRunCancel.disabled = disabled;
             renderSourcePackPanel();
             if (state.startRunSubmitting) {{
               setStartRunStatus('warn', 'Submitting run request', 'Posting the selected dataset, run directory, and runtime options to /runs.');
+            }} else if (blockedByMapping) {{
+              setStartRunStatus('warn', 'Confirm mappings first', `Confirm low-confidence role mappings before running: ${{unconfirmed.join(', ')}}.`);
             }}
           }}
 
@@ -1811,23 +1816,43 @@ def _dashboard_html() -> str:
               ? candidates.map((item) => {{
                   const classification = item.classification || {{}};
                   const proposal = classification.column_mapping_proposal || {{}};
-                  const mapping = Object.entries(proposal.column_mapping || {{}})
-                    .map(([canonical, source]) => `${{canonical}} ← ${{source}}`)
-                    .join(' · ');
+                  const role = classification.role || proposal.role || '';
+                  const proposed = proposal.column_mapping || {{}};
+                  const sourceColumns = Array.isArray(proposal.source_columns) ? proposal.source_columns : [];
+                  const canonicalColumns = Object.keys(proposed).concat(
+                    (proposal.missing_required || []).filter((c) => !(c in proposed))
+                  );
+                  const rel = item.relative_path || '';
+                  const rowId = 'map-' + (item.source_id || Math.random().toString(36).slice(2));
+                  const rows = canonicalColumns.map((canonical) => {{
+                    const chosen = proposed[canonical] || '';
+                    const options = ['<option value="">— unmapped —</option>']
+                      .concat(sourceColumns.map((src) => `<option value="${{escapeHtml(src)}}" ${{src === chosen ? 'selected' : ''}}>${{escapeHtml(src)}}</option>`))
+                      .join('');
+                    return `<div class="summary-line"><span class="mono">${{escapeHtml(canonical)}}</span>` +
+                      `<select data-canonical="${{escapeHtml(canonical)}}" class="mapping-select">${{options}}</select></div>`;
+                  }}).join('');
                   return `
-                    <div class="artifact-item">
-                      <strong>${{escapeHtml(item.relative_path || 'source')}}</strong>
-                      <span>${{statusPill(classification.role || 'candidate')}}</span>
-                      <div class="muted" style="margin-top:8px;font-size:12px;">${{escapeHtml(classification.basis || 'Candidate mapping proposed.')}}</div>
-                      <div class="muted mono" style="margin-top:8px;font-size:12px;">${{escapeHtml(mapping || 'No column mapping proposal.')}}</div>
+                    <div class="artifact-item" id="${{rowId}}" data-rel="${{escapeHtml(encodeURIComponent(rel))}}" data-role="${{escapeHtml(role)}}">
+                      <strong>${{escapeHtml(rel || 'source')}}</strong>
+                      <span>${{statusPill(role || 'candidate')}} ${{statusPill('needs confirmation')}}</span>
+                      <div class="muted" style="margin-top:8px;font-size:12px;">${{escapeHtml(classification.basis || 'Candidate mapping proposed — review each canonical column.')}}</div>
+                      <div style="margin-top:8px;">${{rows || '<span class="muted">No column proposal.</span>'}}</div>
                       <div class="button-row" style="margin-top:8px;">
-                        <button class="button secondary" type="button" onclick="confirmSourcePackMapping('${{encodeURIComponent(item.relative_path || '')}}')">Confirm suggested mapping</button>
+                        <button class="button secondary" type="button" onclick="confirmSourcePackMapping('${{rowId}}')">Confirm mapping</button>
                       </div>
                     </div>`;
                 }}).join('')
               : '<div class="artifact-item"><strong>No candidate mappings</strong><span class="muted">Validated structured mappings appear here when confirmation is required.</span></div>';
 
             const readiness = payload.task_readiness || {{}};
+            const unconfirmed = Array.isArray(readiness.unconfirmed_roles) ? readiness.unconfirmed_roles : [];
+            if (unconfirmed.length) {{
+              els.sourcePackMappings.innerHTML =
+                `<div class="artifact-item"><strong>Confirmation required before run</strong>` +
+                `<span class="muted">These roles were auto-mapped with low confidence: ${{escapeHtml(unconfirmed.join(', '))}}. Confirm each mapping below to enable the run.</span></div>` +
+                els.sourcePackMappings.innerHTML;
+            }}
             const tasks = Array.isArray(readiness.tasks) ? readiness.tasks : [];
             els.sourcePackReadiness.innerHTML = tasks.length
               ? tasks.map((item) => `
@@ -2788,21 +2813,31 @@ def _dashboard_html() -> str:
             }}
           }}
 
-          async function confirmSourcePackMapping(relativePath) {{
+          async function confirmSourcePackMapping(rowId) {{
             if ((state.session?.role || '') !== 'operator') return;
             const sourcePackId = state.sourcePack?.source_pack_id;
-            const decodedPath = decodeURIComponent(relativePath || '');
-            if (!sourcePackId || !decodedPath) {{
+            const row = document.getElementById(rowId);
+            if (!sourcePackId || !row) {{
               setSourcePackStatus('warn', 'No mapping selected', 'Choose a candidate mapping from the validated source pack.');
               return;
             }}
+            const decodedPath = decodeURIComponent(row.getAttribute('data-rel') || '');
+            const role = row.getAttribute('data-role') || '';
+            const columnMapping = {{}};
+            row.querySelectorAll('select.mapping-select').forEach((sel) => {{
+              const canonical = sel.getAttribute('data-canonical');
+              if (canonical && sel.value) columnMapping[canonical] = sel.value;
+            }});
             state.sourcePackSubmitting = true;
-            setSourcePackStatus('warn', 'Confirming mapping', `Applying the suggested canonical mapping for ${{decodedPath}}.`);
+            setSourcePackStatus('warn', 'Confirming mapping', `Applying the canonical mapping for ${{decodedPath}}.`);
             renderSourcePackPanel();
             try {{
+              const body = {{ source_pack_id: sourcePackId, relative_path: decodedPath }};
+              if (role) body.role = role;
+              if (Object.keys(columnMapping).length) body.column_mapping = columnMapping;
               const result = await requestJson('/source-packs/confirm-mapping', {{
                 method: 'POST',
-                body: JSON.stringify({{ source_pack_id: sourcePackId, relative_path: decodedPath }}),
+                body: JSON.stringify(body),
               }});
               state.sourcePack = result;
               state.sourcePackSubmitting = false;
@@ -2810,7 +2845,7 @@ def _dashboard_html() -> str:
               renderSourcePackPanel();
             }} catch (error) {{
               state.sourcePackSubmitting = false;
-              setSourcePackStatus('danger', 'Mapping confirmation failed', error?.message || 'Unable to confirm the suggested source-pack mapping.');
+              setSourcePackStatus('danger', 'Mapping confirmation failed', error?.message || 'Unable to confirm the source-pack mapping.');
               renderSourcePackPanel();
             }}
           }}

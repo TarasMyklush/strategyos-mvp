@@ -934,6 +934,13 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
 
 
 def _build_partial_dataset(source_pack_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Stage a partial run dataset from ONLY the operator-supplied files.
+
+    Missing roles are deliberately left absent — the loader fills them as empty
+    canonical frames and the dependent detectors are skipped. We never inject
+    the synthetic baseline dataset, so a real upload is never contaminated with
+    fixture data.
+    """
     current_root = Path(str(payload["normalized_dataset_root"]))
     partial_root = _partial_dataset_root(source_pack_id)
     if partial_root.exists():
@@ -946,23 +953,16 @@ def _build_partial_dataset(source_pack_id: str, payload: dict[str, Any]) -> dict
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, destination)
 
-    fallback_roles: dict[str, str] = {}
-    for role in payload.get("task_readiness", {}).get("missing_run_model_roles", []):
-        target_rel_path = ROLE_TARGET_PATHS.get(str(role))
-        if not target_rel_path:
-            continue
-        source_path = CONFIG.source_dataset / target_rel_path
-        if not source_path.exists():
-            continue
-        destination = partial_root / target_rel_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, destination)
-        fallback_roles[str(role)] = str(source_path)
+    readiness = payload.get("task_readiness", {})
+    missing_roles = sorted(str(role) for role in readiness.get("missing_run_model_roles", []))
+    available_roles = sorted(
+        role for role in RUN_MODEL_REQUIRED_ROLES if role not in set(missing_roles)
+    )
     return {
         "dataset_root": str(partial_root),
-        "baseline_fallback_roles": sorted(fallback_roles),
-        "baseline_fallback_files": fallback_roles,
-        "run_mode": "partial" if fallback_roles else "full",
+        "run_mode": "partial" if missing_roles else "full",
+        "available_roles": available_roles,
+        "missing_roles": missing_roles,
     }
 
 
@@ -1003,10 +1003,31 @@ def _task_item(
     }
 
 
+def _unconfirmed_roles(manifest: list[dict[str, Any]]) -> list[str]:
+    """Structured roles whose auto-mapping is uncertain and not yet confirmed.
+
+    A role is flagged when a manifest item proposes it as a structured target
+    but the column mapping ``requires_confirmation`` (alias-only or incomplete
+    match) and no operator override has been saved for it. Exact/high-confidence
+    matches and operator-confirmed mappings are never flagged.
+    """
+    flagged: set[str] = set()
+    for item in manifest:
+        classification = item.get("classification") or {}
+        proposal = classification.get("column_mapping_proposal") or {}
+        role = proposal.get("role") or classification.get("role")
+        if not role or role not in TABULAR_ROLE_SIGNATURES:
+            continue
+        if proposal.get("requires_confirmation"):
+            flagged.add(str(role))
+    return sorted(flagged)
+
+
 def build_task_readiness(manifest: list[dict[str, Any]]) -> dict[str, Any]:
     summary = _manifest_summary(manifest)
     supported_count = int(summary["supported_file_count"])
     inventory = _role_inventory(manifest)
+    unconfirmed_roles = _unconfirmed_roles(manifest)
     structured_duplicates = sorted(
         role for role, items in inventory.items() if role in ROLE_TARGET_PATHS and len(items) > 1
     )
@@ -1118,6 +1139,7 @@ def build_task_readiness(manifest: list[dict[str, Any]]) -> dict[str, Any]:
         "basis": "content-based source classification plus current run-model normalization",
         "missing_run_model_roles": missing_run_roles,
         "duplicate_run_model_roles": structured_duplicates,
+        "unconfirmed_roles": unconfirmed_roles,
         "tasks": tasks,
     }
 
@@ -1364,14 +1386,29 @@ def resolve_source_pack_for_run(source_pack_id: str, *, allow_partial: bool = Fa
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=" ".join(str(reason) for reason in reasons),
         )
+    # Confidence gate (orthogonal to completeness): a role whose columns only
+    # alias-matched is a low-confidence guess. Block the run until the operator
+    # confirms it via POST /source-packs/confirm-mapping. Exact/high-confidence
+    # roles are never flagged, so they run without friction.
+    unconfirmed_roles = readiness.get("unconfirmed_roles") or []
+    if unconfirmed_roles:
+        labels = ", ".join(ROLE_LABELS.get(str(role), str(role)) for role in unconfirmed_roles)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "These roles were auto-mapped with low confidence and need operator "
+                f"confirmation before running: {labels}. Confirm each via "
+                "POST /source-packs/confirm-mapping, then start the run."
+            ),
+        )
     resolution = (
         _build_partial_dataset(source_pack_id, payload)
         if allow_partial and not readiness.get("ready_for_run")
         else {
             "dataset_root": str(payload["normalized_dataset_root"]),
-            "baseline_fallback_roles": [],
-            "baseline_fallback_files": {},
             "run_mode": "full",
+            "available_roles": sorted(RUN_MODEL_REQUIRED_ROLES),
+            "missing_roles": [],
         }
     )
     normalized_root = Path(str(resolution["dataset_root"]))

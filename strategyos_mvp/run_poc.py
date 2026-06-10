@@ -185,22 +185,11 @@ def _write_source_pack_run_context(dataset_root: Path, source_pack_payload: dict
         return
     readiness = source_pack_payload.get("task_readiness") or {}
     resolution = source_pack_payload.get("run_resolution") or {}
-    missing_roles = {str(role) for role in readiness.get("missing_run_model_roles", [])}
     duplicate_roles = [str(role) for role in readiness.get("duplicate_run_model_roles", [])]
-    available_roles = sorted(
-        str(role)
-        for role in (
-            "ap_ledger",
-            "ar_ledger",
-            "gl_extract",
-            "vendor_master",
-            "customer_master",
-            "coa",
-            "purchase_orders",
-            "cash_forecast",
-        )
-        if str(role) not in missing_roles
-    )
+    # Single source of truth: the run resolution computed available/missing
+    # roles from the real readiness inventory using canonical role names.
+    available_roles = sorted(str(role) for role in resolution.get("available_roles", []))
+    missing_roles = sorted(str(role) for role in resolution.get("missing_roles", []))
     context_path = dataset_root / RUN_CONTEXT_FILENAME
     context_path.write_text(
         json.dumps(
@@ -208,10 +197,7 @@ def _write_source_pack_run_context(dataset_root: Path, source_pack_payload: dict
                 "source_pack_id": source_pack_payload.get("source_pack_id"),
                 "run_mode": resolution.get("run_mode", "full"),
                 "available_roles": available_roles,
-                "missing_roles": sorted(missing_roles),
-                "baseline_fallback_roles": sorted(
-                    str(role) for role in resolution.get("baseline_fallback_roles", [])
-                ),
+                "missing_roles": missing_roles,
                 "duplicate_roles": duplicate_roles,
             },
             indent=2,
@@ -305,6 +291,16 @@ def _execute_strategyos_workflow(
             "task_readiness": source_pack_payload.get("task_readiness"),
             "run_resolution": source_pack_payload.get("run_resolution"),
         }
+    # Surface detector coverage (which detectors ran vs were skipped for missing
+    # roles) and the run mode in machine-readable output, not only the prose
+    # deliverables. Pulled from the loaded bundle.
+    bundle = result.get("bundle")
+    detector_report = _normalize_json(getattr(bundle, "detector_report", {}) or {})
+    run_meta = _normalize_json(getattr(bundle, "run_metadata", {}) or {})
+    summary["detector_report"] = detector_report
+    summary["run_mode"] = run_meta.get("run_mode", "full")
+    summary["available_roles"] = run_meta.get("available_roles", [])
+    summary["missing_roles"] = run_meta.get("missing_roles", [])
     summary["artifacts"] = {key: str(path) for key, path in artifacts.items()}
     summary["audit_event_count"] = len(result.get("audit_events", []))
     summary["audit_verification"] = _normalize_json(

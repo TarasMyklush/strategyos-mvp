@@ -334,15 +334,20 @@ def test_source_pack_candidate_mapping_can_be_confirmed_and_canonicalized(tmp_pa
         _restore_env(original)
 
 
-def test_partial_source_pack_run_uses_baseline_fill_and_labels_summary(tmp_path: Path):
+def test_partial_source_pack_run_true_skips_missing_roles_without_synthetic_fill(tmp_path: Path):
     source_dataset = load_config().source_dataset
     workspace_root = tmp_path / "workspace"
     output_root = tmp_path / "outputs"
     staged_root = workspace_root / "packs" / "partial-pack"
     staged_root.mkdir(parents=True)
+    # Operator uploads only an AP ledger + vendor master; every other role is absent.
     shutil.copy2(
         source_dataset / "02_ERP_Extracts" / "AP_Invoices_H1_2026.xlsx",
         staged_root / "only-ap.xlsx",
+    )
+    shutil.copy2(
+        source_dataset / "03_Master_Data" / "Vendor_Master.xlsx",
+        staged_root / "vendors.xlsx",
     )
 
     original = _apply_env(
@@ -378,8 +383,102 @@ def test_partial_source_pack_run_uses_baseline_fill_and_labels_summary(tmp_path:
 
         assert run_response.status_code == 200
         summary = run_response.json()
-        assert summary["source_pack"]["run_resolution"]["run_mode"] == "partial"
-        assert "ar_ledger" in summary["source_pack"]["run_resolution"]["baseline_fallback_roles"]
+        resolution = summary["source_pack"]["run_resolution"]
+        assert resolution["run_mode"] == "partial"
         assert summary["status"] == "completed"
+
+        # True skip: no synthetic baseline fill, and missing roles are reported.
+        assert "baseline_fallback_roles" not in resolution
+        assert "gl_extract" in summary["missing_roles"]
+        assert "ap_ledger" in summary["available_roles"]
+
+        # Detectors needing absent roles are skipped, not crashed or faked.
+        skipped = {d["pattern_type"] for d in summary["detector_report"]["skipped_detectors"]}
+        assert "price_variance" in skipped  # needs purchase_orders
+        assert "fx_hedge_unapplied" in skipped  # needs cash_forecast
+
+        # No file in the staged partial dataset originated from the synthetic set.
+        partial_root = Path(resolution["dataset_root"])
+        staged_names = {p.name for p in partial_root.rglob("*") if p.is_file()}
+        assert "GL_Extract_H1_2026.csv" not in staged_names
+        assert "PO_Log_H1_2026.csv" not in staged_names
+    finally:
+        _restore_env(original)
+
+
+def test_low_confidence_mapping_blocks_run_until_confirmed(tmp_path: Path):
+    source_dataset = load_config().source_dataset
+    workspace_root = tmp_path / "workspace"
+    output_root = tmp_path / "outputs"
+    staged_root = workspace_root / "packs" / "aliased-pack"
+    staged_root.mkdir(parents=True)
+    # AP ledger with alias (non-canonical) headers -> low-confidence auto-map.
+    ap = pd.read_excel(source_dataset / "02_ERP_Extracts" / "AP_Invoices_H1_2026.xlsx")
+    aliased = ap.rename(
+        columns={
+            "Invoice_ID": "Invoice No",
+            "Vendor_ID": "Supplier ID",
+            "Amount_SAR": "Amount (SAR)",
+            "Payment_Date": "Payment Date",
+            "PO_Reference": "PO Ref",
+        }
+    )
+    aliased.to_excel(staged_root / "ap_aliased.xlsx", index=False)
+
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_WORKSPACE_ROOT": str(workspace_root),
+            "STRATEGYOS_OUTPUT_ROOT": str(output_root),
+            "STRATEGYOS_SOURCE_DATASET": str(source_dataset),
+            "STRATEGYOS_REQUIRE_HUMAN_REVIEW": "false",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        staged = client.post(
+            "/source-packs/from-path",
+            headers=_auth_header("operator-secret"),
+            json={"folder_path": str(staged_root)},
+        )
+        assert staged.status_code == 200
+        payload = staged.json()
+        source_pack_id = payload["source_pack_id"]
+        assert "ap_ledger" in payload["task_readiness"]["unconfirmed_roles"]
+
+        # Run is blocked while the low-confidence role is unconfirmed.
+        blocked = client.post(
+            "/runs",
+            headers=_auth_header("operator-secret"),
+            json={
+                "source_pack_id": source_pack_id,
+                "allow_partial_source_pack": True,
+                "sync_artifacts": False,
+            },
+        )
+        assert blocked.status_code == 400
+        assert "confirmation" in blocked.json()["detail"].lower()
+
+        # Operator confirms the mapping; the role clears.
+        confirmed = client.post(
+            "/source-packs/confirm-mapping",
+            headers=_auth_header("operator-secret"),
+            json={
+                "source_pack_id": source_pack_id,
+                "relative_path": "ap_aliased.xlsx",
+                "role": "ap_ledger",
+                "column_mapping": {
+                    "Invoice_ID": "Invoice No",
+                    "Vendor_ID": "Supplier ID",
+                    "Amount_SAR": "Amount (SAR)",
+                    "Payment_Date": "Payment Date",
+                    "PO_Reference": "PO Ref",
+                },
+            },
+        )
+        assert confirmed.status_code == 200
+        assert "ap_ledger" not in confirmed.json()["task_readiness"]["unconfirmed_roles"]
     finally:
         _restore_env(original)
