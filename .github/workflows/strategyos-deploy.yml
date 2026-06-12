@@ -235,9 +235,7 @@ jobs:
           token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
           echo "::add-mask::${token}"
           READINESS_AUTH_HEADER="Authorization: Bearer ${token}" \
-          TARGET_HOST="${TARGET_HOST}" \
-          SSH_OPTS="${SSH_OPTS}" \
-          REMOTE_HEALTH_PORT="${STRATEGYOS_HTTP_PORT}" \
+          TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
           bash deploy/scripts/check_health.sh
 
       - name: Optional smoke run
@@ -246,9 +244,7 @@ jobs:
           token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
           echo "::add-mask::${token}"
           RUN_AUTH_HEADER="Authorization: Bearer ${token}" \
-          TARGET_HOST="${TARGET_HOST}" \
-          SSH_OPTS="${SSH_OPTS}" \
-          REMOTE_API_PORT="${STRATEGYOS_HTTP_PORT}" \
+          TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
           bash deploy/scripts/run_remote_workflow.sh
 
       - name: Roll back if post-deploy check fails

@@ -87,6 +87,31 @@ def test_deploy_release_image_path_does_not_build_on_server() -> None:
     assert "up -d --no-build" in script
 
 
+def test_release_rollback_does_not_build_on_server() -> None:
+    script = (REPO_ROOT / "deploy/scripts/rollback_stack.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "grep -Eq '^STRATEGYOS_API_IMAGE=.' deploy/.env" in script
+    assert "up -d --no-build" in script
+
+
+def test_deploy_workflow_checks_public_readiness_after_domain_cutover() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \\' in workflow
+    assert 'READINESS_AUTH_HEADER="Authorization: Bearer ${token}" \\' in workflow
+    assert 'RUN_AUTH_HEADER="Authorization: Bearer ${token}" \\' in workflow
+
+
+def test_remote_smoke_run_forwards_auth_header() -> None:
+    script = (REPO_ROOT / "deploy/scripts/run_remote_workflow.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'RUN_AUTH_HEADER="${RUN_AUTH_HEADER:-}"' in script
+    assert 'curl -fsS -X POST "${base_url}/runs" -H "${RUN_AUTH_HEADER}"' in script
+
+
 def test_source_dataset_sync_omits_macos_metadata_files() -> None:
     script = (REPO_ROOT / "deploy/scripts/sync_source_dataset.sh").read_text(
         encoding="utf-8"

@@ -23,6 +23,10 @@ if [ -d "${TARGET_DIR}/app" ]; then
 fi
 cp -a "${latest}" "${TARGET_DIR}/app"
 cd "${TARGET_DIR}/app"
-docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build
+if grep -Eq '^STRATEGYOS_API_IMAGE=.' deploy/.env; then
+  docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-build
+else
+  docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build
+fi
 echo "Rolled back to ${latest}"
 REMOTE
