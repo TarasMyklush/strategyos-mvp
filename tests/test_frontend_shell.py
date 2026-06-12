@@ -214,6 +214,8 @@ def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
     assert 'requestJson("/health/live")' in js
     assert 'requestJson("/health/ready")' in js
     assert 'requestJson("/health/dependencies")' in js
+    assert "sanitizeUiPayload({ live, ready, config, dependencies })" in js
+    assert "internal identity boundary" in js
 
 
 def test_dashboard_renders_vector_search_utility_hooks():

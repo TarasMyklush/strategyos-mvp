@@ -135,6 +135,35 @@
     return JSON.stringify(value ?? {}, null, 2);
   }
 
+  function sanitizeUiPayload(value, key = "") {
+    if (Array.isArray(value)) return value.map((item) => sanitizeUiPayload(item, key));
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([entryKey, entryValue]) => [
+        entryKey,
+        sanitizeUiPayload(entryValue, entryKey),
+      ]));
+    }
+    if (typeof value !== "string") return value;
+    const lowerKey = String(key || "").toLowerCase();
+    const lowerValue = value.toLowerCase();
+    if (["issuer", "token_url", "introspection_url"].includes(lowerKey)) {
+      return "internal identity boundary";
+    }
+    if (
+      lowerValue.includes("localhost")
+      || lowerValue.includes("127.0.0.1")
+      || lowerValue.includes("strategyos-idp")
+      || lowerValue.includes("postgres:")
+      || lowerValue.includes("neo4j:")
+      || lowerValue.includes("redis:")
+      || lowerValue.includes("qdrant:")
+      || lowerValue.includes("minio:")
+    ) {
+      return "internal service";
+    }
+    return value;
+  }
+
   function basename(path) {
     const raw = String(path || "");
     if (!raw) return "source";
@@ -698,7 +727,7 @@
       ["Public live health", statusPill((live?.public_health_enabled ?? bootstrap.public_health_enabled) ? "enabled" : "protected")],
       ["Object store", statusPill(config?.object_store?.status || "unknown")],
     ], true);
-    els.healthPayloadPreview.textContent = compactJson({ live, ready, config, dependencies });
+    els.healthPayloadPreview.textContent = compactJson(sanitizeUiPayload({ live, ready, config, dependencies }));
   }
 
   function renderArtifacts() {
