@@ -28,6 +28,22 @@ concurrency:
 
 env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  CI_TEST_TARGETS: >-
+    tests/test_runtime_governance.py
+    tests/test_governed_review_flow_e2e.py
+    tests/test_frontend_shell.py
+    tests/test_api_health.py
+    tests/test_api_identity_boundary.py
+    tests/test_api_security_boundary.py
+    tests/test_deploy_config_hygiene.py
+    tests/test_detector_registry.py
+    tests/test_task_registry.py
+    tests/test_source_pack.py
+    tests/test_ocr.py
+    tests/test_prompt_injection.py
+    tests/test_sensitive_ids.py
+    tests/test_data_roles.py
+    tests/test_plugins.py
 
 jobs:
   tests:
@@ -36,10 +52,10 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Check out repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.12"
           cache: pip
@@ -55,7 +71,7 @@ jobs:
           python -m pip install -e . pytest
 
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q ${CI_TEST_TARGETS}
 
   image:
     name: Build and publish image
@@ -66,17 +82,17 @@ jobs:
       image-ref: ${{ steps.image-ref.outputs.value }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Set image name
         id: image
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df
 
       - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -84,7 +100,7 @@ jobs:
 
       - name: Generate image metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
@@ -93,7 +109,7 @@ jobs:
 
       - name: Build and push image
         id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf
         with:
           context: .
           file: deploy/Dockerfile
@@ -132,7 +148,7 @@ jobs:
       STRATEGYOS_SYNC_ARTIFACTS: ${{ vars.STRATEGYOS_SYNC_ARTIFACTS || 'true' }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Prepare SSH
         env:

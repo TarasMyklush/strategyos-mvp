@@ -17,13 +17,15 @@ Move StrategyOS from local/QA proof to a controlled production-style deployment 
 ## CI/CD Flow
 
 1. `StrategyOS CI` runs on pull requests, pushes to `main`, and manual dispatch.
-2. CI installs Python 3.12, local OCR dependencies, the package, and runs `pytest -q`.
+2. CI installs Python 3.12, local OCR dependencies, the package, and runs the portable health/security/intake/OCR/deploy-contract test suite.
 3. CI validates Compose config for both source-build and release-image modes.
 4. CI builds the Docker image without pushing, catching Dockerfile/runtime pin drift before deploy.
 5. `StrategyOS Deploy` is manual (`workflow_dispatch`) and environment-scoped.
 6. Deploy re-runs tests, builds and pushes a GHCR image, exports the digest image ref, logs the target host into GHCR, deploys with Compose, and checks protected readiness.
 7. Optional smoke can call `POST /runs`; leave it off for ordinary deploys unless the dataset and reviewer flow are prepared.
 8. If deploy succeeds but readiness fails, the workflow invokes the existing rollback script against the latest pre-deploy backup.
+
+The full acceptance/regression suite still depends on the external synthetic dataset folder under `strategy os/StrategyOS POC/01_Synthetic_Dataset`. Keep running that suite locally until a sanitized fixture pack is committed to the repo or injected into CI as a controlled artifact.
 
 ## GitHub Environment Configuration
 
