@@ -261,6 +261,35 @@
     return "latest";
   }
 
+  function formatRoleLabel(role) {
+    const normalized = String(role || "").trim().toLowerCase();
+    const labels = {
+      operator: "Operator",
+      reviewer: "Reviewer",
+      anonymous: "Anonymous",
+      public: "Public",
+    };
+    return labels[normalized] || normalized.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()) || "Unknown";
+  }
+
+  function formatSubjectLabel(subject, role) {
+    let raw = String(subject || "").trim();
+    if (!raw || raw === "anonymous") return "Anonymous";
+    if (raw === "auth-disabled") return "Auth disabled";
+    if (raw.startsWith("api-key:")) return `${formatRoleLabel(role)} API key`;
+    if (raw.includes("://")) raw = raw.split(":").pop() || raw;
+    if (raw.endsWith(".local")) raw = raw.slice(0, -".local".length);
+    const compact = raw.replaceAll("_", " ").replaceAll(".", " ").trim();
+    return compact.replace(/\b\w/g, (char) => char.toUpperCase()) || formatRoleLabel(role);
+  }
+
+  function formatSessionIdentity(session) {
+    const role = String(session?.role || "anonymous");
+    if (session?.display_name) return String(session.display_name);
+    if (["operator", "reviewer"].includes(role.toLowerCase())) return formatRoleLabel(role);
+    return formatSubjectLabel(session?.subject, role);
+  }
+
   function showSignIn(message) {
     if (!bootstrap.api_auth_enabled) return;
     els.signInPanel.classList.remove("hidden");
@@ -272,14 +301,14 @@
     els.environmentBadge.textContent = bootstrap.environment || "environment";
     els.sessionToken.value = state.token;
     const session = state.session || {};
-    const subject = session.subject || "anonymous";
     const role = session.role || "anonymous";
     const authDisabled = session.auth_disabled || !bootstrap.api_auth_enabled;
-    els.identity.textContent = authDisabled ? "auth disabled" : `${role}: ${subject}`;
+    const displayName = formatSessionIdentity(session);
+    els.identity.textContent = authDisabled ? "Auth disabled" : session.authenticated ? displayName : "Not signed in";
     els.sessionStatus.textContent = authDisabled
       ? "API auth is disabled for this environment."
       : session.authenticated
-        ? `Connected as ${role}.`
+        ? `Connected as ${displayName}.`
         : "Session not connected.";
     els.signInPanel.classList.toggle("hidden", authDisabled || Boolean(session.authenticated));
     els.newRunButton.disabled = !isOperator();

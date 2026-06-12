@@ -149,6 +149,8 @@ def test_dashboard_renders_sign_in_and_local_storage_token_flow():
     assert "Authorization: `Bearer" in js
     assert '"X-API-Key"' in js
     assert 'requestJson("/ui/session")' in js
+    assert "formatSessionIdentity" in js
+    assert "`${role}: ${subject}`" not in js
 
 
 def test_dashboard_renders_new_run_slide_over_and_start_run_hooks():
@@ -301,5 +303,52 @@ def test_ui_session_reports_authenticated_role_for_api_key():
         assert payload["authenticated"] is True
         assert payload["role"] == "reviewer"
         assert payload["subject"].startswith("api-key:reviewer:")
+    finally:
+        _restore_env(original)
+
+
+def test_ui_session_returns_clean_display_identity_for_idp_subject(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+            "STRATEGYOS_IDP_OPERATOR_USERNAME": "operator.local",
+            "STRATEGYOS_IDP_OPERATOR_PASSWORD": "operator-pass",
+            "STRATEGYOS_IDP_REVIEWER_USERNAME": "reviewer.local",
+            "STRATEGYOS_IDP_REVIEWER_PASSWORD": "reviewer-pass",
+        }
+    )
+    try:
+        monkeypatch.setattr(
+            auth_module,
+            "_introspect_identity_token",
+            lambda token: {
+                "operator-token": {
+                    "role": "operator",
+                    "subject": "http://localhost:8089:operator.local",
+                }
+            }.get(token),
+        )
+        client = TestClient(api_module.app)
+
+        response = client.get(
+            "/ui/session", headers={"Authorization": "Bearer operator-token"}
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["authenticated"] is True
+        assert payload["role"] == "operator"
+        assert payload["subject"] == "http://localhost:8089:operator.local"
+        assert payload["display_role"] == "Operator"
+        assert payload["display_subject"] == "Operator"
+        assert payload["display_name"] == "Operator"
+        assert "localhost" not in payload["display_name"]
+        assert "localhost" not in payload["display_subject"]
     finally:
         _restore_env(original)

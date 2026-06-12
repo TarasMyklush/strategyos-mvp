@@ -250,6 +250,42 @@ def _status_label(value: bool) -> str:
     return "Configured" if value else "Missing"
 
 
+def _display_role(role: str) -> str:
+    labels = {
+        "operator": "Operator",
+        "reviewer": "Reviewer",
+        "anonymous": "Anonymous",
+        "public": "Public",
+    }
+    return labels.get(
+        role.strip().lower(), role.replace("_", " ").strip().title() or "Unknown"
+    )
+
+
+def _display_subject(subject: str, role: str) -> str:
+    raw = subject.strip()
+    if not raw or raw == "anonymous":
+        return "Anonymous"
+    if raw == "auth-disabled":
+        return "Auth disabled"
+    if raw.startswith("api-key:"):
+        return f"{_display_role(role)} API key"
+    if "://" in raw:
+        raw = raw.rsplit(":", 1)[-1]
+    if raw.endswith(".local"):
+        raw = raw[: -len(".local")]
+    return raw.replace("_", " ").replace(".", " ").strip().title() or _display_role(
+        role
+    )
+
+
+def _display_name_for_principal(role: str, subject: str) -> str:
+    normalized_role = role.strip().lower()
+    if normalized_role in {"operator", "reviewer"}:
+        return _display_role(normalized_role)
+    return _display_subject(subject, normalized_role)
+
+
 def _health_check(status: str, **details: Any) -> dict[str, Any]:
     payload = {"status": status}
     payload.update(details)
@@ -953,11 +989,17 @@ def ui_session(
     authenticated = bool(principal.get("authenticated"))
     role = str(principal.get("role") or "anonymous")
     subject = str(principal.get("subject") or "anonymous")
+    display_role = _display_role(role)
+    display_subject = _display_subject(subject, role)
+    display_name = _display_name_for_principal(role, subject)
     return {
         "status": "ok",
         "authenticated": authenticated,
         "role": role,
         "subject": subject,
+        "display_role": display_role,
+        "display_subject": display_subject,
+        "display_name": display_name,
         "auth_disabled": bool(principal.get("auth_disabled", False)),
         "api_auth_enabled": CONFIG.api_auth_enabled,
         "idp_enabled": CONFIG.idp_enabled,
@@ -1049,11 +1091,14 @@ def pending_reviews(
     principal: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
     items, store_status = _store_list_or_empty(state_store.list_pending_reviews())
+    role = str(principal.get("role") or "unknown")
+    subject = str(principal.get("subject") or "unknown")
     return {
         "items": items,
         "store_status": store_status,
-        "viewer_role": principal.get("role"),
-        "viewer_subject": principal.get("subject"),
+        "viewer_role": role,
+        "viewer_subject": subject,
+        "viewer_display_name": _display_name_for_principal(role, subject),
     }
 
 
@@ -1063,11 +1108,14 @@ def reviewer_runs(
     principal: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
     items, store_status = _store_list_or_empty(state_store.list_recent_runs(limit=limit))
+    role = str(principal.get("role") or "unknown")
+    subject = str(principal.get("subject") or "unknown")
     return {
         "items": items,
         "store_status": store_status,
-        "viewer_role": principal.get("role"),
-        "viewer_subject": principal.get("subject"),
+        "viewer_role": role,
+        "viewer_subject": subject,
+        "viewer_display_name": _display_name_for_principal(role, subject),
     }
 
 
