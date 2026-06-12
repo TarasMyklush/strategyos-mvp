@@ -85,3 +85,12 @@ def test_deploy_release_image_path_does_not_build_on_server() -> None:
     assert 'if [ -n "${STRATEGYOS_API_IMAGE:-}" ]; then' in script
     assert '"docker pull \'${STRATEGYOS_API_IMAGE}\'"' in script
     assert "up -d --no-build" in script
+
+
+def test_source_dataset_sync_omits_macos_metadata_files() -> None:
+    script = (REPO_ROOT / "deploy/scripts/sync_source_dataset.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'COPYFILE_DISABLE="${COPYFILE_DISABLE:-1}" tar' in script
+    assert '--exclude "._*"' in script
+    assert '--exclude ".DS_Store"' in script
