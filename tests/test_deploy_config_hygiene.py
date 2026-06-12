@@ -78,3 +78,10 @@ def test_deploy_rsync_uses_ssh_options_for_ci_deploy_key() -> None:
     assert 'RSYNC_SSH_ARGS=(-e "ssh ${SSH_OPTS}")' in script
     assert 'rsync -az --delete "${RSYNC_SSH_ARGS[@]}"' in script
     assert 'rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_ENV}"' in script
+
+
+def test_deploy_release_image_path_does_not_build_on_server() -> None:
+    script = (REPO_ROOT / "deploy/scripts/deploy_stack.sh").read_text(encoding="utf-8")
+    assert 'if [ -n "${STRATEGYOS_API_IMAGE:-}" ]; then' in script
+    assert '"docker pull \'${STRATEGYOS_API_IMAGE}\'"' in script
+    assert "up -d --no-build" in script

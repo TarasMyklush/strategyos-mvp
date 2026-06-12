@@ -44,6 +44,11 @@ rsync -az --delete "${RSYNC_SSH_ARGS[@]}" \
 rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env"
 rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_SECRETS_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env.secrets"
 
-ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build"
+if [ -n "${STRATEGYOS_API_IMAGE:-}" ]; then
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "docker pull '${STRATEGYOS_API_IMAGE}'"
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-build"
+else
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build"
+fi
 
 echo "Deployment complete. Run: TARGET_HOST=${TARGET_HOST} deploy/scripts/check_health.sh"
