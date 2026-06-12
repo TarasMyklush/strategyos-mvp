@@ -104,6 +104,22 @@ def test_deploy_workflow_checks_public_readiness_after_domain_cutover() -> None:
     assert 'RUN_AUTH_HEADER="Authorization: Bearer ${token}" \\' in workflow
 
 
+def test_deploy_workflow_renders_demo_role_login_flag() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: "
+        "${{ vars.STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED || 'false' }}"
+        in workflow
+    )
+    assert (
+        '"STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": '
+        'os.environ["STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED"]'
+        in workflow
+    )
+
+
 def test_remote_smoke_run_forwards_auth_header() -> None:
     script = (REPO_ROOT / "deploy/scripts/run_remote_workflow.sh").read_text(
         encoding="utf-8"

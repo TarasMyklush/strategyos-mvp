@@ -120,6 +120,7 @@ class StrategyOSConfig:
     neo4j_password: str | None
     qdrant_url: str | None
     api_auth_enabled: bool
+    demo_role_login_enabled: bool
     idp_enabled: bool
     idp_issuer: str | None
     idp_token_url: str | None
@@ -279,6 +280,7 @@ def load_config() -> StrategyOSConfig:
         neo4j_password=env("NEO4J_PASSWORD") or env("STRATEGYOS_NEO4J_PASSWORD"),
         qdrant_url=env("QDRANT_URL") or env("STRATEGYOS_QDRANT_URL"),
         api_auth_enabled=env_bool("STRATEGYOS_API_AUTH_ENABLED", False),
+        demo_role_login_enabled=env_bool("STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED", False),
         idp_enabled=env_bool("STRATEGYOS_IDP_ENABLED", False),
         idp_issuer=env("STRATEGYOS_IDP_ISSUER"),
         idp_token_url=env("STRATEGYOS_IDP_TOKEN_URL"),

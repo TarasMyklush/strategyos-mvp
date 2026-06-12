@@ -795,6 +795,24 @@ def _role_inventory(manifest: list[dict[str, Any]]) -> dict[str, list[dict[str, 
     return inventory
 
 
+def _manifest_path_depth(item: dict[str, Any]) -> int:
+    return len(PurePosixPath(str(item.get("relative_path") or "")).parts)
+
+
+def _run_model_role_inventory(manifest: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    inventory = _role_inventory(manifest)
+    selected = dict(inventory)
+    for role in ROLE_TARGET_PATHS:
+        items = inventory.get(role, [])
+        if len(items) <= 1:
+            continue
+        min_depth = min(_manifest_path_depth(item) for item in items)
+        selected[role] = [
+            item for item in items if _manifest_path_depth(item) == min_depth
+        ]
+    return selected
+
+
 def _load_structured_frame(path: Path) -> pd.DataFrame:
     suffix = path.suffix.lower()
     if suffix == ".csv":
@@ -836,8 +854,13 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
     normalized_root.mkdir(parents=True, exist_ok=True)
 
     copied_targets: dict[str, str] = {}
-    inventory = _role_inventory(manifest)
+    inventory = _run_model_role_inventory(manifest)
     duplicates = sorted(role for role, items in inventory.items() if role in ROLE_TARGET_PATHS and len(items) > 1)
+    selected_run_model_source_ids = {
+        str(items[0].get("source_id"))
+        for role, items in inventory.items()
+        if role in ROLE_TARGET_PATHS and len(items) == 1
+    }
 
     for item in manifest:
         classification = item.get("classification") or {}
@@ -849,6 +872,11 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
             continue
         if role in duplicates:
             item["issues"].append(f"Multiple files classified as {ROLE_LABELS[role].lower()}; run normalization requires exactly one.")
+            continue
+        if role in ROLE_TARGET_PATHS and str(item.get("source_id")) not in selected_run_model_source_ids:
+            item["issues"].append(
+                f"Skipped for current run-model normalization because a shallower {ROLE_LABELS[role].lower()} source was selected."
+            )
             continue
         destination = normalized_root / str(normalized_rel_path)
         final_rel_path = str(normalized_rel_path)
@@ -953,7 +981,7 @@ def _unconfirmed_roles(manifest: list[dict[str, Any]]) -> list[str]:
 def build_task_readiness(manifest: list[dict[str, Any]]) -> dict[str, Any]:
     summary = _manifest_summary(manifest)
     supported_count = int(summary["supported_file_count"])
-    inventory = _role_inventory(manifest)
+    inventory = _run_model_role_inventory(manifest)
     unconfirmed_roles = _unconfirmed_roles(manifest)
     structured_duplicates = sorted(
         role for role, items in inventory.items() if role in ROLE_TARGET_PATHS and len(items) > 1

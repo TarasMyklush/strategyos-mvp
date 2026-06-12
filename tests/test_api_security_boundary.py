@@ -112,6 +112,58 @@ def test_run_and_data_endpoints_require_auth(monkeypatch):
         _restore_env(original)
 
 
+def test_demo_role_login_requires_explicit_flag():
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "false",
+            "STRATEGYOS_OPERATOR_API_KEYS": None,
+            "STRATEGYOS_REVIEWER_API_KEYS": None,
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+
+        assert client.get("/runs/latest", headers=_auth_header("operator")).status_code == 401
+        assert client.get("/runs/latest", headers=_auth_header("reviewer")).status_code == 401
+    finally:
+        _restore_env(original)
+
+
+def test_demo_role_login_accepts_literal_operator_and_reviewer(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": None,
+            "STRATEGYOS_REVIEWER_API_KEYS": None,
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1"})
+        monkeypatch.setattr(
+            api_module,
+            "prepare_agent_input",
+            lambda: (Path("/tmp/agent_input"), Path("/tmp/evaluation")),
+        )
+        monkeypatch.setattr(api_module, "run_strategyos_workflow", lambda **_: {"status": "ok"})
+        client = TestClient(api_module.app)
+
+        operator_session = client.get("/ui/session", headers=_auth_header("operator"))
+        reviewer_session = client.get("/ui/session", headers=_auth_header("reviewer"))
+
+        assert operator_session.status_code == 200
+        assert operator_session.json()["role"] == "operator"
+        assert operator_session.json()["subject"] == "demo-role:operator"
+        assert reviewer_session.status_code == 200
+        assert reviewer_session.json()["role"] == "reviewer"
+        assert client.post("/inputs/prepare", headers=_auth_header("operator")).status_code == 200
+        assert client.get("/runs/latest", headers=_auth_header("reviewer")).status_code == 200
+        assert client.post("/runs", headers=_auth_header("reviewer"), json={}).status_code == 403
+    finally:
+        _restore_env(original)
+
+
 def test_role_gated_endpoints_work_when_api_auth_is_disabled(monkeypatch):
     original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
     try:

@@ -126,7 +126,11 @@ def _candidate_paths(dataset_root: Path, contract: DetectorRoleContract) -> list
     candidates: list[Path] = []
     if default_path.exists():
         candidates.append(default_path)
-    for path in sorted(dataset_root.rglob("*")):
+    discovered_paths = sorted(
+        dataset_root.rglob("*"),
+        key=lambda path: (len(path.relative_to(dataset_root).parts), path.as_posix()),
+    )
+    for path in discovered_paths:
         if not path.is_file() or path == default_path:
             continue
         if path.suffix.lower() not in {".csv", ".tsv", ".json", ".xls", ".xlsx"}:

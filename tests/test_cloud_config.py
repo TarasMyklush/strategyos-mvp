@@ -56,6 +56,7 @@ def test_sync_artifacts_noops_without_object_store():
 
 def test_load_config_parses_runtime_auth_and_governance_flags(monkeypatch):
     monkeypatch.setenv("STRATEGYOS_API_AUTH_ENABLED", "true")
+    monkeypatch.setenv("STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED", "true")
     monkeypatch.setenv("STRATEGYOS_REVIEWER_API_KEYS", "reviewer-a, reviewer-b")
     monkeypatch.setenv("STRATEGYOS_OPERATOR_API_KEYS", "operator-a")
     monkeypatch.setenv("STRATEGYOS_PUBLIC_HEALTH_ENABLED", "false")
@@ -72,6 +73,7 @@ def test_load_config_parses_runtime_auth_and_governance_flags(monkeypatch):
     config = load_config()
 
     assert config.api_auth_enabled is True
+    assert config.demo_role_login_enabled is True
     assert config.reviewer_api_keys == ("reviewer-a", "reviewer-b")
     assert config.operator_api_keys == ("operator-a",)
     assert config.public_health_enabled is False

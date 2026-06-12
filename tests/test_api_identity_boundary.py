@@ -109,3 +109,43 @@ def test_identity_tokens_gate_reviewer_and_operator_endpoints(monkeypatch):
         assert client.post("/inputs/prepare", headers=_auth_header("operator-token")).status_code == 200
     finally:
         _restore_env(original)
+
+
+def test_demo_role_login_shortcuts_identity_provider_for_local_use(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": None,
+            "STRATEGYOS_IDP_TOKEN_URL": None,
+            "STRATEGYOS_IDP_INTROSPECTION_URL": None,
+            "STRATEGYOS_IDP_CLIENT_ID": None,
+            "STRATEGYOS_IDP_CLIENT_SECRET": None,
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1"})
+        monkeypatch.setattr(
+            api_module,
+            "prepare_agent_input",
+            lambda: (Path("/tmp/agent_input"), Path("/tmp/evaluation")),
+        )
+
+        def fail_introspection(token: str):
+            raise AssertionError("demo role aliases should not call IDP introspection")
+
+        monkeypatch.setattr(auth_module, "_introspect_identity_token", fail_introspection)
+        client = TestClient(api_module.app)
+
+        reviewer = client.get("/ui/session", headers=_auth_header("reviewer"))
+        operator = client.post("/inputs/prepare", headers=_auth_header("operator"))
+
+        assert reviewer.status_code == 200
+        assert reviewer.json()["role"] == "reviewer"
+        assert reviewer.json()["subject"] == "demo-role:reviewer"
+        assert operator.status_code == 200
+        assert client.get("/runs/latest", headers=_auth_header("reviewer")).status_code == 200
+        assert client.post("/runs", headers=_auth_header("reviewer"), json={}).status_code == 403
+    finally:
+        _restore_env(original)

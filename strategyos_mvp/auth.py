@@ -13,6 +13,8 @@ except Exception as exc:  # pragma: no cover - optional cloud dependency
 
 from .config import CONFIG
 
+DEMO_ROLE_TOKENS = {"operator", "reviewer"}
+
 
 def extract_api_key(
     x_api_key: str | None = None, authorization: str | None = None
@@ -42,10 +44,21 @@ def extract_bearer_token(authorization: str | None = None) -> str | None:
 def role_for_api_key(api_key: str | None) -> str | None:
     if not api_key:
         return None
+    demo_role = demo_role_for_token(api_key)
+    if demo_role is not None:
+        return demo_role
     if api_key in CONFIG.operator_api_keys:
         return "operator"
     if api_key in CONFIG.reviewer_api_keys:
         return "reviewer"
+    return None
+
+
+def demo_role_for_token(token: str | None) -> str | None:
+    if not getattr(CONFIG, "demo_role_login_enabled", False):
+        return None
+    if token in DEMO_ROLE_TOKENS:
+        return token
     return None
 
 
@@ -92,6 +105,16 @@ def authenticate_request(
         return {"role": "anonymous", "subject": "auth-disabled", "auth_disabled": True}
     if CONFIG.idp_enabled:
         token = extract_bearer_token(authorization=authorization)
+        if getattr(CONFIG, "demo_role_login_enabled", False):
+            demo_role = demo_role_for_token(
+                extract_api_key(x_api_key=x_api_key, authorization=authorization)
+            )
+            if demo_role in {"operator", "reviewer"}:
+                return {
+                    "role": demo_role,
+                    "subject": f"demo-role:{demo_role}",
+                    "demo_role_login": True,
+                }
         principal = _introspect_identity_token(token) if token else None
         if principal is None:
             raise HTTPException(
@@ -106,6 +129,12 @@ def authenticate_request(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="A valid API key is required.",
         )
+    if getattr(CONFIG, "demo_role_login_enabled", False) and api_key == role:
+        return {
+            "role": role,
+            "subject": f"demo-role:{role}",
+            "demo_role_login": True,
+        }
     suffix = api_key[-4:] if api_key and len(api_key) >= 4 else api_key or "unknown"
     return {"role": role, "subject": f"api-key:{role}:{suffix}"}
 
