@@ -13,6 +13,11 @@ for compose_file in ${COMPOSE_FILES}; do
   COMPOSE_FILE_ARGS="${COMPOSE_FILE_ARGS} -f ${compose_file}"
 done
 
+RSYNC_SSH_ARGS=()
+if [ -n "${SSH_OPTS}" ]; then
+  RSYNC_SSH_ARGS=(-e "ssh ${SSH_OPTS}")
+fi
+
 if [ ! -f "${LOCAL_ENV}" ]; then
   echo "Missing ${LOCAL_ENV}. Run deploy/scripts/generate_env.sh first or create it from deploy/.env.example."
   exit 1
@@ -27,7 +32,7 @@ ssh ${SSH_OPTS} "${TARGET_HOST}" "mkdir -p '${TARGET_DIR}' '${TARGET_DIR}/backup
 
 ssh ${SSH_OPTS} "${TARGET_HOST}" "if [ -d '${TARGET_DIR}/app' ]; then cp -a '${TARGET_DIR}/app' '${TARGET_DIR}/backups/app-$(date +%Y%m%d%H%M%S)'; fi"
 
-rsync -az --delete \
+rsync -az --delete "${RSYNC_SSH_ARGS[@]}" \
   --exclude ".git" \
   --exclude "__pycache__" \
   --exclude ".pytest_cache" \
@@ -36,8 +41,8 @@ rsync -az --delete \
   --exclude "deploy/.env.*" \
   ./ "${TARGET_HOST}:${TARGET_DIR}/app/"
 
-rsync -az "${LOCAL_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env"
-rsync -az "${LOCAL_SECRETS_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env.secrets"
+rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env"
+rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_SECRETS_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env.secrets"
 
 ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build"
 

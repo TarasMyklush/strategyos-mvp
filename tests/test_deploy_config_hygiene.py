@@ -71,3 +71,10 @@ def test_generate_env_splits_config_from_secrets(tmp_path: Path) -> None:
     ]:
         match = re.search(rf"^{key}=([a-f0-9]{{48}})$", secrets_contents, re.MULTILINE)
         assert match, key
+
+
+def test_deploy_rsync_uses_ssh_options_for_ci_deploy_key() -> None:
+    script = (REPO_ROOT / "deploy/scripts/deploy_stack.sh").read_text(encoding="utf-8")
+    assert 'RSYNC_SSH_ARGS=(-e "ssh ${SSH_OPTS}")' in script
+    assert 'rsync -az --delete "${RSYNC_SSH_ARGS[@]}"' in script
+    assert 'rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_ENV}"' in script
