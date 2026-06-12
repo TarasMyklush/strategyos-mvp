@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StrategyOS chat + dashboard — reference mockup</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --surface: #ffffff; --ink: #1a1d21; --muted: #6b7280; --hint: #9aa1aa;
+    --border: #e3e6ea; --border-2: #cfd4da;
+    --accent-bg: #E1F5EE; --accent: #0F6E56; --accent-ink: #04342C;
+    --ok-bg: #E1F5EE; --ok: #0F6E56; --warn-bg: #FAEEDA; --warn: #854F0B;
+    --radius: 12px; --radius-sm: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  body { margin: 0; background: var(--bg); color: var(--ink); display: flex; justify-content: center; }
+  .app { width: 100%; max-width: 860px; padding: 20px 16px; box-sizing: border-box; }
+  .hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .hdr .brand { font-size: 16px; font-weight: 600; }
+  .pill { font-size: 12px; padding: 3px 11px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); }
+  .hdr .right { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--muted); }
+  .btn { font: inherit; font-size: 13px; padding: 7px 14px; border: 1px solid var(--border-2); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; }
+  .btn:hover { background: var(--bg); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 14px; }
+  .card .label { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .card .value { font-size: 22px; font-weight: 600; }
+  .card .value small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .value.ok { color: var(--ok); }
+  .statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 12.5px; color: var(--muted); }
+  .statusbar .stage-done { color: var(--ink); font-weight: 600; }
+  .badges { margin-left: auto; display: flex; gap: 6px; }
+  .badge { padding: 3px 10px; border-radius: 999px; font-size: 12px; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .chat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .sysmsg { text-align: center; }
+  .sysmsg span { font-size: 12px; color: var(--muted); background: var(--bg); padding: 3px 12px; border-radius: 999px; }
+  .msg-user { align-self: flex-end; max-width: 75%; background: var(--accent-bg); color: var(--accent-ink); border-radius: var(--radius); padding: 10px 14px; font-size: 14px; line-height: 1.5; }
+  .msg-bot { align-self: flex-start; max-width: 85%; }
+  .msg-bot .bubble { background: var(--bg); border-radius: var(--radius); padding: 12px 14px; font-size: 14px; line-height: 1.55; }
+  .msg-bot .big { font-size: 19px; font-weight: 600; }
+  .msg-bot .basis { font-size: 13px; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .cite { font-size: 11.5px; font-family: ui-monospace, "SF Mono", Menlo, monospace; border: 1px solid var(--border-2); border-radius: 999px; padding: 2px 10px; color: var(--muted); cursor: pointer; background: var(--surface); }
+  .cite:hover { border-color: var(--accent); color: var(--accent); }
+  .suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+  .suggest .btn { font-size: 12.5px; padding: 5px 12px; border-radius: 999px; }
+  .review { align-self: flex-start; max-width: 85%; border: 1px solid var(--warn); border-radius: var(--radius); padding: 12px 14px; font-size: 14px; background: var(--warn-bg); color: var(--warn); }
+  .review .actions { margin-top: 8px; display: flex; gap: 8px; }
+  .inputrow { display: flex; gap: 8px; align-items: center; border-top: 1px solid var(--border); padding-top: 12px; }
+  .inputrow input { flex: 1; font: inherit; font-size: 14px; padding: 9px 13px; border: 1px solid var(--border-2); border-radius: var(--radius-sm); outline: none; }
+  .inputrow input:focus { border-color: var(--accent); }
+  .note { margin-top: 14px; font-size: 12px; color: var(--hint); text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hdr">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="brand">StrategyOS</span>
+      <span class="pill" id="run-pill">run 20260610T191014Z · completed</span>
+    </div>
+    <div class="right">
+      <span id="ui-identity">operator.local</span>
+      <span>VPN</span>
+      <button class="btn btn-primary" id="new-run-button">New run</button>
+    </div>
+  </div>
+
+  <div class="cards" id="kpi-cards">
+    <div class="card"><div class="label">recoverable</div><div class="value" id="kpi-recoverable">SAR 794,108</div></div>
+    <div class="card"><div class="label">findings</div><div class="value" id="kpi-findings">8 <small>locked</small></div></div>
+    <div class="card"><div class="label">citations resolved</div><div class="value ok" id="kpi-citations">41 / 41</div></div>
+    <div class="card"><div class="label">challenged by auditor</div><div class="value" id="kpi-challenged">4 <small>of 8</small></div></div>
+  </div>
+
+  <div class="statusbar" id="stage-stepper">
+    <span>ingest → analyst → auditor → evidence QA → graph → <span class="stage-done">writer ✓</span></span>
+    <span class="badges" id="store-badges">
+      <span class="badge ok">postgres synced</span>
+      <span class="badge ok">neo4j synced</span>
+      <span class="badge warn" title="QDRANT_URL is not configured.">qdrant skipped</span>
+    </span>
+  </div>
+
+  <div class="chat" id="chat-thread">
+    <div class="sysmsg"><span>run completed · 8 findings locked · 4 revised after auditor challenge</span></div>
+
+    <div class="msg-user">How much are we losing to missed early-pay discounts?</div>
+
+    <div class="msg-bot">
+      <div class="bubble">
+        <span class="big">SAR 56,666</span> recoverable from missed 2/10 net-30 discounts (finding F-005, high confidence).<br>
+        <span class="basis">Basis: 17 AP invoices paid within the discount window without the 2% taken.</span>
+      </div>
+      <div class="chips">
+        <span class="cite">AP_Invoices · row 312</span>
+        <span class="cite">SaudiTrading contract · p 4</span>
+        <span class="cite">+4 citations</span>
+      </div>
+    </div>
+
+    <div class="msg-user">Who are our top vendors by spend?</div>
+
+    <div class="msg-bot">
+      <div class="bubble">
+        1. Al Rashid Trading — SAR 1,243,500 · 41 invoices<br>
+        2. Gulf Logistics — SAR 887,200 · 28 invoices<br>
+        3. Premier Packaging — SAR 614,090 · 33 invoices<br>
+        <span class="basis">Basis: AP ledger, H1 2026, all currencies in SAR.</span>
+      </div>
+    </div>
+
+    <div class="review" id="review-message" style="display:none;">
+      Run paused — human review required before the writer stage.
+      <div class="actions">
+        <button class="btn" id="review-approve">Approve</button>
+        <button class="btn" id="review-reject">Reject</button>
+      </div>
+    </div>
+
+    <div class="suggest" id="chat-suggestions">
+      <button class="btn">total recoverable by pattern</button>
+      <button class="btn">overdue AR invoices</button>
+      <button class="btn">why was F-006 challenged?</button>
+    </div>
+
+    <div class="inputrow">
+      <input type="text" id="chat-input" placeholder="Ask about invoices, vendors, findings, working capital…">
+      <button class="btn" id="chat-send" aria-label="send">→</button>
+    </div>
+  </div>
+
+  <div class="note">Static reference mockup — sample data. Element ids match the hooks named in docs/chat-dashboard-ui-plan.md §6–7. Toggle the review message by setting display:block on #review-message.</div>
+</div>
+</body>
+</html>

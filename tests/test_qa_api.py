@@ -110,6 +110,53 @@ def test_qa_endpoint_returns_answer_and_suggestions(monkeypatch):
         _restore_env(original)
 
 
+def test_latest_run_audit_summary_reads_citation_and_audit_artifacts(monkeypatch, tmp_path):
+    citation_audit = tmp_path / "citation_audit.json"
+    citation_audit.write_text(
+        (
+            '{"summary": {"citation_count": 7, "resolved_count": 6}, '
+            '"records": []}'
+        ),
+        encoding="utf-8",
+    )
+    audit_log = tmp_path / "audit_log.json"
+    audit_log.write_text(
+        (
+            '['
+            '{"action": "challenge", "status": "challenged", "finding_id": "F-002"},'
+            '{"action": "response", "status": "responded", "finding_id": "F-002"},'
+            '{"action": "challenge", "status": "challenged", "finding_id": "F-001"}'
+            ']'
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        api_module,
+        "_latest_summary",
+        lambda: {
+            "run_id": "run-1",
+            "run_dir": str(tmp_path / "run"),
+            "artifacts": {
+                "citation_audit": str(citation_audit),
+                "audit_log": str(audit_log),
+            },
+        },
+    )
+    original, client = _client_with_auth()
+    try:
+        response = client.get(
+            "/runs/latest/audit-summary",
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["citation_count"] == 7
+        assert response.json()["resolved_count"] == 6
+        assert response.json()["challenged_finding_ids"] == ["F-001", "F-002"]
+    finally:
+        _restore_env(original)
+
+
 def test_qa_context_resolves_explicit_run_id_from_state_store(monkeypatch, tmp_path):
     dataset_root = tmp_path / "dataset"
     dataset_root.mkdir()

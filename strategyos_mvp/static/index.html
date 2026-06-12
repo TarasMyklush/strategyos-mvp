@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StrategyOS Chat Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="brand-row">
+          <span class="brand" id="app-name">StrategyOS</span>
+          <span class="pill status-pill" id="run-pill">latest run: loading</span>
+        </div>
+        <div class="header-actions">
+          <span class="identity" id="ui-identity">checking session</span>
+          <span class="pill" id="environment-badge">environment</span>
+          <button class="btn secondary" id="system-drawer-button" type="button">System</button>
+          <button class="btn primary" id="new-run-button" type="button">New run</button>
+        </div>
+      </header>
+
+      <section class="signin-panel hidden" id="sign-in-panel" aria-live="polite">
+        <div>
+          <h1>Connect session</h1>
+          <p id="session-help">Paste a reviewer/operator bearer token or API key. The token stays in localStorage under strategyos.ui.token.</p>
+        </div>
+        <div class="signin-grid">
+          <label>
+            Bearer token or API key
+            <input id="session-token" type="password" placeholder="Paste token or API key" autocomplete="off" />
+          </label>
+          <div class="signin-actions">
+            <button class="btn primary" id="connect-button" type="button">Connect</button>
+            <button class="btn secondary" id="clear-button" type="button">Clear</button>
+          </div>
+        </div>
+        <div class="muted" id="session-status">Session not connected.</div>
+      </section>
+
+      <section class="cards" id="kpi-cards" aria-label="Latest run metrics">
+        <article class="card">
+          <div class="label">recoverable</div>
+          <div class="value" id="kpi-recoverable">--</div>
+        </article>
+        <article class="card">
+          <div class="label">findings</div>
+          <div class="value" id="kpi-findings">--</div>
+        </article>
+        <article class="card">
+          <div class="label">citations resolved</div>
+          <div class="value" id="kpi-citations">--</div>
+        </article>
+        <article class="card">
+          <div class="label">challenged by auditor</div>
+          <div class="value" id="kpi-challenged">--</div>
+        </article>
+      </section>
+
+      <section class="statusbar">
+        <div class="stage-strip" id="stage-stepper">Loading run stages...</div>
+        <div class="badges" id="store-badges"></div>
+      </section>
+
+      <section class="partial-strip hidden" id="partial-run-chips"></section>
+
+      <main class="chat" id="chat-thread" aria-live="polite">
+        <div class="sysmsg">
+          <span>Deterministic data Q&amp;A. No LLM, no memory; every answer is recomputed from the selected run.</span>
+        </div>
+        <div class="chat-messages" id="chat-messages"></div>
+
+        <div class="review hidden" id="review-message">
+          <strong id="review-title">Run paused for human review.</strong>
+          <span id="review-detail">Approve or reject before the writer stage can continue.</span>
+          <textarea id="review-comment" placeholder="Optional reviewer comment"></textarea>
+          <div class="actions">
+            <button class="btn" id="review-approve" type="button">Approve</button>
+            <button class="btn secondary" id="review-reject" type="button">Reject</button>
+            <button class="btn primary hidden" id="review-resume" type="button">Resume</button>
+          </div>
+        </div>
+
+        <div class="suggest" id="chat-suggestions"></div>
+
+        <form class="inputrow" id="chat-form">
+          <input id="chat-input" type="text" placeholder="Ask deterministic finance questions about invoices, vendors, findings, or working capital" autocomplete="off" />
+          <button class="btn primary icon-btn" id="chat-send" type="submit" aria-label="Send question">Send</button>
+        </form>
+      </main>
+    </div>
+
+    <aside class="drawer hidden" id="new-run-drawer" aria-label="New run panel">
+      <div class="drawer-backdrop" data-close-drawer="new-run"></div>
+      <section class="drawer-panel">
+        <div class="drawer-head">
+          <div>
+            <h2>Start governed run</h2>
+            <p>Operator-only source-pack intake and run launch over the existing endpoints.</p>
+          </div>
+          <button class="btn secondary icon-btn" id="start-run-cancel" type="button" aria-label="Close new run panel">Close</button>
+        </div>
+
+        <div class="drawer-section" id="source-pack-section">
+          <h3>Source-pack intake preview</h3>
+          <p><span class="mono">POST /source-packs</span>, <span class="mono">POST /source-packs/from-path</span>, <span class="mono">POST /source-packs/validate</span>, and <span class="mono">POST /source-packs/confirm-mapping</span>.</p>
+
+          <form id="source-pack-upload-form" class="form-stack">
+            <label>
+              Upload folder or file set
+              <input id="source-pack-files" type="file" multiple webkitdirectory />
+            </label>
+            <button class="btn secondary" id="source-pack-upload-submit" type="submit">Upload source pack</button>
+          </form>
+
+          <form id="source-pack-path-form" class="form-stack">
+            <label>
+              Workspace folder path
+              <input id="source-pack-path" type="text" placeholder="/app/workspace/source_dataset" autocomplete="off" />
+            </label>
+            <button class="btn secondary" id="source-pack-path-submit" type="submit">Stage from path</button>
+          </form>
+
+          <div class="button-row">
+            <button class="btn secondary" id="source-pack-validate" type="button">Revalidate source pack</button>
+          </div>
+          <div class="summary" id="source-pack-status">No source pack loaded.</div>
+          <div class="summary" id="source-pack-summary"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Path</th>
+                  <th>Type</th>
+                  <th>Support</th>
+                  <th>Extraction</th>
+                </tr>
+              </thead>
+              <tbody id="source-pack-manifest-body">
+                <tr><td colspan="5" class="muted">No source-pack manifest yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="source-pack-mappings" class="stack-list"></div>
+          <div id="source-pack-readiness" class="stack-list"></div>
+        </div>
+
+        <form id="start-run-form" class="drawer-section form-stack">
+          <h3>Run options</h3>
+          <p><span class="mono">POST /runs</span></p>
+          <label>
+            Dataset path
+            <input id="start-run-dataset" type="text" placeholder="Leave blank when using a source pack" autocomplete="off" />
+          </label>
+          <label>
+            Run directory
+            <input id="start-run-run-dir" type="text" placeholder="Optional output directory" autocomplete="off" />
+          </label>
+          <label class="check-row">
+            <input id="start-run-skip-prepare" type="checkbox" />
+            Skip input preparation
+          </label>
+          <label class="check-row">
+            <input id="start-run-sync-artifacts" type="checkbox" checked />
+            Sync artifacts when configured
+          </label>
+          <label class="check-row">
+            <input id="start-run-allow-partial-source-pack" type="checkbox" />
+            Allow partial source pack
+          </label>
+          <button class="btn primary" id="start-run-submit" type="submit">Start run</button>
+          <div class="summary" id="start-run-status">Ready for operator input.</div>
+        </form>
+      </section>
+    </aside>
+
+    <aside class="drawer hidden" id="system-drawer" aria-label="System drawer">
+      <div class="drawer-backdrop" data-close-drawer="system"></div>
+      <section class="drawer-panel system-panel">
+        <div class="drawer-head">
+          <div>
+            <h2>System</h2>
+            <p>Operational consoles moved out of the chat surface.</p>
+          </div>
+          <button class="btn secondary icon-btn" id="system-drawer-close" type="button" aria-label="Close system drawer">Close</button>
+        </div>
+
+        <section class="drawer-section">
+          <h3>Managed data shell</h3>
+          <p><span class="mono">GET /data/status</span></p>
+          <div id="data-summary" class="summary">Awaiting data status.</div>
+          <dl class="kv" id="data-counts-kv"></dl>
+          <dl class="kv" id="data-systems-kv"></dl>
+          <pre id="data-payload-preview" class="code-block">Awaiting data status payload.</pre>
+        </section>
+
+        <section class="drawer-section">
+          <h3>Vector search utility</h3>
+          <p><span class="mono">GET /data/vector-search</span></p>
+          <form id="vector-search-form" class="form-stack">
+            <label>
+              Query
+              <input id="vector-search-query" type="text" placeholder="duplicate payment invoice" autocomplete="off" />
+            </label>
+            <label>
+              Limit
+              <input id="vector-search-limit" type="number" min="1" max="10" value="5" />
+            </label>
+            <button class="btn secondary" id="vector-search-submit" type="submit">Search</button>
+          </form>
+          <div id="vector-search-results" class="stack-list"></div>
+          <pre id="vector-search-payload-preview" class="code-block">Awaiting vector search payload.</pre>
+        </section>
+
+        <section class="drawer-section">
+          <h3>Artifact inspector</h3>
+          <div id="artifact-tabs" class="tab-row"></div>
+          <pre id="artifact-viewer" class="code-block">Select a run artifact.</pre>
+        </section>
+
+        <section class="drawer-section">
+          <h3>API / health shell</h3>
+          <p><span class="mono">GET /health/live</span>, <span class="mono">GET /health/ready</span>, <span class="mono">GET /health/dependencies</span>.</p>
+          <div id="health-summary" class="summary">Awaiting health status.</div>
+          <dl class="kv" id="health-checks-kv"></dl>
+          <dl class="kv" id="health-config-kv"></dl>
+          <pre id="health-payload-preview" class="code-block">Awaiting health payload.</pre>
+        </section>
+      </section>
+    </aside>
+
+    <script id="strategyos-bootstrap" type="application/json">__STRATEGYOS_BOOTSTRAP__</script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

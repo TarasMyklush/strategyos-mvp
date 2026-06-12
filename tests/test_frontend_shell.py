@@ -41,213 +41,224 @@ def _restore_env(original: dict[str, str | None]):
     storage.CONFIG = config
 
 
-def test_dashboard_renders_queue_first_shell():
+def _dashboard_response() -> str:
     client = TestClient(api_module.app)
-
     response = client.get("/")
-
     assert response.status_code == 200
-    assert "Governed Operations Shell" in response.text
-    assert "Home / Queue" in response.text
-    assert "Pending review queue" in response.text
-    assert "StrategyOS Governed Operations" in response.text
-    assert "Partial backend data loaded" in response.text
-    assert "guarded('Latest run', requestJson('/runs/latest'), null)" in response.text
+    return response.text
+
+
+def _static_app_js() -> str:
+    client = TestClient(api_module.app)
+    response = client.get("/static/app.js")
+    assert response.status_code == 200
+    return response.text
+
+
+def test_dashboard_renders_chat_dashboard_shell():
+    html = _dashboard_response()
+
+    assert "StrategyOS Chat Dashboard" in html
+    assert 'id="app-name"' in html
+    assert 'id="run-pill"' in html
+    assert 'id="ui-identity"' in html
+    assert 'id="new-run-button"' in html
+    assert 'id="system-drawer-button"' in html
+    assert 'src="/static/app.js"' in html
+    assert 'href="/static/styles.css"' in html
 
 
 def test_dashboard_embeds_parseable_bootstrap_json():
-    client = TestClient(api_module.app)
+    html = _dashboard_response()
 
-    response = client.get("/")
-
-    assert response.status_code == 200
     marker = '<script id="strategyos-bootstrap" type="application/json">'
-    assert marker in response.text
-    bootstrap_json = response.text.partition(marker)[2].partition("</script>")[0]
+    assert marker in html
+    bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     assert "&quot;" not in bootstrap_json
     assert json.loads(bootstrap_json)["product_name"] == "StrategyOS"
 
 
-def test_dashboard_renders_run_detail_and_review_console_slice():
+def test_dashboard_renders_kpi_stage_and_store_hooks():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    assert 'id="kpi-cards"' in html
+    assert 'id="kpi-recoverable"' in html
+    assert 'id="kpi-findings"' in html
+    assert 'id="kpi-citations"' in html
+    assert 'id="kpi-challenged"' in html
+    assert 'id="stage-stepper"' in html
+    assert 'id="store-badges"' in html
+    assert 'id="partial-run-chips"' in html
+    assert 'requestJson("/runs/latest/audit-summary")' in js
+    assert "total_recoverable_sar" in js
+    assert "runtime?.pipeline" in js
+    assert "state_store" in js
+
+
+def test_dashboard_renders_deterministic_chat_hooks_and_qa_fetch():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    assert "Deterministic data Q&amp;A" in html
+    assert "No LLM" in html
+    assert 'id="chat-thread"' in html
+    assert 'id="chat-messages"' in html
+    assert 'id="chat-suggestions"' in html
+    assert 'id="chat-form"' in html
+    assert 'id="chat-input"' in html
+    assert 'id="chat-send"' in html
+    assert 'requestJson("/qa"' in js
+    assert "activeQaRunId: activeRunId" in js
+    assert "What is the total recoverable?" in js
+
+
+def test_dashboard_renders_unmatched_chat_suggestions_path():
+    js = _static_app_js()
+
+    assert "payload.matched === false" in js
+    assert "payload.suggestions" in js
+    assert "I don't have" not in js  # copy belongs to the deterministic backend, not UI fakery
+    assert "data-suggestion" in js
+
+
+def test_dashboard_renders_review_action_message_hooks():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    assert 'id="review-message"' in html
+    assert 'id="review-comment"' in html
+    assert 'id="review-approve"' in html
+    assert 'id="review-reject"' in html
+    assert 'id="review-resume"' in html
+    assert "/reviewer/runs/" in js
+    assert "/operator/runs/" in js
+    assert "requires_human_review" in js
+
+
+def test_dashboard_renders_sign_in_and_local_storage_token_flow():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    assert 'id="sign-in-panel"' in html
+    assert 'id="session-token"' in html
+    assert 'id="connect-button"' in html
+    assert 'id="clear-button"' in html
+    assert "strategyos.ui.token" in js
+    assert "window.localStorage.setItem" in js
+    assert "Authorization: `Bearer" in js
+    assert '"X-API-Key"' in js
+    assert 'requestJson("/ui/session")' in js
+
+
+def test_dashboard_renders_new_run_slide_over_and_start_run_hooks():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    assert 'id="new-run-drawer"' in html
+    assert "Start governed run" in html
+    assert "POST /runs" in html
+    assert 'id="start-run-form"' in html
+    assert 'id="start-run-dataset"' in html
+    assert 'id="start-run-run-dir"' in html
+    assert 'id="start-run-skip-prepare"' in html
+    assert 'id="start-run-sync-artifacts"' in html
+    assert 'id="start-run-allow-partial-source-pack"' in html
+    assert 'requestJson("/runs"' in js
+    assert "submitStartRun" in js
+
+
+def test_dashboard_renders_source_pack_intake_hooks():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    assert "Source-pack intake preview" in html
+    assert "POST /source-packs" in html
+    assert "POST /source-packs/from-path" in html
+    assert "POST /source-packs/validate" in html
+    assert 'id="source-pack-upload-form"' in html
+    assert 'id="source-pack-files"' in html
+    assert "webkitdirectory" in html
+    assert 'id="source-pack-path-form"' in html
+    assert 'id="source-pack-path"' in html
+    assert 'id="source-pack-mappings"' in html
+    assert 'id="source-pack-manifest-body"' in html
+    assert 'id="source-pack-readiness"' in html
+    assert 'requestMultipart("/source-packs"' in js
+    assert 'requestJson("/source-packs/from-path"' in js
+    assert 'requestJson("/source-packs/validate"' in js
+    assert 'requestJson("/source-packs/confirm-mapping"' in js
+
+
+def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    assert 'id="system-drawer"' in html
+    assert "Managed data shell" in html
+    assert "API / health shell" in html
+    assert "Artifact inspector" in html
+    assert 'id="data-summary"' in html
+    assert 'id="data-counts-kv"' in html
+    assert 'id="data-systems-kv"' in html
+    assert 'id="data-payload-preview"' in html
+    assert 'id="artifact-tabs"' in html
+    assert 'id="artifact-viewer"' in html
+    assert 'id="health-summary"' in html
+    assert 'id="health-checks-kv"' in html
+    assert 'id="health-config-kv"' in html
+    assert 'id="health-payload-preview"' in html
+    assert 'requestJson("/data/status")' in js
+    assert 'requestJson("/health/live")' in js
+    assert 'requestJson("/health/ready")' in js
+    assert 'requestJson("/health/dependencies")' in js
+
+
+def test_dashboard_renders_vector_search_utility_hooks():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    assert "Vector search utility" in html
+    assert "GET /data/vector-search" in html
+    assert 'id="vector-search-form"' in html
+    assert 'id="vector-search-query"' in html
+    assert 'id="vector-search-limit"' in html
+    assert 'id="vector-search-results"' in html
+    assert 'id="vector-search-payload-preview"' in html
+    assert "requestJson(`/data/vector-search?${params.toString()}`)" in js
+
+
+def test_dashboard_static_assets_have_no_external_origins():
+    html = _dashboard_response()
+    js = _static_app_js()
     client = TestClient(api_module.app)
+    css = client.get("/static/styles.css").text
 
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Selected run summary" in response.text
-    assert "Lifecycle timeline" in response.text
-    assert "fixed MVP stages" in response.text
-    assert "awaiting-review, approval, and completion" in response.text
-    assert "Review context" in response.text
-    assert "Guarded reviewer/operator actions" in response.text
-    assert 'id="claim-run"' in response.text
-    assert 'id="unclaim-run"' in response.text
-    assert 'id="approve-run"' in response.text
-    assert 'id="resume-run"' in response.text
-    assert "Artifact entry points" in response.text
+    combined = html + js + css
+    assert "https://cdn" not in combined
+    assert "http://" not in combined
+    assert "https://" not in combined
+    assert "fonts.googleapis" not in combined
 
 
-def test_dashboard_renders_runs_index_slice_and_fetch_hook():
-    client = TestClient(api_module.app)
+def test_dashboard_preserves_bootstrap_bound_client_rendering():
+    html = _dashboard_response()
+    js = _static_app_js()
 
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Runs index" in response.text
-    assert "Recent governed runs with lifecycle state, review context, and drill-in actions" in response.text
-    assert 'id="runs-index-body"' in response.text
-    assert 'id="runs-index-empty"' in response.text
-    assert "Open run detail" in response.text
-    assert "Open review context" in response.text
-    assert "requestJson('/reviewer/runs?limit=12')" in response.text
-    assert "runReviewContext(item)" in response.text
+    assert "__STRATEGYOS_BOOTSTRAP__" not in html
+    assert "bootstrap.product_name" in js
+    assert "bootstrap.environment" in js
+    assert "bootstrap.api_auth_enabled" in js
+    assert "bootstrap.require_human_review" in js
 
 
-def test_dashboard_renders_queue_assignment_hooks_for_claim_unclaim_slice():
-    client = TestClient(api_module.app)
+def test_dashboard_polling_uses_latest_run_status_and_visibility():
+    js = _static_app_js()
 
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "thin claim/unclaim assignment" in response.text
-    assert "Claim this governed run before approving or rejecting it" in response.text
-    assert "data-claim-run" in response.text
-    assert "data-unclaim-run" in response.text
-    assert "claimSelectedRun" in response.text
-    assert "unclaimSelectedRun" in response.text
-
-
-def test_dashboard_renders_artifact_inspection_slice_and_deep_linking_hooks():
-    client = TestClient(api_module.app)
-
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Artifact inspector" in response.text
-    assert "Artifact tabs" in response.text
-    assert "Artifact viewer" in response.text
-    assert "Deep link" in response.text
-    assert "parseHashRoute" in response.text
-
-
-def test_dashboard_renders_artifact_inspector_slice():
-    client = TestClient(api_module.app)
-
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert ">Artifacts<" in response.text
-    assert "Artifact inspector" in response.text
-    assert 'id="artifact-tabs"' in response.text
-    assert 'id="artifact-viewer"' in response.text
-    assert "Inspect artifact" in response.text
-
-
-def test_dashboard_renders_richer_data_status_console_slice():
-    client = TestClient(api_module.app)
-
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Managed data shell" in response.text
-    assert "Data counts" in response.text
-    assert "Graph and vector surfaces" in response.text
-    assert 'id="data-summary"' in response.text
-    assert 'id="data-counts-kv"' in response.text
-    assert 'id="data-systems-kv"' in response.text
-    assert 'id="data-payload-preview"' in response.text
-
-
-def test_dashboard_renders_vector_search_utility_panel_and_fetch_hook():
-    client = TestClient(api_module.app)
-
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Vector search utility" in response.text
-    assert "GET /data/vector-search" in response.text
-    assert 'id="vector-search-form"' in response.text
-    assert 'id="vector-search-query"' in response.text
-    assert 'id="vector-search-results"' in response.text
-    assert 'id="vector-search-payload-preview"' in response.text
-    assert "activeVectorRunId()" in response.text
-    assert "requestJson(`/data/vector-search?${params.toString()}`)" in response.text
-
-
-def test_dashboard_renders_qa_panel_and_fetch_hook():
-    client = TestClient(api_module.app)
-
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Data Q&A" in response.text
-    assert "POST /qa" in response.text
-    assert 'id="qa-form"' in response.text
-    assert 'id="qa-input"' in response.text
-    assert 'id="qa-thread"' in response.text
-    assert 'id="qa-payload-preview"' in response.text
-    assert "activeQaRunId()" in response.text
-    assert "requestJson('/qa'" in response.text
-
-
-def test_dashboard_renders_operator_start_run_form_slice_and_submit_hook():
-    client = TestClient(api_module.app)
-
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Start governed run" in response.text
-    assert "POST /runs" in response.text
-    assert 'id="start-run-form"' in response.text
-    assert 'id="start-run-dataset"' in response.text
-    assert 'id="start-run-run-dir"' in response.text
-    assert 'id="start-run-skip-prepare"' in response.text
-    assert 'id="start-run-sync-artifacts"' in response.text
-    assert "toggleStartRunPanel" in response.text
-    assert "submitStartRun" in response.text
-    assert "requestJson('/runs', { method: 'POST', body: JSON.stringify(payload) })" in response.text
-
-
-def test_dashboard_renders_source_pack_intake_slice_and_hooks():
-    client = TestClient(api_module.app)
-
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Source-pack intake preview" in response.text
-    assert "POST /source-packs" in response.text
-    assert "POST /source-packs/from-path" in response.text
-    assert "POST /source-packs/validate" in response.text
-    assert 'id="source-pack-upload-form"' in response.text
-    assert 'id="source-pack-files"' in response.text
-    assert "webkitdirectory" in response.text
-    assert 'id="source-pack-path-form"' in response.text
-    assert 'id="source-pack-path"' in response.text
-    assert 'id="source-pack-mappings"' in response.text
-    assert 'id="source-pack-manifest-body"' in response.text
-    assert 'id="source-pack-readiness"' in response.text
-    assert "requestMultipart('/source-packs', formData)" in response.text
-    assert "submitSourcePackUpload" in response.text
-    assert "submitSourcePackPath" in response.text
-    assert "revalidateSourcePack" in response.text
-    assert "confirmSourcePackMapping" in response.text
-    assert 'id="start-run-allow-partial-source-pack"' in response.text
-
-
-def test_dashboard_renders_richer_health_console_slice_and_live_fetch_hook():
-    client = TestClient(api_module.app)
-
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "API / health shell" in response.text
-    assert "Dependency checks" in response.text
-    assert "Config and access posture" in response.text
-    assert 'id="health-summary"' in response.text
-    assert 'id="health-checks-kv"' in response.text
-    assert 'id="health-config-kv"' in response.text
-    assert 'id="health-payload-preview"' in response.text
-    assert "requestJson('/health/live')" in response.text
+    assert 'requestJson("/runs/latest")' in js
+    assert "document.visibilityState" in js
+    assert "5000" in js
+    assert "30000" in js
 
 
 def test_ui_session_reports_anonymous_when_auth_enabled_and_no_credentials():
