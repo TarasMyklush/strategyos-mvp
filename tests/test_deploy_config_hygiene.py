@@ -94,3 +94,4 @@ def test_source_dataset_sync_omits_macos_metadata_files() -> None:
     assert 'COPYFILE_DISABLE="${COPYFILE_DISABLE:-1}" tar' in script
     assert '--exclude "._*"' in script
     assert '--exclude ".DS_Store"' in script
+    assert "rm -rf /workspace/source_dataset && mkdir -p /workspace/source_dataset" in script

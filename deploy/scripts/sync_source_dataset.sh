@@ -23,6 +23,6 @@ COPYFILE_DISABLE="${COPYFILE_DISABLE:-1}" tar \
   --exclude "._*" \
   --exclude ".DS_Store" \
   -C "${SOURCE_DATASET}" \
-  -czf - . | ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker run --rm -i --volume '${WORKSPACE_VOLUME}:/workspace' '${ALPINE_IMAGE}' sh -c 'mkdir -p /workspace/source_dataset && rm -rf /workspace/source_dataset/* && tar -xzf - -C /workspace/source_dataset'"
+  -czf - . | ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker run --rm -i --volume '${WORKSPACE_VOLUME}:/workspace' '${ALPINE_IMAGE}' sh -c 'rm -rf /workspace/source_dataset && mkdir -p /workspace/source_dataset && tar -xzf - -C /workspace/source_dataset'"
 
 echo "Source dataset synced into ${WORKSPACE_VOLUME}:/source_dataset on ${TARGET_HOST}."
