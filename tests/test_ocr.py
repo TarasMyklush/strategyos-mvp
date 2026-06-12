@@ -84,7 +84,7 @@ def test_runtime_dependency_status_reports_pinned_runtime(monkeypatch):
         responses = {
             ("dpkg-query", "-W", "-f=${Version}", "ca-certificates"): (0, "20250419", ""),
             ("dpkg-query", "-W", "-f=${Version}", "curl"): (0, "8.14.1-2+deb13u3", ""),
-            ("dpkg-query", "-W", "-f=${Version}", "poppler-utils"): (0, "25.03.0-5+deb13u2", ""),
+            ("dpkg-query", "-W", "-f=${Version}", "poppler-utils"): (0, "25.03.0-5+deb13u3", ""),
             ("dpkg-query", "-W", "-f=${Version}", "tesseract-ocr"): (0, "5.5.0-1+b1", ""),
             ("dpkg-query", "-W", "-f=${Version}", "tesseract-ocr-eng"): (0, "1:4.1.0-2", ""),
             ("curl", "--version"): (0, "curl 8.14.1", ""),
@@ -118,7 +118,7 @@ def test_runtime_dependency_status_fails_on_version_mismatch(monkeypatch):
             versions = {
                 "ca-certificates": "20250419",
                 "curl": "8.14.1-2+deb13u3",
-                "poppler-utils": "25.03.0-5+deb13u2",
+                "poppler-utils": "25.03.0-5+deb13u3",
                 "tesseract-ocr-eng": "1:4.1.0-2",
             }
             return SimpleNamespace(returncode=0, stdout=versions[joined[3]], stderr="")

@@ -8,6 +8,9 @@ build/
 deploy/.env
 deploy/.env.secrets
 deploy/.env.local
+deploy/.env.*
+!deploy/.env.example
+!deploy/.env.secrets.example
 .last_recovery_proof_dir
 artifacts/
 outputs/

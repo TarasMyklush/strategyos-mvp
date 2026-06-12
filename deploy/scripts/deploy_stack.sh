@@ -6,6 +6,12 @@ TARGET_DIR="${TARGET_DIR:-/opt/strategyos}"
 SSH_OPTS="${SSH_OPTS:-}"
 LOCAL_ENV="${LOCAL_ENV:-deploy/.env}"
 LOCAL_SECRETS_ENV="${LOCAL_SECRETS_ENV:-deploy/.env.secrets}"
+COMPOSE_FILES="${COMPOSE_FILES:-deploy/docker-compose.yml}"
+
+COMPOSE_FILE_ARGS=""
+for compose_file in ${COMPOSE_FILES}; do
+  COMPOSE_FILE_ARGS="${COMPOSE_FILE_ARGS} -f ${compose_file}"
+done
 
 if [ ! -f "${LOCAL_ENV}" ]; then
   echo "Missing ${LOCAL_ENV}. Run deploy/scripts/generate_env.sh first or create it from deploy/.env.example."
@@ -27,11 +33,12 @@ rsync -az --delete \
   --exclude ".pytest_cache" \
   --exclude "deploy/.env" \
   --exclude "deploy/.env.secrets" \
+  --exclude "deploy/.env.*" \
   ./ "${TARGET_HOST}:${TARGET_DIR}/app/"
 
 rsync -az "${LOCAL_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env"
 rsync -az "${LOCAL_SECRETS_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env.secrets"
 
-ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose -f deploy/docker-compose.yml --env-file deploy/.env --env-file deploy/.env.secrets pull postgres redis neo4j qdrant minio minio-create-bucket caddy && docker compose -f deploy/docker-compose.yml --env-file deploy/.env --env-file deploy/.env.secrets up -d --build"
+ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build"
 
 echo "Deployment complete. Run: TARGET_HOST=${TARGET_HOST} deploy/scripts/check_health.sh"

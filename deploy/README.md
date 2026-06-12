@@ -157,7 +157,7 @@ Latest local proof recorded on 2026-06-10:
 - `STRATEGYOS_IDP_ENABLED=true`
 - `STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION=20250419`
 - `STRATEGYOS_RUNTIME_DEP_CURL_VERSION=8.14.1-2+deb13u3`
-- `STRATEGYOS_RUNTIME_DEP_POPPLER_UTILS_VERSION=25.03.0-5+deb13u2`
+- `STRATEGYOS_RUNTIME_DEP_POPPLER_UTILS_VERSION=25.03.0-5+deb13u3`
 - `STRATEGYOS_RUNTIME_DEP_TESSERACT_VERSION=5.5.0-1+b1`
 - `STRATEGYOS_RUNTIME_DEP_TESSERACT_ENG_VERSION=1:4.1.0-2`
 - `STRATEGYOS_IDP_TOKEN_URL=http://strategyos-idp:9000/oauth/token`
@@ -258,6 +258,7 @@ Key proof points:
 
 ## Next Production Hardening
 
+- The current CI/CD and production rollout plan is maintained in `docs/production-deployment-plan.md`.
 - Add source-pack intake and validation so a user-selected folder with arbitrary filenames can be registered, classified, and readiness-checked before run execution.
 - Keep OCR local and wire PDF/image extraction ahead of content-based document-role classification.
 - Add additive canonical invoice-header normalization only after source-pack intake is in place; keep current invoice-consuming controls unchanged in that tranche.

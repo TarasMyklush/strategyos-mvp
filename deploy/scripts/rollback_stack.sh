@@ -4,8 +4,14 @@ set -euo pipefail
 TARGET_HOST="${TARGET_HOST:?Set TARGET_HOST, for example root@1.2.3.4}"
 TARGET_DIR="${TARGET_DIR:-/opt/strategyos}"
 SSH_OPTS="${SSH_OPTS:-}"
+COMPOSE_FILES="${COMPOSE_FILES:-deploy/docker-compose.yml}"
 
-ssh ${SSH_OPTS} "${TARGET_HOST}" "TARGET_DIR='${TARGET_DIR}' bash -s" <<'REMOTE'
+COMPOSE_FILE_ARGS=""
+for compose_file in ${COMPOSE_FILES}; do
+  COMPOSE_FILE_ARGS="${COMPOSE_FILE_ARGS} -f ${compose_file}"
+done
+
+ssh ${SSH_OPTS} "${TARGET_HOST}" "TARGET_DIR='${TARGET_DIR}' COMPOSE_FILE_ARGS='${COMPOSE_FILE_ARGS}' bash -s" <<'REMOTE'
 set -euo pipefail
 latest="$(ls -td "${TARGET_DIR}"/backups/app-* 2>/dev/null | head -1 || true)"
 if [ -z "${latest}" ]; then
@@ -17,6 +23,6 @@ if [ -d "${TARGET_DIR}/app" ]; then
 fi
 cp -a "${latest}" "${TARGET_DIR}/app"
 cd "${TARGET_DIR}/app"
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env --env-file deploy/.env.secrets up -d --build
+docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build
 echo "Rolled back to ${latest}"
 REMOTE

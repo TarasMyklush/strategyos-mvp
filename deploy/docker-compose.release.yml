@@ -1,0 +1,8 @@
+services:
+  strategyos-api:
+    image: ${STRATEGYOS_API_IMAGE:?Set STRATEGYOS_API_IMAGE to the tested release image}
+    build: !override null
+
+  strategyos-idp:
+    image: ${STRATEGYOS_API_IMAGE:?Set STRATEGYOS_API_IMAGE to the tested release image}
+    build: !override null

@@ -1,0 +1,8 @@
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
+
+  strategyos-idp:
+    ports: !override
+      - "127.0.0.1:${STRATEGYOS_IDP_HTTP_PORT:-8089}:9000"

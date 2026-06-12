@@ -308,9 +308,9 @@ def load_config() -> StrategyOSConfig:
         runtime_dep_poppler_utils_version=(
             env(
                 "STRATEGYOS_RUNTIME_DEP_POPPLER_UTILS_VERSION",
-                "25.03.0-5+deb13u2",
+                "25.03.0-5+deb13u3",
             )
-            or "25.03.0-5+deb13u2"
+            or "25.03.0-5+deb13u3"
         ),
         runtime_dep_tesseract_version=(
             env("STRATEGYOS_RUNTIME_DEP_TESSERACT_VERSION", "5.5.0-1+b1")
