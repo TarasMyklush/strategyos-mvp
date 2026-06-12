@@ -125,6 +125,42 @@ def test_ready_health_requires_auth_and_surfaces_failed_dependencies(monkeypatch
         _restore_env(original)
 
 
+def test_ready_health_is_ok_when_human_review_is_intentionally_disabled(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-key",
+            "STRATEGYOS_REQUIRE_HUMAN_REVIEW": "false",
+        }
+    )
+    try:
+        for check_name in [
+            "_check_postgres",
+            "_check_redis",
+            "_check_neo4j",
+            "_check_qdrant",
+            "_check_object_store",
+            "_check_workspace",
+        ]:
+            monkeypatch.setattr(api_module, check_name, lambda: {"status": "ok"})
+        monkeypatch.setattr(
+            api_module,
+            "_check_runtime_dependencies",
+            lambda: {"status": "ok", "checks": {}},
+        )
+
+        client = TestClient(api_module.app)
+        response = client.get("/health/ready", headers={"X-API-Key": "operator-key"})
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["checks"]["governance"]["status"] == "ok"
+        assert payload["checks"]["governance"]["require_human_review"] is False
+    finally:
+        _restore_env(original)
+
+
 def test_dependencies_health_requires_auth_and_reports_runtime_deps(monkeypatch):
     original = _apply_env(
         {

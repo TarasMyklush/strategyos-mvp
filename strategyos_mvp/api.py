@@ -987,7 +987,11 @@ def _check_auth_boundary() -> dict[str, Any]:
 
 def _check_governance_boundary() -> dict[str, Any]:
     if not CONFIG.require_human_review:
-        return _health_check("skipped", reason="Human review gate is disabled.")
+        return _health_check(
+            "ok",
+            require_human_review=False,
+            reason="Human review gate is disabled.",
+        )
     if not CONFIG.api_auth_enabled:
         return _health_check(
             "failed", reason="Human review is enabled but API auth is disabled."
