@@ -41,7 +41,7 @@
     chatRunKey: "",
     chatThread: [],
     qaLoading: false,
-    activeSuggestions: STARTER_SUGGESTIONS.slice(0, 5),
+    activeSuggestions: STARTER_SUGGESTIONS.slice(0, 3),
     openCitationKey: "",
     sourcePack: null,
     sourcePackSubmitting: false,
@@ -526,13 +526,8 @@
     const current = String(run.current_stage || (run.status === "completed" ? "writer" : "")).toLowerCase();
     const currentIndex = Math.max(0, stages.findIndex((item) => String(item).toLowerCase() === current));
     const completed = String(run.status || "").toLowerCase() === "completed";
-    els.stageStepper.innerHTML = stages.map((stage, index) => {
-      const done = completed || index < currentIndex;
-      const active = !completed && index === currentIndex;
-      const mark = done ? " ✓" : active ? " active" : "";
-      const label = String(stage).replaceAll("_", " ");
-      return `<span class="stage-node ${done ? "done" : active ? "current" : ""}">${escapeHtml(label)}${mark}</span>`;
-    }).join("");
+    const activeStage = completed ? "complete" : String(stages[currentIndex] || current || run.status || "unknown").replaceAll("_", " ");
+    els.stageStepper.innerHTML = `<span class="stage-node ${completed ? "done" : "current"}">Stage: ${escapeHtml(activeStage)}</span>`;
   }
 
   function renderStoreBadges(run) {
@@ -543,19 +538,26 @@
     ];
     els.storeBadges.innerHTML = stores.map(([name, payload]) => {
       const meta = storeStatusMeta(name, payload);
+      if (meta.status !== "danger") return "";
       return `<span class="badge ${statusTone(meta.status)}" title="${escapeHtml(meta.reason)}">${escapeHtml(meta.label)}</span>`;
     }).join("");
   }
 
   function renderPartialRunChips(run) {
-    const chips = [];
-    if (run.run_mode && run.run_mode !== "full") chips.push(statusPill("warn", `mode ${run.run_mode}`));
-    (run.missing_roles || []).forEach((role) => chips.push(statusPill("warn", `missing ${role}`)));
+    const diagnostics = [];
+    if (run.run_mode && run.run_mode !== "full") diagnostics.push(`mode ${run.run_mode}`);
+    (run.missing_roles || []).forEach((role) => diagnostics.push(`missing ${role}`));
     (run.detector_report?.skipped_detectors || []).forEach((item) => {
-      chips.push(`<span class="pill warn" title="${escapeHtml(item.reason || "")}">skipped ${escapeHtml(item.detector || "detector")}</span>`);
+      diagnostics.push(`skipped ${item.detector || "detector"}${item.reason ? `: ${item.reason}` : ""}`);
     });
-    els.partialRunChips.innerHTML = chips.join("");
-    els.partialRunChips.classList.toggle("hidden", chips.length === 0);
+    if (!diagnostics.length) {
+      els.partialRunChips.innerHTML = "";
+      els.partialRunChips.classList.add("hidden");
+      return;
+    }
+    const mode = run.run_mode && run.run_mode !== "full" ? "Partial analysis" : "Run diagnostics";
+    els.partialRunChips.innerHTML = `<span class="pill warn" title="${escapeHtml(diagnostics.join("\n"))}">${escapeHtml(mode)}: ${formatCount(diagnostics.length)} items</span>`;
+    els.partialRunChips.classList.remove("hidden");
   }
 
   function runApprovalStatus(run) {
@@ -572,16 +574,19 @@
 
     const role = String(state.session?.role || "anonymous").toLowerCase();
     const emptyRun = runHasNoReadableFiles(run);
+    const reviewerAllowed = needsReview && isReviewer() && Boolean(activeRunId()) && !emptyRun;
+    const operatorResumeAllowed = resumable && isOperator() && Boolean(activeRunId());
 
-    els.reviewApprove.classList.toggle("hidden", !needsReview);
-    els.reviewReject.classList.toggle("hidden", !needsReview);
-    els.reviewResume.classList.toggle("hidden", !resumable);
+    els.reviewApprove.classList.toggle("hidden", !reviewerAllowed);
+    els.reviewReject.classList.toggle("hidden", !reviewerAllowed);
+    els.reviewResume.classList.toggle("hidden", !operatorResumeAllowed);
     els.reviewNewRun.classList.toggle("hidden", !emptyRun);
-    els.reviewComment.disabled = emptyRun || (needsReview && !isReviewer()) || (resumable && !isOperator());
+    els.reviewComment.classList.toggle("hidden", !reviewerAllowed);
+    els.reviewComment.disabled = !reviewerAllowed;
 
     if (emptyRun) {
       els.reviewTitle.textContent = "Upload readable finance files before review.";
-      els.reviewDetail.textContent = "This run has no findings to approve. Start a new analysis with invoices, ledgers, bank statements, or the sample dataset.";
+      els.reviewDetail.textContent = "Start a new analysis with invoices, ledgers, bank statements, or the sample dataset.";
       els.reviewApprove.disabled = true;
       els.reviewReject.disabled = true;
       els.reviewResume.disabled = true;
@@ -610,8 +615,6 @@
       els.reviewDetail.textContent = "Use a Reviewer token to approve or reject. Use an Operator token to resume after approval.";
     }
 
-    const reviewerAllowed = needsReview && isReviewer() && Boolean(activeRunId());
-    const operatorResumeAllowed = resumable && isOperator() && Boolean(activeRunId());
     els.reviewApprove.disabled = !reviewerAllowed;
     els.reviewReject.disabled = !reviewerAllowed;
     els.reviewResume.disabled = !operatorResumeAllowed;
@@ -690,7 +693,7 @@
 
   function renderChatEntry(entry, index) {
     if (entry.type === "system") {
-      return `<div class="sysmsg"><span>${escapeHtml(entry.text || "")}</span></div>`;
+      return "";
     }
     if (entry.type === "user") {
       return `<div class="msg-user">${escapeHtml(entry.text || "")}</div>`;
@@ -747,8 +750,8 @@
   }
 
   function renderSuggestions() {
-    const suggestions = state.activeSuggestions.length ? state.activeSuggestions : STARTER_SUGGESTIONS.slice(0, 5);
-    els.chatSuggestions.innerHTML = suggestions.slice(0, 6).map((item) => (
+    const suggestions = state.activeSuggestions.length ? state.activeSuggestions : STARTER_SUGGESTIONS.slice(0, 3);
+    els.chatSuggestions.innerHTML = suggestions.slice(0, 3).map((item) => (
       `<button class="btn secondary" type="button" data-suggestion="${escapeHtml(item)}">${escapeHtml(item)}</button>`
     )).join("");
   }
@@ -772,7 +775,7 @@
       state.chatThread.push({ type: "bot", payload });
       state.activeSuggestions = Array.isArray(payload.suggestions) && payload.suggestions.length
         ? payload.suggestions
-        : STARTER_SUGGESTIONS.slice(0, 5);
+        : STARTER_SUGGESTIONS.slice(0, 3);
       els.chatInput.value = "";
     } catch (error) {
       state.chatThread.push({
@@ -785,7 +788,7 @@
           citations: [],
         },
       });
-      state.activeSuggestions = STARTER_SUGGESTIONS.slice(0, 5);
+      state.activeSuggestions = STARTER_SUGGESTIONS.slice(0, 3);
     } finally {
       state.qaLoading = false;
       saveChat();
