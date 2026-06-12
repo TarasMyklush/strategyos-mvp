@@ -35,7 +35,7 @@ from .skills.finance_controls import run_all_finance_skills
 from .reviewer_runtime import resume_reviewed_run
 from .run_registry import load_latest_run_summary, update_run_pointers
 from .run_poc import run_strategyos_workflow
-from .runtime_governance import annotate_governance_state
+from .runtime_governance import annotate_governance_state, local_run_id_for_dir
 from . import state_store
 from .state_store import data_management_status, database_connection
 from .storage import ObjectStoreUnavailable, S3CompatibleStore, object_store_status
@@ -224,7 +224,211 @@ def _run_lifecycle_timeline(record: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _latest_summary() -> dict[str, Any] | None:
-    return load_latest_run_summary()
+    summary = load_latest_run_summary()
+    if summary is None:
+        return None
+    return _with_local_run_identity(summary)
+
+
+def _with_local_run_identity(summary: dict[str, Any]) -> dict[str, Any]:
+    if summary.get("run_id") or not summary.get("run_dir"):
+        return summary
+    enriched = dict(summary)
+    enriched["run_id"] = local_run_id_for_dir(Path(str(summary["run_dir"])))
+    checkpoint = enriched.get("local_review_checkpoint")
+    if isinstance(checkpoint, dict):
+        checkpoint = dict(checkpoint)
+        checkpoint["run_id"] = enriched["run_id"]
+        enriched["local_review_checkpoint"] = checkpoint
+    return enriched
+
+
+def _latest_summary_path(summary: dict[str, Any]) -> Path | None:
+    pointer = summary.get("latest_pointer")
+    if isinstance(pointer, dict) and pointer.get("summary_path"):
+        return Path(str(pointer["summary_path"])).expanduser().resolve()
+    if summary.get("run_dir"):
+        return Path(str(summary["run_dir"])).expanduser().resolve() / "run_summary.json"
+    return None
+
+
+def _local_review_checkpoint_for_run(run_id: str) -> dict[str, Any] | None:
+    summary = _latest_summary()
+    if not summary or str(summary.get("run_id") or "") != str(run_id):
+        return None
+    checkpoint = summary.get("local_review_checkpoint")
+    if not isinstance(checkpoint, dict):
+        if not summary.get("requires_human_review"):
+            return None
+        if str(summary.get("current_stage") or "").lower() != "awaiting_review":
+            return None
+        checkpoint = {
+            "checkpoint_id": f"local-checkpoint:{run_id}:awaiting_review",
+            "run_id": run_id,
+            "stage": "awaiting_review",
+            "status": "awaiting_review",
+            "state_json": {
+                "run_id": run_id,
+                "dataset_root": summary.get("dataset") or summary.get("dataset_root"),
+                "source_pack_id": summary.get("source_pack_id"),
+                "run_dir": summary.get("run_dir"),
+                "workflow_status": summary.get("status"),
+                "current_stage": summary.get("current_stage"),
+                "requires_human_review": summary.get("requires_human_review"),
+                "approval_status": summary.get("approval_status") or "pending",
+                "findings": [],
+                "audit_events": [],
+                "artifact_paths": summary.get("artifacts") or {},
+            },
+            "summary_json": summary,
+            "persistence": "local_synthesized",
+        }
+    normalized = dict(checkpoint)
+    normalized["run_id"] = run_id
+    normalized.setdefault("checkpoint_id", f"local-checkpoint:{run_id}:awaiting_review")
+    normalized.setdefault("stage", summary.get("current_stage") or "awaiting_review")
+    normalized.setdefault("status", summary.get("status") or "awaiting_review")
+    normalized.setdefault("state_json", {})
+    normalized.setdefault("summary_json", summary)
+    normalized["persistence"] = "local"
+    return normalized
+
+
+def _local_approval_status_for_run(run_id: str) -> dict[str, Any] | None:
+    summary = _latest_summary()
+    if not summary or str(summary.get("run_id") or "") != str(run_id):
+        return None
+    decision = summary.get("review_decision")
+    return {
+        "run_id": run_id,
+        "run_status": summary.get("status"),
+        "current_stage": summary.get("current_stage"),
+        "requires_human_review": bool(summary.get("requires_human_review")),
+        "approved_at": summary.get("approved_at"),
+        "approved_by": summary.get("approved_by"),
+        "approval_status": str(summary.get("approval_status") or "pending"),
+        "latest_approval": decision if isinstance(decision, dict) else None,
+    }
+
+
+def _local_pending_review_items() -> list[dict[str, Any]]:
+    summary = _latest_summary()
+    if not summary:
+        return []
+    if not summary.get("requires_human_review"):
+        return []
+    if str(summary.get("status") or "").lower() != "awaiting_review":
+        return []
+    if str(summary.get("approval_status") or "pending").lower() in {"approved", "rejected"}:
+        return []
+    run_id = summary.get("run_id")
+    if not run_id:
+        return []
+    checkpoint = _local_review_checkpoint_for_run(str(run_id))
+    return [
+        {
+            "run_id": str(run_id),
+            "run_dir": summary.get("run_dir"),
+            "dataset_root": summary.get("dataset") or summary.get("dataset_root"),
+            "status": summary.get("status"),
+            "current_stage": summary.get("current_stage"),
+            "requires_human_review": True,
+            "checkpoint_id": checkpoint.get("checkpoint_id") if checkpoint else None,
+            "checkpoint_stage": "awaiting_review",
+            "review_assignment": {"claimed": False, "claimed_by": None, "claimed_at": None},
+            "approval_status": str(summary.get("approval_status") or "pending"),
+            "source": "local_summary",
+        }
+    ]
+
+
+def _write_local_review_summary(
+    summary: dict[str, Any],
+    summary_path: Path,
+) -> dict[str, Any]:
+    summary = annotate_governance_state(summary)
+    summary["pointer_metadata"] = update_run_pointers(summary, summary_path)
+    summary["latest_pointer"] = summary["pointer_metadata"]["latest"]
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    return summary
+
+
+def _record_local_reviewer_decision(
+    *,
+    run_id: str,
+    decision: str,
+    request: ReviewerDecisionRequest,
+    principal: dict[str, Any],
+    checkpoint: dict[str, Any],
+) -> dict[str, Any]:
+    summary = _latest_summary()
+    if not summary or str(summary.get("run_id") or "") != str(run_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Run '{run_id}' was not found.",
+        )
+    if str(summary.get("status") or "").lower() != "awaiting_review":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Run '{run_id}' is not awaiting review.",
+        )
+    approval_status = str(summary.get("approval_status") or "pending").lower()
+    if approval_status in {"approved", "rejected"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Run '{run_id}' already has reviewer decision '{approval_status}'.",
+        )
+    summary_path = _latest_summary_path(summary)
+    if summary_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Run '{run_id}' summary file was not found.",
+        )
+    reviewer_subject = str(principal.get("subject") or "unknown")
+    reviewer_role = str(principal.get("role") or "reviewer")
+    created_at = datetime.now(UTC).isoformat()
+    payload = {
+        "decision": decision,
+        "comment": request.comment,
+        "checkpoint": {
+            "checkpoint_id": checkpoint.get("checkpoint_id"),
+            "stage": checkpoint.get("stage"),
+            "status": checkpoint.get("status"),
+        },
+        **(request.payload or {}),
+    }
+    result = {
+        "approval_id": f"local-approval:{run_id}:{decision}",
+        "run_id": run_id,
+        "checkpoint_id": checkpoint.get("checkpoint_id"),
+        "reviewer": reviewer_subject,
+        "reviewer_subject": reviewer_subject,
+        "reviewer_role": reviewer_role,
+        "decision": decision,
+        "comment": request.comment,
+        "payload": payload,
+        "created_at": created_at,
+        "run_status": decision,
+        "current_stage": summary.get("current_stage"),
+        "persistence": "local",
+    }
+    summary["status"] = "awaiting_review"
+    summary["current_stage"] = "awaiting_review"
+    summary["approval_status"] = decision
+    if decision == "approved":
+        summary["approved_by"] = reviewer_subject
+        summary["approved_at"] = created_at
+    summary["review_decision"] = {
+        "decision": decision,
+        "comment": request.comment,
+        "reviewer": reviewer_subject,
+        "reviewer_subject": reviewer_subject,
+        "created_at": created_at,
+        "checkpoint_id": checkpoint.get("checkpoint_id"),
+        "persistence": "local",
+    }
+    _write_local_review_summary(summary, summary_path)
+    return result
 
 
 def _sync_run_summary_review_state(
@@ -1276,8 +1480,13 @@ def _record_reviewer_decision(
     request: ReviewerDecisionRequest,
     principal: dict[str, Any],
 ) -> dict[str, Any]:
+    checkpoint_record = state_store.latest_checkpoint(run_id)
+    local_checkpoint = None
+    if isinstance(checkpoint_record, dict) and checkpoint_record.get("status") == "skipped":
+        local_checkpoint = _local_review_checkpoint_for_run(run_id)
+        checkpoint_record = local_checkpoint
     checkpoint = _require_store_record(
-        state_store.latest_checkpoint(run_id),
+        checkpoint_record,
         missing_detail=f"No checkpoint found for run '{run_id}'.",
     )
     assert isinstance(checkpoint, dict)
@@ -1293,6 +1502,14 @@ def _record_reviewer_decision(
         },
         **(request.payload or {}),
     }
+    if local_checkpoint is not None:
+        return _record_local_reviewer_decision(
+            run_id=run_id,
+            decision=decision,
+            request=request,
+            principal=principal,
+            checkpoint=checkpoint,
+        )
     result = _require_store_mutation_result(
         state_store.record_approval(
             run_id,
@@ -1425,6 +1642,8 @@ def pending_reviews(
     principal: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
     items, store_status = _store_list_or_empty(state_store.list_pending_reviews())
+    if store_status == "skipped":
+        items = _local_pending_review_items()
     role = str(principal.get("role") or "unknown")
     subject = str(principal.get("subject") or "unknown")
     return {
@@ -1442,6 +1661,8 @@ def reviewer_runs(
     principal: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
     items, store_status = _store_list_or_empty(state_store.list_recent_runs(limit=limit))
+    if store_status == "skipped":
+        items = _local_pending_review_items()
     role = str(principal.get("role") or "unknown")
     subject = str(principal.get("subject") or "unknown")
     return {
@@ -1557,8 +1778,11 @@ def resume_run(
     run_id: str,
     _: dict[str, Any] = require_role("operator"),
 ) -> dict[str, Any]:
+    approval_record = state_store.approval_status_for_run(run_id)
+    if isinstance(approval_record, dict) and approval_record.get("status") == "skipped":
+        approval_record = _local_approval_status_for_run(run_id)
     approval = _require_store_record(
-        state_store.approval_status_for_run(run_id),
+        approval_record,
         missing_detail=f"Run '{run_id}' was not found.",
     )
     assert isinstance(approval, dict)
@@ -1581,8 +1805,11 @@ def resume_run(
                 f"Run '{run_id}' is at stage '{current_stage or 'unknown'}', not awaiting review."
             ),
         )
+    checkpoint_record = state_store.latest_checkpoint(run_id)
+    if isinstance(checkpoint_record, dict) and checkpoint_record.get("status") == "skipped":
+        checkpoint_record = _local_review_checkpoint_for_run(run_id)
     checkpoint = _require_store_record(
-        state_store.latest_checkpoint(run_id),
+        checkpoint_record,
         missing_detail=f"No checkpoint found for run '{run_id}'.",
     )
     assert isinstance(checkpoint, dict)

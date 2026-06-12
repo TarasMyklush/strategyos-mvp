@@ -373,6 +373,10 @@
     return runId ? String(runId) : null;
   }
 
+  function isLocalRunId(runId) {
+    return String(runId || "").startsWith("local-");
+  }
+
   function activeRunKey() {
     const run = state.latestRun || {};
     return String(run.run_id || run.run_dir || run.dataset || "latest");
@@ -1584,10 +1588,14 @@
   }
 
   async function sendReviewDecision(decision) {
-    if (!activeRunId() || !isReviewer()) return;
+    const runId = activeRunId();
+    if (!runId || !isReviewer()) return;
     const comment = els.reviewComment.value.trim();
     try {
-      await requestJson(`/reviewer/runs/${encodeURIComponent(activeRunId())}/${decision}`, {
+      if (!isLocalRunId(runId)) {
+        await requestJson(`/reviewer/runs/${encodeURIComponent(runId)}/claim`, { method: "POST" });
+      }
+      await requestJson(`/reviewer/runs/${encodeURIComponent(runId)}/${decision}`, {
         method: "POST",
         body: JSON.stringify({ comment }),
       });

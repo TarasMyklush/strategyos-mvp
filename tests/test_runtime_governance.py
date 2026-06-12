@@ -42,7 +42,7 @@ def test_runtime_governance_initial_state_noops_without_database():
             run_dir=Path("/tmp/run"),
         )
         state = governance.initial_state()
-        assert state["run_id"] is None
+        assert state["run_id"].startswith("local-run-")
         assert state["workflow_status"] == "running"
         assert state["approval_status"] == "pending"
         assert state["runtime_record"]["status"] == "skipped"

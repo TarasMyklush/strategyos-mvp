@@ -66,6 +66,62 @@ def _client_with_auth_env():
     return original, TestClient(api_module.app)
 
 
+def _write_local_review_summary(tmp_path: Path, *, approval_status: str = "pending") -> dict:
+    output_root = tmp_path / "outputs"
+    run_dir = output_root / "local-review-run"
+    dataset_root = tmp_path / "dataset"
+    run_dir.mkdir(parents=True)
+    dataset_root.mkdir()
+    run_id = "local-review-run"
+    state_json = {
+        "run_id": run_id,
+        "dataset_root": str(dataset_root),
+        "source_pack_id": None,
+        "run_dir": str(run_dir),
+        "workflow_status": "awaiting_review",
+        "current_stage": "awaiting_review",
+        "requires_human_review": True,
+        "approval_status": approval_status,
+        "findings": [],
+        "audit_events": [],
+        "artifact_paths": {},
+    }
+    summary = api_module.annotate_governance_state(
+        {
+            "run_id": run_id,
+            "dataset": str(dataset_root),
+            "run_dir": str(run_dir),
+            "findings": 1,
+            "locked_findings": 1,
+            "total_recoverable_sar": 80.0,
+            "artifacts": {},
+            "status": "awaiting_review",
+            "current_stage": "awaiting_review",
+            "requires_human_review": True,
+            "approval_status": approval_status,
+            "checkpoint_count": 1,
+            "run_outcome": "awaiting_review",
+            "deliverables_status": "paused_before_writer",
+            "local_review_checkpoint": {
+                "checkpoint_id": f"local-checkpoint:{run_id}:awaiting_review",
+                "run_id": run_id,
+                "stage": "awaiting_review",
+                "status": "awaiting_review",
+                "state_json": state_json,
+                "summary_json": {},
+                "persistence": "local",
+            },
+        }
+    )
+    summary_path = run_dir / "run_summary.json"
+    summary["pointer_metadata"] = run_registry_module.update_run_pointers(
+        summary, summary_path
+    )
+    summary["latest_pointer"] = summary["pointer_metadata"]["latest"]
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    return {"summary": summary, "summary_path": summary_path, "run_id": run_id}
+
+
 def test_pending_reviews_requires_api_key():
     original, client = _client_with_auth_env()
     try:
@@ -101,6 +157,33 @@ def test_pending_reviews_returns_items_for_reviewer(monkeypatch):
         assert response.json()["items"][0]["run_id"] == "run-1"
         assert response.json()["items"][0]["review_assignment"]["claimed"] is True
         assert response.json()["viewer_role"] == "reviewer"
+    finally:
+        _restore_env(original)
+
+
+def test_pending_reviews_includes_latest_local_summary_when_store_skipped(tmp_path):
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-a111",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path)
+
+        response = client.get(
+            "/reviewer/pending-reviews", headers=_auth_header("reviewer-a111")
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["store_status"] == "skipped"
+        assert payload["items"][0]["run_id"] == local["run_id"]
+        assert payload["items"][0]["source"] == "local_summary"
     finally:
         _restore_env(original)
 
@@ -652,6 +735,82 @@ def test_approve_run_returns_conflict_when_not_claimed(monkeypatch):
 
         assert response.status_code == 409
         assert "must be claimed" in response.json()["detail"]
+    finally:
+        _restore_env(original)
+
+
+def test_approve_run_updates_latest_local_summary_when_store_skipped(tmp_path):
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-a111",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path)
+
+        response = client.post(
+            f"/reviewer/runs/{local['run_id']}/approve",
+            headers=_auth_header("reviewer-a111"),
+            json={"comment": "ready"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["decision"] == "approved"
+        assert payload["persistence"] == "local"
+
+        summary = json.loads(local["summary_path"].read_text(encoding="utf-8"))
+        assert summary["approval_status"] == "approved"
+        assert summary["review_state"] == "approved"
+        assert summary["resume_state"] == "ready"
+        assert summary["review_decision"]["comment"] == "ready"
+    finally:
+        _restore_env(original)
+
+
+def test_resume_run_uses_latest_local_checkpoint_when_store_skipped(monkeypatch, tmp_path):
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-a111",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path, approval_status="approved")
+        captured = {}
+
+        def fake_resume(run_id, checkpoint):
+            captured["run_id"] = run_id
+            captured["checkpoint"] = checkpoint
+            return {
+                "run_id": run_id,
+                "status": "completed",
+                "current_stage": "writer",
+                "approval_status": "approved",
+            }
+
+        monkeypatch.setattr(api_module, "resume_reviewed_run", fake_resume)
+
+        response = client.post(
+            f"/operator/runs/{local['run_id']}/resume",
+            headers=_auth_header("operator-secret"),
+            json={},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "completed"
+        assert captured["run_id"] == local["run_id"]
+        assert captured["checkpoint"]["persistence"] == "local"
+        assert captured["checkpoint"]["state_json"]["current_stage"] == "awaiting_review"
     finally:
         _restore_env(original)
 

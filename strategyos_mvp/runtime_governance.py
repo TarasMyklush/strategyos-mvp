@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import re
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +14,7 @@ AWAITING_REVIEW_STATUS = "awaiting_review"
 COMPLETED_STATUS = "completed"
 
 AWAITING_REVIEW_STAGE = "awaiting_review"
+LOCAL_RUN_ID_PREFIX = "local-"
 
 
 class RuntimeGovernance:
@@ -57,8 +60,10 @@ class RuntimeGovernance:
         )
         state["runtime_record"] = record
         run_id = record.get("run_id")
-        if isinstance(run_id, str):
+        if isinstance(run_id, str) and run_id.strip():
             state["run_id"] = run_id
+        else:
+            state["run_id"] = local_run_id_for_dir(self.run_dir)
         return state
 
     def checkpoint(self, stage: str, state: dict[str, Any]) -> dict[str, Any]:
@@ -143,6 +148,14 @@ def checkpoint_state(state: dict[str, Any]) -> dict[str, Any]:
         "knowledge_graph": _normalize_value(knowledge_graph),
     }
     return annotate_governance_state(payload)
+
+
+def local_run_id_for_dir(run_dir: Path) -> str:
+    resolved = str(run_dir.expanduser().resolve())
+    digest = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:12]
+    name = re.sub(r"[^A-Za-z0-9_.-]+", "-", run_dir.name).strip("-").lower()
+    compact_name = name[:48] if name else "run"
+    return f"{LOCAL_RUN_ID_PREFIX}{compact_name}-{digest}"
 
 
 def build_run_summary(state: dict[str, Any]) -> dict[str, Any]:

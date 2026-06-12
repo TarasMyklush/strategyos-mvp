@@ -137,6 +137,7 @@ def test_dashboard_renders_review_action_message_hooks():
     assert 'id="review-new-run"' in html
     assert "Waiting for reviewer approval." in js
     assert "Upload readable finance files before review." in js
+    assert "/claim" in js
     assert "/reviewer/runs/" in js
     assert "/operator/runs/" in js
     assert "requires_human_review" in js

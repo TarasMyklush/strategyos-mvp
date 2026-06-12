@@ -4,6 +4,7 @@ import argparse
 import json
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
+from typing import Any
 
 from .config import (
     CONFIG,
@@ -23,7 +24,7 @@ from .runtime_artifacts import AUDIT_LOG_FILENAME, remove_legacy_artifacts
 from .state_store import persist_run_summary
 from .storage import sync_artifacts as sync_artifact_files
 from .storage import sync_source_files
-from .runtime_governance import RuntimeGovernance, build_run_summary
+from .runtime_governance import RuntimeGovernance, build_run_summary, checkpoint_state
 from .source_pack import resolve_source_pack_for_run
 from .vector_store import sync_findings_vector_store
 from .workflow import build_workflow
@@ -285,6 +286,7 @@ def _execute_strategyos_workflow(
     )
 
     summary = build_run_summary(result)
+    attach_local_review_checkpoint(summary, result)
     if source_pack_payload is not None:
         summary["source_pack"] = {
             "source_pack_id": source_pack_payload.get("source_pack_id"),
@@ -323,6 +325,7 @@ def _execute_strategyos_workflow(
         ),
     }
     summary_path = actual_run_dir / "run_summary.json"
+    attach_local_review_checkpoint(summary, result)
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     do_sync = (
         requested_object_storage_sync
@@ -384,10 +387,42 @@ def _execute_strategyos_workflow(
         findings=result.get("findings", []),
         knowledge_graph_path=result.get("artifacts", {}).get("knowledge_graph"),
     )
+    attach_local_review_checkpoint(summary, result)
     summary["pointer_metadata"] = update_run_pointers(summary, summary_path)
     summary["latest_pointer"] = summary["pointer_metadata"]["latest"]
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary, result
+
+
+def attach_local_review_checkpoint(
+    summary: dict[str, Any], result: dict[str, Any]
+) -> None:
+    """Keep no-database governed runs reviewable through the API."""
+    if not summary.get("run_id"):
+        return
+    if not summary.get("requires_human_review"):
+        return
+    if str(summary.get("current_stage") or "").lower() != "awaiting_review":
+        summary.pop("local_review_checkpoint", None)
+        return
+    checkpoint_record = result.get("last_checkpoint")
+    if isinstance(checkpoint_record, dict) and checkpoint_record.get("checkpoint_id"):
+        summary.pop("local_review_checkpoint", None)
+        return
+    checkpoint_id = f"local-checkpoint:{summary['run_id']}:awaiting_review"
+    summary["local_review_checkpoint"] = {
+        "checkpoint_id": checkpoint_id,
+        "run_id": summary["run_id"],
+        "stage": "awaiting_review",
+        "status": "awaiting_review",
+        "state_json": checkpoint_state(result),
+        "summary_json": {
+            key: value
+            for key, value in summary.items()
+            if key not in {"local_review_checkpoint", "pointer_metadata", "latest_pointer"}
+        },
+        "persistence": "local",
+    }
 
 
 def run_strategyos_workflow(
