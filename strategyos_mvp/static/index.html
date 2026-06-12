@@ -98,25 +98,23 @@
         <div class="drawer-head">
           <div>
             <h2>Start analysis</h2>
-            <p>Choose a folder of finance files. StrategyOS checks what it can read before it starts.</p>
           </div>
           <button class="btn secondary icon-btn" id="start-run-cancel" type="button" aria-label="Close new run panel">Close</button>
         </div>
 
         <div class="drawer-section" id="source-pack-section">
-          <h3>1. Select files</h3>
-          <p>Upload a folder with invoices, ledgers, bank statements, ERP exports, or scans.</p>
-
           <form id="source-pack-upload-form" class="form-stack">
             <label>
-              Upload folder or file set
+              Select a folder or zip
               <input id="source-pack-files" type="file" multiple webkitdirectory />
             </label>
-            <button class="btn secondary" id="source-pack-upload-submit" type="submit">Check selected files</button>
+            <button class="btn primary" id="source-pack-upload-submit" type="submit">Start analysis</button>
           </form>
 
-          <details class="advanced-options">
-            <summary>Advanced: use a server folder</summary>
+          <div class="summary" id="source-pack-status">Choose the sample dataset zip or a folder of finance files.</div>
+
+          <details class="advanced-options compact-diagnostics">
+            <summary>Details</summary>
             <form id="source-pack-path-form" class="form-stack">
               <label>
                 Server folder path
@@ -124,15 +122,8 @@
               </label>
               <button class="btn secondary" id="source-pack-path-submit" type="submit">Check server folder</button>
             </form>
-          </details>
-
-          <div class="button-row">
             <button class="btn secondary" id="source-pack-validate" type="button">Recheck files</button>
-          </div>
-          <div class="summary" id="source-pack-status">No files selected.</div>
-          <div class="summary" id="source-pack-summary"></div>
-          <details class="advanced-options">
-            <summary>File details</summary>
+            <div class="summary" id="source-pack-summary"></div>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -149,15 +140,13 @@
                 </tbody>
               </table>
             </div>
+            <div id="source-pack-mappings" class="stack-list"></div>
+            <div id="source-pack-readiness" class="stack-list"></div>
           </details>
-          <div id="source-pack-mappings" class="stack-list"></div>
-          <div id="source-pack-readiness" class="stack-list"></div>
         </div>
 
-        <form id="start-run-form" class="drawer-section form-stack">
-          <h3>2. Start analysis</h3>
-          <p>StrategyOS will analyze readable files, save the run, and pause for reviewer approval when required.</p>
-          <details class="advanced-options">
+        <form id="start-run-form" class="drawer-section form-stack hidden">
+          <details class="advanced-options compact-diagnostics">
             <summary>Advanced run settings</summary>
             <label>
               Dataset path
@@ -179,9 +168,9 @@
               <input id="start-run-allow-partial-source-pack" type="checkbox" />
               Allow partial analysis when some required finance files are missing
             </label>
+            <button class="btn secondary" id="start-run-submit" type="submit">Start with current settings</button>
           </details>
-          <button class="btn primary" id="start-run-submit" type="submit">Start analysis</button>
-          <div class="summary" id="start-run-status">Ready for operator input.</div>
+          <div class="summary hidden" id="start-run-status"></div>
         </form>
       </section>
     </aside>
@@ -203,6 +192,21 @@
           <dl class="kv" id="data-counts-kv"></dl>
           <dl class="kv" id="data-systems-kv"></dl>
           <pre id="data-payload-preview" class="code-block">Awaiting data status payload.</pre>
+        </section>
+
+        <section class="drawer-section" id="kg-panel">
+          <div class="section-title-row">
+            <div>
+              <h3>Knowledge graph</h3>
+              <p><span class="mono">GET /runs/latest/knowledge-graph</span></p>
+            </div>
+            <button class="btn secondary" id="kg-refresh" type="button">Refresh graph</button>
+          </div>
+          <div id="kg-summary" class="summary">Awaiting knowledge graph payload.</div>
+          <div class="kg-viewer">
+            <div id="kg-graph" class="kg-graph" aria-label="Latest run knowledge graph visualization"></div>
+            <aside id="kg-detail" class="kg-detail">Select a graph node to inspect details.</aside>
+          </div>
         </section>
 
         <section class="drawer-section">
@@ -240,6 +244,7 @@
     </aside>
 
     <script id="strategyos-bootstrap" type="application/json">__STRATEGYOS_BOOTSTRAP__</script>
+    <script src="/static/vendor/cytoscape.min.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

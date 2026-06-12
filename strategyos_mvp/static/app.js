@@ -30,6 +30,10 @@
     latestRun: null,
     auditSummary: null,
     dataStatus: null,
+    knowledgeGraph: null,
+    kgLoading: false,
+    kgCy: null,
+    kgSelectedId: "",
     liveStatus: null,
     readyStatus: null,
     configStatus: null,
@@ -110,6 +114,10 @@
     dataCountsKv: byId("data-counts-kv"),
     dataSystemsKv: byId("data-systems-kv"),
     dataPayloadPreview: byId("data-payload-preview"),
+    kgSummary: byId("kg-summary"),
+    kgGraph: byId("kg-graph"),
+    kgDetail: byId("kg-detail"),
+    kgRefresh: byId("kg-refresh"),
     vectorSearchForm: byId("vector-search-form"),
     vectorSearchQuery: byId("vector-search-query"),
     vectorSearchLimit: byId("vector-search-limit"),
@@ -696,6 +704,7 @@
     const citationHtml = citations.length
       ? `<div class="chips">${citations.map((citation, citationIndex) => renderCitation(citation, `${index}-${citationIndex}`)).join("")}</div>`
       : "";
+    const graphHtml = renderGraphChips(citations);
     const suggestionHtml = unmatched && suggestions.length
       ? `<div class="chips">${suggestions.map((item) => `<button class="btn secondary" type="button" data-suggestion="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join("")}</div>`
       : "";
@@ -708,6 +717,7 @@
           ${payload.intent ? `<span class="intent">${statusPill(unmatched ? "warn" : "ok", payload.intent)}</span>` : ""}
         </div>
         ${citationHtml}
+        ${graphHtml}
         ${suggestionHtml}
       </div>`;
   }
@@ -726,6 +736,14 @@
         </button>
         ${excerpt}
       </span>`;
+  }
+
+  function renderGraphChips(citations) {
+    const findingIds = Array.from(new Set(citations.map((citation) => citation.finding_id).filter(Boolean)));
+    if (!findingIds.length) return "";
+    return `<div class="chips">${findingIds.map((findingId) => (
+      `<button class="btn secondary" type="button" data-kg-node="Finding:${escapeHtml(findingId)}">Show ${escapeHtml(findingId)} in graph</button>`
+    )).join("")}</div>`;
   }
 
   function renderSuggestions() {
@@ -811,6 +829,320 @@
       ["Vector sample", payload.qdrant?.sample_record?.finding_id || payload.qdrant?.reason || "--"],
     ], true);
     els.dataPayloadPreview.textContent = compactJson(payload);
+  }
+
+  function destroyKnowledgeGraph() {
+    if (state.kgCy) {
+      state.kgCy.destroy();
+      state.kgCy = null;
+    }
+  }
+
+  function kgClass(label) {
+    return `kg-${String(label || "node").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  }
+
+  function kgElements(payload) {
+    const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+    const edges = Array.isArray(payload?.edges) ? payload.edges : [];
+    return nodes.map((node) => ({
+      group: "nodes",
+      classes: kgClass(node.label),
+      data: {
+        id: String(node.id || ""),
+        label: String(node.label || ""),
+        display: String(node.display || node.id || "node"),
+        sublabel: String(node.sublabel || ""),
+        recoverable_sar: Number(node.recoverable_sar || 0),
+        invoice_count: Number(node.invoice_count || 0),
+        payload: node,
+      },
+    })).concat(edges.map((edge) => ({
+      group: "edges",
+      classes: [
+        kgClass(edge.label),
+        String(edge.label || "").startsWith("SAME_") ? "kg-risk-edge" : "",
+      ].join(" "),
+      data: {
+        id: String(edge.id || `${edge.source}|${edge.label}|${edge.target}`),
+        source: String(edge.source || ""),
+        target: String(edge.target || ""),
+        label: String(edge.label || ""),
+        payload: edge,
+      },
+    })));
+  }
+
+  function kgStyle(maxRecoverable) {
+    const maxValue = Math.max(1, Number(maxRecoverable || 1));
+    return [
+      {
+        selector: "node",
+        style: {
+          "background-color": "#6b7280",
+          "border-width": 1,
+          "border-color": "#ffffff",
+          "color": "#1a1d21",
+          "font-size": 10,
+          "font-weight": "bold",
+          "label": "data(display)",
+          "text-background-color": "#ffffff",
+          "text-background-opacity": 0.86,
+          "text-background-padding": 2,
+          "text-max-width": 110,
+          "text-valign": "bottom",
+          "text-wrap": "wrap",
+          "width": 34,
+          "height": 34,
+        },
+      },
+      {
+        selector: ".kg-finding",
+        style: {
+          "background-color": "#d45a4c",
+          "shape": "ellipse",
+          "width": `mapData(recoverable_sar, 0, ${maxValue}, 42, 78)`,
+          "height": `mapData(recoverable_sar, 0, ${maxValue}, 42, 78)`,
+        },
+      },
+      {
+        selector: ".kg-vendor",
+        style: {
+          "background-color": "#0f6e56",
+          "shape": "round-rectangle",
+          "width": 50,
+          "height": 36,
+        },
+      },
+      {
+        selector: ".kg-evidence",
+        style: {
+          "background-color": "#8b98a8",
+          "shape": "round-rectangle",
+          "width": 44,
+          "height": 28,
+          "font-size": 9,
+        },
+      },
+      {
+        selector: ".kg-contract",
+        style: {
+          "background-color": "#7c5b9c",
+          "shape": "diamond",
+          "width": 38,
+          "height": 38,
+        },
+      },
+      {
+        selector: ".kg-invoice",
+        style: {
+          "background-color": "#c98b2c",
+          "shape": "rectangle",
+          "width": 34,
+          "height": 24,
+          "font-size": 8,
+        },
+      },
+      {
+        selector: ".kg-purchaseorder",
+        style: {
+          "background-color": "#2d7fb8",
+          "shape": "hexagon",
+          "width": 34,
+          "height": 28,
+          "font-size": 8,
+        },
+      },
+      {
+        selector: "edge",
+        style: {
+          "curve-style": "bezier",
+          "line-color": "#cfd4da",
+          "target-arrow-color": "#cfd4da",
+          "target-arrow-shape": "triangle",
+          "width": 1.4,
+          "label": "data(label)",
+          "font-size": 7,
+          "text-rotation": "autorotate",
+          "text-background-color": "#ffffff",
+          "text-background-opacity": 0.78,
+          "text-background-padding": 1,
+        },
+      },
+      {
+        selector: ".kg-risk-edge",
+        style: {
+          "line-color": "#b42318",
+          "target-arrow-color": "#b42318",
+          "line-style": "dashed",
+          "width": 2.2,
+        },
+      },
+      {
+        selector: "node:selected",
+        style: {
+          "border-color": "#1a1d21",
+          "border-width": 3,
+        },
+      },
+      {
+        selector: ".faded",
+        style: {
+          "opacity": 0.2,
+        },
+      },
+    ];
+  }
+
+  function selectedKnowledgeGraphNode() {
+    const nodes = Array.isArray(state.knowledgeGraph?.nodes) ? state.knowledgeGraph.nodes : [];
+    return nodes.find((node) => node.id === state.kgSelectedId) || null;
+  }
+
+  function renderKnowledgeGraphDetail(node) {
+    const selected = node || selectedKnowledgeGraphNode();
+    if (!selected) {
+      els.kgDetail.textContent = "Select a graph node to inspect details.";
+      return;
+    }
+    const chips = [
+      statusPill("neutral", selected.label || "node"),
+      selected.invoice_count ? statusPill("neutral", `${formatCount(selected.invoice_count)} invoices`) : "",
+      selected.recoverable_sar ? statusPill("ok", formatSar(selected.recoverable_sar)) : "",
+    ].filter(Boolean).join(" ");
+    els.kgDetail.innerHTML = `
+      <strong>${escapeHtml(selected.display || selected.id)}</strong>
+      <div>${chips}</div>
+      <div class="muted">${escapeHtml(selected.sublabel || selected.id || "")}</div>
+      <pre class="code-block">${escapeHtml(compactJson(selected.properties || {}))}</pre>`;
+  }
+
+  function renderKnowledgeGraph() {
+    if (!isAuthed()) {
+      destroyKnowledgeGraph();
+      els.kgSummary.textContent = "Connect a session to inspect the knowledge graph.";
+      els.kgGraph.classList.add("empty");
+      els.kgGraph.textContent = "Authentication required.";
+      els.kgDetail.textContent = "Authentication required.";
+      return;
+    }
+
+    const payload = state.knowledgeGraph || {};
+    const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+    const edges = Array.isArray(payload.edges) ? payload.edges : [];
+    const meta = payload.meta || {};
+    const loading = state.kgLoading ? `${statusPill("warn", "loading")} ` : "";
+    els.kgRefresh.disabled = state.kgLoading;
+    els.kgSummary.innerHTML = [
+      loading + statusPill(payload.status || "missing"),
+      `${formatCount(meta.view_node_count ?? nodes.length)} view nodes`,
+      `${formatCount(meta.view_edge_count ?? edges.length)} view edges`,
+      `${formatCount(meta.source_node_count ?? meta.node_count ?? "--")} source nodes`,
+      payload.expansion?.truncated ? `${formatCount(payload.expansion.truncated)} expansion results hidden by cap` : "",
+    ].filter(Boolean).join(" - ");
+
+    if (payload.status !== "ok" || !nodes.length || !edges.length) {
+      destroyKnowledgeGraph();
+      els.kgGraph.classList.add("empty");
+      els.kgGraph.textContent = payload.reason || "No graph payload is available for the latest run.";
+      renderKnowledgeGraphDetail();
+      return;
+    }
+
+    if (els.systemDrawer.classList.contains("hidden")) {
+      return;
+    }
+
+    if (!window.cytoscape) {
+      destroyKnowledgeGraph();
+      els.kgGraph.classList.add("empty");
+      els.kgGraph.textContent = "Graph renderer did not load.";
+      renderKnowledgeGraphDetail();
+      return;
+    }
+
+    els.kgGraph.classList.remove("empty");
+    els.kgGraph.textContent = "";
+    destroyKnowledgeGraph();
+    const maxRecoverable = nodes.reduce((max, node) => Math.max(max, Number(node.recoverable_sar || 0)), 0);
+    state.kgCy = window.cytoscape({
+      container: els.kgGraph,
+      elements: kgElements(payload),
+      style: kgStyle(maxRecoverable),
+      layout: {
+        name: "cose",
+        animate: false,
+        fit: true,
+        padding: 28,
+        nodeRepulsion: 9000,
+        idealEdgeLength: 110,
+        componentSpacing: 90,
+      },
+    });
+    state.kgCy.on("tap", "node", (event) => {
+      const nodePayload = event.target.data("payload");
+      state.kgSelectedId = nodePayload?.id || "";
+      renderKnowledgeGraphDetail(nodePayload);
+      const neighborhood = event.target.closedNeighborhood();
+      state.kgCy.elements().addClass("faded");
+      neighborhood.removeClass("faded");
+      if (nodePayload?.label === "Vendor") {
+        expandKnowledgeGraph(nodePayload.id);
+      }
+    });
+    state.kgCy.on("tap", (event) => {
+      if (event.target !== state.kgCy) return;
+      state.kgCy.elements().removeClass("faded");
+    });
+    renderKnowledgeGraphDetail();
+    focusKnowledgeGraphSelection();
+  }
+
+  function focusKnowledgeGraphSelection() {
+    if (!state.kgCy || !state.kgSelectedId) return;
+    const node = state.kgCy.getElementById(state.kgSelectedId);
+    if (!node || !node.length) return;
+    node.select();
+    state.kgCy.center(node);
+    state.kgCy.animate({ zoom: Math.max(state.kgCy.zoom(), 1.25), center: { eles: node } }, { duration: 250 });
+  }
+
+  async function refreshKnowledgeGraph(expandId = "") {
+    state.kgLoading = true;
+    renderKnowledgeGraph();
+    try {
+      const params = new URLSearchParams();
+      if (expandId) params.set("expand", expandId);
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+      state.knowledgeGraph = await requestJson(`/runs/latest/knowledge-graph${suffix}`);
+    } catch (error) {
+      state.knowledgeGraph = {
+        status: "failed",
+        reason: error?.message || "Knowledge graph request failed.",
+        nodes: [],
+        edges: [],
+        meta: {},
+      };
+    } finally {
+      state.kgLoading = false;
+      renderKnowledgeGraph();
+    }
+  }
+
+  async function expandKnowledgeGraph(nodeId) {
+    if (!nodeId || state.kgLoading || state.knowledgeGraph?.expansion?.node_id === nodeId) return;
+    state.kgSelectedId = nodeId;
+    await refreshKnowledgeGraph(nodeId);
+  }
+
+  async function focusKnowledgeGraphNode(nodeId) {
+    if (!nodeId) return;
+    openDrawer("system");
+    state.kgSelectedId = nodeId;
+    if (!state.knowledgeGraph || state.knowledgeGraph.status === "idle") {
+      await refreshKnowledgeGraph();
+    }
+    renderKnowledgeGraph();
   }
 
   function kvHtml(rows, trustedValues = false) {
@@ -958,12 +1290,12 @@
     const payload = state.sourcePack;
     if (!payload) {
       if (!state.sourcePackSubmitting) {
-        setSourcePackStatus("not_started", "No files selected", "Choose a folder of invoices, ledgers, statements, or ERP exports.");
+        setSourcePackStatus("not_started", "Choose files", "Upload the sample dataset zip or a folder of finance files.");
       }
-      els.sourcePackSummary.textContent = "After upload, StrategyOS will show how many files are readable before analysis starts.";
+      els.sourcePackSummary.textContent = "";
       els.sourcePackManifestBody.innerHTML = '<tr><td colspan="5" class="muted">No file details yet.</td></tr>';
-      els.sourcePackMappings.innerHTML = '<div class="item"><strong>No column checks yet</strong><span>Column checks appear only when a spreadsheet needs confirmation.</span></div>';
-      els.sourcePackReadiness.innerHTML = '<div class="item"><strong>Ready check pending</strong><span>Upload files first.</span></div>';
+      els.sourcePackMappings.innerHTML = "";
+      els.sourcePackReadiness.innerHTML = "";
       return;
     }
 
@@ -1052,7 +1384,7 @@
       ? `<div class="item"><strong>Column confirmation required</strong><span>${escapeHtml(state.sourcePack.task_readiness.unconfirmed_roles.join(", "))}</span></div>`
       : "";
     if (!candidates.length) {
-      els.sourcePackMappings.innerHTML = `${prefix}<div class="item"><strong>No column checks needed</strong><span>StrategyOS did not find any spreadsheet mappings that need manual confirmation.</span></div>`;
+      els.sourcePackMappings.innerHTML = prefix;
       return;
     }
     els.sourcePackMappings.innerHTML = prefix + candidates.map((item, index) => {
@@ -1088,7 +1420,7 @@
       ? tasks.map((item) => (
         `<div class="item"><strong>${escapeHtml(item.label || item.task_key || "Task")}</strong><span>${statusPill(item.status || "unknown")}</span><span class="muted">${escapeHtml((item.reasons || []).join(" | ") || "No readiness details.")}</span></div>`
       )).join("")
-      : '<div class="item"><strong>Ready check pending</strong><span>Upload files first.</span></div>';
+      : "";
   }
 
   function setSourcePackStatus(tone, title, message) {
@@ -1096,6 +1428,7 @@
   }
 
   function setStartRunStatus(tone, title, message) {
+    els.startRunStatus.classList.remove("hidden");
     els.startRunStatus.innerHTML = `${statusPill(tone, title)} ${escapeHtml(message || "")}`;
   }
 
@@ -1110,16 +1443,21 @@
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file, file.webkitRelativePath || file.name));
     state.sourcePackSubmitting = true;
-    setSourcePackStatus("warn", "Uploading", "Checking selected files.");
+    setSourcePackStatus("warn", "Starting", "Uploading and checking files.");
     renderSourcePackPanel();
+    let shouldStart = false;
     try {
       state.sourcePack = await requestMultipart("/source-packs", formData);
+      shouldStart = sourcePackCanStart(state.sourcePack);
       renderSourcePackStatus(state.sourcePack);
     } catch (error) {
       setSourcePackStatus("danger", "Upload failed", error?.message || "Unable to upload source pack.");
     } finally {
       state.sourcePackSubmitting = false;
       renderSourcePackPanel();
+    }
+    if (shouldStart) {
+      await submitStartRun();
     }
   }
 
@@ -1277,6 +1615,9 @@
   function openDrawer(name) {
     const drawer = name === "system" ? els.systemDrawer : els.newRunDrawer;
     drawer.classList.remove("hidden");
+    if (name === "system") {
+      requestAnimationFrame(renderKnowledgeGraph);
+    }
   }
 
   function closeDrawer(name) {
@@ -1321,6 +1662,7 @@
       state.latestRun = null;
       state.auditSummary = null;
       state.dataStatus = null;
+      state.knowledgeGraph = null;
       state.liveStatus = null;
       state.readyStatus = null;
       state.configStatus = null;
@@ -1329,10 +1671,11 @@
       return;
     }
     const previousSignature = state.lastRunSignature;
-    const [latestRun, auditSummary, dataStatus, liveStatus, readyStatus, configStatus, dependenciesStatus] = await Promise.all([
+    const [latestRun, auditSummary, dataStatus, knowledgeGraph, liveStatus, readyStatus, configStatus, dependenciesStatus] = await Promise.all([
       guarded("Latest run", requestJson("/runs/latest"), { status: "missing" }),
       guarded("Audit summary", requestJson("/runs/latest/audit-summary"), { status: "missing" }),
       guarded("Data status", requestJson("/data/status"), null),
+      guarded("Knowledge graph", requestJson("/runs/latest/knowledge-graph"), { status: "missing", nodes: [], edges: [], meta: {} }),
       guarded("Live health", requestJson("/health/live"), null),
       guarded("Readiness", readinessProbe(), null),
       guarded("Config", requestJson("/health/config"), null),
@@ -1341,6 +1684,7 @@
     state.latestRun = latestRun;
     state.auditSummary = auditSummary;
     state.dataStatus = dataStatus;
+    state.knowledgeGraph = knowledgeGraph;
     state.liveStatus = liveStatus;
     state.readyStatus = readyStatus;
     state.configStatus = configStatus;
@@ -1353,6 +1697,7 @@
     renderSession();
     renderDashboard();
     renderDataStatus();
+    renderKnowledgeGraph();
     renderHealth();
     renderVectorSearch();
     renderSourcePackPanel();
@@ -1390,6 +1735,11 @@
     });
     els.chatForm.addEventListener("submit", submitChat);
     els.chatThread.addEventListener("click", (event) => {
+      const graphNode = event.target.closest("[data-kg-node]");
+      if (graphNode) {
+        focusKnowledgeGraphNode(graphNode.getAttribute("data-kg-node") || "");
+        return;
+      }
       const suggestion = event.target.closest("[data-suggestion]");
       if (suggestion) {
         setSuggestion(suggestion.getAttribute("data-suggestion") || "");
@@ -1423,6 +1773,7 @@
     els.reviewReject.addEventListener("click", () => sendReviewDecision("reject"));
     els.reviewResume.addEventListener("click", resumeRun);
     els.reviewNewRun.addEventListener("click", () => openDrawer("new-run"));
+    els.kgRefresh.addEventListener("click", () => refreshKnowledgeGraph());
     els.vectorSearchForm.addEventListener("submit", submitVectorSearch);
     els.artifactTabs.addEventListener("click", (event) => {
       const button = event.target.closest("[data-artifact-key]");
@@ -1452,6 +1803,8 @@
     revalidateSourcePack,
     confirmSourcePackMapping,
     submitStartRun,
+    refreshKnowledgeGraph,
+    focusKnowledgeGraphNode,
     activeQaRunId: activeRunId,
   };
 })();

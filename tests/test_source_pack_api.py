@@ -1,5 +1,7 @@
 import os
 import shutil
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -177,6 +179,52 @@ def test_source_pack_upload_preserves_relative_paths_and_support_flags(tmp_path:
         )
         assert validate_response.status_code == 200
         assert validate_response.json()["source_pack_id"] == payload["source_pack_id"]
+    finally:
+        _restore_env(original)
+
+
+def test_source_pack_upload_expands_canonical_dataset_zip(tmp_path: Path):
+    source_dataset = load_config().source_dataset
+    archive_buffer = BytesIO()
+    with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(source_dataset.rglob("*")):
+            if path.is_file():
+                archive.write(path, f"01_Synthetic_Dataset/{path.relative_to(source_dataset).as_posix()}")
+    archive_buffer.seek(0)
+
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_WORKSPACE_ROOT": str(tmp_path / "workspace"),
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/source-packs",
+            headers=_auth_header("operator-secret"),
+            files=[
+                (
+                    "files",
+                    (
+                        "01_Synthetic_Dataset.zip",
+                        archive_buffer.getvalue(),
+                        "application/zip",
+                    ),
+                )
+            ],
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        manifest_paths = {item["relative_path"] for item in payload["manifest"]}
+        assert "01_Synthetic_Dataset/02_ERP_Extracts/AP_Invoices_H1_2026.xlsx" in manifest_paths
+        assert payload["manifest_summary"]["supported_file_count"] > 10
+        assert payload["task_readiness"]["ready_for_run"] is True
     finally:
         _restore_env(original)
 

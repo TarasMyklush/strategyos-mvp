@@ -4,6 +4,7 @@ import json
 import mimetypes
 import re
 import shutil
+import zipfile
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
@@ -50,6 +51,7 @@ SUPPORTED_EXTENSIONS = {
 TABULAR_EXTENSIONS = {".csv", ".json", ".tsv", ".xls", ".xlsx"}
 DOCUMENT_EXTENSIONS = {".md", ".pdf", ".txt"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
+ARCHIVE_EXTENSIONS = {".zip"}
 IGNORED_NAMES = {".DS_Store"}
 OVERRIDE_FILENAME = "mapping_overrides.json"
 
@@ -148,6 +150,13 @@ def _normalize_upload_path(filename: str) -> PurePosixPath:
             detail="Uploaded file paths must stay relative to the selected source pack.",
         )
     return path
+
+
+def _normalize_zip_member_path(filename: str) -> PurePosixPath | None:
+    rel_path = _normalize_upload_path(filename)
+    if any(part == "__MACOSX" or part in IGNORED_NAMES for part in rel_path.parts):
+        return None
+    return rel_path
 
 
 def _iter_source_files(root: Path) -> Iterable[Path]:
@@ -1118,30 +1127,84 @@ def _source_pack_id_for_uploads(files: list[UploadFile]) -> str:
     seen: set[str] = set()
     for upload in files:
         rel_path = _normalize_upload_path(upload.filename or "")
-        rel_text = rel_path.as_posix()
-        if rel_text in seen:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Duplicate uploaded relative path '{rel_text}' is not allowed.",
-            )
-        seen.add(rel_text)
-        hasher = sha256()
-        size_bytes = 0
-        while True:
-            chunk = upload.file.read(1024 * 1024)
-            if not chunk:
-                break
-            size_bytes += len(chunk)
-            hasher.update(chunk)
-        upload.file.seek(0)
-        manifest_seed.append(
-            {
-                "relative_path": rel_text,
-                "sha256": hasher.hexdigest(),
-                "size_bytes": size_bytes,
-            }
+        if rel_path.suffix.lower() in ARCHIVE_EXTENSIONS:
+            try:
+                with zipfile.ZipFile(upload.file) as archive:
+                    for member in archive.infolist():
+                        if member.is_dir():
+                            continue
+                        member_path = _normalize_zip_member_path(member.filename)
+                        if member_path is None:
+                            continue
+                        rel_text = member_path.as_posix()
+                        if rel_text in seen:
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"Duplicate uploaded relative path '{rel_text}' is not allowed.",
+                            )
+                        seen.add(rel_text)
+                        hasher = sha256()
+                        size_bytes = 0
+                        with archive.open(member) as source:
+                            while True:
+                                chunk = source.read(1024 * 1024)
+                                if not chunk:
+                                    break
+                                size_bytes += len(chunk)
+                                hasher.update(chunk)
+                        manifest_seed.append(
+                            {
+                                "relative_path": rel_text,
+                                "sha256": hasher.hexdigest(),
+                                "size_bytes": size_bytes,
+                            }
+                        )
+            except zipfile.BadZipFile as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Uploaded archive '{rel_path.name}' is not a readable zip file.",
+                ) from exc
+            finally:
+                upload.file.seek(0)
+            continue
+        _append_upload_manifest_seed(upload, rel_path, seen, manifest_seed)
+    if not manifest_seed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The uploaded archive did not contain readable files.",
         )
     return _deterministic_source_pack_id(manifest_seed)
+
+
+def _append_upload_manifest_seed(
+    upload: UploadFile,
+    rel_path: PurePosixPath,
+    seen: set[str],
+    manifest_seed: list[dict[str, Any]],
+) -> None:
+    rel_text = rel_path.as_posix()
+    if rel_text in seen:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Duplicate uploaded relative path '{rel_text}' is not allowed.",
+        )
+    seen.add(rel_text)
+    hasher = sha256()
+    size_bytes = 0
+    while True:
+        chunk = upload.file.read(1024 * 1024)
+        if not chunk:
+            break
+        size_bytes += len(chunk)
+        hasher.update(chunk)
+    upload.file.seek(0)
+    manifest_seed.append(
+        {
+            "relative_path": rel_text,
+            "sha256": hasher.hexdigest(),
+            "size_bytes": size_bytes,
+        }
+    )
 
 
 def stage_source_pack_uploads(files: list[UploadFile]) -> dict[str, Any]:
@@ -1157,10 +1220,29 @@ def stage_source_pack_uploads(files: list[UploadFile]) -> dict[str, Any]:
     try:
         for upload in files:
             rel_path = _normalize_upload_path(upload.filename or "")
-            destination = raw_root.joinpath(*rel_path.parts)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            with destination.open("wb") as handle:
-                shutil.copyfileobj(upload.file, handle)
+            if rel_path.suffix.lower() in ARCHIVE_EXTENSIONS:
+                try:
+                    with zipfile.ZipFile(upload.file) as archive:
+                        for member in archive.infolist():
+                            if member.is_dir():
+                                continue
+                            member_path = _normalize_zip_member_path(member.filename)
+                            if member_path is None:
+                                continue
+                            destination = raw_root.joinpath(*member_path.parts)
+                            destination.parent.mkdir(parents=True, exist_ok=True)
+                            with archive.open(member) as source, destination.open("wb") as handle:
+                                shutil.copyfileobj(source, handle)
+                except zipfile.BadZipFile as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Uploaded archive '{rel_path.name}' is not a readable zip file.",
+                    ) from exc
+            else:
+                destination = raw_root.joinpath(*rel_path.parts)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with destination.open("wb") as handle:
+                    shutil.copyfileobj(upload.file, handle)
             upload.file.seek(0)
     finally:
         for upload in files:

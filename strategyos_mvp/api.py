@@ -94,6 +94,26 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 ARTIFACT_PREVIEW_LIMIT_BYTES = 24_000
 ARTIFACT_JSON_PARSE_LIMIT_BYTES = 200_000
 ARTIFACT_ACCESS_AUDIT_LOG = "StrategyOS Artifact Access Audit.jsonl"
+KNOWLEDGE_GRAPH_ARTIFACT_KEY = "knowledge_graph"
+KNOWLEDGE_GRAPH_DEFAULT_VIEW = "findings"
+KNOWLEDGE_GRAPH_FULL_LIMIT = 300
+KNOWLEDGE_GRAPH_EXPAND_LIMIT = 25
+KNOWLEDGE_GRAPH_BASE_EDGE_LABELS = {
+    "SUPPORTED_BY",
+    "INVOLVES_VENDOR",
+    "HAS_CONTRACT",
+    "SAME_BANK_ACCOUNT_AS",
+    "SAME_TAX_ID_AS",
+}
+KNOWLEDGE_GRAPH_EXPAND_EDGE_LABELS = {
+    "ISSUED_INVOICE",
+    "ISSUED_PO",
+}
+KNOWLEDGE_GRAPH_VISIBLE_EDGE_LABELS = (
+    KNOWLEDGE_GRAPH_BASE_EDGE_LABELS
+    | KNOWLEDGE_GRAPH_EXPAND_EDGE_LABELS
+    | {"MATCHES_PO"}
+)
 RESTRICTED_ARTIFACT_KEYS = {
     "case_file",
     "case_file_pdf",
@@ -846,6 +866,320 @@ def _load_summary_artifact_json(
     return None
 
 
+def _knowledge_graph_path_from_summary(summary: dict[str, Any]) -> Path | None:
+    artifacts = summary.get("artifacts") if isinstance(summary, dict) else None
+    if not isinstance(artifacts, dict):
+        return None
+    artifact_path = artifacts.get(KNOWLEDGE_GRAPH_ARTIFACT_KEY)
+    if not artifact_path:
+        return None
+    path = Path(str(artifact_path)).expanduser().resolve()
+    allowed_roots = [CONFIG.output_root]
+    run_dir = summary.get("run_dir")
+    if run_dir:
+        allowed_roots.append(Path(str(run_dir)).expanduser().resolve())
+    if not any(_path_is_within(path, root) for root in allowed_roots):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Knowledge graph artifact path falls outside the configured output or run boundary.",
+        )
+    if not path.exists() or not path.is_file():
+        return None
+    return path
+
+
+def _load_knowledge_graph_artifact(summary: dict[str, Any]) -> tuple[Path | None, dict[str, Any] | None]:
+    path = _knowledge_graph_path_from_summary(summary)
+    if path is None:
+        return None, None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Knowledge graph artifact could not be read: {exc}",
+        ) from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Knowledge graph artifact is not a JSON object.",
+        )
+    return path, payload
+
+
+def _kg_node_id(node: dict[str, Any]) -> str:
+    return str(node.get("id") or "")
+
+
+def _kg_node_label(node: dict[str, Any]) -> str:
+    return str(node.get("label") or "")
+
+
+def _kg_node_properties(node: dict[str, Any]) -> dict[str, Any]:
+    properties = node.get("properties")
+    return properties if isinstance(properties, dict) else {}
+
+
+def _kg_edge_source(edge: dict[str, Any]) -> str:
+    return str(edge.get("source") or "")
+
+
+def _kg_edge_target(edge: dict[str, Any]) -> str:
+    return str(edge.get("target") or "")
+
+
+def _kg_edge_label(edge: dict[str, Any]) -> str:
+    return str(edge.get("label") or "")
+
+
+def _kg_amount(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _kg_display_for_node(
+    node: dict[str, Any],
+    *,
+    invoice_counts: dict[str, int],
+) -> dict[str, Any]:
+    node_id = _kg_node_id(node)
+    label = _kg_node_label(node)
+    properties = _kg_node_properties(node)
+    display = node_id
+    sublabel = label
+    if label == "Finding":
+        display = str(properties.get("finding_id") or node_id.removeprefix("Finding:"))
+        sublabel = str(properties.get("title") or properties.get("pattern_type") or "Finding")
+    elif label == "Vendor":
+        display = str(properties.get("vendor_name") or properties.get("vendor_id") or node_id.removeprefix("Vendor:"))
+        invoice_count = invoice_counts.get(node_id, 0)
+        vendor_id = properties.get("vendor_id") or node_id.removeprefix("Vendor:")
+        sublabel = f"{vendor_id} - {invoice_count:,} invoices" if invoice_count else str(vendor_id)
+    elif label == "Evidence":
+        source_path = str(properties.get("source_path") or node_id.removeprefix("Evidence:"))
+        display = Path(source_path).name or source_path
+        sublabel = source_path
+    elif label == "Contract":
+        source_path = str(properties.get("source_path") or node_id.removeprefix("Contract:"))
+        display = str(properties.get("contract_reference") or Path(source_path).name or "Contract")
+        sublabel = str(properties.get("vendor_id") or source_path)
+    elif label == "Invoice":
+        display = str(properties.get("invoice_id") or node_id.removeprefix("Invoice:"))
+        amount = _kg_amount(properties.get("amount_sar"))
+        sublabel = f"SAR {amount:,.0f}" if amount else str(properties.get("status") or "Invoice")
+    elif label == "PurchaseOrder":
+        display = str(properties.get("po_id") or node_id.removeprefix("PurchaseOrder:"))
+        amount = _kg_amount(properties.get("total"))
+        sublabel = f"SAR {amount:,.0f}" if amount else str(properties.get("status") or "Purchase order")
+    return {
+        "id": node_id,
+        "label": label,
+        "display": display,
+        "sublabel": sublabel,
+        "properties": properties,
+        "recoverable_sar": _kg_amount(properties.get("recoverable_sar")),
+        "invoice_count": invoice_counts.get(node_id, 0),
+    }
+
+
+def _kg_edge_view(edge: dict[str, Any]) -> dict[str, Any]:
+    source = _kg_edge_source(edge)
+    target = _kg_edge_target(edge)
+    label = _kg_edge_label(edge)
+    properties = edge.get("properties")
+    return {
+        "id": f"{source}|{label}|{target}",
+        "source": source,
+        "target": target,
+        "label": label,
+        "properties": properties if isinstance(properties, dict) else {},
+    }
+
+
+def _kg_invoice_counts(edges: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for edge in edges:
+        if _kg_edge_label(edge) != "ISSUED_INVOICE":
+            continue
+        source = _kg_edge_source(edge)
+        counts[source] = counts.get(source, 0) + 1
+    return counts
+
+
+def _knowledge_graph_base_node_ids(
+    nodes_by_id: dict[str, dict[str, Any]],
+    edges: list[dict[str, Any]],
+) -> set[str]:
+    selected: set[str] = {
+        node_id
+        for node_id, node in nodes_by_id.items()
+        if _kg_node_label(node) == "Finding"
+    }
+    first_hop = True
+    while first_hop:
+        first_hop = False
+        for edge in edges:
+            label = _kg_edge_label(edge)
+            source = _kg_edge_source(edge)
+            target = _kg_edge_target(edge)
+            if label in {"SUPPORTED_BY", "INVOLVES_VENDOR"} and source in selected:
+                for node_id in (source, target):
+                    if node_id not in selected:
+                        selected.add(node_id)
+                        first_hop = True
+
+    vendor_ids = {
+        node_id
+        for node_id in selected
+        if _kg_node_label(nodes_by_id.get(node_id, {})) == "Vendor"
+    }
+    for edge in edges:
+        label = _kg_edge_label(edge)
+        source = _kg_edge_source(edge)
+        target = _kg_edge_target(edge)
+        if label in {"HAS_CONTRACT", "SAME_BANK_ACCOUNT_AS", "SAME_TAX_ID_AS"} and (
+            source in vendor_ids or target in vendor_ids
+        ):
+            selected.add(source)
+            selected.add(target)
+
+    contract_ids = {
+        node_id
+        for node_id in selected
+        if _kg_node_label(nodes_by_id.get(node_id, {})) == "Contract"
+    }
+    for edge in edges:
+        if _kg_edge_label(edge) == "SUPPORTED_BY" and _kg_edge_source(edge) in contract_ids:
+            selected.add(_kg_edge_target(edge))
+    return selected
+
+
+def _knowledge_graph_expand_node_ids(
+    *,
+    expand: str | None,
+    limit: int,
+    nodes_by_id: dict[str, dict[str, Any]],
+    edges: list[dict[str, Any]],
+    selected: set[str],
+) -> dict[str, Any]:
+    if not expand:
+        return {"node_id": None, "added": 0, "truncated": 0, "limit": limit}
+    if expand not in nodes_by_id:
+        return {"node_id": expand, "added": 0, "truncated": 0, "limit": limit, "status": "missing"}
+
+    candidates: list[tuple[float, str, str]] = []
+    for edge in edges:
+        label = _kg_edge_label(edge)
+        source = _kg_edge_source(edge)
+        target = _kg_edge_target(edge)
+        if label not in KNOWLEDGE_GRAPH_EXPAND_EDGE_LABELS:
+            continue
+        if source != expand and target != expand:
+            continue
+        other = target if source == expand else source
+        other_props = _kg_node_properties(nodes_by_id.get(other, {}))
+        amount = _kg_amount(other_props.get("amount_sar") or other_props.get("total"))
+        candidates.append((amount, other, label))
+
+    capped = sorted(candidates, key=lambda item: (-item[0], item[1]))[:limit]
+    before = len(selected)
+    selected.add(expand)
+    for _, node_id, _ in capped:
+        selected.add(node_id)
+
+    truncated = max(0, len(candidates) - len(capped))
+    return {
+        "node_id": expand,
+        "added": max(0, len(selected) - before),
+        "truncated": truncated,
+        "limit": limit,
+        "status": "expanded",
+    }
+
+
+def _knowledge_graph_payload(
+    *,
+    summary: dict[str, Any],
+    view: str,
+    expand: str | None,
+    limit: int,
+) -> dict[str, Any]:
+    graph_path, graph = _load_knowledge_graph_artifact(summary)
+    if graph is None:
+        return {
+            "status": "missing",
+            "run_id": summary.get("run_id"),
+            "view": view,
+            "reason": "Latest run has no knowledge graph artifact.",
+            "nodes": [],
+            "edges": [],
+            "meta": {},
+        }
+
+    raw_nodes = [node for node in graph.get("nodes", []) if isinstance(node, dict)]
+    raw_edges = [edge for edge in graph.get("edges", []) if isinstance(edge, dict)]
+    nodes_by_id = {_kg_node_id(node): node for node in raw_nodes if _kg_node_id(node)}
+    invoice_counts = _kg_invoice_counts(raw_edges)
+    normalized_view = (view or KNOWLEDGE_GRAPH_DEFAULT_VIEW).strip().lower()
+    bounded_limit = max(1, min(int(limit or KNOWLEDGE_GRAPH_EXPAND_LIMIT), 100))
+    if normalized_view not in {"findings", "full"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Knowledge graph view must be 'findings' or 'full'.",
+        )
+
+    if normalized_view == "full":
+        selected = set(sorted(nodes_by_id)[:KNOWLEDGE_GRAPH_FULL_LIMIT])
+        expansion = {"node_id": None, "added": 0, "truncated": 0, "limit": bounded_limit}
+        view_truncated = max(0, len(nodes_by_id) - len(selected))
+    else:
+        selected = _knowledge_graph_base_node_ids(nodes_by_id, raw_edges)
+        expansion = _knowledge_graph_expand_node_ids(
+            expand=expand,
+            limit=bounded_limit,
+            nodes_by_id=nodes_by_id,
+            edges=raw_edges,
+            selected=selected,
+        )
+        view_truncated = 0
+
+    selected_edges = [
+        edge
+        for edge in raw_edges
+        if _kg_edge_source(edge) in selected
+        and _kg_edge_target(edge) in selected
+        and _kg_edge_label(edge) in KNOWLEDGE_GRAPH_VISIBLE_EDGE_LABELS
+    ]
+    selected_nodes = [
+        nodes_by_id[node_id]
+        for node_id in sorted(selected)
+        if node_id in nodes_by_id
+    ]
+    graph_meta = graph.get("meta") if isinstance(graph.get("meta"), dict) else {}
+    return {
+        "status": "ok",
+        "run_id": summary.get("run_id"),
+        "view": normalized_view,
+        "graph_path": str(graph_path) if graph_path else None,
+        "nodes": [
+            _kg_display_for_node(node, invoice_counts=invoice_counts)
+            for node in selected_nodes
+        ],
+        "edges": [_kg_edge_view(edge) for edge in selected_edges],
+        "meta": {
+            **graph_meta,
+            "source_node_count": len(raw_nodes),
+            "source_edge_count": len(raw_edges),
+            "view_node_count": len(selected_nodes),
+            "view_edge_count": len(selected_edges),
+            "view_truncated": view_truncated,
+        },
+        "expansion": expansion,
+    }
+
+
 def _challenged_finding_ids_from_audit_log(
     payload: dict[str, Any] | list[dict[str, Any]] | None,
 ) -> list[str]:
@@ -1380,6 +1714,31 @@ def latest_run_audit_summary(
             "resolved_count", acceptance.get("resolved_citation_count")
         ),
     }
+
+
+@app.get("/runs/latest/knowledge-graph")
+def latest_run_knowledge_graph(
+    view: str = KNOWLEDGE_GRAPH_DEFAULT_VIEW,
+    expand: str | None = None,
+    limit: int = KNOWLEDGE_GRAPH_EXPAND_LIMIT,
+    _: dict[str, Any] = require_role("operator", "reviewer"),
+) -> dict[str, Any]:
+    summary = _latest_summary()
+    if summary is None:
+        return {
+            "status": "missing",
+            "view": view,
+            "reason": "No latest run is available.",
+            "nodes": [],
+            "edges": [],
+            "meta": {},
+        }
+    return _knowledge_graph_payload(
+        summary=summary,
+        view=view,
+        expand=expand,
+        limit=limit,
+    )
 
 
 @app.get("/data/status")

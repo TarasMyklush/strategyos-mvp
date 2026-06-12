@@ -165,7 +165,7 @@ def test_dashboard_renders_new_run_slide_over_and_start_run_hooks():
 
     assert 'id="new-run-drawer"' in html
     assert "Start analysis" in html
-    assert "Advanced run settings" in html
+    assert "Start with current settings" in html
     assert "POST /runs" not in html
     assert 'id="start-run-form"' in html
     assert 'id="start-run-dataset"' in html
@@ -181,9 +181,10 @@ def test_dashboard_renders_source_pack_intake_hooks():
     html = _dashboard_response()
     js = _static_app_js()
 
-    assert "1. Select files" in html
-    assert "Check selected files" in html
-    assert "Advanced: use a server folder" in html
+    assert "Select a folder or zip" in html
+    assert "Choose the sample dataset zip or a folder of finance files." in html
+    assert "Check selected files" not in html
+    assert "Advanced: use a server folder" not in html
     assert "POST /source-packs" not in html
     assert 'id="source-pack-upload-form"' in html
     assert 'id="source-pack-files"' in html
@@ -205,12 +206,19 @@ def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
 
     assert 'id="system-drawer"' in html
     assert "Managed data" in html
+    assert "Knowledge graph" in html
     assert "Runtime health" in html
     assert "Artifact inspector" in html
     assert 'id="data-summary"' in html
     assert 'id="data-counts-kv"' in html
     assert 'id="data-systems-kv"' in html
     assert 'id="data-payload-preview"' in html
+    assert 'id="kg-panel"' in html
+    assert 'id="kg-summary"' in html
+    assert 'id="kg-graph"' in html
+    assert 'id="kg-detail"' in html
+    assert 'id="kg-refresh"' in html
+    assert 'src="/static/vendor/cytoscape.min.js"' in html
     assert 'id="artifact-tabs"' in html
     assert 'id="artifact-viewer"' in html
     assert 'id="health-summary"' in html
@@ -218,6 +226,9 @@ def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
     assert 'id="health-config-kv"' in html
     assert 'id="health-payload-preview"' in html
     assert 'requestJson("/data/status")' in js
+    assert 'requestJson("/runs/latest/knowledge-graph")' in js
+    assert "focusKnowledgeGraphNode" in js
+    assert "data-kg-node" in js
     assert 'requestJson("/health/live")' in js
     assert 'requestJson("/health/ready")' in js
     assert 'requestJson("/health/dependencies")' in js

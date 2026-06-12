@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -153,6 +154,143 @@ def test_latest_run_audit_summary_reads_citation_and_audit_artifacts(monkeypatch
         assert response.json()["citation_count"] == 7
         assert response.json()["resolved_count"] == 6
         assert response.json()["challenged_finding_ids"] == ["F-001", "F-002"]
+    finally:
+        _restore_env(original)
+
+
+def test_latest_run_knowledge_graph_returns_findings_view_and_vendor_expansion(monkeypatch, tmp_path):
+    output_root = tmp_path / "outputs"
+    run_dir = output_root / "run-1"
+    run_dir.mkdir(parents=True)
+    graph_path = run_dir / "StrategyOS Knowledge Graph.json"
+    graph_path.write_text(
+        json.dumps(
+            {
+                "meta": {"node_count": 8, "edge_count": 9},
+                "nodes": [
+                    {
+                        "id": "Finding:F-001",
+                        "label": "Finding",
+                        "properties": {
+                            "finding_id": "F-001",
+                            "title": "Duplicate bank account",
+                            "pattern_type": "entity_resolution",
+                            "recoverable_sar": 1200,
+                        },
+                    },
+                    {
+                        "id": "Vendor:V-1",
+                        "label": "Vendor",
+                        "properties": {"vendor_id": "V-1", "vendor_name": "Alpha LLC"},
+                    },
+                    {
+                        "id": "Vendor:V-2",
+                        "label": "Vendor",
+                        "properties": {"vendor_id": "V-2", "vendor_name": "Beta LLC"},
+                    },
+                    {
+                        "id": "Evidence:docs/audit.pdf",
+                        "label": "Evidence",
+                        "properties": {"source_path": "docs/audit.pdf"},
+                    },
+                    {
+                        "id": "Contract:docs/contract.pdf",
+                        "label": "Contract",
+                        "properties": {
+                            "source_path": "docs/contract.pdf",
+                            "contract_reference": "C-1",
+                            "vendor_id": "V-1",
+                        },
+                    },
+                    {
+                        "id": "Invoice:INV-1",
+                        "label": "Invoice",
+                        "properties": {"invoice_id": "INV-1", "amount_sar": 100},
+                    },
+                    {
+                        "id": "Invoice:INV-2",
+                        "label": "Invoice",
+                        "properties": {"invoice_id": "INV-2", "amount_sar": 200},
+                    },
+                    {
+                        "id": "PurchaseOrder:PO-1",
+                        "label": "PurchaseOrder",
+                        "properties": {"po_id": "PO-1", "total": 150},
+                    },
+                ],
+                "edges": [
+                    {"source": "Finding:F-001", "target": "Vendor:V-1", "label": "INVOLVES_VENDOR"},
+                    {"source": "Finding:F-001", "target": "Evidence:docs/audit.pdf", "label": "SUPPORTED_BY"},
+                    {"source": "Vendor:V-1", "target": "Contract:docs/contract.pdf", "label": "HAS_CONTRACT"},
+                    {"source": "Contract:docs/contract.pdf", "target": "Evidence:docs/audit.pdf", "label": "SUPPORTED_BY"},
+                    {"source": "Vendor:V-1", "target": "Vendor:V-2", "label": "SAME_BANK_ACCOUNT_AS"},
+                    {"source": "Vendor:V-1", "target": "Invoice:INV-1", "label": "ISSUED_INVOICE"},
+                    {"source": "Vendor:V-1", "target": "Invoice:INV-2", "label": "ISSUED_INVOICE"},
+                    {"source": "Vendor:V-1", "target": "PurchaseOrder:PO-1", "label": "ISSUED_PO"},
+                    {"source": "Invoice:INV-1", "target": "PurchaseOrder:PO-1", "label": "MATCHES_PO"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        api_module,
+        "_latest_summary",
+        lambda: {
+            "run_id": "run-1",
+            "run_dir": str(run_dir),
+            "artifacts": {"knowledge_graph": str(graph_path)},
+        },
+    )
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-key",
+            "STRATEGYOS_OUTPUT_ROOT": str(output_root),
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        response = client.get(
+            "/runs/latest/knowledge-graph",
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["view"] == "findings"
+        assert {node["label"] for node in payload["nodes"]} == {
+            "Contract",
+            "Evidence",
+            "Finding",
+            "Vendor",
+        }
+        vendor = next(node for node in payload["nodes"] if node["id"] == "Vendor:V-1")
+        assert vendor["invoice_count"] == 2
+        assert "ISSUED_INVOICE" not in {edge["label"] for edge in payload["edges"]}
+
+        expanded = client.get(
+            "/runs/latest/knowledge-graph?expand=Vendor%3AV-1&limit=1",
+            headers={"X-API-Key": "reviewer-key"},
+        )
+
+        assert expanded.status_code == 200
+        expanded_payload = expanded.json()
+        assert "Invoice:INV-2" in {node["id"] for node in expanded_payload["nodes"]}
+        assert "Invoice:INV-1" not in {node["id"] for node in expanded_payload["nodes"]}
+        assert expanded_payload["expansion"]["truncated"] == 2
+    finally:
+        _restore_env(original)
+
+
+def test_latest_run_knowledge_graph_requires_auth():
+    original, client = _client_with_auth()
+    try:
+        response = client.get("/runs/latest/knowledge-graph")
+
+        assert response.status_code == 401
     finally:
         _restore_env(original)
 
