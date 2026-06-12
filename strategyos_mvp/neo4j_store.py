@@ -155,8 +155,10 @@ def graph_status_for_run(run_id: str | None) -> dict[str, Any]:
         )
         node_count = int(summary.get("node_count", 0) or 0)
         edge_count = int(summary.get("edge_count", 0) or 0)
-        status = "ready" if node_count > 0 or edge_count > 0 else "missing"
+        status = "ready" if node_count > 0 or edge_count > 0 else "empty"
         reason = None
+        if status == "empty":
+            reason = "No graph nodes or relationships have been projected for this run yet."
         if status == "ready" and projection_guardrails["status"] != "ok":
             status = "failed"
             reason = projection_guardrails["reason"]

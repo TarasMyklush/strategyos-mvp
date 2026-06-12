@@ -1234,6 +1234,23 @@ def confirm_source_pack_mapping(
 def resolve_source_pack_for_run(source_pack_id: str, *, allow_partial: bool = False) -> dict[str, Any]:
     payload = validate_source_pack(source_pack_id)
     readiness = payload.get("task_readiness") or {}
+    manifest_summary = payload.get("manifest_summary") or {}
+    supported_count = int(
+        manifest_summary.get("supported_file_count")
+        or manifest_summary.get("supported_count")
+        or 0
+    )
+    if supported_count <= 0:
+        reasons = readiness.get("blocking_reasons") or [
+            "No supported files were registered in the staged source pack."
+        ]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                " ".join(str(reason) for reason in reasons)
+                + " Upload readable finance files before starting a run."
+            ),
+        )
     if not readiness.get("ready_for_run") and not allow_partial:
         reasons = readiness.get("blocking_reasons") or [
             "The selected source pack is not ready for the current run model."

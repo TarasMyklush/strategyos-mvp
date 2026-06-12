@@ -79,6 +79,24 @@ textarea {
   flex-wrap: wrap;
 }
 
+.advanced-options {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  padding: 9px 11px;
+}
+
+.advanced-options summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.advanced-options[open] summary {
+  margin-bottom: 10px;
+}
+
 .header-actions {
   flex-wrap: nowrap;
 }

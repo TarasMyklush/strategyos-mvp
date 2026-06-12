@@ -112,6 +112,40 @@ def test_run_and_data_endpoints_require_auth(monkeypatch):
         _restore_env(original)
 
 
+def test_role_gated_endpoints_work_when_api_auth_is_disabled(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1"})
+        monkeypatch.setattr(
+            api_module,
+            "data_management_status",
+            lambda: {"status": "ok", "run_id": "run-1"},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "graph_status_for_run",
+            lambda run_id: {"status": "empty", "run_id": run_id},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "vector_status_for_run",
+            lambda run_id: {"status": "empty", "run_id": run_id},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "run_strategyos_workflow",
+            lambda **_: {"status": "ok", "run_id": "run-1"},
+        )
+
+        client = TestClient(api_module.app)
+
+        assert client.get("/runs/latest").status_code == 200
+        assert client.get("/data/status").status_code == 200
+        assert client.post("/runs", json={"sync_artifacts": False}).status_code == 200
+    finally:
+        _restore_env(original)
+
+
 def test_create_run_requires_operator_role(monkeypatch):
     original = _apply_env(
         {

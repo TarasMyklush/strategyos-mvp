@@ -406,6 +406,52 @@ def test_partial_source_pack_run_true_skips_missing_roles_without_synthetic_fill
         _restore_env(original)
 
 
+def test_partial_source_pack_run_still_blocks_zero_supported_files(tmp_path: Path):
+    workspace_root = tmp_path / "workspace"
+    output_root = tmp_path / "outputs"
+    staged_root = workspace_root / "packs" / "unsupported-only"
+    staged_root.mkdir(parents=True)
+    (staged_root / "archive.exe").write_bytes(b"not a finance document")
+
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_WORKSPACE_ROOT": str(workspace_root),
+            "STRATEGYOS_OUTPUT_ROOT": str(output_root),
+            "STRATEGYOS_REQUIRE_HUMAN_REVIEW": "false",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        staged = client.post(
+            "/source-packs/from-path",
+            headers=_auth_header("operator-secret"),
+            json={"folder_path": str(staged_root)},
+        )
+        assert staged.status_code == 200
+        payload = staged.json()
+        assert payload["manifest_summary"]["supported_file_count"] == 0
+        assert payload["task_readiness"]["status"] == "blocked"
+
+        run_response = client.post(
+            "/runs",
+            headers=_auth_header("operator-secret"),
+            json={
+                "source_pack_id": payload["source_pack_id"],
+                "allow_partial_source_pack": True,
+                "sync_artifacts": False,
+            },
+        )
+
+        assert run_response.status_code == 400
+        assert "No supported files" in run_response.json()["detail"]
+        assert "Upload readable finance files" in run_response.json()["detail"]
+    finally:
+        _restore_env(original)
+
+
 def test_low_confidence_mapping_blocks_run_until_confirmed(tmp_path: Path):
     source_dataset = load_config().source_dataset
     workspace_root = tmp_path / "workspace"

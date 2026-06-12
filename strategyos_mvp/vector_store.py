@@ -52,8 +52,10 @@ def sync_findings_vector_store(
     )
     if not points:
         return {
-            "status": "missing",
+            "status": "empty",
             "run_id": run_id,
+            "collection": COLLECTION_NAME,
+            "point_count": 0,
             "reason": "No findings available to index.",
         }
     _ensure_collection()
@@ -91,10 +93,11 @@ def vector_status_for_run(run_id: str | None) -> dict[str, Any]:
         point_count = int(count_payload.get("result", {}).get("count", 0))
         if point_count == 0:
             return {
-                "status": "missing",
+                "status": "empty",
                 "run_id": run_id,
                 "collection": COLLECTION_NAME,
                 "point_count": 0,
+                "reason": "No vector records have been indexed for this run yet.",
             }
         scroll_payload = _qdrant_request(
             "POST",

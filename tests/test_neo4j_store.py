@@ -242,6 +242,34 @@ def test_graph_status_fails_when_neo4j_outpaces_authoritative_sources(monkeypatc
     assert payload["projection_guardrails"]["status"] == "blocked"
 
 
+def test_graph_status_reports_empty_projection_without_error(monkeypatch, tmp_path):
+    graph_path = tmp_path / "StrategyOS Knowledge Graph.json"
+    graph_path.write_text(json.dumps({"nodes": [], "edges": []}), encoding="utf-8")
+    fake_driver = FakeDriver()
+    monkeypatch.setattr(neo4j_store, "_graph_driver", lambda: fake_driver)
+    monkeypatch.setattr(
+        neo4j_store,
+        "CONFIG",
+        SimpleNamespace(neo4j_uri="bolt://neo4j:7687"),
+    )
+    monkeypatch.setattr(
+        neo4j_store,
+        "data_management_status",
+        lambda run_id: {
+            "status": "ready",
+            "run_id": run_id,
+            "counts": {"kg_nodes": 0, "kg_edges": 0},
+            "artifacts": {"knowledge_graph": str(graph_path)},
+        },
+    )
+
+    payload = neo4j_store.graph_status_for_run("run-empty")
+
+    assert payload["status"] == "empty"
+    assert "No graph nodes" in payload["reason"]
+    assert payload["projection_guardrails"]["status"] == "ok"
+
+
 def test_data_status_includes_neo4j_graph_summary(monkeypatch):
     monkeypatch.setattr(
         api_module,

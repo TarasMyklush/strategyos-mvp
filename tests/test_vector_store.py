@@ -132,6 +132,44 @@ def test_sync_and_search_vectors_for_a_run(monkeypatch, tmp_path):
     assert status["sample_record"]["source"].endswith("StrategyOS Knowledge Graph.json")
 
 
+def test_empty_vector_status_is_not_reported_as_missing(monkeypatch, tmp_path):
+    state = {"collections": set()}
+
+    def fake_request(method: str, path: str, payload=None):
+        if method == "GET" and path == "/collections/strategyos_findings":
+            if "strategyos_findings" not in state["collections"]:
+                raise RuntimeError(
+                    "Qdrant request failed (404) for /collections/strategyos_findings: missing"
+                )
+            return {"result": {"status": "green"}}
+        if method == "PUT" and path == "/collections/strategyos_findings":
+            state["collections"].add("strategyos_findings")
+            return {"result": True}
+        if method == "POST" and path == "/collections/strategyos_findings/points/count":
+            return {"result": {"count": 0}}
+        raise AssertionError(f"Unexpected request: {method} {path}")
+
+    monkeypatch.setattr(vector_store, "_qdrant_request", fake_request)
+    monkeypatch.setattr(
+        vector_store,
+        "CONFIG",
+        SimpleNamespace(qdrant_url="http://qdrant:6333"),
+    )
+
+    sync = vector_store.sync_findings_vector_store(
+        run_id="run-empty",
+        tenant_slug="local-poc",
+        findings=[],
+        knowledge_graph_path=tmp_path / "kg.json",
+    )
+    status = vector_store.vector_status_for_run("run-empty")
+
+    assert sync["status"] == "empty"
+    assert sync["point_count"] == 0
+    assert status["status"] == "empty"
+    assert status["point_count"] == 0
+
+
 def test_embed_text_returns_normalized_vector():
     vector = vector_store._embed_text("duplicate payment invoice")
 

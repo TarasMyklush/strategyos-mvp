@@ -89,7 +89,7 @@ def authenticate_request(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict[str, Any]:
     if not CONFIG.api_auth_enabled:
-        return {"role": "anonymous", "subject": "auth-disabled"}
+        return {"role": "anonymous", "subject": "auth-disabled", "auth_disabled": True}
     if CONFIG.idp_enabled:
         token = extract_bearer_token(authorization=authorization)
         principal = _introspect_identity_token(token) if token else None
@@ -140,6 +140,9 @@ def require_role(*allowed_roles: str):
     def dependency(
         principal: dict[str, Any] = Depends(authenticate_request),
     ) -> dict[str, Any]:
+        if principal.get("auth_disabled"):
+            role = allowed_roles[0] if allowed_roles else "anonymous"
+            return {**principal, "role": role}
         role = str(principal.get("role"))
         if allowed_roles and role not in allowed_roles:
             raise HTTPException(

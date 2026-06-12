@@ -94,14 +94,17 @@ def test_dashboard_renders_kpi_stage_and_store_hooks():
     assert "total_recoverable_sar" in js
     assert "runtime?.pipeline" in js
     assert "state_store" in js
+    assert "No analyses yet - choose Start analysis." in js
+    assert "No vector data yet" in js
+    assert "Graph empty" in js
 
 
 def test_dashboard_renders_deterministic_chat_hooks_and_qa_fetch():
     html = _dashboard_response()
     js = _static_app_js()
 
-    assert "Deterministic data Q&amp;A" in html
-    assert "No LLM" in html
+    assert "Ask questions about the latest analysis." in html
+    assert "uploaded files" in html
     assert 'id="chat-thread"' in html
     assert 'id="chat-messages"' in html
     assert 'id="chat-suggestions"' in html
@@ -131,6 +134,9 @@ def test_dashboard_renders_review_action_message_hooks():
     assert 'id="review-approve"' in html
     assert 'id="review-reject"' in html
     assert 'id="review-resume"' in html
+    assert 'id="review-new-run"' in html
+    assert "Waiting for reviewer approval." in js
+    assert "Upload readable finance files before review." in js
     assert "/reviewer/runs/" in js
     assert "/operator/runs/" in js
     assert "requires_human_review" in js
@@ -158,8 +164,9 @@ def test_dashboard_renders_new_run_slide_over_and_start_run_hooks():
     js = _static_app_js()
 
     assert 'id="new-run-drawer"' in html
-    assert "Start governed run" in html
-    assert "POST /runs" in html
+    assert "Start analysis" in html
+    assert "Advanced run settings" in html
+    assert "POST /runs" not in html
     assert 'id="start-run-form"' in html
     assert 'id="start-run-dataset"' in html
     assert 'id="start-run-run-dir"' in html
@@ -174,10 +181,10 @@ def test_dashboard_renders_source_pack_intake_hooks():
     html = _dashboard_response()
     js = _static_app_js()
 
-    assert "Source-pack intake preview" in html
-    assert "POST /source-packs" in html
-    assert "POST /source-packs/from-path" in html
-    assert "POST /source-packs/validate" in html
+    assert "1. Select files" in html
+    assert "Check selected files" in html
+    assert "Advanced: use a server folder" in html
+    assert "POST /source-packs" not in html
     assert 'id="source-pack-upload-form"' in html
     assert 'id="source-pack-files"' in html
     assert "webkitdirectory" in html
@@ -197,8 +204,8 @@ def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
     js = _static_app_js()
 
     assert 'id="system-drawer"' in html
-    assert "Managed data shell" in html
-    assert "API / health shell" in html
+    assert "Managed data" in html
+    assert "Runtime health" in html
     assert "Artifact inspector" in html
     assert 'id="data-summary"' in html
     assert 'id="data-counts-kv"' in html
@@ -222,8 +229,8 @@ def test_dashboard_renders_vector_search_utility_hooks():
     html = _dashboard_response()
     js = _static_app_js()
 
-    assert "Vector search utility" in html
-    assert "GET /data/vector-search" in html
+    assert "Search index utility" in html
+    assert "GET /data/vector-search" not in html
     assert 'id="vector-search-form"' in html
     assert 'id="vector-search-query"' in html
     assert 'id="vector-search-limit"' in html

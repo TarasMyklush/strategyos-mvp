@@ -79,6 +79,7 @@
     reviewApprove: byId("review-approve"),
     reviewReject: byId("review-reject"),
     reviewResume: byId("review-resume"),
+    reviewNewRun: byId("review-new-run"),
     newRunButton: byId("new-run-button"),
     newRunDrawer: byId("new-run-drawer"),
     sourcePackUploadForm: byId("source-pack-upload-form"),
@@ -191,15 +192,97 @@
 
   function statusTone(status) {
     const normalized = String(status || "").toLowerCase();
-    if (["ok", "ready", "synced", "persisted", "completed", "approved", "not_required", "pass"].includes(normalized)) return "ok";
+    if (normalized === "danger") return "danger";
+    if (normalized === "warn") return "warn";
+    if (normalized === "neutral") return "neutral";
+    if (["ok", "ready", "synced", "persisted", "completed", "approved", "not_required", "pass", "supported"].includes(normalized)) return "ok";
     if (["failed", "error", "rejected", "missing"].includes(normalized)) return "danger";
-    if (["skipped", "degraded", "awaiting_review", "pending", "running"].includes(normalized)) return "warn";
+    if (["skipped", "degraded", "awaiting_review", "pending", "running", "unsupported", "partial", "blocked"].includes(normalized)) return "warn";
+    if (["empty", "no_data", "not_started"].includes(normalized)) return "neutral";
     return "neutral";
   }
 
   function statusPill(status, label) {
     const text = label || String(status || "unknown").replaceAll("_", " ");
     return `<span class="pill ${statusTone(status)}">${escapeHtml(text)}</span>`;
+  }
+
+  function numericValue(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function sourcePackBlockingReasons(payload) {
+    const reasons = payload?.task_readiness?.blocking_reasons || [];
+    return Array.isArray(reasons) ? reasons.map((item) => String(item)).filter(Boolean) : [];
+  }
+
+  function sourcePackSupportedCount(payload) {
+    const summary = payload?.manifest_summary || {};
+    return numericValue(summary.supported_file_count ?? summary.supported_count) ?? 0;
+  }
+
+  function sourcePackHasNoReadableFiles(payload) {
+    if (!payload) return false;
+    const readiness = payload.task_readiness || {};
+    const reasons = sourcePackBlockingReasons(payload).join(" ").toLowerCase();
+    return sourcePackSupportedCount(payload) <= 0
+      || readiness.classification_status === "empty"
+      || reasons.includes("no supported files");
+  }
+
+  function runHasNoReadableFiles(run) {
+    const readiness = run?.source_pack?.task_readiness || {};
+    const reasons = Array.isArray(readiness.blocking_reasons)
+      ? readiness.blocking_reasons.join(" ").toLowerCase()
+      : "";
+    return readiness.classification_status === "empty"
+      || reasons.includes("no supported files");
+  }
+
+  function storeStatusMeta(name, payload) {
+    const rawStatus = String(payload?.status || "unknown").toLowerCase();
+    const reason = String(payload?.reason || payload?.detail || "");
+    const pointCount = numericValue(payload?.point_count);
+    const nodeCount = numericValue(payload?.node_count);
+    const edgeCount = numericValue(payload?.edge_count);
+    const labels = {
+      postgres: "Data saved",
+      neo4j: "Graph",
+      qdrant: "Search index",
+    };
+
+    if (name === "qdrant" && (
+      rawStatus === "empty"
+      || (rawStatus === "missing" && (pointCount === 0 || reason.toLowerCase().includes("no findings")))
+    )) {
+      return {
+        status: "empty",
+        label: "No vector data yet",
+        reason: reason || "The search index is empty because this run has no findings to index.",
+      };
+    }
+
+    if (name === "neo4j" && (
+      rawStatus === "empty"
+      || (rawStatus === "missing" && nodeCount === 0 && edgeCount === 0)
+    )) {
+      return {
+        status: "empty",
+        label: "Graph empty",
+        reason: reason || "The graph is empty because this run has no nodes or relationships yet.",
+      };
+    }
+
+    if (name === "postgres" && ["ok", "ready", "synced", "persisted"].includes(rawStatus)) {
+      return { status: "ok", label: labels.postgres, reason };
+    }
+
+    return {
+      status: rawStatus,
+      label: `${labels[name] || name} ${rawStatus.replaceAll("_", " ")}`,
+      reason,
+    };
   }
 
   function authHeaders() {
@@ -265,12 +348,16 @@
     return !bootstrap.api_auth_enabled || Boolean(state.session?.authenticated);
   }
 
+  function isAuthDisabled() {
+    return Boolean(state.session?.auth_disabled) || !bootstrap.api_auth_enabled;
+  }
+
   function isOperator() {
-    return String(state.session?.role || "") === "operator";
+    return isAuthDisabled() || String(state.session?.role || "") === "operator";
   }
 
   function isReviewer() {
-    return String(state.session?.role || "") === "reviewer";
+    return isAuthDisabled() || String(state.session?.role || "") === "reviewer";
   }
 
   function activeRunId() {
@@ -387,7 +474,7 @@
       els.kpiCitations.textContent = "--";
       els.kpiCitations.classList.remove("ok");
       els.kpiChallenged.textContent = "--";
-      els.stageStepper.textContent = "No runs yet - start one from New run.";
+      els.stageStepper.textContent = "No analyses yet - choose Start analysis.";
       els.storeBadges.innerHTML = "";
       els.partialRunChips.classList.add("hidden");
       renderReviewMessage();
@@ -447,10 +534,8 @@
       ["qdrant", run.qdrant || state.dataStatus?.qdrant],
     ];
     els.storeBadges.innerHTML = stores.map(([name, payload]) => {
-      const status = payload?.status || "unknown";
-      const label = `${name} ${String(status).replaceAll("_", " ")}`;
-      const reason = payload?.reason || payload?.detail || "";
-      return `<span class="badge ${statusTone(status)}" title="${escapeHtml(reason)}">${escapeHtml(label)}</span>`;
+      const meta = storeStatusMeta(name, payload);
+      return `<span class="badge ${statusTone(meta.status)}" title="${escapeHtml(meta.reason)}">${escapeHtml(meta.label)}</span>`;
     }).join("");
   }
 
@@ -477,19 +562,54 @@
     els.reviewMessage.classList.toggle("hidden", !(needsReview || resumable));
     if (!needsReview && !resumable) return;
 
-    if (resumable) {
-      els.reviewTitle.textContent = "Run approved - resume is available.";
-      els.reviewDetail.textContent = `Operator resume will continue run ${displayRunId(run)} into the writer stage.`;
-    } else {
-      els.reviewTitle.textContent = "Run paused - human review required.";
-      els.reviewDetail.textContent = `Reviewer decision is required before run ${displayRunId(run)} can continue.`;
-    }
+    const role = String(state.session?.role || "anonymous").toLowerCase();
+    const emptyRun = runHasNoReadableFiles(run);
+
     els.reviewApprove.classList.toggle("hidden", !needsReview);
     els.reviewReject.classList.toggle("hidden", !needsReview);
     els.reviewResume.classList.toggle("hidden", !resumable);
-    els.reviewApprove.disabled = !isReviewer() || !activeRunId();
-    els.reviewReject.disabled = !isReviewer() || !activeRunId();
-    els.reviewResume.disabled = !isOperator() || !activeRunId();
+    els.reviewNewRun.classList.toggle("hidden", !emptyRun);
+    els.reviewComment.disabled = emptyRun || (needsReview && !isReviewer()) || (resumable && !isOperator());
+
+    if (emptyRun) {
+      els.reviewTitle.textContent = "Upload readable finance files before review.";
+      els.reviewDetail.textContent = "This run has no findings to approve. Start a new analysis with invoices, ledgers, bank statements, or the sample dataset.";
+      els.reviewApprove.disabled = true;
+      els.reviewReject.disabled = true;
+      els.reviewResume.disabled = true;
+      els.reviewApprove.title = "No findings are available to approve.";
+      els.reviewReject.title = "No findings are available to reject.";
+      els.reviewResume.title = "Start a new analysis with readable files instead.";
+      return;
+    }
+
+    if (resumable) {
+      if (isOperator()) {
+        els.reviewTitle.textContent = "Reviewer approved this run.";
+        els.reviewDetail.textContent = "Resume now to create the final writer-stage deliverables.";
+      } else {
+        els.reviewTitle.textContent = "Reviewer approved this run.";
+        els.reviewDetail.textContent = "An Operator must resume the run to create the final deliverables.";
+      }
+    } else if (isReviewer()) {
+      els.reviewTitle.textContent = "Please review this run.";
+      els.reviewDetail.textContent = "Approve it to let an Operator finish the report, or reject it if the findings need rework.";
+    } else if (role === "operator") {
+      els.reviewTitle.textContent = "Waiting for reviewer approval.";
+      els.reviewDetail.textContent = "You are signed in as Operator. A Reviewer must approve or reject this run before it can continue.";
+    } else {
+      els.reviewTitle.textContent = "Sign in to review this run.";
+      els.reviewDetail.textContent = "Use a Reviewer token to approve or reject. Use an Operator token to resume after approval.";
+    }
+
+    const reviewerAllowed = needsReview && isReviewer() && Boolean(activeRunId());
+    const operatorResumeAllowed = resumable && isOperator() && Boolean(activeRunId());
+    els.reviewApprove.disabled = !reviewerAllowed;
+    els.reviewReject.disabled = !reviewerAllowed;
+    els.reviewResume.disabled = !operatorResumeAllowed;
+    els.reviewApprove.title = reviewerAllowed ? "" : "Reviewer role required.";
+    els.reviewReject.title = reviewerAllowed ? "" : "Reviewer role required.";
+    els.reviewResume.title = operatorResumeAllowed ? "" : "Operator role required after approval.";
   }
 
   function systemMessageForRun(run) {
@@ -682,9 +802,11 @@
       ["Artifacts", counts.artifacts ?? "--"],
       ["KG nodes / edges", `${counts.kg_nodes ?? counts.nodes ?? "--"} / ${counts.kg_edges ?? counts.edges ?? "--"}`],
     ]);
+    const graphMeta = storeStatusMeta("neo4j", payload.neo4j);
+    const vectorMeta = storeStatusMeta("qdrant", payload.qdrant);
     els.dataSystemsKv.innerHTML = kvHtml([
-      ["Neo4j", statusPill(payload.neo4j?.status || "unknown")],
-      ["Qdrant", statusPill(payload.qdrant?.status || "unknown")],
+      ["Graph", statusPill(graphMeta.status, graphMeta.label)],
+      ["Search index", statusPill(vectorMeta.status, vectorMeta.label)],
       ["Graph sample", payload.neo4j?.sample_relation?.source_node_key || payload.neo4j?.reason || "--"],
       ["Vector sample", payload.qdrant?.sample_record?.finding_id || payload.qdrant?.reason || "--"],
     ], true);
@@ -829,20 +951,28 @@
       if (node) node.disabled = disabled;
     });
     els.sourcePackValidate.disabled = disabled || !state.sourcePack?.source_pack_id;
-    els.startRunSubmit.disabled = disabled || state.runSubmitting || hasUnconfirmedMappings();
+    const canStart = canStartRunFromCurrentInputs();
+    els.startRunSubmit.disabled = disabled || state.runSubmitting || !canStart;
+    els.startRunSubmit.title = canStart ? "" : startRunDisabledReason();
 
     const payload = state.sourcePack;
     if (!payload) {
-      els.sourcePackSummary.textContent = "Manifest counts appear after upload or local staging.";
-      els.sourcePackManifestBody.innerHTML = '<tr><td colspan="5" class="muted">No source-pack manifest yet.</td></tr>';
-      els.sourcePackMappings.innerHTML = '<div class="item"><strong>No candidate mappings</strong><span>Upload or validate a source pack to inspect mapping proposals.</span></div>';
-      els.sourcePackReadiness.innerHTML = '<div class="item"><strong>No readiness payload</strong><span>Validate a source pack to inspect task readiness.</span></div>';
+      if (!state.sourcePackSubmitting) {
+        setSourcePackStatus("not_started", "No files selected", "Choose a folder of invoices, ledgers, statements, or ERP exports.");
+      }
+      els.sourcePackSummary.textContent = "After upload, StrategyOS will show how many files are readable before analysis starts.";
+      els.sourcePackManifestBody.innerHTML = '<tr><td colspan="5" class="muted">No file details yet.</td></tr>';
+      els.sourcePackMappings.innerHTML = '<div class="item"><strong>No column checks yet</strong><span>Column checks appear only when a spreadsheet needs confirmation.</span></div>';
+      els.sourcePackReadiness.innerHTML = '<div class="item"><strong>Ready check pending</strong><span>Upload files first.</span></div>';
       return;
     }
 
+    if (!state.sourcePackSubmitting) {
+      renderSourcePackStatus(payload);
+    }
     const summary = payload.manifest_summary || {};
     els.sourcePackSummary.innerHTML = [
-      `<strong>${escapeHtml(payload.source_pack_id || "source pack")}</strong>`,
+      "<strong>Selected files</strong>",
       `${formatCount(summary.file_count)} total files`,
       `${formatCount(summary.supported_count)} supported`,
       `${formatCount(summary.unsupported_count)} unsupported`,
@@ -858,7 +988,7 @@
           <td>${statusPill(item.supported ? "supported" : "unsupported")}</td>
           <td>${statusPill(item.extraction_status || "unknown")}</td>
         </tr>`).join("")
-      : '<tr><td colspan="5" class="muted">No source-pack manifest yet.</td></tr>';
+      : '<tr><td colspan="5" class="muted">No file details yet.</td></tr>';
 
     renderSourcePackMappings(manifest);
     renderSourcePackReadiness(payload.task_readiness || {});
@@ -869,13 +999,60 @@
     return Array.isArray(unconfirmed) && unconfirmed.length > 0;
   }
 
+  function sourcePackNeedsPartialRun(payload) {
+    const readiness = payload?.task_readiness || {};
+    return Boolean(payload)
+      && !sourcePackHasNoReadableFiles(payload)
+      && !readiness.ready_for_run;
+  }
+
+  function sourcePackCanStart(payload) {
+    const readiness = payload?.task_readiness || {};
+    if (!payload || sourcePackHasNoReadableFiles(payload) || hasUnconfirmedMappings()) return false;
+    if (readiness.ready_for_run) return true;
+    return Boolean(els.startRunAllowPartialSourcePack.checked);
+  }
+
+  function canStartRunFromCurrentInputs() {
+    if (els.startRunDataset.value.trim()) return true;
+    return sourcePackCanStart(state.sourcePack);
+  }
+
+  function startRunDisabledReason() {
+    if (!isOperator()) return "Operator role required.";
+    if (state.runSubmitting) return "Analysis is already starting.";
+    if (!state.sourcePack && !els.startRunDataset.value.trim()) return "Choose files before starting analysis.";
+    if (state.sourcePack && sourcePackHasNoReadableFiles(state.sourcePack)) return "No readable finance files were found.";
+    if (hasUnconfirmedMappings()) return "Confirm the suggested column mappings first.";
+    if (sourcePackNeedsPartialRun(state.sourcePack) && !els.startRunAllowPartialSourcePack.checked) {
+      return "Required finance files are missing. Use a complete file set or enable partial analysis in Advanced settings.";
+    }
+    return "Choose files before starting analysis.";
+  }
+
+  function renderSourcePackStatus(payload) {
+    const readiness = payload?.task_readiness || {};
+    const reasons = sourcePackBlockingReasons(payload);
+    if (sourcePackHasNoReadableFiles(payload)) {
+      setSourcePackStatus("danger", "No readable finance files", "Upload invoices, ledgers, statements, ERP exports, or use the sample dataset.");
+    } else if (hasUnconfirmedMappings()) {
+      setSourcePackStatus("warn", "Column check needed", "Confirm the suggested spreadsheet columns before starting analysis.");
+    } else if (readiness.ready_for_run) {
+      setSourcePackStatus("ok", "Ready to analyze", "Start analysis when you are ready.");
+    } else if (sourcePackNeedsPartialRun(payload) && els.startRunAllowPartialSourcePack.checked) {
+      setSourcePackStatus("warn", "Partial analysis selected", "StrategyOS will analyze the readable files and clearly report missing roles.");
+    } else {
+      setSourcePackStatus("warn", "More finance files needed", reasons.join(" ") || "Some required finance files are missing.");
+    }
+  }
+
   function renderSourcePackMappings(manifest) {
     const candidates = manifest.filter((item) => item.classification?.status === "candidate");
     const prefix = hasUnconfirmedMappings()
-      ? `<div class="item"><strong>Confirmation required before run</strong><span>${escapeHtml(state.sourcePack.task_readiness.unconfirmed_roles.join(", "))}</span></div>`
+      ? `<div class="item"><strong>Column confirmation required</strong><span>${escapeHtml(state.sourcePack.task_readiness.unconfirmed_roles.join(", "))}</span></div>`
       : "";
     if (!candidates.length) {
-      els.sourcePackMappings.innerHTML = `${prefix}<div class="item"><strong>No candidate mappings</strong><span>Validated structured mappings appear here when confirmation is required.</span></div>`;
+      els.sourcePackMappings.innerHTML = `${prefix}<div class="item"><strong>No column checks needed</strong><span>StrategyOS did not find any spreadsheet mappings that need manual confirmation.</span></div>`;
       return;
     }
     els.sourcePackMappings.innerHTML = prefix + candidates.map((item, index) => {
@@ -900,7 +1077,7 @@
           <strong>${escapeHtml(rel || "source")}</strong>
           <span>${statusPill(role || "candidate")} ${statusPill("pending", "needs confirmation")}</span>
           <div class="form-stack">${selects}</div>
-          <button class="btn secondary" type="button" data-confirm-mapping="source-pack-mapping-${index}">Confirm mapping</button>
+          <button class="btn secondary" type="button" data-confirm-mapping="source-pack-mapping-${index}">Confirm columns</button>
         </div>`;
     }).join("");
   }
@@ -911,7 +1088,7 @@
       ? tasks.map((item) => (
         `<div class="item"><strong>${escapeHtml(item.label || item.task_key || "Task")}</strong><span>${statusPill(item.status || "unknown")}</span><span class="muted">${escapeHtml((item.reasons || []).join(" | ") || "No readiness details.")}</span></div>`
       )).join("")
-      : '<div class="item"><strong>No readiness payload</strong><span>Validate a source pack to inspect task readiness.</span></div>';
+      : '<div class="item"><strong>Ready check pending</strong><span>Upload files first.</span></div>';
   }
 
   function setSourcePackStatus(tone, title, message) {
@@ -933,11 +1110,11 @@
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file, file.webkitRelativePath || file.name));
     state.sourcePackSubmitting = true;
-    setSourcePackStatus("warn", "Uploading", "Posting selected files to /source-packs.");
+    setSourcePackStatus("warn", "Uploading", "Checking selected files.");
     renderSourcePackPanel();
     try {
       state.sourcePack = await requestMultipart("/source-packs", formData);
-      setSourcePackStatus("ok", "Uploaded", `Loaded ${state.sourcePack.source_pack_id || "source pack"}.`);
+      renderSourcePackStatus(state.sourcePack);
     } catch (error) {
       setSourcePackStatus("danger", "Upload failed", error?.message || "Unable to upload source pack.");
     } finally {
@@ -955,14 +1132,14 @@
       return;
     }
     state.sourcePackSubmitting = true;
-    setSourcePackStatus("warn", "Staging", "Posting folder path to /source-packs/from-path.");
+    setSourcePackStatus("warn", "Checking folder", "Reading files from the selected server folder.");
     renderSourcePackPanel();
     try {
       state.sourcePack = await requestJson("/source-packs/from-path", {
         method: "POST",
         body: JSON.stringify({ folder_path: folderPath }),
       });
-      setSourcePackStatus("ok", "Staged", `Loaded ${state.sourcePack.source_pack_id || "source pack"}.`);
+      renderSourcePackStatus(state.sourcePack);
     } catch (error) {
       setSourcePackStatus("danger", "Staging failed", error?.message || "Unable to stage source pack.");
     } finally {
@@ -979,14 +1156,14 @@
       return;
     }
     state.sourcePackSubmitting = true;
-    setSourcePackStatus("warn", "Validating", `Refreshing ${sourcePackId}.`);
+    setSourcePackStatus("warn", "Rechecking files", "Refreshing file readiness.");
     renderSourcePackPanel();
     try {
       state.sourcePack = await requestJson("/source-packs/validate", {
         method: "POST",
         body: JSON.stringify({ source_pack_id: sourcePackId }),
       });
-      setSourcePackStatus("ok", "Validated", `Validation refreshed for ${sourcePackId}.`);
+      renderSourcePackStatus(state.sourcePack);
     } catch (error) {
       setSourcePackStatus("danger", "Validation failed", error?.message || "Unable to validate source pack.");
     } finally {
@@ -1013,14 +1190,14 @@
     });
     if (Object.keys(columnMapping).length) body.column_mapping = columnMapping;
     state.sourcePackSubmitting = true;
-    setSourcePackStatus("warn", "Confirming", `Applying mapping for ${body.relative_path}.`);
+    setSourcePackStatus("warn", "Confirming columns", `Applying choices for ${body.relative_path}.`);
     renderSourcePackPanel();
     try {
       state.sourcePack = await requestJson("/source-packs/confirm-mapping", {
         method: "POST",
         body: JSON.stringify(body),
       });
-      setSourcePackStatus("ok", "Confirmed", `Mapping confirmed for ${body.relative_path}.`);
+      renderSourcePackStatus(state.sourcePack);
     } catch (error) {
       setSourcePackStatus("danger", "Confirmation failed", error?.message || "Unable to confirm mapping.");
     } finally {
@@ -1032,9 +1209,14 @@
   async function submitStartRun(event) {
     event?.preventDefault?.();
     if (!isOperator()) return;
+    if (!canStartRunFromCurrentInputs()) {
+      setStartRunStatus("warn", "Cannot start yet", startRunDisabledReason());
+      return;
+    }
+    const datasetInput = els.startRunDataset.value.trim();
     const payload = {
-      dataset: els.startRunDataset.value.trim() || null,
-      source_pack_id: state.sourcePack?.source_pack_id || null,
+      dataset: datasetInput || null,
+      source_pack_id: datasetInput ? null : state.sourcePack?.source_pack_id || null,
       run_dir: els.startRunRunDir.value.trim() || null,
       skip_prepare: els.startRunSkipPrepare.checked,
       sync_artifacts: els.startRunSyncArtifacts.checked,
@@ -1042,14 +1224,14 @@
     };
     if (!payload.dataset && !payload.source_pack_id) payload.skip_prepare = true;
     state.runSubmitting = true;
-    setStartRunStatus("warn", "Submitting", "Posting run request to /runs.");
+    setStartRunStatus("warn", "Starting analysis", "StrategyOS is analyzing the selected files.");
     renderSourcePackPanel();
     try {
       const result = await requestJson("/runs", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      setStartRunStatus("ok", "Started", `Run ${displayRunId(result)} started.`);
+      setStartRunStatus("ok", "Analysis started", `Current run ${displayRunId(result)} is now running.`);
       closeDrawer("new-run");
       await refreshAll();
     } catch (error) {
@@ -1230,6 +1412,8 @@
     els.sourcePackUploadForm.addEventListener("submit", submitSourcePackUpload);
     els.sourcePackPathForm.addEventListener("submit", submitSourcePackPath);
     els.sourcePackValidate.addEventListener("click", revalidateSourcePack);
+    els.startRunDataset.addEventListener("input", renderSourcePackPanel);
+    els.startRunAllowPartialSourcePack.addEventListener("change", renderSourcePackPanel);
     els.sourcePackMappings.addEventListener("click", (event) => {
       const button = event.target.closest("[data-confirm-mapping]");
       if (button) confirmSourcePackMapping(button.getAttribute("data-confirm-mapping"));
@@ -1238,6 +1422,7 @@
     els.reviewApprove.addEventListener("click", () => sendReviewDecision("approve"));
     els.reviewReject.addEventListener("click", () => sendReviewDecision("reject"));
     els.reviewResume.addEventListener("click", resumeRun);
+    els.reviewNewRun.addEventListener("click", () => openDrawer("new-run"));
     els.vectorSearchForm.addEventListener("submit", submitVectorSearch);
     els.artifactTabs.addEventListener("click", (event) => {
       const button = event.target.closest("[data-artifact-key]");
