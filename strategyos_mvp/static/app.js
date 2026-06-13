@@ -94,6 +94,7 @@
     newRunDrawer: byId("new-run-drawer"),
     sourcePackUploadForm: byId("source-pack-upload-form"),
     sourcePackFiles: byId("source-pack-files"),
+    sourcePackFolderFiles: byId("source-pack-folder-files"),
     sourcePackUploadSubmit: byId("source-pack-upload-submit"),
     sourcePackPathForm: byId("source-pack-path-form"),
     sourcePackPath: byId("source-pack-path"),
@@ -1429,6 +1430,7 @@
     const disabled = state.sourcePackSubmitting || !operator;
     [
       els.sourcePackFiles,
+      els.sourcePackFolderFiles,
       els.sourcePackUploadSubmit,
       els.sourcePackPath,
       els.sourcePackPathSubmit,
@@ -1450,7 +1452,7 @@
     const payload = state.sourcePack;
     if (!payload) {
       if (!state.sourcePackSubmitting) {
-        setSourcePackStatus("not_started", "Choose files", "Upload the sample dataset zip or a folder of finance files.");
+        setSourcePackStatus("not_started", "Choose files", "Upload a source zip or a folder of finance files.");
       }
       els.sourcePackSummary.textContent = "";
       els.sourcePackManifestBody.innerHTML = '<tr><td colspan="5" class="muted">No file details yet.</td></tr>';
@@ -1595,9 +1597,12 @@
   async function submitSourcePackUpload(event) {
     event?.preventDefault?.();
     if (!isOperator()) return;
-    const files = Array.from(els.sourcePackFiles.files || []);
+    const files = [
+      ...Array.from(els.sourcePackFiles.files || []),
+      ...Array.from(els.sourcePackFolderFiles.files || []),
+    ];
     if (!files.length) {
-      setSourcePackStatus("warn", "No files selected", "Choose a folder or file set before uploading.");
+      setSourcePackStatus("warn", "No files selected", "Choose a zip file or folder before uploading.");
       return;
     }
     const formData = new FormData();

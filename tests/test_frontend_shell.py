@@ -190,13 +190,16 @@ def test_dashboard_renders_source_pack_intake_hooks():
     html = _dashboard_response()
     js = _static_app_js()
 
-    assert "Select a folder or zip" in html
+    assert "Select zip file" in html
+    assert "Select folder" in html
     assert "Choose the sample dataset zip or a folder of finance files." in html
     assert "Check selected files" not in html
     assert "Advanced: use a server folder" not in html
     assert "POST /source-packs" not in html
     assert 'id="source-pack-upload-form"' in html
     assert 'id="source-pack-files"' in html
+    assert 'id="source-pack-folder-files"' in html
+    assert 'accept=".zip,application/zip,application/x-zip-compressed"' in html
     assert "webkitdirectory" in html
     assert 'id="source-pack-path-form"' in html
     assert 'id="source-pack-path"' in html
@@ -204,6 +207,7 @@ def test_dashboard_renders_source_pack_intake_hooks():
     assert 'id="source-pack-manifest-body"' in html
     assert 'id="source-pack-readiness"' in html
     assert 'requestMultipart("/source-packs"' in js
+    assert "sourcePackFolderFiles" in js
     assert 'requestJson("/source-packs/from-path"' in js
     assert 'requestJson("/source-packs/validate"' in js
     assert 'requestJson("/source-packs/confirm-mapping"' in js

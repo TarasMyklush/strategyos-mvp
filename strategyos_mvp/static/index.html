@@ -113,8 +113,12 @@
         <div class="drawer-section" id="source-pack-section">
           <form id="source-pack-upload-form" class="form-stack">
             <label>
-              Select a folder or zip
-              <input id="source-pack-files" type="file" multiple webkitdirectory />
+              Select zip file
+              <input id="source-pack-files" type="file" accept=".zip,application/zip,application/x-zip-compressed" multiple />
+            </label>
+            <label>
+              Select folder
+              <input id="source-pack-folder-files" type="file" multiple webkitdirectory />
             </label>
             <button class="btn primary" id="source-pack-upload-submit" type="submit">Start analysis</button>
           </form>
