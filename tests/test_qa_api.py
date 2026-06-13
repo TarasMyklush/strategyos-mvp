@@ -111,6 +111,78 @@ def test_qa_endpoint_returns_answer_and_suggestions(monkeypatch):
         _restore_env(original)
 
 
+def test_qa_llm_mode_is_blocked_until_configured():
+    original, client = _client_with_auth()
+    try:
+        response = client.post(
+            "/qa",
+            json={"question": "summarize the run", "mode": "llm"},
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 403
+        assert "LLM chat is disabled" in response.json()["detail"]
+    finally:
+        _restore_env(original)
+
+
+def test_qa_llm_mode_uses_configured_adapter(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-key",
+            "STRATEGYOS_RUN_POLICY": "external-approved",
+            "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+            "STRATEGYOS_LLM_API_KEY": "test-key",
+            "STRATEGYOS_LLM_MODEL": "gpt-test",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {
+                "bundle": object(),
+                "findings": [],
+                "summary": {"run_id": "run-1"},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+
+        def fake_answer(question, *, bundle, findings, summary, config):
+            assert question == "summarize the run"
+            assert config.llm_model == "gpt-test"
+            return {
+                "matched": True,
+                "answer": "LLM summary",
+                "basis": "Supplied run evidence.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": config.llm_model},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+
+        response = client.post(
+            "/qa",
+            json={"question": "summarize the run", "mode": "llm"},
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "llm"
+        assert payload["answer"] == "LLM summary"
+        assert payload["llm_status"]["model"] == "gpt-test"
+    finally:
+        _restore_env(original)
+
+
 def test_latest_run_audit_summary_reads_citation_and_audit_artifacts(monkeypatch, tmp_path):
     citation_audit = tmp_path / "citation_audit.json"
     citation_audit.write_text(

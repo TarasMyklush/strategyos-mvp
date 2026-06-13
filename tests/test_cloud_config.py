@@ -67,6 +67,12 @@ def test_load_config_parses_runtime_auth_and_governance_flags(monkeypatch):
         "object_storage_sync, model_provider_use, batch_apis, hosted_ocr_vision",
     )
     monkeypatch.setenv("STRATEGYOS_MODEL_PROVIDER_ENABLED", "true")
+    monkeypatch.setenv("STRATEGYOS_LLM_CHAT_ENABLED", "true")
+    monkeypatch.setenv("STRATEGYOS_LLM_PROVIDER", "openai-compatible")
+    monkeypatch.setenv("STRATEGYOS_LLM_BASE_URL", "https://api.openai.test/v1")
+    monkeypatch.setenv("STRATEGYOS_LLM_MODEL", "gpt-test")
+    monkeypatch.setenv("STRATEGYOS_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("STRATEGYOS_LLM_TIMEOUT_SECONDS", "7")
     monkeypatch.setenv("STRATEGYOS_BATCH_APIS_ENABLED", "true")
     monkeypatch.setenv("STRATEGYOS_HOSTED_OCR_VISION_ENABLED", "true")
 
@@ -86,8 +92,33 @@ def test_load_config_parses_runtime_auth_and_governance_flags(monkeypatch):
         "hosted_ocr_vision",
     )
     assert config.model_provider_enabled is True
+    assert config.llm_chat_enabled is True
+    assert config.llm_provider == "openai-compatible"
+    assert config.llm_base_url == "https://api.openai.test/v1"
+    assert config.llm_model == "gpt-test"
+    assert config.llm_api_key == "test-key"
+    assert config.llm_timeout_seconds == 7
     assert config.batch_apis_enabled is True
     assert config.hosted_ocr_vision_enabled is True
+
+
+def test_load_config_uses_deepseek_defaults_and_key_fallback(monkeypatch):
+    for key in [
+        "STRATEGYOS_LLM_PROVIDER",
+        "STRATEGYOS_LLM_BASE_URL",
+        "STRATEGYOS_LLM_MODEL",
+        "STRATEGYOS_LLM_API_KEY",
+        "OPENAI_API_KEY",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-key")
+
+    config = load_config()
+
+    assert config.llm_provider == "deepseek"
+    assert config.llm_base_url == "https://api.deepseek.com"
+    assert config.llm_model == "deepseek-v4-pro"
+    assert config.llm_api_key == "deepseek-key"
 
 
 def test_load_config_parses_schema_tolerant_thresholds_and_fx_defaults(monkeypatch):

@@ -21,6 +21,7 @@ def test_schema_defines_managed_data_layers():
     schema = schema_path().read_text(encoding="utf-8")
     required_tables = [
         "strategyos_runs",
+        "strategyos_run_jobs",
         "strategyos_run_checkpoints",
         "strategyos_approvals",
         "strategyos_tenants",

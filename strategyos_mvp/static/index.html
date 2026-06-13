@@ -85,6 +85,14 @@
 
         <div class="suggest" id="chat-suggestions"></div>
 
+        <div class="chat-mode-row">
+          <div class="mode-switch" id="qa-mode-switch" role="group" aria-label="Answer mode">
+            <button class="mode-option active" type="button" data-qa-mode="deterministic">Deterministic</button>
+            <button class="mode-option" type="button" data-qa-mode="llm">LLM</button>
+          </div>
+          <span class="muted" id="qa-mode-status"></span>
+        </div>
+
         <form class="inputrow" id="chat-form">
           <input id="chat-input" type="text" placeholder="Ask deterministic finance questions about invoices, vendors, findings, or working capital" autocomplete="off" />
           <button class="btn primary icon-btn" id="chat-send" type="submit" aria-label="Send question">Send</button>

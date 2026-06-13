@@ -75,7 +75,10 @@ def test_dashboard_embeds_parseable_bootstrap_json():
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     assert "&quot;" not in bootstrap_json
-    assert json.loads(bootstrap_json)["product_name"] == "StrategyOS"
+    bootstrap = json.loads(bootstrap_json)
+    assert bootstrap["product_name"] == "StrategyOS"
+    assert bootstrap["qa_modes"]["deterministic"]["enabled"] is True
+    assert "enabled" in bootstrap["qa_modes"]["llm"]
 
 
 def test_dashboard_renders_kpi_stage_and_store_hooks():
@@ -111,7 +114,12 @@ def test_dashboard_renders_deterministic_chat_hooks_and_qa_fetch():
     assert 'id="chat-form"' in html
     assert 'id="chat-input"' in html
     assert 'id="chat-send"' in html
+    assert 'id="qa-mode-switch"' in html
+    assert 'data-qa-mode="deterministic"' in html
+    assert 'data-qa-mode="llm"' in html
     assert 'requestJson("/qa"' in js
+    assert "mode: state.qaMode" in js
+    assert "strategyos.ui.qaMode" in js
     assert "activeQaRunId: activeRunId" in js
     assert "What is the total recoverable?" in js
 

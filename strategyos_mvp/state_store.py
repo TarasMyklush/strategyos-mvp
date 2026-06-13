@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from .citation_resolver import resolve_citation
 from .config import CONFIG
@@ -67,6 +69,143 @@ def create_run(
         "pending" if requires_human_review else "not_required"
     )
     return normalized
+
+
+def run_job_request_hash(request_payload: dict[str, Any]) -> str:
+    canonical = json.dumps(
+        request_payload,
+        default=json_value,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def create_run_job(
+    request_payload: dict[str, Any],
+    *,
+    submitted_by: str | None = None,
+    execution_mode: str = "hatchet",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    request_hash = run_job_request_hash(request_payload)
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into strategyos_run_jobs
+                    (execution_mode, status, request_hash, request_json, submitted_by, metadata_json)
+                values (%s, 'queued', %s, %s::jsonb, %s, %s::jsonb)
+                returning id, created_at, updated_at, execution_mode, status, request_hash, request_json,
+                          submitted_by, hatchet_run_id, strategyos_run_id, retry_count, failure_reason,
+                          metadata_json, started_at, finished_at
+                """,
+                (
+                    execution_mode,
+                    request_hash,
+                    json_blob(request_payload),
+                    submitted_by,
+                    json_blob(metadata or {}),
+                ),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    assert record is not None
+    return normalize_run_job_record(record)
+
+
+def update_run_job(
+    job_id: str,
+    *,
+    status: str | None = None,
+    hatchet_run_id: str | None = None,
+    strategyos_run_id: str | None = None,
+    failure_reason: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    increment_retry: bool = False,
+) -> dict[str, Any]:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    normalized_run_id = uuid_value(strategyos_run_id)
+    terminal_status = status in {"succeeded", "failed", "cancelled"}
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                update strategyos_run_jobs
+                set status = coalesce(%s::text, status),
+                    hatchet_run_id = coalesce(%s::text, hatchet_run_id),
+                    strategyos_run_id = coalesce(%s::uuid, strategyos_run_id),
+                    failure_reason = case when %s::text is null then failure_reason else %s::text end,
+                    metadata_json = metadata_json || %s::jsonb,
+                    retry_count = retry_count + %s::integer,
+                    started_at = case
+                        when %s::text = 'running' then coalesce(started_at, now())
+                        else started_at
+                    end,
+                    finished_at = case
+                        when %s::boolean then coalesce(finished_at, now())
+                        else finished_at
+                    end,
+                    updated_at = now()
+                where id = %s
+                returning id, created_at, updated_at, execution_mode, status, request_hash, request_json,
+                          submitted_by, hatchet_run_id, strategyos_run_id, retry_count, failure_reason,
+                          metadata_json, started_at, finished_at
+                """,
+                (
+                    status,
+                    hatchet_run_id,
+                    normalized_run_id,
+                    failure_reason,
+                    failure_reason,
+                    json_blob(metadata or {}),
+                    1 if increment_retry else 0,
+                    status,
+                    terminal_status,
+                    job_id,
+                ),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    if record is None:
+        return {"status": "missing", "job_id": job_id}
+    return normalize_run_job_record(record)
+
+
+def get_run_job(job_id: str) -> dict[str, Any]:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select id, created_at, updated_at, execution_mode, status, request_hash, request_json,
+                       submitted_by, hatchet_run_id, strategyos_run_id, retry_count, failure_reason,
+                       metadata_json, started_at, finished_at
+                from strategyos_run_jobs
+                where id = %s
+                """,
+                (job_id,),
+            )
+            record = fetchone_dict(cur)
+    if record is None:
+        return {"status": "missing", "job_id": job_id}
+    return normalize_run_job_record(record)
 
 
 def update_run_status(
@@ -1637,6 +1776,14 @@ def normalize_record(record: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def normalize_run_job_record(record: dict[str, Any]) -> dict[str, Any]:
+    normalized = normalize_record(record)
+    normalized["job_id"] = normalized.pop("id")
+    if normalized.get("strategyos_run_id") is not None:
+        normalized["strategyos_run_id"] = str(normalized["strategyos_run_id"])
+    return normalized
+
+
 def run_status_for_decision(decision: str) -> str:
     return {
         "approved": "approved",
@@ -1652,6 +1799,16 @@ def text_value(value: Any) -> str | None:
         return None
     text = str(normalized).strip()
     return text or None
+
+
+def uuid_value(value: Any) -> str | None:
+    text = text_value(value)
+    if text is None:
+        return None
+    try:
+        return str(UUID(text))
+    except ValueError:
+        return None
 
 
 def date_value(value: Any) -> date | None:

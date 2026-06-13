@@ -31,10 +31,12 @@ from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
 from . import qa as qa_engine
+from . import llm_qa
 from .skills.finance_controls import run_all_finance_skills
 from .reviewer_runtime import resume_reviewed_run
 from .run_registry import load_latest_run_summary, update_run_pointers
 from .run_poc import run_strategyos_workflow
+from .run_executor import RunExecutionUnavailable, submit_run
 from .runtime_governance import annotate_governance_state, local_run_id_for_dir
 from . import state_store
 from .state_store import data_management_status, database_connection
@@ -85,6 +87,7 @@ class SourcePackMappingConfirmRequest(BaseModel):
 class QaRequest(BaseModel):
     question: str
     run_id: str | None = None
+    mode: str | None = "deterministic"
 
 
 app = FastAPI(title="StrategyOS MVP API", version="0.1.0")
@@ -943,6 +946,32 @@ def _check_runtime_dependencies() -> dict[str, Any]:
     return runtime_dependency_status()
 
 
+def _check_run_execution() -> dict[str, Any]:
+    if CONFIG.run_execution_mode == "sync":
+        return _health_check("ok", execution_mode="sync")
+    if CONFIG.run_execution_mode != "hatchet":
+        return _health_check(
+            "failed",
+            execution_mode=CONFIG.run_execution_mode,
+            reason="Unsupported run execution mode.",
+        )
+    try:
+        from .hatchet_runtime import hatchet_dependency_status
+
+        status_payload = hatchet_dependency_status(CONFIG)
+    except Exception as exc:
+        return _health_check("failed", execution_mode="hatchet", reason=str(exc))
+    if status_payload.get("status") != "ok":
+        return status_payload
+    if not CONFIG.database_url:
+        return _health_check(
+            "failed",
+            execution_mode="hatchet",
+            reason="Hatchet execution mode requires DATABASE_URL for run job records.",
+        )
+    return status_payload
+
+
 def _check_auth_boundary() -> dict[str, Any]:
     if not CONFIG.api_auth_enabled:
         return _health_check("skipped", reason="API auth is disabled.")
@@ -1021,6 +1050,7 @@ def _ui_environment_label() -> str:
 
 
 def _ui_bootstrap() -> dict[str, Any]:
+    llm_status = llm_qa.chat_status(CONFIG)
     return {
         "product_name": "StrategyOS",
         "shell_title": "StrategyOS Governed Operations",
@@ -1032,6 +1062,11 @@ def _ui_bootstrap() -> dict[str, Any]:
         "idp_enabled": CONFIG.idp_enabled,
         "require_human_review": CONFIG.require_human_review,
         "public_health_enabled": CONFIG.public_health_enabled,
+        "run_execution_mode": CONFIG.run_execution_mode,
+        "qa_modes": {
+            "deterministic": {"enabled": True},
+            "llm": llm_status,
+        },
         "generated_at": datetime.now(UTC).isoformat(),
     }
 
@@ -1418,6 +1453,7 @@ def readiness_payload() -> dict[str, Any]:
         "object_store": _check_object_store(),
         "workspace": _check_workspace(),
         "ocr_runtime": _check_runtime_dependencies(),
+        "run_execution": _check_run_execution(),
         "auth": _check_auth_boundary(),
         "governance": _check_governance_boundary(),
     }
@@ -1612,6 +1648,8 @@ def health_config(
         "neo4j_configured": bool(CONFIG.neo4j_uri),
         "api_auth_enabled": CONFIG.api_auth_enabled,
         "require_human_review": CONFIG.require_human_review,
+        "llm_chat": llm_qa.chat_status(CONFIG),
+        "run_execution": _check_run_execution(),
     }
 
 
@@ -1619,7 +1657,12 @@ def health_config(
 def health_dependencies(
     _: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> JSONResponse:
-    payload = runtime_dependency_status()
+    payload = dict(runtime_dependency_status())
+    checks = dict(payload.get("checks") or {})
+    checks["run_execution"] = _check_run_execution()
+    payload["checks"] = checks
+    if checks["run_execution"].get("status") == "failed":
+        payload["status"] = "failed"
     status_code = 200 if payload["status"] == "ok" else 503
     return JSONResponse(content=payload, status_code=status_code)
 
@@ -1868,8 +1911,8 @@ def confirm_source_pack_mapping_endpoint(
 @app.post("/runs")
 def create_run(
     request: RunRequest,
-    _: dict[str, Any] = require_role("operator"),
-) -> dict[str, Any]:
+    principal: dict[str, Any] = require_role("operator"),
+) -> Any:
     source_pack_id = (request.source_pack_id or "").strip() or None
     if source_pack_id and request.dataset:
         raise HTTPException(
@@ -1883,15 +1926,49 @@ def create_run(
         resolve_source_pack_for_run(
             source_pack_id, allow_partial=bool(request.allow_partial_source_pack)
         )
-    summary = run_strategyos_workflow(
-        dataset=dataset,
-        source_pack_id=source_pack_id,
-        run_dir=run_dir,
-        skip_prepare=request.skip_prepare if source_pack_id is None else True,
-        sync_artifacts=request.sync_artifacts,
-        allow_partial_source_pack=bool(request.allow_partial_source_pack),
-    )
+    try:
+        summary = submit_run(
+            dataset=dataset,
+            source_pack_id=source_pack_id,
+            run_dir=run_dir,
+            skip_prepare=request.skip_prepare if source_pack_id is None else True,
+            sync_artifacts=request.sync_artifacts,
+            allow_partial_source_pack=bool(request.allow_partial_source_pack),
+            submitted_by=str(principal.get("subject") or "operator"),
+            config=CONFIG,
+            sync_runner=run_strategyos_workflow,
+        )
+    except RunExecutionUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    if summary.get("execution_mode") == "hatchet":
+        return JSONResponse(content=summary, status_code=status.HTTP_202_ACCEPTED)
     return summary
+
+
+@app.get("/runs/jobs/{job_id}")
+def run_job_status(
+    job_id: str,
+    _: dict[str, Any] = require_role("operator", "reviewer"),
+) -> dict[str, Any]:
+    record = state_store.get_run_job(job_id)
+    job = _require_store_record(
+        record,
+        missing_detail=f"Run job '{job_id}' was not found.",
+    )
+    assert isinstance(job, dict)
+    run_id = job.get("strategyos_run_id")
+    if run_id:
+        run_detail = state_store.get_run_detail(str(run_id))
+        if isinstance(run_detail, dict) and run_detail.get("status") not in {
+            "missing",
+            "skipped",
+            "failed",
+        }:
+            job["run"] = run_detail
+    return job
 
 
 @app.get("/runs/latest")
@@ -2077,6 +2154,7 @@ def _resolve_qa_context(run_id: str | None) -> dict[str, Any]:
     return {
         "bundle": cached["bundle"],
         "findings": cached["findings"],
+        "summary": summary,
         "run_id": resolved_run_id,
         "run_mode": run_mode,
     }
@@ -2093,14 +2171,43 @@ def data_qa(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ask a question, e.g. 'What is the total amount of invoices?'.",
         )
+    mode = (request.mode or "deterministic").strip().lower()
+    if mode not in {"deterministic", "llm"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Q&A mode must be 'deterministic' or 'llm'.",
+        )
+    if mode == "llm":
+        llm_status = llm_qa.chat_status(CONFIG)
+        if not llm_status["enabled"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=llm_status["reason"],
+            )
     context = _resolve_qa_context(request.run_id)
-    result = qa_engine.answer_question(
-        question, bundle=context["bundle"], findings=context["findings"]
-    )
+    if mode == "llm":
+        try:
+            result = llm_qa.answer_question(
+                question,
+                bundle=context["bundle"],
+                findings=context["findings"],
+                summary=context["summary"],
+                config=CONFIG,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=str(exc),
+            ) from exc
+    else:
+        result = qa_engine.answer_question(
+            question, bundle=context["bundle"], findings=context["findings"]
+        )
     return {
         "status": "ok",
         "run_id": context["run_id"],
         "run_mode": context["run_mode"],
+        "mode": mode,
         "question": question,
         **result,
     }

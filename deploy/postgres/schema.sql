@@ -26,6 +26,37 @@ alter table if exists strategyos_runs add column if not exists review_claimed_at
 alter table if exists strategyos_runs add column if not exists approved_at timestamptz;
 alter table if exists strategyos_runs add column if not exists approved_by text;
 
+create table if not exists strategyos_run_jobs (
+    id uuid primary key default gen_random_uuid(),
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    execution_mode text not null default 'hatchet',
+    status text not null check (status in ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+    request_hash text not null,
+    request_json jsonb not null default '{}'::jsonb,
+    submitted_by text,
+    hatchet_run_id text,
+    strategyos_run_id uuid references strategyos_runs(id) on delete set null,
+    retry_count integer not null default 0,
+    failure_reason text,
+    metadata_json jsonb not null default '{}'::jsonb,
+    started_at timestamptz,
+    finished_at timestamptz
+);
+
+alter table if exists strategyos_run_jobs add column if not exists execution_mode text not null default 'hatchet';
+alter table if exists strategyos_run_jobs add column if not exists status text not null default 'queued';
+alter table if exists strategyos_run_jobs add column if not exists request_hash text not null default '';
+alter table if exists strategyos_run_jobs add column if not exists request_json jsonb not null default '{}'::jsonb;
+alter table if exists strategyos_run_jobs add column if not exists submitted_by text;
+alter table if exists strategyos_run_jobs add column if not exists hatchet_run_id text;
+alter table if exists strategyos_run_jobs add column if not exists strategyos_run_id uuid references strategyos_runs(id) on delete set null;
+alter table if exists strategyos_run_jobs add column if not exists retry_count integer not null default 0;
+alter table if exists strategyos_run_jobs add column if not exists failure_reason text;
+alter table if exists strategyos_run_jobs add column if not exists metadata_json jsonb not null default '{}'::jsonb;
+alter table if exists strategyos_run_jobs add column if not exists started_at timestamptz;
+alter table if exists strategyos_run_jobs add column if not exists finished_at timestamptz;
+
 create table if not exists strategyos_run_checkpoints (
     id uuid primary key default gen_random_uuid(),
     run_id uuid not null references strategyos_runs(id) on delete cascade,
@@ -353,6 +384,10 @@ create table if not exists strategyos_kg_edges (
 create index if not exists idx_strategyos_runs_created_at on strategyos_runs(created_at desc);
 create index if not exists idx_strategyos_runs_status on strategyos_runs(status);
 create index if not exists idx_strategyos_runs_current_stage on strategyos_runs(current_stage);
+create index if not exists idx_strategyos_run_jobs_created_at on strategyos_run_jobs(created_at desc);
+create index if not exists idx_strategyos_run_jobs_status on strategyos_run_jobs(status);
+create index if not exists idx_strategyos_run_jobs_strategyos_run on strategyos_run_jobs(strategyos_run_id);
+create index if not exists idx_strategyos_run_jobs_hatchet_run on strategyos_run_jobs(hatchet_run_id);
 create index if not exists idx_strategyos_findings_pattern on strategyos_findings(pattern_type);
 create index if not exists idx_strategyos_run_checkpoints_run_created_at on strategyos_run_checkpoints(run_id, created_at desc);
 create index if not exists idx_strategyos_approvals_run_created_at on strategyos_approvals(run_id, created_at desc);

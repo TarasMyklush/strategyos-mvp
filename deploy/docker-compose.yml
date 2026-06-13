@@ -41,6 +41,15 @@ services:
       STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY: ${STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY:?Set STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY in deploy/.env.secrets}
       STRATEGYOS_PUBLIC_HEALTH_ENABLED: ${STRATEGYOS_PUBLIC_HEALTH_ENABLED:-true}
       STRATEGYOS_REQUIRE_HUMAN_REVIEW: ${STRATEGYOS_REQUIRE_HUMAN_REVIEW:-true}
+      STRATEGYOS_RUN_POLICY: ${STRATEGYOS_RUN_POLICY:-sovereign}
+      STRATEGYOS_APPROVED_EXTERNAL_MODES: ${STRATEGYOS_APPROVED_EXTERNAL_MODES:-}
+      STRATEGYOS_MODEL_PROVIDER_ENABLED: ${STRATEGYOS_MODEL_PROVIDER_ENABLED:-false}
+      STRATEGYOS_LLM_CHAT_ENABLED: ${STRATEGYOS_LLM_CHAT_ENABLED:-false}
+      STRATEGYOS_LLM_PROVIDER: ${STRATEGYOS_LLM_PROVIDER:-deepseek}
+      STRATEGYOS_LLM_BASE_URL: ${STRATEGYOS_LLM_BASE_URL:-https://api.deepseek.com}
+      STRATEGYOS_LLM_MODEL: ${STRATEGYOS_LLM_MODEL:-deepseek-v4-pro}
+      STRATEGYOS_LLM_TIMEOUT_SECONDS: ${STRATEGYOS_LLM_TIMEOUT_SECONDS:-30}
+      STRATEGYOS_LLM_API_KEY: ${STRATEGYOS_LLM_API_KEY:-}
       STRATEGYOS_SYNC_ARTIFACTS: ${STRATEGYOS_SYNC_ARTIFACTS:-true}
       STRATEGYOS_OCR_ENGINE: ${STRATEGYOS_OCR_ENGINE:-tesseract}
       STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION: ${STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION:-20250419}
@@ -55,6 +64,14 @@ services:
       STRATEGYOS_AGENT_INPUT_DIR: ${STRATEGYOS_AGENT_INPUT_DIR:-/app/workspace/agent_input}
       STRATEGYOS_EVALUATION_DIR: ${STRATEGYOS_EVALUATION_DIR:-/app/workspace/evaluation}
       STRATEGYOS_RUN_DIR: ${STRATEGYOS_RUN_DIR:-/app/workspace/outputs/latest}
+      STRATEGYOS_RUNTIME_BACKEND: ${STRATEGYOS_RUNTIME_BACKEND:-langgraph}
+      STRATEGYOS_RUN_EXECUTION_MODE: ${STRATEGYOS_RUN_EXECUTION_MODE:-sync}
+      HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN:-}
+      HATCHET_CLIENT_TLS_STRATEGY: ${HATCHET_CLIENT_TLS_STRATEGY:-none}
+      HATCHET_CLIENT_HOST_PORT: ${HATCHET_CLIENT_HOST_PORT:-hatchet-lite:7077}
+      STRATEGYOS_HATCHET_WORKER_NAME: ${STRATEGYOS_HATCHET_WORKER_NAME:-strategyos-worker}
+      STRATEGYOS_HATCHET_WORKER_SLOTS: ${STRATEGYOS_HATCHET_WORKER_SLOTS:-1}
+      STRATEGYOS_HATCHET_DASHBOARD_URL: ${STRATEGYOS_HATCHET_DASHBOARD_URL:-http://localhost:8888}
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,6 +96,67 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  strategyos-worker:
+    profiles: ["hatchet"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        CA_CERTIFICATES_VERSION: ${STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION:-20250419}
+        CURL_VERSION: ${STRATEGYOS_RUNTIME_DEP_CURL_VERSION:-8.14.1-2+deb13u3}
+        POPPLER_UTILS_VERSION: ${STRATEGYOS_RUNTIME_DEP_POPPLER_UTILS_VERSION:-25.03.0-5+deb13u3}
+        TESSERACT_OCR_VERSION: ${STRATEGYOS_RUNTIME_DEP_TESSERACT_VERSION:-5.5.0-1+b1}
+        TESSERACT_OCR_ENG_VERSION: ${STRATEGYOS_RUNTIME_DEP_TESSERACT_ENG_VERSION:-1:4.1.0-2}
+    command: ["python", "-m", "strategyos_mvp.worker"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-strategyos}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.secrets}@postgres:5432/${POSTGRES_DB:-strategyos}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in deploy/.env.secrets}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      STRATEGYOS_OBJECT_ENDPOINT: ${STRATEGYOS_OBJECT_ENDPOINT:-http://minio:9000}
+      STRATEGYOS_OBJECT_BUCKET: ${STRATEGYOS_OBJECT_BUCKET:-strategyos}
+      STRATEGYOS_OBJECT_ACCESS_KEY_ID: ${STRATEGYOS_OBJECT_ACCESS_KEY_ID:-strategyos}
+      STRATEGYOS_OBJECT_SECRET_ACCESS_KEY: ${STRATEGYOS_OBJECT_SECRET_ACCESS_KEY:?Set STRATEGYOS_OBJECT_SECRET_ACCESS_KEY in deploy/.env.secrets}
+      STRATEGYOS_OBJECT_REGION: ${STRATEGYOS_OBJECT_REGION:-us-east-1}
+      STRATEGYOS_OBJECT_PREFIX: ${STRATEGYOS_OBJECT_PREFIX:-strategyos}
+      STRATEGYOS_OBJECT_FORCE_PATH_STYLE: ${STRATEGYOS_OBJECT_FORCE_PATH_STYLE:-true}
+      STRATEGYOS_REQUIRE_HUMAN_REVIEW: ${STRATEGYOS_REQUIRE_HUMAN_REVIEW:-true}
+      STRATEGYOS_RUN_POLICY: ${STRATEGYOS_RUN_POLICY:-sovereign}
+      STRATEGYOS_APPROVED_EXTERNAL_MODES: ${STRATEGYOS_APPROVED_EXTERNAL_MODES:-}
+      STRATEGYOS_SYNC_ARTIFACTS: ${STRATEGYOS_SYNC_ARTIFACTS:-true}
+      STRATEGYOS_OCR_ENGINE: ${STRATEGYOS_OCR_ENGINE:-tesseract}
+      STRATEGYOS_RUNTIME_BACKEND: ${STRATEGYOS_RUNTIME_BACKEND:-langgraph}
+      STRATEGYOS_RUN_EXECUTION_MODE: hatchet
+      STRATEGYOS_TENANT_SLUG: ${STRATEGYOS_TENANT_SLUG:-local-poc}
+      STRATEGYOS_TENANT_NAME: ${STRATEGYOS_TENANT_NAME:-StrategyOS Local POC}
+      STRATEGYOS_SOURCE_SYSTEM_NAME: ${STRATEGYOS_SOURCE_SYSTEM_NAME:-Synthetic Finance Dataset}
+      STRATEGYOS_SOURCE_DATASET: ${STRATEGYOS_SOURCE_DATASET:-/app/workspace/source_dataset}
+      STRATEGYOS_AGENT_INPUT_DIR: ${STRATEGYOS_AGENT_INPUT_DIR:-/app/workspace/agent_input}
+      STRATEGYOS_EVALUATION_DIR: ${STRATEGYOS_EVALUATION_DIR:-/app/workspace/evaluation}
+      STRATEGYOS_RUN_DIR: ${STRATEGYOS_RUN_DIR:-/app/workspace/outputs/latest}
+      HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN:-}
+      HATCHET_CLIENT_TLS_STRATEGY: ${HATCHET_CLIENT_TLS_STRATEGY:-none}
+      HATCHET_CLIENT_HOST_PORT: ${HATCHET_CLIENT_HOST_PORT:-hatchet-lite:7077}
+      STRATEGYOS_HATCHET_WORKER_NAME: ${STRATEGYOS_HATCHET_WORKER_NAME:-strategyos-worker}
+      STRATEGYOS_HATCHET_WORKER_SLOTS: ${STRATEGYOS_HATCHET_WORKER_SLOTS:-1}
+      STRATEGYOS_HATCHET_DASHBOARD_URL: ${STRATEGYOS_HATCHET_DASHBOARD_URL:-http://localhost:8888}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      minio-create-bucket:
+        condition: service_completed_successfully
+      hatchet-lite:
+        condition: service_started
+    volumes:
+      - strategyos-workspace:/app/workspace
     restart: unless-stopped
 
   strategyos-idp:
@@ -140,6 +218,48 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  hatchet-postgres:
+    profiles: ["hatchet"]
+    image: postgres:16-alpine
+    command: postgres -c 'max_connections=200'
+    environment:
+      POSTGRES_DB: ${HATCHET_POSTGRES_DB:-hatchet}
+      POSTGRES_USER: ${HATCHET_POSTGRES_USER:-hatchet}
+      POSTGRES_PASSWORD: ${HATCHET_POSTGRES_PASSWORD:-hatchet}
+    volumes:
+      - hatchet-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hatchet -d hatchet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  hatchet-lite:
+    profiles: ["hatchet"]
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-lite:latest
+    depends_on:
+      hatchet-postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${HATCHET_POSTGRES_USER:-hatchet}:${HATCHET_POSTGRES_PASSWORD:-hatchet}@hatchet-postgres:5432/${HATCHET_POSTGRES_DB:-hatchet}?sslmode=disable
+      SERVER_AUTH_COOKIE_DOMAIN: localhost
+      SERVER_AUTH_COOKIE_INSECURE: "t"
+      SERVER_GRPC_BIND_ADDRESS: "0.0.0.0"
+      SERVER_GRPC_INSECURE: "t"
+      SERVER_GRPC_BROADCAST_ADDRESS: hatchet-lite:7077
+      SERVER_GRPC_PORT: "7077"
+      SERVER_URL: http://localhost:8888
+      SERVER_AUTH_SET_EMAIL_VERIFIED: "t"
+      SERVER_DEFAULT_ENGINE_VERSION: "V1"
+      SERVER_INTERNAL_CLIENT_INTERNAL_GRPC_BROADCAST_ADDRESS: hatchet-lite:7077
+    volumes:
+      - hatchet-lite-config:/config
+    ports:
+      - "127.0.0.1:${HATCHET_DASHBOARD_PORT:-8888}:8888"
+      - "127.0.0.1:${HATCHET_GRPC_PORT:-7077}:7077"
     restart: unless-stopped
 
   neo4j:
@@ -212,5 +332,7 @@ volumes:
   neo4j-logs:
   qdrant-data:
   minio-data:
+  hatchet-postgres-data:
+  hatchet-lite-config:
   caddy-data:
   caddy-config:

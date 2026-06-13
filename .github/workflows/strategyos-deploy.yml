@@ -139,6 +139,7 @@ jobs:
       TARGET_DIR: ${{ vars.TARGET_DIR || '/opt/strategyos' }}
       STRATEGYOS_API_IMAGE: ${{ needs.image.outputs.image-ref }}
       STRATEGYOS_COMPOSE_FILES: ${{ vars.STRATEGYOS_COMPOSE_FILES }}
+      STRATEGYOS_COMPOSE_PROFILES: ${{ vars.STRATEGYOS_COMPOSE_PROFILES }}
       STRATEGYOS_HTTP_PORT: ${{ vars.STRATEGYOS_HTTP_PORT || '80' }}
       STRATEGYOS_HTTPS_PORT: ${{ vars.STRATEGYOS_HTTPS_PORT || '443' }}
       STRATEGYOS_SITE_ADDRESS: ${{ vars.STRATEGYOS_SITE_ADDRESS || ':80' }}
@@ -147,6 +148,25 @@ jobs:
       STRATEGYOS_PUBLIC_HEALTH_ENABLED: ${{ vars.STRATEGYOS_PUBLIC_HEALTH_ENABLED || 'false' }}
       STRATEGYOS_REQUIRE_HUMAN_REVIEW: ${{ vars.STRATEGYOS_REQUIRE_HUMAN_REVIEW || 'true' }}
       STRATEGYOS_SYNC_ARTIFACTS: ${{ vars.STRATEGYOS_SYNC_ARTIFACTS || 'true' }}
+      STRATEGYOS_RUNTIME_BACKEND: ${{ vars.STRATEGYOS_RUNTIME_BACKEND || 'langgraph' }}
+      STRATEGYOS_RUN_EXECUTION_MODE: ${{ vars.STRATEGYOS_RUN_EXECUTION_MODE || 'sync' }}
+      STRATEGYOS_RUN_POLICY: ${{ vars.STRATEGYOS_RUN_POLICY || 'sovereign' }}
+      STRATEGYOS_APPROVED_EXTERNAL_MODES: ${{ vars.STRATEGYOS_APPROVED_EXTERNAL_MODES || '' }}
+      STRATEGYOS_MODEL_PROVIDER_ENABLED: ${{ vars.STRATEGYOS_MODEL_PROVIDER_ENABLED || 'false' }}
+      STRATEGYOS_LLM_CHAT_ENABLED: ${{ vars.STRATEGYOS_LLM_CHAT_ENABLED || 'false' }}
+      STRATEGYOS_LLM_PROVIDER: ${{ vars.STRATEGYOS_LLM_PROVIDER || 'deepseek' }}
+      STRATEGYOS_LLM_BASE_URL: ${{ vars.STRATEGYOS_LLM_BASE_URL || 'https://api.deepseek.com' }}
+      STRATEGYOS_LLM_MODEL: ${{ vars.STRATEGYOS_LLM_MODEL || 'deepseek-v4-pro' }}
+      STRATEGYOS_LLM_TIMEOUT_SECONDS: ${{ vars.STRATEGYOS_LLM_TIMEOUT_SECONDS || '30' }}
+      HATCHET_CLIENT_TLS_STRATEGY: ${{ vars.HATCHET_CLIENT_TLS_STRATEGY || 'none' }}
+      HATCHET_CLIENT_HOST_PORT: ${{ vars.HATCHET_CLIENT_HOST_PORT || 'hatchet-lite:7077' }}
+      STRATEGYOS_HATCHET_WORKER_NAME: ${{ vars.STRATEGYOS_HATCHET_WORKER_NAME || 'strategyos-worker' }}
+      STRATEGYOS_HATCHET_WORKER_SLOTS: ${{ vars.STRATEGYOS_HATCHET_WORKER_SLOTS || '1' }}
+      STRATEGYOS_HATCHET_DASHBOARD_URL: ${{ vars.STRATEGYOS_HATCHET_DASHBOARD_URL || 'http://localhost:8888' }}
+      HATCHET_POSTGRES_DB: ${{ vars.HATCHET_POSTGRES_DB || 'hatchet' }}
+      HATCHET_POSTGRES_USER: ${{ vars.HATCHET_POSTGRES_USER || 'hatchet' }}
+      HATCHET_DASHBOARD_PORT: ${{ vars.HATCHET_DASHBOARD_PORT || '8888' }}
+      HATCHET_GRPC_PORT: ${{ vars.HATCHET_GRPC_PORT || '7077' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -190,6 +210,25 @@ jobs:
               "STRATEGYOS_PUBLIC_HEALTH_ENABLED": os.environ["STRATEGYOS_PUBLIC_HEALTH_ENABLED"],
               "STRATEGYOS_REQUIRE_HUMAN_REVIEW": os.environ["STRATEGYOS_REQUIRE_HUMAN_REVIEW"],
               "STRATEGYOS_SYNC_ARTIFACTS": os.environ["STRATEGYOS_SYNC_ARTIFACTS"],
+              "STRATEGYOS_RUNTIME_BACKEND": os.environ["STRATEGYOS_RUNTIME_BACKEND"],
+              "STRATEGYOS_RUN_EXECUTION_MODE": os.environ["STRATEGYOS_RUN_EXECUTION_MODE"],
+              "STRATEGYOS_RUN_POLICY": os.environ["STRATEGYOS_RUN_POLICY"],
+              "STRATEGYOS_APPROVED_EXTERNAL_MODES": os.environ["STRATEGYOS_APPROVED_EXTERNAL_MODES"],
+              "STRATEGYOS_MODEL_PROVIDER_ENABLED": os.environ["STRATEGYOS_MODEL_PROVIDER_ENABLED"],
+              "STRATEGYOS_LLM_CHAT_ENABLED": os.environ["STRATEGYOS_LLM_CHAT_ENABLED"],
+              "STRATEGYOS_LLM_PROVIDER": os.environ["STRATEGYOS_LLM_PROVIDER"],
+              "STRATEGYOS_LLM_BASE_URL": os.environ["STRATEGYOS_LLM_BASE_URL"],
+              "STRATEGYOS_LLM_MODEL": os.environ["STRATEGYOS_LLM_MODEL"],
+              "STRATEGYOS_LLM_TIMEOUT_SECONDS": os.environ["STRATEGYOS_LLM_TIMEOUT_SECONDS"],
+              "HATCHET_CLIENT_TLS_STRATEGY": os.environ["HATCHET_CLIENT_TLS_STRATEGY"],
+              "HATCHET_CLIENT_HOST_PORT": os.environ["HATCHET_CLIENT_HOST_PORT"],
+              "STRATEGYOS_HATCHET_WORKER_NAME": os.environ["STRATEGYOS_HATCHET_WORKER_NAME"],
+              "STRATEGYOS_HATCHET_WORKER_SLOTS": os.environ["STRATEGYOS_HATCHET_WORKER_SLOTS"],
+              "STRATEGYOS_HATCHET_DASHBOARD_URL": os.environ["STRATEGYOS_HATCHET_DASHBOARD_URL"],
+              "HATCHET_POSTGRES_DB": os.environ["HATCHET_POSTGRES_DB"],
+              "HATCHET_POSTGRES_USER": os.environ["HATCHET_POSTGRES_USER"],
+              "HATCHET_DASHBOARD_PORT": os.environ["HATCHET_DASHBOARD_PORT"],
+              "HATCHET_GRPC_PORT": os.environ["HATCHET_GRPC_PORT"],
           }
           for key, value in overrides.items():
               if "\n" in value:
@@ -204,15 +243,37 @@ jobs:
       - name: Render deploy secrets
         env:
           STRATEGYOS_ENV_SECRETS: ${{ secrets.STRATEGYOS_ENV_SECRETS }}
+          STRATEGYOS_LLM_API_KEY: ${{ secrets.STRATEGYOS_LLM_API_KEY }}
         run: |
           test -n "${STRATEGYOS_ENV_SECRETS}"
           printf '%s\n' "${STRATEGYOS_ENV_SECRETS}" > deploy/.env.secrets.ci
+          if [ -n "${STRATEGYOS_LLM_API_KEY}" ]; then
+            python - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path("deploy/.env.secrets.ci")
+          secret = os.environ["STRATEGYOS_LLM_API_KEY"]
+          lines = [
+              line
+              for line in path.read_text(encoding="utf-8").splitlines()
+              if not line.startswith("STRATEGYOS_LLM_API_KEY=")
+          ]
+          lines.append(f"STRATEGYOS_LLM_API_KEY={secret}")
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+          fi
           grep -q '^POSTGRES_PASSWORD=' deploy/.env.secrets.ci
           grep -q '^STRATEGYOS_IDP_CLIENT_SECRET=' deploy/.env.secrets.ci
           ! grep -q '__CHANGE_ME_' deploy/.env.secrets.ci
 
       - name: Validate release compose config
-        run: docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml -f deploy/docker-compose.hetzner-qa.yml --env-file deploy/.env.ci --env-file deploy/.env.secrets.ci config -q
+        run: |
+          profile_args=()
+          for profile in ${STRATEGYOS_COMPOSE_PROFILES:-}; do
+            profile_args+=(--profile "${profile}")
+          done
+          docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml -f deploy/docker-compose.hetzner-qa.yml "${profile_args[@]}" --env-file deploy/.env.ci --env-file deploy/.env.secrets.ci config -q
 
       - name: Log remote host in to GHCR
         env:
@@ -229,6 +290,7 @@ jobs:
           LOCAL_ENV=deploy/.env.ci \
           LOCAL_SECRETS_ENV=deploy/.env.secrets.ci \
           COMPOSE_FILES="${compose_files}" \
+          COMPOSE_PROFILES="${STRATEGYOS_COMPOSE_PROFILES:-}" \
           bash deploy/scripts/deploy_stack.sh
 
       - name: Check protected readiness
@@ -257,4 +319,5 @@ jobs:
           TARGET_DIR="${TARGET_DIR}" \
           SSH_OPTS="${SSH_OPTS}" \
           COMPOSE_FILES="${compose_files}" \
+          COMPOSE_PROFILES="${STRATEGYOS_COMPOSE_PROFILES:-}" \
           bash deploy/scripts/rollback_stack.sh

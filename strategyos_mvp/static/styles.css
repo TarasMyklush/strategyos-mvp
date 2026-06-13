@@ -488,6 +488,48 @@ select:focus {
   font-size: 12.5px;
 }
 
+.chat-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.mode-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(112px, 1fr));
+  gap: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  padding: 2px;
+}
+
+.mode-option {
+  min-height: 32px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.mode-option.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(19, 29, 39, 0.08);
+}
+
+.mode-option[disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .review {
   align-self: stretch;
   display: grid;

@@ -87,6 +87,68 @@ curl -X POST http://localhost:${STRATEGYOS_HTTP_PORT:-80}/runs \
   -d '{"skip_prepare": true, "sync_artifacts": true}'
 ```
 
+## Optional Hatchet Worker Mode
+
+The default `/runs` path remains synchronous. Hatchet mode is available for long-running run execution, but should be treated as an explicit production-hardening path until a dated Hetzner proof is captured.
+
+1. Generate `deploy/.env` and `deploy/.env.secrets`, then set:
+
+```bash
+STRATEGYOS_RUN_EXECUTION_MODE=hatchet
+HATCHET_CLIENT_TLS_STRATEGY=none
+HATCHET_CLIENT_HOST_PORT=hatchet-lite:7077
+```
+
+To include MinIO/S3 artifact sync in a proof run, also set:
+
+```bash
+STRATEGYOS_RUN_POLICY=external-approved
+STRATEGYOS_APPROVED_EXTERNAL_MODES=object_storage_sync
+```
+
+To enable LLM chat for testing, approve model-provider use and keep the API key
+only in the secrets file:
+
+```bash
+STRATEGYOS_RUN_POLICY=external-approved
+STRATEGYOS_APPROVED_EXTERNAL_MODES=model_provider_use
+STRATEGYOS_MODEL_PROVIDER_ENABLED=true
+STRATEGYOS_LLM_CHAT_ENABLED=true
+STRATEGYOS_LLM_PROVIDER=deepseek
+STRATEGYOS_LLM_BASE_URL=https://api.deepseek.com
+STRATEGYOS_LLM_MODEL=deepseek-v4-pro
+```
+
+```bash
+# deploy/.env.secrets
+STRATEGYOS_LLM_API_KEY=<server-side API key>
+```
+
+2. Start the stack with the Hatchet profile:
+
+```bash
+docker compose --profile hatchet \
+  -f deploy/docker-compose.yml \
+  --env-file deploy/.env \
+  --env-file deploy/.env.secrets \
+  up -d --build
+```
+
+3. Open the internal Hatchet dashboard at `http://localhost:${HATCHET_DASHBOARD_PORT:-8888}`, create or copy the client token, set `HATCHET_CLIENT_TOKEN` in `deploy/.env.secrets`, and restart the API and worker containers.
+
+For non-interactive local proof runs, Hatchet Lite also includes `hatchet-admin token create`; use the generated tenant id from Hatchet Lite startup logs and store only the resulting token in `deploy/.env.secrets`.
+
+If Docker volumes already exist from an older local stack, do not mix those persisted volumes with a newly generated secrets file unless you intentionally reset the volumes. Align `deploy/.env.secrets` with the passwords used to initialize the existing Postgres, Neo4j, and MinIO volumes, or run the proof under a fresh compose project/volume set.
+
+4. Submit a run as usual. In Hatchet mode the API returns `202 Accepted` with `job_id`, `hatchet_run_id`, and `status_url`. Poll the job:
+
+```bash
+curl http://localhost:${STRATEGYOS_HTTP_PORT:-80}/runs/jobs/${JOB_ID} \
+  -H "Authorization: Bearer ${TOKEN}"
+```
+
+Local proof from 2026-06-12 is recorded at `../outputs/StrategyOS Runtime Proofs/20260612T193648Z-hatchet-full-stack/`. Production use should still prove the same path on Hetzner and add a failed-worker/retry case before enabling non-conservative retry behavior.
+
 ## Local Postgres Proof Target
 
 `make postgres-proof` runs the governed source-pack pause/approve/resume e2e against Postgres. It intentionally fails fast unless `STRATEGYOS_POSTGRES_E2E_DATABASE_URL` is set, because the test truncates all `strategyos_*` tables before and after the proof. Use a dedicated disposable proof database, for example:

@@ -7,10 +7,16 @@ SSH_OPTS="${SSH_OPTS:-}"
 LOCAL_ENV="${LOCAL_ENV:-deploy/.env}"
 LOCAL_SECRETS_ENV="${LOCAL_SECRETS_ENV:-deploy/.env.secrets}"
 COMPOSE_FILES="${COMPOSE_FILES:-deploy/docker-compose.yml}"
+COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
 
 COMPOSE_FILE_ARGS=""
 for compose_file in ${COMPOSE_FILES}; do
   COMPOSE_FILE_ARGS="${COMPOSE_FILE_ARGS} -f ${compose_file}"
+done
+
+COMPOSE_PROFILE_ARGS=""
+for compose_profile in ${COMPOSE_PROFILES}; do
+  COMPOSE_PROFILE_ARGS="${COMPOSE_PROFILE_ARGS} --profile ${compose_profile}"
 done
 
 RSYNC_SSH_ARGS=()
@@ -46,9 +52,9 @@ rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_SECRETS_ENV}" "${TARGET_HOST}:${TARGET
 
 if [ -n "${STRATEGYOS_API_IMAGE:-}" ]; then
   ssh ${SSH_OPTS} "${TARGET_HOST}" "docker pull '${STRATEGYOS_API_IMAGE}'"
-  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-build"
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-build"
 else
-  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build"
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build"
 fi
 
 echo "Deployment complete. Run: TARGET_HOST=${TARGET_HOST} deploy/scripts/check_health.sh"

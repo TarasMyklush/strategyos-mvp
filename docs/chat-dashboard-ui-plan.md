@@ -12,22 +12,22 @@
 Replace the current form-wall dashboard with a two-zone UI:
 
 1. **Dashboard strip (top):** compact metric cards and status chips for the latest run — recoverable SAR, findings count, citation resolution, auditor challenges, stage stepper, store sync badges (postgres / neo4j / qdrant), run mode (full/partial).
-2. **Chat surface (main):** an evidence-grounded Q&A thread driven by the existing deterministic `POST /qa` endpoint. Answer bubbles show the value, the basis line, and clickable citation chips. System messages narrate run lifecycle events (run completed, auditor challenged N findings, awaiting review). When a run pauses for human review, the approve/reject actions appear as an actionable system message in the thread.
+2. **Chat surface (main):** an evidence-grounded Q&A thread driven by `POST /qa`. Deterministic mode remains the default; optional LLM mode is selected with a chat-mode switch and is available only when server-side model-provider config and policy allow it. Answer bubbles show the value, the basis line, and clickable citation chips. System messages narrate run lifecycle events (run completed, auditor challenged N findings, awaiting review). When a run pauses for human review, the approve/reject actions appear as an actionable system message in the thread.
 
 Secondary flows (upload source pack → confirm column mapping → start run) move into a slide-over panel opened from a "New run" header button. They keep their existing behavior.
 
 ## 2. Context a cold implementer needs
 
-- **Repo:** `strategyos_mvp` (Python 3.14, FastAPI). Run tests: `.venv/bin/python -m pytest -q`. Full suite must stay green (167 passed / 1 skipped baseline as of 2026-06-12; the skip is a Postgres e2e gated on an env var).
-- **Where the UI lives today:** the ENTIRE frontend is inline Python strings in `strategyos_mvp/api.py` (~3,800 lines total; the HTML/CSS/JS shell is roughly lines 900–3350, served by `GET /` at `api.py:3347`). There is no `static/` directory and no build toolchain.
+- **Repo:** `strategyos_mvp` (Python 3.14, FastAPI). Run tests: `.venv/bin/python -m pytest -q`. Full suite must stay green (184 passed / 1 skipped baseline as of 2026-06-12; the skip is a Postgres e2e gated on an env var).
+- **Where the UI lives today:** the frontend is served from `strategyos_mvp/static/` and bootstrapped by `GET /` in `strategyos_mvp/api.py`. There is no frontend build toolchain.
 - **Auth model:** bearer tokens from the local IDP. The current shell stores the token in `localStorage` under key `strategyos.ui.token` (`api.py:1517,3101`). Token acquisition: `POST {idp}/oauth/token` with form-encoded `grant_type=password&client_id=...&client_secret=...&username=...&password=...`. A `GET /ui/session` endpoint reports the authenticated role (see `tests/test_frontend_shell.py:253,275`). All data endpoints require `Authorization: Bearer <token>` (or `X-API-Key` in non-IDP mode).
 - **Test trap #1:** `tests/test_frontend_shell.py` has 15 tests asserting specific element ids/hooks exist in the HTML served at `GET /` (queue shell, bootstrap JSON, run detail, review console, runs index, queue assignment, artifact inspector, data status console, vector search panel, **qa panel**, start-run form, source-pack intake, health console, ui-session behavior). Any redesign must either preserve those hooks or **deliberately update the tests in the same commit** — never delete assertions without replacing them with equivalents for the new UI.
 - **Test trap #2:** one shell test asserts the page **embeds parseable bootstrap JSON** (`test_dashboard_embeds_parseable_bootstrap_json`). Keep server-side bootstrap injection (see Phase 1 §4.3).
-- **Deployment constraint:** the app deploys to a VPN-only Azure QA VM behind Caddy (`deploy/README.md`). All assets must be served by the app itself — **no CDN links, no external fonts, no node toolchain**. Vanilla HTML/CSS/JS only.
+- **Deployment constraint:** the app deploys to Hetzner behind Caddy (`deploy/README.md`). All assets must be served by the app itself — **no CDN links, no external fonts, no node toolchain**. Vanilla HTML/CSS/JS only.
 
 ## 3. Hard constraints
 
-1. **No LLM.** `POST /qa` is deterministic (keyword/intent matching in `strategyos_mvp/qa.py`). The UI must present it honestly: placeholder text describing what it can answer, suggestion chips, and a graceful unmatched state. Do not fake open-ended conversation.
+1. **Deterministic by default.** `POST /qa` defaults to deterministic keyword/intent matching in `strategyos_mvp/qa.py`. LLM mode must be explicit, server-side, policy-gated, and evidence-grounded; never fake open-ended conversation when LLM config is unavailable.
 2. **No new backend business logic for v1.** Every UI element binds to an endpoint that already exists (§4). Small additive endpoints are allowed only if listed in §6.
 3. **Backward compatibility:** existing endpoints keep their paths and response shapes. The reviewer/operator API is used by scripts and tests.
 4. **All assets local.** No external origins anywhere in the served HTML.
@@ -87,7 +87,7 @@ Component inventory (all in vanilla JS; one `app.js` module pattern is fine):
 | Stage stepper | `/runs/latest.current_stage` | completed stages get a check; `awaiting_review` renders only when `requires_human_review` |
 | Store badges | `state_store/neo4j/qdrant.status` | tooltip shows skip reason |
 | Partial-run chips | `run_mode`, `missing_roles`, `skipped_detectors` | hidden on full runs |
-| Chat thread | client-side array; answers from `POST /qa` | persist thread per run id in `sessionStorage`; **no server-side chat memory — each question is independent** (deterministic engine) |
+| Chat thread | client-side array; answers from `POST /qa` | persist thread per run id in `sessionStorage`; **no server-side chat memory — each question is independent**; mode is `deterministic` or gated `llm` |
 | System messages | derived on poll: status transitions of `/runs/latest` | e.g. on `completed`: "Run completed — N findings locked, SAR X recoverable" |
 | Review action message | `requires_human_review && approval_status=="pending"` | Approve/Reject buttons → reviewer endpoints → then operator resume button |
 | Suggestion chips | `suggestions` from unmatched `/qa` + a static starter set | starter set: copy the curated intents from `qa.py` `SUGGESTIONS` |
@@ -111,7 +111,7 @@ Design tokens (match the mockup): neutral surfaces, one accent — teal `#0F6E56
 
 ## 8. Out of scope (do not build)
 
-- LLM/conversational layer, multi-turn memory, websockets/SSE (polling is fine), React/Vue/build toolchain, dark mode, mobile layout, redesign of the artifact-inspector/vector-search consoles (they just move), any change to detectors/workflow/auth.
+- Multi-turn memory, websockets/SSE (polling is fine), React/Vue/build toolchain, dark mode, mobile layout, redesign of the artifact-inspector/vector-search consoles (they just move), any change to detectors/workflow/auth.
 
 ## 9. Suggested commit sequence
 

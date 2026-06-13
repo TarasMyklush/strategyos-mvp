@@ -37,6 +37,7 @@ idp_client_secret="$(generate_secret)"
 operator_password="$(generate_secret)"
 reviewer_password="$(generate_secret)"
 sensitive_identifier_hmac_key="$(generate_secret)"
+hatchet_postgres_password="$(generate_secret)"
 
 replace_value "${SECRETS_FILE}" "POSTGRES_PASSWORD" "${postgres_password}"
 replace_value "${SECRETS_FILE}" "NEO4J_PASSWORD" "${neo4j_password}"
@@ -46,6 +47,7 @@ replace_value "${SECRETS_FILE}" "STRATEGYOS_IDP_CLIENT_SECRET" "${idp_client_sec
 replace_value "${SECRETS_FILE}" "STRATEGYOS_IDP_OPERATOR_PASSWORD" "${operator_password}"
 replace_value "${SECRETS_FILE}" "STRATEGYOS_IDP_REVIEWER_PASSWORD" "${reviewer_password}"
 replace_value "${SECRETS_FILE}" "STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY" "${sensitive_identifier_hmac_key}"
+replace_value "${SECRETS_FILE}" "HATCHET_POSTGRES_PASSWORD" "${hatchet_postgres_password}"
 
 rm -f "${ENV_FILE}.bak" "${SECRETS_FILE}.bak"
 echo "Created ${ENV_FILE} and ${SECRETS_FILE}. Review non-secret config separately from injected secrets before deployment."

@@ -145,12 +145,24 @@ class StrategyOSConfig:
     runtime_dep_tesseract_version: str
     runtime_dep_tesseract_eng_version: str
     runtime_backend: str
+    run_execution_mode: str
+    hatchet_client_token: str | None
+    hatchet_client_tls_strategy: str | None
+    hatchet_worker_name: str
+    hatchet_worker_slots: int
+    hatchet_dashboard_url: str | None
     plugin_modules: tuple[str, ...]
     plugin_failure_mode: str
     run_policy: RunPolicyConfig
     sync_artifacts: bool
     sync_source_files: bool
     model_provider_enabled: bool
+    llm_chat_enabled: bool
+    llm_provider: str
+    llm_base_url: str
+    llm_model: str
+    llm_api_key: str | None
+    llm_timeout_seconds: int
     batch_apis_enabled: bool
     hosted_ocr_vision_enabled: bool
     source_pack_structured_candidate_threshold: float
@@ -185,6 +197,15 @@ def _runtime_backend() -> str:
     if backend in {"local", "langgraph", "auto"}:
         return backend
     return "local"
+
+
+def _run_execution_mode() -> str:
+    mode = (
+        env("STRATEGYOS_RUN_EXECUTION_MODE", "sync") or "sync"
+    ).strip().lower()
+    if mode in {"sync", "hatchet"}:
+        return mode
+    return "sync"
 
 
 def _plugin_failure_mode() -> str:
@@ -239,6 +260,25 @@ def load_config() -> StrategyOSConfig:
             iter(sensitive_identifier_hmac_keys.keys()),
             default_sensitive_key_id,
         )
+    llm_provider = (env("STRATEGYOS_LLM_PROVIDER", "deepseek") or "deepseek").strip()
+    llm_base_url = (
+        env("STRATEGYOS_LLM_BASE_URL", "https://api.deepseek.com")
+        or "https://api.deepseek.com"
+    ).strip()
+    llm_model = (
+        env("STRATEGYOS_LLM_MODEL", "deepseek-v4-pro") or "deepseek-v4-pro"
+    ).strip()
+    llm_api_key = env("STRATEGYOS_LLM_API_KEY")
+    normalized_provider = llm_provider.lower()
+    normalized_base_url = llm_base_url.lower()
+    if not llm_api_key and (
+        normalized_provider == "deepseek" or "api.deepseek.com" in normalized_base_url
+    ):
+        llm_api_key = env("DEEPSEEK_API_KEY")
+    if not llm_api_key and (
+        normalized_provider == "openai" or "api.openai.com" in normalized_base_url
+    ):
+        llm_api_key = env("OPENAI_API_KEY")
     return StrategyOSConfig(
         tenant_slug=env("STRATEGYOS_TENANT_SLUG", "local-poc") or "local-poc",
         tenant_name=env("STRATEGYOS_TENANT_NAME", "StrategyOS Local POC")
@@ -323,6 +363,17 @@ def load_config() -> StrategyOSConfig:
             or "1:4.1.0-2"
         ),
         runtime_backend=_runtime_backend(),
+        run_execution_mode=_run_execution_mode(),
+        hatchet_client_token=env("HATCHET_CLIENT_TOKEN")
+        or env("STRATEGYOS_HATCHET_CLIENT_TOKEN"),
+        hatchet_client_tls_strategy=env("HATCHET_CLIENT_TLS_STRATEGY")
+        or env("STRATEGYOS_HATCHET_CLIENT_TLS_STRATEGY"),
+        hatchet_worker_name=env(
+            "STRATEGYOS_HATCHET_WORKER_NAME", "strategyos-worker"
+        )
+        or "strategyos-worker",
+        hatchet_worker_slots=env_int("STRATEGYOS_HATCHET_WORKER_SLOTS", 1),
+        hatchet_dashboard_url=env("STRATEGYOS_HATCHET_DASHBOARD_URL"),
         plugin_modules=env_csv("STRATEGYOS_PLUGIN_MODULES"),
         plugin_failure_mode=_plugin_failure_mode(),
         run_policy=RunPolicyConfig(
@@ -332,6 +383,12 @@ def load_config() -> StrategyOSConfig:
         sync_artifacts=env_bool("STRATEGYOS_SYNC_ARTIFACTS", False),
         sync_source_files=env_bool("STRATEGYOS_SYNC_SOURCE_FILES", False),
         model_provider_enabled=env_bool("STRATEGYOS_MODEL_PROVIDER_ENABLED", False),
+        llm_chat_enabled=env_bool("STRATEGYOS_LLM_CHAT_ENABLED", False),
+        llm_provider=llm_provider,
+        llm_base_url=llm_base_url,
+        llm_model=llm_model,
+        llm_api_key=llm_api_key,
+        llm_timeout_seconds=env_int("STRATEGYOS_LLM_TIMEOUT_SECONDS", 30),
         batch_apis_enabled=env_bool("STRATEGYOS_BATCH_APIS_ENABLED", False),
         hosted_ocr_vision_enabled=env_bool("STRATEGYOS_HOSTED_OCR_VISION_ENABLED", False),
         source_pack_structured_candidate_threshold=env_float(

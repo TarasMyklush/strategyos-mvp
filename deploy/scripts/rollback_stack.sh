@@ -5,13 +5,19 @@ TARGET_HOST="${TARGET_HOST:?Set TARGET_HOST, for example root@1.2.3.4}"
 TARGET_DIR="${TARGET_DIR:-/opt/strategyos}"
 SSH_OPTS="${SSH_OPTS:-}"
 COMPOSE_FILES="${COMPOSE_FILES:-deploy/docker-compose.yml}"
+COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
 
 COMPOSE_FILE_ARGS=""
 for compose_file in ${COMPOSE_FILES}; do
   COMPOSE_FILE_ARGS="${COMPOSE_FILE_ARGS} -f ${compose_file}"
 done
 
-ssh ${SSH_OPTS} "${TARGET_HOST}" "TARGET_DIR='${TARGET_DIR}' COMPOSE_FILE_ARGS='${COMPOSE_FILE_ARGS}' bash -s" <<'REMOTE'
+COMPOSE_PROFILE_ARGS=""
+for compose_profile in ${COMPOSE_PROFILES}; do
+  COMPOSE_PROFILE_ARGS="${COMPOSE_PROFILE_ARGS} --profile ${compose_profile}"
+done
+
+ssh ${SSH_OPTS} "${TARGET_HOST}" "TARGET_DIR='${TARGET_DIR}' COMPOSE_FILE_ARGS='${COMPOSE_FILE_ARGS}' COMPOSE_PROFILE_ARGS='${COMPOSE_PROFILE_ARGS}' bash -s" <<'REMOTE'
 set -euo pipefail
 latest="$(ls -td "${TARGET_DIR}"/backups/app-* 2>/dev/null | head -1 || true)"
 if [ -z "${latest}" ]; then
@@ -24,9 +30,9 @@ fi
 cp -a "${latest}" "${TARGET_DIR}/app"
 cd "${TARGET_DIR}/app"
 if grep -Eq '^STRATEGYOS_API_IMAGE=.' deploy/.env; then
-  docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-build
+  docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-build
 else
-  docker compose${COMPOSE_FILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build
+  docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build
 fi
 echo "Rolled back to ${latest}"
 REMOTE

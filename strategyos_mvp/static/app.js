@@ -3,6 +3,7 @@
 
   const bootstrap = JSON.parse(document.getElementById("strategyos-bootstrap").textContent);
   const TOKEN_KEY = "strategyos.ui.token";
+  const QA_MODE_KEY = "strategyos.ui.qaMode";
   const STARTER_SUGGESTIONS = [
     "What is the total amount of invoices?",
     "How many AP invoices are there?",
@@ -28,6 +29,7 @@
     token: window.localStorage.getItem(TOKEN_KEY) || "",
     session: null,
     latestRun: null,
+    latestJob: null,
     auditSummary: null,
     dataStatus: null,
     knowledgeGraph: null,
@@ -40,6 +42,7 @@
     dependenciesStatus: null,
     chatRunKey: "",
     chatThread: [],
+    qaMode: window.sessionStorage.getItem(QA_MODE_KEY) || "deterministic",
     qaLoading: false,
     activeSuggestions: STARTER_SUGGESTIONS.slice(0, 3),
     openCitationKey: "",
@@ -76,6 +79,8 @@
     chatInput: byId("chat-input"),
     chatSend: byId("chat-send"),
     chatSuggestions: byId("chat-suggestions"),
+    qaModeSwitch: byId("qa-mode-switch"),
+    qaModeStatus: byId("qa-mode-status"),
     reviewMessage: byId("review-message"),
     reviewTitle: byId("review-title"),
     reviewDetail: byId("review-detail"),
@@ -213,6 +218,43 @@
   function statusPill(status, label) {
     const text = label || String(status || "unknown").replaceAll("_", " ");
     return `<span class="pill ${statusTone(status)}">${escapeHtml(text)}</span>`;
+  }
+
+  function llmChatStatus() {
+    return bootstrap.qa_modes?.llm || { enabled: false, reason: "LLM chat is not configured." };
+  }
+
+  function llmChatEnabled() {
+    return Boolean(llmChatStatus().enabled);
+  }
+
+  function setQaMode(mode) {
+    const normalized = mode === "llm" ? "llm" : "deterministic";
+    state.qaMode = normalized === "llm" && !llmChatEnabled() ? "deterministic" : normalized;
+    window.sessionStorage.setItem(QA_MODE_KEY, state.qaMode);
+    renderQaMode();
+  }
+
+  function renderQaMode() {
+    if (!els.qaModeSwitch) return;
+    const llmStatus = llmChatStatus();
+    els.qaModeSwitch.querySelectorAll("[data-qa-mode]").forEach((button) => {
+      const mode = button.dataset.qaMode;
+      const active = mode === state.qaMode;
+      button.classList.toggle("active", active);
+      button.disabled = mode === "llm" && !llmStatus.enabled;
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+      if (mode === "llm" && !llmStatus.enabled) {
+        button.title = llmStatus.reason || "LLM chat is not configured.";
+      } else {
+        button.title = "";
+      }
+    });
+    if (els.qaModeStatus) {
+      els.qaModeStatus.textContent = state.qaMode === "llm"
+        ? `LLM: ${llmStatus.model || "configured"}`
+        : "Exact deterministic answers";
+    }
   }
 
   function numericValue(value) {
@@ -384,6 +426,7 @@
 
   function displayRunId(run) {
     if (!run || run.status === "missing") return "no run";
+    if (run.job_id) return `job ${String(run.job_id).slice(0, 8)}`;
     if (run.run_id) return String(run.run_id);
     if (run.run_dir) return basename(run.run_dir);
     return "latest";
@@ -479,6 +522,24 @@
   function renderDashboard() {
     const run = state.latestRun || {};
     if (!run || run.status === "missing") {
+      const job = state.latestJob;
+      if (job?.job_id && ["queued", "running", "failed"].includes(String(job.status || "").toLowerCase())) {
+        els.runPill.textContent = `${displayRunId(job)} - ${String(job.status).replaceAll("_", " ")}`;
+        els.runPill.className = `pill status-pill ${statusTone(job.status)}`;
+        els.kpiRecoverable.textContent = "--";
+        els.kpiFindings.innerHTML = "--";
+        els.kpiCitations.textContent = "--";
+        els.kpiCitations.classList.remove("ok");
+        els.kpiChallenged.textContent = "--";
+        els.stageStepper.textContent = String(job.status || "").toLowerCase() === "failed"
+          ? `Worker failed${job.failure_reason ? `: ${job.failure_reason}` : "."}`
+          : "Queued analysis - waiting for StrategyOS worker.";
+        els.storeBadges.innerHTML = "";
+        els.partialRunChips.classList.add("hidden");
+        renderReviewMessage();
+        renderArtifacts();
+        return;
+      }
       els.runPill.textContent = "No runs yet";
       els.runPill.className = "pill status-pill warn";
       els.kpiRecoverable.textContent = "--";
@@ -674,6 +735,9 @@
 
   function renderChat() {
     loadChatForRun();
+    if (state.qaMode === "llm" && !llmChatEnabled()) {
+      setQaMode("deterministic");
+    }
     if (bootstrap.api_auth_enabled && !state.session?.authenticated) {
       els.chatInput.disabled = true;
       els.chatSend.disabled = true;
@@ -688,6 +752,10 @@
     els.chatMessages.innerHTML = state.chatThread.length
       ? state.chatThread.map(renderChatEntry).join("")
       : `<div class="sysmsg"><span>No questions yet. Use the suggestions below to ask a deterministic finance question.</span></div>`;
+    els.chatInput.placeholder = state.qaMode === "llm"
+      ? "Ask grounded LLM questions about the latest analysis"
+      : "Ask deterministic finance questions about invoices, vendors, findings, or working capital";
+    renderQaMode();
     renderSuggestions();
     renderReviewMessage();
     requestAnimationFrame(() => {
@@ -706,6 +774,7 @@
     const valueLabel = formatValue(payload.value, payload.unit);
     const answer = payload.answer || entry.error || "No answer returned.";
     const unmatched = payload.matched === false;
+    const modeLabel = payload.mode === "llm" ? "LLM" : payload.mode === "deterministic" ? "Deterministic" : "";
     const citations = Array.isArray(payload.citations) ? payload.citations : [];
     const suggestions = Array.isArray(payload.suggestions) ? payload.suggestions : [];
     const citationHtml = citations.length
@@ -722,6 +791,7 @@
           <span>${escapeHtml(answer)}</span>
           ${payload.basis ? `<span class="basis">Basis: ${escapeHtml(payload.basis)}</span>` : ""}
           ${payload.intent ? `<span class="intent">${statusPill(unmatched ? "warn" : "ok", payload.intent)}</span>` : ""}
+          ${modeLabel ? `<span class="intent">${statusPill(payload.mode === "llm" ? "warn" : "neutral", modeLabel)}</span>` : ""}
         </div>
         ${citationHtml}
         ${graphHtml}
@@ -769,7 +839,7 @@
     saveChat();
     renderChat();
     try {
-      const body = { question };
+      const body = { question, mode: state.qaMode };
       const runId = activeRunId();
       if (runId) body.run_id = runId;
       const payload = await requestJson("/qa", {
@@ -1185,6 +1255,7 @@
     els.healthConfigKv.innerHTML = kvHtml([
       ["API auth", statusPill((config?.api_auth_enabled ?? bootstrap.api_auth_enabled) ? "enabled" : "disabled")],
       ["Human review", statusPill((config?.require_human_review ?? bootstrap.require_human_review) ? "required" : "optional")],
+      ["LLM chat", statusPill(config?.llm_chat?.enabled ? "enabled" : "disabled")],
       ["Public live health", statusPill((live?.public_health_enabled ?? bootstrap.public_health_enabled) ? "enabled" : "protected")],
       ["Object store", statusPill(config?.object_store?.status || "unknown")],
     ], true);
@@ -1576,7 +1647,13 @@
         method: "POST",
         body: JSON.stringify(payload),
       });
-      setStartRunStatus("ok", "Analysis started", `Current run ${displayRunId(result)} is now running.`);
+      if (result.execution_mode === "hatchet" && result.job_id) {
+        state.latestJob = result;
+        setStartRunStatus("ok", "Analysis queued", `${displayRunId(result)} is waiting for a StrategyOS worker.`);
+      } else {
+        state.latestJob = null;
+        setStartRunStatus("ok", "Analysis started", `Current run ${displayRunId(result)} is now running.`);
+      }
       closeDrawer("new-run");
       await refreshAll();
     } catch (error) {
@@ -1671,6 +1748,7 @@
   async function loadRuntimeData() {
     if (!isAuthed()) {
       state.latestRun = null;
+      state.latestJob = null;
       state.auditSummary = null;
       state.dataStatus = null;
       state.knowledgeGraph = null;
@@ -1700,6 +1778,13 @@
     state.readyStatus = readyStatus;
     state.configStatus = configStatus;
     state.dependenciesStatus = dependenciesStatus;
+    if (state.latestJob?.job_id && ["queued", "running"].includes(String(state.latestJob.status || "").toLowerCase())) {
+      state.latestJob = await guarded(
+        "Run job",
+        requestJson(`/runs/jobs/${encodeURIComponent(state.latestJob.job_id)}`),
+        state.latestJob,
+      );
+    }
     maybeAppendRunEvent(previousSignature);
     renderAll();
   }
@@ -1725,7 +1810,8 @@
     window.clearTimeout(state.pollTimer);
     if (document.visibilityState === "hidden") return;
     const status = String(state.latestRun?.status || "").toLowerCase();
-    const delay = ["running", "awaiting_review"].includes(status) ? 5000 : 30000;
+    const jobStatus = String(state.latestJob?.status || "").toLowerCase();
+    const delay = ["running", "awaiting_review"].includes(status) || ["queued", "running"].includes(jobStatus) ? 5000 : 30000;
     state.pollTimer = window.setTimeout(() => {
       loadRuntimeData().then(schedulePoll).catch(() => schedulePoll());
     }, delay);
@@ -1745,6 +1831,12 @@
       await refreshAll();
     });
     els.chatForm.addEventListener("submit", submitChat);
+    els.qaModeSwitch.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-qa-mode]");
+      if (!button || button.disabled) return;
+      setQaMode(button.getAttribute("data-qa-mode") || "deterministic");
+      renderChat();
+    });
     els.chatThread.addEventListener("click", (event) => {
       const graphNode = event.target.closest("[data-kg-node]");
       if (graphNode) {

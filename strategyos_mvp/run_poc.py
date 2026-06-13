@@ -32,7 +32,6 @@ from .workflow import build_workflow
 
 HOSTED_OCR_ENGINES = {
     "google_vision",
-    "azure_document_intelligence",
     "textract",
     "hosted_ocr",
     "hosted_vision",
