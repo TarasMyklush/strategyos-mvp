@@ -82,6 +82,9 @@ def test_run_all_finance_skills_uses_registry_order_and_preserves_ranked_reid(mo
         ],
     )
     monkeypatch.setattr(finance_controls_module, "KNOWN_PATTERN_TYPES", frozenset({"pattern_a", "pattern_b", "pattern_skip"}))
+    # Isolate the row registry under test: empty the separate graph-detector
+    # registry so its skip entries don't leak into this report assertion.
+    monkeypatch.setattr("strategyos_mvp.skills.graph_controls.GRAPH_DETECTOR_REGISTRY", [])
 
     bundle = SimpleNamespace(run_metadata={"available_roles": ["ap_ledger"]})
 

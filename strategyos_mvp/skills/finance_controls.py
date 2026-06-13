@@ -301,6 +301,7 @@ def run_all_finance_skills(bundle: DataBundle) -> list[Finding]:
                 "finding_count": len(detector_findings),
             }
         )
+    _run_graph_detectors(bundle, findings, executed_detectors, skipped_detectors)
     findings.sort(key=lambda f: (f.recoverable_sar, f.leakage_sar), reverse=True)
     for i, finding in enumerate(findings, start=1):
         finding.finding_id = f"F-{i:03d}"
@@ -310,6 +311,63 @@ def run_all_finance_skills(bundle: DataBundle) -> list[Finding]:
         "skipped_detectors": skipped_detectors,
     }
     return findings
+
+
+def _run_graph_detectors(
+    bundle: DataBundle,
+    findings: list[Finding],
+    executed_detectors: list[dict[str, object]],
+    skipped_detectors: list[dict[str, object]],
+) -> None:
+    """Run graph-native detectors over the in-memory structural graph and merge
+    their findings into the same list (before sort/re-ID). Imported lazily to
+    avoid a circular import (graph_controls depends on this module). Degrades
+    cleanly: a structural-graph build failure skips graph detectors and leaves
+    row findings untouched."""
+    from ..knowledge_graph import build_structural_graph
+    from .graph_controls import graph_detector_registry
+
+    registry = graph_detector_registry()
+    if not registry:
+        return
+    try:
+        graph = build_structural_graph(bundle)
+    except Exception as exc:  # pragma: no cover - defensive
+        for detector in registry:
+            skipped_detectors.append(
+                {
+                    "detector": detector.name,
+                    "pattern_type": detector.pattern_type,
+                    "required_roles": list(detector.required_roles),
+                    "missing_roles": [],
+                    "reason": f"Structural graph could not be built: {exc}",
+                }
+            )
+        return
+    for detector in registry:
+        missing_roles = _missing_required_roles(bundle, detector.required_roles)
+        if missing_roles:
+            skipped_detectors.append(
+                {
+                    "detector": detector.name,
+                    "pattern_type": detector.pattern_type,
+                    "required_roles": list(detector.required_roles),
+                    "missing_roles": missing_roles,
+                    "reason": "Source pack did not provide all required structured roles for this detector.",
+                }
+            )
+            continue
+        detector_findings = detector.runner(graph, bundle)
+        findings.extend(detector_findings)
+        executed_detectors.append(
+            {
+                "detector": detector.name,
+                "pattern_type": detector.pattern_type,
+                "required_roles": list(detector.required_roles),
+                "finding_count": len(detector_findings),
+                "engine": "graph",
+            }
+        )
 
 
 @register_detector("duplicate_payment", ("ap_ledger",))

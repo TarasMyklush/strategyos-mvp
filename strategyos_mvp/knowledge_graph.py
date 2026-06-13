@@ -27,40 +27,78 @@ class GraphEdge:
     properties: dict[str, Any]
 
 
-def build_knowledge_graph(bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
-    nodes: dict[str, GraphNode] = {}
-    edges: dict[tuple[str, str, str], GraphEdge] = {}
+class StructuralGraph:
+    """In-memory finance graph (everything except Finding nodes) built before
+    findings exist, so graph-native detectors can traverse it during the analyst
+    stage. Holds the same node/edge sets the JSON export uses and exposes simple
+    neighbor/edge queries for detectors. Mutating helpers (`add_node`/`add_edge`)
+    are reused by `build_knowledge_graph` to append the finding layer."""
 
-    def add_node(label: str, key: str, **properties: Any) -> str:
+    def __init__(self) -> None:
+        self.nodes: dict[str, GraphNode] = {}
+        self.edges: dict[tuple[str, str, str], GraphEdge] = {}
+
+    def add_node(self, label: str, key: str, **properties: Any) -> str:
         node_id = f"{label}:{key}"
         clean = {k: normalize_value(v) for k, v in properties.items() if not is_empty(v)}
-        nodes.setdefault(node_id, GraphNode(node_id, label, clean))
+        self.nodes.setdefault(node_id, GraphNode(node_id, label, clean))
         return node_id
 
-    def add_edge(source: str, target: str, label: str, **properties: Any) -> None:
+    def add_edge(self, source: str, target: str, label: str, **properties: Any) -> None:
         edge_key = (source, target, label)
         clean = {k: normalize_value(v) for k, v in properties.items() if not is_empty(v)}
-        edges.setdefault(edge_key, GraphEdge(source, target, label, clean))
+        self.edges.setdefault(edge_key, GraphEdge(source, target, label, clean))
 
-    evidence_nodes(bundle, add_node)
-    vendor_nodes(bundle, add_node, add_edge)
-    purchase_order_nodes(bundle, add_node, add_edge)
-    invoice_nodes(bundle, add_node, add_edge)
-    contract_nodes(bundle, add_node, add_edge)
-    entity_resolution_edges(bundle, add_node, add_edge)
-    finding_nodes(bundle, findings, add_node, add_edge)
+    def nodes_with_label(self, label: str) -> list[GraphNode]:
+        return [node for node in self.nodes.values() if node.label == label]
 
-    return {
-        "meta": {
-            "purpose": "Local strong-node StrategyOS finance knowledge graph export.",
-            "node_count": len(nodes),
-            "edge_count": len(edges),
-            "strong_node_labels": ["Vendor", "Invoice", "PurchaseOrder", "Contract", "Evidence", "Finding", "SKU"],
-            "weak_node_policy": "PDF/email evidence is linked as Evidence nodes and must not override structured Vendor, Invoice, or PO facts without review.",
-        },
-        "nodes": [asdict(node) for node in sorted(nodes.values(), key=lambda n: n.id)],
-        "edges": [asdict(edge) for edge in sorted(edges.values(), key=lambda e: (e.source, e.label, e.target))],
-    }
+    def edges_with_label(self, label: str) -> list[GraphEdge]:
+        return [edge for edge in self.edges.values() if edge.label == label]
+
+    def neighbors(self, node_id: str, label: str | None = None) -> list[str]:
+        """Outgoing+incoming neighbor ids, optionally filtered to one edge label."""
+        out: list[str] = []
+        for edge in self.edges.values():
+            if label is not None and edge.label != label:
+                continue
+            if edge.source == node_id:
+                out.append(edge.target)
+            elif edge.target == node_id:
+                out.append(edge.source)
+        return out
+
+    def export(self) -> dict[str, Any]:
+        return {
+            "meta": {
+                "purpose": "Local strong-node StrategyOS finance knowledge graph export.",
+                "node_count": len(self.nodes),
+                "edge_count": len(self.edges),
+                "strong_node_labels": ["Vendor", "Invoice", "PurchaseOrder", "Contract", "Evidence", "Finding", "SKU"],
+                "weak_node_policy": "PDF/email evidence is linked as Evidence nodes and must not override structured Vendor, Invoice, or PO facts without review.",
+            },
+            "nodes": [asdict(node) for node in sorted(self.nodes.values(), key=lambda n: n.id)],
+            "edges": [asdict(edge) for edge in sorted(self.edges.values(), key=lambda e: (e.source, e.label, e.target))],
+        }
+
+
+def build_structural_graph(bundle: DataBundle) -> StructuralGraph:
+    """Build the finance graph WITHOUT the finding layer. Available during the
+    analyst stage (before findings exist) so graph-native detectors can run; also
+    reused by `build_knowledge_graph` which appends finding nodes afterward."""
+    graph = StructuralGraph()
+    evidence_nodes(bundle, graph.add_node)
+    vendor_nodes(bundle, graph.add_node, graph.add_edge)
+    purchase_order_nodes(bundle, graph.add_node, graph.add_edge)
+    invoice_nodes(bundle, graph.add_node, graph.add_edge)
+    contract_nodes(bundle, graph.add_node, graph.add_edge)
+    entity_resolution_edges(bundle, graph.add_node, graph.add_edge)
+    return graph
+
+
+def build_knowledge_graph(bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+    graph = build_structural_graph(bundle)
+    finding_nodes(bundle, findings, graph.add_node, graph.add_edge)
+    return graph.export()
 
 
 def save_knowledge_graph(graph: dict[str, Any], output_path: Path) -> Path:
