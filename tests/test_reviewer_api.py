@@ -1124,3 +1124,76 @@ def test_vector_search_returns_ranked_hits_for_selected_run(monkeypatch):
         assert payload["results"][0]["finding_id"] == "F-002"
     finally:
         _restore_env(original)
+
+
+def test_vector_search_forwards_investigation_filters(monkeypatch):
+    original, client = _client_with_auth_env()
+    captured = {}
+    try:
+        def fake_search(run_id, query, limit=5, **filters):
+            captured.update(
+                {
+                    "run_id": run_id,
+                    "query": query,
+                    "limit": limit,
+                    "filters": filters,
+                }
+            )
+            return {
+                "status": "ready",
+                "run_id": run_id,
+                "query": query,
+                "filters": filters,
+                "results": [],
+            }
+
+        monkeypatch.setattr(api_module, "search_run_vectors", fake_search)
+
+        response = client.get(
+            "/data/vector-search?query=invoice&run_id=run-77&point_type=citation"
+            "&pattern_type=duplicate_payment&vendor_name=Premier%20Packaging%20LLC"
+            "&confidence=HIGH&source_path=uploads%2Fap_ledger.csv&finding_id=F-002",
+            headers=_auth_header("reviewer-a111"),
+        )
+
+        assert response.status_code == 200
+        assert captured["run_id"] == "run-77"
+        assert captured["filters"]["point_type"] == "citation"
+        assert captured["filters"]["vendor_name"] == "Premier Packaging LLC"
+        assert captured["filters"]["source_path"] == "uploads/ap_ledger.csv"
+    finally:
+        _restore_env(original)
+
+
+def test_evidence_preview_returns_stored_citation_context(monkeypatch):
+    original, client = _client_with_auth_env()
+    try:
+        monkeypatch.setattr(
+            api_module.state_store,
+            "evidence_preview_for_run",
+            lambda run_id, **_: {
+                "status": "ok",
+                "run_id": run_id,
+                "finding_id": "F-002",
+                "citation_id": "citation-1",
+                "source_path": "uploads/ap_ledger.csv",
+                "locator": "row 341",
+                "preview_kind": "text",
+                "excerpt": "Invoice INV-2026-0341 was paid twice.",
+                "resolved_payload": {},
+            },
+        )
+
+        response = client.get(
+            "/data/evidence-preview?run_id=run-77&finding_id=F-002",
+            headers=_auth_header("reviewer-a111"),
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_id"] == "run-77"
+        assert payload["finding_id"] == "F-002"
+        assert payload["source_path"] == "uploads/ap_ledger.csv"
+        assert payload["excerpt"] == "Invoice INV-2026-0341 was paid twice."
+    finally:
+        _restore_env(original)

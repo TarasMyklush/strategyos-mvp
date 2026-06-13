@@ -50,6 +50,7 @@
     sourcePackSubmitting: false,
     runSubmitting: false,
     vectorSearch: { status: "idle", payload: null, error: "" },
+    vectorEvidence: { status: "idle", payload: null, error: "" },
     pollTimer: null,
     lastRunSignature: "",
   };
@@ -125,8 +126,15 @@
     kgRefresh: byId("kg-refresh"),
     vectorSearchForm: byId("vector-search-form"),
     vectorSearchQuery: byId("vector-search-query"),
+    vectorSearchType: byId("vector-search-type"),
+    vectorSearchPattern: byId("vector-search-pattern"),
+    vectorSearchVendor: byId("vector-search-vendor"),
+    vectorSearchConfidence: byId("vector-search-confidence"),
+    vectorSearchSource: byId("vector-search-source"),
+    vectorSearchFinding: byId("vector-search-finding"),
     vectorSearchLimit: byId("vector-search-limit"),
     vectorSearchResults: byId("vector-search-results"),
+    vectorSearchEvidencePreview: byId("vector-search-evidence-preview"),
     vectorSearchPayloadPreview: byId("vector-search-payload-preview"),
     artifactTabs: byId("artifact-tabs"),
     artifactViewer: byId("artifact-viewer"),
@@ -1302,6 +1310,7 @@
     if (vector.status === "idle") {
       els.vectorSearchResults.innerHTML = '<div class="item"><strong>No vector search yet</strong><span class="muted">Submit a query to inspect ranked hits.</span></div>';
       els.vectorSearchPayloadPreview.textContent = "Awaiting vector search payload.";
+      els.vectorSearchEvidencePreview.textContent = "Select a search result evidence link.";
       return;
     }
     if (vector.status === "loading") {
@@ -1313,23 +1322,96 @@
       els.vectorSearchResults.innerHTML = `<div class="item"><strong>No hits</strong><span class="muted">${escapeHtml(vector.error || "No ranked hits returned.")}</span></div>`;
     } else {
       els.vectorSearchResults.innerHTML = results.map((item, index) => (
-        `<div class="item"><strong>${index + 1}. ${escapeHtml(item.finding_id || item.title || "Result")}</strong><span>${escapeHtml(item.summary || item.text || item.vendor_name || "Vector hit")}</span></div>`
+        vectorSearchResultHtml(item, index)
       )).join("");
     }
+    renderVectorEvidence();
     els.vectorSearchPayloadPreview.textContent = compactJson(vector.payload);
+  }
+
+  function vectorSearchResultHtml(item, index) {
+    const score = Number(item.score);
+    const scoreLabel = Number.isFinite(score) ? score.toFixed(3) : "--";
+    const type = String(item.result_type || "finding").replaceAll("_", " ");
+    const title = item.title || item.finding_id || "Search result";
+    const meta = [
+      type,
+      item.finding_id,
+      item.pattern_type,
+      item.vendor_name,
+      item.confidence,
+      item.source_path ? basename(item.source_path) : "",
+      item.locator,
+      `score ${scoreLabel}`,
+    ].filter(Boolean);
+    const evidence = item.open_evidence?.href
+      ? `<button class="btn secondary" type="button" data-open-evidence="${escapeHtml(item.open_evidence.href)}">Open evidence</button>`
+      : "";
+    return `<div class="item">
+      <strong>${index + 1}. ${escapeHtml(title)}</strong>
+      <span>${escapeHtml(item.excerpt || item.summary || item.text || "Search hit")}</span>
+      <div class="item-meta">${meta.map((value) => `<span>${escapeHtml(value)}</span>`).join("")}</div>
+      ${evidence ? `<div class="item-actions">${evidence}</div>` : ""}
+    </div>`;
+  }
+
+  function renderVectorEvidence() {
+    const evidence = state.vectorEvidence;
+    if (evidence.status === "idle") {
+      els.vectorSearchEvidencePreview.textContent = "Select a search result evidence link.";
+      return;
+    }
+    if (evidence.status === "loading") {
+      els.vectorSearchEvidencePreview.textContent = "Loading evidence preview.";
+      return;
+    }
+    els.vectorSearchEvidencePreview.textContent = compactJson(evidence.payload || {
+      status: evidence.status,
+      error: evidence.error,
+    });
+  }
+
+  async function openSearchEvidence(href) {
+    if (!href) return;
+    state.vectorEvidence = { status: "loading", payload: null, error: "" };
+    renderVectorEvidence();
+    try {
+      const payload = await requestJson(href);
+      state.vectorEvidence = { status: "ready", payload, error: payload.reason || "" };
+    } catch (error) {
+      state.vectorEvidence = {
+        status: "failed",
+        payload: error?.payload || { status: "failed", detail: error?.message || "Evidence preview failed." },
+        error: error?.message || "Evidence preview failed.",
+      };
+    }
+    renderVectorEvidence();
   }
 
   async function submitVectorSearch(event) {
     event?.preventDefault?.();
     const query = els.vectorSearchQuery.value.trim();
     if (!query) return;
-    const limit = Math.max(1, Math.min(10, Number(els.vectorSearchLimit.value || 5)));
+    const limit = Math.max(1, Math.min(50, Number(els.vectorSearchLimit.value || 5)));
     state.vectorSearch = { status: "loading", payload: null, error: "" };
+    state.vectorEvidence = { status: "idle", payload: null, error: "" };
     renderVectorSearch();
     try {
       const params = new URLSearchParams({ query, limit: String(limit) });
       const runId = activeRunId();
       if (runId) params.set("run_id", runId);
+      const filterInputs = [
+        ["point_type", els.vectorSearchType.value],
+        ["pattern_type", els.vectorSearchPattern.value],
+        ["vendor_name", els.vectorSearchVendor.value],
+        ["confidence", els.vectorSearchConfidence.value],
+        ["source_path", els.vectorSearchSource.value],
+        ["finding_id", els.vectorSearchFinding.value],
+      ];
+      filterInputs.forEach(([key, value]) => {
+        const normalized = String(value || "").trim();
+        if (normalized) params.set(key, normalized);
+      });
       const payload = await requestJson(`/data/vector-search?${params.toString()}`);
       state.vectorSearch = { status: "ready", payload, error: payload.reason || "" };
     } catch (error) {
@@ -1878,6 +1960,10 @@
     els.reviewNewRun.addEventListener("click", () => openDrawer("new-run"));
     els.kgRefresh.addEventListener("click", () => refreshKnowledgeGraph());
     els.vectorSearchForm.addEventListener("submit", submitVectorSearch);
+    els.vectorSearchResults.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-open-evidence]");
+      if (button) openSearchEvidence(button.getAttribute("data-open-evidence"));
+    });
     els.artifactTabs.addEventListener("click", (event) => {
       const button = event.target.closest("[data-artifact-key]");
       if (button) openArtifact(button.getAttribute("data-artifact-key"));

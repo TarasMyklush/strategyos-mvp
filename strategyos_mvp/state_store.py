@@ -1698,6 +1698,187 @@ def artifact_paths_for_run(cur: Any, run_id: str) -> dict[str, str]:
     }
 
 
+def search_citations_for_run(run_id: str) -> list[dict[str, Any]]:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return []
+
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select
+                    c.id::text as citation_id,
+                    c.run_id::text as run_id,
+                    c.finding_id,
+                    c.evidence_document_id::text as evidence_document_id,
+                    c.source_path,
+                    c.source_hash,
+                    c.locator,
+                    c.excerpt,
+                    c.resolved,
+                    c.hash_match,
+                    c.resolved_payload,
+                    c.created_at,
+                    f.pattern_type,
+                    f.vendor_id,
+                    f.vendor_name,
+                    f.confidence,
+                    f.recoverable_sar,
+                    coalesce(f.finding_json->>'title', c.finding_id) as title
+                from strategyos_finding_citations c
+                left join strategyos_findings f
+                    on f.run_id = c.run_id
+                    and f.finding_id = c.finding_id
+                where c.run_id = %s
+                order by c.finding_id, c.created_at, c.id
+                """,
+                (run_id,),
+            )
+            return [
+                normalize_search_citation_record(record)
+                for record in fetchall_dicts(cur)
+            ]
+
+
+def evidence_preview_for_run(
+    run_id: str,
+    *,
+    citation_id: str | None = None,
+    finding_id: str | None = None,
+    source_hash: str | None = None,
+    locator: str | None = None,
+) -> dict[str, Any]:
+    if not any([citation_id, finding_id, source_hash, locator]):
+        return {
+            "status": "missing",
+            "run_id": run_id,
+            "reason": "At least one evidence selector is required.",
+        }
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return {
+            "status": "skipped",
+            "run_id": run_id,
+            "reason": skipped.get("reason", "DATABASE_URL is not configured."),
+        }
+
+    where = ["c.run_id = %s"]
+    params: list[Any] = [run_id]
+    if citation_id:
+        where.append("c.id = %s")
+        params.append(citation_id)
+    if finding_id:
+        where.append("c.finding_id = %s")
+        params.append(finding_id)
+    if source_hash:
+        where.append("c.source_hash = %s")
+        params.append(source_hash)
+    if locator:
+        where.append("c.locator = %s")
+        params.append(locator)
+
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                select
+                    c.id::text as citation_id,
+                    c.run_id::text as run_id,
+                    c.finding_id,
+                    c.evidence_document_id::text as evidence_document_id,
+                    c.source_path,
+                    c.source_hash,
+                    c.locator,
+                    c.excerpt,
+                    c.resolved,
+                    c.hash_match,
+                    c.resolved_payload,
+                    c.created_at,
+                    f.pattern_type,
+                    f.vendor_id,
+                    f.vendor_name,
+                    f.confidence,
+                    f.recoverable_sar,
+                    coalesce(f.finding_json->>'title', c.finding_id) as title
+                from strategyos_finding_citations c
+                left join strategyos_findings f
+                    on f.run_id = c.run_id
+                    and f.finding_id = c.finding_id
+                where {" and ".join(where)}
+                order by c.created_at, c.id
+                limit 1
+                """,
+                tuple(params),
+            )
+            record = fetchone_dict(cur)
+    if record is None:
+        return {
+            "status": "missing",
+            "run_id": run_id,
+            "reason": "No stored evidence matched the requested selector.",
+        }
+    citation = normalize_search_citation_record(record)
+    excerpt = text_value(citation.get("excerpt")) or ""
+    resolved_payload = citation.get("resolved_payload") or {}
+    preview_kind = "text" if excerpt else "json" if resolved_payload else "metadata"
+    return {
+        "status": "ok",
+        "run_id": run_id,
+        "finding_id": citation.get("finding_id"),
+        "citation_id": citation.get("citation_id"),
+        "evidence_document_id": citation.get("evidence_document_id"),
+        "title": citation.get("title"),
+        "pattern_type": citation.get("pattern_type"),
+        "vendor_id": citation.get("vendor_id"),
+        "vendor_name": citation.get("vendor_name"),
+        "confidence": citation.get("confidence"),
+        "source_path": citation.get("source_path"),
+        "source_hash": citation.get("source_hash"),
+        "locator": citation.get("locator"),
+        "resolved": citation.get("resolved"),
+        "hash_match": citation.get("hash_match"),
+        "preview_kind": preview_kind,
+        "excerpt": preview_text(excerpt),
+        "resolved_payload": bounded_json_value(resolved_payload),
+    }
+
+
+def normalize_search_citation_record(record: dict[str, Any]) -> dict[str, Any]:
+    normalized = normalize_record(record)
+    payload = normalized.get("resolved_payload")
+    if isinstance(payload, str):
+        try:
+            normalized["resolved_payload"] = json.loads(payload)
+        except json.JSONDecodeError:
+            normalized["resolved_payload"] = {"raw": preview_text(payload)}
+    elif payload is None:
+        normalized["resolved_payload"] = {}
+    normalized["recoverable_sar"] = money_value(normalized.get("recoverable_sar"))
+    return normalized
+
+
+def preview_text(value: str | None, limit: int = 4_000) -> str:
+    text = (value or "").strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[: max(0, limit - 15)].rstrip()}... truncated"
+
+
+def bounded_json_value(value: Any, limit: int = 12_000) -> Any:
+    try:
+        encoded = json.dumps(value, default=json_value, sort_keys=True)
+    except TypeError:
+        return preview_text(str(value), limit)
+    if len(encoded) <= limit:
+        return value
+    return {"preview": preview_text(encoded, limit), "truncated": True}
+
+
 def row_to_dict(row: Any) -> dict[str, Any]:
     return {str(key): json_value(value) for key, value in row.to_dict().items()}
 

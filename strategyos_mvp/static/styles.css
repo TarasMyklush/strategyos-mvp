@@ -665,6 +665,12 @@ select:focus {
   gap: 10px;
 }
 
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
 .check-row {
   display: flex;
   align-items: center;
@@ -696,6 +702,21 @@ select:focus {
   display: block;
   color: var(--ink);
   margin-bottom: 4px;
+}
+
+.item-actions,
+.item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.item-meta span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 2px 7px;
 }
 
 .table-wrap {

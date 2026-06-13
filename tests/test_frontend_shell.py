@@ -253,10 +253,19 @@ def test_dashboard_renders_vector_search_utility_hooks():
     assert "GET /data/vector-search" not in html
     assert 'id="vector-search-form"' in html
     assert 'id="vector-search-query"' in html
+    assert 'id="vector-search-type"' in html
+    assert 'id="vector-search-pattern"' in html
+    assert 'id="vector-search-vendor"' in html
+    assert 'id="vector-search-confidence"' in html
+    assert 'id="vector-search-source"' in html
+    assert 'id="vector-search-finding"' in html
     assert 'id="vector-search-limit"' in html
     assert 'id="vector-search-results"' in html
+    assert 'id="vector-search-evidence-preview"' in html
     assert 'id="vector-search-payload-preview"' in html
     assert "requestJson(`/data/vector-search?${params.toString()}`)" in js
+    assert "data-open-evidence" in js
+    assert "requestJson(href)" in js
 
 
 def test_dashboard_static_assets_have_no_external_origins():

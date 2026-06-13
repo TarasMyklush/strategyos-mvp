@@ -224,13 +224,50 @@
               Query
               <input id="vector-search-query" type="text" placeholder="duplicate payment invoice" autocomplete="off" />
             </label>
-            <label>
-              Limit
-              <input id="vector-search-limit" type="number" min="1" max="10" value="5" />
-            </label>
+            <div class="filter-grid">
+              <label>
+                Result type
+                <select id="vector-search-type">
+                  <option value="">All</option>
+                  <option value="finding">Findings</option>
+                  <option value="citation">Citations</option>
+                  <option value="evidence_chunk">Evidence</option>
+                </select>
+              </label>
+              <label>
+                Finding type
+                <input id="vector-search-pattern" type="text" placeholder="duplicate_payment" autocomplete="off" />
+              </label>
+              <label>
+                Vendor
+                <input id="vector-search-vendor" type="text" placeholder="Premier Packaging LLC" autocomplete="off" />
+              </label>
+              <label>
+                Confidence
+                <select id="vector-search-confidence">
+                  <option value="">Any</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </select>
+              </label>
+              <label>
+                Source file
+                <input id="vector-search-source" type="text" placeholder="ap_ledger.csv" autocomplete="off" />
+              </label>
+              <label>
+                Finding ID
+                <input id="vector-search-finding" type="text" placeholder="F-002" autocomplete="off" />
+              </label>
+              <label>
+                Limit
+                <input id="vector-search-limit" type="number" min="1" max="50" value="5" />
+              </label>
+            </div>
             <button class="btn secondary" id="vector-search-submit" type="submit">Search</button>
           </form>
           <div id="vector-search-results" class="stack-list"></div>
+          <pre id="vector-search-evidence-preview" class="code-block">Select a search result evidence link.</pre>
           <pre id="vector-search-payload-preview" class="code-block">Awaiting vector search payload.</pre>
         </section>
 

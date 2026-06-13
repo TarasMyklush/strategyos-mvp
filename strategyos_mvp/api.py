@@ -2068,12 +2068,61 @@ def vector_search(
     query: str,
     run_id: str | None = None,
     limit: int = 5,
+    point_type: str | None = None,
+    pattern_type: str | None = None,
+    vendor_id: str | None = None,
+    vendor_name: str | None = None,
+    confidence: str | None = None,
+    source_path: str | None = None,
+    finding_id: str | None = None,
     _: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
     if run_id is None:
         latest_summary = _latest_summary() or {}
         run_id = latest_summary.get("run_id")
-    return search_run_vectors(str(run_id) if run_id else None, query, limit=limit)
+    filters = {
+        "point_type": point_type,
+        "pattern_type": pattern_type,
+        "vendor_id": vendor_id,
+        "vendor_name": vendor_name,
+        "confidence": confidence,
+        "source_path": source_path,
+        "finding_id": finding_id,
+    }
+    if not any(value for value in filters.values()):
+        return search_run_vectors(str(run_id) if run_id else None, query, limit=limit)
+    return search_run_vectors(
+        str(run_id) if run_id else None,
+        query,
+        limit=limit,
+        **filters,
+    )
+
+
+@app.get("/data/evidence-preview")
+def evidence_preview(
+    run_id: str,
+    point_id: str | None = None,
+    citation_id: str | None = None,
+    finding_id: str | None = None,
+    source_hash: str | None = None,
+    locator: str | None = None,
+    _: dict[str, Any] = require_role("operator", "reviewer"),
+) -> dict[str, Any]:
+    payload = state_store.evidence_preview_for_run(
+        run_id,
+        citation_id=citation_id,
+        finding_id=finding_id,
+        source_hash=source_hash,
+        locator=locator,
+    )
+    payload["point_id"] = point_id
+    if payload.get("status") == "missing":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=payload.get("reason", "Evidence preview was not found."),
+        )
+    return payload
 
 
 # Cache reloaded Q&A contexts by a stable run key so repeated chat questions do
