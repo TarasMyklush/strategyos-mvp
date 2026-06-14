@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StrategyOS.live Finance Recovery Control Room</title>
+<style>
+  :root {
+    --page: #f4f3ef;
+    --paper: #fffdf8;
+    --panel: #ffffff;
+    --ink: #17191d;
+    --muted: #69717c;
+    --faint: #929aa4;
+    --line: #d9d6ce;
+    --line-strong: #bcb7ac;
+    --green: #006b4f;
+    --green-soft: #e2f2eb;
+    --blue: #225fba;
+    --blue-soft: #e8effa;
+    --amber: #95620a;
+    --amber-soft: #fff0d3;
+    --red: #a33d45;
+    --red-soft: #f9e5e8;
+    --slate: #2d3745;
+    --shadow: 0 18px 45px rgba(23, 25, 29, 0.08);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Arial, sans-serif;
+    font-family: var(--font);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+  }
+
+  a { color: inherit; }
+
+  button {
+    font: inherit;
+  }
+
+  .shell {
+    width: min(1240px, calc(100% - 40px));
+    margin: 0 auto;
+  }
+
+  .topbar {
+    min-height: 74px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 22px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+  }
+
+  .mark {
+    width: 34px;
+    height: 34px;
+    border: 1px solid #111;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    background: var(--ink);
+    color: #fff;
+    font-weight: 800;
+  }
+
+  .brand strong,
+  .top-meta strong {
+    display: block;
+    font-size: 16px;
+  }
+
+  .brand span,
+  .top-meta span {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.55);
+  }
+
+  .nav a {
+    border-radius: 6px;
+    padding: 9px 12px;
+    color: var(--muted);
+    font-size: 13px;
+    text-decoration: none;
+  }
+
+  .nav a.active {
+    background: #fff;
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .top-meta {
+    text-align: right;
+  }
+
+  .btn {
+    border: 1px solid var(--ink);
+    border-radius: 7px;
+    background: var(--ink);
+    color: #fff;
+    padding: 10px 13px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn.secondary {
+    border-color: var(--line-strong);
+    background: #fff;
+    color: var(--ink);
+  }
+
+  .brief {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: 26px;
+    padding: 34px 0 28px;
+  }
+
+  .brief-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 22px;
+  }
+
+  .eyebrow {
+    margin: 0 0 9px;
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  h1 {
+    margin: 0;
+    max-width: 820px;
+    font-size: 48px;
+    line-height: 1.04;
+    letter-spacing: 0;
+  }
+
+  .brief-copy {
+    max-width: 680px;
+    margin: 18px 0 0;
+    color: #4c535c;
+    font-size: 17px;
+    line-height: 1.55;
+  }
+
+  .status-note {
+    min-width: 190px;
+    border-left: 3px solid var(--green);
+    padding-left: 14px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .status-note strong {
+    display: block;
+    color: var(--ink);
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+
+  .metric-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 26px;
+  }
+
+  .metric {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 15px;
+  }
+
+  .metric span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .metric strong {
+    display: block;
+    margin-top: 7px;
+    font-size: 25px;
+    line-height: 1.05;
+  }
+
+  .metric small {
+    display: block;
+    margin-top: 8px;
+    color: var(--faint);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .decision-panel {
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: var(--paper);
+    box-shadow: var(--shadow);
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 18px 13px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .panel-head h2,
+  .section-title h2 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.2;
+  }
+
+  .panel-head p,
+  .section-title p {
+    margin: 5px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 5px 9px;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .badge.green { background: var(--green-soft); color: var(--green); }
+  .badge.amber { background: var(--amber-soft); color: var(--amber); }
+  .badge.red { background: var(--red-soft); color: var(--red); }
+  .badge.blue { background: var(--blue-soft); color: var(--blue); }
+
+  .decision-list {
+    display: grid;
+  }
+
+  .decision {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .decision:last-child {
+    border-bottom: 0;
+  }
+
+  .decision h3 {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.3;
+  }
+
+  .decision p {
+    margin: 5px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .amount {
+    text-align: right;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .amount span {
+    display: block;
+    margin-top: 5px;
+    color: var(--faint);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .section {
+    border-top: 1px solid var(--line);
+    padding: 30px 0;
+  }
+
+  .section-title {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 16px;
+  }
+
+  .section-title p {
+    max-width: 520px;
+  }
+
+  .operating-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+    gap: 16px;
+  }
+
+  .work-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .work-table th,
+  .work-table td {
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .work-table th {
+    background: #f7f5ef;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .work-table tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .work-table strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .work-table small {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .right-stack {
+    display: grid;
+    gap: 12px;
+  }
+
+  .assurance {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 16px;
+  }
+
+  .assurance h3 {
+    margin: 0 0 12px;
+    font-size: 16px;
+  }
+
+  .assurance-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+  }
+
+  .assurance-row:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .assurance-row span {
+    color: var(--muted);
+  }
+
+  .assurance-row strong {
+    text-align: right;
+  }
+
+  .trend-panel {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 18px;
+  }
+
+  .trend-panel h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .trend-panel p {
+    margin: 5px 0 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .chart {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .memo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .memo-block {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 18px;
+  }
+
+  .memo-block h3 {
+    margin: 0 0 10px;
+    font-size: 16px;
+  }
+
+  .memo-block p {
+    margin: 0;
+    color: #4c535c;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .memo-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .memo-list li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    color: #4c535c;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .memo-list b {
+    color: var(--green);
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    border-top: 1px solid var(--line);
+    padding: 20px 0 32px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  @media (max-width: 1040px) {
+    .brief,
+    .operating-grid,
+    .memo {
+      grid-template-columns: 1fr;
+    }
+
+    .brief-head {
+      flex-direction: column;
+    }
+
+    .status-note {
+      min-width: 0;
+    }
+
+    .metric-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 760px) {
+    .shell {
+      width: min(100% - 28px, 1240px);
+    }
+
+    .topbar,
+    .top-actions,
+    .section-title,
+    .footer {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .nav {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .top-meta {
+      text-align: left;
+    }
+
+    h1 {
+      font-size: 36px;
+    }
+
+    .brief-copy {
+      font-size: 16px;
+    }
+
+    .metric-row {
+      grid-template-columns: 1fr;
+    }
+
+    .decision {
+      grid-template-columns: 1fr;
+    }
+
+    .amount {
+      text-align: left;
+    }
+
+    .work-table {
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="StrategyOS.live home">
+        <span class="mark">S</span>
+        <span>
+          <strong>StrategyOS.live</strong>
+          <span>Finance recovery control room</span>
+        </span>
+      </a>
+
+      <nav class="nav" aria-label="Primary">
+        <a class="active" href="#brief">Brief</a>
+        <a href="#decisions">Decisions</a>
+        <a href="#evidence">Evidence</a>
+        <a href="#memo">Board memo</a>
+      </nav>
+
+      <div class="top-actions">
+        <div class="top-meta">
+          <strong>Local Tamween H1 2026</strong>
+          <span>Updated 08:42 · reviewer gate active</span>
+        </div>
+        <a class="btn" href="/app">Open review</a>
+      </div>
+    </header>
+
+    <section class="brief" id="brief">
+      <div>
+        <div class="brief-head">
+          <div>
+            <p class="eyebrow">Executive recovery brief</p>
+            <h1>Four decisions can unlock SAR 7.2M this week.</h1>
+            <p class="brief-copy">
+              Finance files have been reconciled into cited recovery cases. Value, blockers, and evidence posture are summarized for the next executive review.
+            </p>
+          </div>
+          <aside class="status-note">
+            <strong>Ready for action</strong>
+            39 of 39 citations resolved. Four cases need reviewer approval or escalation before recovery letters go out.
+          </aside>
+        </div>
+
+        <div class="metric-row" aria-label="Portfolio metrics">
+          <div class="metric">
+            <span>Total recoverable</span>
+            <strong>SAR 18.4M</strong>
+            <small>Validated across AP, contracts, credits, and payment timing.</small>
+          </div>
+          <div class="metric">
+            <span>Ready to pursue</span>
+            <strong>SAR 7.2M</strong>
+            <small>Evidence complete, pending final reviewer action.</small>
+          </div>
+          <div class="metric">
+            <span>Evidence confidence</span>
+            <strong>93%</strong>
+            <small>Files, citations, and graph links reconciled.</small>
+          </div>
+          <div class="metric">
+            <span>Executive blockers</span>
+            <strong>4</strong>
+            <small>Legal, policy, or vendor context required.</small>
+          </div>
+        </div>
+      </div>
+
+      <aside class="decision-panel" aria-label="Priority decisions">
+        <div class="panel-head">
+          <div>
+            <h2>Today&apos;s decisions</h2>
+            <p>Ranked by recoverable value and evidence readiness.</p>
+          </div>
+          <span class="badge amber">4 due</span>
+        </div>
+        <div class="decision-list">
+          <div class="decision">
+            <div>
+              <h3>Approve duplicate payment recovery packet</h3>
+              <p>Gulf Logistics · invoices, bank references, and vendor aliases matched.</p>
+            </div>
+            <div class="amount">SAR 3.2M<span>ready</span></div>
+          </div>
+          <div class="decision">
+            <div>
+              <h3>Escalate contract leakage policy exception</h3>
+              <p>Regional services mix · pricing variance accepted by ops, not yet by policy.</p>
+            </div>
+            <div class="amount">SAR 1.4M<span>blocked</span></div>
+          </div>
+          <div class="decision">
+            <div>
+              <h3>Sign off credit balance outreach</h3>
+              <p>Al Rashid Trading · auditor challenge cleared, vendor letter staged.</p>
+            </div>
+            <div class="amount">SAR 1.9M<span>due today</span></div>
+          </div>
+          <div class="decision">
+            <div>
+              <h3>Hold two early-pay discount cases</h3>
+              <p>Premier Packaging · evidence is strong, but commercial owner wants context added.</p>
+            </div>
+            <div class="amount">SAR 0.7M<span>review</span></div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section" id="decisions">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Operating view</p>
+          <h2>Cases, owners, and next actions.</h2>
+        </div>
+        <p>Every open item is tied to a named owner, a recoverable amount, and the decision needed to move cash or reduce risk.</p>
+      </div>
+
+      <div class="operating-grid">
+        <table class="work-table" aria-label="Recovery case queue">
+          <thead>
+            <tr>
+              <th>Case</th>
+              <th>Owner</th>
+              <th>Value</th>
+              <th>Status</th>
+              <th>Next action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Duplicate payments</strong><small>11 documents · 18 linked citations</small></td>
+              <td>CFO office</td>
+              <td>SAR 3.2M</td>
+              <td><span class="badge green">Release-ready</span></td>
+              <td>Approve recovery packet</td>
+            </tr>
+            <tr>
+              <td><strong>Contract leakage</strong><small>Policy variance · services category</small></td>
+              <td>Procurement</td>
+              <td>SAR 1.4M</td>
+              <td><span class="badge red">Escalated</span></td>
+              <td>Confirm policy exception</td>
+            </tr>
+            <tr>
+              <td><strong>Credit balances</strong><small>Vendor letters drafted</small></td>
+              <td>AP lead</td>
+              <td>SAR 1.9M</td>
+              <td><span class="badge blue">Auditor-cleared</span></td>
+              <td>Reviewer sign-off</td>
+            </tr>
+            <tr>
+              <td><strong>Early-pay discounts</strong><small>Commercial context requested</small></td>
+              <td>Commercial</td>
+              <td>SAR 0.7M</td>
+              <td><span class="badge amber">Hold</span></td>
+              <td>Add owner comment</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="right-stack" id="evidence">
+          <aside class="assurance">
+            <h3>Evidence assurance</h3>
+            <div class="assurance-row"><span>Citations resolved</span><strong>39 / 39</strong></div>
+            <div class="assurance-row"><span>Reviewer challenges</span><strong>4 / 8 closed</strong></div>
+            <div class="assurance-row"><span>Graph conflicts</span><strong>2 open</strong></div>
+            <div class="assurance-row"><span>Unmapped source files</span><strong>0 critical</strong></div>
+          </aside>
+
+          <aside class="assurance">
+            <h3>Governance posture</h3>
+            <div class="assurance-row"><span>Human review gate</span><strong>Active</strong></div>
+            <div class="assurance-row"><span>Answer source</span><strong>Uploaded files</strong></div>
+            <div class="assurance-row"><span>Report status</span><strong>Draft ready</strong></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Portfolio movement</p>
+          <h2>Recovery progress.</h2>
+        </div>
+        <p>Identified value has continued to rise; approved value is now gated by a short list of reviewer actions.</p>
+      </div>
+
+      <article class="trend-panel">
+        <h3>Recoverable value and approved value</h3>
+        <p>SAR millions · last six review cycles</p>
+        <svg class="chart" viewBox="0 0 900 310" role="img" aria-label="Recoverable value and approved value trend">
+          <rect x="0" y="0" width="900" height="310" rx="8" fill="#ffffff"/>
+          <g stroke="#e3e0d8" stroke-width="1">
+            <line x1="72" y1="42" x2="840" y2="42"/>
+            <line x1="72" y1="92" x2="840" y2="92"/>
+            <line x1="72" y1="142" x2="840" y2="142"/>
+            <line x1="72" y1="192" x2="840" y2="192"/>
+            <line x1="72" y1="242" x2="840" y2="242"/>
+          </g>
+          <g fill="#69717c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13">
+            <text x="35" y="247">0</text>
+            <text x="28" y="197">5</text>
+            <text x="22" y="147">10</text>
+            <text x="22" y="97">15</text>
+            <text x="22" y="47">20</text>
+            <text x="86" y="281">Jan</text>
+            <text x="222" y="281">Feb</text>
+            <text x="358" y="281">Mar</text>
+            <text x="494" y="281">Apr</text>
+            <text x="630" y="281">May</text>
+            <text x="766" y="281">Jun</text>
+          </g>
+          <path d="M100 214C150 204 178 186 226 178C288 168 304 142 364 133C424 124 446 102 500 93C558 84 588 73 640 66C700 58 746 52 812 42" fill="none" stroke="#006b4f" stroke-width="4" stroke-linecap="round"/>
+          <path d="M100 238C158 232 184 222 226 216C290 206 312 196 364 184C424 171 452 158 500 146C560 132 590 118 640 105C704 88 748 70 812 58" fill="none" stroke="#225fba" stroke-width="4" stroke-linecap="round"/>
+          <g fill="#006b4f">
+            <circle cx="100" cy="214" r="5"/><circle cx="226" cy="178" r="5"/><circle cx="364" cy="133" r="5"/><circle cx="500" cy="93" r="5"/><circle cx="640" cy="66" r="5"/><circle cx="812" cy="42" r="5"/>
+          </g>
+          <g fill="#225fba">
+            <circle cx="100" cy="238" r="5"/><circle cx="226" cy="216" r="5"/><circle cx="364" cy="184" r="5"/><circle cx="500" cy="146" r="5"/><circle cx="640" cy="105" r="5"/><circle cx="812" cy="58" r="5"/>
+          </g>
+          <g fill="#17191d" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" font-weight="700">
+            <text x="650" y="36">Identified</text>
+            <text x="650" y="86">Approved</text>
+          </g>
+        </svg>
+      </article>
+    </section>
+
+    <section class="section" id="memo">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Board memo</p>
+          <h2>Prepared board narrative.</h2>
+        </div>
+      </div>
+
+      <div class="memo">
+        <article class="memo-block">
+          <h3>Narrative for the meeting</h3>
+          <p>
+            The recovery program is not blocked by discovery. It is blocked by a small number of accountable decisions. Evidence is complete enough to pursue SAR 7.2M now, while four exceptions need named-owner resolution.
+          </p>
+        </article>
+        <article class="memo-block">
+          <h3>What the CFO asks for</h3>
+          <ul class="memo-list">
+            <li><b>1.</b><span>Approve release-ready packets with cited support attached.</span></li>
+            <li><b>2.</b><span>Assign policy and commercial owners to the remaining exceptions.</span></li>
+            <li><b>3.</b><span>Export a board memo only after reviewer actions are recorded.</span></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>StrategyOS.live · Local Tamween H1 2026 Finance Review</span>
+      <span>Evidence locked · Reviewer gate active · Report draft ready</span>
+    </footer>
+  </main>
+</body>
+</html>

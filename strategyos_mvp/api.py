@@ -1083,6 +1083,11 @@ def _dashboard_html() -> str:
     return html_text.replace("__STRATEGYOS_BOOTSTRAP__", bootstrap_json)
 
 
+def _homepage_html() -> str:
+    template_path = STATIC_DIR / "home.html"
+    return template_path.read_text(encoding="utf-8")
+
+
 def _load_summary_artifact_json(
     summary: dict[str, Any],
     artifact_key: str,
@@ -1569,7 +1574,17 @@ def _record_reviewer_decision(
 
 
 @app.get("/", response_class=HTMLResponse)
+def homepage() -> str:
+    return _homepage_html()
+
+
+@app.get("/app", response_class=HTMLResponse)
 def dashboard() -> str:
+    return _dashboard_html()
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_alias() -> str:
     return _dashboard_html()
 
 

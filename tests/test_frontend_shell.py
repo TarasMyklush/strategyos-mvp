@@ -43,6 +43,13 @@ def _restore_env(original: dict[str, str | None]):
 
 def _dashboard_response() -> str:
     client = TestClient(api_module.app)
+    response = client.get("/app")
+    assert response.status_code == 200
+    return response.text
+
+
+def _homepage_response() -> str:
+    client = TestClient(api_module.app)
     response = client.get("/")
     assert response.status_code == 200
     return response.text
@@ -53,6 +60,35 @@ def _static_app_js() -> str:
     response = client.get("/static/app.js")
     assert response.status_code == 200
     return response.text
+
+
+def test_homepage_renders_executive_recovery_control_room():
+    html = _homepage_response()
+
+    assert "StrategyOS.live Finance Recovery Control Room" in html
+    assert "Four decisions can unlock SAR 7.2M this week." in html
+    assert "Today&apos;s decisions" in html
+    assert "Evidence assurance" in html
+    assert "Prepared board narrative" in html
+    assert 'href="#brief"' in html
+    assert 'href="#decisions"' in html
+    assert 'href="#evidence"' in html
+    assert 'href="#memo"' in html
+    assert '<script id="strategyos-bootstrap"' not in html
+
+
+def test_dashboard_shell_is_served_from_app_route_and_alias():
+    client = TestClient(api_module.app)
+
+    app_response = client.get("/app")
+    alias_response = client.get("/dashboard")
+
+    assert app_response.status_code == 200
+    assert alias_response.status_code == 200
+    assert "StrategyOS Chat Dashboard" in app_response.text
+    assert "StrategyOS Chat Dashboard" in alias_response.text
+    assert '<script id="strategyos-bootstrap"' in app_response.text
+    assert '<script id="strategyos-bootstrap"' in alias_response.text
 
 
 def test_dashboard_renders_chat_dashboard_shell():
