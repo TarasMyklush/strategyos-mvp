@@ -152,8 +152,8 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert 'data-drawer-target="kg-panel"' in html
     assert 'querySelectorAll("[data-scroll-target]")' in js
     assert 'querySelectorAll("[data-open-drawer]")' in js
-    assert 'src="/static/app.js"' in html
-    assert 'href="/static/styles.css"' in html
+    assert 'src="/static/app.js?v=rail-20260615"' in html
+    assert 'href="/static/styles.css?v=rail-20260615"' in html
 
 
 def test_dashboard_embeds_parseable_bootstrap_json():
