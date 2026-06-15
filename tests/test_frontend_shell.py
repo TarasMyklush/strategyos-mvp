@@ -126,8 +126,8 @@ def test_dashboard_shell_is_served_from_app_route_and_alias():
 
     assert app_response.status_code == 200
     assert alias_response.status_code == 200
-    assert "StrategyOS.live Command Cockpit" in app_response.text
-    assert "StrategyOS.live Command Cockpit" in alias_response.text
+    assert "StrategyOS.live Finance Review" in app_response.text
+    assert "StrategyOS.live Finance Review" in alias_response.text
     assert '<script id="strategyos-bootstrap"' in app_response.text
     assert '<script id="strategyos-bootstrap"' in alias_response.text
 
@@ -136,17 +136,19 @@ def test_dashboard_renders_chat_dashboard_shell():
     html = _dashboard_response()
     js = _static_app_js()
 
-    assert "StrategyOS.live Command Cockpit" in html
-    assert "RECOVERY CONTROL ONLINE" in html
-    assert "Finance command cockpit" in html
+    assert "StrategyOS.live Finance Review" in html
+    assert "Latest review" in html
+    assert "Finance review workspace" in html
     assert 'id="app-name"' in html
     assert 'id="run-pill"' in html
     assert 'id="ui-identity"' in html
     assert 'id="new-run-button"' in html
     assert 'id="system-drawer-button"' in html
     assert 'id="graph-drawer-button"' in html
-    assert "Diagnostics" in html
-    assert "Graph and source trail" in html
+    # Business path must never read "Diagnostics" (fix-list item 5).
+    assert "Diagnostics" not in html
+    assert "Evidence map" in html
+    assert "Evidence map and sources" in html
     assert 'class="rail-nav"' not in html
     assert 'data-scroll-target="' not in html
     assert 'data-open-drawer="new-run"' in html
@@ -224,6 +226,38 @@ def test_dashboard_renders_unmatched_chat_suggestions_path():
     assert "data-suggestion" in js
 
 
+def test_dashboard_renders_findings_worklist_hooks():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    # Findings decision worklist panel + drill-down drawer (fix-list item 3).
+    assert 'id="findings-panel"' in html
+    assert "Findings worklist" in html
+    assert 'id="findings-list"' in html
+    assert 'id="findings-summary"' in html
+    assert 'id="finding-drawer"' in html
+    assert 'id="finding-detail-citations"' in html
+    assert "Show in evidence map" in html
+    assert 'requestJson("/runs/latest/findings")' in js
+    assert "function renderFindings" in js
+    assert "function openFindingDetail" in js
+    # Plain-language labels, not raw pattern_type (fix-list item 7).
+    assert "PATTERN_LABELS" in js
+    assert "humanizePattern" in js
+
+
+def test_dashboard_renders_trend_strip_hooks():
+    html = _dashboard_response()
+    js = _static_app_js()
+
+    # CEO direction-of-travel trend strip (fix-list item 8).
+    assert 'id="trend-strip"' in html
+    assert "Direction of travel" in html
+    assert 'id="trend-bars"' in html
+    assert 'requestJson("/runs/history")' in js
+    assert "function renderTrend" in js
+
+
 def test_dashboard_renders_review_action_message_hooks():
     html = _dashboard_response()
     js = _static_app_js()
@@ -283,7 +317,7 @@ def test_dashboard_renders_source_pack_intake_hooks():
 
     assert "Upload .zip" in html
     assert "Choose folder" in html
-    assert "Choose a .zip source pack or a folder of finance files." in html
+    assert "Pick a .zip or a folder above, then start analysis." in html
     assert "Check selected files" not in html
     assert "Advanced: use a server folder" not in html
     assert "POST /source-packs" not in html
@@ -309,9 +343,10 @@ def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
     js = _static_app_js()
 
     assert 'id="system-drawer"' in html
-    assert "Diagnostics" in html
+    assert "Evidence map" in html
+    assert "Analyst tools" in html
     assert "Managed data" in html
-    assert "Knowledge graph" in html
+    assert "Relationship map" in html
     assert "Runtime health" in html
     assert "Artifact inspector" in html
     assert 'id="data-summary"' in html
