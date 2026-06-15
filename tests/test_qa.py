@@ -93,3 +93,86 @@ def test_partial_run_missing_role_returns_clear_message(qa_context):
     assert result["matched"] is True
     assert result["available"] is False
     assert "needs the AP and AR ledgers" in result["answer"]
+
+
+def test_colloquial_phrasing_routes_to_the_right_intent(qa_context):
+    bundle, findings = qa_context
+
+    # Business-user phrasing for "recoverable" — none of these contain the literal
+    # trigger words, so they only match via synonym expansion.
+    for phrasing in (
+        "how much are we losing?",
+        "where is cash going out the door?",
+        "what can we claw back?",
+        "how much money are we bleeding?",
+    ):
+        result = qa.answer_question(phrasing, bundle=bundle, findings=findings)
+        assert result["matched"] is True, phrasing
+        assert result["intent"] == "recoverable", phrasing
+        assert result["value"] == pytest.approx(794_108.0), phrasing
+
+    # "supplier" should reach the vendor intents just like "vendor".
+    top_suppliers = qa.answer_question(
+        "top 5 suppliers by spend", bundle=bundle, findings=findings
+    )
+    assert top_suppliers["intent"] == "top_parties"
+    assert top_suppliers["value"][0]["name"] == "Saudi Trading Co"
+
+    # Colloquial ranking phrasing ("biggest suppliers") also reaches top_parties.
+    biggest = qa.answer_question("who are our biggest suppliers?", bundle=bundle, findings=findings)
+    assert biggest["intent"] == "top_parties"
+
+    # Guard: a bare ranking word must NOT hijack an unrelated noun into top_parties.
+    # "biggest invoice" has no party word, so it should route to invoice_metric.
+    biggest_invoice = qa.answer_question(
+        "what is the biggest invoice?", bundle=bundle, findings=findings
+    )
+    assert biggest_invoice["intent"] == "invoice_metric"
+
+    # "issues" / "problems" should reach the findings intent.
+    issues = qa.answer_question("what issues did you find?", bundle=bundle, findings=findings)
+    assert issues["matched"] is True
+    assert issues["intent"] == "findings"
+
+    # Argument extraction must use the original question, not the expanded text:
+    # a named-vendor lookup should still parse the real name and not be polluted
+    # by injected canonical tokens.
+    named = qa.answer_question(
+        "how much did we pay Saudi Trading Co?", bundle=bundle, findings=findings
+    )
+    assert named["matched"] is True
+    assert "Saudi Trading Co" in named["answer"]
+
+    # A genuinely unrelated question still falls through to suggestions.
+    no_match = qa.answer_question("what is the weather today?", bundle=bundle, findings=findings)
+    assert no_match["matched"] is False
+    assert no_match["suggestions"]
+
+
+def test_bare_outstanding_question_does_not_hit_exception_path(qa_context):
+    bundle, findings = qa_context
+
+    # "outstanding" routes to the overdue intent via synonym expansion. A bare
+    # phrasing with no AP/AR hint must compute (or return a clean _needs message)
+    # and never fall into answer_question's generic exception handler, which would
+    # surface a "handler '...' raised: ..." basis. Regression for the 4-vs-3 tuple
+    # unpack in _handle_overdue.
+    result = qa.answer_question("what is outstanding?", bundle=bundle, findings=findings)
+
+    assert result["matched"] is True
+    assert result["intent"] == "overdue"
+    # available is a real True/False signal, not absent.
+    assert result.get("available") in (True, False)
+    # The basis must be a genuine computation, not the exception fallback.
+    assert "raised:" not in str(result.get("basis"))
+    assert result["answer"] != "I could not compute that from the current run."
+    # On the default (AP) ledger the answer is computable, so it carries a value.
+    assert result["available"] is True
+    assert result["value"] is not None
+
+    # Equivalent bare synonyms exercise the same handler and must also stay clean.
+    for phrasing in ("what is unpaid?", "what do we owe?", "show me past due amounts"):
+        r = qa.answer_question(phrasing, bundle=bundle, findings=findings)
+        assert r["matched"] is True, phrasing
+        assert r["intent"] == "overdue", phrasing
+        assert "raised:" not in str(r.get("basis")), phrasing
