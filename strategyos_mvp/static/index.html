@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>StrategyOS.live Command Cockpit</title>
+    <title>StrategyOS.live Finance Review</title>
     <link rel="stylesheet" href="/static/styles.css?v=ux-20260615" />
   </head>
   <body>
@@ -14,7 +14,7 @@
           <div class="brand-row">
             <div>
               <span class="brand" id="app-name">StrategyOS</span>
-              <span class="brand-subtitle">Finance command cockpit</span>
+              <span class="brand-subtitle">Finance review workspace</span>
             </div>
           </div>
           <div class="header-meta">
@@ -23,8 +23,8 @@
             <span class="pill" id="environment-badge">environment</span>
           </div>
           <div class="header-actions">
-            <button class="btn secondary" id="graph-drawer-button" type="button" data-open-drawer="system" data-drawer-target="kg-panel">Graph</button>
-            <button class="btn quiet" id="system-drawer-button" type="button">Diagnostics</button>
+            <button class="btn secondary" id="graph-drawer-button" type="button" data-open-drawer="system" data-drawer-target="kg-panel">Evidence map</button>
+            <button class="btn quiet" id="system-drawer-button" type="button">System</button>
             <button class="btn primary" id="new-run-button" type="button">Start analysis</button>
           </div>
         </header>
@@ -51,7 +51,7 @@
           <section class="panel mission-panel">
             <div class="brief-row">
               <div class="brief-copy">
-                <p class="eyebrow">RECOVERY CONTROL ONLINE</p>
+                <p class="eyebrow">Latest review</p>
                 <h1>Latest finance run</h1>
                 <p class="brief-note">Ask cited questions, inspect recovery exposure, or start a fresh source-pack analysis.</p>
               </div>
@@ -78,6 +78,14 @@
             <section class="statusbar" aria-label="Run status">
               <div class="stage-strip" id="stage-stepper">Loading run stages...</div>
               <div class="badges" id="store-badges"></div>
+            </section>
+
+            <section class="trend-strip hidden" id="trend-strip" aria-label="Direction of travel">
+              <div class="trend-head">
+                <p class="eyebrow">Direction of travel</p>
+                <span class="trend-read" id="trend-read"></span>
+              </div>
+              <div class="trend-bars" id="trend-bars"></div>
             </section>
 
             <section class="partial-strip hidden" id="partial-run-chips"></section>
@@ -110,10 +118,21 @@
           </section>
 
           <aside class="side-stack" id="review">
+            <section class="panel findings-panel" id="findings-panel">
+              <div class="panel-title">
+                <div>
+                  <p class="eyebrow">Decisions</p>
+                  <h2>Findings worklist</h2>
+                </div>
+                <span class="pill" id="findings-total">--</span>
+              </div>
+              <div class="findings-note" id="findings-summary">Loading findings...</div>
+              <ol class="findings-list" id="findings-list" aria-label="Findings to review"></ol>
+            </section>
             <section class="panel review-panel">
               <div class="panel-title">
                 <div>
-                  <p class="eyebrow">HUMAN GATE</p>
+                  <p class="eyebrow">Approvals</p>
                   <h2>Review control</h2>
                 </div>
               </div>
@@ -136,13 +155,13 @@
             <section class="panel evidence-panel">
               <div class="panel-title">
                 <div>
-                  <p class="eyebrow">EVIDENCE MAP</p>
-                  <h2>Graph and source trail</h2>
+                  <p class="eyebrow">Evidence</p>
+                  <h2>Evidence map and sources</h2>
                 </div>
               </div>
-              <p>Open the graph when you need relationships, citations, vendors, and finding context.</p>
+              <p>Open the evidence map when you need relationships, citations, vendors, and finding context.</p>
               <div class="button-row">
-                <button class="btn secondary" type="button" data-open-drawer="system" data-drawer-target="kg-panel">Open graph</button>
+                <button class="btn secondary" type="button" data-open-drawer="system" data-drawer-target="kg-panel">Open evidence map</button>
                 <button class="btn secondary" type="button" data-open-drawer="new-run" data-drawer-target="source-pack-section">Upload sources</button>
               </div>
             </section>
@@ -156,7 +175,7 @@
       <section class="drawer-panel">
         <div class="drawer-head">
           <div>
-            <p class="eyebrow">SOURCE INTAKE</p>
+            <p class="eyebrow">New analysis</p>
             <h2>Start analysis</h2>
           </div>
           <button class="btn secondary icon-btn" id="start-run-cancel" type="button" aria-label="Close new run panel">Close</button>
@@ -179,7 +198,7 @@
             <button class="btn primary" id="source-pack-upload-submit" type="submit">Start analysis</button>
           </form>
 
-          <div class="summary" id="source-pack-status">Choose a .zip source pack or a folder of finance files.</div>
+          <div class="summary" id="source-pack-status">Pick a .zip or a folder above, then start analysis.</div>
 
           <details class="advanced-options compact-diagnostics">
             <summary>Details</summary>
@@ -248,19 +267,19 @@
       <section class="drawer-panel system-panel">
         <div class="drawer-head">
           <div>
-            <p class="eyebrow">SYSTEM</p>
-            <h2>Diagnostics</h2>
+            <p class="eyebrow">Evidence &amp; system</p>
+            <h2>Evidence map</h2>
           </div>
-          <button class="btn secondary icon-btn" id="system-drawer-close" type="button" aria-label="Close system drawer">Close</button>
+          <button class="btn secondary icon-btn" id="system-drawer-close" type="button" aria-label="Close evidence map drawer">Close</button>
         </div>
 
         <section class="drawer-section" id="kg-panel">
           <div class="section-title-row">
             <div>
-              <h3>Knowledge graph</h3>
-              <p>Latest run relationships and evidence paths.</p>
+              <h3>Relationship map</h3>
+              <p>How vendors, invoices, and findings connect in this run.</p>
             </div>
-            <button class="btn secondary" id="kg-refresh" type="button">Refresh graph</button>
+            <button class="btn secondary" id="kg-refresh" type="button">Refresh map</button>
           </div>
           <div id="kg-summary" class="summary">Awaiting knowledge graph payload.</div>
           <div class="kg-viewer">
@@ -268,6 +287,11 @@
             <aside id="kg-detail" class="kg-detail">Select a graph node to inspect details.</aside>
           </div>
         </section>
+
+        <div class="drawer-divider" id="analyst-tools-divider">
+          <p class="eyebrow">Analyst tools</p>
+          <p class="muted">Data, search, and runtime detail for analysts and operators.</p>
+        </div>
 
         <section class="drawer-section" id="data-panel">
           <h3>Managed data</h3>
@@ -359,6 +383,35 @@
             <pre id="health-payload-preview" class="code-block">Awaiting health payload.</pre>
           </details>
         </section>
+      </section>
+    </aside>
+
+    <aside class="drawer hidden" id="finding-drawer" aria-label="Finding detail panel">
+      <div class="drawer-backdrop" data-close-drawer="finding"></div>
+      <section class="drawer-panel">
+        <div class="drawer-head">
+          <div>
+            <p class="eyebrow" id="finding-detail-eyebrow">Finding</p>
+            <h2 id="finding-detail-title">Finding detail</h2>
+          </div>
+          <button class="btn secondary icon-btn" id="finding-drawer-close" type="button" aria-label="Close finding detail">Close</button>
+        </div>
+        <div class="drawer-section" id="finding-detail-body">
+          <dl class="kv" id="finding-detail-kv"></dl>
+          <div class="finding-detail-block">
+            <h3>Why it matters</h3>
+            <p id="finding-detail-explainer">Select a finding.</p>
+          </div>
+          <div class="finding-detail-block">
+            <h3>Evidence</h3>
+            <div id="finding-detail-citations" class="stack-list">No evidence loaded.</div>
+            <button class="btn secondary" id="finding-detail-graph" type="button">Show in evidence map</button>
+          </div>
+          <div class="finding-detail-block" id="finding-detail-challenge-block">
+            <h3>Auditor challenge</h3>
+            <p id="finding-detail-challenge">No challenge recorded.</p>
+          </div>
+        </div>
       </section>
     </aside>
 

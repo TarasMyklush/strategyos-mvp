@@ -34,7 +34,11 @@ from . import qa as qa_engine
 from . import llm_qa
 from .skills.finance_controls import run_all_finance_skills
 from .reviewer_runtime import resume_reviewed_run
-from .run_registry import load_latest_run_summary, update_run_pointers
+from .run_registry import (
+    discover_run_history,
+    load_latest_run_summary,
+    update_run_pointers,
+)
 from .run_poc import run_strategyos_workflow
 from .run_executor import RunExecutionUnavailable, submit_run
 from .runtime_governance import annotate_governance_state, local_run_id_for_dir
@@ -144,6 +148,29 @@ UI_LIFECYCLE_STAGE_ALIASES = {
     "governed_review": "awaiting_review",
     "completed": "writer",
 }
+# Plain-language titles for detector pattern_type values, served alongside
+# findings so the business UI never has to render a raw snake_case identifier
+# (fix-list item 7). Mirrors PATTERN_LABELS in static/app.js.
+PATTERN_LABELS: dict[str, str] = {
+    "duplicate_payment": "Duplicate payment",
+    "entity_resolution_duplicate": "Duplicate vendor identity",
+    "off_contract_single_approver": "Off-contract spend, single approver",
+    "price_variance": "Price variance vs PO",
+    "missed_early_pay_discount": "Missed early-payment discount",
+    "auto_renewal_escalation": "Auto-renewal escalation",
+    "fx_hedge_unapplied": "FX hedge not applied",
+    "dormant_credit_balance": "Dormant supplier credit",
+    "vendor_collusion_ring": "Vendor collusion ring",
+}
+
+
+def _humanize_pattern_label(pattern_type: Any) -> str:
+    key = str(pattern_type or "").strip().lower()
+    if not key:
+        return ""
+    if key in PATTERN_LABELS:
+        return PATTERN_LABELS[key]
+    return key.replace("_", " ").strip().title()
 
 
 def _normalize_lifecycle_stage(value: Any) -> str:
@@ -2053,6 +2080,123 @@ def latest_run_audit_summary(
         "resolved_count": citation_summary.get(
             "resolved_count", acceptance.get("resolved_citation_count")
         ),
+    }
+
+
+def _finding_rows_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    """Assemble one decision-worklist row per finding from the run's knowledge
+    graph artifact. Finding nodes already carry id/title/pattern_type/amounts;
+    SUPPORTED_BY edges give the citation count; the audit log marks challenged
+    findings. Returns rows sorted by recoverable amount, descending."""
+    _, graph = _load_knowledge_graph_artifact(summary)
+    if not isinstance(graph, dict):
+        return []
+    raw_nodes = [node for node in graph.get("nodes", []) if isinstance(node, dict)]
+    raw_edges = [edge for edge in graph.get("edges", []) if isinstance(edge, dict)]
+
+    citation_counts: dict[str, int] = {}
+    vendor_by_finding: dict[str, str] = {}
+    node_label_by_id = {_kg_node_id(n): _kg_node_label(n) for n in raw_nodes}
+    node_props_by_id = {_kg_node_id(n): _kg_node_properties(n) for n in raw_nodes}
+    for edge in raw_edges:
+        source = _kg_edge_source(edge)
+        if not source.startswith("Finding:"):
+            continue
+        label = _kg_edge_label(edge)
+        if label == "SUPPORTED_BY":
+            citation_counts[source] = citation_counts.get(source, 0) + 1
+        elif label == "INVOLVES_VENDOR":
+            target = _kg_edge_target(edge)
+            props = node_props_by_id.get(target, {})
+            vendor_by_finding.setdefault(
+                source,
+                str(props.get("vendor_name") or props.get("vendor_id") or ""),
+            )
+
+    audit_payload = _load_summary_artifact_json(summary, "audit_log")
+    challenged_ids = set(_challenged_finding_ids_from_audit_log(audit_payload))
+    verification = summary.get("audit_verification")
+    if isinstance(verification, dict):
+        for item in verification.get("challenged_finding_ids") or []:
+            if item:
+                challenged_ids.add(str(item))
+
+    rows: list[dict[str, Any]] = []
+    for node in raw_nodes:
+        node_id = _kg_node_id(node)
+        if node_label_by_id.get(node_id) != "Finding":
+            continue
+        props = node_props_by_id.get(node_id, {})
+        finding_id = str(props.get("finding_id") or node_id.removeprefix("Finding:"))
+        pattern_type = str(props.get("pattern_type") or "")
+        rows.append(
+            {
+                "finding_id": finding_id,
+                "title": str(props.get("title") or _humanize_pattern_label(pattern_type) or "Finding"),
+                "pattern_type": pattern_type,
+                "pattern_label": _humanize_pattern_label(pattern_type),
+                "confidence": str(props.get("confidence") or ""),
+                "status": str(props.get("status") or ""),
+                "classification": str(props.get("classification") or ""),
+                "recoverable_sar": _kg_amount(props.get("recoverable_sar")),
+                "leakage_sar": _kg_amount(props.get("leakage_sar")),
+                "owner": vendor_by_finding.get(node_id, ""),
+                "citation_count": citation_counts.get(node_id, 0),
+                "node_id": node_id,
+                "challenged": finding_id in challenged_ids,
+            }
+        )
+    rows.sort(key=lambda row: row["recoverable_sar"], reverse=True)
+    return rows
+
+
+@app.get("/runs/latest/findings")
+def latest_run_findings(
+    _: dict[str, Any] = require_role("operator", "reviewer"),
+) -> dict[str, Any]:
+    """Decision worklist for the latest run: one actionable row per finding
+    (plain-language title, recoverable amount, owner, citation count, challenge
+    and review status). Powers the business-user findings panel (fix-list 3)."""
+    summary = _latest_summary()
+    if summary is None:
+        return {
+            "status": "missing",
+            "findings": [],
+            "total_recoverable_sar": None,
+            "requires_human_review": False,
+            "approval_status": None,
+        }
+    rows = _finding_rows_from_summary(summary)
+    total_recoverable = summary.get("total_recoverable_sar")
+    if total_recoverable is None and rows:
+        total_recoverable = round(sum(row["recoverable_sar"] for row in rows), 2)
+    return {
+        "status": "ok",
+        "run_id": summary.get("run_id"),
+        "run_dir": summary.get("run_dir"),
+        "findings": rows,
+        "finding_count": len(rows),
+        "locked_findings": summary.get("locked_findings"),
+        "total_recoverable_sar": total_recoverable,
+        "requires_human_review": bool(summary.get("requires_human_review")),
+        "approval_status": summary.get("approval_status"),
+    }
+
+
+@app.get("/runs/history")
+def runs_history(
+    limit: int = 12,
+    _: dict[str, Any] = require_role("operator", "reviewer"),
+) -> dict[str, Any]:
+    """Direction-of-travel history for a CEO view (fix-list item 8): leakage
+    identified and recoverable across the most recent runs, oldest first.
+    Additive and read-only - scans prior run_summary.json files."""
+    bounded = max(1, min(int(limit or 12), 60))
+    history = discover_run_history(limit=bounded)
+    return {
+        "status": "ok" if history else "empty",
+        "count": len(history),
+        "history": history,
     }
 
 
