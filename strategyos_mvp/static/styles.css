@@ -74,6 +74,7 @@ textarea {
 .rail {
   position: sticky;
   top: 0;
+  z-index: 30;
   height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr;
@@ -796,11 +797,17 @@ select:focus {
 }
 
 .drawer-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
   margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(13, 18, 24, 0.96);
+  padding-bottom: 14px;
 }
 
 .drawer-head h2,

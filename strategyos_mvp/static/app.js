@@ -1799,12 +1799,16 @@
 
   function scrollToWorkspaceTarget(targetId) {
     if (!targetId) return;
+    els.systemDrawer.classList.add("hidden");
+    els.newRunDrawer.classList.add("hidden");
     document.getElementById(targetId)?.scrollIntoView({ block: "start" });
     setRailActive(targetId);
   }
 
   function openDrawer(name, targetId = "") {
     const drawer = name === "system" ? els.systemDrawer : els.newRunDrawer;
+    const otherDrawer = name === "system" ? els.newRunDrawer : els.systemDrawer;
+    otherDrawer.classList.add("hidden");
     drawer.classList.remove("hidden");
     if (name === "system") {
       requestAnimationFrame(renderKnowledgeGraph);
