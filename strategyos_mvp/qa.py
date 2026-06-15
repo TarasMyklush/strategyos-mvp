@@ -18,6 +18,37 @@ from .ingestion import DataBundle
 from .models import Finding
 
 
+# Colloquial phrasing -> canonical intent tokens. Each entry maps a regex (matched
+# against the lowercased question) to the canonical terms appended to the normalized
+# text so the existing exact-term intent triggers fire. Additive only: real keywords
+# already in the question keep matching as before; this just widens recall for the
+# way a business user actually phrases things ("how much are we losing").
+_SYNONYM_EXPANSIONS: tuple[tuple[str, str], ...] = (
+    (r"\b(losing|loss|losses|leak|leaking|leaks|bleed|bleeding|wasted?|wasting|"
+     r"slipping|going out the door|down the drain)\b", "leakage recoverable"),
+    (r"\b(claw ?back|recoup|recouped|get back|win back|claim back)\b", "recoverable recovery"),
+    (r"\b(save|saves|saving)\b", "savings recoverable"),
+    (r"\b(supplier|suppliers|payee|payees)\b", "vendor"),
+    (r"\b(issues?|problems?|red flags?|whats? wrong|anomal\w*|exceptions?)\b", "findings"),
+    (r"\b(unpaid|outstanding|owe|owed|owing|past due|not paid)\b", "overdue invoice"),
+    # Phrases that clearly mean "rank the vendors" get both tokens.
+    (r"\b(spend the most|spend most|who we pay|highest spend|top spend|"
+     r"biggest (?:vendor|supplier|payee)s?|largest (?:vendor|supplier|payee)s?|"
+     r"main (?:vendor|supplier)s?)\b", "top vendor"),
+    # Bare ranking words only add "top"; they still need a real party word in the
+    # question to reach top_parties, so "biggest invoice" is not hijacked.
+    (r"\b(biggest|largest|highest)\b", "top"),
+    (r"\b(cash flow|liquidity|dso|dpo)\b", "working capital"),
+)
+
+
+def _expand_synonyms(text: str) -> str:
+    extra = [canonical for pattern, canonical in _SYNONYM_EXPANSIONS if re.search(pattern, text)]
+    if not extra:
+        return text
+    return " ".join([text, *extra])
+
+
 def _normalize(question: str) -> str:
     return " ".join(str(question or "").lower().split())
 
@@ -345,15 +376,19 @@ def _handle_working_capital(question: str, bundle: DataBundle, findings: list[Fi
 
 
 def _handle_overdue(question: str, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
-    role, frame, settle_col, label = _ledger_for(question, bundle)
+    role, frame, label = _ledger_for(question, bundle)
     settle_col = "Collection_Date" if label == "AR" else "Payment_Date"
     if not _role_available(bundle, role):
         return _needs(role, f"{label} ledger")
     if "Due_Date" not in frame.columns:
         return _needs(role, "Due_Date data")
-    settled = frame[settle_col] if settle_col in frame.columns else pd.NaT
-    # overdue = no settlement and due date in the past relative to the data's max date
-    ref = pd.to_datetime(frame[["Invoice_Date", "Due_Date"]].stack(), errors="coerce").max()
+    if "Amount_SAR" not in frame.columns:
+        return _needs(role, "Amount_SAR data")
+    # overdue = no settlement and due date in the past relative to the data's max date.
+    # ref is the latest known date in the ledger; stack only the date columns present
+    # so a ledger without Invoice_Date still resolves a reference date from Due_Date.
+    date_cols = [c for c in ("Invoice_Date", "Due_Date") if c in frame.columns]
+    ref = pd.to_datetime(frame[date_cols].stack(), errors="coerce").max()
     due = pd.to_datetime(frame["Due_Date"], errors="coerce")
     unsettled = frame[settle_col].isna() if settle_col in frame.columns else pd.Series(True, index=frame.index)
     overdue = frame[(due < ref) & unsettled]
@@ -416,9 +451,14 @@ def answer_question(question: str, *, bundle: DataBundle, findings: list[Finding
     norm = _normalize(question)
     if not norm:
         return {"matched": False, "answer": "Please ask a question.", "suggestions": list(SUGGESTIONS)}
+    # Intent selection runs on the synonym-expanded text so colloquial phrasing
+    # ("how much are we losing") still routes to the right intent. Handlers receive
+    # the original normalized question so argument extraction (vendor names, top-N)
+    # never sees the injected canonical tokens.
+    match_text = _expand_synonyms(norm)
     for intent in INTENTS:
         try:
-            if intent.matcher(norm):
+            if intent.matcher(match_text):
                 result = intent.handler(norm, bundle, findings)
                 if result.get("matched", True) is False:
                     continue
