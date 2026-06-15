@@ -760,7 +760,7 @@
 
     els.chatMessages.innerHTML = state.chatThread.length
       ? state.chatThread.map(renderChatEntry).join("")
-      : `<div class="sysmsg"><span>No questions yet. Use the suggestions below to ask a deterministic finance question.</span></div>`;
+      : `<div class="sysmsg"><span>No command history for this run.</span></div>`;
     els.chatInput.placeholder = state.qaMode === "llm"
       ? "Ask grounded LLM questions about the latest analysis"
       : "Ask deterministic finance questions about invoices, vendors, findings, or working capital";
@@ -965,16 +965,16 @@
       {
         selector: "node",
         style: {
-          "background-color": "#6b7280",
+          "background-color": "#768393",
           "border-width": 1,
-          "border-color": "#ffffff",
-          "color": "#1a1d21",
+          "border-color": "#d7e3ee",
+          "color": "#f4f7fa",
           "font-size": 10,
           "font-weight": "bold",
           "label": "data(display)",
-          "text-background-color": "#ffffff",
-          "text-background-opacity": 0.86,
-          "text-background-padding": 2,
+          "text-background-color": "#05080b",
+          "text-background-opacity": 0.82,
+          "text-background-padding": 3,
           "text-max-width": 110,
           "text-valign": "bottom",
           "text-wrap": "wrap",
@@ -985,7 +985,7 @@
       {
         selector: ".kg-finding",
         style: {
-          "background-color": "#d45a4c",
+          "background-color": "#ff6b7a",
           "shape": "ellipse",
           "width": `mapData(recoverable_sar, 0, ${maxValue}, 42, 78)`,
           "height": `mapData(recoverable_sar, 0, ${maxValue}, 42, 78)`,
@@ -994,7 +994,7 @@
       {
         selector: ".kg-vendor",
         style: {
-          "background-color": "#0f6e56",
+          "background-color": "#41d69f",
           "shape": "round-rectangle",
           "width": 50,
           "height": 36,
@@ -1003,7 +1003,7 @@
       {
         selector: ".kg-evidence",
         style: {
-          "background-color": "#8b98a8",
+          "background-color": "#a8b4c2",
           "shape": "round-rectangle",
           "width": 44,
           "height": 28,
@@ -1013,7 +1013,7 @@
       {
         selector: ".kg-contract",
         style: {
-          "background-color": "#7c5b9c",
+          "background-color": "#b48cff",
           "shape": "diamond",
           "width": 38,
           "height": 38,
@@ -1022,7 +1022,7 @@
       {
         selector: ".kg-invoice",
         style: {
-          "background-color": "#c98b2c",
+          "background-color": "#f4b860",
           "shape": "rectangle",
           "width": 34,
           "height": 24,
@@ -1032,7 +1032,7 @@
       {
         selector: ".kg-purchaseorder",
         style: {
-          "background-color": "#2d7fb8",
+          "background-color": "#58a6ff",
           "shape": "hexagon",
           "width": 34,
           "height": 28,
@@ -1043,23 +1043,24 @@
         selector: "edge",
         style: {
           "curve-style": "bezier",
-          "line-color": "#cfd4da",
-          "target-arrow-color": "#cfd4da",
+          "line-color": "#768393",
+          "target-arrow-color": "#768393",
           "target-arrow-shape": "triangle",
           "width": 1.4,
           "label": "data(label)",
           "font-size": 7,
+          "color": "#d7e3ee",
           "text-rotation": "autorotate",
-          "text-background-color": "#ffffff",
-          "text-background-opacity": 0.78,
-          "text-background-padding": 1,
+          "text-background-color": "#05080b",
+          "text-background-opacity": 0.82,
+          "text-background-padding": 2,
         },
       },
       {
         selector: ".kg-risk-edge",
         style: {
-          "line-color": "#b42318",
-          "target-arrow-color": "#b42318",
+          "line-color": "#ff6b7a",
+          "target-arrow-color": "#ff6b7a",
           "line-style": "dashed",
           "width": 2.2,
         },
@@ -1067,7 +1068,7 @@
       {
         selector: "node:selected",
         style: {
-          "border-color": "#1a1d21",
+          "border-color": "#41d69f",
           "border-width": 3,
         },
       },
@@ -1946,6 +1947,18 @@
     els.startRunCancel.addEventListener("click", () => closeDrawer("new-run"));
     els.systemDrawerButton.addEventListener("click", () => openDrawer("system"));
     els.systemDrawerClose.addEventListener("click", () => closeDrawer("system"));
+    document.querySelectorAll("[data-open-drawer]").forEach((node) => {
+      node.addEventListener("click", () => {
+        const drawerName = node.getAttribute("data-open-drawer") || "system";
+        const targetId = node.getAttribute("data-drawer-target") || "";
+        openDrawer(drawerName);
+        if (targetId) {
+          requestAnimationFrame(() => {
+            document.getElementById(targetId)?.scrollIntoView({ block: "start" });
+          });
+        }
+      });
+    });
     document.querySelectorAll("[data-close-drawer]").forEach((node) => {
       node.addEventListener("click", () => closeDrawer(node.getAttribute("data-close-drawer")));
     });

@@ -126,21 +126,28 @@ def test_dashboard_shell_is_served_from_app_route_and_alias():
 
     assert app_response.status_code == 200
     assert alias_response.status_code == 200
-    assert "StrategyOS Chat Dashboard" in app_response.text
-    assert "StrategyOS Chat Dashboard" in alias_response.text
+    assert "StrategyOS.live Command Cockpit" in app_response.text
+    assert "StrategyOS.live Command Cockpit" in alias_response.text
     assert '<script id="strategyos-bootstrap"' in app_response.text
     assert '<script id="strategyos-bootstrap"' in alias_response.text
 
 
 def test_dashboard_renders_chat_dashboard_shell():
     html = _dashboard_response()
+    js = _static_app_js()
 
-    assert "StrategyOS Chat Dashboard" in html
+    assert "StrategyOS.live Command Cockpit" in html
+    assert "RECOVERY CONTROL ONLINE" in html
+    assert "Finance command cockpit" in html
     assert 'id="app-name"' in html
     assert 'id="run-pill"' in html
     assert 'id="ui-identity"' in html
     assert 'id="new-run-button"' in html
     assert 'id="system-drawer-button"' in html
+    assert 'data-open-drawer="new-run"' in html
+    assert 'data-open-drawer="system"' in html
+    assert 'data-drawer-target="kg-panel"' in html
+    assert 'querySelectorAll("[data-open-drawer]")' in js
     assert 'src="/static/app.js"' in html
     assert 'href="/static/styles.css"' in html
 
@@ -267,9 +274,9 @@ def test_dashboard_renders_source_pack_intake_hooks():
     html = _dashboard_response()
     js = _static_app_js()
 
-    assert "Select zip file" in html
-    assert "Select folder" in html
-    assert "Choose the sample dataset zip or a folder of finance files." in html
+    assert "Zip source pack" in html
+    assert "Folder source pack" in html
+    assert "Choose a .zip source pack or a folder of finance files." in html
     assert "Check selected files" not in html
     assert "Advanced: use a server folder" not in html
     assert "POST /source-packs" not in html
