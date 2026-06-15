@@ -1088,6 +1088,18 @@ def _homepage_html() -> str:
     return template_path.read_text(encoding="utf-8")
 
 
+def _executive_html() -> str:
+    bootstrap_json = (
+        json.dumps(_ui_bootstrap())
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
+    template_path = STATIC_DIR / "executive.html"
+    html_text = template_path.read_text(encoding="utf-8")
+    return html_text.replace("__STRATEGYOS_EXECUTIVE_BOOTSTRAP__", bootstrap_json)
+
+
 def _load_summary_artifact_json(
     summary: dict[str, Any],
     artifact_key: str,
@@ -1586,6 +1598,11 @@ def dashboard() -> str:
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_alias() -> str:
     return _dashboard_html()
+
+
+@app.get("/executive", response_class=HTMLResponse)
+def executive_cockpit() -> str:
+    return _executive_html()
 
 
 @app.get("/ui/session")

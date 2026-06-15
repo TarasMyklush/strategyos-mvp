@@ -3,272 +3,332 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StrategyOS.live Finance Recovery Control Room</title>
+<title>StrategyOS.live Executive Command System</title>
 <style>
   :root {
-    --page: #f4f3ef;
-    --paper: #fffdf8;
-    --panel: #ffffff;
-    --ink: #17191d;
-    --muted: #69717c;
-    --faint: #929aa4;
-    --line: #d9d6ce;
-    --line-strong: #bcb7ac;
-    --green: #006b4f;
-    --green-soft: #e2f2eb;
-    --blue: #225fba;
-    --blue-soft: #e8effa;
-    --amber: #95620a;
-    --amber-soft: #fff0d3;
-    --red: #a33d45;
-    --red-soft: #f9e5e8;
-    --slate: #2d3745;
-    --shadow: 0 18px 45px rgba(23, 25, 29, 0.08);
+    --bg: #07090c;
+    --bg-2: #0d1117;
+    --panel: rgba(16, 21, 28, 0.92);
+    --panel-2: rgba(12, 16, 22, 0.96);
+    --line: rgba(151, 170, 191, 0.20);
+    --line-hot: rgba(65, 214, 159, 0.48);
+    --ink: #f4f7fa;
+    --muted: #94a3b3;
+    --faint: #5f6d7d;
+    --green: #41d69f;
+    --green-soft: rgba(65, 214, 159, 0.14);
+    --blue: #58a6ff;
+    --blue-soft: rgba(88, 166, 255, 0.13);
+    --amber: #f4b860;
+    --amber-soft: rgba(244, 184, 96, 0.14);
+    --red: #ff6b7a;
+    --red-soft: rgba(255, 107, 122, 0.13);
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Arial, sans-serif;
     font-family: var(--font);
   }
 
   * { box-sizing: border-box; }
 
-  html { scroll-behavior: smooth; }
+  html,
+  body {
+    min-height: 100%;
+  }
 
   body {
     margin: 0;
-    background: var(--page);
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(255,255,255,0.026) 1px, transparent 1px),
+      linear-gradient(135deg, #05070a 0%, #101315 44%, #11100c 100%);
+    background-size: 42px 42px, 42px 42px, auto;
     color: var(--ink);
   }
 
-  a { color: inherit; }
-
-  button {
+  a,
+  button,
+  input {
     font: inherit;
   }
 
-  .shell {
-    width: min(1240px, calc(100% - 40px));
-    margin: 0 auto;
-  }
-
-  .topbar {
-    min-height: 74px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 22px;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+  a {
+    color: inherit;
     text-decoration: none;
+  }
+
+  .cockpit {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .rail {
+    min-height: 100vh;
+    border-right: 1px solid var(--line);
+    background: rgba(4, 7, 10, 0.88);
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    justify-items: center;
+    padding: 18px 10px;
   }
 
   .mark {
-    width: 34px;
-    height: 34px;
-    border: 1px solid #111;
-    border-radius: 6px;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--line-hot);
+    border-radius: 8px;
     display: grid;
     place-items: center;
-    background: var(--ink);
-    color: #fff;
-    font-weight: 800;
+    background: linear-gradient(180deg, rgba(65,214,159,0.18), rgba(88,166,255,0.10));
+    color: var(--green);
+    font-weight: 900;
+    box-shadow: inset 0 0 18px rgba(65,214,159,0.14);
   }
 
-  .brand strong,
-  .top-meta strong {
-    display: block;
-    font-size: 16px;
+  .rail-nav {
+    display: grid;
+    gap: 12px;
+    align-content: center;
   }
 
-  .brand span,
-  .top-meta span {
-    display: block;
-    margin-top: 2px;
-    color: var(--muted);
-    font-size: 12px;
-  }
-
-  .nav {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+  .rail-nav a {
+    width: 42px;
+    height: 42px;
     border: 1px solid var(--line);
     border-radius: 8px;
-    padding: 4px;
-    background: rgba(255, 255, 255, 0.55);
-  }
-
-  .nav a {
-    border-radius: 6px;
-    padding: 9px 12px;
-    color: var(--muted);
-    font-size: 13px;
-    text-decoration: none;
-  }
-
-  .nav a.active {
-    background: #fff;
-    color: var(--ink);
-    box-shadow: inset 0 0 0 1px var(--line);
-  }
-
-  .top-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .top-meta {
-    text-align: right;
-  }
-
-  .btn {
-    border: 1px solid var(--ink);
-    border-radius: 7px;
-    background: var(--ink);
-    color: #fff;
-    padding: 10px 13px;
-    font-weight: 700;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .btn.secondary {
-    border-color: var(--line-strong);
-    background: #fff;
-    color: var(--ink);
-  }
-
-  .brief {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 420px;
-    gap: 26px;
-    padding: 34px 0 28px;
-  }
-
-  .brief-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 24px;
-    margin-bottom: 22px;
-  }
-
-  .eyebrow {
-    margin: 0 0 9px;
-    color: var(--green);
+    place-items: center;
+    color: var(--muted);
     font-size: 12px;
     font-weight: 800;
+    background: rgba(255,255,255,0.035);
   }
 
-  h1 {
-    margin: 0;
-    max-width: 820px;
-    font-size: 48px;
-    line-height: 1.04;
+  .rail-nav a.active {
+    border-color: var(--line-hot);
+    color: var(--green);
+    background: var(--green-soft);
+  }
+
+  .rail-status {
+    writing-mode: vertical-rl;
+    color: var(--faint);
+    font-size: 11px;
     letter-spacing: 0;
   }
 
-  .brief-copy {
-    max-width: 680px;
-    margin: 18px 0 0;
-    color: #4c535c;
-    font-size: 17px;
-    line-height: 1.55;
+  .workspace {
+    min-width: 0;
+    padding: 18px;
   }
 
-  .status-note {
-    min-width: 190px;
-    border-left: 3px solid var(--green);
-    padding-left: 14px;
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1.45;
+  .topbar {
+    min-height: 62px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(11, 15, 20, 0.82);
+    padding: 12px 14px;
   }
 
-  .status-note strong {
-    display: block;
-    color: var(--ink);
+  .product {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-width: 0;
+  }
+
+  .product h1 {
+    margin: 0;
     font-size: 18px;
-    margin-bottom: 4px;
+    line-height: 1.1;
   }
 
-  .metric-row {
+  .product span,
+  .system-clock span,
+  .micro {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .system-clock {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: var(--ink);
+    text-align: right;
+  }
+
+  .live-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 18px rgba(65,214,159,0.8);
+  }
+
+  .open-app {
+    border: 1px solid var(--line-hot);
+    border-radius: 8px;
+    background: var(--green-soft);
+    color: var(--green);
+    padding: 10px 12px;
+    font-weight: 800;
+  }
+
+  .command-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 26px;
+    grid-template-columns: minmax(0, 1.2fr) 390px;
+    gap: 14px;
+    margin-top: 14px;
   }
 
-  .metric {
+  .panel {
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--panel);
-    padding: 15px;
+    box-shadow: 0 26px 70px rgba(0,0,0,0.26);
   }
 
-  .metric span {
-    display: block;
-    color: var(--muted);
-    font-size: 12px;
+  .main-panel {
+    min-width: 0;
+    padding: 18px;
   }
 
-  .metric strong {
-    display: block;
-    margin-top: 7px;
-    font-size: 25px;
-    line-height: 1.05;
-  }
-
-  .metric small {
-    display: block;
-    margin-top: 8px;
-    color: var(--faint);
-    font-size: 12px;
-    line-height: 1.35;
-  }
-
-  .decision-panel {
-    border: 1px solid var(--line-strong);
-    border-radius: 8px;
-    background: var(--paper);
-    box-shadow: var(--shadow);
-  }
-
-  .panel-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+  .brief-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
     gap: 16px;
-    padding: 18px 18px 13px;
-    border-bottom: 1px solid var(--line);
+    align-items: start;
   }
 
-  .panel-head h2,
-  .section-title h2 {
+  .eyebrow {
+    margin: 0 0 10px;
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .headline {
     margin: 0;
-    font-size: 20px;
-    line-height: 1.2;
+    max-width: 760px;
+    font-size: 42px;
+    line-height: 1.02;
+    letter-spacing: 0;
   }
 
-  .panel-head p,
-  .section-title p {
-    margin: 5px 0 0;
+  .lead {
+    max-width: 720px;
+    margin: 16px 0 0;
+    color: #c8d2dd;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  .command-input {
+    margin-top: 18px;
+    border: 1px solid var(--line-hot);
+    border-radius: 8px;
+    background: rgba(5, 10, 14, 0.72);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .prompt-symbol {
+    color: var(--green);
+    font-weight: 900;
+  }
+
+  .command-input input {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--ink);
+    font-size: 15px;
+  }
+
+  .command-input input::placeholder {
+    color: #b4c0cc;
+  }
+
+  .command-input button,
+  .action-button {
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: rgba(255,255,255,0.06);
+    color: var(--ink);
+    padding: 8px 10px;
+    font-weight: 800;
+  }
+
+  .system-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    padding: 14px;
+  }
+
+  .system-card strong {
+    display: block;
+    font-size: 28px;
+    line-height: 1;
+    margin: 8px 0;
+  }
+
+  .system-card p {
+    margin: 0;
     color: var(--muted);
     font-size: 13px;
     line-height: 1.45;
   }
 
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    border-radius: 999px;
-    padding: 5px 9px;
+  .module-grid {
+    display: grid;
+    grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.1fr);
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .radar {
+    position: relative;
+    min-height: 390px;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(65,214,159,0.08), rgba(88,166,255,0.035)),
+      #060a0e;
+  }
+
+  .panel-title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 14px 0;
+  }
+
+  .panel-title h2 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .panel-title p {
+    margin: 5px 0 0;
+    color: var(--muted);
     font-size: 12px;
-    font-weight: 800;
+    line-height: 1.4;
+  }
+
+  .badge {
+    border-radius: 999px;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-weight: 900;
     white-space: nowrap;
   }
 
@@ -277,296 +337,291 @@
   .badge.red { background: var(--red-soft); color: var(--red); }
   .badge.blue { background: var(--blue-soft); color: var(--blue); }
 
-  .decision-list {
-    display: grid;
+  .radar-svg {
+    width: 100%;
+    height: 320px;
+    display: block;
+    margin-top: 8px;
   }
 
-  .decision {
+  .radar-readout {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 14px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .readout {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(7, 9, 12, 0.78);
+    padding: 10px;
+  }
+
+  .readout span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .readout strong {
+    display: block;
+    margin-top: 5px;
+    font-size: 17px;
+  }
+
+  .decision-stack {
+    display: grid;
+    gap: 10px;
+  }
+
+  .decision-panel {
+    padding: 14px;
+  }
+
+  .decision-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.035);
+    padding: 12px;
     display: grid;
     grid-template-columns: 1fr auto;
     gap: 12px;
-    padding: 15px 18px;
-    border-bottom: 1px solid var(--line);
   }
 
-  .decision:last-child {
-    border-bottom: 0;
-  }
-
-  .decision h3 {
+  .decision-card h3 {
     margin: 0;
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1.3;
   }
 
-  .decision p {
-    margin: 5px 0 0;
+  .decision-card p {
+    margin: 6px 0 0;
     color: var(--muted);
-    font-size: 13px;
-    line-height: 1.4;
+    font-size: 12px;
+    line-height: 1.42;
   }
 
   .amount {
     text-align: right;
-    font-weight: 800;
     white-space: nowrap;
+    font-weight: 900;
   }
 
   .amount span {
     display: block;
-    margin-top: 5px;
+    margin-top: 6px;
     color: var(--faint);
     font-size: 11px;
-    font-weight: 600;
   }
 
-  .section {
-    border-top: 1px solid var(--line);
-    padding: 30px 0;
-  }
-
-  .section-title {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 24px;
-    margin-bottom: 16px;
-  }
-
-  .section-title p {
-    max-width: 520px;
-  }
-
-  .operating-grid {
+  .assistant-panel {
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
-    gap: 16px;
+    grid-template-rows: auto 1fr auto;
+    min-height: 630px;
+    background:
+      linear-gradient(180deg, rgba(88,166,255,0.08), transparent 30%),
+      var(--panel);
   }
 
-  .work-table {
-    width: 100%;
-    border-collapse: collapse;
+  .assistant-head {
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .assistant-head h2 {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  .assistant-head p {
+    margin: 7px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .assistant-feed {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .message {
     border: 1px solid var(--line);
     border-radius: 8px;
-    overflow: hidden;
-    background: #fff;
+    background: rgba(255,255,255,0.04);
+    padding: 12px;
   }
 
-  .work-table th,
-  .work-table td {
-    padding: 13px 14px;
+  .message.system {
+    border-color: var(--line-hot);
+    background: var(--green-soft);
+  }
+
+  .message strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+
+  .message p {
+    margin: 0;
+    color: #c7d1dc;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .assistant-actions {
+    border-top: 1px solid var(--line);
+    padding: 14px;
+    display: grid;
+    gap: 9px;
+  }
+
+  .action-button.primary {
+    border-color: var(--line-hot);
+    color: var(--green);
+    background: var(--green-soft);
+  }
+
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .case-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .case-table th,
+  .case-table td {
+    padding: 12px 14px;
     border-bottom: 1px solid var(--line);
     text-align: left;
     vertical-align: top;
   }
 
-  .work-table th {
-    background: #f7f5ef;
+  .case-table th {
     color: var(--muted);
-    font-size: 12px;
-    font-weight: 800;
+    font-size: 11px;
+    font-weight: 900;
   }
 
-  .work-table tr:last-child td {
+  .case-table tr:last-child td {
     border-bottom: 0;
   }
 
-  .work-table strong {
+  .case-table strong {
     display: block;
-    font-size: 14px;
+    font-size: 13px;
   }
 
-  .work-table small {
+  .case-table small {
     display: block;
     margin-top: 4px;
     color: var(--muted);
     font-size: 12px;
-    line-height: 1.35;
   }
 
-  .right-stack {
-    display: grid;
-    gap: 12px;
+  .memo-card {
+    padding: 14px;
   }
 
-  .assurance {
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
-    padding: 16px;
-  }
-
-  .assurance h3 {
-    margin: 0 0 12px;
-    font-size: 16px;
-  }
-
-  .assurance-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 12px;
-    padding: 10px 0;
-    border-top: 1px solid var(--line);
-    font-size: 13px;
-  }
-
-  .assurance-row:first-of-type {
-    border-top: 0;
-    padding-top: 0;
-  }
-
-  .assurance-row span {
-    color: var(--muted);
-  }
-
-  .assurance-row strong {
-    text-align: right;
-  }
-
-  .trend-panel {
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
-    padding: 18px;
-  }
-
-  .trend-panel h3 {
-    margin: 0;
-    font-size: 16px;
-  }
-
-  .trend-panel p {
-    margin: 5px 0 14px;
-    color: var(--muted);
-    font-size: 13px;
-  }
-
-  .chart {
-    display: block;
-    width: 100%;
-    height: auto;
-  }
-
-  .memo {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-
-  .memo-block {
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
-    padding: 18px;
-  }
-
-  .memo-block h3 {
+  .memo-card h2 {
     margin: 0 0 10px;
     font-size: 16px;
   }
 
-  .memo-block p {
+  .memo-card p {
     margin: 0;
-    color: #4c535c;
-    font-size: 14px;
+    color: #c7d1dc;
+    font-size: 13px;
     line-height: 1.55;
   }
 
   .memo-list {
     display: grid;
-    gap: 10px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    gap: 8px;
+    margin-top: 12px;
   }
 
-  .memo-list li {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 10px;
-    color: #4c535c;
-    font-size: 14px;
+  .memo-list div {
+    border-top: 1px solid var(--line);
+    padding-top: 8px;
+    color: var(--muted);
+    font-size: 12px;
     line-height: 1.45;
   }
 
-  .memo-list b {
-    color: var(--green);
-  }
-
-  .footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
-    border-top: 1px solid var(--line);
-    padding: 20px 0 32px;
-    color: var(--muted);
-    font-size: 12px;
-  }
-
-  @media (max-width: 1040px) {
-    .brief,
-    .operating-grid,
-    .memo {
+  @media (max-width: 1160px) {
+    .command-grid,
+    .module-grid,
+    .bottom-grid,
+    .brief-row {
       grid-template-columns: 1fr;
     }
 
-    .brief-head {
-      flex-direction: column;
-    }
-
-    .status-note {
-      min-width: 0;
-    }
-
-    .metric-row {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+    .assistant-panel {
+      min-height: auto;
     }
   }
 
   @media (max-width: 760px) {
-    .shell {
-      width: min(100% - 28px, 1240px);
+    .cockpit {
+      grid-template-columns: 1fr;
+    }
+
+    .rail {
+      min-height: auto;
+      grid-template-columns: auto 1fr auto;
+      grid-template-rows: auto;
+      padding: 10px;
+    }
+
+    .rail-nav {
+      grid-auto-flow: column;
+      align-content: center;
+      justify-content: center;
+      overflow-x: auto;
+      width: 100%;
+    }
+
+    .rail-status {
+      writing-mode: initial;
+    }
+
+    .workspace {
+      padding: 10px;
     }
 
     .topbar,
-    .top-actions,
-    .section-title,
-    .footer {
-      align-items: flex-start;
+    .system-clock,
+    .command-input {
+      align-items: stretch;
+      grid-template-columns: 1fr;
       flex-direction: column;
-    }
-
-    .nav {
-      width: 100%;
-      overflow-x: auto;
-    }
-
-    .top-meta {
       text-align: left;
     }
 
-    h1 {
-      font-size: 36px;
+    .headline {
+      font-size: 32px;
     }
 
-    .brief-copy {
-      font-size: 16px;
-    }
-
-    .metric-row {
+    .radar-readout {
+      position: static;
       grid-template-columns: 1fr;
+      padding: 0 14px 14px;
     }
 
-    .decision {
-      grid-template-columns: 1fr;
-    }
-
-    .amount {
-      text-align: left;
-    }
-
-    .work-table {
+    .case-table {
       display: block;
       overflow-x: auto;
       white-space: nowrap;
@@ -575,264 +630,267 @@
 </style>
 </head>
 <body>
-  <main class="shell">
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="StrategyOS.live home">
-        <span class="mark">S</span>
-        <span>
-          <strong>StrategyOS.live</strong>
-          <span>Finance recovery control room</span>
-        </span>
-      </a>
-
-      <nav class="nav" aria-label="Primary">
-        <a class="active" href="#brief">Brief</a>
-        <a href="#decisions">Decisions</a>
-        <a href="#evidence">Evidence</a>
-        <a href="#memo">Board memo</a>
+  <main class="cockpit">
+    <aside class="rail" aria-label="StrategyOS command navigation">
+      <a class="mark" href="/" aria-label="StrategyOS home">S</a>
+      <nav class="rail-nav">
+        <a class="active" href="#command" title="Command">CMD</a>
+        <a href="#radar" title="Radar">RAD</a>
+        <a href="#cases" title="Cases">CAS</a>
+        <a href="#memo" title="Memo">MEM</a>
       </nav>
+      <div class="rail-status">SYSTEM ONLINE</div>
+    </aside>
 
-      <div class="top-actions">
-        <div class="top-meta">
-          <strong>Local Tamween H1 2026</strong>
-          <span>Updated 08:42 · reviewer gate active</span>
-        </div>
-        <a class="btn" href="/app">Open review</a>
-      </div>
-    </header>
-
-    <section class="brief" id="brief">
-      <div>
-        <div class="brief-head">
+    <section class="workspace" id="command">
+      <header class="topbar">
+        <div class="product">
+          <div class="live-dot" aria-hidden="true"></div>
           <div>
-            <p class="eyebrow">Executive recovery brief</p>
-            <h1>Four decisions can unlock SAR 7.2M this week.</h1>
-            <p class="brief-copy">
-              Finance files have been reconciled into cited recovery cases. Value, blockers, and evidence posture are summarized for the next executive review.
-            </p>
-          </div>
-          <aside class="status-note">
-            <strong>Ready for action</strong>
-            39 of 39 citations resolved. Four cases need reviewer approval or escalation before recovery letters go out.
-          </aside>
-        </div>
-
-        <div class="metric-row" aria-label="Portfolio metrics">
-          <div class="metric">
-            <span>Total recoverable</span>
-            <strong>SAR 18.4M</strong>
-            <small>Validated across AP, contracts, credits, and payment timing.</small>
-          </div>
-          <div class="metric">
-            <span>Ready to pursue</span>
-            <strong>SAR 7.2M</strong>
-            <small>Evidence complete, pending final reviewer action.</small>
-          </div>
-          <div class="metric">
-            <span>Evidence confidence</span>
-            <strong>93%</strong>
-            <small>Files, citations, and graph links reconciled.</small>
-          </div>
-          <div class="metric">
-            <span>Executive blockers</span>
-            <strong>4</strong>
-            <small>Legal, policy, or vendor context required.</small>
+            <h1>StrategyOS.live</h1>
+            <span>Executive finance command system</span>
           </div>
         </div>
-      </div>
-
-      <aside class="decision-panel" aria-label="Priority decisions">
-        <div class="panel-head">
+        <div class="system-clock">
           <div>
-            <h2>Today&apos;s decisions</h2>
-            <p>Ranked by recoverable value and evidence readiness.</p>
+            <strong>Local Tamween H1 2026</strong><br>
+            <span>15 Jun 2026 · 08:42 · reviewer gate active</span>
           </div>
-          <span class="badge amber">4 due</span>
+          <a class="open-app" href="/app">Open review app</a>
         </div>
-        <div class="decision-list">
-          <div class="decision">
-            <div>
-              <h3>Approve duplicate payment recovery packet</h3>
-              <p>Gulf Logistics · invoices, bank references, and vendor aliases matched.</p>
-            </div>
-            <div class="amount">SAR 3.2M<span>ready</span></div>
-          </div>
-          <div class="decision">
-            <div>
-              <h3>Escalate contract leakage policy exception</h3>
-              <p>Regional services mix · pricing variance accepted by ops, not yet by policy.</p>
-            </div>
-            <div class="amount">SAR 1.4M<span>blocked</span></div>
-          </div>
-          <div class="decision">
-            <div>
-              <h3>Sign off credit balance outreach</h3>
-              <p>Al Rashid Trading · auditor challenge cleared, vendor letter staged.</p>
-            </div>
-            <div class="amount">SAR 1.9M<span>due today</span></div>
-          </div>
-          <div class="decision">
-            <div>
-              <h3>Hold two early-pay discount cases</h3>
-              <p>Premier Packaging · evidence is strong, but commercial owner wants context added.</p>
-            </div>
-            <div class="amount">SAR 0.7M<span>review</span></div>
-          </div>
-        </div>
-      </aside>
-    </section>
+      </header>
 
-    <section class="section" id="decisions">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">Operating view</p>
-          <h2>Cases, owners, and next actions.</h2>
-        </div>
-        <p>Every open item is tied to a named owner, a recoverable amount, and the decision needed to move cash or reduce risk.</p>
+      <div class="command-grid">
+        <section class="panel main-panel">
+          <div class="brief-row">
+            <div>
+              <p class="eyebrow">RECOVERY INTELLIGENCE ONLINE</p>
+              <h2 class="headline">Good morning. Four finance decisions are blocking SAR 7.2M.</h2>
+              <p class="lead">
+                I checked the current evidence pack, reviewer state, and case graph. One packet is clean enough to approve. Two cases need named human judgement. One credit letter can go out after reviewer sign-off.
+              </p>
+              <form class="command-input">
+                <span class="prompt-symbol">></span>
+                <input type="text" value="" placeholder="Ask: what can I approve safely today?" aria-label="Ask StrategyOS command">
+                <button type="button">Run</button>
+              </form>
+            </div>
+            <aside class="system-card">
+              <span class="micro">PRIMARY OBJECTIVE</span>
+              <strong>SAR 7.2M</strong>
+              <p>Recoverable value that can move this week if the four human decisions are closed.</p>
+            </aside>
+          </div>
+
+          <div class="module-grid">
+            <section class="panel radar" id="radar">
+              <div class="panel-title">
+                <div>
+                  <h2>Cash recovery radar</h2>
+                  <p>Live relationship map between value, evidence, owner, and risk.</p>
+                </div>
+                <span class="badge green">39 / 39 citations</span>
+              </div>
+              <svg class="radar-svg" viewBox="0 0 520 320" role="img" aria-label="Cash recovery radar">
+                <defs>
+                  <filter id="glow">
+                    <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+                    <feMerge>
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                </defs>
+                <rect x="0" y="0" width="520" height="320" fill="transparent"/>
+                <g stroke="rgba(151,170,191,0.16)" fill="none">
+                  <circle cx="260" cy="160" r="48"/>
+                  <circle cx="260" cy="160" r="92"/>
+                  <circle cx="260" cy="160" r="136"/>
+                  <line x1="260" y1="24" x2="260" y2="296"/>
+                  <line x1="124" y1="160" x2="396" y2="160"/>
+                  <line x1="164" y1="64" x2="356" y2="256"/>
+                  <line x1="356" y1="64" x2="164" y2="256"/>
+                </g>
+                <g stroke="rgba(65,214,159,0.62)" stroke-width="2" fill="none" filter="url(#glow)">
+                  <path d="M260 160L142 96"/>
+                  <path d="M260 160L392 104"/>
+                  <path d="M260 160L390 220"/>
+                  <path d="M260 160L144 238"/>
+                  <path d="M260 160L260 52"/>
+                </g>
+                <g>
+                  <circle cx="260" cy="160" r="35" fill="rgba(65,214,159,0.16)" stroke="#41d69f" stroke-width="2"/>
+                  <text x="260" y="154" text-anchor="middle" fill="#f4f7fa" font-size="16" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-weight="800">18.4M</text>
+                  <text x="260" y="175" text-anchor="middle" fill="#94a3b3" font-size="10" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">FOUND</text>
+
+                  <circle cx="142" cy="96" r="19" fill="rgba(65,214,159,0.18)" stroke="#41d69f" stroke-width="2"/>
+                  <text x="142" y="100" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">3.2M</text>
+                  <text x="142" y="70" text-anchor="middle" fill="#94a3b3" font-size="10">Gulf Logistics</text>
+
+                  <circle cx="392" cy="104" r="17" fill="rgba(255,107,122,0.15)" stroke="#ff6b7a" stroke-width="2"/>
+                  <text x="392" y="108" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">1.4M</text>
+                  <text x="392" y="78" text-anchor="middle" fill="#94a3b3" font-size="10">Policy call</text>
+
+                  <circle cx="390" cy="220" r="18" fill="rgba(88,166,255,0.15)" stroke="#58a6ff" stroke-width="2"/>
+                  <text x="390" y="224" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">1.9M</text>
+                  <text x="390" y="252" text-anchor="middle" fill="#94a3b3" font-size="10">Credit letter</text>
+
+                  <circle cx="144" cy="238" r="14" fill="rgba(244,184,96,0.16)" stroke="#f4b860" stroke-width="2"/>
+                  <text x="144" y="242" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">0.7M</text>
+                  <text x="144" y="268" text-anchor="middle" fill="#94a3b3" font-size="10">Hold</text>
+
+                  <circle cx="260" cy="52" r="16" fill="rgba(65,214,159,0.13)" stroke="#41d69f" stroke-width="2"/>
+                  <text x="260" y="56" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">39</text>
+                  <text x="260" y="28" text-anchor="middle" fill="#94a3b3" font-size="10">Citations</text>
+                </g>
+              </svg>
+              <div class="radar-readout">
+                <div class="readout"><span>Can approve</span><strong>SAR 3.2M</strong></div>
+                <div class="readout"><span>Needs judgement</span><strong>2 cases</strong></div>
+                <div class="readout"><span>Do not automate</span><strong>1 vendor</strong></div>
+              </div>
+            </section>
+
+            <section class="panel decision-panel">
+              <div class="panel-title">
+                <div>
+                  <h2>Decision controls</h2>
+                  <p>Each control has a cash impact, owner, and current safety posture.</p>
+                </div>
+                <span class="badge amber">4 pending</span>
+              </div>
+              <div class="decision-stack">
+                <article class="decision-card">
+                  <div>
+                    <h3>Approve duplicate payment packet</h3>
+                    <p>Maha · CFO office · evidence clean, no relationship concern flagged.</p>
+                  </div>
+                  <div class="amount">SAR 3.2M<span>safe</span></div>
+                </article>
+                <article class="decision-card">
+                  <div>
+                    <h3>Confirm contract leakage posture</h3>
+                    <p>Omar · Procurement · do not frame as vendor fault until policy signs off.</p>
+                  </div>
+                  <div class="amount">SAR 1.4M<span>blocked</span></div>
+                </article>
+                <article class="decision-card">
+                  <div>
+                    <h3>Release credit balance outreach</h3>
+                    <p>Noura · AP lead · letter can go Monday if reviewer signs today.</p>
+                  </div>
+                  <div class="amount">SAR 1.9M<span>ready</span></div>
+                </article>
+                <article class="decision-card">
+                  <div>
+                    <h3>Hold Premier Packaging discounts</h3>
+                    <p>Faisal · Commercial · relationship-sensitive account, add context first.</p>
+                  </div>
+                  <div class="amount">SAR 0.7M<span>hold</span></div>
+                </article>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <aside class="panel assistant-panel" aria-label="StrategyOS assistant">
+          <div class="assistant-head">
+            <p class="eyebrow">STRATEGYOS COPILOT</p>
+            <h2>Executive brief generated from uploaded files.</h2>
+            <p>No uncited claim should enter a vendor letter. Human gates stay visible.</p>
+          </div>
+          <div class="assistant-feed">
+            <div class="message system">
+              <strong>System readout</strong>
+              <p>I found one clean approval path and three cases where the financial signal is real but human judgement still matters.</p>
+            </div>
+            <div class="message">
+              <strong>Recommended next move</strong>
+              <p>Approve Gulf Logistics first. It has the cleanest citation path and the largest immediate cash impact.</p>
+            </div>
+            <div class="message">
+              <strong>Guardrail</strong>
+              <p>Do not contact Premier Packaging automatically. The evidence is strong, but Commercial asked for relationship context before outreach.</p>
+            </div>
+            <div class="message">
+              <strong>Board note</strong>
+              <p>Discovery is not the blocker. Decision ownership is the blocker. Put names next to the two unresolved calls.</p>
+            </div>
+          </div>
+          <div class="assistant-actions">
+            <button class="action-button primary" type="button">Open clean approval</button>
+            <button class="action-button" type="button">Show blocked evidence</button>
+            <button class="action-button" type="button">Draft board memo</button>
+          </div>
+        </aside>
       </div>
 
-      <div class="operating-grid">
-        <table class="work-table" aria-label="Recovery case queue">
-          <thead>
-            <tr>
-              <th>Case</th>
-              <th>Owner</th>
-              <th>Value</th>
-              <th>Status</th>
-              <th>Next action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Duplicate payments</strong><small>11 documents · 18 linked citations</small></td>
-              <td>CFO office</td>
-              <td>SAR 3.2M</td>
-              <td><span class="badge green">Release-ready</span></td>
-              <td>Approve recovery packet</td>
-            </tr>
-            <tr>
-              <td><strong>Contract leakage</strong><small>Policy variance · services category</small></td>
-              <td>Procurement</td>
-              <td>SAR 1.4M</td>
-              <td><span class="badge red">Escalated</span></td>
-              <td>Confirm policy exception</td>
-            </tr>
-            <tr>
-              <td><strong>Credit balances</strong><small>Vendor letters drafted</small></td>
-              <td>AP lead</td>
-              <td>SAR 1.9M</td>
-              <td><span class="badge blue">Auditor-cleared</span></td>
-              <td>Reviewer sign-off</td>
-            </tr>
-            <tr>
-              <td><strong>Early-pay discounts</strong><small>Commercial context requested</small></td>
-              <td>Commercial</td>
-              <td>SAR 0.7M</td>
-              <td><span class="badge amber">Hold</span></td>
-              <td>Add owner comment</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="bottom-grid" id="cases">
+        <section class="panel">
+          <div class="panel-title">
+            <div>
+              <h2>Case matrix</h2>
+              <p>Designed for CFO scan: owner, decision, evidence, and risk.</p>
+            </div>
+            <span class="badge blue">live queue</span>
+          </div>
+          <table class="case-table">
+            <thead>
+              <tr>
+                <th>Case</th>
+                <th>Owner</th>
+                <th>Evidence</th>
+                <th>Action</th>
+                <th>Risk</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Duplicate payments</strong><small>Gulf Logistics · AP-1482/AP-1482R</small></td>
+                <td>Maha</td>
+                <td><span class="badge green">complete</span></td>
+                <td>Approve packet</td>
+                <td>Low</td>
+              </tr>
+              <tr>
+                <td><strong>Contract leakage</strong><small>Regional services mix</small></td>
+                <td>Omar</td>
+                <td><span class="badge amber">policy gap</span></td>
+                <td>Name posture</td>
+                <td>Medium</td>
+              </tr>
+              <tr>
+                <td><strong>Credit balances</strong><small>Al Rashid Trading</small></td>
+                <td>Noura</td>
+                <td><span class="badge blue">reviewer gate</span></td>
+                <td>Sign off letter</td>
+                <td>Low</td>
+              </tr>
+              <tr>
+                <td><strong>Early-pay discounts</strong><small>Premier Packaging</small></td>
+                <td>Faisal</td>
+                <td><span class="badge red">relationship hold</span></td>
+                <td>Add context</td>
+                <td>High</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
 
-        <div class="right-stack" id="evidence">
-          <aside class="assurance">
-            <h3>Evidence assurance</h3>
-            <div class="assurance-row"><span>Citations resolved</span><strong>39 / 39</strong></div>
-            <div class="assurance-row"><span>Reviewer challenges</span><strong>4 / 8 closed</strong></div>
-            <div class="assurance-row"><span>Graph conflicts</span><strong>2 open</strong></div>
-            <div class="assurance-row"><span>Unmapped source files</span><strong>0 critical</strong></div>
-          </aside>
-
-          <aside class="assurance">
-            <h3>Governance posture</h3>
-            <div class="assurance-row"><span>Human review gate</span><strong>Active</strong></div>
-            <div class="assurance-row"><span>Answer source</span><strong>Uploaded files</strong></div>
-            <div class="assurance-row"><span>Report status</span><strong>Draft ready</strong></div>
-          </aside>
-        </div>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">Portfolio movement</p>
-          <h2>Recovery progress.</h2>
-        </div>
-        <p>Identified value has continued to rise; approved value is now gated by a short list of reviewer actions.</p>
-      </div>
-
-      <article class="trend-panel">
-        <h3>Recoverable value and approved value</h3>
-        <p>SAR millions · last six review cycles</p>
-        <svg class="chart" viewBox="0 0 900 310" role="img" aria-label="Recoverable value and approved value trend">
-          <rect x="0" y="0" width="900" height="310" rx="8" fill="#ffffff"/>
-          <g stroke="#e3e0d8" stroke-width="1">
-            <line x1="72" y1="42" x2="840" y2="42"/>
-            <line x1="72" y1="92" x2="840" y2="92"/>
-            <line x1="72" y1="142" x2="840" y2="142"/>
-            <line x1="72" y1="192" x2="840" y2="192"/>
-            <line x1="72" y1="242" x2="840" y2="242"/>
-          </g>
-          <g fill="#69717c" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13">
-            <text x="35" y="247">0</text>
-            <text x="28" y="197">5</text>
-            <text x="22" y="147">10</text>
-            <text x="22" y="97">15</text>
-            <text x="22" y="47">20</text>
-            <text x="86" y="281">Jan</text>
-            <text x="222" y="281">Feb</text>
-            <text x="358" y="281">Mar</text>
-            <text x="494" y="281">Apr</text>
-            <text x="630" y="281">May</text>
-            <text x="766" y="281">Jun</text>
-          </g>
-          <path d="M100 214C150 204 178 186 226 178C288 168 304 142 364 133C424 124 446 102 500 93C558 84 588 73 640 66C700 58 746 52 812 42" fill="none" stroke="#006b4f" stroke-width="4" stroke-linecap="round"/>
-          <path d="M100 238C158 232 184 222 226 216C290 206 312 196 364 184C424 171 452 158 500 146C560 132 590 118 640 105C704 88 748 70 812 58" fill="none" stroke="#225fba" stroke-width="4" stroke-linecap="round"/>
-          <g fill="#006b4f">
-            <circle cx="100" cy="214" r="5"/><circle cx="226" cy="178" r="5"/><circle cx="364" cy="133" r="5"/><circle cx="500" cy="93" r="5"/><circle cx="640" cy="66" r="5"/><circle cx="812" cy="42" r="5"/>
-          </g>
-          <g fill="#225fba">
-            <circle cx="100" cy="238" r="5"/><circle cx="226" cy="216" r="5"/><circle cx="364" cy="184" r="5"/><circle cx="500" cy="146" r="5"/><circle cx="640" cy="105" r="5"/><circle cx="812" cy="58" r="5"/>
-          </g>
-          <g fill="#17191d" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" font-weight="700">
-            <text x="650" y="36">Identified</text>
-            <text x="650" y="86">Approved</text>
-          </g>
-        </svg>
-      </article>
-    </section>
-
-    <section class="section" id="memo">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">Board memo</p>
-          <h2>Prepared board narrative.</h2>
-        </div>
-      </div>
-
-      <div class="memo">
-        <article class="memo-block">
-          <h3>Narrative for the meeting</h3>
+        <aside class="panel memo-card" id="memo">
+          <p class="eyebrow">BOARD PACK SNAPSHOT</p>
+          <h2>What to say in the room</h2>
           <p>
-            The recovery program is not blocked by discovery. It is blocked by a small number of accountable decisions. Evidence is complete enough to pursue SAR 7.2M now, while four exceptions need named-owner resolution.
+            We have enough cited recovery value to act. The system is not asking for more discovery; it is asking for four named human decisions.
           </p>
-        </article>
-        <article class="memo-block">
-          <h3>What the CFO asks for</h3>
-          <ul class="memo-list">
-            <li><b>1.</b><span>Approve release-ready packets with cited support attached.</span></li>
-            <li><b>2.</b><span>Assign policy and commercial owners to the remaining exceptions.</span></li>
-            <li><b>3.</b><span>Export a board memo only after reviewer actions are recorded.</span></li>
-          </ul>
-        </article>
+          <div class="memo-list">
+            <div>Approve Gulf Logistics or record the reason not to.</div>
+            <div>Keep Premier Packaging out of automated outreach.</div>
+            <div>Assign policy ownership before framing leakage as recoverable.</div>
+          </div>
+        </aside>
       </div>
     </section>
-
-    <footer class="footer">
-      <span>StrategyOS.live · Local Tamween H1 2026 Finance Review</span>
-      <span>Evidence locked · Reviewer gate active · Report draft ready</span>
-    </footer>
   </main>
 </body>
 </html>

@@ -62,18 +62,59 @@ def _static_app_js() -> str:
     return response.text
 
 
+def _static_executive_js() -> str:
+    client = TestClient(api_module.app)
+    response = client.get("/static/executive.js")
+    assert response.status_code == 200
+    return response.text
+
+
 def test_homepage_renders_executive_recovery_control_room():
     html = _homepage_response()
 
-    assert "StrategyOS.live Finance Recovery Control Room" in html
-    assert "Four decisions can unlock SAR 7.2M this week." in html
-    assert "Today&apos;s decisions" in html
-    assert "Evidence assurance" in html
-    assert "Prepared board narrative" in html
-    assert 'href="#brief"' in html
-    assert 'href="#decisions"' in html
-    assert 'href="#evidence"' in html
+    assert "StrategyOS.live Executive Command System" in html
+    assert "RECOVERY INTELLIGENCE ONLINE" in html
+    assert "Good morning. Four finance decisions are blocking SAR 7.2M." in html
+    assert "Ask: what can I approve safely today?" in html
+    assert "Cash recovery radar" in html
+    assert "STRATEGYOS COPILOT" in html
+    assert "Case matrix" in html
+    assert "Open review app" in html
+    assert 'href="#command"' in html
+    assert 'href="#radar"' in html
+    assert 'href="#cases"' in html
     assert 'href="#memo"' in html
+    assert '<script id="strategyos-bootstrap"' not in html
+
+
+def test_executive_cockpit_renders_live_command_shell():
+    client = TestClient(api_module.app)
+    response = client.get("/executive")
+    assert response.status_code == 200
+    html = response.text
+    js = _static_executive_js()
+
+    marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
+    assert "StrategyOS.live Executive Cockpit" in html
+    assert 'href="/static/executive.css"' in html
+    assert 'src="/static/executive.js"' in html
+    assert marker in html
+    bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
+    bootstrap = json.loads(bootstrap_json)
+    assert bootstrap["product_name"] == "StrategyOS"
+    assert 'id="exec-command-form"' in html
+    assert 'id="exec-session-panel"' in html
+    assert 'id="exec-decision-list"' in html
+    assert 'id="exec-case-body"' in html
+    assert "strategyos.ui.token" in js
+    assert "headers.Authorization" in js
+    assert "`Bearer ${state.token}`" in js
+    assert '"X-API-Key"' in js
+    assert 'requestJson("/runs/latest")' in js
+    assert 'requestJson("/runs/latest/audit-summary")' in js
+    assert 'requestJson("/runs/latest/knowledge-graph")' in js
+    assert 'requestJson("/qa"' in js
+    assert "mode: \"deterministic\"" in js
     assert '<script id="strategyos-bootstrap"' not in html
 
 

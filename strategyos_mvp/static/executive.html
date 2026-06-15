@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StrategyOS.live Executive Cockpit</title>
+    <link rel="stylesheet" href="/static/executive.css" />
+  </head>
+  <body>
+    <main class="cockpit">
+      <aside class="rail" aria-label="StrategyOS executive navigation">
+        <a class="mark" href="/" aria-label="StrategyOS home">S</a>
+        <nav class="rail-nav">
+          <a class="active" href="#command" title="Command">CMD</a>
+          <a href="#radar" title="Radar">RAD</a>
+          <a href="#cases" title="Cases">CAS</a>
+          <a href="#memo" title="Memo">MEM</a>
+        </nav>
+        <div class="rail-status" id="exec-rail-status">CONNECTING</div>
+      </aside>
+
+      <section class="workspace" id="command">
+        <header class="topbar">
+          <div class="product">
+            <div class="live-dot" aria-hidden="true"></div>
+            <div>
+              <h1>StrategyOS.live</h1>
+              <span>Executive finance command system</span>
+            </div>
+          </div>
+          <div class="system-clock">
+            <div>
+              <strong id="exec-run-title">Latest finance review</strong><br />
+              <span id="exec-run-meta">Waiting for authenticated run data</span>
+            </div>
+            <a class="open-app" href="/app">Open review app</a>
+          </div>
+        </header>
+
+        <section class="session-panel" id="exec-session-panel" aria-live="polite">
+          <div>
+            <strong>Connect executive cockpit</strong>
+            <span id="exec-session-status">Paste an operator or reviewer token to load live run data.</span>
+          </div>
+          <label>
+            Access token
+            <input id="exec-session-token" type="password" placeholder="Bearer token or API key" autocomplete="off" />
+          </label>
+          <button class="action-button primary" id="exec-connect" type="button">Connect</button>
+          <button class="action-button" id="exec-clear" type="button">Clear</button>
+        </section>
+
+        <div class="command-grid">
+          <section class="panel main-panel">
+            <div class="brief-row">
+              <div>
+                <p class="eyebrow">RECOVERY INTELLIGENCE ONLINE</p>
+                <h2 class="headline" id="exec-headline">Awaiting live StrategyOS run.</h2>
+                <p class="lead" id="exec-lead">
+                  Connect a reviewer or operator session. I will summarize what can be approved, what is blocked, and what should not be automated.
+                </p>
+                <form class="command-input" id="exec-command-form">
+                  <span class="prompt-symbol">&gt;</span>
+                  <input id="exec-command-input" type="text" value="What is the total recoverable?" aria-label="Ask StrategyOS command" />
+                  <button type="submit">Run</button>
+                </form>
+                <div class="command-output" id="exec-command-output">Command answers will appear here with citations.</div>
+              </div>
+              <aside class="system-card">
+                <span class="micro">PRIMARY OBJECTIVE</span>
+                <strong id="exec-primary-objective">--</strong>
+                <p id="exec-primary-caption">Recoverable value will load from the latest run.</p>
+              </aside>
+            </div>
+
+            <div class="module-grid">
+              <section class="panel radar" id="radar">
+                <div class="panel-title">
+                  <div>
+                    <h2>Cash recovery radar</h2>
+                    <p id="exec-radar-caption">Live relationship map between value, evidence, owner, and risk.</p>
+                  </div>
+                  <span class="badge green" id="exec-citation-badge">-- citations</span>
+                </div>
+                <svg class="radar-svg" viewBox="0 0 520 320" role="img" aria-label="Cash recovery radar">
+                  <defs>
+                    <filter id="exec-glow">
+                      <feGaussianBlur stdDeviation="3.5" result="coloredBlur" />
+                      <feMerge>
+                        <feMergeNode in="coloredBlur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  <rect x="0" y="0" width="520" height="320" fill="transparent" />
+                  <g stroke="rgba(151,170,191,0.16)" fill="none">
+                    <circle cx="260" cy="160" r="48" />
+                    <circle cx="260" cy="160" r="92" />
+                    <circle cx="260" cy="160" r="136" />
+                    <line x1="260" y1="24" x2="260" y2="296" />
+                    <line x1="124" y1="160" x2="396" y2="160" />
+                    <line x1="164" y1="64" x2="356" y2="256" />
+                    <line x1="356" y1="64" x2="164" y2="256" />
+                  </g>
+                  <g stroke="rgba(65,214,159,0.62)" stroke-width="2" fill="none" filter="url(#exec-glow)">
+                    <path d="M260 160L142 96" />
+                    <path d="M260 160L392 104" />
+                    <path d="M260 160L390 220" />
+                    <path d="M260 160L144 238" />
+                    <path d="M260 160L260 52" />
+                  </g>
+                  <g>
+                    <circle cx="260" cy="160" r="35" fill="rgba(65,214,159,0.16)" stroke="#41d69f" stroke-width="2" />
+                    <text id="exec-radar-found" x="260" y="154" text-anchor="middle" fill="#f4f7fa" font-size="16" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-weight="800">--</text>
+                    <text x="260" y="175" text-anchor="middle" fill="#94a3b3" font-size="10" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">FOUND</text>
+                    <circle cx="142" cy="96" r="19" fill="rgba(65,214,159,0.18)" stroke="#41d69f" stroke-width="2" />
+                    <text id="exec-radar-ready" x="142" y="100" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">--</text>
+                    <text x="142" y="70" text-anchor="middle" fill="#94a3b3" font-size="10">Ready</text>
+                    <circle cx="392" cy="104" r="17" fill="rgba(255,107,122,0.15)" stroke="#ff6b7a" stroke-width="2" />
+                    <text id="exec-radar-blocked" x="392" y="108" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">--</text>
+                    <text x="392" y="78" text-anchor="middle" fill="#94a3b3" font-size="10">Blocked</text>
+                    <circle cx="390" cy="220" r="18" fill="rgba(88,166,255,0.15)" stroke="#58a6ff" stroke-width="2" />
+                    <text id="exec-radar-review" x="390" y="224" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">--</text>
+                    <text x="390" y="252" text-anchor="middle" fill="#94a3b3" font-size="10">Review</text>
+                    <circle cx="144" cy="238" r="14" fill="rgba(244,184,96,0.16)" stroke="#f4b860" stroke-width="2" />
+                    <text id="exec-radar-hold" x="144" y="242" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">--</text>
+                    <text x="144" y="268" text-anchor="middle" fill="#94a3b3" font-size="10">Hold</text>
+                    <circle cx="260" cy="52" r="16" fill="rgba(65,214,159,0.13)" stroke="#41d69f" stroke-width="2" />
+                    <text id="exec-radar-citations" x="260" y="56" text-anchor="middle" fill="#f4f7fa" font-size="10" font-weight="800">--</text>
+                    <text x="260" y="28" text-anchor="middle" fill="#94a3b3" font-size="10">Cites</text>
+                  </g>
+                </svg>
+                <div class="radar-readout">
+                  <div class="readout"><span>Recoverable</span><strong id="exec-kpi-recoverable">--</strong></div>
+                  <div class="readout"><span>Findings</span><strong id="exec-kpi-findings">--</strong></div>
+                  <div class="readout"><span>Challenges</span><strong id="exec-kpi-challenges">--</strong></div>
+                </div>
+              </section>
+
+              <section class="panel decision-panel">
+                <div class="panel-title">
+                  <div>
+                    <h2>Decision controls</h2>
+                    <p>Each control has a cash impact, owner, and current safety posture.</p>
+                  </div>
+                  <span class="badge amber" id="exec-decision-badge">pending</span>
+                </div>
+                <div class="decision-stack" id="exec-decision-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <aside class="panel assistant-panel" aria-label="StrategyOS assistant">
+            <div class="assistant-head">
+              <p class="eyebrow">STRATEGYOS COPILOT</p>
+              <h2 id="exec-copilot-title">Executive brief from live run data.</h2>
+              <p id="exec-copilot-subtitle">No uncited claim should enter a vendor letter. Human gates stay visible.</p>
+            </div>
+            <div class="assistant-feed" id="exec-assistant-feed"></div>
+            <div class="assistant-actions">
+              <a class="action-button primary" href="/app">Open dashboard controls</a>
+              <button class="action-button" id="exec-refresh" type="button">Refresh live data</button>
+              <button class="action-button" id="exec-evidence-command" type="button">Ask evidence status</button>
+            </div>
+          </aside>
+        </div>
+
+        <div class="bottom-grid" id="cases">
+          <section class="panel">
+            <div class="panel-title">
+              <div>
+                <h2>Case matrix</h2>
+                <p>Designed for CFO scan: owner, decision, evidence, and risk.</p>
+              </div>
+              <span class="badge blue" id="exec-case-badge">live queue</span>
+            </div>
+            <table class="case-table">
+              <thead>
+                <tr>
+                  <th>Case</th>
+                  <th>Owner</th>
+                  <th>Evidence</th>
+                  <th>Action</th>
+                  <th>Risk</th>
+                </tr>
+              </thead>
+              <tbody id="exec-case-body">
+                <tr><td colspan="5">Connect a session to load cases.</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <aside class="panel memo-card" id="memo">
+            <p class="eyebrow">BOARD PACK SNAPSHOT</p>
+            <h2 id="exec-memo-title">What to say in the room</h2>
+            <p id="exec-memo-body">Live board narrative will load from the latest run state.</p>
+            <div class="memo-list" id="exec-memo-list"></div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
+    <script src="/static/executive.js"></script>
+  </body>
+</html>
