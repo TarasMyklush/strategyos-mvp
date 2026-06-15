@@ -11,10 +11,10 @@
       <aside class="rail" aria-label="StrategyOS navigation">
         <a class="mark" href="/" aria-label="StrategyOS home">S</a>
         <nav class="rail-nav">
-          <a class="active" href="#command" title="Command">CMD</a>
-          <a href="#review" title="Review">REV</a>
-          <a href="#source-pack-section" title="Upload">SRC</a>
-          <a href="#kg-panel" title="Graph">KG</a>
+          <button class="active" type="button" title="Command" data-scroll-target="command">CMD</button>
+          <button type="button" title="Review" data-scroll-target="review">REV</button>
+          <button type="button" title="Source intake" data-open-drawer="new-run" data-drawer-target="source-pack-section">SRC</button>
+          <button type="button" title="Knowledge graph" data-open-drawer="system" data-drawer-target="kg-panel">KG</button>
         </nav>
       </aside>
 
@@ -31,7 +31,6 @@
             <span class="identity" id="ui-identity">checking session</span>
             <span class="pill status-pill" id="run-pill">latest run: loading</span>
             <span class="pill" id="environment-badge">environment</span>
-            <a class="btn secondary" href="/">Public view</a>
             <button class="btn secondary" id="system-drawer-button" type="button">Advanced</button>
             <button class="btn primary" id="new-run-button" type="button">Start analysis</button>
           </div>
@@ -133,21 +132,6 @@
                 </div>
               </div>
               <div class="empty-review-note">No review gate is currently visible.</div>
-            </section>
-
-            <section class="panel route-panel">
-              <div class="panel-title">
-                <div>
-                  <p class="eyebrow">OPERATIONS</p>
-                  <h2>Fast routes</h2>
-                </div>
-              </div>
-              <div class="route-list">
-                <button class="route-button" type="button" data-open-drawer="new-run" data-drawer-target="source-pack-section">Source intake</button>
-                <button class="route-button" type="button" data-open-drawer="system" data-drawer-target="kg-panel">Knowledge graph</button>
-                <button class="route-button" type="button" data-open-drawer="system" data-drawer-target="vector-search-panel">Search index</button>
-                <button class="route-button" type="button" data-open-drawer="system" data-drawer-target="health-panel">Runtime health</button>
-              </div>
             </section>
           </aside>
         </div>
@@ -253,7 +237,7 @@
           <button class="btn secondary icon-btn" id="system-drawer-close" type="button" aria-label="Close system drawer">Close</button>
         </div>
 
-        <section class="drawer-section" id="vector-search-panel">
+        <section class="drawer-section" id="data-panel">
           <h3>Managed data</h3>
           <div id="data-summary" class="summary">Awaiting data status.</div>
           <dl class="kv" id="data-counts-kv"></dl>
@@ -276,7 +260,7 @@
           </div>
         </section>
 
-        <section class="drawer-section" id="health-panel">
+        <section class="drawer-section" id="vector-search-panel">
           <h3>Search index utility</h3>
           <form id="vector-search-form" class="form-stack">
             <label>
@@ -330,7 +314,7 @@
           <pre id="vector-search-payload-preview" class="code-block">Awaiting vector search payload.</pre>
         </section>
 
-        <section class="drawer-section">
+        <section class="drawer-section" id="health-panel">
           <h3>Artifact inspector</h3>
           <div id="artifact-tabs" class="tab-row"></div>
           <pre id="artifact-viewer" class="code-block">Select a run artifact.</pre>

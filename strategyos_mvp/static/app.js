@@ -1224,7 +1224,7 @@
 
   async function focusKnowledgeGraphNode(nodeId) {
     if (!nodeId) return;
-    openDrawer("system");
+    openDrawer("system", "kg-panel");
     state.kgSelectedId = nodeId;
     if (!state.knowledgeGraph || state.knowledgeGraph.status === "idle") {
       await refreshKnowledgeGraph();
@@ -1788,11 +1788,32 @@
     }
   }
 
-  function openDrawer(name) {
+  function setRailActive(targetId) {
+    if (!targetId) return;
+    document.querySelectorAll(".rail-nav button").forEach((node) => {
+      const matches = node.getAttribute("data-scroll-target") === targetId
+        || node.getAttribute("data-drawer-target") === targetId;
+      node.classList.toggle("active", matches);
+    });
+  }
+
+  function scrollToWorkspaceTarget(targetId) {
+    if (!targetId) return;
+    document.getElementById(targetId)?.scrollIntoView({ block: "start" });
+    setRailActive(targetId);
+  }
+
+  function openDrawer(name, targetId = "") {
     const drawer = name === "system" ? els.systemDrawer : els.newRunDrawer;
     drawer.classList.remove("hidden");
     if (name === "system") {
       requestAnimationFrame(renderKnowledgeGraph);
+    }
+    if (targetId) {
+      setRailActive(targetId);
+      requestAnimationFrame(() => {
+        document.getElementById(targetId)?.scrollIntoView({ block: "start" });
+      });
     }
   }
 
@@ -1943,20 +1964,20 @@
         renderChat();
       }
     });
-    els.newRunButton.addEventListener("click", () => openDrawer("new-run"));
+    els.newRunButton.addEventListener("click", () => openDrawer("new-run", "source-pack-section"));
     els.startRunCancel.addEventListener("click", () => closeDrawer("new-run"));
     els.systemDrawerButton.addEventListener("click", () => openDrawer("system"));
     els.systemDrawerClose.addEventListener("click", () => closeDrawer("system"));
+    document.querySelectorAll("[data-scroll-target]").forEach((node) => {
+      node.addEventListener("click", () => {
+        scrollToWorkspaceTarget(node.getAttribute("data-scroll-target") || "");
+      });
+    });
     document.querySelectorAll("[data-open-drawer]").forEach((node) => {
       node.addEventListener("click", () => {
         const drawerName = node.getAttribute("data-open-drawer") || "system";
         const targetId = node.getAttribute("data-drawer-target") || "";
-        openDrawer(drawerName);
-        if (targetId) {
-          requestAnimationFrame(() => {
-            document.getElementById(targetId)?.scrollIntoView({ block: "start" });
-          });
-        }
+        openDrawer(drawerName, targetId);
       });
     });
     document.querySelectorAll("[data-close-drawer]").forEach((node) => {
@@ -1975,7 +1996,7 @@
     els.reviewApprove.addEventListener("click", () => sendReviewDecision("approve"));
     els.reviewReject.addEventListener("click", () => sendReviewDecision("reject"));
     els.reviewResume.addEventListener("click", resumeRun);
-    els.reviewNewRun.addEventListener("click", () => openDrawer("new-run"));
+    els.reviewNewRun.addEventListener("click", () => openDrawer("new-run", "source-pack-section"));
     els.kgRefresh.addEventListener("click", () => refreshKnowledgeGraph());
     els.vectorSearchForm.addEventListener("submit", submitVectorSearch);
     els.vectorSearchResults.addEventListener("click", (event) => {

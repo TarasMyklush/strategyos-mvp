@@ -144,9 +144,13 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert 'id="ui-identity"' in html
     assert 'id="new-run-button"' in html
     assert 'id="system-drawer-button"' in html
+    assert 'data-scroll-target="command"' in html
+    assert 'data-scroll-target="review"' in html
     assert 'data-open-drawer="new-run"' in html
     assert 'data-open-drawer="system"' in html
+    assert 'data-drawer-target="source-pack-section"' in html
     assert 'data-drawer-target="kg-panel"' in html
+    assert 'querySelectorAll("[data-scroll-target]")' in js
     assert 'querySelectorAll("[data-open-drawer]")' in js
     assert 'src="/static/app.js"' in html
     assert 'href="/static/styles.css"' in html
@@ -311,6 +315,9 @@ def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
     assert 'id="data-systems-kv"' in html
     assert 'id="data-payload-preview"' in html
     assert 'id="kg-panel"' in html
+    assert 'id="data-panel"' in html
+    assert 'id="vector-search-panel"' in html
+    assert 'id="health-panel"' in html
     assert 'id="kg-summary"' in html
     assert 'id="kg-graph"' in html
     assert 'id="kg-detail"' in html
