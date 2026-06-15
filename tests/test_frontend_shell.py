@@ -144,16 +144,19 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert 'id="ui-identity"' in html
     assert 'id="new-run-button"' in html
     assert 'id="system-drawer-button"' in html
-    assert 'data-scroll-target="command"' in html
-    assert 'data-scroll-target="review"' in html
+    assert 'id="graph-drawer-button"' in html
+    assert "Diagnostics" in html
+    assert "Graph and source trail" in html
+    assert 'class="rail-nav"' not in html
+    assert 'data-scroll-target="' not in html
     assert 'data-open-drawer="new-run"' in html
     assert 'data-open-drawer="system"' in html
     assert 'data-drawer-target="source-pack-section"' in html
     assert 'data-drawer-target="kg-panel"' in html
-    assert 'querySelectorAll("[data-scroll-target]")' in js
+    assert 'querySelectorAll("[data-scroll-target]")' not in js
     assert 'querySelectorAll("[data-open-drawer]")' in js
-    assert 'src="/static/app.js?v=rail-20260615"' in html
-    assert 'href="/static/styles.css?v=rail-20260615"' in html
+    assert 'src="/static/app.js?v=ux-20260615"' in html
+    assert 'href="/static/styles.css?v=ux-20260615"' in html
 
 
 def test_dashboard_embeds_parseable_bootstrap_json():
@@ -278,8 +281,8 @@ def test_dashboard_renders_source_pack_intake_hooks():
     html = _dashboard_response()
     js = _static_app_js()
 
-    assert "Zip source pack" in html
-    assert "Folder source pack" in html
+    assert "Upload .zip" in html
+    assert "Choose folder" in html
     assert "Choose a .zip source pack or a folder of finance files." in html
     assert "Check selected files" not in html
     assert "Advanced: use a server folder" not in html
@@ -306,6 +309,7 @@ def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
     js = _static_app_js()
 
     assert 'id="system-drawer"' in html
+    assert "Diagnostics" in html
     assert "Managed data" in html
     assert "Knowledge graph" in html
     assert "Runtime health" in html

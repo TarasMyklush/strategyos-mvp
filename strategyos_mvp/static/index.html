@@ -4,34 +4,27 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StrategyOS.live Command Cockpit</title>
-    <link rel="stylesheet" href="/static/styles.css?v=rail-20260615" />
+    <link rel="stylesheet" href="/static/styles.css?v=ux-20260615" />
   </head>
   <body>
     <div class="app-shell">
-      <aside class="rail" aria-label="StrategyOS navigation">
-        <a class="mark" href="/" aria-label="StrategyOS home">S</a>
-        <nav class="rail-nav">
-          <button class="active" type="button" title="Command" data-scroll-target="command">CMD</button>
-          <button type="button" title="Review" data-scroll-target="review">REV</button>
-          <button type="button" title="Source intake" data-open-drawer="new-run" data-drawer-target="source-pack-section">SRC</button>
-          <button type="button" title="Knowledge graph" data-open-drawer="system" data-drawer-target="kg-panel">KG</button>
-        </nav>
-      </aside>
-
       <section class="workspace" id="command">
         <header class="app-header">
+          <a class="mark" href="/" aria-label="StrategyOS home">S</a>
           <div class="brand-row">
-            <span class="live-dot" aria-hidden="true"></span>
             <div>
               <span class="brand" id="app-name">StrategyOS</span>
               <span class="brand-subtitle">Finance command cockpit</span>
             </div>
           </div>
-          <div class="header-actions">
+          <div class="header-meta">
             <span class="identity" id="ui-identity">checking session</span>
             <span class="pill status-pill" id="run-pill">latest run: loading</span>
             <span class="pill" id="environment-badge">environment</span>
-            <button class="btn secondary" id="system-drawer-button" type="button">Advanced</button>
+          </div>
+          <div class="header-actions">
+            <button class="btn secondary" id="graph-drawer-button" type="button" data-open-drawer="system" data-drawer-target="kg-panel">Graph</button>
+            <button class="btn quiet" id="system-drawer-button" type="button">Diagnostics</button>
             <button class="btn primary" id="new-run-button" type="button">Start analysis</button>
           </div>
         </header>
@@ -59,7 +52,8 @@
             <div class="brief-row">
               <div class="brief-copy">
                 <p class="eyebrow">RECOVERY CONTROL ONLINE</p>
-                <h1>Recovery command is standing by.</h1>
+                <h1>Latest finance run</h1>
+                <p class="brief-note">Ask cited questions, inspect recovery exposure, or start a fresh source-pack analysis.</p>
               </div>
               <section class="cards" id="kpi-cards" aria-label="Latest run metrics">
                 <article class="card">
@@ -97,11 +91,14 @@
               <div class="suggest" id="chat-suggestions"></div>
 
               <div class="chat-mode-row">
-                <div class="mode-switch" id="qa-mode-switch" role="group" aria-label="Answer mode">
-                  <button class="mode-option active" type="button" data-qa-mode="deterministic">Deterministic</button>
-                  <button class="mode-option" type="button" data-qa-mode="llm">LLM</button>
-                </div>
                 <span class="muted" id="qa-mode-status"></span>
+                <details class="qa-options">
+                  <summary>Answer mode</summary>
+                  <div class="mode-switch" id="qa-mode-switch" role="group" aria-label="Answer mode">
+                    <button class="mode-option active" type="button" data-qa-mode="deterministic">Deterministic</button>
+                    <button class="mode-option" type="button" data-qa-mode="llm">LLM</button>
+                  </div>
+                </details>
               </div>
 
               <form class="inputrow" id="chat-form">
@@ -131,7 +128,23 @@
                   <button class="btn primary hidden" id="review-new-run" type="button">Start new analysis</button>
                 </div>
               </div>
-              <div class="empty-review-note">No review gate is currently visible.</div>
+              <div class="empty-review-note">
+                <strong>No approval needed.</strong>
+                <span>Use the graph or cited Q&amp;A to inspect this run.</span>
+              </div>
+            </section>
+            <section class="panel evidence-panel">
+              <div class="panel-title">
+                <div>
+                  <p class="eyebrow">EVIDENCE MAP</p>
+                  <h2>Graph and source trail</h2>
+                </div>
+              </div>
+              <p>Open the graph when you need relationships, citations, vendors, and finding context.</p>
+              <div class="button-row">
+                <button class="btn secondary" type="button" data-open-drawer="system" data-drawer-target="kg-panel">Open graph</button>
+                <button class="btn secondary" type="button" data-open-drawer="new-run" data-drawer-target="source-pack-section">Upload sources</button>
+              </div>
             </section>
           </aside>
         </div>
@@ -151,14 +164,18 @@
 
         <div class="drawer-section" id="source-pack-section">
           <form id="source-pack-upload-form" class="form-stack">
-            <label>
-              Zip source pack
-              <input id="source-pack-files" type="file" accept=".zip,application/zip,application/x-zip-compressed" multiple />
-            </label>
-            <label>
-              Folder source pack
-              <input id="source-pack-folder-files" type="file" multiple webkitdirectory />
-            </label>
+            <div class="source-upload-grid">
+              <label class="upload-choice">
+                <strong>Upload .zip</strong>
+                <span>Best for source packs shared from another system.</span>
+                <input id="source-pack-files" type="file" accept=".zip,application/zip,application/x-zip-compressed" multiple />
+              </label>
+              <label class="upload-choice">
+                <strong>Choose folder</strong>
+                <span>Use when files are already unpacked on this machine.</span>
+                <input id="source-pack-folder-files" type="file" multiple webkitdirectory />
+              </label>
+            </div>
             <button class="btn primary" id="source-pack-upload-submit" type="submit">Start analysis</button>
           </form>
 
@@ -232,24 +249,16 @@
         <div class="drawer-head">
           <div>
             <p class="eyebrow">SYSTEM</p>
-            <h2>Advanced</h2>
+            <h2>Diagnostics</h2>
           </div>
           <button class="btn secondary icon-btn" id="system-drawer-close" type="button" aria-label="Close system drawer">Close</button>
         </div>
-
-        <section class="drawer-section" id="data-panel">
-          <h3>Managed data</h3>
-          <div id="data-summary" class="summary">Awaiting data status.</div>
-          <dl class="kv" id="data-counts-kv"></dl>
-          <dl class="kv" id="data-systems-kv"></dl>
-          <pre id="data-payload-preview" class="code-block">Awaiting data status payload.</pre>
-        </section>
 
         <section class="drawer-section" id="kg-panel">
           <div class="section-title-row">
             <div>
               <h3>Knowledge graph</h3>
-              <p><span class="mono">GET /runs/latest/knowledge-graph</span></p>
+              <p>Latest run relationships and evidence paths.</p>
             </div>
             <button class="btn secondary" id="kg-refresh" type="button">Refresh graph</button>
           </div>
@@ -258,6 +267,17 @@
             <div id="kg-graph" class="kg-graph" aria-label="Latest run knowledge graph visualization"></div>
             <aside id="kg-detail" class="kg-detail">Select a graph node to inspect details.</aside>
           </div>
+        </section>
+
+        <section class="drawer-section" id="data-panel">
+          <h3>Managed data</h3>
+          <div id="data-summary" class="summary">Awaiting data status.</div>
+          <dl class="kv" id="data-counts-kv"></dl>
+          <dl class="kv" id="data-systems-kv"></dl>
+          <details class="diagnostic-disclosure">
+            <summary>Raw data payload</summary>
+            <pre id="data-payload-preview" class="code-block">Awaiting data status payload.</pre>
+          </details>
         </section>
 
         <section class="drawer-section" id="vector-search-panel">
@@ -310,14 +330,23 @@
             <button class="btn secondary" id="vector-search-submit" type="submit">Search</button>
           </form>
           <div id="vector-search-results" class="stack-list"></div>
-          <pre id="vector-search-evidence-preview" class="code-block">Select a search result evidence link.</pre>
-          <pre id="vector-search-payload-preview" class="code-block">Awaiting vector search payload.</pre>
+          <details class="diagnostic-disclosure">
+            <summary>Evidence preview</summary>
+            <pre id="vector-search-evidence-preview" class="code-block">Select a search result evidence link.</pre>
+          </details>
+          <details class="diagnostic-disclosure">
+            <summary>Raw search payload</summary>
+            <pre id="vector-search-payload-preview" class="code-block">Awaiting vector search payload.</pre>
+          </details>
         </section>
 
         <section class="drawer-section" id="health-panel">
           <h3>Artifact inspector</h3>
           <div id="artifact-tabs" class="tab-row"></div>
-          <pre id="artifact-viewer" class="code-block">Select a run artifact.</pre>
+          <details class="diagnostic-disclosure" open>
+            <summary>Artifact preview</summary>
+            <pre id="artifact-viewer" class="code-block">Select a run artifact.</pre>
+          </details>
         </section>
 
         <section class="drawer-section">
@@ -325,13 +354,16 @@
           <div id="health-summary" class="summary">Awaiting health status.</div>
           <dl class="kv" id="health-checks-kv"></dl>
           <dl class="kv" id="health-config-kv"></dl>
-          <pre id="health-payload-preview" class="code-block">Awaiting health payload.</pre>
+          <details class="diagnostic-disclosure">
+            <summary>Raw health payload</summary>
+            <pre id="health-payload-preview" class="code-block">Awaiting health payload.</pre>
+          </details>
         </section>
       </section>
     </aside>
 
     <script id="strategyos-bootstrap" type="application/json">__STRATEGYOS_BOOTSTRAP__</script>
     <script src="/static/vendor/cytoscape.min.js"></script>
-    <script src="/static/app.js?v=rail-20260615"></script>
+    <script src="/static/app.js?v=ux-20260615"></script>
   </body>
 </html>

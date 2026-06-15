@@ -262,7 +262,7 @@
     if (els.qaModeStatus) {
       els.qaModeStatus.textContent = state.qaMode === "llm"
         ? `LLM: ${llmStatus.model || "configured"}`
-        : "Exact deterministic answers";
+        : "Cited deterministic answers";
     }
   }
 
@@ -1788,23 +1788,6 @@
     }
   }
 
-  function setRailActive(targetId) {
-    if (!targetId) return;
-    document.querySelectorAll(".rail-nav button").forEach((node) => {
-      const matches = node.getAttribute("data-scroll-target") === targetId
-        || node.getAttribute("data-drawer-target") === targetId;
-      node.classList.toggle("active", matches);
-    });
-  }
-
-  function scrollToWorkspaceTarget(targetId) {
-    if (!targetId) return;
-    els.systemDrawer.classList.add("hidden");
-    els.newRunDrawer.classList.add("hidden");
-    document.getElementById(targetId)?.scrollIntoView({ block: "start" });
-    setRailActive(targetId);
-  }
-
   function openDrawer(name, targetId = "") {
     const drawer = name === "system" ? els.systemDrawer : els.newRunDrawer;
     const otherDrawer = name === "system" ? els.newRunDrawer : els.systemDrawer;
@@ -1814,7 +1797,6 @@
       requestAnimationFrame(renderKnowledgeGraph);
     }
     if (targetId) {
-      setRailActive(targetId);
       requestAnimationFrame(() => {
         document.getElementById(targetId)?.scrollIntoView({ block: "start" });
       });
@@ -1972,11 +1954,6 @@
     els.startRunCancel.addEventListener("click", () => closeDrawer("new-run"));
     els.systemDrawerButton.addEventListener("click", () => openDrawer("system"));
     els.systemDrawerClose.addEventListener("click", () => closeDrawer("system"));
-    document.querySelectorAll("[data-scroll-target]").forEach((node) => {
-      node.addEventListener("click", () => {
-        scrollToWorkspaceTarget(node.getAttribute("data-scroll-target") || "");
-      });
-    });
     document.querySelectorAll("[data-open-drawer]").forEach((node) => {
       node.addEventListener("click", () => {
         const drawerName = node.getAttribute("data-open-drawer") || "system";
