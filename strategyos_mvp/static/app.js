@@ -25,6 +25,71 @@
     "writer",
   ];
 
+  // Plain-language labels for internal identifiers a business user should never
+  // see raw (fix-list item 7). Covers detector pattern_type values and the
+  // internal pipeline stage names. Anything not present falls back to a
+  // title-cased version of the snake_case token via humanizeToken().
+  const PATTERN_LABELS = {
+    duplicate_payment: "Duplicate payment",
+    entity_resolution_duplicate: "Duplicate vendor identity",
+    off_contract_single_approver: "Off-contract spend, single approver",
+    price_variance: "Price variance vs PO",
+    missed_early_pay_discount: "Missed early-payment discount",
+    auto_renewal_escalation: "Auto-renewal escalation",
+    fx_hedge_unapplied: "FX hedge not applied",
+    dormant_credit_balance: "Dormant supplier credit",
+    vendor_collusion_ring: "Vendor collusion ring",
+  };
+  const STAGE_LABELS = {
+    ingest: "Data intake",
+    analyst: "Analyst review",
+    auditor: "Auditor challenge",
+    evidence_qa: "Evidence check",
+    knowledge_graph: "Relationship map",
+    awaiting_review: "Awaiting sign-off",
+    writer: "Final report",
+  };
+
+  function humanizeToken(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    return text
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }
+
+  function humanizePattern(value) {
+    const key = String(value || "").trim().toLowerCase();
+    if (!key) return "";
+    return PATTERN_LABELS[key] || humanizeToken(key);
+  }
+
+  function humanizeStage(value) {
+    const key = String(value || "").trim().toLowerCase();
+    if (!key) return "";
+    return STAGE_LABELS[key] || humanizeToken(key);
+  }
+
+  // Deterministic Q&A intent names (qa.py INTENTS) shown as a tag under each
+  // answer. Keep these short and business-readable.
+  const INTENT_LABELS = {
+    working_capital: "Working capital",
+    overdue: "Overdue / outstanding",
+    recoverable: "Recoverable",
+    findings: "Findings",
+    top_parties: "Top vendors",
+    distinct_parties: "Vendor count",
+    named_party_spend: "Vendor spend",
+    invoice_metric: "Invoice totals",
+  };
+
+  function humanizeIntent(value) {
+    const key = String(value || "").trim().toLowerCase();
+    if (!key) return "";
+    return INTENT_LABELS[key] || humanizeToken(key);
+  }
+
   const state = {
     token: window.localStorage.getItem(TOKEN_KEY) || "",
     session: null,
@@ -51,6 +116,9 @@
     runSubmitting: false,
     vectorSearch: { status: "idle", payload: null, error: "" },
     vectorEvidence: { status: "idle", payload: null, error: "" },
+    findings: null,
+    openFindingId: "",
+    history: null,
     pollTimer: null,
     lastRunSignature: "",
   };
@@ -143,6 +211,22 @@
     healthChecksKv: byId("health-checks-kv"),
     healthConfigKv: byId("health-config-kv"),
     healthPayloadPreview: byId("health-payload-preview"),
+    findingsPanel: byId("findings-panel"),
+    findingsTotal: byId("findings-total"),
+    findingsSummary: byId("findings-summary"),
+    findingsList: byId("findings-list"),
+    findingDrawer: byId("finding-drawer"),
+    findingDrawerClose: byId("finding-drawer-close"),
+    findingDetailEyebrow: byId("finding-detail-eyebrow"),
+    findingDetailTitle: byId("finding-detail-title"),
+    findingDetailKv: byId("finding-detail-kv"),
+    findingDetailExplainer: byId("finding-detail-explainer"),
+    findingDetailCitations: byId("finding-detail-citations"),
+    findingDetailGraph: byId("finding-detail-graph"),
+    findingDetailChallenge: byId("finding-detail-challenge"),
+    trendStrip: byId("trend-strip"),
+    trendRead: byId("trend-read"),
+    trendBars: byId("trend-bars"),
   };
 
   function escapeHtml(value) {
@@ -629,9 +713,135 @@
       els.partialRunChips.classList.add("hidden");
       return;
     }
-    const mode = run.run_mode && run.run_mode !== "full" ? "Partial analysis" : "Run diagnostics";
+    const mode = run.run_mode && run.run_mode !== "full" ? "Partial analysis" : "Run notes";
     els.partialRunChips.innerHTML = `<span class="pill warn" title="${escapeHtml(diagnostics.join("\n"))}">${escapeHtml(mode)}: ${formatCount(diagnostics.length)} items</span>`;
     els.partialRunChips.classList.remove("hidden");
+  }
+
+  function findingStatus(finding) {
+    // Status pill shown on each worklist row, in business language.
+    const run = state.findings || {};
+    if (run.requires_human_review && ["pending", "awaiting_review", ""].includes(String(run.approval_status || "").toLowerCase())) {
+      return { tone: "warn", label: "Needs sign-off" };
+    }
+    if (finding.challenged) {
+      return { tone: "neutral", label: "Auditor challenged" };
+    }
+    if (Number(finding.recoverable_sar) <= 0) {
+      return { tone: "neutral", label: "Control gap" };
+    }
+    return { tone: "ok", label: "Verified" };
+  }
+
+  function renderFindingRow(finding) {
+    const status = findingStatus(finding);
+    const amount = Number(finding.recoverable_sar) > 0 ? formatSar(finding.recoverable_sar) : "No cash impact";
+    const owner = finding.owner ? escapeHtml(finding.owner) : "Unassigned";
+    const cites = Number(finding.citation_count) || 0;
+    return `
+      <li class="finding-row" data-finding-id="${escapeHtml(finding.finding_id)}" role="button" tabindex="0">
+        <div class="finding-row-head">
+          <span class="finding-title">${escapeHtml(finding.title)}</span>
+          ${statusPill(status.tone, status.label)}
+        </div>
+        <div class="finding-row-meta">
+          <span class="finding-amount">${escapeHtml(amount)}</span>
+          <span class="finding-owner">${owner}</span>
+          <span class="finding-cites">${cites} ${cites === 1 ? "citation" : "citations"}</span>
+        </div>
+      </li>`;
+  }
+
+  function renderTrend() {
+    if (!els.trendStrip) return;
+    const rows = Array.isArray(state.history?.history) ? state.history.history : [];
+    // A single run is a snapshot, not a trend - keep the strip hidden.
+    if (rows.length < 2) {
+      els.trendStrip.classList.add("hidden");
+      els.trendBars.innerHTML = "";
+      els.trendRead.textContent = "";
+      return;
+    }
+    const max = rows.reduce((acc, row) => Math.max(acc, Number(row.recoverable_sar) || 0), 0) || 1;
+    els.trendBars.innerHTML = rows.map((row) => {
+      const value = Number(row.recoverable_sar) || 0;
+      const height = Math.max(6, Math.round((value / max) * 100));
+      const label = (row.period || "").slice(0, 8);
+      return `<span class="trend-bar" title="${escapeHtml(label)}: ${escapeHtml(formatSar(value))}">
+        <span class="trend-bar-fill" style="height:${height}%"></span>
+      </span>`;
+    }).join("");
+
+    const latest = Number(rows[rows.length - 1].recoverable_sar) || 0;
+    const prior = Number(rows[rows.length - 2].recoverable_sar) || 0;
+    let read;
+    if (latest > prior) read = `Up to ${formatSar(latest)} caught this review`;
+    else if (latest < prior) read = `Down to ${formatSar(latest)} caught this review`;
+    else read = `Holding at ${formatSar(latest)} caught per review`;
+    els.trendRead.textContent = `${read} - across ${formatCount(rows.length)} reviews`;
+    els.trendStrip.classList.remove("hidden");
+  }
+
+  function renderFindings() {
+    if (!els.findingsList) return;
+    const payload = state.findings;
+    const rows = Array.isArray(payload?.findings) ? payload.findings : [];
+    const missing = !payload || payload.status === "missing";
+
+    if (missing || !rows.length) {
+      els.findingsTotal.textContent = "--";
+      els.findingsSummary.textContent = missing
+        ? "No analysis yet - choose Start analysis to review findings."
+        : "No findings in the latest run.";
+      els.findingsList.innerHTML = "";
+      return;
+    }
+
+    const totalRecoverable = payload.total_recoverable_sar;
+    els.findingsTotal.textContent = `${formatCount(rows.length)} findings`;
+    els.findingsSummary.textContent = totalRecoverable != null
+      ? `${formatSar(totalRecoverable)} recoverable across ${formatCount(rows.length)} findings. Tap a row for evidence.`
+      : `${formatCount(rows.length)} findings. Tap a row for evidence.`;
+    els.findingsList.innerHTML = rows.map(renderFindingRow).join("");
+  }
+
+  function openFindingDetail(findingId) {
+    const rows = Array.isArray(state.findings?.findings) ? state.findings.findings : [];
+    const finding = rows.find((row) => String(row.finding_id) === String(findingId));
+    if (!finding) return;
+    state.openFindingId = String(findingId);
+
+    els.findingDetailEyebrow.textContent = finding.pattern_label || "Finding";
+    els.findingDetailTitle.textContent = finding.title || finding.finding_id;
+
+    const kv = [
+      ["Finding", finding.finding_id],
+      ["Type", finding.pattern_label || humanizePattern(finding.pattern_type)],
+      ["Recoverable", Number(finding.recoverable_sar) > 0 ? formatSar(finding.recoverable_sar) : "No cash impact"],
+      ["Leakage", Number(finding.leakage_sar) > 0 ? formatSar(finding.leakage_sar) : "-"],
+      ["Confidence", finding.confidence ? humanizeToken(finding.confidence) : "-"],
+      ["Owner", finding.owner || "Unassigned"],
+      ["Classification", finding.classification || "-"],
+    ];
+    els.findingDetailKv.innerHTML = kv
+      .map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(String(value))}</dd>`)
+      .join("");
+
+    els.findingDetailExplainer.textContent = finding.classification
+      ? `${finding.pattern_label || "This finding"} - ${finding.classification}.`
+      : `${finding.pattern_label || "This finding"} flagged by the analyst and reviewed by the auditor.`;
+
+    const cites = Number(finding.citation_count) || 0;
+    els.findingDetailCitations.textContent = cites
+      ? `${cites} source ${cites === 1 ? "citation" : "citations"} support this finding. Open the evidence map to trace each one.`
+      : "No source citations were attached to this finding.";
+
+    els.findingDetailChallenge.textContent = finding.challenged
+      ? "The auditor challenged this finding during the ping-pong review; it was retained after verification."
+      : "No auditor challenge was raised for this finding.";
+
+    els.findingDetailGraph.dataset.kgNode = finding.node_id || `Finding:${finding.finding_id}`;
+    openDrawer("finding");
   }
 
   function runApprovalStatus(run) {
@@ -799,7 +1009,7 @@
           ${valueLabel ? `<span class="big">${escapeHtml(valueLabel)}</span>` : ""}
           <span>${escapeHtml(answer)}</span>
           ${payload.basis ? `<span class="basis">Basis: ${escapeHtml(payload.basis)}</span>` : ""}
-          ${payload.intent ? `<span class="intent">${statusPill(unmatched ? "warn" : "ok", payload.intent)}</span>` : ""}
+          ${payload.intent ? `<span class="intent">${statusPill(unmatched ? "warn" : "ok", humanizeIntent(payload.intent))}</span>` : ""}
           ${modeLabel ? `<span class="intent">${statusPill(payload.mode === "llm" ? "warn" : "neutral", modeLabel)}</span>` : ""}
         </div>
         ${citationHtml}
@@ -881,7 +1091,11 @@
 
   function setSuggestion(value) {
     els.chatInput.value = value;
-    els.chatInput.focus();
+    if (state.qaLoading) {
+      els.chatInput.focus();
+      return;
+    }
+    submitChat();
   }
 
   function renderDataStatus() {
@@ -1107,7 +1321,7 @@
   function renderKnowledgeGraph() {
     if (!isAuthed()) {
       destroyKnowledgeGraph();
-      els.kgSummary.textContent = "Connect a session to inspect the knowledge graph.";
+      els.kgSummary.textContent = "Connect a session to inspect the evidence map.";
       els.kgGraph.classList.add("empty");
       els.kgGraph.textContent = "Authentication required.";
       els.kgDetail.textContent = "Authentication required.";
@@ -1453,7 +1667,7 @@
     const payload = state.sourcePack;
     if (!payload) {
       if (!state.sourcePackSubmitting) {
-        setSourcePackStatus("not_started", "Choose files", "Upload a source zip or a folder of finance files.");
+        setSourcePackStatus("not_started", "Ready", "Pick a .zip or a folder above, then start analysis.");
       }
       els.sourcePackSummary.textContent = "";
       els.sourcePackManifestBody.innerHTML = '<tr><td colspan="5" class="muted">No file details yet.</td></tr>';
@@ -1788,10 +2002,19 @@
     }
   }
 
+  function drawerByName(name) {
+    if (name === "system") return els.systemDrawer;
+    if (name === "finding") return els.findingDrawer;
+    return els.newRunDrawer;
+  }
+
   function openDrawer(name, targetId = "") {
-    const drawer = name === "system" ? els.systemDrawer : els.newRunDrawer;
-    const otherDrawer = name === "system" ? els.newRunDrawer : els.systemDrawer;
-    otherDrawer.classList.add("hidden");
+    const drawer = drawerByName(name);
+    if (!drawer) return;
+    // Only one drawer open at a time.
+    [els.systemDrawer, els.newRunDrawer, els.findingDrawer].forEach((other) => {
+      if (other && other !== drawer) other.classList.add("hidden");
+    });
     drawer.classList.remove("hidden");
     if (name === "system") {
       requestAnimationFrame(renderKnowledgeGraph);
@@ -1804,8 +2027,8 @@
   }
 
   function closeDrawer(name) {
-    const drawer = name === "system" ? els.systemDrawer : els.newRunDrawer;
-    drawer.classList.add("hidden");
+    const drawer = drawerByName(name);
+    if (drawer) drawer.classList.add("hidden");
   }
 
   async function loadSession() {
@@ -1855,9 +2078,11 @@
       return;
     }
     const previousSignature = state.lastRunSignature;
-    const [latestRun, auditSummary, dataStatus, knowledgeGraph, liveStatus, readyStatus, configStatus, dependenciesStatus] = await Promise.all([
+    const [latestRun, auditSummary, findings, history, dataStatus, knowledgeGraph, liveStatus, readyStatus, configStatus, dependenciesStatus] = await Promise.all([
       guarded("Latest run", requestJson("/runs/latest"), { status: "missing" }),
       guarded("Audit summary", requestJson("/runs/latest/audit-summary"), { status: "missing" }),
+      guarded("Findings", requestJson("/runs/latest/findings"), { status: "missing", findings: [] }),
+      guarded("Run history", requestJson("/runs/history"), { status: "empty", history: [] }),
       guarded("Data status", requestJson("/data/status"), null),
       guarded("Knowledge graph", requestJson("/runs/latest/knowledge-graph"), { status: "missing", nodes: [], edges: [], meta: {} }),
       guarded("Live health", requestJson("/health/live"), null),
@@ -1867,6 +2092,8 @@
     ]);
     state.latestRun = latestRun;
     state.auditSummary = auditSummary;
+    state.findings = findings;
+    state.history = history;
     state.dataStatus = dataStatus;
     state.knowledgeGraph = knowledgeGraph;
     state.liveStatus = liveStatus;
@@ -1887,6 +2114,8 @@
   function renderAll() {
     renderSession();
     renderDashboard();
+    renderTrend();
+    renderFindings();
     renderDataStatus();
     renderKnowledgeGraph();
     renderHealth();
@@ -1950,6 +2179,32 @@
         renderChat();
       }
     });
+    if (els.findingsList) {
+      els.findingsList.addEventListener("click", (event) => {
+        const row = event.target.closest("[data-finding-id]");
+        if (row) openFindingDetail(row.getAttribute("data-finding-id") || "");
+      });
+      els.findingsList.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const row = event.target.closest("[data-finding-id]");
+        if (row) {
+          event.preventDefault();
+          openFindingDetail(row.getAttribute("data-finding-id") || "");
+        }
+      });
+    }
+    if (els.findingDrawerClose) {
+      els.findingDrawerClose.addEventListener("click", () => closeDrawer("finding"));
+    }
+    if (els.findingDetailGraph) {
+      els.findingDetailGraph.addEventListener("click", () => {
+        const nodeId = els.findingDetailGraph.dataset.kgNode || "";
+        if (nodeId) {
+          closeDrawer("finding");
+          focusKnowledgeGraphNode(nodeId);
+        }
+      });
+    }
     els.newRunButton.addEventListener("click", () => openDrawer("new-run", "source-pack-section"));
     els.startRunCancel.addEventListener("click", () => closeDrawer("new-run"));
     els.systemDrawerButton.addEventListener("click", () => openDrawer("system"));

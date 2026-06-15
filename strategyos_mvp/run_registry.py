@@ -99,3 +99,74 @@ def load_latest_run_summary() -> dict[str, Any] | None:
 
 def _looks_timestamped(name: str) -> bool:
     return bool(TIMESTAMP_PATTERN.fullmatch(name))
+
+
+_TIMESTAMP_SUFFIX = re.compile(r"(\d{8}T\d{6}Z)")
+
+
+def _run_timestamp(run_dir_name: str) -> str:
+    match = _TIMESTAMP_SUFFIX.search(run_dir_name)
+    return match.group(1) if match else ""
+
+
+def discover_run_history(limit: int = 12) -> list[dict[str, Any]]:
+    """Scan the output root for timestamped run directories and return a
+    chronological history of leakage caught per run. Each entry:
+    {run_id, period, run_dir, identified_sar, recoverable_sar, finding_count}.
+    Oldest first so a trend strip reads left-to-right. Best-effort: unreadable
+    or malformed summaries are skipped, never raised."""
+    output_root = CONFIG.output_root.expanduser().resolve()
+    if not output_root.exists():
+        return []
+
+    entries: list[tuple[str, dict[str, Any]]] = []
+    for summary_path in output_root.glob("*/run_summary.json"):
+        run_dir = summary_path.parent
+        if not _looks_timestamped(run_dir.name):
+            continue
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(summary, dict):
+            continue
+        timestamp = _run_timestamp(run_dir.name)
+        acceptance = summary.get("acceptance") if isinstance(summary.get("acceptance"), dict) else {}
+        recoverable = _safe_float(
+            summary.get("total_recoverable_sar")
+            if summary.get("total_recoverable_sar") is not None
+            else acceptance.get("actual_total_recoverable_sar")
+        )
+        identified = _safe_float(
+            summary.get("total_identified_sar")
+            or acceptance.get("actual_total_identified_sar")
+            or acceptance.get("actual_total_leakage_sar")
+        )
+        entries.append(
+            (
+                timestamp,
+                {
+                    "run_id": summary.get("run_id"),
+                    "period": timestamp or run_dir.name,
+                    "run_dir": str(run_dir),
+                    "identified_sar": identified if identified is not None else recoverable,
+                    "recoverable_sar": recoverable,
+                    "finding_count": summary.get("locked_findings") or summary.get("findings"),
+                },
+            )
+        )
+
+    entries.sort(key=lambda item: item[0])
+    history = [entry for _, entry in entries]
+    if limit and len(history) > limit:
+        history = history[-limit:]
+    return history
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
