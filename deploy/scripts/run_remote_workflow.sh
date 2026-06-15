@@ -51,7 +51,13 @@ json_field() {
 import json
 import sys
 
-data = json.load(sys.stdin)
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except ValueError:
+    # Empty or non-JSON body: exit non-zero so the caller can fail loudly,
+    # without dumping a Python traceback.
+    sys.exit(1)
 value = data
 for part in sys.argv[1].split("."):
     value = value.get(part, "") if isinstance(value, dict) else ""
@@ -62,18 +68,40 @@ print(json.dumps(value) if isinstance(value, (dict, list)) else value)
 }
 
 if [ -n "${TARGET_URL}" ]; then
-  response="$(curl_run "${TARGET_URL}")"
+  if ! response="$(curl_run "${TARGET_URL}")"; then
+    echo "Smoke run failed: POST ${TARGET_URL%/}/runs returned an HTTP error (often 401/403 auth or 4xx/5xx). Response body (if any):" >&2
+    printf '%s\n' "${response}" >&2
+    exit 1
+  fi
 elif [ -n "${TARGET_HOST}" ]; then
-  response="$(remote_run)"
+  if ! response="$(remote_run)"; then
+    echo "Smoke run failed: POST http://localhost/runs on ${TARGET_HOST} returned an HTTP error. Response body (if any):" >&2
+    printf '%s\n' "${response}" >&2
+    exit 1
+  fi
 else
-  echo "Set TARGET_URL=https://domain or TARGET_HOST=root@server."
+  echo "Set TARGET_URL=https://domain or TARGET_HOST=root@server." >&2
   exit 1
 fi
 
 printf '%s\n' "${response}"
-job_id="$(printf '%s' "${response}" | json_field job_id || true)"
-if [ "${RUN_POLL_JOB}" != "true" ] || [ -z "${job_id}" ]; then
+
+# A successful POST /runs must return a JSON object. An empty or non-JSON body
+# means the request did not actually start a run (e.g. an auth error swallowed
+# by curl -f) and must fail the step rather than silently pass.
+if ! job_id="$(printf '%s' "${response}" | json_field job_id)"; then
+  echo "Smoke run failed: POST /runs did not return parseable JSON. Raw response:" >&2
+  printf '%s\n' "${response}" >&2
+  exit 1
+fi
+
+if [ "${RUN_POLL_JOB}" != "true" ]; then
   exit 0
+fi
+
+if [ -z "${job_id}" ]; then
+  echo "Smoke run failed: /runs response contained no job_id, so no run was queued." >&2
+  exit 1
 fi
 
 deadline=$((SECONDS + RUN_POLL_TIMEOUT_SECONDS))
