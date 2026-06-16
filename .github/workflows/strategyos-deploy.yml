@@ -137,6 +137,11 @@ jobs:
     env:
       TARGET_HOST: ${{ vars.HETZNER_USER }}@${{ vars.HETZNER_HOST }}
       TARGET_DIR: ${{ vars.TARGET_DIR || '/opt/strategyos' }}
+      # Readiness and smoke steps read $STRATEGYOS_PUBLIC_URL as TARGET_URL to hit
+      # the deployed host over HTTPS. Without this export the variable is empty and
+      # both steps silently fall back to an SSH-nested localhost curl, which mangles
+      # the bearer auth header for POST /runs (empty body). Keep it exported.
+      STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
       STRATEGYOS_API_IMAGE: ${{ needs.image.outputs.image-ref }}
       STRATEGYOS_COMPOSE_FILES: ${{ vars.STRATEGYOS_COMPOSE_FILES }}
       STRATEGYOS_COMPOSE_PROFILES: ${{ vars.STRATEGYOS_COMPOSE_PROFILES }}
