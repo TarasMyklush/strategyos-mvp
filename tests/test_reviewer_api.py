@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 import strategyos_mvp.api as api_module
 import strategyos_mvp.auth as auth_module
+import strategyos_mvp.reviewer_runtime as reviewer_runtime
 import strategyos_mvp.run_poc as run_poc_module
 import strategyos_mvp.run_registry as run_registry_module
 import strategyos_mvp.state_store as state_store
@@ -59,6 +60,7 @@ def _client_with_auth_env():
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_BU_API_KEYS": "bu-key",
             "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-a111,reviewer-b222",
             "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
         }
@@ -66,7 +68,12 @@ def _client_with_auth_env():
     return original, TestClient(api_module.app)
 
 
-def _write_local_review_summary(tmp_path: Path, *, approval_status: str = "pending") -> dict:
+def _write_local_review_summary(
+    tmp_path: Path,
+    *,
+    approval_status: str = "pending",
+    claimed_by: str | None = None,
+) -> dict:
     output_root = tmp_path / "outputs"
     run_dir = output_root / "local-review-run"
     dataset_root = tmp_path / "dataset"
@@ -110,6 +117,11 @@ def _write_local_review_summary(tmp_path: Path, *, approval_status: str = "pendi
                 "state_json": state_json,
                 "summary_json": {},
                 "persistence": "local",
+            },
+            "review_assignment": {
+                "claimed": bool(claimed_by),
+                "claimed_by": claimed_by,
+                "claimed_at": "2026-06-18T00:00:00Z" if claimed_by else None,
             },
         }
     )
@@ -157,6 +169,34 @@ def test_pending_reviews_returns_items_for_reviewer(monkeypatch):
         assert response.json()["items"][0]["run_id"] == "run-1"
         assert response.json()["items"][0]["review_assignment"]["claimed"] is True
         assert response.json()["viewer_role"] == "reviewer"
+    finally:
+        _restore_env(original)
+
+
+def test_bu_pending_reviews_returns_items_read_only(monkeypatch):
+    original, client = _client_with_auth_env()
+    try:
+        monkeypatch.setattr(
+            api_module.state_store,
+            "list_pending_reviews",
+            lambda: [{
+                "run_id": "run-1",
+                "checkpoint_id": "cp-1",
+                "review_assignment": {
+                    "claimed": True,
+                    "claimed_by": "api-key:reviewer:a111",
+                    "claimed_at": "2026-06-05T10:00:00Z",
+                },
+            }],
+        )
+
+        response = client.get("/bu/pending-reviews", headers=_auth_header("bu-key"))
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["items"][0]["run_id"] == "run-1"
+        assert payload["viewer_role"] == "bu"
+        assert payload["read_only"] is True
     finally:
         _restore_env(original)
 
@@ -332,6 +372,19 @@ def test_claim_run_forbids_operator():
         _restore_env(original)
 
 
+def test_claim_run_forbids_bu_role():
+    original, client = _client_with_auth_env()
+    try:
+        response = client.post(
+            "/reviewer/runs/run-1/claim",
+            headers=_auth_header("bu-key"),
+        )
+
+        assert response.status_code == 403
+    finally:
+        _restore_env(original)
+
+
 def test_run_detail_allows_operator(monkeypatch):
     original, client = _client_with_auth_env()
     try:
@@ -395,6 +448,69 @@ def test_run_detail_adds_fixed_lifecycle_timeline(monkeypatch):
         _restore_env(original)
 
 
+def test_bu_run_detail_sanitizes_artifact_paths(monkeypatch):
+    original, client = _client_with_auth_env()
+    try:
+        monkeypatch.setattr(
+            api_module.state_store,
+            "get_run_detail",
+            lambda run_id: {
+                "run_id": run_id,
+                "run_dir": "/tmp/private-run",
+                "dataset_root": "/tmp/private-dataset",
+                "artifacts": {"case_file": "/tmp/private-run/case.md"},
+                "summary_json": {
+                    "run_id": run_id,
+                    "run_dir": "/tmp/private-run",
+                    "artifacts": {"case_file": "/tmp/private-run/case.md"},
+                },
+                "approval": {"approval_status": "pending"},
+                "current_stage": "awaiting_review",
+                "requires_human_review": True,
+            },
+        )
+
+        response = client.get("/bu/runs/run-1", headers=_auth_header("bu-key"))
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_id"] == "run-1"
+        assert "run_dir" not in payload
+        assert "artifacts" not in payload
+        assert "run_dir" not in payload["summary_json"]
+        assert "artifacts" not in payload["summary_json"]
+        assert payload["read_only"] is True
+    finally:
+        _restore_env(original)
+
+
+def test_run_detail_uses_latest_local_summary_when_store_skipped(tmp_path):
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-a111",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path)
+
+        response = client.get(
+            f"/reviewer/runs/{local['run_id']}", headers=_auth_header("operator-secret")
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_id"] == local["run_id"]
+        assert payload["summary_json"]["run_id"] == local["run_id"]
+        assert payload["latest_checkpoint"]["checkpoint_id"].startswith("local-checkpoint:")
+    finally:
+        _restore_env(original)
+
+
 def test_run_lifecycle_timeline_keeps_rejected_runs_out_of_completed_state():
     timeline = api_module._run_lifecycle_timeline(
         {
@@ -423,6 +539,35 @@ def test_checkpoint_detail_requires_auth(monkeypatch):
         response = client.get("/reviewer/checkpoints/cp-1")
 
         assert response.status_code == 401
+    finally:
+        _restore_env(original)
+
+
+def test_checkpoint_detail_uses_latest_local_summary_when_store_skipped(tmp_path):
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-a111",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path)
+        checkpoint_id = local["summary"]["local_review_checkpoint"]["checkpoint_id"]
+
+        response = client.get(
+            f"/reviewer/checkpoints/{checkpoint_id}",
+            headers=_auth_header("operator-secret"),
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["checkpoint_id"] == checkpoint_id
+        assert payload["run_id"] == local["run_id"]
+        assert payload["stage"] == "awaiting_review"
     finally:
         _restore_env(original)
 
@@ -458,6 +603,32 @@ def test_run_artifact_preview_returns_json_payload_with_config_patch(monkeypatch
         assert audit_lines[-1]["artifact_key"] == "knowledge_graph"
         assert audit_lines[-1]["allowed"] is True
         assert audit_lines[-1]["restricted"] is False
+    finally:
+        _restore_env(original)
+
+
+def test_bu_artifact_preview_denies_restricted_artifact(monkeypatch, tmp_path):
+    original, client = _client_with_auth_env()
+    try:
+        artifact = tmp_path / "case_file.md"
+        artifact.write_text("restricted", encoding="utf-8")
+        monkeypatch.setattr(api_module, "CONFIG", replace(api_module.CONFIG, output_root=tmp_path))
+        monkeypatch.setattr(
+            api_module.state_store,
+            "get_run_detail",
+            lambda run_id: {
+                "run_id": run_id,
+                "review_assignment": {"claimed": False, "claimed_by": None, "claimed_at": None},
+                "summary_json": {"artifacts": {"case_file": str(artifact)}},
+            },
+        )
+
+        response = client.get(
+            "/bu/runs/run-1/artifacts/case_file",
+            headers=_auth_header("bu-key"),
+        )
+
+        assert response.status_code == 403
     finally:
         _restore_env(original)
 
@@ -622,6 +793,40 @@ def test_run_artifact_preview_returns_json_payload(monkeypatch, tmp_path):
         _restore_env(original)
 
 
+def test_run_artifact_preview_uses_latest_local_summary_when_store_skipped(tmp_path):
+    output_root = tmp_path / "outputs"
+
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_OUTPUT_ROOT": str(output_root),
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path)
+        artifact = local["summary_path"].parent / "summary.json"
+        artifact.write_text('{"status":"ok"}', encoding="utf-8")
+        summary = json.loads(local["summary_path"].read_text(encoding="utf-8"))
+        summary.setdefault("artifacts", {})["summary"] = str(artifact)
+        local["summary_path"].write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+        response = client.get(
+            f"/reviewer/runs/{local['run_id']}/artifacts/summary",
+            headers=_auth_header("operator-secret"),
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["artifact_key"] == "summary"
+        assert payload["preview_json"]["status"] == "ok"
+    finally:
+        _restore_env(original)
+
+
 def test_checkpoint_artifact_preview_rejects_paths_outside_output_root(monkeypatch, tmp_path):
     output_root = tmp_path / "outputs"
     output_root.mkdir(parents=True)
@@ -751,7 +956,9 @@ def test_approve_run_updates_latest_local_summary_when_store_skipped(tmp_path):
     )
     client = TestClient(api_module.app)
     try:
-        local = _write_local_review_summary(tmp_path)
+        local = _write_local_review_summary(
+            tmp_path, claimed_by="api-key:reviewer:a111"
+        )
 
         response = client.post(
             f"/reviewer/runs/{local['run_id']}/approve",
@@ -769,6 +976,60 @@ def test_approve_run_updates_latest_local_summary_when_store_skipped(tmp_path):
         assert summary["review_state"] == "approved"
         assert summary["resume_state"] == "ready"
         assert summary["review_decision"]["comment"] == "ready"
+        assert summary["review_assignment"]["claimed"] is False
+    finally:
+        _restore_env(original)
+
+
+def test_approve_run_returns_conflict_for_unclaimed_local_summary(tmp_path):
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-a111",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path)
+
+        response = client.post(
+            f"/reviewer/runs/{local['run_id']}/approve",
+            headers=_auth_header("reviewer-a111"),
+            json={"comment": "ready"},
+        )
+
+        assert response.status_code == 409
+        assert "must be claimed" in response.json()["detail"]
+    finally:
+        _restore_env(original)
+
+
+def test_claim_run_updates_latest_local_summary_when_store_skipped(tmp_path):
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-a111",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path)
+
+        response = client.post(
+            f"/reviewer/runs/{local['run_id']}/claim",
+            headers=_auth_header("reviewer-a111"),
+        )
+
+        assert response.status_code == 200
+        summary = json.loads(local["summary_path"].read_text(encoding="utf-8"))
+        assert summary["review_assignment"]["claimed"] is True
+        assert summary["review_assignment"]["claimed_by"] == "api-key:reviewer:a111"
     finally:
         _restore_env(original)
 
@@ -1195,5 +1456,125 @@ def test_evidence_preview_returns_stored_citation_context(monkeypatch):
         assert payload["finding_id"] == "F-002"
         assert payload["source_path"] == "uploads/ap_ledger.csv"
         assert payload["excerpt"] == "Invoice INV-2026-0341 was paid twice."
+    finally:
+        _restore_env(original)
+
+
+def test_evidence_preview_uses_latest_local_citation_audit_when_store_skipped(tmp_path):
+    output_root = tmp_path / "outputs"
+
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_OUTPUT_ROOT": str(output_root),
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path)
+        citation_audit = local["summary_path"].parent / "StrategyOS Citation Audit.json"
+        citation_audit.write_text(
+            json.dumps(
+                {
+                    "records": [
+                        {
+                            "finding_id": "F-002",
+                            "pattern_type": "duplicate_payment",
+                            "source_path": "uploads/ap_ledger.csv",
+                            "source_hash": "hash-1",
+                            "locator": "row 341",
+                            "excerpt": "Invoice INV-2026-0341 was paid twice.",
+                            "resolved": True,
+                            "hash_match": True,
+                            "resolved_payload": {"row": {"Invoice_ID": "INV-2026-0341"}},
+                        }
+                    ]
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        summary = json.loads(local["summary_path"].read_text(encoding="utf-8"))
+        summary.setdefault("artifacts", {})["citation_audit"] = str(citation_audit)
+        summary["local_review_checkpoint"]["state_json"]["findings"] = [
+            {
+                "finding_id": "F-002",
+                "title": "Duplicate payment",
+                "pattern_type": "duplicate_payment",
+                "vendor_id": "V-1",
+                "vendor_name": "Vendor One",
+                "confidence": "HIGH",
+            }
+        ]
+        local["summary_path"].write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+        response = client.get(
+            f"/data/evidence-preview?run_id={local['run_id']}&finding_id=F-002",
+            headers=_auth_header("reviewer-secret"),
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_id"] == local["run_id"]
+        assert payload["finding_id"] == "F-002"
+        assert payload["source_path"] == "uploads/ap_ledger.csv"
+        assert payload["excerpt"] == "Invoice INV-2026-0341 was paid twice."
+        assert payload["vendor_name"] == "Vendor One"
+    finally:
+        _restore_env(original)
+
+
+def test_resume_run_completes_latest_local_summary_without_circular_reference(monkeypatch, tmp_path):
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-a111",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path, approval_status="approved")
+
+        class FakeBundle:
+            pass
+
+        class FakeWriter:
+            def write_all(self, bundle, findings, audit_events, run_dir):
+                case_file = run_dir / "Final consolidated case file.md"
+                case_file.write_text("# Final consolidated case file\n", encoding="utf-8")
+                return {"case_file": case_file}
+
+        monkeypatch.setattr(
+            api_module.state_store,
+            "approval_status_for_run",
+            lambda run_id: {
+                "run_id": run_id,
+                "approval_status": "approved",
+                "run_status": "awaiting_review",
+                "current_stage": "awaiting_review",
+            },
+        )
+        monkeypatch.setattr(reviewer_runtime, "load_dataset", lambda dataset_root: FakeBundle())
+        monkeypatch.setattr(reviewer_runtime, "CaseFileWriter", FakeWriter)
+
+        response = client.post(
+            f"/operator/runs/{local['run_id']}/resume",
+            headers=_auth_header("operator-secret"),
+            json={},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "completed"
+        updated = json.loads(local["summary_path"].read_text(encoding="utf-8"))
+        assert updated["status"] == "completed"
+        assert updated["current_stage"] == "writer"
+        assert updated["resume"]["checkpoint"]["checkpoint_id"] is None
     finally:
         _restore_env(original)

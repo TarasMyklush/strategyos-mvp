@@ -256,7 +256,14 @@ def persist_checkpoint(
 ) -> dict[str, Any]:
     connection, skipped = database_connection()
     if skipped is not None:
-        return skipped
+        return {
+            **skipped,
+            "checkpoint_id": None,
+            "run_id": run_id,
+            "stage": stage,
+            "state_json": state,
+            "summary_json": summary or {},
+        }
 
     assert connection is not None
     with connection as conn:

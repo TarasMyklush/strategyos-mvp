@@ -1,4 +1,5 @@
 import copy
+import json
 import os
 from pathlib import Path
 
@@ -84,6 +85,8 @@ class InMemoryReviewStore:
             "requires_human_review": requires_human_review,
             "approved_at": None,
             "approved_by": None,
+            "review_claimed_by": None,
+            "review_claimed_at": None,
             "summary_json": dict(summary_seed),
             "approval_status": "pending" if requires_human_review else "not_required",
         }
@@ -129,6 +132,16 @@ class InMemoryReviewStore:
         comment: str | None,
         payload: dict,
     ) -> dict:
+        claimed_by = self.runs[run_id].get("review_claimed_by")
+        if reviewer_role == "reviewer" and claimed_by != reviewer_subject:
+            return {
+                "status": "conflict",
+                "reason": (
+                    f"Run '{run_id}' must be claimed before a reviewer decision can be recorded."
+                    if claimed_by is None
+                    else f"Run '{run_id}' is claimed by {claimed_by}."
+                ),
+            }
         self.approval_counter += 1
         approval = {
             "approval_id": f"ap-{self.approval_counter}",
@@ -148,9 +161,34 @@ class InMemoryReviewStore:
         }
         self.approvals.setdefault(run_id, []).append(approval)
         self.runs[run_id]["status"] = approval["run_status"]
+        self.runs[run_id]["review_claimed_by"] = None
+        self.runs[run_id]["review_claimed_at"] = None
         if decision == "approved":
             self.runs[run_id]["approved_by"] = reviewer
         return dict(approval)
+
+    def claim_pending_review(self, run_id: str, reviewer_subject: str) -> dict:
+        run = self.runs.get(run_id)
+        if run is None:
+            return {"status": "missing", "run_id": run_id}
+        claimed_by = run.get("review_claimed_by")
+        if claimed_by and claimed_by != reviewer_subject:
+            return {
+                "status": "conflict",
+                "reason": f"Run '{run_id}' is already claimed by {claimed_by}.",
+            }
+        run["review_claimed_by"] = reviewer_subject
+        run["review_claimed_at"] = "2026-06-18T00:00:00Z"
+        return {
+            "run_id": run_id,
+            "status": run["status"],
+            "current_stage": run["current_stage"],
+            "review_assignment": {
+                "claimed": True,
+                "claimed_by": reviewer_subject,
+                "claimed_at": run["review_claimed_at"],
+            },
+        }
 
     def approval_status_for_run(self, run_id: str) -> dict:
         run = dict(self.runs[run_id])
@@ -252,6 +290,9 @@ def _install_store(monkeypatch, store: InMemoryReviewStore):
         api_module.state_store, "record_approval", store.record_approval
     )
     monkeypatch.setattr(
+        api_module.state_store, "claim_pending_review", store.claim_pending_review
+    )
+    monkeypatch.setattr(
         api_module.state_store, "approval_status_for_run", store.approval_status_for_run
     )
     monkeypatch.setattr(
@@ -300,9 +341,14 @@ def test_governed_review_flow_approve_then_resume_runs_writer(monkeypatch, tmp_p
             "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
         }
     )
-    client = TestClient(api_module.app)
+    client = TestClient(api_module.app, raise_server_exceptions=False)
     try:
         run_id = result["run_id"]
+        claim_response = client.post(
+            f"/reviewer/runs/{run_id}/claim",
+            headers=_auth_header("reviewer-secret"),
+        )
+        assert claim_response.status_code == 200
         approve_response = client.post(
             f"/reviewer/runs/{run_id}/approve",
             headers=_auth_header("reviewer-secret"),
@@ -327,6 +373,14 @@ def test_governed_review_flow_approve_then_resume_runs_writer(monkeypatch, tmp_p
         assert writer_called["count"] == 1
         assert store.latest_checkpoint(run_id)["stage"] == "writer"
         assert (run_dir / "case.md").exists()
+        receipt = json.loads(
+            (run_dir / runtime_governance.GOVERNED_RELEASE_RECEIPT_FILENAME).read_text(
+                encoding="utf-8"
+            )
+        )
+        assert receipt["approved_checkpoint_id"] == "cp-6"
+        assert receipt["approved_checkpoint_fingerprint"]
+        assert receipt["approved_quantification"]["total_recoverable_sar"] == 80.0
     finally:
         _restore_env(original)
 
@@ -343,9 +397,14 @@ def test_governed_review_flow_reject_blocks_resume(monkeypatch, tmp_path):
             "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
         }
     )
-    client = TestClient(api_module.app)
+    client = TestClient(api_module.app, raise_server_exceptions=False)
     try:
         run_id = result["run_id"]
+        claim_response = client.post(
+            f"/reviewer/runs/{run_id}/claim",
+            headers=_auth_header("reviewer-secret"),
+        )
+        assert claim_response.status_code == 200
         reject_response = client.post(
             f"/reviewer/runs/{run_id}/reject",
             headers=_auth_header("reviewer-secret"),
@@ -363,5 +422,44 @@ def test_governed_review_flow_reject_blocks_resume(monkeypatch, tmp_path):
         assert resume_response.status_code == 409
         assert writer_called["count"] == 0
         assert store.latest_checkpoint(run_id)["stage"] == "awaiting_review"
+    finally:
+        _restore_env(original)
+
+
+def test_governed_review_flow_resume_blocks_on_checkpoint_tamper(monkeypatch, tmp_path):
+    result, store, writer_called, _ = _run_until_review(monkeypatch, tmp_path)
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app, raise_server_exceptions=False)
+    try:
+        run_id = result["run_id"]
+        claim_response = client.post(
+            f"/reviewer/runs/{run_id}/claim",
+            headers=_auth_header("reviewer-secret"),
+        )
+        assert claim_response.status_code == 200
+        approve_response = client.post(
+            f"/reviewer/runs/{run_id}/approve",
+            headers=_auth_header("reviewer-secret"),
+            json={"comment": "ready for writer"},
+        )
+        assert approve_response.status_code == 200
+
+        tampered = store.checkpoints[run_id][-1]
+        tampered["state_json"]["quantification"]["total_recoverable_sar"] = 999.0
+
+        resume_response = client.post(
+            f"/operator/runs/{run_id}/resume",
+            headers=_auth_header("operator-secret"),
+            json={},
+        )
+        assert resume_response.status_code == 409
+        assert "checkpoint quantification mismatch" in resume_response.json()["detail"]
+        assert writer_called["count"] == 0
     finally:
         _restore_env(original)

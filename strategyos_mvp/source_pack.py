@@ -26,6 +26,11 @@ from .data_roles import (
 )
 from .evidence import sha256_file
 from .ocr import ocr_empty_pdf_pages, ocr_image_file
+from .platform_foundation import (
+    artifact_contracts_payload,
+    build_source_pack_ingestion_job,
+    build_tenant_context,
+)
 from .plugins import load_configured_plugins
 from .prompt_injection import guard_untrusted_document_text, raw_document_text
 from .tasks import (
@@ -1084,12 +1089,26 @@ def _write_summary(source_pack_id: str, payload: dict[str, Any]) -> None:
     _summary_path(source_pack_id).write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def _payload_for(source_pack_id: str, raw_root: Path, *, source_kind: str) -> dict[str, Any]:
+def _payload_for(
+    source_pack_id: str,
+    raw_root: Path,
+    *,
+    source_kind: str,
+    source_ref: str | None = None,
+) -> dict[str, Any]:
     load_configured_plugins()
     refresh_source_pack_role_constants()
     manifest = _build_manifest(raw_root, source_pack_id=source_pack_id)
     _classify_manifest(manifest, raw_root, source_pack_id=source_pack_id)
     normalization = _normalize_manifest(manifest, raw_root, source_pack_id=source_pack_id)
+    tenant_context = build_tenant_context()
+    ingestion_job = build_source_pack_ingestion_job(
+        source_pack_id=source_pack_id,
+        source_kind=source_kind,
+        source_ref=str(source_ref or raw_root),
+        tenant_id=tenant_context.tenant_id,
+        metadata={"raw_root": str(raw_root)},
+    )
     payload = {
         "status": "ok",
         "source_pack_id": source_pack_id,
@@ -1104,6 +1123,8 @@ def _payload_for(source_pack_id: str, raw_root: Path, *, source_kind: str) -> di
         "classification_summary": _classification_summary(manifest),
         "task_readiness": build_task_readiness(manifest),
         "validation": build_validation(manifest),
+        "tenant_context": artifact_contracts_payload(tenant_context),
+        "ingestion_job": artifact_contracts_payload(ingestion_job),
     }
     _write_summary(source_pack_id, payload)
     return payload
@@ -1147,7 +1168,12 @@ def stage_source_pack_from_path(folder_path: str) -> dict[str, Any]:
     raw_root = _raw_dir(source_pack_id)
     raw_root.mkdir(parents=True, exist_ok=True)
     _copy_tree_to_raw(resolved, raw_root)
-    return _payload_for(source_pack_id, raw_root, source_kind="workspace_path")
+    return _payload_for(
+        source_pack_id,
+        raw_root,
+        source_kind="workspace_path",
+        source_ref=str(resolved),
+    )
 
 
 def _source_pack_id_for_uploads(files: list[UploadFile]) -> str:
@@ -1275,7 +1301,12 @@ def stage_source_pack_uploads(files: list[UploadFile]) -> dict[str, Any]:
     finally:
         for upload in files:
             upload.file.close()
-    return _payload_for(source_pack_id, raw_root, source_kind="browser_upload")
+    return _payload_for(
+        source_pack_id,
+        raw_root,
+        source_kind="browser_upload",
+        source_ref="browser-upload",
+    )
 
 
 def validate_source_pack(source_pack_id: str) -> dict[str, Any]:
@@ -1290,7 +1321,12 @@ def validate_source_pack(source_pack_id: str) -> dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Source pack '{source_pack_id}' was not found.",
         )
-    return _payload_for(source_pack_id, raw_root, source_kind="validated")
+    return _payload_for(
+        source_pack_id,
+        raw_root,
+        source_kind="validated",
+        source_ref=str(raw_root),
+    )
 
 
 def confirm_source_pack_mapping(

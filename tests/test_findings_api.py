@@ -131,6 +131,15 @@ def test_findings_endpoint_returns_worklist(monkeypatch):
         assert payload["total_recoverable_sar"] == 223676
         assert payload["findings"][0]["finding_id"] == "F-001"
         assert payload["findings"][0]["pattern_label"] == "Duplicate payment"
+        assert payload["findings"][0]["case_href"] == "/runs/latest/cases/F-001"
+        assert (
+            payload["findings"][0]["evidence_preview_href"]
+            == "/data/evidence-preview?run_id=run-test&finding_id=F-001"
+        )
+        assert (
+            payload["findings"][0]["report_preview_href"]
+            == "/public/runs/latest/report-preview"
+        )
     finally:
         _restore_env(original)
 
@@ -171,5 +180,193 @@ def test_findings_endpoint_requires_auth_when_enabled(monkeypatch):
         ok = client.get("/runs/latest/findings", headers={"X-API-Key": "operator-secret"})
         assert ok.status_code == 200
         assert ok.json()["status"] == "ok"
+    finally:
+        _restore_env(original)
+
+
+def test_public_findings_endpoint_is_anonymous_safe_when_auth_enabled(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        response = client.get("/public/runs/latest/findings")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["public_safe"] is True
+        assert payload["findings"][0]["finding_id"] == "F-001"
+        assert payload["findings"][0]["case_href"] == "/public/runs/latest/cases/F-001"
+        assert (
+            payload["findings"][0]["evidence_preview_href"]
+            == "/public/data/evidence-preview?run_id=run-test&finding_id=F-001"
+        )
+        assert "run_dir" not in payload
+    finally:
+        _restore_env(original)
+
+
+def test_case_detail_endpoint_returns_role_safe_case_contract(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        response = client.get("/runs/latest/cases/F-001")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["case"]["finding_id"] == "F-001"
+        assert payload["case"]["case_href"] == "/runs/latest/cases/F-001"
+        assert (
+            payload["case"]["evidence_preview_href"]
+            == "/data/evidence-preview?run_id=run-test&finding_id=F-001"
+        )
+    finally:
+        _restore_env(original)
+
+
+def test_public_evidence_preview_sanitizes_payload(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module.state_store,
+            "evidence_preview_for_run",
+            lambda run_id, **_: {
+                "status": "ok",
+                "run_id": run_id,
+                "finding_id": "F-001",
+                "citation_id": "c-1",
+                "title": "Duplicate payment for invoice INV-1",
+                "pattern_type": "duplicate_payment",
+                "vendor_name": "Premier Packaging LLC",
+                "confidence": "HIGH",
+                "source_path": "uploads/ap_ledger.csv",
+                "source_hash": "secret-hash",
+                "locator": "row 341",
+                "resolved": True,
+                "hash_match": True,
+                "preview_kind": "text",
+                "excerpt": "Invoice INV-2026-0341 was paid twice.",
+                "resolved_payload": {"raw": "hidden"},
+            },
+        )
+
+        client = TestClient(api_module.app)
+        response = client.get("/public/data/evidence-preview?finding_id=F-001")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["public_safe"] is True
+        assert payload["source_path"] == "ap_ledger.csv"
+        assert payload["source_hash"] is None
+        assert payload["resolved_payload"] == {}
+        assert payload["excerpt"] == "Invoice INV-2026-0341 was paid twice."
+    finally:
+        _restore_env(original)
+
+
+def test_public_report_preview_returns_board_safe_summary(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        response = client.get("/public/runs/latest/report-preview")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["public_safe"] is True
+        assert payload["artifact_key"] == "executive_summary"
+        assert "Recoverable value identified" in payload["preview_text"]
+        assert "Top case: Duplicate payment for invoice INV-1" in payload["preview_text"]
+    finally:
+        _restore_env(original)
+
+
+def test_executive_latest_run_uses_public_safe_summary(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": None,
+            "STRATEGYOS_REVIEWER_API_KEYS": None,
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+
+        client = TestClient(api_module.app)
+        response = client.get("/runs/latest", headers={"X-API-Key": "executive"})
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["public_safe"] is True
+        assert "run_dir" not in payload
+    finally:
+        _restore_env(original)
+
+
+def test_executive_findings_route_stays_public_safe(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": None,
+            "STRATEGYOS_REVIEWER_API_KEYS": None,
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        response = client.get("/runs/latest/findings", headers={"X-API-Key": "executive"})
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["public_safe"] is True
+        assert "run_dir" not in payload
+        assert payload["findings"][0]["case_href"] == "/public/runs/latest/cases/F-001"
+        assert payload["findings"][0]["evidence_preview_href"] == "/public/data/evidence-preview?run_id=run-test&finding_id=F-001"
     finally:
         _restore_env(original)

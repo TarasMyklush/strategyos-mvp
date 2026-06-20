@@ -105,6 +105,8 @@
     readyStatus: null,
     configStatus: null,
     dependenciesStatus: null,
+    connectorCatalog: null,
+    workspaceContract: null,
     chatRunKey: "",
     chatThread: [],
     qaMode: window.sessionStorage.getItem(QA_MODE_KEY) || "deterministic",
@@ -121,11 +123,28 @@
     history: null,
     pollTimer: null,
     lastRunSignature: "",
+    laneSignature: "",
   };
 
   const byId = (id) => document.getElementById(id);
   const els = {
     appName: byId("app-name"),
+    workspaceSubtitle: byId("workspace-subtitle"),
+    workspaceHeadline: byId("workspace-headline"),
+    workspaceNote: byId("workspace-note"),
+    roleLanePill: byId("role-lane-pill"),
+    surfaceCardExecutive: byId("surface-card-executive"),
+    surfaceCardReviewer: byId("surface-card-reviewer"),
+    surfaceCardOperator: byId("surface-card-operator"),
+    surfaceCardTenantAdmin: byId("surface-card-tenant-admin"),
+    surfaceBadgeExecutive: byId("surface-badge-executive"),
+    surfaceBadgeReviewer: byId("surface-badge-reviewer"),
+    surfaceBadgeOperator: byId("surface-badge-operator"),
+    surfaceBadgeTenantAdmin: byId("surface-badge-tenant-admin"),
+    roleTaskTitle: byId("role-task-title"),
+    roleTaskNote: byId("role-task-note"),
+    roleTaskPill: byId("role-task-pill"),
+    roleTaskList: byId("role-task-list"),
     runPill: byId("run-pill"),
     identity: byId("ui-identity"),
     environmentBadge: byId("environment-badge"),
@@ -185,6 +204,16 @@
     systemDrawerButton: byId("system-drawer-button"),
     systemDrawer: byId("system-drawer"),
     systemDrawerClose: byId("system-drawer-close"),
+    adminContextSummary: byId("admin-context-summary"),
+    adminContextKv: byId("admin-context-kv"),
+    adminCapabilitiesKv: byId("admin-capabilities-kv"),
+    adminContextPayloadPreview: byId("admin-context-payload-preview"),
+    systemWorkflowSummary: byId("system-workflow-summary"),
+    systemWorkflowList: byId("system-workflow-list"),
+    systemWorkflowPayloadPreview: byId("system-workflow-payload-preview"),
+    connectorsSummary: byId("connectors-summary"),
+    connectorsList: byId("connectors-list"),
+    connectorsPayloadPreview: byId("connectors-payload-preview"),
     dataSummary: byId("data-summary"),
     dataCountsKv: byId("data-counts-kv"),
     dataSystemsKv: byId("data-systems-kv"),
@@ -491,16 +520,53 @@
     return !bootstrap.api_auth_enabled || Boolean(state.session?.authenticated);
   }
 
+  function currentRole() {
+    return String(state.session?.role || "anonymous").toLowerCase();
+  }
+
+  function roleHasAny(role, ...targets) {
+    const normalized = String(role || "anonymous").toLowerCase();
+    const implied = {
+      anonymous: ["anonymous"],
+      public: ["public", "anonymous"],
+      bu: ["bu"],
+      operator: ["operator"],
+      reviewer: ["reviewer"],
+      analyst: ["analyst"],
+      auditor: ["auditor", "reviewer"],
+      executive: ["executive"],
+      tenant_operator: ["tenant_operator", "operator", "analyst"],
+      tenant_admin: ["tenant_admin", "tenant_operator", "operator", "reviewer", "analyst", "auditor", "executive"],
+      system: ["system", "tenant_admin", "tenant_operator", "operator", "reviewer", "analyst", "auditor", "executive"],
+    };
+    const set = new Set(implied[normalized] || [normalized]);
+    return targets.some((target) => set.has(String(target || "").toLowerCase()));
+  }
+
+  function preferredLaneForRole(role) {
+    if (roleHasAny(role, "system", "tenant_admin")) return "system";
+    if (roleHasAny(role, "bu")) return "review";
+    if (roleHasAny(role, "reviewer")) return "review";
+    if (roleHasAny(role, "operator")) return "operate";
+    if (roleHasAny(role, "executive")) return "executive";
+    return "public";
+  }
+
+  function requestedLane() {
+    const params = new URLSearchParams(window.location.search);
+    return String(params.get("lane") || "").trim().toLowerCase();
+  }
+
   function isAuthDisabled() {
     return Boolean(state.session?.auth_disabled) || !bootstrap.api_auth_enabled;
   }
 
   function isOperator() {
-    return isAuthDisabled() || String(state.session?.role || "") === "operator";
+    return isAuthDisabled() || roleHasAny(currentRole(), "operator");
   }
 
   function isReviewer() {
-    return isAuthDisabled() || String(state.session?.role || "") === "reviewer";
+    return isAuthDisabled() || roleHasAny(currentRole(), "reviewer");
   }
 
   function activeRunId() {
@@ -528,12 +594,31 @@
   function formatRoleLabel(role) {
     const normalized = String(role || "").trim().toLowerCase();
     const labels = {
+      bu: "BU leader",
       operator: "Operator",
       reviewer: "Reviewer",
+      analyst: "Analyst",
+      auditor: "Auditor",
+      executive: "Executive",
+      tenant_operator: "Tenant operator",
+      tenant_admin: "Tenant admin",
+      system: "System",
       anonymous: "Anonymous",
       public: "Public",
     };
     return labels[normalized] || normalized.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()) || "Unknown";
+  }
+
+  function formatCapabilityLabel(key) {
+    const labels = {
+      can_view_overview: "Overview",
+      can_view_cases: "Cases",
+      can_investigate_evidence: "Evidence",
+      can_review: "Review control",
+      can_launch_runs: "Run launch",
+      can_manage_ingestion: "Ingestion",
+    };
+    return labels[String(key || "")] || humanizeToken(key);
   }
 
   function formatSubjectLabel(subject, role) {
@@ -550,14 +635,207 @@
   function formatSessionIdentity(session) {
     const role = String(session?.role || "anonymous");
     if (session?.display_name) return String(session.display_name);
-    if (["operator", "reviewer"].includes(role.toLowerCase())) return formatRoleLabel(role);
+    if (["bu", "operator", "reviewer"].includes(role.toLowerCase())) return formatRoleLabel(role);
     return formatSubjectLabel(session?.subject, role);
+  }
+
+  function isBuRole() {
+    return roleHasAny(currentRole(), "bu") && !roleHasAny(currentRole(), "reviewer", "operator");
+  }
+
+  function reviewArtifactBaseRoute() {
+    return isBuRole() ? "/bu/runs" : "/reviewer/runs";
   }
 
   function showSignIn(message) {
     if (!bootstrap.api_auth_enabled) return;
     els.signInPanel.classList.remove("hidden");
     els.sessionStatus.textContent = message || "Session not connected.";
+  }
+
+  function renderRoleFrame() {
+    const session = state.session || {};
+    const role = currentRole();
+    const authDisabled = session.auth_disabled || !bootstrap.api_auth_enabled;
+    const preferredLane = authDisabled ? "shared" : preferredLaneForRole(role);
+
+    els.surfaceCardExecutive?.classList.toggle("current", preferredLane === "executive");
+    els.surfaceCardReviewer?.classList.toggle("current", preferredLane === "review" || preferredLane === "shared");
+    els.surfaceCardOperator?.classList.toggle("current", preferredLane === "operate" || preferredLane === "shared");
+    els.surfaceCardTenantAdmin?.classList.toggle("current", preferredLane === "system");
+
+    if (els.surfaceBadgeExecutive) els.surfaceBadgeExecutive.textContent = "Read-only";
+    if (els.surfaceBadgeReviewer) els.surfaceBadgeReviewer.textContent = preferredLane === "review" || preferredLane === "shared" ? "Current lane" : "Approval lane";
+    if (els.surfaceBadgeOperator) els.surfaceBadgeOperator.textContent = preferredLane === "operate" || preferredLane === "shared" ? "Current lane" : "Run control";
+    if (els.surfaceBadgeTenantAdmin) els.surfaceBadgeTenantAdmin.textContent = preferredLane === "system" ? "Current lane" : "System health";
+
+    if (authDisabled) {
+      els.workspaceSubtitle.textContent = "Shared reviewer + operator lane";
+      els.workspaceHeadline.textContent = "Review and operate the latest governed case";
+      els.workspaceNote.textContent = "This environment exposes reviewer and operator controls together. Executive narration stays separate on /executive; tenant-system governance stays in the system lane; the bounded BU backend role only applies when auth is enabled.";
+      els.roleLanePill.textContent = "Shared operator + reviewer access";
+      els.sessionHelp.textContent = "Auth is disabled in this environment. Executive remains read-only on /executive; approvals, run controls, and system inspection stay inside this workspace.";
+      return;
+    }
+
+    if (isBuRole()) {
+      els.workspaceSubtitle.textContent = "BU governed read lane";
+      els.workspaceHeadline.textContent = "Review governed case posture before reviewer sign-off";
+      els.workspaceNote.textContent = "Inspect queue state, findings, evidence previews, and report posture through the BU-only read lane. Claim, approve/reject, and restricted artifact release remain with reviewer and operator runtime paths.";
+      els.roleLanePill.textContent = "BU lane active";
+      els.sessionHelp.textContent = "Paste a BU token to inspect governed queue state, or a reviewer token to take approval actions.";
+      return;
+    }
+
+    if (roleHasAny(role, "tenant_admin", "system")) {
+      els.workspaceSubtitle.textContent = "Tenant admin / system lane";
+      els.workspaceHeadline.textContent = "Govern connectors, stores, and runtime health";
+      els.workspaceNote.textContent = "Use this lane to inspect managed data, graph/search stores, artifact previews, and readiness for the current finance diagnostics tenant. Review and operator controls remain available because this backend role inherits them.";
+      els.roleLanePill.textContent = "Tenant admin / system lane active";
+      els.sessionHelp.textContent = "Paste a tenant admin or system token to inspect health, connectors, and protected runtime state across the current tenant.";
+      return;
+    }
+
+    if (roleHasAny(role, "reviewer") && !roleHasAny(role, "operator")) {
+      els.workspaceSubtitle.textContent = "BU / reviewer decision lane";
+      els.workspaceHeadline.textContent = "Review governed cases before release";
+      els.workspaceNote.textContent = "Inspect findings, evidence packets, and challenge state. Approve or reject here; operators resume only after approval. BU leaders now have a separate read-only backend lane into this governed surface.";
+      els.roleLanePill.textContent = "BU / reviewer lane active";
+      els.sessionHelp.textContent = "Paste a reviewer token to approve or reject governed cases, a BU token for read-only queue access, or an operator token to switch into run-control work.";
+      return;
+    }
+
+    if (roleHasAny(role, "operator")) {
+      els.workspaceSubtitle.textContent = "Operator control plane";
+      els.workspaceHeadline.textContent = "Prepare inputs and resume approved runs";
+      els.workspaceNote.textContent = "Use this lane for source-pack intake, run launch, runtime inspection, and post-approval resume. Executive narrative stays on /executive; reviewer approval stays separate; tenant-system governance stays in the system lane.";
+      els.roleLanePill.textContent = "Operator lane active";
+      els.sessionHelp.textContent = "Paste an operator token to start or resume governed runs, or a reviewer token to move into the approval lane.";
+      return;
+    }
+
+    els.workspaceSubtitle.textContent = "Role-aware governed diagnostics workspace";
+    els.workspaceHeadline.textContent = "Choose the truthful StrategyOS lane";
+    els.workspaceNote.textContent = "Executive sees board-safe narrative on /executive. BU leaders get a bounded read-only governed lane here, reviewers handle sign-off, operators handle intake and resume, and tenant admin / system governs health and connector truth.";
+    els.roleLanePill.textContent = "Sign in for role lanes";
+    els.sessionHelp.textContent = "Paste a BU, reviewer, operator, or tenant-admin access token. Executive readout lives at /executive; governed approvals, run controls, and system inspection stay here.";
+  }
+
+  function renderHeaderActions() {
+    const lane = isAuthDisabled() ? "shared" : preferredLaneForRole(currentRole());
+    if (lane === "system") {
+      els.systemDrawerButton.textContent = "Governance tools";
+      els.newRunButton.textContent = "Open hosted workflow";
+      return;
+    }
+    if (lane === "review") {
+      els.systemDrawerButton.textContent = "Evidence + system support";
+      els.newRunButton.textContent = "Open governed queue";
+      return;
+    }
+    if (lane === "operate" || lane === "shared") {
+      els.systemDrawerButton.textContent = "Runtime + system support";
+      els.newRunButton.textContent = isOperator() ? "Prepare source pack" : "Open operator lane";
+      return;
+    }
+    els.systemDrawerButton.textContent = "Lane support";
+    els.newRunButton.textContent = "Open current lane";
+  }
+
+  function renderRoleTasks() {
+    if (!els.roleTaskList) return;
+    const lane = isAuthDisabled() ? "shared" : preferredLaneForRole(currentRole());
+    const run = state.latestRun || {};
+    const findings = Array.isArray(state.findings?.findings) ? state.findings.findings : [];
+    const approvalStatus = runApprovalStatus(run);
+    const resumable = Boolean(run.requires_human_review) && approvalStatus === "approved" && String(run.current_stage || "") === "awaiting_review";
+    const needsReview = Boolean(run.requires_human_review) && ["pending", "awaiting_review", ""].includes(approvalStatus);
+    let title = "Role priorities";
+    let note = "Concrete next actions appear once session and run state load.";
+    let pill = "Awaiting role";
+    let tasks = [];
+
+    if (lane === "system") {
+      title = "Tenant governance priorities";
+      note = "Keep the finance diagnostics tenant truthful: connectors, stores, artifacts, and readiness should agree before broader rollout.";
+      pill = "System lane";
+      tasks = [
+        { title: "Confirm admin context", detail: state.session?.tenant_context?.tenant_id ? `Tenant ${state.session.tenant_context.tenant_id} is in scope. Check role, workspace, and auth posture before changing anything.` : "Open Safe admin context to verify tenant, workspace, and auth posture." },
+        { title: "Review connector catalog", detail: Array.isArray(state.connectorCatalog?.connectors) && state.connectorCatalog.connectors.length ? `Inspect ${formatCount(state.connectorCatalog.connectors.length)} truthful ingestion connectors and confirm which ones are permitted for this role.` : "Open Connector catalog to inspect permitted ingestion routes for this tenant." },
+        { title: "Check readiness", detail: state.readyStatus?.status ? `Current readiness is ${state.readyStatus.status}. Open Runtime health for dependency detail.` : "Open Runtime health to inspect dependency readiness and auth posture." },
+        { title: "Inspect managed data and stores", detail: state.dataStatus?.status === "ok" ? "Managed data is available; verify graph and vector stores reflect the latest governed run." : "Open Managed data to confirm Postgres, graph, and vector-store state for this tenant." },
+        { title: "Review protected artifacts", detail: activeRunId() ? `Use the artifact inspector for run ${activeRunId()} to confirm evidence and report surfaces stay aligned.` : "No governed run is loaded yet; verify the platform before onboarding the next run." },
+      ];
+    } else if (lane === "review") {
+      title = isBuRole() ? "BU priorities" : "BU / reviewer priorities";
+      note = isBuRole()
+        ? "Inspect governed release posture. Reviewer sign-off and operator resume remain downstream from this bounded BU lane."
+        : "Decide what is safe to release. Stay on cases, evidence packets, and approval state; operator execution remains downstream.";
+      pill = "Review lane";
+      tasks = [
+        { title: isBuRole() ? "Inspect governed release posture" : needsReview ? "Approve or reject the governed run" : "Review queue posture", detail: isBuRole() ? (needsReview ? `A governed run is waiting for reviewer sign-off${findings.length ? ` across ${formatCount(findings.length)} findings` : ""}.` : findings.length ? `Inspect ${formatCount(findings.length)} governed findings and evidence packets before reviewer release.` : "No governed findings are loaded yet.") : needsReview ? `A governed run is waiting for sign-off${findings.length ? ` across ${formatCount(findings.length)} findings` : ""}.` : resumable ? "Reviewer decision is already recorded; hand off to an operator for resume." : findings.length ? `Inspect ${formatCount(findings.length)} governed findings and evidence packets for the shared BU/reviewer lane.` : "No governed findings are loaded yet." },
+        { title: "Open evidence before decision", detail: findings.length ? "Use the evidence map and finding drawer to inspect citations, owners, challenge posture, and release risk before approving." : "When findings appear, open a case row to inspect its evidence thread." },
+        { title: "Protect the handoff", detail: isBuRole() ? "Escalate to a reviewer for claim and sign-off when the governed package is ready." : resumable ? "The next valid step is operator resume into writer-stage deliverables." : "Approval should unblock operator resume; rejection should keep the run from publication." },
+      ];
+    } else if (lane === "operate" || lane === "shared") {
+      title = lane === "shared" ? "Workspace priorities" : "Operator priorities";
+      note = lane === "shared"
+        ? "This environment shares reviewer and operator controls. Keep run prep, approval, and resume explicit."
+        : "Drive governed execution: intake, launch, inspect, then resume only after approval.";
+      pill = lane === "shared" ? "Shared workspace" : "Operator lane";
+      tasks = [
+        { title: state.sourcePack ? "Prepare the source pack" : "Stage finance inputs", detail: state.sourcePack ? (sourcePackCanStart(state.sourcePack) ? "Current source pack is ready. Launch analysis when you are ready." : sourcePackBlockingReasons(state.sourcePack).join(" | ") || "Check file support and required roles before launching.") : "Upload a source pack or choose a server folder to begin the next finance diagnostics run." },
+        { title: resumable ? "Resume the approved run" : "Track governed run state", detail: resumable ? "Reviewer approval is recorded. Resume now to create writer-stage deliverables." : needsReview ? "This run is waiting on reviewer approval; keep the runtime stable and prepare for resume." : activeRunId() ? `Latest run ${activeRunId()} is loaded. Inspect readiness, stores, and findings before starting the next cycle.` : "No active governed run is loaded yet." },
+        { title: "Use operator diagnostics", detail: "Open system tools for managed data, graph, vector search, artifacts, and runtime health when a run needs deeper inspection." },
+      ];
+    } else if (lane === "executive") {
+      title = "Executive handoff";
+      note = "Board-safe narrative lives on /executive; this workspace remains for governed execution and evidence inspection.";
+      pill = "Executive route";
+      tasks = [
+        { title: "Use the executive cockpit", detail: "Open /executive for overview, cases, evidence, and reports framed for leadership scan." },
+        { title: "Delegate execution here", detail: "Reviewer, operator, and tenant-system work stays in this workspace so the executive surface remains clean." },
+      ];
+    } else {
+      title = "Choose the right StrategyOS lane";
+      note = "Anonymous viewers see the lane map only. Sign in for governed review, operator control, or tenant-system inspection.";
+      pill = "Public posture";
+      tasks = [
+        { title: "Executive", detail: "Use /executive for the board-safe narrative surface." },
+        { title: "BU / reviewer", detail: "Sign in with a BU token for read-only governed review, or a reviewer token for approval actions." },
+        { title: "Operator / tenant admin", detail: "Sign in to stage inputs, resume approved runs, and inspect system health." },
+      ];
+    }
+
+    els.roleTaskTitle.textContent = title;
+    els.roleTaskNote.textContent = note;
+    els.roleTaskPill.textContent = pill;
+    els.roleTaskList.innerHTML = tasks.map((item) => `
+      <div class="item">
+        <strong>${escapeHtml(item.title || "Task")}</strong>
+        <span>${escapeHtml(item.detail || "")}</span>
+      </div>
+    `).join("");
+  }
+
+  function applyLaneHint() {
+    const requested = requestedLane();
+    const preferred = preferredLaneForRole(currentRole());
+    const lane = requested || (currentRole() !== "anonymous" ? preferred : "");
+    const signature = `${lane}:${currentRole()}:${Boolean(state.session?.authenticated)}`;
+    if (!lane || state.laneSignature === signature) return;
+    state.laneSignature = signature;
+    if (lane === "review") {
+      document.getElementById("review")?.scrollIntoView({ block: "start" });
+      return;
+    }
+    if (lane === "operate") {
+      openDrawer("new-run", "source-pack-section");
+      return;
+    }
+    if (lane === "system") {
+      openDrawer("system", "admin-context-panel");
+    }
   }
 
   function renderSession() {
@@ -568,14 +846,23 @@
     const role = session.role || "anonymous";
     const authDisabled = session.auth_disabled || !bootstrap.api_auth_enabled;
     const displayName = formatSessionIdentity(session);
+    renderRoleFrame();
+    renderHeaderActions();
     els.identity.textContent = authDisabled ? "Auth disabled" : session.authenticated ? displayName : "Not signed in";
     els.sessionStatus.textContent = authDisabled
-      ? "API auth is disabled for this environment."
+      ? "API auth is disabled for this environment. Reviewer and operator controls share this workspace."
       : session.authenticated
-        ? `Connected as ${displayName}.`
+        ? role === "bu"
+          ? `Connected as ${displayName}. Inspect governed queue state; reviewer sign-off is still required for release actions.`
+          : role === "reviewer"
+          ? `Connected as ${displayName}. Approve or reject governed cases in this lane.`
+          : role === "operator"
+            ? `Connected as ${displayName}. Start analyses and resume only after reviewer approval.`
+            : roleHasAny(role, "tenant_admin", "system")
+              ? `Connected as ${displayName}. Govern tenant context, connectors, managed data, and runtime posture from this lane.`
+              : `Connected as ${displayName}.`
         : "Session not connected.";
     els.signInPanel.classList.toggle("hidden", authDisabled || Boolean(session.authenticated));
-    els.newRunButton.disabled = !isOperator();
     els.reviewApprove.disabled = !isReviewer() || !activeRunId();
     els.reviewReject.disabled = !isReviewer() || !activeRunId();
     els.reviewResume.disabled = !isOperator() || !activeRunId();
@@ -1131,6 +1418,181 @@
     els.dataPayloadPreview.textContent = compactJson(payload);
   }
 
+  function renderAdminContext() {
+    if (!isAuthed()) {
+      els.adminContextSummary.textContent = "Connect a session to inspect tenant admin context.";
+      els.adminContextKv.innerHTML = "";
+      els.adminCapabilitiesKv.innerHTML = "";
+      els.adminContextPayloadPreview.textContent = "Authentication required.";
+      return;
+    }
+    const session = state.session || {};
+    const tenant = session.tenant_context || {};
+    const capabilities = session.capabilities || {};
+    const enabledCapabilities = Object.entries(capabilities)
+      .filter(([, enabled]) => Boolean(enabled))
+      .map(([key]) => formatCapabilityLabel(key));
+    els.adminContextSummary.innerHTML = [
+      `${escapeHtml(formatRoleLabel(session.role || "anonymous"))} ${statusPill(session.authenticated ? "ok" : "warn", session.authenticated ? "authenticated" : "not connected")}`,
+      `Altitude ${statusPill("neutral", session.altitude || "workspace")}`,
+    ].join(" - ");
+    els.adminContextKv.innerHTML = kvHtml([
+      ["Tenant", tenant.tenant_name || tenant.tenant_id || "--"],
+      ["Tenant ID", tenant.tenant_id || "--"],
+      ["Workspace", tenant.workspace_id || "--"],
+      ["Environment", session.environment || bootstrap.environment || "--"],
+      ["Auth mode", session.auth_mode || "--"],
+      ["Public live health", statusPill(session.public_health_enabled ? "enabled" : "protected")],
+      ["Human review", statusPill(session.require_human_review ? "required" : "optional")],
+    ], true);
+    els.adminCapabilitiesKv.innerHTML = kvHtml([
+      ["Allowed here", enabledCapabilities.length ? enabledCapabilities.join(", ") : "No protected capabilities exposed"],
+      ["Identity", formatSessionIdentity(session)],
+    ]);
+    els.adminContextPayloadPreview.textContent = compactJson(sanitizeUiPayload(session));
+  }
+
+  function connectorCapabilityChips(connector) {
+    const chips = [];
+    chips.push(statusPill(connector?.permitted ? "ok" : "neutral", connector?.permitted ? "Permitted" : "Not permitted"));
+    if (connector?.source_boundary) chips.push(statusPill("neutral", humanizeToken(connector.source_boundary)));
+    if (connector?.supports_manual_upload) chips.push(statusPill("ok", "Manual upload"));
+    if (connector?.supports_incremental) chips.push(statusPill("ok", "Incremental"));
+    return chips.join(" ");
+  }
+
+  function workflowStep(status, title, detail, targetId) {
+    const target = targetId
+      ? `<button class="btn secondary" type="button" data-workflow-target="${escapeHtml(targetId)}">Open panel</button>`
+      : "";
+    return `
+      <div class="item">
+        <strong>${statusPill(status, title)}</strong>
+        <span>${escapeHtml(detail)}</span>
+        ${target}
+      </div>`;
+  }
+
+  function renderSystemWorkflow() {
+    if (!isAuthed()) {
+      els.systemWorkflowSummary.textContent = "Connect a session to inspect the hosted admin workflow.";
+      els.systemWorkflowList.innerHTML = "";
+      els.systemWorkflowPayloadPreview.textContent = "Authentication required.";
+      return;
+    }
+    const contract = state.workspaceContract;
+    if (!contract) {
+      els.systemWorkflowSummary.textContent = "Hosted workflow has not loaded.";
+      els.systemWorkflowList.innerHTML = "";
+      els.systemWorkflowPayloadPreview.textContent = "No workspace contract payload.";
+      return;
+    }
+
+    const connectors = Array.isArray(state.connectorCatalog?.connectors) ? state.connectorCatalog.connectors : [];
+    const permittedConnectors = connectors.filter((item) => item?.permitted);
+    const reports = Array.isArray(contract.reports?.artifacts) ? contract.reports.artifacts : [];
+    const evidence = Array.isArray(contract.evidence?.artifacts) ? contract.evidence.artifacts : [];
+    const dataStatus = state.dataStatus || {};
+    const counts = dataStatus.counts || {};
+    const ready = state.readyStatus || {};
+    const checks = ready.checks || {};
+    const session = state.session || {};
+    const tenant = session.tenant_context || contract.tenant_context || {};
+    const runId = activeRunId();
+    const workflowSurface = Array.isArray(contract.surfaces)
+      ? contract.surfaces.find((surface) => surface.surface_id === "workflow")
+      : null;
+    const blockedChecks = Object.entries(checks)
+      .filter(([, value]) => value && !["ok", "ready", "enabled"].includes(String(value.status || "").toLowerCase()))
+      .map(([key]) => humanizeToken(key));
+
+    const workflowItems = [
+      workflowStep(
+        session.authenticated && tenant.tenant_id ? "ok" : "warn",
+        "1. Confirm admin context",
+        `${formatRoleLabel(session.role || "anonymous")} on ${tenant.tenant_name || tenant.tenant_id || "current tenant"} / ${tenant.workspace_id || "workspace unknown"}. Auth mode: ${session.auth_mode || "unknown"}.`,
+        "admin-context-panel"
+      ),
+      workflowStep(
+        permittedConnectors.length ? "ok" : connectors.length ? "warn" : "neutral",
+        "2. Review connector posture",
+        permittedConnectors.length
+          ? `${formatCount(permittedConnectors.length)} permitted connectors available${workflowSurface?.permitted ? "; workflow surface stays inside existing governed routes." : "."}`
+          : connectors.length
+            ? "Connector catalog loaded, but none are currently permitted for this role."
+            : "No connector catalog is available for this tenant yet.",
+        "connectors-panel"
+      ),
+      workflowStep(
+        dataStatus.status === "ready" ? "ok" : dataStatus.status === "missing" ? "warn" : statusTone(dataStatus.status || "unknown"),
+        "3. Check data posture",
+        dataStatus.status === "ready"
+          ? `${formatCount(counts.evidence_documents ?? 0)} evidence docs, ${formatCount(counts.findings ?? 0)} findings, graph ${state.dataStatus?.neo4j?.status || "unknown"}, search ${state.dataStatus?.qdrant?.status || "unknown"}.`
+          : dataStatus.reason || "Managed data posture is not ready yet.",
+        "data-panel"
+      ),
+      workflowStep(
+        ready.status === "ok" ? "ok" : ready.status === "degraded" ? "warn" : statusTone(ready.status || "unknown"),
+        "4. Verify runtime readiness",
+        blockedChecks.length
+          ? `Readiness is ${ready.status || "unknown"}; investigate ${blockedChecks.join(", ")}.`
+          : `Readiness is ${ready.status || "unknown"}; health, config, and dependency posture are aligned.`,
+        "health-panel"
+      ),
+      workflowStep(
+        runId && (reports.length || evidence.length) ? "ok" : runId ? "warn" : "neutral",
+        "5. Inspect governed artifacts",
+        runId
+          ? `${formatCount(reports.length)} report artifacts and ${formatCount(evidence.length)} evidence artifacts are exposed for governed preview on run ${runId}.`
+          : "No governed run is loaded yet, so artifact preview remains limited.",
+        "health-panel"
+      ),
+    ];
+
+    els.systemWorkflowSummary.innerHTML = [
+      `${escapeHtml(tenant.tenant_name || tenant.tenant_id || "Current tenant")}`,
+      statusPill(ready.status || "unknown", `Readiness ${ready.status || "unknown"}`),
+      statusPill(runId ? "ok" : "neutral", runId ? `Run ${runId}` : "No active run"),
+    ].join(" - ");
+    els.systemWorkflowList.innerHTML = workflowItems.join("");
+    els.systemWorkflowPayloadPreview.textContent = compactJson(sanitizeUiPayload(contract));
+  }
+
+  function renderConnectors() {
+    if (!isAuthed()) {
+      els.connectorsSummary.textContent = "Connect a session to inspect the connector catalog.";
+      els.connectorsList.innerHTML = "";
+      els.connectorsPayloadPreview.textContent = "Authentication required.";
+      return;
+    }
+    const payload = state.connectorCatalog;
+    if (!payload) {
+      els.connectorsSummary.textContent = "Connector catalog has not loaded.";
+      els.connectorsList.innerHTML = "";
+      els.connectorsPayloadPreview.textContent = "No connector payload.";
+      return;
+    }
+    const connectors = Array.isArray(payload.connectors) ? payload.connectors : [];
+    const tenant = payload.tenant_context || state.session?.tenant_context || {};
+    els.connectorsSummary.innerHTML = `${formatCount(connectors.length)} connectors for ${escapeHtml(tenant.tenant_name || tenant.tenant_id || "current tenant")}`;
+    if (!connectors.length) {
+      els.connectorsList.innerHTML = '<div class="item"><strong>No connectors</strong><span class="muted">No ingestion connectors are exposed for this tenant.</span></div>';
+    } else {
+      els.connectorsList.innerHTML = connectors.map((connector) => {
+        const capabilities = Array.isArray(connector?.capabilities) && connector.capabilities.length
+          ? connector.capabilities.map((item) => humanizeToken(item)).join(", ")
+          : "No write actions listed";
+        return `
+          <div class="item">
+            <strong>${escapeHtml(connector.display_name || connector.connector_id || "Connector")}</strong>
+            <span>${connectorCapabilityChips(connector)}</span>
+            <span>${escapeHtml(capabilities)}</span>
+          </div>`;
+      }).join("");
+    }
+    els.connectorsPayloadPreview.textContent = compactJson(payload);
+  }
+
   function destroyKnowledgeGraph() {
     if (state.kgCy) {
       state.kgCy.destroy();
@@ -1487,30 +1949,38 @@
   }
 
   function renderArtifacts() {
-    const artifacts = state.latestRun?.artifacts || {};
-    const entries = Object.entries(artifacts);
+    const contract = state.workspaceContract || {};
+    const evidence = Array.isArray(contract.evidence?.artifacts) ? contract.evidence.artifacts : [];
+    const reports = Array.isArray(contract.reports?.artifacts) ? contract.reports.artifacts : [];
+    const contractEntries = evidence.concat(reports).filter((item) => item?.artifact_key);
+    const fallbackEntries = Object.entries(state.latestRun?.artifacts || {}).map(([artifact_key, path]) => ({ artifact_key, title: humanizeToken(artifact_key), category: "artifact", restricted: false, path }));
+    const entries = contractEntries.length ? contractEntries : fallbackEntries;
     if (!entries.length) {
       els.artifactTabs.innerHTML = '<span class="muted">No artifacts are listed for the latest run.</span>';
       els.artifactViewer.textContent = "No artifact payload.";
       return;
     }
-    els.artifactTabs.innerHTML = entries.map(([key]) => (
-      `<button class="btn secondary" type="button" data-artifact-key="${escapeHtml(key)}">${escapeHtml(key)}</button>`
+    els.artifactTabs.innerHTML = entries.map((item) => (
+      `<button class="btn secondary" type="button" data-artifact-key="${escapeHtml(item.artifact_key)}">${escapeHtml(item.title || item.artifact_key)} · ${escapeHtml(humanizeToken(item.category || "artifact"))}${item.restricted ? " · Restricted" : ""}</button>`
     )).join("");
     if (els.artifactViewer.textContent === "Select a run artifact." || els.artifactViewer.textContent === "No artifact payload.") {
-      const [firstKey, firstPath] = entries[0];
-      els.artifactViewer.textContent = compactJson({ artifact_key: firstKey, path: firstPath });
+      const first = entries[0];
+      els.artifactViewer.textContent = compactJson(first);
     }
   }
 
   async function openArtifact(key) {
-    const artifacts = state.latestRun?.artifacts || {};
-    const path = artifacts[key];
-    if (!path) return;
-    els.artifactViewer.textContent = compactJson({ artifact_key: key, path });
+    const contract = state.workspaceContract || {};
+    const catalog = []
+      .concat(Array.isArray(contract.evidence?.artifacts) ? contract.evidence.artifacts : [])
+      .concat(Array.isArray(contract.reports?.artifacts) ? contract.reports.artifacts : []);
+    const selected = catalog.find((item) => item?.artifact_key === key) || null;
+    const path = selected?.path || state.latestRun?.artifacts?.[key];
+    if (!path && !selected) return;
+    els.artifactViewer.textContent = compactJson(selected || { artifact_key: key, path });
     if (!activeRunId()) return;
     try {
-      const payload = await requestJson(`/reviewer/runs/${encodeURIComponent(activeRunId())}/artifacts/${encodeURIComponent(key)}`);
+      const payload = await requestJson(`${reviewArtifactBaseRoute()}/${encodeURIComponent(activeRunId())}/artifacts/${encodeURIComponent(key)}`);
       els.artifactViewer.textContent = compactJson(payload);
     } catch (error) {
       els.artifactViewer.textContent = compactJson({
@@ -2074,21 +2544,26 @@
       state.readyStatus = null;
       state.configStatus = null;
       state.dependenciesStatus = null;
+      state.connectorCatalog = null;
+      state.workspaceContract = null;
       renderAll();
       return;
     }
     const previousSignature = state.lastRunSignature;
-    const [latestRun, auditSummary, findings, history, dataStatus, knowledgeGraph, liveStatus, readyStatus, configStatus, dependenciesStatus] = await Promise.all([
+    const buRole = roleHasAny(currentRole(), "bu") && !roleHasAny(currentRole(), "reviewer", "operator", "tenant_admin", "system");
+    const [latestRun, auditSummary, findings, history, dataStatus, knowledgeGraph, liveStatus, readyStatus, configStatus, dependenciesStatus, connectorCatalog, workspaceContract] = await Promise.all([
       guarded("Latest run", requestJson("/runs/latest"), { status: "missing" }),
       guarded("Audit summary", requestJson("/runs/latest/audit-summary"), { status: "missing" }),
       guarded("Findings", requestJson("/runs/latest/findings"), { status: "missing", findings: [] }),
       guarded("Run history", requestJson("/runs/history"), { status: "empty", history: [] }),
-      guarded("Data status", requestJson("/data/status"), null),
-      guarded("Knowledge graph", requestJson("/runs/latest/knowledge-graph"), { status: "missing", nodes: [], edges: [], meta: {} }),
-      guarded("Live health", requestJson("/health/live"), null),
-      guarded("Readiness", readinessProbe(), null),
-      guarded("Config", requestJson("/health/config"), null),
-      guarded("Dependencies", requestJson("/health/dependencies"), null),
+      buRole ? Promise.resolve(null) : guarded("Data status", requestJson("/data/status"), null),
+      buRole ? Promise.resolve({ status: "restricted", reason: "Knowledge graph stays outside the bounded BU lane." }) : guarded("Knowledge graph", requestJson("/runs/latest/knowledge-graph"), { status: "missing", nodes: [], edges: [], meta: {} }),
+      buRole ? Promise.resolve(null) : guarded("Live health", requestJson("/health/live"), null),
+      buRole ? Promise.resolve(null) : guarded("Readiness", readinessProbe(), null),
+      buRole ? Promise.resolve(null) : guarded("Config", requestJson("/health/config"), null),
+      buRole ? Promise.resolve(null) : guarded("Dependencies", requestJson("/health/dependencies"), null),
+      buRole ? Promise.resolve(null) : guarded("Connector catalog", requestJson("/ingestion/connectors"), null),
+      guarded("Workspace contract", requestJson("/ui/workspace-contract/latest"), null),
     ]);
     state.latestRun = latestRun;
     state.auditSummary = auditSummary;
@@ -2100,6 +2575,8 @@
     state.readyStatus = readyStatus;
     state.configStatus = configStatus;
     state.dependenciesStatus = dependenciesStatus;
+    state.connectorCatalog = connectorCatalog;
+    state.workspaceContract = workspaceContract;
     if (state.latestJob?.job_id && ["queued", "running"].includes(String(state.latestJob.status || "").toLowerCase())) {
       state.latestJob = await guarded(
         "Run job",
@@ -2116,12 +2593,17 @@
     renderDashboard();
     renderTrend();
     renderFindings();
+    renderRoleTasks();
+    renderAdminContext();
+    renderSystemWorkflow();
+    renderConnectors();
     renderDataStatus();
     renderKnowledgeGraph();
     renderHealth();
     renderVectorSearch();
     renderSourcePackPanel();
     renderChat();
+    applyLaneHint();
   }
 
   async function refreshAll() {
@@ -2205,10 +2687,25 @@
         }
       });
     }
-    els.newRunButton.addEventListener("click", () => openDrawer("new-run", "source-pack-section"));
+    els.newRunButton.addEventListener("click", () => {
+      const lane = isAuthDisabled() ? "shared" : preferredLaneForRole(currentRole());
+      if (lane === "review") {
+        document.getElementById("review")?.scrollIntoView({ block: "start" });
+        return;
+      }
+      if (lane === "system") {
+        openDrawer("system", "system-workflow-panel");
+        return;
+      }
+      openDrawer("new-run", "source-pack-section");
+    });
     els.startRunCancel.addEventListener("click", () => closeDrawer("new-run"));
     els.systemDrawerButton.addEventListener("click", () => openDrawer("system"));
     els.systemDrawerClose.addEventListener("click", () => closeDrawer("system"));
+    els.systemWorkflowList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-workflow-target]");
+      if (button) openDrawer("system", button.getAttribute("data-workflow-target") || "system-workflow-panel");
+    });
     document.querySelectorAll("[data-open-drawer]").forEach((node) => {
       node.addEventListener("click", () => {
         const drawerName = node.getAttribute("data-open-drawer") || "system";

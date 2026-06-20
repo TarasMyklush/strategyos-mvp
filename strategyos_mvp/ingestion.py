@@ -18,6 +18,7 @@ from .detector_contracts import (
 from .data_roles import role_attribute_names, role_date_columns
 from .evidence import EvidenceStore
 from .models import DataQualityIssue
+from .platform_foundation import hydrate_ingestion_job, hydrate_tenant_context
 from .plugins import load_configured_plugins
 
 
@@ -51,6 +52,8 @@ class DataBundle:
     run_metadata: dict[str, Any] = field(default_factory=dict)
     detector_report: dict[str, Any] = field(default_factory=dict)
     quality_issues: list[DataQualityIssue] = field(default_factory=list)
+    tenant_context: Any = None
+    ingestion_job: Any = None
 
 
 _ROLE_ATTRIBUTES: dict[str, str] = role_attribute_names()
@@ -128,6 +131,8 @@ def load_dataset(dataset_root: Path, *, strict: bool | None = None) -> DataBundl
         cash_forecast=frames["cash_forecast"],
         data_contracts={role: resolved.artifact() for role, resolved in contracts.items()},
         run_metadata=run_metadata,
+        tenant_context=hydrate_tenant_context(run_metadata.get("tenant_context")),
+        ingestion_job=hydrate_ingestion_job(run_metadata.get("ingestion_job")),
     )
     bundle.quality_issues.extend(check_quality(bundle))
     return bundle

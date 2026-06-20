@@ -34,6 +34,13 @@ if [ ! -f "${LOCAL_SECRETS_ENV}" ]; then
   exit 1
 fi
 
+ENV_FILE="${LOCAL_ENV}" \
+SECRETS_FILE="${LOCAL_SECRETS_ENV}" \
+TARGET_ENVIRONMENT="${TARGET_ENVIRONMENT:-}" \
+TARGET_PUBLIC_URL="${STRATEGYOS_PUBLIC_URL:-}" \
+TARGET_DEPLOY_USER="${HETZNER_USER:-}" \
+bash deploy/scripts/validate_deploy_boundary.sh
+
 ssh ${SSH_OPTS} "${TARGET_HOST}" "mkdir -p '${TARGET_DIR}' '${TARGET_DIR}/backups'"
 
 ssh ${SSH_OPTS} "${TARGET_HOST}" "if [ -d '${TARGET_DIR}/app' ]; then cp -a '${TARGET_DIR}/app' '${TARGET_DIR}/backups/app-$(date +%Y%m%d%H%M%S)'; fi"

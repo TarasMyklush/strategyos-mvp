@@ -145,14 +145,27 @@ jobs:
       STRATEGYOS_API_IMAGE: ${{ needs.image.outputs.image-ref }}
       STRATEGYOS_COMPOSE_FILES: ${{ vars.STRATEGYOS_COMPOSE_FILES }}
       STRATEGYOS_COMPOSE_PROFILES: ${{ vars.STRATEGYOS_COMPOSE_PROFILES }}
+      HETZNER_USER: ${{ vars.HETZNER_USER }}
       STRATEGYOS_HTTP_PORT: ${{ vars.STRATEGYOS_HTTP_PORT || '80' }}
       STRATEGYOS_HTTPS_PORT: ${{ vars.STRATEGYOS_HTTPS_PORT || '443' }}
       STRATEGYOS_SITE_ADDRESS: ${{ vars.STRATEGYOS_SITE_ADDRESS || ':80' }}
+      STRATEGYOS_ENVIRONMENT_LABEL: ${{ vars.STRATEGYOS_ENVIRONMENT_LABEL || inputs.target_environment }}
+      STRATEGYOS_AUTH_MODE: ${{ vars.STRATEGYOS_AUTH_MODE || 'identity_provider' }}
+      STRATEGYOS_TRUST_PROXY_AUTH: ${{ vars.STRATEGYOS_TRUST_PROXY_AUTH || 'false' }}
+      STRATEGYOS_OPERATOR_EMAILS: ${{ vars.STRATEGYOS_OPERATOR_EMAILS || '' }}
+      STRATEGYOS_REVIEWER_EMAILS: ${{ vars.STRATEGYOS_REVIEWER_EMAILS || '' }}
       STRATEGYOS_IDP_ISSUER: ${{ vars.STRATEGYOS_IDP_ISSUER || 'http://localhost:8089' }}
       STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: ${{ vars.STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED || 'false' }}
       STRATEGYOS_PUBLIC_HEALTH_ENABLED: ${{ vars.STRATEGYOS_PUBLIC_HEALTH_ENABLED || 'false' }}
       STRATEGYOS_REQUIRE_HUMAN_REVIEW: ${{ vars.STRATEGYOS_REQUIRE_HUMAN_REVIEW || 'true' }}
       STRATEGYOS_SYNC_ARTIFACTS: ${{ vars.STRATEGYOS_SYNC_ARTIFACTS || 'true' }}
+      OAUTH2_PROXY_PROVIDER: ${{ vars.OAUTH2_PROXY_PROVIDER || 'oidc' }}
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${{ vars.OAUTH2_PROXY_OIDC_ISSUER_URL || '' }}
+      OAUTH2_PROXY_CLIENT_ID: ${{ vars.OAUTH2_PROXY_CLIENT_ID || '' }}
+      OAUTH2_PROXY_REDIRECT_URL: ${{ vars.OAUTH2_PROXY_REDIRECT_URL || '' }}
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${{ vars.OAUTH2_PROXY_EMAIL_DOMAINS || '*' }}
+      OAUTH2_PROXY_SCOPE: ${{ vars.OAUTH2_PROXY_SCOPE || 'openid email profile' }}
+      OAUTH2_PROXY_COOKIE_SECURE: ${{ vars.OAUTH2_PROXY_COOKIE_SECURE || 'true' }}
       STRATEGYOS_RUNTIME_BACKEND: ${{ vars.STRATEGYOS_RUNTIME_BACKEND || 'langgraph' }}
       STRATEGYOS_RUN_EXECUTION_MODE: ${{ vars.STRATEGYOS_RUN_EXECUTION_MODE || 'sync' }}
       STRATEGYOS_RUN_POLICY: ${{ vars.STRATEGYOS_RUN_POLICY || 'sovereign' }}
@@ -206,17 +219,29 @@ jobs:
                   order.append(key)
 
           overrides = {
-              "STRATEGYOS_API_IMAGE": os.environ["STRATEGYOS_API_IMAGE"],
-              "STRATEGYOS_HTTP_PORT": os.environ["STRATEGYOS_HTTP_PORT"],
-              "STRATEGYOS_HTTPS_PORT": os.environ["STRATEGYOS_HTTPS_PORT"],
-              "STRATEGYOS_SITE_ADDRESS": os.environ["STRATEGYOS_SITE_ADDRESS"],
-              "STRATEGYOS_IDP_ISSUER": os.environ["STRATEGYOS_IDP_ISSUER"],
-              "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": os.environ["STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED"],
-              "STRATEGYOS_PUBLIC_HEALTH_ENABLED": os.environ["STRATEGYOS_PUBLIC_HEALTH_ENABLED"],
-              "STRATEGYOS_REQUIRE_HUMAN_REVIEW": os.environ["STRATEGYOS_REQUIRE_HUMAN_REVIEW"],
-              "STRATEGYOS_SYNC_ARTIFACTS": os.environ["STRATEGYOS_SYNC_ARTIFACTS"],
-              "STRATEGYOS_RUNTIME_BACKEND": os.environ["STRATEGYOS_RUNTIME_BACKEND"],
-              "STRATEGYOS_RUN_EXECUTION_MODE": os.environ["STRATEGYOS_RUN_EXECUTION_MODE"],
+               "STRATEGYOS_API_IMAGE": os.environ["STRATEGYOS_API_IMAGE"],
+               "STRATEGYOS_HTTP_PORT": os.environ["STRATEGYOS_HTTP_PORT"],
+               "STRATEGYOS_HTTPS_PORT": os.environ["STRATEGYOS_HTTPS_PORT"],
+               "STRATEGYOS_SITE_ADDRESS": os.environ["STRATEGYOS_SITE_ADDRESS"],
+               "STRATEGYOS_ENVIRONMENT_LABEL": os.environ["STRATEGYOS_ENVIRONMENT_LABEL"],
+               "STRATEGYOS_AUTH_MODE": os.environ["STRATEGYOS_AUTH_MODE"],
+               "STRATEGYOS_TRUST_PROXY_AUTH": os.environ["STRATEGYOS_TRUST_PROXY_AUTH"],
+               "STRATEGYOS_OPERATOR_EMAILS": os.environ["STRATEGYOS_OPERATOR_EMAILS"],
+               "STRATEGYOS_REVIEWER_EMAILS": os.environ["STRATEGYOS_REVIEWER_EMAILS"],
+               "STRATEGYOS_IDP_ISSUER": os.environ["STRATEGYOS_IDP_ISSUER"],
+               "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": os.environ["STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED"],
+               "STRATEGYOS_PUBLIC_HEALTH_ENABLED": os.environ["STRATEGYOS_PUBLIC_HEALTH_ENABLED"],
+               "STRATEGYOS_REQUIRE_HUMAN_REVIEW": os.environ["STRATEGYOS_REQUIRE_HUMAN_REVIEW"],
+               "STRATEGYOS_SYNC_ARTIFACTS": os.environ["STRATEGYOS_SYNC_ARTIFACTS"],
+               "OAUTH2_PROXY_PROVIDER": os.environ["OAUTH2_PROXY_PROVIDER"],
+               "OAUTH2_PROXY_OIDC_ISSUER_URL": os.environ["OAUTH2_PROXY_OIDC_ISSUER_URL"],
+               "OAUTH2_PROXY_CLIENT_ID": os.environ["OAUTH2_PROXY_CLIENT_ID"],
+               "OAUTH2_PROXY_REDIRECT_URL": os.environ["OAUTH2_PROXY_REDIRECT_URL"],
+               "OAUTH2_PROXY_EMAIL_DOMAINS": os.environ["OAUTH2_PROXY_EMAIL_DOMAINS"],
+               "OAUTH2_PROXY_SCOPE": os.environ["OAUTH2_PROXY_SCOPE"],
+               "OAUTH2_PROXY_COOKIE_SECURE": os.environ["OAUTH2_PROXY_COOKIE_SECURE"],
+               "STRATEGYOS_RUNTIME_BACKEND": os.environ["STRATEGYOS_RUNTIME_BACKEND"],
+               "STRATEGYOS_RUN_EXECUTION_MODE": os.environ["STRATEGYOS_RUN_EXECUTION_MODE"],
               "STRATEGYOS_RUN_POLICY": os.environ["STRATEGYOS_RUN_POLICY"],
               "STRATEGYOS_APPROVED_EXTERNAL_MODES": os.environ["STRATEGYOS_APPROVED_EXTERNAL_MODES"],
               "STRATEGYOS_MODEL_PROVIDER_ENABLED": os.environ["STRATEGYOS_MODEL_PROVIDER_ENABLED"],
@@ -249,9 +274,31 @@ jobs:
         env:
           STRATEGYOS_ENV_SECRETS: ${{ secrets.STRATEGYOS_ENV_SECRETS }}
           STRATEGYOS_LLM_API_KEY: ${{ secrets.STRATEGYOS_LLM_API_KEY }}
+          STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET: ${{ secrets.STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET }}
+          OAUTH2_PROXY_CLIENT_SECRET: ${{ secrets.OAUTH2_PROXY_CLIENT_SECRET }}
+          OAUTH2_PROXY_COOKIE_SECRET: ${{ secrets.OAUTH2_PROXY_COOKIE_SECRET }}
         run: |
           test -n "${STRATEGYOS_ENV_SECRETS}"
           printf '%s\n' "${STRATEGYOS_ENV_SECRETS}" > deploy/.env.secrets.ci
+          python - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path("deploy/.env.secrets.ci")
+          lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+          def upsert(key: str, value: str) -> None:
+              global lines
+              lines = [line for line in lines if not line.startswith(f"{key}=")]
+              if value:
+                  lines.append(f"{key}={value}")
+
+          upsert("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET", os.environ.get("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET", ""))
+          upsert("OAUTH2_PROXY_CLIENT_SECRET", os.environ.get("OAUTH2_PROXY_CLIENT_SECRET", ""))
+          upsert("OAUTH2_PROXY_COOKIE_SECRET", os.environ.get("OAUTH2_PROXY_COOKIE_SECRET", ""))
+          upsert("STRATEGYOS_LLM_API_KEY", os.environ.get("STRATEGYOS_LLM_API_KEY", ""))
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
           if [ -n "${STRATEGYOS_LLM_API_KEY}" ]; then
             python - <<'PY'
           from pathlib import Path
@@ -274,11 +321,29 @@ jobs:
 
       - name: Validate release compose config
         run: |
+          compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml}"
+          compose_args=()
+          for compose_file in ${compose_files}; do
+            compose_args+=(-f "${compose_file}")
+          done
           profile_args=()
           for profile in ${STRATEGYOS_COMPOSE_PROFILES:-}; do
             profile_args+=(--profile "${profile}")
           done
-          docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml -f deploy/docker-compose.hetzner-qa.yml "${profile_args[@]}" --env-file deploy/.env.ci --env-file deploy/.env.secrets.ci config -q
+          docker compose "${compose_args[@]}" "${profile_args[@]}" --env-file deploy/.env.ci --env-file deploy/.env.secrets.ci config -q
+
+      - name: Validate deploy boundary
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+          TARGET_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+          TARGET_DEPLOY_USER: ${{ vars.HETZNER_USER }}
+        run: |
+          ENV_FILE=deploy/.env.ci \
+          SECRETS_FILE=deploy/.env.secrets.ci \
+          TARGET_ENVIRONMENT="${TARGET_ENVIRONMENT}" \
+          TARGET_PUBLIC_URL="${TARGET_PUBLIC_URL}" \
+          TARGET_DEPLOY_USER="${TARGET_DEPLOY_USER}" \
+          bash deploy/scripts/validate_deploy_boundary.sh
 
       - name: Log remote host in to GHCR
         env:
@@ -300,21 +365,67 @@ jobs:
 
       - name: Check protected readiness
         id: health
+        env:
+          STRATEGYOS_READINESS_AUTH_HEADER: ${{ secrets.STRATEGYOS_READINESS_AUTH_HEADER }}
         run: |
-          token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
-          echo "::add-mask::${token}"
-          READINESS_AUTH_HEADER="Authorization: Bearer ${token}" \
+          if [ "${STRATEGYOS_AUTH_MODE}" = "proxy_oidc" ]; then
+            test -n "${STRATEGYOS_READINESS_AUTH_HEADER}"
+            READINESS_AUTH_HEADER="${STRATEGYOS_READINESS_AUTH_HEADER}" \
+            TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
+            bash deploy/scripts/check_health.sh
+          else
+            token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
+            echo "::add-mask::${token}"
+            READINESS_AUTH_HEADER="Authorization: Bearer ${token}" \
+            TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
+            bash deploy/scripts/check_health.sh
+          fi
+
+      - name: Verify governed cloud surface
+        env:
+          STRATEGYOS_OPERATOR_AUTH_HEADER: ${{ secrets.STRATEGYOS_OPERATOR_AUTH_HEADER }}
+          STRATEGYOS_REVIEWER_AUTH_HEADER: ${{ secrets.STRATEGYOS_REVIEWER_AUTH_HEADER }}
+        run: |
+          if [ "${STRATEGYOS_AUTH_MODE}" = "proxy_oidc" ]; then
+            test -n "${STRATEGYOS_OPERATOR_AUTH_HEADER}"
+            test -n "${STRATEGYOS_REVIEWER_AUTH_HEADER}"
+            python deploy/scripts/verify_cloud_surface.py \
+              --base-url "${STRATEGYOS_PUBLIC_URL}" \
+              --operator-auth-header "${STRATEGYOS_OPERATOR_AUTH_HEADER}" \
+              --reviewer-auth-header "${STRATEGYOS_REVIEWER_AUTH_HEADER}"
+          else
+            operator_token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
+            reviewer_token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=reviewer bash deploy/scripts/remote_idp_token.sh)"
+            echo "::add-mask::${operator_token}"
+            echo "::add-mask::${reviewer_token}"
+            python deploy/scripts/verify_cloud_surface.py \
+              --base-url "${STRATEGYOS_PUBLIC_URL}" \
+              --operator-auth-header "Authorization: Bearer ${operator_token}" \
+              --reviewer-auth-header "Authorization: Bearer ${reviewer_token}"
+          fi
+
+      - name: Validate public edge headers
+        run: |
           TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
-          bash deploy/scripts/check_health.sh
+          bash deploy/scripts/validate_public_edge.sh
 
       - name: Optional smoke run
         if: ${{ inputs.run_smoke }}
+        env:
+          STRATEGYOS_RUN_AUTH_HEADER: ${{ secrets.STRATEGYOS_RUN_AUTH_HEADER }}
         run: |
-          token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
-          echo "::add-mask::${token}"
-          RUN_AUTH_HEADER="Authorization: Bearer ${token}" \
-          TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
-          bash deploy/scripts/run_remote_workflow.sh
+          if [ "${STRATEGYOS_AUTH_MODE}" = "proxy_oidc" ]; then
+            test -n "${STRATEGYOS_RUN_AUTH_HEADER}"
+            RUN_AUTH_HEADER="${STRATEGYOS_RUN_AUTH_HEADER}" \
+            TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
+            bash deploy/scripts/run_remote_workflow.sh
+          else
+            token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
+            echo "::add-mask::${token}"
+            RUN_AUTH_HEADER="Authorization: Bearer ${token}" \
+            TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
+            bash deploy/scripts/run_remote_workflow.sh
+          fi
 
       - name: Roll back if post-deploy check fails
         if: ${{ failure() && steps.deploy.outcome == 'success' }}

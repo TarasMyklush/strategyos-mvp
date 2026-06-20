@@ -41,6 +41,16 @@
     memoTitle: byId("exec-memo-title"),
     memoBody: byId("exec-memo-body"),
     memoList: byId("exec-memo-list"),
+    planHealthBadge: byId("exec-plan-health-badge"),
+    planHealthStatus: byId("exec-plan-health-status"),
+    planHealthNote: byId("exec-plan-health-note"),
+    planHealthBoundary: byId("exec-plan-health-boundary"),
+    planKpiValue: byId("exec-plan-kpi-value"),
+    planKpiValueNote: byId("exec-plan-kpi-value-note"),
+    planKpiCases: byId("exec-plan-kpi-cases"),
+    planKpiCasesNote: byId("exec-plan-kpi-cases-note"),
+    planKpiEvidence: byId("exec-plan-kpi-evidence"),
+    planKpiEvidenceNote: byId("exec-plan-kpi-evidence-note"),
   };
 
   const state = {
@@ -49,6 +59,12 @@
     latestRun: null,
     auditSummary: null,
     knowledgeGraph: null,
+    latestFindings: null,
+    pendingReviews: null,
+    runDetail: null,
+    selectedFindingId: null,
+    publicEvidencePreview: null,
+    publicReportPreview: null,
     loading: false,
   };
 
@@ -158,6 +174,59 @@
     return run?.audit_event_count ?? null;
   }
 
+  function findingsPayload() {
+    return state.latestFindings && Array.isArray(state.latestFindings.findings)
+      ? state.latestFindings.findings
+      : [];
+  }
+
+  function approvalSummary(run) {
+    return run?.approval_status || run?.approval?.approval_status || "pending";
+  }
+
+  function reportArtifacts() {
+    const fromDetail = state.runDetail?.summary_json?.artifacts;
+    if (fromDetail && typeof fromDetail === "object") return fromDetail;
+    const fromRun = state.latestRun?.artifacts;
+    if (fromRun && typeof fromRun === "object") return fromRun;
+    return {};
+  }
+
+  function reportLabel(key) {
+    return String(key || "report").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  function findingsTotals() {
+    const findings = findingsPayload();
+    if (!findings.length) {
+      return { ready: 0, challenged: 0, review: 0, total: 0 };
+    }
+    return findings.reduce((totals, finding) => {
+      totals.total += 1;
+      if (finding?.challenged) {
+        totals.challenged += 1;
+      } else if (String(finding?.status || "").toLowerCase().includes("review") || String(finding?.confidence || "").toLowerCase() === "review") {
+        totals.review += 1;
+      } else {
+        totals.ready += 1;
+      }
+      return totals;
+    }, { ready: 0, challenged: 0, review: 0, total: 0 });
+  }
+
+  function renderPlanHealth(config) {
+    els.planHealthBadge.textContent = config.badge;
+    els.planHealthStatus.textContent = config.status;
+    els.planHealthNote.textContent = config.note;
+    els.planHealthBoundary.textContent = config.boundary;
+    els.planKpiValue.textContent = config.value;
+    els.planKpiValueNote.textContent = config.valueNote;
+    els.planKpiCases.textContent = config.cases;
+    els.planKpiCasesNote.textContent = config.casesNote;
+    els.planKpiEvidence.textContent = config.evidence;
+    els.planKpiEvidenceNote.textContent = config.evidenceNote;
+  }
+
   function isAuthenticated() {
     const session = state.session || {};
     return Boolean(session.authenticated || session.auth_disabled || !bootstrap.api_auth_enabled);
@@ -170,22 +239,135 @@
     els.sessionToken.value = state.token;
     els.sessionPanel.classList.toggle("hidden", authDisabled || Boolean(session.authenticated));
     els.sessionStatus.textContent = authDisabled
-      ? "Auth disabled in this environment. Loading live data."
+      ? "Auth disabled in this environment. Executive remains read-only while live data loads."
       : session.authenticated
-        ? `Connected as ${display}.`
-        : "Paste an operator or reviewer token to load live run data.";
+        ? `Connected as ${display}. Executive remains read-only; use /app for approvals or run control.`
+        : "Paste an operator or reviewer token to unlock live run data. Executive remains read-only.";
     els.railStatus.textContent = isAuthenticated() ? "SYSTEM ONLINE" : "AUTH REQUIRED";
   }
 
   function renderLocked() {
     displaySession();
-    els.runTitle.textContent = "Executive cockpit locked";
-    els.runMeta.textContent = "Connect an operator or reviewer session";
-    els.headline.textContent = "Connect to load live finance intelligence.";
-    els.lead.textContent = "The public preview contains no sensitive run data. This cockpit loads KPIs, evidence, and command answers only after authentication.";
-    els.primaryObjective.textContent = "--";
-    els.primaryCaption.textContent = "Waiting for authenticated run data.";
+    const run = state.latestRun || {};
+    const findings = findingsPayload();
+    const citations = citationSummary(run);
+    const challenged = Array.isArray(state.auditSummary?.challenged_finding_ids)
+      ? state.auditSummary.challenged_finding_ids.length
+      : findings.filter((item) => item?.challenged).length;
+    const totals = findingsTotals();
+    if (run?.status === "ok" || findings.length) {
+      els.runTitle.textContent = run?.run_id ? `public preview · ${compactRunId(run)}` : "Public preview";
+      els.runMeta.textContent = "Anonymous-safe snapshot of the latest governed run";
+      els.headline.textContent = findings.length
+        ? `${formatCount(findings.length)} governed case${Number(findings.length) === 1 ? "" : "s"} are visible on the anonymous demo path.`
+        : "A governed run is available on the anonymous demo path.";
+      els.lead.textContent = "This route now shows a truthful public-safe slice: latest cases, one sanitized evidence drill-down, and a board-safe report note. Protected controls still require authentication.";
+      els.primaryObjective.textContent = formatSarShort(run?.total_recoverable_sar);
+      els.primaryCaption.textContent = "Latest recoverable value from the governed run.";
+      els.commandOutput.textContent = "Connect a session before running commands.";
+      byId("exec-overview-status").textContent = run?.approval_status ? `Latest run ${run.approval_status}` : "Latest run available";
+      byId("exec-overview-note").textContent = "Anonymous viewers see only a sanitized demo slice of the latest run.";
+      byId("exec-queue-count").textContent = formatCount(findings.length || run?.locked_findings);
+      byId("exec-queue-note").textContent = "Public queue mirrors governed findings only, not reviewer assignments.";
+      byId("exec-evidence-status").textContent = state.publicEvidencePreview?.resolved ? "resolved" : "public-safe";
+      byId("exec-evidence-note").textContent = "Excerpt and locator are sanitized for public demo use. Full packet stays protected.";
+      byId("exec-report-status").textContent = "board-safe preview";
+      byId("exec-report-note").textContent = "This note is synthesized for anonymous demo use; protected artifact bodies remain gated.";
+      const citationText = citations.count !== null && citations.count !== undefined
+        ? `${formatCount(citations.resolved)} / ${formatCount(citations.count)} citations`
+        : `${formatCount(findings.reduce((sum, item) => sum + Number(item?.citation_count || 0), 0))} cites`;
+      els.citationBadge.textContent = citationText;
+      els.radarFound.textContent = formatSarShort(run?.total_recoverable_sar).replace("SAR ", "");
+      els.radarReady.textContent = formatCount(findings.length || run?.locked_findings);
+      els.radarBlocked.textContent = formatCount(challenged || 0);
+      els.radarReview.textContent = run?.approval_status || "pending";
+      els.radarHold.textContent = run?.requires_human_review ? "review gate" : "open";
+      els.radarCitations.textContent = formatCount(citations.count);
+      els.kpiRecoverable.textContent = formatSarShort(run?.total_recoverable_sar);
+      els.kpiFindings.textContent = formatCount(findings.length || run?.locked_findings);
+      els.kpiChallenges.textContent = formatCount(challenged || 0);
+      els.decisionBadge.textContent = "public-safe";
+      els.decisionList.innerHTML = [
+        decisionCard("1. Latest governed cases", "Anonymous viewers can see the top governed findings without crossing the auth boundary.", formatCount(findings.length || run?.locked_findings), "public"),
+        decisionCard("2. Sanitized evidence drill-down", "One evidence preview stays truthful but strips protected payload details.", formatCount(citations.count), "sanitized"),
+        decisionCard("3. Board-safe report note", "The anonymous path now shows a report summary without exposing restricted artifact bodies.", run?.approval_status || "pending", "public"),
+      ].join("");
+      els.assistantFeed.innerHTML = [
+        message("system", "Anonymous surface", "The latest governed run now exposes a narrow, public-safe hero story without weakening protected controls."),
+        message("", "Evidence boundary", "Detailed citation payloads, reviewer actions, and protected artifacts still require an operator or reviewer session."),
+      ].join("");
+      renderCases(run, citations, challenged);
+
+      const evidence = state.publicEvidencePreview;
+      if (evidence?.status === "ok") {
+        byId("exec-evidence-badge").textContent = evidence?.hash_match === false ? "check source" : "public-safe excerpt";
+        byId("exec-evidence-title").textContent = evidence.title || evidence.finding_id || "Governed evidence packet";
+        byId("exec-evidence-summary").textContent = `${evidence.finding_id || "finding"} · ${evidence.vendor_name || evidence.vendor_id || "reviewer"} · ${evidence.confidence || "review"}`;
+        byId("exec-evidence-source").textContent = evidence.source_path || "Stored evidence";
+        byId("exec-evidence-locator").textContent = evidence.locator || "No locator";
+        byId("exec-evidence-confidence").textContent = evidence.confidence || "review";
+        byId("exec-evidence-resolution").textContent = evidence.resolved ? "Resolved citation" : "Stored citation";
+        byId("exec-evidence-preview").textContent = evidence.excerpt || "Stored evidence excerpt unavailable.";
+      } else {
+        setEvidencePreviewFallback("No public-safe evidence preview is available yet.", "awaiting evidence");
+      }
+
+      const report = state.publicReportPreview;
+      const reportChoices = Array.isArray(report?.available_artifacts) && report.available_artifacts.length
+        ? report.available_artifacts
+        : [{ artifact_key: report?.artifact_key || "executive_summary", title: report?.title || "Executive summary" }];
+      byId("exec-report-badge").textContent = `${reportChoices.length} public preview${reportChoices.length === 1 ? "" : "s"}`;
+      byId("exec-report-list").innerHTML = reportChoices.map((item) => `
+        <button class="report-button" type="button" data-artifact-key="${escapeHtml(item.artifact_key || "executive_summary")}">
+          <strong>${escapeHtml(item.title || item.artifact_key || "Executive summary")}</strong>
+          <span>Anonymous-safe preview</span>
+        </button>
+      `).join("");
+      byId("exec-report-list").querySelectorAll("[data-artifact-key]").forEach((button) => {
+        button.addEventListener("click", () => loadReportPreview(button.getAttribute("data-artifact-key")));
+      });
+      byId("exec-report-preview").textContent = report?.preview_text || "No board-safe report preview is available yet.";
+      els.memoBody.textContent = "The anonymous route now tells one truthful story: governed cases exist, evidence is cited, and outputs stay under human control.";
+      els.memoList.innerHTML = [
+        `<div>Run: ${escapeHtml(run?.run_id || "latest")}</div>`,
+        `<div>Cases: ${escapeHtml(formatCount(findings.length || run?.locked_findings))}</div>`,
+        `<div>Boundary: protected reviewer controls still require authentication.</div>`,
+      ].join("");
+      renderPlanHealth({
+        badge: "bounded KPI layer",
+        status: challenged ? "Human gate visible" : "Finance signal available",
+        note: challenged
+          ? `${formatCount(challenged)} challenge${Number(challenged) === 1 ? " is" : "s are"} keeping the public story bounded to finance evidence and review posture.`
+          : "The public story can now show value, case count, and evidence posture without pretending broader enterprise plan logic exists.",
+        boundary: "Finance-derived signal only — StrategyOS is summarizing current case, evidence, and report posture, not a full enterprise strategy compiler.",
+        value: formatSarShort(run?.total_recoverable_sar),
+        valueNote: "Current value signal comes from the latest governed finance run, not from portfolio-wide planning data.",
+        cases: totals.total ? `${formatCount(totals.total)} cases` : formatCount(findings.length || run?.locked_findings),
+        casesNote: totals.total
+          ? `${formatCount(totals.ready)} ready · ${formatCount(totals.review)} in review · ${formatCount(totals.challenged)} challenged.`
+          : "Public-safe case count mirrors the governed queue, without reviewer assignment detail.",
+        evidence: citations.count !== null && citations.count !== undefined
+          ? `${formatCount(citations.resolved)} / ${formatCount(citations.count)} cited`
+          : `${formatCount(challenged || 0)} challenges`,
+        evidenceNote: "Evidence and release posture stay deliberately narrow here: citation chain, challenge state, and board-safe preview only.",
+      });
+      return;
+    }
+    els.runTitle.textContent = "Anonymous executive demo";
+    els.runMeta.textContent = "Public posture only · live evidence remains protected";
+    els.headline.textContent = "See how StrategyOS turns finance evidence into governed executive action.";
+    els.lead.textContent = "The anonymous surface shows the real workflow shape — overview, cases, evidence, and reports — while live run data, citations, approvals, and board artifacts stay behind operator or reviewer access.";
+    els.primaryObjective.textContent = "4-stage flow";
+    els.primaryCaption.textContent = "Intake → governed findings → evidence packet → board-ready report.";
     els.commandOutput.textContent = "Connect a session before running commands.";
+    byId("exec-overview-status").textContent = "Anonymous demo mode";
+    byId("exec-overview-note").textContent = "StrategyOS can show the governed surface shape publicly, but it exposes no live recovery data without authentication.";
+    byId("exec-queue-count").textContent = "4 stages";
+    byId("exec-queue-note").textContent = "Follow the public story below, then authenticate to load the real review queue.";
+    byId("exec-evidence-status").textContent = "Boundary intact";
+    byId("exec-evidence-note").textContent = "Evidence packets, excerpts, and citation payloads stay hidden until a trusted session is present.";
+    byId("exec-report-status").textContent = "Preview posture only";
+    byId("exec-report-note").textContent = "Board-ready files and report previews remain protected on the public surface.";
     els.citationBadge.textContent = "-- citations";
     els.radarFound.textContent = "--";
     els.radarReady.textContent = "--";
@@ -196,12 +378,86 @@
     els.kpiRecoverable.textContent = "--";
     els.kpiFindings.textContent = "--";
     els.kpiChallenges.textContent = "--";
-    els.decisionBadge.textContent = "locked";
-    els.decisionList.innerHTML = decisionCard("Connect session", "Use the same operator/reviewer token as the dashboard.", "--", "auth");
-    els.assistantFeed.innerHTML = message("system", "System readout", "No live data is loaded on the public surface. Connect a session to activate the executive cockpit.");
-    els.caseBody.innerHTML = '<tr><td colspan="5">Connect a session to load cases.</td></tr>';
-    els.memoBody.textContent = "Live board narrative will load from the latest run state.";
-    els.memoList.innerHTML = "";
+    els.decisionBadge.textContent = "story mode";
+    els.decisionList.innerHTML = [
+      decisionCard("1. Intake source pack", "Operators upload a governed source pack and start analysis in the review app.", "Input", "public"),
+      decisionCard("2. Produce governed findings", "StrategyOS converts source material into reviewable finance cases with recoverable value and risk posture.", "Cases", "public"),
+      decisionCard("3. Inspect evidence packet", "Every claim stays attached to citations, excerpts, and challenge state before action is approved.", "Evidence", "protected"),
+      decisionCard("4. Release board-ready report", "Reports and outbound actions stay behind human control until the reviewer boundary is satisfied.", "Reports", "protected"),
+    ].join("");
+    els.assistantFeed.innerHTML = [
+      message("system", "Anonymous surface", "You are seeing the executive demo path only. Live findings, evidence, and report data remain hidden."),
+      message("", "Hero story", "A StrategyOS run moves from source intake to governed cases, then to evidence review, and finally to report publication."),
+      message("", "Boundary", "Protected controls are still real. Authenticate with an operator or reviewer session before loading any live packet."),
+    ].join("");
+    els.caseBody.innerHTML = `
+      <tr>
+        <td><strong>Source intake</strong><small>Operator uploads finance pack</small></td>
+        <td>Operator</td>
+        <td><span class="badge blue">Protected input</span></td>
+        <td>Start governed analysis</td>
+        <td>Boundary held</td>
+      </tr>
+      <tr>
+        <td><strong>Governed findings</strong><small>StrategyOS creates reviewable cases</small></td>
+        <td>Reviewer</td>
+        <td><span class="badge green">Cases + citations</span></td>
+        <td>Open evidence packet</td>
+        <td>Needs live session</td>
+      </tr>
+      <tr>
+        <td><strong>Evidence packet</strong><small>Excerpt, locator, confidence, challenge state</small></td>
+        <td>Reviewer</td>
+        <td><span class="badge amber">Restricted</span></td>
+        <td>Approve or challenge</td>
+        <td>Human gate</td>
+      </tr>
+      <tr>
+        <td><strong>Board report</strong><small>Board-safe memo and stored report artifacts</small></td>
+        <td>Executive</td>
+        <td><span class="badge amber">Restricted</span></td>
+        <td>Release after approval</td>
+        <td>Protected output</td>
+      </tr>
+    `;
+    byId("exec-evidence-badge").textContent = "story preview";
+    byId("exec-evidence-title").textContent = "Governed evidence packet";
+    byId("exec-evidence-summary").textContent = "Publicly visible workflow shape only. Authenticate to load the real citation packet for a specific finding.";
+    byId("exec-evidence-source").textContent = "Protected source";
+    byId("exec-evidence-locator").textContent = "Hidden until auth";
+    byId("exec-evidence-confidence").textContent = "Reviewer-controlled";
+    byId("exec-evidence-resolution").textContent = "Human gate required";
+    byId("exec-evidence-preview").textContent = "Evidence preview remains intentionally blank on the anonymous surface. Use an operator or reviewer session to reveal cited excerpts and challenge state.";
+    byId("exec-report-badge").textContent = "protected";
+    byId("exec-report-list").innerHTML = `
+      <button class="report-button" type="button" disabled>
+        <strong>Board pack snapshot</strong>
+        <span>Visible as workflow posture only on the public route.</span>
+      </button>
+      <button class="report-button" type="button" disabled>
+        <strong>Evidence report packet</strong>
+        <span>Unlocks only after reviewer/operator authentication.</span>
+      </button>
+    `;
+    byId("exec-report-preview").textContent = "Report previews stay protected until an authenticated session confirms the latest governed run and artifact boundary.";
+    els.memoBody.textContent = "The public demo now reads as a coherent executive story: source pack in, governed cases out, evidence reviewed, report released under human control.";
+    els.memoList.innerHTML = [
+      "<div>Overview: public shell shows the real product posture without exposing live finance data.</div>",
+      "<div>Cases: anonymous viewers can understand the case-review step before seeing any real queue items.</div>",
+      "<div>Evidence and reports: both remain clearly present in the workflow and clearly protected.</div>",
+    ].join("");
+    renderPlanHealth({
+      badge: "story mode",
+      status: "Awaiting governed run",
+      note: "This first plan-health layer stays intentionally honest: no broad strategic health score appears until real finance cases and evidence exist.",
+      boundary: "Finance-derived signal only — StrategyOS is summarizing current case, evidence, and report posture, not a full enterprise strategy compiler.",
+      value: "--",
+      valueNote: "Recoverable value appears only after a governed finance run exists.",
+      cases: "Workflow shape",
+      casesNote: "The anonymous surface shows how cases progress before any live queue is revealed.",
+      evidence: "Boundary intact",
+      evidenceNote: "Evidence and release remain visible as workflow stages, not as fabricated KPI output.",
+    });
   }
 
   function decisionCard(title, text, amount, status) {
@@ -238,6 +494,34 @@
   }
 
   function renderCases(run, citations, challenged) {
+    const findings = findingsPayload();
+    if (findings.length) {
+      els.caseBadge.textContent = `${findings.length} governed cases`;
+      els.caseBody.innerHTML = findings.map((finding, index) => {
+        const title = finding.title || finding.pattern_label || finding.finding_id || `Finding ${index + 1}`;
+        const risk = finding.challenged
+          ? "Challenge open"
+          : finding.confidence || finding.status || "Review";
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(title)}</strong>
+              <small>${escapeHtml(finding.finding_id || finding.node_id || "latest finding")}</small>
+              <button class="case-action" type="button" data-finding-id="${escapeHtml(finding.finding_id || "")}">View evidence</button>
+            </td>
+            <td>${escapeHtml(finding.owner || "reviewer")}</td>
+            <td><span class="badge green">${escapeHtml(formatCount(finding.citation_count ?? citations.resolved ?? "--"))} cites</span></td>
+            <td>${escapeHtml(finding.challenged ? "Resolve challenge" : "Review packet")}</td>
+            <td>${escapeHtml(finding.recoverable_sar ? formatSarShort(finding.recoverable_sar) : risk)}</td>
+          </tr>
+        `;
+      }).join("");
+      els.caseBody.querySelectorAll("[data-finding-id]").forEach((button) => {
+        button.addEventListener("click", () => selectFinding(button.getAttribute("data-finding-id")));
+      });
+      return;
+    }
+
     const graphFindings = extractGraphFindings();
     if (graphFindings.length) {
       els.caseBadge.textContent = `${graphFindings.length} graph cases`;
@@ -290,6 +574,10 @@
     const recoverable = run.total_recoverable_sar;
     const findings = run.locked_findings ?? run.findings;
     const status = String(run.status || "missing").replaceAll("_", " ");
+    const queueCount = Array.isArray(state.pendingReviews?.items) ? state.pendingReviews.items.length : 0;
+    const artifactCount = Object.keys(reportArtifacts()).length;
+    const approval = approvalSummary(run);
+    const totals = findingsTotals();
 
     els.runTitle.textContent = missing ? "No completed run yet" : `run ${compactRunId(run)} · ${status}`;
     els.runMeta.textContent = `${bootstrap.environment || "environment"} · ${new Date().toLocaleString()}`;
@@ -318,6 +606,22 @@
     els.kpiFindings.textContent = `${formatCount(run.locked_findings ?? findings)} / ${formatCount(run.findings ?? findings)}`;
     els.kpiChallenges.textContent = challenged === null || challenged === undefined ? "--" : formatCount(challenged);
     els.decisionBadge.textContent = missing ? "no run" : `${formatCount(challenged || 0)} challenge${Number(challenged || 0) === 1 ? "" : "s"}`;
+    byId("exec-overview-status").textContent = missing ? "No governed run yet" : `${formatCount(findings)} findings · ${approval}`;
+    byId("exec-overview-note").textContent = missing
+      ? "Run one governed analysis, then this view becomes the executive narrative surface."
+      : `Latest run ${compactRunId(run)} is ${status}. StrategyOS is emphasizing evidence-backed action before more analysis.`;
+    byId("exec-queue-count").textContent = formatCount(queueCount);
+    byId("exec-queue-note").textContent = queueCount
+      ? `${queueCount} review item${queueCount === 1 ? "" : "s"} are waiting in the governed queue.`
+      : "No extra review queue items are currently waiting beyond the latest run context.";
+    byId("exec-evidence-status").textContent = citationText;
+    byId("exec-evidence-note").textContent = challenged
+      ? `${formatCount(challenged)} challenge${Number(challenged) === 1 ? "" : "s"} keep this packet in human hands.`
+      : "Citation chain looks intact enough for executive drill-down.";
+    byId("exec-report-status").textContent = artifactCount ? `${formatCount(artifactCount)} artifacts` : "No report artifacts";
+    byId("exec-report-note").textContent = artifactCount
+      ? "Preview what is safe, then use the review app for restricted board-ready files."
+      : "The latest run has not yet surfaced report artifacts for executive inspection.";
 
     if (missing) {
       els.decisionList.innerHTML = decisionCard("Start analysis", "Open the review app and upload a source pack before using executive controls.", "--", "missing");
@@ -347,7 +651,118 @@
       `<div>Evidence: ${escapeHtml(citationText)}.</div>`,
       `<div>Challenges: ${escapeHtml(formatCount(challenged || 0))} visible events.</div>`,
     ].join("");
+    renderPlanHealth({
+      badge: missing ? "no run" : challenged ? "human gate" : approval === "approved" ? "release posture" : "bounded KPI layer",
+      status: missing
+        ? "Awaiting governed run"
+        : challenged
+          ? "Needs reviewer closure"
+          : approval === "approved"
+            ? "Release posture is clear"
+            : "Finance plan signal is actionable",
+      note: missing
+        ? "Run one governed analysis before promoting any plan-health view beyond workflow posture."
+        : challenged
+          ? `${formatCount(challenged)} challenge${Number(challenged) === 1 ? " is" : "s are"} still open, so plan health remains constrained by evidence closure.`
+          : queueCount
+            ? `${formatCount(queueCount)} additional review item${queueCount === 1 ? " is" : "s are"} still queued behind the latest packet.`
+            : "Current finance evidence is strong enough to frame the next move without inventing broader strategic reasoning.",
+      boundary: "Finance-derived signal only — StrategyOS is summarizing current case, evidence, and report posture, not a full enterprise strategy compiler.",
+      value: formatSar(recoverable),
+      valueNote: missing
+        ? "Recoverable value will load from the latest governed analysis."
+        : `${formatCount(findings)} finding${Number(findings || 0) === 1 ? "" : "s"} are supporting this value signal in the current finance packet.`,
+      cases: missing ? "--" : `${formatCount(totals.ready)} ready · ${formatCount(totals.review)} review`,
+      casesNote: missing
+        ? "Case readiness appears after the first governed packet lands."
+        : `${formatCount(totals.challenged)} challenged · ${formatCount(queueCount)} queued beyond the latest run context.`,
+      evidence: missing
+        ? "--"
+        : citations.count !== null && citations.count !== undefined
+          ? `${formatCount(citations.resolved)} / ${formatCount(citations.count)} cited`
+          : formatCount(challenged || 0),
+      evidenceNote: missing
+        ? "Evidence and release posture load with the governed run."
+        : artifactCount
+          ? `${formatCount(artifactCount)} report artifact${artifactCount === 1 ? " is" : "s are"} visible; approval is ${approval}.`
+          : `Approval is ${approval}; report artifacts are not yet surfaced for executive inspection.`,
+    });
     renderCases(run, citations, challenged);
+    renderReports();
+  }
+
+  function setEvidencePreviewFallback(message, badge) {
+    byId("exec-evidence-badge").textContent = badge || "awaiting selection";
+    byId("exec-evidence-summary").textContent = message;
+    byId("exec-evidence-preview").textContent = message;
+  }
+
+  async function selectFinding(findingId) {
+    const finding = findingsPayload().find((item) => item.finding_id === findingId);
+    state.selectedFindingId = findingId || null;
+    if (!finding || !state.latestRun?.run_id) {
+      byId("exec-evidence-title").textContent = "No finding selected";
+      setEvidencePreviewFallback("Choose a case from the matrix to load cited evidence and validation posture.");
+      return;
+    }
+    byId("exec-evidence-badge").textContent = finding.challenged ? "challenge open" : "evidence ready";
+    byId("exec-evidence-title").textContent = finding.title || finding.pattern_label || finding.finding_id;
+    byId("exec-evidence-summary").textContent = `${finding.finding_id} · ${finding.owner || "reviewer"} · ${finding.recoverable_sar ? formatSar(finding.recoverable_sar) : "value pending"}`;
+    byId("exec-evidence-source").textContent = "Loading…";
+    byId("exec-evidence-locator").textContent = "Loading…";
+    byId("exec-evidence-confidence").textContent = finding.confidence || "review";
+    byId("exec-evidence-resolution").textContent = finding.challenged ? "Challenge open" : (finding.status || "Ready for review");
+    byId("exec-evidence-preview").textContent = "Loading evidence preview…";
+    try {
+      const payload = await requestJson(`${isAuthenticated() ? "/data/evidence-preview" : "/public/data/evidence-preview"}?run_id=${encodeURIComponent(state.latestRun.run_id)}&finding_id=${encodeURIComponent(finding.finding_id)}`);
+      if (!isAuthenticated()) state.publicEvidencePreview = payload;
+      byId("exec-evidence-source").textContent = payload.source_path || "Stored evidence";
+      byId("exec-evidence-locator").textContent = payload.locator || "No locator";
+      byId("exec-evidence-confidence").textContent = payload.confidence || finding.confidence || "review";
+      byId("exec-evidence-resolution").textContent = payload.resolved ? "Resolved citation" : "Stored citation";
+      const preview = payload.excerpt || JSON.stringify(payload.resolved_payload || {}, null, 2) || "No preview available.";
+      byId("exec-evidence-preview").textContent = preview;
+    } catch (error) {
+      setEvidencePreviewFallback(`Evidence preview unavailable: ${error.message}`, "preview blocked");
+      byId("exec-evidence-source").textContent = finding.owner || "--";
+      byId("exec-evidence-locator").textContent = "--";
+    }
+  }
+
+  function renderReports() {
+    const artifacts = reportArtifacts();
+    const keys = Object.keys(artifacts);
+    byId("exec-report-badge").textContent = keys.length ? `${keys.length} available` : "no artifacts";
+    if (!keys.length) {
+      byId("exec-report-list").innerHTML = "";
+      byId("exec-report-preview").textContent = "No latest-run report artifacts are available yet.";
+      return;
+    }
+    byId("exec-report-list").innerHTML = keys.map((key) => `
+      <button class="report-button" type="button" data-artifact-key="${escapeHtml(key)}">
+        <strong>${escapeHtml(reportLabel(key))}</strong>
+        <span>${escapeHtml(String(artifacts[key] || "").split("/").slice(-1)[0] || "Stored artifact")}</span>
+      </button>
+    `).join("");
+    byId("exec-report-list").querySelectorAll("[data-artifact-key]").forEach((button) => {
+      button.addEventListener("click", () => loadReportPreview(button.getAttribute("data-artifact-key")));
+    });
+  }
+
+  async function loadReportPreview(artifactKey) {
+    if (!artifactKey || !state.latestRun?.run_id) return;
+    byId("exec-report-preview").textContent = "Loading report preview…";
+    try {
+      const payload = isAuthenticated()
+        ? await requestJson(`/reviewer/runs/${encodeURIComponent(state.latestRun.run_id)}/artifacts/${encodeURIComponent(artifactKey)}`)
+        : await requestJson(`/public/runs/latest/report-preview?artifact_key=${encodeURIComponent(artifactKey)}`);
+      if (!isAuthenticated()) state.publicReportPreview = payload;
+      const preview = payload.preview_text
+        || (payload.preview_json ? JSON.stringify(payload.preview_json, null, 2) : "Preview unavailable for this artifact.");
+      byId("exec-report-preview").textContent = preview;
+    } catch (error) {
+      byId("exec-report-preview").textContent = `Preview blocked: ${error.message}. Use the review app for restricted artifacts.`;
+    }
   }
 
   async function refreshLiveData() {
@@ -357,18 +772,56 @@
     try {
       state.session = await guarded("Session", requestJson("/ui/session"), { authenticated: false });
       if (!isAuthenticated()) {
+        const [publicRun, publicAuditSummary, publicFindings, publicReportPreview] = await Promise.all([
+          guarded("Public latest run", requestJson("/public/runs/latest"), { status: "missing" }),
+          guarded("Public audit summary", requestJson("/public/runs/latest/audit-summary"), { status: "missing", challenged_finding_ids: [] }),
+          guarded("Public latest findings", requestJson("/public/runs/latest/findings"), { status: "missing", findings: [] }),
+          guarded("Public report preview", requestJson("/public/runs/latest/report-preview"), { status: "missing" }),
+        ]);
+        state.latestRun = publicRun;
+        state.auditSummary = publicAuditSummary;
+        state.knowledgeGraph = null;
+        state.latestFindings = publicFindings;
+        state.pendingReviews = { items: [] };
+        state.runDetail = null;
+        state.publicReportPreview = publicReportPreview;
+        const preferredFinding = Array.isArray(publicFindings?.findings) ? publicFindings.findings[0]?.finding_id : null;
+        state.publicEvidencePreview = preferredFinding
+          ? await guarded(
+            "Public evidence preview",
+            requestJson(`/public/data/evidence-preview?run_id=${encodeURIComponent(publicRun?.run_id || "")}&finding_id=${encodeURIComponent(preferredFinding)}`),
+            null,
+          )
+          : null;
         renderLocked();
         return;
       }
-      const [latestRun, auditSummary, knowledgeGraph] = await Promise.all([
+      state.publicEvidencePreview = null;
+      state.publicReportPreview = null;
+      const [latestRun, auditSummary, knowledgeGraph, latestFindings, pendingReviews] = await Promise.all([
         guarded("Latest run", requestJson("/runs/latest"), { status: "missing" }),
         guarded("Audit summary", requestJson("/runs/latest/audit-summary"), { status: "missing" }),
         guarded("Knowledge graph", requestJson("/runs/latest/knowledge-graph"), { status: "missing", nodes: [], edges: [], meta: {} }),
+        guarded("Latest findings", requestJson("/runs/latest/findings"), { status: "missing", findings: [] }),
+        guarded("Pending reviews", requestJson("/reviewer/pending-reviews"), { items: [] }),
       ]);
       state.latestRun = latestRun;
       state.auditSummary = auditSummary;
       state.knowledgeGraph = knowledgeGraph;
+      state.latestFindings = latestFindings;
+      state.pendingReviews = pendingReviews;
+      state.runDetail = latestRun?.run_id
+        ? await guarded("Run detail", requestJson(`/reviewer/runs/${encodeURIComponent(latestRun.run_id)}`), null)
+        : null;
       renderLive();
+      const preferredFinding = findingsPayload()[0]?.finding_id;
+      if (preferredFinding) {
+        selectFinding(preferredFinding);
+      }
+      const preferredArtifact = ["working_capital", "qa", "summary", "knowledge_graph"].find((key) => reportArtifacts()[key]) || Object.keys(reportArtifacts())[0];
+      if (preferredArtifact) {
+        loadReportPreview(preferredArtifact);
+      }
     } finally {
       state.loading = false;
       els.refresh.disabled = false;
@@ -427,6 +880,10 @@
   els.evidenceCommand.addEventListener("click", () => {
     els.commandInput.value = "What is the total recoverable?";
     submitCommand(els.commandInput.value);
+  });
+
+  byId("exec-open-report-app").addEventListener("click", () => {
+    window.location.href = "/app";
   });
 
   els.commandForm.addEventListener("submit", (event) => {

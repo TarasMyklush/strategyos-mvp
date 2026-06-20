@@ -1,0 +1,28 @@
+{$STRATEGYOS_SITE_ADDRESS} {
+    encode gzip
+    header {
+        -Server
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+    }
+
+    handle /oauth2/* {
+        reverse_proxy oauth2-proxy:4180 {
+            header_down -Server
+        }
+    }
+
+    @protected path /ui/session /inputs/* /runs* /reviews* /data/* /health/ready /health/config /health/dependencies
+    forward_auth @protected oauth2-proxy:4180 {
+        uri /oauth2/auth
+        copy_headers X-Auth-Request-User X-Auth-Request-Email X-Auth-Request-Preferred-Username
+    }
+
+    reverse_proxy strategyos-api:8000 {
+        header_up X-StrategyOS-Proxy-Auth {$STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET}
+        header_down -Server
+    }
+}

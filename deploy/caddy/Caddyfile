@@ -1,4 +1,18 @@
 {$STRATEGYOS_SITE_ADDRESS} {
     encode gzip
-    reverse_proxy strategyos-api:8000
+    header {
+        -Server
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+    }
+    @idp path /.well-known/openid-configuration /oauth/*
+    reverse_proxy @idp strategyos-idp:9000 {
+        header_down -Server
+    }
+    reverse_proxy strategyos-api:8000 {
+        header_down -Server
+    }
 }

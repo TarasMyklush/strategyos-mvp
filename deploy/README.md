@@ -34,6 +34,7 @@ This deployment package is designed for Hetzner first, but keeps the runtime por
 
 - Compose runtime is up locally and being used as the active proof environment.
 - Provider-backed local identity boundary is in place for operator and reviewer flows.
+- Repo/deploy tooling now also supports a **proxy-OIDC cutover path** for production-grade human access: trusted edge auth via `oauth2-proxy`, StrategyOS role mapping by email allowlist, and fail-closed deploy validation when that mode is selected.
 - Neo4j sync/query proof is complete through `/data/status` with ready-state graph counts and a sample live relation.
 - Qdrant runtime proof is complete through `/data/status` plus vector search against current-run findings.
 - Recovery proof is complete: backup, volume restore, stack restart, latest-run preservation, and governed rerun evidence are captured under `artifacts/recovery-proof-20260604T174300Z`.
@@ -175,7 +176,50 @@ Latest local proof recorded on 2026-06-10:
 - Use distinct operator and reviewer identities; do not reuse local defaults outside disposable environments.
 - Use Hetzner volume snapshots plus S3-compatible backup for Postgres, Neo4j, and evidence artifacts.
 
+## Proxy-OIDC production-boundary overlay
+
+When moving beyond the disposable local identity provider, switch StrategyOS to trusted edge auth:
+
+1. Add the proxy overlay compose file to the deploy set:
+
+```bash
+docker compose \
+  -f deploy/docker-compose.yml \
+  -f deploy/docker-compose.proxy-oidc.yml \
+  --env-file deploy/.env \
+  --env-file deploy/.env.secrets \
+  up -d
+```
+
+2. Set at minimum in `deploy/.env`:
+
+```bash
+STRATEGYOS_AUTH_MODE=proxy_oidc
+STRATEGYOS_TRUST_PROXY_AUTH=true
+STRATEGYOS_OPERATOR_EMAILS=operator@example.com
+STRATEGYOS_REVIEWER_EMAILS=reviewer@example.com
+OAUTH2_PROXY_OIDC_ISSUER_URL=https://accounts.google.com
+OAUTH2_PROXY_CLIENT_ID=<oidc-client-id>
+OAUTH2_PROXY_REDIRECT_URL=https://strategyos.example.com/oauth2/callback
+```
+
+3. Keep only in `deploy/.env.secrets`:
+
+```bash
+STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET=<shared edge-to-app secret>
+OAUTH2_PROXY_CLIENT_SECRET=<oidc-client-secret>
+OAUTH2_PROXY_COOKIE_SECRET=<oauth2-proxy-cookie-secret>
+```
+
+4. Use the proxy-specific Caddy edge file at `deploy/caddy/Caddyfile.proxy-oidc`. It forwards authenticated identity headers from `oauth2-proxy` and injects a shared trusted-proxy secret upstream so StrategyOS can fail closed if headers are spoofed or the edge is bypassed.
+
 ## Controlled Pilot Readiness Contract
+
+### Public-safe proof path
+
+- `python deploy/scripts/verify_cloud_surface.py --base-url https://strategyos.example.com`
+- With no credentials, this now verifies the anonymous/public-safe contract only: `/ui/session`, `/ui/workspace-contract/latest`, `/public/runs/latest`, `/public/runs/latest/findings`, `/public/runs/latest/report-preview`, and fail-closed anonymous health behavior.
+- Add both operator and reviewer credentials only when you intend to validate the authenticated governed surface too.
 
 ### Liveness
 
@@ -242,6 +286,32 @@ Latest local proof recorded on 2026-06-10:
 - Production secret material should be rendered into `deploy/.env.secrets` by your CI/CD or secret manager at deploy time, not committed into the repo.
 
 This hardens the in-repo pilot runtime/auth boundary only. It adds a provider-backed local identity boundary for the compose stack and does not broaden into host provisioning or external secret managers. That boundary is now part of the verified local as-built state for broader testing.
+
+### Deploy-time boundary validation
+
+- `deploy/scripts/validate_deploy_boundary.sh` is the preflight guard for generated deploy env files.
+- It fails fast if required secrets are blank or still use `__CHANGE_ME_...` placeholders.
+- It refuses externally deployable configs that disable API auth, disable mandatory human review, or leave demo-role login enabled.
+- It refuses Hatchet-mode deploys that omit `HATCHET_POSTGRES_PASSWORD` or `HATCHET_CLIENT_TOKEN`.
+- It refuses LLM/model-provider deploys unless run policy is `external-approved`, `model_provider_use` is explicitly approved, and `STRATEGYOS_LLM_API_KEY` is present in secrets.
+- For `TARGET_ENVIRONMENT=production`, it also refuses:
+  - `STRATEGYOS_AUTH_MODE=api_key`
+  - non-HTTPS `STRATEGYOS_PUBLIC_URL`
+  - non-HTTPS identity issuers
+  - proxy-OIDC configs missing trusted-proxy/email-allowlist/OIDC redirect settings
+  - `STRATEGYOS_SITE_ADDRESS` values that do not cover the public host
+  - `STRATEGYOS_SITE_ADDRESS=:80`
+  - `STRATEGYOS_PUBLIC_HEALTH_ENABLED=true`
+  - localhost/container-local identity issuers
+  - root deploy user
+- Run it manually before shipping env files if needed:
+
+```bash
+ENV_FILE=deploy/.env \
+SECRETS_FILE=deploy/.env.secrets \
+TARGET_ENVIRONMENT=hetzner-qa \
+bash deploy/scripts/validate_deploy_boundary.sh
+```
 
 ## Neo4j graph sync proof path
 
@@ -324,7 +394,7 @@ Key proof points:
 - Add source-pack intake and validation so a user-selected folder with arbitrary filenames can be registered, classified, and readiness-checked before run execution.
 - Keep OCR local and wire PDF/image extraction ahead of content-based document-role classification.
 - Add additive canonical invoice-header normalization only after source-pack intake is in place; keep current invoice-consuming controls unchanged in that tranche.
-- Replace the local identity provider with the production SSO authority before exposing reviewer endpoints.
+- Replace the local identity provider with the production SSO authority before exposing reviewer endpoints. The deploy preflight now blocks `production` if the identity issuer is still localhost/container-local.
 - Extend the 2026-06-10 LangGraph/Postgres proof to a full active Neo4j/Qdrant/object-store sync proof.
 - Add CI/CD and smoke tests for `/health/live`, `/health/ready`, `/runs`, source-pack validation, artifact sync, and citation audit.
 
@@ -370,7 +440,7 @@ Check health and run the workflow:
 
 ```bash
 READINESS_AUTH_HEADER="Authorization: Bearer ${TOKEN}" TARGET_HOST=root@YOUR_SERVER_IP deploy/scripts/check_health.sh
-TARGET_HOST=root@YOUR_SERVER_IP deploy/scripts/run_remote_workflow.sh
+RUN_AUTH_HEADER="Authorization: Bearer ${TOKEN}" TARGET_HOST=root@YOUR_SERVER_IP deploy/scripts/run_remote_workflow.sh
 ```
 
 Rollback to the latest pre-deploy backup:
@@ -378,3 +448,25 @@ Rollback to the latest pre-deploy backup:
 ```bash
 TARGET_HOST=root@YOUR_SERVER_IP deploy/scripts/rollback_stack.sh
 ```
+
+## External governed-surface verification
+
+Use the post-deploy verifier to prove the cloud-visible auth/governance contract from outside the host:
+
+```bash
+OPERATOR_TOKEN="$(TARGET_HOST=root@YOUR_SERVER_IP ROLE=operator deploy/scripts/remote_idp_token.sh)"
+REVIEWER_TOKEN="$(TARGET_HOST=root@YOUR_SERVER_IP ROLE=reviewer deploy/scripts/remote_idp_token.sh)"
+python deploy/scripts/verify_cloud_surface.py \
+  --base-url https://strategyos.example.test \
+  --operator-auth-header "Authorization: Bearer ${OPERATOR_TOKEN}" \
+  --reviewer-auth-header "Authorization: Bearer ${REVIEWER_TOKEN}"
+```
+
+The verifier fails if the external surface drifts into any of the conditions we must not ship:
+- unauthenticated health/readiness exposure
+- missing operator/reviewer role separation
+- `require_human_review=false`
+- demo-role authentication on an external surface
+- localhost/container-local identity issuer exposed through `/health/ready`
+
+The deploy workflow now runs this verifier automatically after protected readiness, before optional smoke, so a deploy cannot be reported healthy if the externally visible governed surface still drifts.

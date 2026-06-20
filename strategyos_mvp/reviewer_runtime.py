@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -12,9 +13,12 @@ from .runtime_artifacts import remove_legacy_artifacts
 from .runtime_governance import (
     AWAITING_REVIEW_STAGE,
     COMPLETED_STATUS,
+    GOVERNED_RELEASE_RECEIPT_FILENAME,
+    _quantification_summary,
     annotate_governance_state,
     build_run_summary,
     checkpoint_state,
+    governance_fingerprint_for_checkpoint_state,
 )
 from .state_store import approval_status_for_run, persist_checkpoint, update_run_summary
 
@@ -28,6 +32,7 @@ def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, An
         raise ValueError(
             f"Run '{run_id}' cannot resume from checkpoint stage '{checkpoint_stage or 'unknown'}'."
         )
+    _validate_checkpoint_for_resume(run_id, checkpoint, state)
     dataset_root = Path(str(state["dataset_root"])).expanduser().resolve()
     run_dir = Path(str(state["run_dir"])).expanduser().resolve()
     findings = [finding_from_payload(item) for item in state.get("findings", [])]
@@ -42,6 +47,14 @@ def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, An
     remove_legacy_artifacts(run_dir)
     artifacts.update(
         CaseFileWriter().write_all(bundle, findings, audit_events, run_dir)
+    )
+    release_receipt_path = run_dir / GOVERNED_RELEASE_RECEIPT_FILENAME
+    artifacts["governed_release_receipt"] = _write_governed_release_receipt(
+        release_receipt_path,
+        run_id=run_id,
+        checkpoint=checkpoint,
+        state=state,
+        artifacts=artifacts,
     )
     resumed_state = {
         "run_id": run_id,
@@ -58,6 +71,8 @@ def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, An
         "checkpoints": [],
     }
     summary = build_run_summary(resumed_state)
+    prior_summary = checkpoint.get("summary_json") or {}
+    summary["checkpoint_count"] = int(prior_summary.get("checkpoint_count") or 0) + 1
     if resumed_state.get("source_pack_id"):
         summary["source_pack"] = {
             "source_pack_id": resumed_state.get("source_pack_id"),
@@ -76,12 +91,99 @@ def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, An
         summary["approved_at"] = approval.get("approved_at")
     summary_path = run_dir / "run_summary.json"
     summary["state_store"] = update_run_summary(run_id, summary)
-    summary["resume"] = {"checkpoint": checkpoint_record}
+    summary["resume"] = {"checkpoint": _checkpoint_reference(checkpoint_record)}
     summary = annotate_governance_state(summary)
     summary["pointer_metadata"] = update_run_pointers(summary, summary_path)
     summary["latest_pointer"] = summary["pointer_metadata"]["latest"]
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary
+
+
+def _checkpoint_reference(checkpoint_record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "checkpoint_id": checkpoint_record.get("checkpoint_id"),
+        "run_id": checkpoint_record.get("run_id"),
+        "stage": checkpoint_record.get("stage"),
+        "status": checkpoint_record.get("status"),
+        "created_at": checkpoint_record.get("created_at"),
+        "persistence": checkpoint_record.get("persistence"),
+    }
+
+
+def _validate_checkpoint_for_resume(
+    run_id: str,
+    checkpoint: dict[str, Any],
+    state: dict[str, Any],
+) -> None:
+    expected_fingerprint = str(
+        state.get("checkpoint_fingerprint")
+        or (checkpoint.get("summary_json") or {}).get("checkpoint_fingerprint")
+        or ""
+    )
+    actual_fingerprint = governance_fingerprint_for_checkpoint_state(state)
+    if expected_fingerprint and expected_fingerprint != actual_fingerprint:
+        raise ValueError(
+            f"Run '{run_id}' checkpoint fingerprint mismatch; governed resume is blocked."
+        )
+    expected_quantification = state.get("quantification") or {}
+    actual_quantification = _quantification_summary(state)
+    if expected_quantification and expected_quantification != actual_quantification:
+        raise ValueError(
+            f"Run '{run_id}' checkpoint quantification mismatch; governed resume is blocked."
+        )
+    artifact_integrity = state.get("artifact_integrity") or {}
+    if isinstance(artifact_integrity, dict):
+        invalid: list[str] = []
+        for key, payload in artifact_integrity.items():
+            if not isinstance(payload, dict):
+                continue
+            path_value = payload.get("path")
+            if not path_value:
+                continue
+            path = Path(str(path_value)).expanduser().resolve()
+            if not path.exists() or not path.is_file():
+                invalid.append(str(key))
+                continue
+            expected_hash = payload.get("sha256")
+            if expected_hash and expected_hash != _sha256_for_path(path):
+                invalid.append(str(key))
+        if invalid:
+            raise ValueError(
+                f"Run '{run_id}' has changed or missing governed evidence artifacts: {', '.join(sorted(invalid))}."
+            )
+
+
+def _write_governed_release_receipt(
+    path: Path,
+    *,
+    run_id: str,
+    checkpoint: dict[str, Any],
+    state: dict[str, Any],
+    artifacts: dict[str, Path],
+) -> Path:
+    payload = {
+        "run_id": run_id,
+        "released_at": datetime.now(UTC).isoformat(),
+        "approved_checkpoint_id": checkpoint.get("checkpoint_id"),
+        "approved_checkpoint_fingerprint": state.get("checkpoint_fingerprint"),
+        "approved_quantification": state.get("quantification") or {},
+        "approval_status": state.get("approval_status"),
+        "source_artifacts": state.get("artifact_integrity") or {},
+        "final_artifacts": checkpoint_state({"artifacts": artifacts}).get("artifact_integrity")
+        or {},
+    }
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return path
+
+
+def _sha256_for_path(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def finding_from_payload(payload: dict[str, Any]) -> Finding:

@@ -18,3 +18,7 @@ outputs/
 .phase8-venv/
 .tmp-venv/
 .ruff_cache/
+.playwright-mcp/
+playwright_*_snapshot.md
+strategyos-live-*.png
+strategyos-*.png

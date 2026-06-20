@@ -8,11 +8,11 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 try:
     from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
-    from fastapi.responses import HTMLResponse, JSONResponse
+    from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
 except Exception as exc:  # pragma: no cover - optional cloud dependency
@@ -30,6 +30,16 @@ from .ingestion import load_dataset
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
+from .platform_foundation import (
+    ARTIFACT_TITLES,
+    artifact_contracts_payload,
+    build_case_summary_contracts,
+    build_ingestion_connector_catalog,
+    build_run_report_contracts,
+    build_surface_contract,
+    build_tenant_context,
+    principal_has_any_role,
+)
 from . import qa as qa_engine
 from . import llm_qa
 from .skills.finance_controls import run_all_finance_skills
@@ -88,6 +98,11 @@ class SourcePackMappingConfirmRequest(BaseModel):
     column_mapping: dict[str, str] | None = None
 
 
+class IngestionConnectorsResponse(BaseModel):
+    tenant_context: dict[str, str]
+    connectors: list[dict[str, Any]]
+
+
 class QaRequest(BaseModel):
     question: str
     run_id: str | None = None
@@ -134,6 +149,8 @@ RESTRICTED_ARTIFACT_PATH_MARKERS = (
     "ocr",
     "excerpt",
 )
+PUBLIC_REPORT_ARTIFACT_KEYS = ("working_capital", "summary")
+PUBLIC_EVIDENCE_EXCERPT_LIMIT = 600
 UI_LIFECYCLE_STAGES: list[tuple[str, str]] = [
     ("created", "Created"),
     ("ingest", "Ingest"),
@@ -162,6 +179,17 @@ PATTERN_LABELS: dict[str, str] = {
     "dormant_credit_balance": "Dormant supplier credit",
     "vendor_collusion_ring": "Vendor collusion ring",
 }
+PRODUCT_READ_ROLES = ("operator", "reviewer", "bu", "analyst", "executive")
+SYSTEM_READ_ROLES = ("operator", "reviewer", "analyst", "executive")
+REVIEW_READ_ROLES = ("operator", "reviewer", "bu")
+INVESTIGATION_ROLES = ("operator", "reviewer", "analyst")
+REVIEW_WORKFLOW_ROLES = ("operator", "reviewer")
+
+
+def _principal_prefers_public_safe_surface(principal: dict[str, Any] | None) -> bool:
+    role = str((principal or {}).get("role") or "anonymous")
+    authenticated = bool((principal or {}).get("authenticated"))
+    return (not authenticated) or principal_has_any_role(role, "executive")
 
 
 def _humanize_pattern_label(pattern_type: Any) -> str:
@@ -260,6 +288,110 @@ def _latest_summary() -> dict[str, Any] | None:
     return _with_local_run_identity(summary)
 
 
+def _latest_run_public_payload(summary: dict[str, Any] | None) -> dict[str, Any]:
+    if summary is None:
+        return {"status": "missing"}
+    return {
+        "status": "ok",
+        "run_id": summary.get("run_id"),
+        "current_stage": summary.get("current_stage"),
+        "approval_status": summary.get("approval_status"),
+        "requires_human_review": bool(summary.get("requires_human_review")),
+        "total_recoverable_sar": summary.get("total_recoverable_sar"),
+        "locked_findings": summary.get("locked_findings"),
+        "public_safe": True,
+    }
+
+
+def _finding_case_href(case_id: str, *, public_safe: bool) -> str:
+    encoded = quote(str(case_id), safe="")
+    return (
+        f"/public/runs/latest/cases/{encoded}"
+        if public_safe
+        else f"/runs/latest/cases/{encoded}"
+    )
+
+
+def _finding_evidence_preview_href(
+    case_id: str,
+    *,
+    run_id: str | None,
+    public_safe: bool,
+) -> str:
+    query_parts = [f"finding_id={quote(str(case_id), safe='')}"]
+    if run_id:
+        query_parts.insert(0, f"run_id={quote(str(run_id), safe='')}")
+    base = "/public/data/evidence-preview" if public_safe else "/data/evidence-preview"
+    return f"{base}?{'&'.join(query_parts)}"
+
+
+def _finding_report_preview_href(*, public_safe: bool) -> str:
+    if public_safe:
+        return "/public/runs/latest/report-preview"
+    return "/public/runs/latest/report-preview"
+
+
+def _finding_case_contract_payloads(
+    rows: list[dict[str, Any]],
+    *,
+    run_id: str | None,
+    public_safe: bool,
+) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    contracts = build_case_summary_contracts(rows)
+    for row, item in zip(rows, contracts):
+        payload = dict(row)
+        payload.update(artifact_contracts_payload(item))
+        case_id = str(payload.get("case_id") or "")
+        if case_id:
+            payload["case_href"] = _finding_case_href(case_id, public_safe=public_safe)
+            payload["evidence_preview_href"] = _finding_evidence_preview_href(
+                case_id,
+                run_id=run_id,
+                public_safe=public_safe,
+            )
+        else:
+            payload["case_href"] = None
+            payload["evidence_preview_href"] = None
+        payload["report_preview_href"] = _finding_report_preview_href(
+            public_safe=public_safe
+        )
+        payloads.append(payload)
+    return payloads
+
+
+def _latest_case_payload(
+    summary: dict[str, Any] | None,
+    case_id: str,
+    *,
+    public_safe: bool,
+) -> dict[str, Any]:
+    run_payload = _latest_run_findings_payload(
+        summary,
+        include_run_dir=not public_safe,
+        public_safe=public_safe,
+    )
+    if run_payload.get("status") != "ok":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No latest governed run is available.",
+        )
+    for item in run_payload.get("findings", []) or []:
+        if str(item.get("case_id") or item.get("finding_id") or "") == str(case_id):
+            return {
+                "status": "ok",
+                "public_safe": public_safe,
+                "run_id": run_payload.get("run_id"),
+                "approval_status": run_payload.get("approval_status"),
+                "requires_human_review": run_payload.get("requires_human_review"),
+                "case": item,
+            }
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Case '{case_id}' was not found on the latest run.",
+    )
+
+
 def _with_local_run_identity(summary: dict[str, Any]) -> dict[str, Any]:
     if summary.get("run_id") or not summary.get("run_dir"):
         return summary
@@ -336,9 +468,125 @@ def _local_approval_status_for_run(run_id: str) -> dict[str, Any] | None:
         "requires_human_review": bool(summary.get("requires_human_review")),
         "approved_at": summary.get("approved_at"),
         "approved_by": summary.get("approved_by"),
+        "review_assignment": _local_review_assignment(summary),
         "approval_status": str(summary.get("approval_status") or "pending"),
         "latest_approval": decision if isinstance(decision, dict) else None,
     }
+
+
+def _local_review_assignment(summary: dict[str, Any]) -> dict[str, Any]:
+    assignment = summary.get("review_assignment")
+    if not isinstance(assignment, dict):
+        assignment = {}
+    claimed_by = assignment.get("claimed_by")
+    claimed = bool(claimed_by)
+    return {
+        "claimed": claimed,
+        "claimed_by": str(claimed_by) if claimed_by else None,
+        "claimed_at": assignment.get("claimed_at"),
+    }
+
+
+def _latest_local_summary_for_run(run_id: str) -> dict[str, Any] | None:
+    summary = _latest_summary()
+    if not summary or str(summary.get("run_id") or "") != str(run_id):
+        return None
+    return summary
+
+
+def _local_run_record_for_run_id(run_id: str) -> dict[str, Any] | None:
+    summary = _latest_local_summary_for_run(run_id)
+    if not summary:
+        return None
+    checkpoint = summary.get("local_review_checkpoint")
+    return {
+        "run_id": run_id,
+        "status": summary.get("status"),
+        "created_at": summary.get("created_at"),
+        "current_stage": summary.get("current_stage"),
+        "approval_status": summary.get("approval_status"),
+        "review_assignment": _local_review_assignment(summary),
+        "latest_checkpoint": checkpoint if isinstance(checkpoint, dict) else None,
+        "summary_json": summary,
+    }
+
+
+def _local_checkpoint_record_for_id(checkpoint_id: str) -> dict[str, Any] | None:
+    summary = _latest_summary()
+    if not summary:
+        return None
+    checkpoint = summary.get("local_review_checkpoint")
+    if not isinstance(checkpoint, dict):
+        return None
+    if str(checkpoint.get("checkpoint_id") or "") != str(checkpoint_id):
+        return None
+    return checkpoint
+
+
+def _local_evidence_preview_for_run(
+    run_id: str,
+    *,
+    citation_id: str | None = None,
+    finding_id: str | None = None,
+    source_hash: str | None = None,
+    locator: str | None = None,
+) -> dict[str, Any] | None:
+    if citation_id:
+        return None
+    summary = _latest_local_summary_for_run(run_id)
+    if not summary:
+        return None
+    artifacts = summary.get("artifacts") or {}
+    citation_audit_path = artifacts.get("citation_audit")
+    if not citation_audit_path:
+        return None
+    path = Path(str(citation_audit_path)).expanduser().resolve()
+    if not path.exists() or not path.is_file():
+        return None
+    try:
+        citation_audit = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    finding_lookup: dict[str, dict[str, Any]] = {}
+    checkpoint = summary.get("local_review_checkpoint") or {}
+    state_json = checkpoint.get("state_json") or {}
+    for item in state_json.get("findings", []) or []:
+        if isinstance(item, dict) and item.get("finding_id"):
+            finding_lookup[str(item["finding_id"])] = item
+    for record in citation_audit.get("records", []) or []:
+        if not isinstance(record, dict):
+            continue
+        if finding_id and str(record.get("finding_id") or "") != str(finding_id):
+            continue
+        if source_hash and str(record.get("source_hash") or "") != str(source_hash):
+            continue
+        if locator and str(record.get("locator") or "") != str(locator):
+            continue
+        finding = finding_lookup.get(str(record.get("finding_id") or ""), {})
+        excerpt = str(record.get("excerpt") or "")
+        resolved_payload = record.get("resolved_payload") or {}
+        preview_kind = "text" if excerpt else "json" if resolved_payload else "metadata"
+        return {
+            "status": "ok",
+            "run_id": run_id,
+            "finding_id": record.get("finding_id"),
+            "citation_id": None,
+            "evidence_document_id": None,
+            "title": finding.get("title"),
+            "pattern_type": record.get("pattern_type") or finding.get("pattern_type"),
+            "vendor_id": finding.get("vendor_id"),
+            "vendor_name": finding.get("vendor_name"),
+            "confidence": finding.get("confidence"),
+            "source_path": record.get("source_path"),
+            "source_hash": record.get("source_hash"),
+            "locator": record.get("locator"),
+            "resolved": record.get("resolved"),
+            "hash_match": record.get("hash_match"),
+            "preview_kind": preview_kind,
+            "excerpt": excerpt,
+            "resolved_payload": resolved_payload,
+        }
+    return None
 
 
 def _local_pending_review_items() -> list[dict[str, Any]]:
@@ -365,7 +613,7 @@ def _local_pending_review_items() -> list[dict[str, Any]]:
             "requires_human_review": True,
             "checkpoint_id": checkpoint.get("checkpoint_id") if checkpoint else None,
             "checkpoint_stage": "awaiting_review",
-            "review_assignment": {"claimed": False, "claimed_by": None, "claimed_at": None},
+            "review_assignment": _local_review_assignment(summary),
             "approval_status": str(summary.get("approval_status") or "pending"),
             "source": "local_summary",
         }
@@ -377,10 +625,75 @@ def _write_local_review_summary(
     summary_path: Path,
 ) -> dict[str, Any]:
     summary = annotate_governance_state(summary)
+    summary["review_assignment"] = _local_review_assignment(summary)
     summary["pointer_metadata"] = update_run_pointers(summary, summary_path)
     summary["latest_pointer"] = summary["pointer_metadata"]["latest"]
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary
+
+
+def _mutate_local_review_assignment(
+    *,
+    run_id: str,
+    reviewer_subject: str,
+    claim: bool,
+) -> dict[str, Any]:
+    summary = _latest_summary()
+    if not summary or str(summary.get("run_id") or "") != str(run_id):
+        return {"status": "missing", "run_id": run_id}
+    if str(summary.get("status") or "").lower() != "awaiting_review":
+        return {
+            "status": "conflict",
+            "run_id": run_id,
+            "reason": f"Run '{run_id}' is not available for {'claim' if claim else 'unclaim'}.",
+            "review_assignment": _local_review_assignment(summary),
+        }
+    summary_path = _latest_summary_path(summary)
+    if summary_path is None:
+        return {"status": "missing", "run_id": run_id}
+
+    assignment = _local_review_assignment(summary)
+    claimed_by = assignment.get("claimed_by")
+    if claim:
+        if claimed_by and claimed_by != reviewer_subject:
+            return {
+                "status": "conflict",
+                "run_id": run_id,
+                "reason": f"Run '{run_id}' is already claimed by {claimed_by}.",
+                "review_assignment": assignment,
+            }
+        if not claimed_by:
+            assignment = {
+                "claimed": True,
+                "claimed_by": reviewer_subject,
+                "claimed_at": datetime.now(UTC).isoformat(),
+            }
+    else:
+        if not claimed_by:
+            return {
+                "status": "conflict",
+                "run_id": run_id,
+                "reason": f"Run '{run_id}' is not currently claimed.",
+                "review_assignment": assignment,
+            }
+        if claimed_by != reviewer_subject:
+            return {
+                "status": "conflict",
+                "run_id": run_id,
+                "reason": f"Run '{run_id}' is claimed by {claimed_by}; only the current reviewer can unclaim it.",
+                "review_assignment": assignment,
+            }
+        assignment = {"claimed": False, "claimed_by": None, "claimed_at": None}
+
+    summary["review_assignment"] = assignment
+    _write_local_review_summary(summary, summary_path)
+    return {
+        "run_id": run_id,
+        "status": str(summary.get("status") or "awaiting_review"),
+        "current_stage": summary.get("current_stage"),
+        "requires_human_review": bool(summary.get("requires_human_review")),
+        "review_assignment": assignment,
+    }
 
 
 def _record_local_reviewer_decision(
@@ -416,6 +729,15 @@ def _record_local_reviewer_decision(
         )
     reviewer_subject = str(principal.get("subject") or "unknown")
     reviewer_role = str(principal.get("role") or "reviewer")
+    assignment = _local_review_assignment(summary)
+    claimed_by = assignment.get("claimed_by")
+    if reviewer_role == "reviewer" and claimed_by != reviewer_subject:
+        detail = (
+            f"Run '{run_id}' must be claimed before a reviewer decision can be recorded."
+            if claimed_by is None
+            else f"Run '{run_id}' is claimed by {claimed_by}."
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     created_at = datetime.now(UTC).isoformat()
     payload = {
         "decision": decision,
@@ -424,6 +746,15 @@ def _record_local_reviewer_decision(
             "checkpoint_id": checkpoint.get("checkpoint_id"),
             "stage": checkpoint.get("stage"),
             "status": checkpoint.get("status"),
+            "fingerprint": (checkpoint.get("state_json") or {}).get(
+                "checkpoint_fingerprint"
+            )
+            or (checkpoint.get("summary_json") or {}).get("checkpoint_fingerprint"),
+            "quantification": (checkpoint.get("state_json") or {}).get(
+                "quantification"
+            )
+            or (checkpoint.get("summary_json") or {}).get("quantification")
+            or {},
         },
         **(request.payload or {}),
     }
@@ -445,6 +776,11 @@ def _record_local_reviewer_decision(
     summary["status"] = "awaiting_review"
     summary["current_stage"] = "awaiting_review"
     summary["approval_status"] = decision
+    summary["review_assignment"] = {
+        "claimed": False,
+        "claimed_by": None,
+        "claimed_at": None,
+    }
     if decision == "approved":
         summary["approved_by"] = reviewer_subject
         summary["approved_at"] = created_at
@@ -455,6 +791,8 @@ def _record_local_reviewer_decision(
         "reviewer_subject": reviewer_subject,
         "created_at": created_at,
         "checkpoint_id": checkpoint.get("checkpoint_id"),
+        "checkpoint_fingerprint": payload["checkpoint"].get("fingerprint"),
+        "quantification": payload["checkpoint"].get("quantification") or {},
         "persistence": "local",
     }
     _write_local_review_summary(summary, summary_path)
@@ -493,6 +831,13 @@ def _sync_run_summary_review_state(
         "reviewer_subject": decision_result.get("reviewer_subject"),
         "created_at": decision_result.get("created_at"),
         "checkpoint_id": checkpoint.get("checkpoint_id"),
+        "checkpoint_fingerprint": ((decision_result.get("payload") or {}).get("checkpoint") or {}).get(
+            "fingerprint"
+        ),
+        "quantification": ((decision_result.get("payload") or {}).get("checkpoint") or {}).get(
+            "quantification"
+        )
+        or {},
     }
     summary = annotate_governance_state(summary)
     summary["pointer_metadata"] = update_run_pointers(summary, summary_path)
@@ -506,8 +851,15 @@ def _status_label(value: bool) -> str:
 
 def _display_role(role: str) -> str:
     labels = {
+        "bu": "BU leader",
         "operator": "Operator",
         "reviewer": "Reviewer",
+        "analyst": "Analyst",
+        "auditor": "Auditor",
+        "executive": "Executive",
+        "tenant_operator": "Tenant operator",
+        "tenant_admin": "Tenant admin",
+        "system": "System",
         "anonymous": "Anonymous",
         "public": "Public",
     }
@@ -522,6 +874,8 @@ def _display_subject(subject: str, role: str) -> str:
         return "Anonymous"
     if raw == "auth-disabled":
         return "Auth disabled"
+    if raw.startswith("demo-role:"):
+        return _display_role(role)
     if raw.startswith("api-key:"):
         return f"{_display_role(role)} API key"
     if "://" in raw:
@@ -535,9 +889,286 @@ def _display_subject(subject: str, role: str) -> str:
 
 def _display_name_for_principal(role: str, subject: str) -> str:
     normalized_role = role.strip().lower()
-    if normalized_role in {"operator", "reviewer"}:
+    if normalized_role in {
+        "operator",
+        "reviewer",
+        "analyst",
+        "auditor",
+        "executive",
+        "tenant_operator",
+        "tenant_admin",
+        "system",
+    }:
         return _display_role(normalized_role)
     return _display_subject(subject, normalized_role)
+
+
+def _role_altitude(role: str) -> str:
+    normalized = role.strip().lower()
+    if normalized in {"anonymous", "public"}:
+        return "public"
+    if principal_has_any_role(normalized, "executive"):
+        return "executive"
+    if principal_has_any_role(normalized, "bu"):
+        return "review"
+    if principal_has_any_role(normalized, "reviewer"):
+        return "review"
+    if principal_has_any_role(normalized, "analyst"):
+        return "analysis"
+    if principal_has_any_role(normalized, "operator"):
+        return "operations"
+    return "workspace"
+
+
+def _principal_capabilities(role: str) -> dict[str, bool]:
+    normalized = role.strip().lower()
+    return {
+        "can_view_overview": principal_has_any_role(normalized, *PRODUCT_READ_ROLES),
+        "can_view_cases": principal_has_any_role(normalized, *PRODUCT_READ_ROLES),
+        "can_investigate_evidence": principal_has_any_role(normalized, *INVESTIGATION_ROLES),
+        "can_review": principal_has_any_role(normalized, *REVIEW_WORKFLOW_ROLES),
+        "can_launch_runs": principal_has_any_role(normalized, "operator"),
+        "can_manage_ingestion": principal_has_any_role(normalized, "operator"),
+    }
+
+
+def _summary_tenant_context(
+    summary: dict[str, Any] | None,
+    principal: dict[str, Any],
+) -> dict[str, str]:
+    payload = summary.get("tenant_context") if isinstance(summary, dict) else None
+    tenant_context = build_tenant_context(
+        tenant_id=(payload or {}).get("tenant_id") if isinstance(payload, dict) else str(principal.get("tenant_id") or CONFIG.tenant_slug),
+        tenant_name=(payload or {}).get("tenant_name") if isinstance(payload, dict) else None,
+        workspace_id=(payload or {}).get("workspace_id") if isinstance(payload, dict) else None,
+    )
+    return artifact_contracts_payload(tenant_context)
+
+
+def _summary_report_contracts(summary: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {"tenant_id": CONFIG.tenant_slug, "run_id": None, "evidence": [], "reports": []}
+    payload = summary.get("report_contracts")
+    if isinstance(payload, dict):
+        return payload
+    artifacts = summary.get("artifacts") if isinstance(summary.get("artifacts"), dict) else {}
+    tenant_payload = summary.get("tenant_context") if isinstance(summary.get("tenant_context"), dict) else {}
+    return artifact_contracts_payload(
+        build_run_report_contracts(
+            dict(artifacts),
+            tenant_id=str(tenant_payload.get("tenant_id") or CONFIG.tenant_slug),
+            run_id=str(summary.get("run_id") or "") or None,
+        )
+    )
+
+
+def _sanitize_contract_list(
+    items: list[dict[str, Any]],
+    *,
+    include_paths: bool,
+    include_restricted: bool,
+) -> list[dict[str, Any]]:
+    sanitized: list[dict[str, Any]] = []
+    for item in items:
+        payload = dict(item)
+        if not include_restricted and payload.get("restricted"):
+            payload.pop("path", None)
+        elif not include_paths:
+            payload.pop("path", None)
+        sanitized.append(payload)
+    return sanitized
+
+
+def _workspace_surface_contract_payload(
+    summary: dict[str, Any] | None,
+    principal: dict[str, Any],
+) -> dict[str, Any]:
+    authenticated = bool(principal.get("authenticated"))
+    role = str(principal.get("role") or "anonymous")
+    public_safe = _principal_prefers_public_safe_surface(principal)
+    tenant_context = _summary_tenant_context(summary, principal)
+    findings = (
+        build_case_summary_contracts(_finding_rows_from_summary(summary))
+        if isinstance(summary, dict)
+        else []
+    )
+    report_contracts = _summary_report_contracts(summary)
+    can_investigate = principal_has_any_role(role, *INVESTIGATION_ROLES)
+    can_review = principal_has_any_role(role, *REVIEW_WORKFLOW_ROLES)
+    can_read_review = principal_has_any_role(role, *REVIEW_READ_ROLES)
+    can_operate = principal_has_any_role(role, "operator")
+    include_paths = can_review or can_operate
+    filtered_evidence = _sanitize_contract_list(
+        list(report_contracts.get("evidence") or []),
+        include_paths=include_paths,
+        include_restricted=can_review or can_operate,
+    )
+    filtered_reports = _sanitize_contract_list(
+        list(report_contracts.get("reports") or []),
+        include_paths=include_paths,
+        include_restricted=can_review or can_operate,
+    )
+    evidence_route = "/data/evidence-preview" if can_investigate else "/public/data/evidence-preview"
+    findings_route = (
+        "/public/runs/latest/findings"
+        if public_safe
+        else "/runs/latest/findings"
+        if principal_has_any_role(role, *PRODUCT_READ_ROLES)
+        else "/public/runs/latest/findings"
+    )
+    reports_route = (
+        "/reviewer/runs/{run_id}"
+        if can_review or can_operate
+        else "/bu/runs/{run_id}"
+        if principal_has_any_role(role, "bu")
+        else "/public/runs/latest/report-preview"
+    )
+    surfaces = [
+        build_surface_contract(
+            surface_id="overview",
+            title="Overview",
+            visibility="public" if public_safe or principal_has_any_role(role, "executive") else "protected",
+            audience=("anonymous", "executive", "analyst", "bu", "reviewer", "operator"),
+            permitted=True,
+            primary_route="/public/runs/latest" if public_safe or principal_has_any_role(role, "executive") else "/runs/latest",
+            public_route="/public/runs/latest",
+            actions=("view_summary", "view_history"),
+        ),
+        build_surface_contract(
+            surface_id="cases",
+            title="Cases",
+            visibility="public" if public_safe or principal_has_any_role(role, "executive") else "protected",
+            audience=("anonymous", "executive", "analyst", "bu", "reviewer", "operator"),
+            permitted=True,
+            primary_route=findings_route,
+            public_route="/public/runs/latest/findings",
+            actions=("list_cases", "view_case_summary"),
+        ),
+        build_surface_contract(
+            surface_id="evidence",
+            title="Evidence",
+            visibility="public" if public_safe or not can_investigate else "protected",
+            audience=("anonymous", "executive", "analyst", "bu", "reviewer", "operator"),
+            permitted=True,
+            primary_route=evidence_route,
+            public_route="/public/data/evidence-preview",
+            actions=("preview_evidence",) if not can_investigate else ("preview_evidence", "search_evidence"),
+            notes=(
+                "Board-safe preview only." if public_safe or principal_has_any_role(role, "executive") else "Protected evidence routes available."
+            ,),
+        ),
+        build_surface_contract(
+            surface_id="reports",
+            title="Reports",
+            visibility="public" if public_safe or principal_has_any_role(role, "executive") else "restricted" if can_review or can_operate else "protected" if principal_has_any_role(role, "bu") else "public",
+            audience=("anonymous", "executive", "analyst", "bu", "reviewer", "operator"),
+            permitted=True,
+            primary_route=reports_route,
+            public_route="/public/runs/latest/report-preview",
+            actions=("view_report_preview", "view_governed_report_status") if principal_has_any_role(role, "bu") and not (can_review or can_operate) else ("view_report_preview",) if not (can_review or can_operate) else ("view_report_preview", "open_report_artifact"),
+        ),
+        build_surface_contract(
+            surface_id="ingestion",
+            title="Ingestion",
+            visibility="restricted",
+            audience=("operator",),
+            permitted=can_operate,
+            primary_route="/ingestion/connectors",
+            actions=("list_connectors", "stage_source_pack", "validate_source_pack"),
+        ),
+        build_surface_contract(
+            surface_id="workflow",
+            title="Workflow",
+            visibility="restricted",
+            audience=("operator", "reviewer", "bu"),
+            permitted=can_operate or can_read_review,
+            primary_route="/reviewer/pending-reviews" if can_review else "/bu/pending-reviews" if principal_has_any_role(role, "bu") else "/runs",
+            actions=(
+                ("launch_run", "resume_run")
+                if can_operate and not can_review
+                else ("launch_run", "resume_run", "review_decision")
+                if can_operate and can_review
+                else ("view_review_queue", "view_governed_cases")
+                if principal_has_any_role(role, "bu")
+                else ("review_decision",)
+                if can_review
+                else ()
+            ),
+        ),
+    ]
+    findings_payload = _finding_case_contract_payloads(
+        _finding_rows_from_summary(summary) if isinstance(summary, dict) else [],
+        run_id=str(summary.get("run_id") or "") if isinstance(summary, dict) else None,
+        public_safe=public_safe,
+    )
+    return {
+        "status": "ok" if summary else "missing",
+        "public_safe": public_safe,
+        "run_id": summary.get("run_id") if isinstance(summary, dict) else None,
+        "tenant_context": tenant_context,
+        "principal": {
+            "authenticated": authenticated,
+            "role": role,
+            "subject": str(principal.get("subject") or "anonymous"),
+            "display_name": _display_name_for_principal(role, str(principal.get("subject") or "anonymous")),
+            "altitude": _role_altitude(role),
+            "capabilities": _principal_capabilities(role),
+        },
+        "surfaces": [artifact_contracts_payload(item) for item in surfaces],
+        "cases": {
+            "count": len(findings_payload),
+            "items": findings_payload,
+        },
+        "evidence": {
+            "count": len(filtered_evidence),
+            "artifacts": filtered_evidence,
+            "preview_route": evidence_route,
+        },
+        "reports": {
+            "count": len(filtered_reports),
+            "artifacts": filtered_reports,
+            "preview_route": "/public/runs/latest/report-preview",
+        },
+    }
+
+
+def _latest_run_audit_summary_payload(summary: dict[str, Any] | None) -> dict[str, Any]:
+    if summary is None:
+        return {
+            "status": "missing",
+            "challenged_finding_ids": [],
+            "citation_count": None,
+            "resolved_count": None,
+        }
+
+    citation_payload = _load_summary_artifact_json(summary, "citation_audit")
+    citation_summary = (
+        citation_payload.get("summary")
+        if isinstance(citation_payload, dict)
+        and isinstance(citation_payload.get("summary"), dict)
+        else {}
+    )
+    acceptance = summary.get("acceptance") if isinstance(summary.get("acceptance"), dict) else {}
+    audit_payload = _load_summary_artifact_json(summary, "audit_log")
+    challenged_ids = _challenged_finding_ids_from_audit_log(audit_payload)
+    verification = summary.get("audit_verification")
+    if not challenged_ids and isinstance(verification, dict):
+        raw_ids = verification.get("challenged_finding_ids") or []
+        if isinstance(raw_ids, list):
+            challenged_ids = sorted(str(item) for item in raw_ids if item)
+
+    return {
+        "status": "ok",
+        "run_id": summary.get("run_id"),
+        "run_dir": summary.get("run_dir"),
+        "challenged_finding_ids": challenged_ids,
+        "citation_count": citation_summary.get(
+            "citation_count", acceptance.get("citation_count")
+        ),
+        "resolved_count": citation_summary.get(
+            "resolved_count", acceptance.get("resolved_citation_count")
+        ),
+    }
 
 
 def _health_check(status: str, **details: Any) -> dict[str, Any]:
@@ -784,8 +1415,11 @@ def _run_artifact_payload(
     artifact_key: str,
     principal: dict[str, Any],
 ) -> dict[str, Any]:
+    run_record = state_store.get_run_detail(run_id)
+    if isinstance(run_record, dict) and run_record.get("status") == "skipped":
+        run_record = _local_run_record_for_run_id(run_id) or run_record
     record = _require_store_record(
-        state_store.get_run_detail(run_id),
+        run_record,
         missing_detail=f"Run '{run_id}' was not found.",
     )
     assert isinstance(record, dict)
@@ -817,8 +1451,11 @@ def _checkpoint_artifact_payload(
     artifact_key: str,
     principal: dict[str, Any],
 ) -> dict[str, Any]:
+    checkpoint_record = state_store.get_checkpoint_detail(checkpoint_id)
+    if isinstance(checkpoint_record, dict) and checkpoint_record.get("status") == "skipped":
+        checkpoint_record = _local_checkpoint_record_for_id(checkpoint_id) or checkpoint_record
     record = _require_store_record(
-        state_store.get_checkpoint_detail(checkpoint_id),
+        checkpoint_record,
         missing_detail=f"Checkpoint '{checkpoint_id}' was not found.",
     )
     assert isinstance(record, dict)
@@ -832,8 +1469,11 @@ def _checkpoint_artifact_payload(
             ),
         )
     run_id = str(record.get("run_id") or "")
+    run_record = state_store.get_run_detail(run_id)
+    if isinstance(run_record, dict) and run_record.get("status") == "skipped":
+        run_record = _local_run_record_for_run_id(run_id) or run_record
     run_record = _require_store_record(
-        state_store.get_run_detail(run_id),
+        run_record,
         missing_detail=f"Run '{run_id}' was not found.",
     )
     assert isinstance(run_record, dict)
@@ -1002,7 +1642,37 @@ def _check_run_execution() -> dict[str, Any]:
 def _check_auth_boundary() -> dict[str, Any]:
     if not CONFIG.api_auth_enabled:
         return _health_check("skipped", reason="API auth is disabled.")
-    if CONFIG.idp_enabled:
+    if CONFIG.auth_mode == "proxy_oidc":
+        missing = []
+        if not CONFIG.trust_proxy_auth:
+            missing.append("STRATEGYOS_TRUST_PROXY_AUTH")
+        if not CONFIG.trusted_proxy_auth_secret:
+            missing.append("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET")
+        if not CONFIG.oidc_issuer_url:
+            missing.append("OAUTH2_PROXY_OIDC_ISSUER_URL")
+        if not CONFIG.oidc_client_id:
+            missing.append("OAUTH2_PROXY_CLIENT_ID")
+        if not CONFIG.oidc_redirect_url:
+            missing.append("OAUTH2_PROXY_REDIRECT_URL")
+        if not CONFIG.operator_emails:
+            missing.append("STRATEGYOS_OPERATOR_EMAILS")
+        if not CONFIG.reviewer_emails:
+            missing.append("STRATEGYOS_REVIEWER_EMAILS")
+        if missing:
+            return _health_check(
+                "failed",
+                reason=f"Trusted proxy OIDC config is incomplete: {', '.join(missing)}.",
+            )
+        return _health_check(
+            "ok",
+            mode="proxy_oidc",
+            issuer=CONFIG.oidc_issuer_url,
+            redirect_url=CONFIG.oidc_redirect_url,
+            operator_identities=len(CONFIG.operator_emails),
+            reviewer_identities=len(CONFIG.reviewer_emails),
+            public_live_health=CONFIG.public_health_enabled,
+        )
+    if CONFIG.auth_mode == "identity_provider":
         missing = []
         if not CONFIG.idp_issuer:
             missing.append("STRATEGYOS_IDP_ISSUER")
@@ -1052,7 +1722,7 @@ def _check_governance_boundary() -> dict[str, Any]:
         return _health_check(
             "failed", reason="Human review is enabled but API auth is disabled."
         )
-    if CONFIG.idp_enabled:
+    if CONFIG.auth_mode == "identity_provider":
         auth_boundary = _check_auth_boundary()
         if auth_boundary.get("status") != "ok":
             return _health_check(
@@ -1064,6 +1734,18 @@ def _check_governance_boundary() -> dict[str, Any]:
             require_human_review=True,
             auth_mode="identity-provider",
         )
+    if CONFIG.auth_mode == "proxy_oidc":
+        auth_boundary = _check_auth_boundary()
+        if auth_boundary.get("status") != "ok":
+            return _health_check(
+                "failed",
+                reason=str(auth_boundary.get("reason") or "Trusted proxy OIDC is not configured."),
+            )
+        return _health_check(
+            "ok",
+            require_human_review=True,
+            auth_mode="proxy_oidc",
+        )
     if not CONFIG.operator_api_keys or not CONFIG.reviewer_api_keys:
         return _health_check(
             "failed",
@@ -1073,7 +1755,7 @@ def _check_governance_boundary() -> dict[str, Any]:
 
 
 def _ui_environment_label() -> str:
-    return "Local broader-testing"
+    return CONFIG.environment_label.strip() or "Local development"
 
 
 def _ui_bootstrap() -> dict[str, Any]:
@@ -1085,6 +1767,7 @@ def _ui_bootstrap() -> dict[str, Any]:
         "workspace_root": str(CONFIG.workspace_root),
         "default_run_dir": str(CONFIG.default_run_dir),
         "output_root": str(CONFIG.output_root),
+        "auth_mode": CONFIG.auth_mode,
         "api_auth_enabled": CONFIG.api_auth_enabled,
         "idp_enabled": CONFIG.idp_enabled,
         "require_human_review": CONFIG.require_human_review,
@@ -1127,6 +1810,21 @@ def _executive_html() -> str:
     return html_text.replace("__STRATEGYOS_EXECUTIVE_BOOTSTRAP__", bootstrap_json)
 
 
+def _default_surface_route(principal: dict[str, Any]) -> str:
+    role = str(principal.get("role") or "anonymous")
+    if principal_has_any_role(role, "system") or principal_has_any_role(role, "tenant_admin"):
+        return "/app?lane=system"
+    if principal_has_any_role(role, "bu"):
+        return "/app?lane=review#bu"
+    if principal_has_any_role(role, "reviewer"):
+        return "/app?lane=review#review"
+    if principal_has_any_role(role, "operator"):
+        return "/app?lane=operate"
+    if principal_has_any_role(role, "executive"):
+        return "/executive"
+    return "/executive"
+
+
 def _load_summary_artifact_json(
     summary: dict[str, Any],
     artifact_key: str,
@@ -1151,6 +1849,44 @@ def _load_summary_artifact_json(
     ):
         return payload
     return None
+
+
+def _sanitize_summary_for_bu(summary: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {"status": "missing"}
+    payload = dict(summary)
+    payload.pop("run_dir", None)
+    payload.pop("dataset", None)
+    payload.pop("artifacts", None)
+    payload.pop("report_contracts", None)
+    payload.pop("pointer_metadata", None)
+    payload.pop("latest_pointer", None)
+    checkpoint = payload.get("local_review_checkpoint")
+    if isinstance(checkpoint, dict):
+        sanitized_checkpoint = dict(checkpoint)
+        sanitized_checkpoint.pop("state_json", None)
+        sanitized_checkpoint.pop("summary_json", None)
+        payload["local_review_checkpoint"] = sanitized_checkpoint
+    return payload
+
+
+def _sanitize_run_record_for_bu(record: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(record)
+    payload.pop("run_dir", None)
+    payload.pop("dataset", None)
+    payload.pop("dataset_root", None)
+    payload.pop("artifacts", None)
+    summary_json = payload.get("summary_json")
+    if isinstance(summary_json, dict):
+        payload["summary_json"] = _sanitize_summary_for_bu(summary_json)
+    state_json = payload.get("state_json")
+    if isinstance(state_json, dict):
+        sanitized_state = dict(state_json)
+        sanitized_state.pop("dataset_root", None)
+        sanitized_state.pop("run_dir", None)
+        sanitized_state.pop("artifact_paths", None)
+        payload["state_json"] = sanitized_state
+    return payload
 
 
 def _knowledge_graph_path_from_summary(summary: dict[str, Any]) -> Path | None:
@@ -1583,6 +2319,15 @@ def _record_reviewer_decision(
             "checkpoint_id": checkpoint.get("checkpoint_id"),
             "stage": checkpoint.get("stage"),
             "status": checkpoint.get("status"),
+            "fingerprint": (checkpoint.get("state_json") or {}).get(
+                "checkpoint_fingerprint"
+            )
+            or (checkpoint.get("summary_json") or {}).get("checkpoint_fingerprint"),
+            "quantification": (checkpoint.get("state_json") or {}).get(
+                "quantification"
+            )
+            or (checkpoint.get("summary_json") or {}).get("quantification")
+            or {},
         },
         **(request.payload or {}),
     }
@@ -1613,8 +2358,14 @@ def _record_reviewer_decision(
 
 
 @app.get("/", response_class=HTMLResponse)
-def homepage() -> str:
-    return _homepage_html()
+def homepage(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
+    if principal.get("authenticated"):
+        default_route = _default_surface_route(principal)
+        if default_route != "/executive":
+            return RedirectResponse(url=default_route, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return HTMLResponse(_executive_html())
 
 
 @app.get("/app", response_class=HTMLResponse)
@@ -1650,7 +2401,11 @@ def ui_session(
         "display_role": display_role,
         "display_subject": display_subject,
         "display_name": display_name,
+        "altitude": _role_altitude(role),
+        "capabilities": _principal_capabilities(role),
+        "tenant_context": _summary_tenant_context(None, principal),
         "auth_disabled": bool(principal.get("auth_disabled", False)),
+        "auth_mode": CONFIG.auth_mode,
         "api_auth_enabled": CONFIG.api_auth_enabled,
         "idp_enabled": CONFIG.idp_enabled,
         "public_health_enabled": CONFIG.public_health_enabled,
@@ -1659,6 +2414,26 @@ def ui_session(
         "default_run_dir": str(CONFIG.default_run_dir),
         "output_root": str(CONFIG.output_root),
     }
+
+
+@app.get("/ui/workspace-contract/latest")
+def latest_workspace_contract(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> dict[str, Any]:
+    return _workspace_surface_contract_payload(_latest_summary(), principal)
+
+
+@app.get("/public/runs/latest")
+def public_latest_run() -> dict[str, Any]:
+    return _latest_run_public_payload(_latest_summary())
+
+
+@app.get("/public/runs/latest/audit-summary")
+def public_latest_run_audit_summary() -> dict[str, Any]:
+    payload = _latest_run_audit_summary_payload(_latest_summary())
+    payload.pop("run_dir", None)
+    payload["public_safe"] = True
+    return payload
 
 
 @app.get("/health")
@@ -1687,7 +2462,7 @@ def health_live(
 
 @app.get("/health/ready")
 def health_ready(
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*SYSTEM_READ_ROLES),
 ) -> JSONResponse:
     payload = readiness_payload()
     status_code = 200 if payload["status"] in {"ok", "degraded"} else 503
@@ -1696,7 +2471,7 @@ def health_ready(
 
 @app.get("/health/config")
 def health_config(
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*SYSTEM_READ_ROLES),
 ) -> dict[str, Any]:
     return {
         "status": "ok",
@@ -1705,6 +2480,7 @@ def health_config(
         "database_configured": bool(CONFIG.database_url),
         "redis_configured": bool(CONFIG.redis_url),
         "neo4j_configured": bool(CONFIG.neo4j_uri),
+        "auth_mode": CONFIG.auth_mode,
         "api_auth_enabled": CONFIG.api_auth_enabled,
         "require_human_review": CONFIG.require_human_review,
         "llm_chat": llm_qa.chat_status(CONFIG),
@@ -1714,7 +2490,7 @@ def health_config(
 
 @app.get("/health/dependencies")
 def health_dependencies(
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*SYSTEM_READ_ROLES),
 ) -> JSONResponse:
     payload = dict(runtime_dependency_status())
     checks = dict(payload.get("checks") or {})
@@ -1743,9 +2519,105 @@ def _store_list_or_empty(
     return items, "ok"
 
 
+@app.get("/bu/pending-reviews")
+def bu_pending_reviews(
+    principal: dict[str, Any] = require_role(*REVIEW_READ_ROLES),
+) -> dict[str, Any]:
+    items, store_status = _store_list_or_empty(state_store.list_pending_reviews())
+    if store_status == "skipped":
+        items = _local_pending_review_items()
+    role = str(principal.get("role") or "unknown")
+    subject = str(principal.get("subject") or "unknown")
+    return {
+        "items": items,
+        "store_status": store_status,
+        "viewer_role": role,
+        "viewer_subject": subject,
+        "viewer_display_name": _display_name_for_principal(role, subject),
+        "read_only": not principal_has_any_role(role, "reviewer"),
+    }
+
+
+@app.get("/bu/runs")
+def bu_runs(
+    limit: int = 12,
+    principal: dict[str, Any] = require_role(*REVIEW_READ_ROLES),
+) -> dict[str, Any]:
+    items, store_status = _store_list_or_empty(state_store.list_recent_runs(limit=limit))
+    if store_status == "skipped":
+        items = _local_pending_review_items()
+    role = str(principal.get("role") or "unknown")
+    subject = str(principal.get("subject") or "unknown")
+    return {
+        "items": items,
+        "store_status": store_status,
+        "viewer_role": role,
+        "viewer_subject": subject,
+        "viewer_display_name": _display_name_for_principal(role, subject),
+        "read_only": not principal_has_any_role(role, "reviewer"),
+    }
+
+
+@app.get("/bu/runs/{run_id}")
+def bu_run_detail(
+    run_id: str,
+    principal: dict[str, Any] = require_role(*REVIEW_READ_ROLES),
+) -> dict[str, Any]:
+    run_record = state_store.get_run_detail(run_id)
+    if isinstance(run_record, dict) and run_record.get("status") == "skipped":
+        run_record = _local_run_record_for_run_id(run_id) or run_record
+    record = _require_store_record(
+        run_record,
+        missing_detail=f"Run '{run_id}' was not found.",
+    )
+    assert isinstance(record, dict)
+    sanitized = _sanitize_run_record_for_bu(record)
+    sanitized["lifecycle_timeline"] = _run_lifecycle_timeline(record)
+    sanitized["viewer_role"] = str(principal.get("role") or "unknown")
+    sanitized["read_only"] = True
+    return sanitized
+
+
+@app.get("/bu/checkpoints/{checkpoint_id}")
+def bu_checkpoint_detail(
+    checkpoint_id: str,
+    principal: dict[str, Any] = require_role(*REVIEW_READ_ROLES),
+) -> dict[str, Any]:
+    checkpoint_record = state_store.get_checkpoint_detail(checkpoint_id)
+    if isinstance(checkpoint_record, dict) and checkpoint_record.get("status") == "skipped":
+        checkpoint_record = _local_checkpoint_record_for_id(checkpoint_id) or checkpoint_record
+    record = _require_store_record(
+        checkpoint_record,
+        missing_detail=f"Checkpoint '{checkpoint_id}' was not found.",
+    )
+    assert isinstance(record, dict)
+    sanitized = _sanitize_run_record_for_bu(record)
+    sanitized["viewer_role"] = str(principal.get("role") or "unknown")
+    sanitized["read_only"] = True
+    return sanitized
+
+
+@app.get("/bu/runs/{run_id}/artifacts/{artifact_key}")
+def bu_run_artifact_preview(
+    run_id: str,
+    artifact_key: str,
+    principal: dict[str, Any] = require_role(*REVIEW_READ_ROLES),
+) -> dict[str, Any]:
+    return _run_artifact_payload(run_id, artifact_key, principal)
+
+
+@app.get("/bu/checkpoints/{checkpoint_id}/artifacts/{artifact_key}")
+def bu_checkpoint_artifact_preview(
+    checkpoint_id: str,
+    artifact_key: str,
+    principal: dict[str, Any] = require_role(*REVIEW_READ_ROLES),
+) -> dict[str, Any]:
+    return _checkpoint_artifact_payload(checkpoint_id, artifact_key, principal)
+
+
 @app.get("/reviewer/pending-reviews")
 def pending_reviews(
-    principal: dict[str, Any] = require_role("operator", "reviewer"),
+    principal: dict[str, Any] = require_role(*REVIEW_WORKFLOW_ROLES),
 ) -> dict[str, Any]:
     items, store_status = _store_list_or_empty(state_store.list_pending_reviews())
     if store_status == "skipped":
@@ -1764,7 +2636,7 @@ def pending_reviews(
 @app.get("/reviewer/runs")
 def reviewer_runs(
     limit: int = 12,
-    principal: dict[str, Any] = require_role("operator", "reviewer"),
+    principal: dict[str, Any] = require_role(*REVIEW_WORKFLOW_ROLES),
 ) -> dict[str, Any]:
     items, store_status = _store_list_or_empty(state_store.list_recent_runs(limit=limit))
     if store_status == "skipped":
@@ -1785,8 +2657,11 @@ def reviewer_run_detail(
     run_id: str,
     _: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
+    run_record = state_store.get_run_detail(run_id)
+    if isinstance(run_record, dict) and run_record.get("status") == "skipped":
+        run_record = _local_run_record_for_run_id(run_id) or run_record
     record = _require_store_record(
-        state_store.get_run_detail(run_id),
+        run_record,
         missing_detail=f"Run '{run_id}' was not found.",
     )
     assert isinstance(record, dict)
@@ -1799,8 +2674,11 @@ def reviewer_checkpoint_detail(
     checkpoint_id: str,
     _: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
+    checkpoint_record = state_store.get_checkpoint_detail(checkpoint_id)
+    if isinstance(checkpoint_record, dict) and checkpoint_record.get("status") == "skipped":
+        checkpoint_record = _local_checkpoint_record_for_id(checkpoint_id) or checkpoint_record
     record = _require_store_record(
-        state_store.get_checkpoint_detail(checkpoint_id),
+        checkpoint_record,
         missing_detail=f"Checkpoint '{checkpoint_id}' was not found.",
     )
     assert isinstance(record, dict)
@@ -1831,8 +2709,15 @@ def claim_run(
     principal: dict[str, Any] = require_role("reviewer"),
 ) -> dict[str, Any]:
     reviewer_subject = str(principal.get("subject") or "unknown")
+    claim_record = state_store.claim_pending_review(run_id, reviewer_subject)
+    if isinstance(claim_record, dict) and claim_record.get("status") == "skipped":
+        claim_record = _mutate_local_review_assignment(
+            run_id=run_id,
+            reviewer_subject=reviewer_subject,
+            claim=True,
+        )
     return _require_store_mutation_result(
-        state_store.claim_pending_review(run_id, reviewer_subject),
+        claim_record,
         missing_detail=f"Run '{run_id}' was not found.",
         conflict_detail=f"Run '{run_id}' is not available for claim.",
     )
@@ -1844,8 +2729,15 @@ def unclaim_run(
     principal: dict[str, Any] = require_role("reviewer"),
 ) -> dict[str, Any]:
     reviewer_subject = str(principal.get("subject") or "unknown")
+    unclaim_record = state_store.unclaim_pending_review(run_id, reviewer_subject)
+    if isinstance(unclaim_record, dict) and unclaim_record.get("status") == "skipped":
+        unclaim_record = _mutate_local_review_assignment(
+            run_id=run_id,
+            reviewer_subject=reviewer_subject,
+            claim=False,
+        )
     return _require_store_mutation_result(
-        state_store.unclaim_pending_review(run_id, reviewer_subject),
+        unclaim_record,
         missing_detail=f"Run '{run_id}' was not found.",
         conflict_detail=f"Run '{run_id}' is not currently claimed.",
     )
@@ -1927,7 +2819,10 @@ def resume_run(
                 f"Run '{run_id}' latest checkpoint is '{checkpoint_stage or 'unknown'}', not awaiting review."
             ),
     )
-    return resume_reviewed_run(run_id, checkpoint)
+    try:
+        return resume_reviewed_run(run_id, checkpoint)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @app.post("/source-packs")
@@ -1965,6 +2860,25 @@ def confirm_source_pack_mapping_endpoint(
         role=request.role,
         column_mapping=request.column_mapping,
     )
+
+
+@app.get("/ingestion/connectors", response_model=IngestionConnectorsResponse)
+def list_ingestion_connectors(
+    principal: dict[str, Any] = require_role(*SYSTEM_READ_ROLES),
+) -> dict[str, Any]:
+    tenant_context = build_tenant_context(
+        tenant_id=str(principal.get("tenant_id") or CONFIG.tenant_slug),
+    )
+    return {
+        "tenant_context": {
+            "tenant_id": tenant_context.tenant_id,
+            "tenant_name": tenant_context.tenant_name,
+            "workspace_id": tenant_context.workspace_id,
+        },
+        "connectors": build_ingestion_connector_catalog(
+            principal_role=str(principal.get("role") or "anonymous")
+        ),
+    }
 
 
 @app.post("/runs")
@@ -2010,7 +2924,7 @@ def create_run(
 @app.get("/runs/jobs/{job_id}")
 def run_job_status(
     job_id: str,
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*SYSTEM_READ_ROLES),
 ) -> dict[str, Any]:
     record = state_store.get_run_job(job_id)
     job = _require_store_record(
@@ -2032,55 +2946,25 @@ def run_job_status(
 
 @app.get("/runs/latest")
 def latest_run(
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
     summary = _latest_summary()
     if summary is None:
+        if principal_has_any_role(str(principal.get("role") or ""), "executive"):
+            return {"status": "missing", "public_safe": True}
         return {"status": "missing", "run_dir": str(CONFIG.default_run_dir)}
+    if principal_has_any_role(str(principal.get("role") or ""), "executive"):
+        return _latest_run_public_payload(summary)
+    if principal_has_any_role(str(principal.get("role") or ""), "bu"):
+        return _sanitize_summary_for_bu(summary)
     return summary
 
 
 @app.get("/runs/latest/audit-summary")
 def latest_run_audit_summary(
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
-    summary = _latest_summary()
-    if summary is None:
-        return {
-            "status": "missing",
-            "challenged_finding_ids": [],
-            "citation_count": None,
-            "resolved_count": None,
-        }
-
-    citation_payload = _load_summary_artifact_json(summary, "citation_audit")
-    citation_summary = (
-        citation_payload.get("summary")
-        if isinstance(citation_payload, dict)
-        and isinstance(citation_payload.get("summary"), dict)
-        else {}
-    )
-    acceptance = summary.get("acceptance") if isinstance(summary.get("acceptance"), dict) else {}
-    audit_payload = _load_summary_artifact_json(summary, "audit_log")
-    challenged_ids = _challenged_finding_ids_from_audit_log(audit_payload)
-    verification = summary.get("audit_verification")
-    if not challenged_ids and isinstance(verification, dict):
-        raw_ids = verification.get("challenged_finding_ids") or []
-        if isinstance(raw_ids, list):
-            challenged_ids = sorted(str(item) for item in raw_ids if item)
-
-    return {
-        "status": "ok",
-        "run_id": summary.get("run_id"),
-        "run_dir": summary.get("run_dir"),
-        "challenged_finding_ids": challenged_ids,
-        "citation_count": citation_summary.get(
-            "citation_count", acceptance.get("citation_count")
-        ),
-        "resolved_count": citation_summary.get(
-            "resolved_count", acceptance.get("resolved_citation_count")
-        ),
-    }
+    return _latest_run_audit_summary_payload(_latest_summary())
 
 
 def _finding_rows_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
@@ -2150,14 +3034,12 @@ def _finding_rows_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-@app.get("/runs/latest/findings")
-def latest_run_findings(
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+def _latest_run_findings_payload(
+    summary: dict[str, Any] | None,
+    *,
+    include_run_dir: bool,
+    public_safe: bool,
 ) -> dict[str, Any]:
-    """Decision worklist for the latest run: one actionable row per finding
-    (plain-language title, recoverable amount, owner, citation count, challenge
-    and review status). Powers the business-user findings panel (fix-list 3)."""
-    summary = _latest_summary()
     if summary is None:
         return {
             "status": "missing",
@@ -2165,28 +3047,211 @@ def latest_run_findings(
             "total_recoverable_sar": None,
             "requires_human_review": False,
             "approval_status": None,
+            "public_safe": public_safe,
         }
     rows = _finding_rows_from_summary(summary)
     total_recoverable = summary.get("total_recoverable_sar")
     if total_recoverable is None and rows:
         total_recoverable = round(sum(row["recoverable_sar"] for row in rows), 2)
-    return {
+    findings_payload = _finding_case_contract_payloads(
+        rows,
+        run_id=str(summary.get("run_id") or "") or None,
+        public_safe=public_safe,
+    )
+    payload = {
         "status": "ok",
         "run_id": summary.get("run_id"),
-        "run_dir": summary.get("run_dir"),
-        "findings": rows,
-        "finding_count": len(rows),
+        "findings": findings_payload,
+        "finding_count": len(findings_payload),
         "locked_findings": summary.get("locked_findings"),
         "total_recoverable_sar": total_recoverable,
         "requires_human_review": bool(summary.get("requires_human_review")),
         "approval_status": summary.get("approval_status"),
+        "public_safe": public_safe,
     }
+    if include_run_dir:
+        payload["run_dir"] = summary.get("run_dir")
+    return payload
+
+
+def _sanitize_public_evidence_preview(payload: dict[str, Any]) -> dict[str, Any]:
+    source_path = str(payload.get("source_path") or "").strip()
+    source_name = Path(source_path).name if source_path else None
+    excerpt = state_store.preview_text(
+        str(payload.get("excerpt") or ""), limit=PUBLIC_EVIDENCE_EXCERPT_LIMIT
+    )
+    if not excerpt:
+        excerpt = "Stored citation evidence is available for this finding on the protected review surface."
+    return {
+        "status": "ok",
+        "run_id": payload.get("run_id"),
+        "finding_id": payload.get("finding_id"),
+        "citation_id": payload.get("citation_id"),
+        "evidence_document_id": payload.get("evidence_document_id"),
+        "title": payload.get("title"),
+        "pattern_type": payload.get("pattern_type"),
+        "vendor_id": payload.get("vendor_id"),
+        "vendor_name": payload.get("vendor_name"),
+        "confidence": payload.get("confidence"),
+        "source_path": source_name,
+        "source_hash": None,
+        "locator": payload.get("locator"),
+        "resolved": payload.get("resolved"),
+        "hash_match": payload.get("hash_match"),
+        "preview_kind": payload.get("preview_kind") or "text",
+        "excerpt": excerpt,
+        "resolved_payload": {},
+        "public_safe": True,
+    }
+
+
+def _public_evidence_preview_payload(
+    *,
+    run_id: str | None,
+    finding_id: str | None,
+    source_hash: str | None,
+    locator: str | None,
+) -> dict[str, Any]:
+    summary = _latest_summary()
+    if summary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No latest run is available for the public demo path.",
+        )
+    latest_run_id = str(summary.get("run_id") or "")
+    if not latest_run_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The latest run does not have a public demo identity.",
+        )
+    if run_id and str(run_id) != latest_run_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Only the latest public demo run is available on the anonymous surface.",
+        )
+    payload = state_store.evidence_preview_for_run(
+        latest_run_id,
+        finding_id=finding_id,
+        source_hash=source_hash,
+        locator=locator,
+    )
+    if payload.get("status") == "skipped":
+        payload = _local_evidence_preview_for_run(
+            latest_run_id,
+            finding_id=finding_id,
+            source_hash=source_hash,
+            locator=locator,
+        ) or payload
+    if payload.get("status") == "missing":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=payload.get("reason", "Evidence preview was not found."),
+        )
+    if payload.get("status") == "skipped":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=payload.get("reason", "Evidence preview is unavailable."),
+        )
+    return _sanitize_public_evidence_preview(payload)
+
+
+def _public_report_preview_payload(artifact_key: str | None = None) -> dict[str, Any]:
+    summary = _latest_summary()
+    if summary is None:
+        return {
+            "status": "missing",
+            "artifact_key": "executive_summary",
+            "title": "Executive summary",
+            "preview_kind": "text",
+            "preview_text": "No latest governed run is available yet.",
+            "available_artifacts": [],
+            "public_safe": True,
+        }
+    audit = _latest_run_audit_summary_payload(summary)
+    findings = _finding_rows_from_summary(summary)
+    challenged = len(audit.get("challenged_finding_ids") or [])
+    available_artifacts = [
+        {
+            "artifact_key": key,
+            "title": ARTIFACT_TITLES.get(key, key.replace("_", " ").title()),
+        }
+        for key in PUBLIC_REPORT_ARTIFACT_KEYS
+        if isinstance(summary.get("artifacts"), dict) and summary["artifacts"].get(key)
+    ]
+    selected_key = artifact_key or (available_artifacts[0]["artifact_key"] if available_artifacts else "executive_summary")
+    top_finding = findings[0] if findings else None
+    preview_lines = [
+        f"Latest governed run: {summary.get('run_id') or 'latest'}.",
+        f"Recoverable value identified: {summary.get('total_recoverable_sar') or 0:,.2f} SAR.",
+        f"Review posture: {summary.get('approval_status') or 'pending'} with {len(findings)} finding(s) and {challenged} challenged item(s).",
+    ]
+    if top_finding:
+        preview_lines.append(
+            f"Top case: {top_finding.get('title') or top_finding.get('finding_id')} ({top_finding.get('finding_id')}) worth {top_finding.get('recoverable_sar') or 0:,.2f} SAR."
+        )
+    citation_count = audit.get("citation_count")
+    resolved_count = audit.get("resolved_count")
+    if citation_count is not None or resolved_count is not None:
+        preview_lines.append(
+            f"Citation chain: {resolved_count if resolved_count is not None else '--'} resolved of {citation_count if citation_count is not None else '--'} total."
+        )
+    preview_lines.append(
+        "Protected artifact bodies remain behind reviewer/operator authentication; this public preview is a synthesized board-safe status note."
+    )
+    return {
+        "status": "ok",
+        "run_id": summary.get("run_id"),
+        "artifact_key": selected_key,
+        "title": ARTIFACT_TITLES.get(selected_key, "Executive summary"),
+        "preview_kind": "text",
+        "preview_text": "\n\n".join(preview_lines),
+        "available_artifacts": available_artifacts,
+        "public_safe": True,
+    }
+
+
+@app.get("/runs/latest/findings")
+def latest_run_findings(
+    principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
+) -> dict[str, Any]:
+    """Decision worklist for the latest run: one actionable row per finding
+    (plain-language title, recoverable amount, owner, citation count, challenge
+    and review status). Powers the business-user findings panel (fix-list 3)."""
+    return _latest_run_findings_payload(
+        _latest_summary(),
+        include_run_dir=not principal_has_any_role(str(principal.get("role") or ""), "executive"),
+        public_safe=principal_has_any_role(str(principal.get("role") or ""), "executive"),
+    )
+
+
+@app.get("/public/runs/latest/findings")
+def public_latest_run_findings() -> dict[str, Any]:
+    return _latest_run_findings_payload(
+        _latest_summary(), include_run_dir=False, public_safe=True
+    )
+
+
+@app.get("/runs/latest/cases/{case_id}")
+def latest_run_case(
+    case_id: str,
+    principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
+) -> dict[str, Any]:
+    return _latest_case_payload(
+        _latest_summary(),
+        case_id,
+        public_safe=principal_has_any_role(str(principal.get("role") or ""), "executive"),
+    )
+
+
+@app.get("/public/runs/latest/cases/{case_id}")
+def public_latest_run_case(case_id: str) -> dict[str, Any]:
+    return _latest_case_payload(_latest_summary(), case_id, public_safe=True)
 
 
 @app.get("/runs/history")
 def runs_history(
     limit: int = 12,
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
     """Direction-of-travel history for a CEO view (fix-list item 8): leakage
     identified and recoverable across the most recent runs, oldest first.
@@ -2205,7 +3270,7 @@ def latest_run_knowledge_graph(
     view: str = KNOWLEDGE_GRAPH_DEFAULT_VIEW,
     expand: str | None = None,
     limit: int = KNOWLEDGE_GRAPH_EXPAND_LIMIT,
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*INVESTIGATION_ROLES),
 ) -> dict[str, Any]:
     summary = _latest_summary()
     if summary is None:
@@ -2227,7 +3292,7 @@ def latest_run_knowledge_graph(
 
 @app.get("/data/status")
 def data_status(
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*SYSTEM_READ_ROLES),
 ) -> dict[str, Any]:
     status_payload = data_management_status()
     run_id = status_payload.get("run_id")
@@ -2251,7 +3316,7 @@ def vector_search(
     confidence: str | None = None,
     source_path: str | None = None,
     finding_id: str | None = None,
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*INVESTIGATION_ROLES),
 ) -> dict[str, Any]:
     if run_id is None:
         latest_summary = _latest_summary() or {}
@@ -2283,7 +3348,7 @@ def evidence_preview(
     finding_id: str | None = None,
     source_hash: str | None = None,
     locator: str | None = None,
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*INVESTIGATION_ROLES),
 ) -> dict[str, Any]:
     payload = state_store.evidence_preview_for_run(
         run_id,
@@ -2292,13 +3357,46 @@ def evidence_preview(
         source_hash=source_hash,
         locator=locator,
     )
+    if payload.get("status") == "skipped":
+        payload = _local_evidence_preview_for_run(
+            run_id,
+            citation_id=citation_id,
+            finding_id=finding_id,
+            source_hash=source_hash,
+            locator=locator,
+        ) or payload
     payload["point_id"] = point_id
     if payload.get("status") == "missing":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=payload.get("reason", "Evidence preview was not found."),
         )
+    if payload.get("status") == "skipped":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=payload.get("reason", "Evidence preview is unavailable."),
+        )
     return payload
+
+
+@app.get("/public/data/evidence-preview")
+def public_evidence_preview(
+    run_id: str | None = None,
+    finding_id: str | None = None,
+    source_hash: str | None = None,
+    locator: str | None = None,
+) -> dict[str, Any]:
+    return _public_evidence_preview_payload(
+        run_id=run_id,
+        finding_id=finding_id,
+        source_hash=source_hash,
+        locator=locator,
+    )
+
+
+@app.get("/public/runs/latest/report-preview")
+def public_report_preview(artifact_key: str | None = None) -> dict[str, Any]:
+    return _public_report_preview_payload(artifact_key)
 
 
 # Cache reloaded Q&A contexts by a stable run key so repeated chat questions do

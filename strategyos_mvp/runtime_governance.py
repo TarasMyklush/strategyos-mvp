@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
@@ -15,6 +16,7 @@ COMPLETED_STATUS = "completed"
 
 AWAITING_REVIEW_STAGE = "awaiting_review"
 LOCAL_RUN_ID_PREFIX = "local-"
+GOVERNED_RELEASE_RECEIPT_FILENAME = "StrategyOS Governed Release Receipt.json"
 
 
 class RuntimeGovernance:
@@ -75,15 +77,22 @@ class RuntimeGovernance:
             "current_stage": stage,
             "approval_status": approval_status,
         }
+        checkpoint_payload = checkpoint_state(updated)
         checkpoint_summary = build_run_summary(updated)
-        checkpoint_record = {"status": "skipped", "reason": "run_id is unavailable."}
+        checkpoint_record = {
+            "checkpoint_id": None,
+            "status": "skipped",
+            "reason": "run_id is unavailable.",
+            "state_json": checkpoint_payload,
+            "summary_json": checkpoint_summary,
+        }
         run_id = updated.get("run_id")
         if isinstance(run_id, str):
             checkpoint_record = persist_checkpoint(
                 run_id,
                 stage,
                 workflow_status,
-                checkpoint_state(updated),
+                checkpoint_payload,
                 checkpoint_summary,
             )
         checkpoints = list(updated.get("checkpoints", []))
@@ -147,6 +156,9 @@ def checkpoint_state(state: dict[str, Any]) -> dict[str, Any]:
         },
         "knowledge_graph": _normalize_value(knowledge_graph),
     }
+    payload["quantification"] = _quantification_summary(payload)
+    payload["artifact_integrity"] = _artifact_integrity_report(payload)
+    payload["checkpoint_fingerprint"] = governance_fingerprint_for_checkpoint_state(payload)
     return annotate_governance_state(payload)
 
 
@@ -190,6 +202,11 @@ def build_run_summary(state: dict[str, Any]) -> dict[str, Any]:
         "run_outcome": _run_outcome(workflow_status, current_stage),
         "deliverables_status": _deliverables_status(workflow_status, current_stage),
     }
+    payload["quantification"] = _quantification_summary(payload)
+    payload["artifact_integrity"] = _artifact_integrity_report(payload)
+    payload["checkpoint_fingerprint"] = governance_fingerprint_for_checkpoint_state(
+        checkpoint_state(state)
+    )
     return annotate_governance_state(payload)
 
 
@@ -227,6 +244,144 @@ def _normalize_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_normalize_value(item) for item in value]
     return value
+
+
+def governance_fingerprint_for_checkpoint_state(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(
+        _governance_fingerprint_payload(payload),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _governance_fingerprint_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "run_id": payload.get("run_id"),
+        "dataset_root": payload.get("dataset_root"),
+        "source_pack_id": payload.get("source_pack_id"),
+        "workflow_status": payload.get("workflow_status"),
+        "current_stage": payload.get("current_stage"),
+        "requires_human_review": bool(payload.get("requires_human_review", False)),
+        "approval_status": payload.get("approval_status"),
+        "quantification": _quantification_summary(payload),
+        "artifact_integrity": _artifact_integrity_report(payload),
+        "findings": [_finding_fingerprint_payload(item) for item in payload.get("findings", []) or []],
+        "audit_event_count": int(payload.get("audit_event_count") or len(payload.get("audit_events", []) or [])),
+        "audit_events": _normalize_value(payload.get("audit_events", []) or []),
+        "audit_verification": _normalize_value(payload.get("audit_verification") or {}),
+        "evidence_qa": _normalize_value(payload.get("evidence_qa") or {}),
+    }
+
+
+def _finding_fingerprint_payload(finding: Any) -> dict[str, Any]:
+    normalized = _normalize_value(finding)
+    if not isinstance(normalized, dict):
+        return {"value": normalized}
+    citations = normalized.get("citations", []) or []
+    ordered_citations = sorted(
+        [
+            {
+                "source_path": item.get("source_path"),
+                "locator": item.get("locator"),
+                "source_hash": item.get("source_hash"),
+            }
+            for item in citations
+            if isinstance(item, dict)
+        ],
+        key=lambda item: (
+            str(item.get("source_path") or ""),
+            str(item.get("locator") or ""),
+            str(item.get("source_hash") or ""),
+        ),
+    )
+    return {
+        "finding_id": normalized.get("finding_id"),
+        "pattern_type": normalized.get("pattern_type"),
+        "vendor_id": normalized.get("vendor_id"),
+        "status": normalized.get("status"),
+        "confidence": normalized.get("confidence"),
+        "recoverable_sar": _as_rounded_float(normalized.get("recoverable_sar")),
+        "leakage_sar": _as_rounded_float(normalized.get("leakage_sar")),
+        "recoverable_usd": _as_rounded_float(normalized.get("recoverable_usd")),
+        "calculation": _normalize_value(normalized.get("calculation") or {}),
+        "citations": ordered_citations,
+    }
+
+
+def _quantification_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    findings = payload.get("findings", []) or []
+    if isinstance(findings, (list, tuple)):
+        normalized_findings = [_normalize_value(item) for item in findings]
+        finding_count = len(normalized_findings)
+    else:
+        normalized_findings = []
+        finding_count = int(payload.get("findings_count") or findings or 0)
+    finding_ids = sorted(
+        str(item.get("finding_id"))
+        for item in normalized_findings
+        if isinstance(item, dict) and item.get("finding_id") is not None
+    )
+    total_recoverable = payload.get("total_recoverable_sar")
+    if total_recoverable is None:
+        total_recoverable = sum(
+            _as_float(item.get("recoverable_sar"))
+            for item in normalized_findings
+            if isinstance(item, dict)
+        )
+    locked_findings = payload.get("locked_findings")
+    if locked_findings is None:
+        locked_findings = sum(
+            str(item.get("status") or "") == "locked"
+            for item in normalized_findings
+            if isinstance(item, dict)
+        )
+    return {
+        "finding_count": int(payload.get("findings_count") or finding_count),
+        "locked_finding_count": int(locked_findings or 0),
+        "total_recoverable_sar": round(float(total_recoverable or 0.0), 2),
+        "finding_ids": finding_ids,
+    }
+
+
+def _artifact_integrity_report(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    artifacts = payload.get("artifact_paths") or payload.get("artifacts") or {}
+    if not isinstance(artifacts, dict):
+        return {}
+    report: dict[str, dict[str, Any]] = {}
+    for key, value in sorted(artifacts.items(), key=lambda item: str(item[0])):
+        path_value = _normalize_value(value)
+        if not isinstance(path_value, str) or not path_value.strip():
+            report[str(key)] = {"path": path_value, "exists": False, "sha256": None, "size_bytes": None}
+            continue
+        path = Path(path_value).expanduser().resolve()
+        exists = path.exists() and path.is_file()
+        report[str(key)] = {
+            "path": str(path),
+            "exists": exists,
+            "sha256": _sha256_for_path(path) if exists else None,
+            "size_bytes": path.stat().st_size if exists else None,
+        }
+    return report
+
+
+def _sha256_for_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _as_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _as_rounded_float(value: Any) -> float:
+    return round(_as_float(value), 2)
 
 
 def _run_outcome(workflow_status: Any, current_stage: Any) -> str:

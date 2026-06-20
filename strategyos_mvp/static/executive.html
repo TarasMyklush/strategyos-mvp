@@ -4,28 +4,28 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StrategyOS.live Executive Cockpit</title>
-    <link rel="stylesheet" href="/static/executive.css" />
+    <link rel="stylesheet" href="/static/executive.css?v=ux-20260619c" />
   </head>
   <body>
     <main class="cockpit">
       <aside class="rail" aria-label="StrategyOS executive navigation">
-        <a class="mark" href="/" aria-label="StrategyOS home">S</a>
-        <nav class="rail-nav">
-          <a class="active" href="#command" title="Command">CMD</a>
-          <a href="#radar" title="Radar">RAD</a>
-          <a href="#cases" title="Cases">CAS</a>
-          <a href="#memo" title="Memo">MEM</a>
-        </nav>
-        <div class="rail-status" id="exec-rail-status">CONNECTING</div>
-      </aside>
+          <a class="mark" href="/" aria-label="StrategyOS home">S</a>
+          <nav class="rail-nav">
+          <a class="active" href="#overview" title="Overview">Overview</a>
+          <a href="#cases" title="Cases">Cases</a>
+          <a href="#evidence" title="Evidence">Evidence</a>
+          <a href="#reports" title="Reports">Reports</a>
+          </nav>
+          <div class="rail-status" id="exec-rail-status">CONNECTING</div>
+        </aside>
 
-      <section class="workspace" id="command">
+      <section class="workspace" id="overview">
         <header class="topbar">
           <div class="product">
             <div class="live-dot" aria-hidden="true"></div>
             <div>
               <h1>StrategyOS.live</h1>
-              <span>Executive finance command system</span>
+              <span>Executive altitude · evidence-linked overview</span>
             </div>
           </div>
           <div class="system-clock">
@@ -37,10 +37,62 @@
           </div>
         </header>
 
+        <section class="surface-ladder" aria-label="StrategyOS role surfaces">
+          <article class="surface-lane current">
+            <div class="surface-lane-head">
+              <div>
+                <p class="eyebrow">Executive altitude</p>
+                <h2>Board-safe narrative surface</h2>
+              </div>
+              <span class="badge green">Current surface</span>
+            </div>
+            <p>Overview, cases, evidence, and reports are framed for executive scan. This cockpit stays read-only even when it borrows a live operator or reviewer session.</p>
+            <span class="surface-link current-link">You are here</span>
+          </article>
+
+          <article class="surface-lane">
+            <div class="surface-lane-head">
+              <div>
+                <p class="eyebrow">BU / reviewer altitude</p>
+                <h2>Governed review lane</h2>
+              </div>
+              <span class="badge amber">Approval gate</span>
+            </div>
+            <p>Queue-first review, checkpoint inspection, evidence packet validation, and release posture. BU leaders now have a distinct read-only backend lane here; reviewer sign-off still owns approve/reject decisions.</p>
+            <a class="surface-link" href="/app#review">Open review lane</a>
+          </article>
+
+          <article class="surface-lane">
+            <div class="surface-lane-head">
+              <div>
+                <p class="eyebrow">Operator altitude</p>
+                <h2>Run-control lane</h2>
+              </div>
+              <span class="badge blue">Run control</span>
+            </div>
+            <p>Source-pack intake, run launch, runtime diagnostics, and post-approval resume. This is where governed execution is operated, not narrated.</p>
+            <a class="surface-link" href="/app?lane=operate">Open operator lane</a>
+          </article>
+
+          <article class="surface-lane">
+            <div class="surface-lane-head">
+              <div>
+                <p class="eyebrow">Tenant admin / system altitude</p>
+                <h2>Governance and runtime lane</h2>
+              </div>
+              <span class="badge blue">Tenant controls</span>
+            </div>
+            <p>Connector readiness, managed data, graph and search stores, artifact previews, and runtime health stay here so executive and reviewer lanes remain clean.</p>
+            <a class="surface-link" href="/app?lane=system">Open system lane</a>
+          </article>
+        </section>
+
+        <p class="surface-truth">Truth today: there is no standalone executive auth role; the BU backend role is now bounded and read-only. The executive surface stays read-only, while reviewer, operator, and tenant-admin/system work continue inside the governed workspace.</p>
+
         <section class="session-panel" id="exec-session-panel" aria-live="polite">
           <div>
-            <strong>Connect executive cockpit</strong>
-            <span id="exec-session-status">Paste an operator or reviewer token to load live run data.</span>
+            <strong>Connect live packet data</strong>
+            <span id="exec-session-status">Paste an operator or reviewer token to unlock live run data. Executive remains read-only.</span>
           </div>
           <label>
             Access token
@@ -73,8 +125,63 @@
               </aside>
             </div>
 
+            <div class="overview-strip" aria-label="Executive validation overview">
+              <article class="summary-card">
+                <span class="micro">OVERVIEW</span>
+                <strong id="exec-overview-status">Awaiting authenticated run</strong>
+                <p id="exec-overview-note">StrategyOS will translate the latest governed run into board-safe priorities.</p>
+              </article>
+              <article class="summary-card">
+                <span class="micro">CASES</span>
+                <strong id="exec-queue-count">--</strong>
+                <p id="exec-queue-note">Pending review queue will load after authentication.</p>
+              </article>
+              <article class="summary-card">
+                <span class="micro">EVIDENCE</span>
+                <strong id="exec-evidence-status">--</strong>
+                <p id="exec-evidence-note">Citation integrity and live excerpts stay attached to every claim.</p>
+              </article>
+              <article class="summary-card">
+                <span class="micro">REPORTS</span>
+                <strong id="exec-report-status">--</strong>
+                <p id="exec-report-note">Publication readiness depends on human review and report artifact availability.</p>
+              </article>
+            </div>
+
+            <section class="plan-health-panel" aria-label="Bounded plan health and KPI snapshot">
+              <div class="panel-title compact plan-health-title">
+                <div>
+                  <h2>Plan health snapshot</h2>
+                  <p id="exec-plan-health-boundary">Finance-derived signal only — StrategyOS is summarizing current case, evidence, and report posture, not a full enterprise strategy compiler.</p>
+                </div>
+                <span class="badge blue" id="exec-plan-health-badge">bounded KPI layer</span>
+              </div>
+              <div class="plan-health-grid">
+                <article class="plan-health-card">
+                  <span class="micro">PLAN HEALTH</span>
+                  <strong id="exec-plan-health-status">Awaiting governed run</strong>
+                  <p id="exec-plan-health-note">Connect live run data to derive a board-safe health readout from finance cases and evidence.</p>
+                </article>
+                <article class="plan-health-card">
+                  <span class="micro">VALUE SIGNAL</span>
+                  <strong id="exec-plan-kpi-value">--</strong>
+                  <p id="exec-plan-kpi-value-note">Recoverable value will load from the current finance diagnostics run.</p>
+                </article>
+                <article class="plan-health-card">
+                  <span class="micro">CASE READINESS</span>
+                  <strong id="exec-plan-kpi-cases">--</strong>
+                  <p id="exec-plan-kpi-cases-note">Case progression will summarize what is ready, blocked, or still waiting for review.</p>
+                </article>
+                <article class="plan-health-card">
+                  <span class="micro">EVIDENCE &amp; RELEASE</span>
+                  <strong id="exec-plan-kpi-evidence">--</strong>
+                  <p id="exec-plan-kpi-evidence-note">Evidence chain and report release posture stay human-governed.</p>
+                </article>
+              </div>
+            </section>
+
             <div class="module-grid">
-              <section class="panel radar" id="radar">
+              <section class="panel radar">
                 <div class="panel-title">
                   <div>
                     <h2>Cash recovery radar</h2>
@@ -170,7 +277,7 @@
             <div class="panel-title">
               <div>
                 <h2>Case matrix</h2>
-                <p>Designed for CFO scan: owner, decision, evidence, and risk.</p>
+                <p>Designed for CFO scan: owner, decision, evidence, and risk. Select a case to inspect the governed evidence thread.</p>
               </div>
               <span class="badge blue" id="exec-case-badge">live queue</span>
             </div>
@@ -190,17 +297,72 @@
             </table>
           </section>
 
-          <aside class="panel memo-card" id="memo">
+          <aside class="panel detail-card" id="evidence">
+            <div class="panel-title compact">
+              <div>
+                <h2>Evidence packet</h2>
+                <p>Selected case evidence, excerpt preview, and why the claim is safe or blocked.</p>
+              </div>
+              <span class="badge green" id="exec-evidence-badge">awaiting selection</span>
+            </div>
+            <div class="detail-stack">
+              <div class="detail-block">
+                <span class="micro">SELECTED CASE</span>
+                <strong id="exec-evidence-title">No finding selected</strong>
+                <p id="exec-evidence-summary">Choose a case from the matrix to load cited evidence and validation posture.</p>
+              </div>
+              <div class="detail-grid">
+                <div class="detail-metric">
+                  <span>Source</span>
+                  <strong id="exec-evidence-source">--</strong>
+                </div>
+                <div class="detail-metric">
+                  <span>Locator</span>
+                  <strong id="exec-evidence-locator">--</strong>
+                </div>
+                <div class="detail-metric">
+                  <span>Confidence</span>
+                  <strong id="exec-evidence-confidence">--</strong>
+                </div>
+                <div class="detail-metric">
+                  <span>Status</span>
+                  <strong id="exec-evidence-resolution">--</strong>
+                </div>
+              </div>
+              <div class="detail-preview" id="exec-evidence-preview">Evidence preview will appear here.</div>
+              <div class="detail-actions">
+                <button class="action-button" id="exec-open-report-app" type="button">Open in review app</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="reports-grid" id="reports">
+          <section class="panel memo-card">
             <p class="eyebrow">BOARD PACK SNAPSHOT</p>
             <h2 id="exec-memo-title">What to say in the room</h2>
             <p id="exec-memo-body">Live board narrative will load from the latest run state.</p>
             <div class="memo-list" id="exec-memo-list"></div>
-          </aside>
+          </section>
+
+          <section class="panel reports-panel">
+            <div class="panel-title compact">
+              <div>
+                <h2>Reports</h2>
+                <p>Available run artifacts and the latest previewable packet for executive validation.</p>
+              </div>
+              <span class="badge amber" id="exec-report-badge">locked</span>
+            </div>
+            <div class="reports-layout">
+              <div class="report-list" id="exec-report-list"></div>
+              <div class="report-preview" id="exec-report-preview">Connect a session to inspect report surfaces.</div>
+            </div>
+          </section>
         </div>
       </section>
     </main>
 
     <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
-    <script src="/static/executive.js"></script>
+    <script src="/static/executive.js?v=ux-20260619c"></script>
   </body>
 </html>

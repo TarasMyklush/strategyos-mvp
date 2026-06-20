@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>StrategyOS.live Finance Review</title>
-    <link rel="stylesheet" href="/static/styles.css?v=ux-20260615" />
+    <title>StrategyOS.live Governed Diagnostics Workspace</title>
+    <link rel="stylesheet" href="/static/styles.css?v=ux-20260619d" />
   </head>
   <body>
     <div class="app-shell">
@@ -14,7 +14,7 @@
           <div class="brand-row">
             <div>
               <span class="brand" id="app-name">StrategyOS</span>
-              <span class="brand-subtitle">Finance review workspace</span>
+              <span class="brand-subtitle" id="workspace-subtitle">Role-aware governed diagnostics workspace</span>
             </div>
           </div>
           <div class="header-meta">
@@ -24,15 +24,15 @@
           </div>
           <div class="header-actions">
             <button class="btn secondary" id="graph-drawer-button" type="button" data-open-drawer="system" data-drawer-target="kg-panel">Evidence map</button>
-            <button class="btn quiet" id="system-drawer-button" type="button">System</button>
-            <button class="btn primary" id="new-run-button" type="button">Start analysis</button>
+            <button class="btn quiet" id="system-drawer-button" type="button">Lane support</button>
+            <button class="btn primary" id="new-run-button" type="button">Open current lane</button>
           </div>
         </header>
 
         <section class="signin-panel hidden" id="sign-in-panel" aria-live="polite">
           <div>
             <h1>Connect cockpit</h1>
-            <p id="session-help">Paste an operator or reviewer access token. It is stored only in this browser.</p>
+            <p id="session-help">Paste a reviewer, operator, or tenant-admin access token. It is stored only in this browser.</p>
           </div>
           <div class="signin-grid">
             <label>
@@ -44,16 +44,97 @@
               <button class="btn secondary" id="clear-button" type="button">Clear</button>
             </div>
           </div>
-          <div class="muted" id="session-status">Session not connected.</div>
+            <div class="muted" id="session-status">Session not connected.</div>
+        </section>
+
+        <section class="panel surface-map" aria-label="Role entry points">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Role entry points</p>
+              <h2 id="workspace-headline">Choose the truthful StrategyOS lane</h2>
+              <p id="workspace-note">Executive stays on the board-safe narrative surface at <code>/executive</code>. BU leaders now have a bounded backend role for governed queue and report read paths, while reviewer sign-off remains the approval gate. Operators own intake and resume after approval. Tenant admin and system roles govern connectors, stores, and readiness from the system lane.</p>
+            </div>
+            <span class="pill" id="role-lane-pill">Sign in for role lanes</span>
+          </div>
+          <p class="surface-map-note">Truth today: StrategyOS now exposes a bounded BU backend role for read-only governed review access. Claim, approve/reject, and restricted artifact release still stay with reviewer/operator runtime paths.</p>
+          <div class="surface-grid">
+            <article class="surface-card" id="surface-card-executive">
+              <div class="surface-card-head">
+                <div>
+                  <p class="eyebrow">Executive</p>
+                  <h3>Executive cockpit</h3>
+                </div>
+                <span class="pill surface-badge" id="surface-badge-executive">Read-only</span>
+              </div>
+              <p>Board-safe overview, governed case framing, evidence drill-down, and report posture. No approvals or run launch on this surface.</p>
+              <div class="button-row">
+                <a class="btn secondary" href="/executive">Open executive cockpit</a>
+              </div>
+            </article>
+
+            <article class="surface-card" id="surface-card-reviewer">
+              <div class="surface-card-head">
+                <div>
+                  <p class="eyebrow">BU / reviewer</p>
+                  <h3>BU / reviewer decision lane</h3>
+                </div>
+                <span class="pill surface-badge" id="surface-badge-reviewer">Approval lane</span>
+              </div>
+              <p>Queue first. Inspect findings, evidence packets, and challenge posture before release. BU leaders now have a separate read-only backend lane here; reviewer sign-off still performs the actual approve/reject action.</p>
+              <div class="button-row">
+                <a class="btn secondary" href="#review">Open review lane</a>
+              </div>
+            </article>
+
+            <article class="surface-card" id="surface-card-operator">
+              <div class="surface-card-head">
+                <div>
+                  <p class="eyebrow">Operator</p>
+                  <h3>Run-control lane</h3>
+                </div>
+                <span class="pill surface-badge" id="surface-badge-operator">Run control</span>
+              </div>
+              <p>Prepare source packs, launch analyses, inspect runtime and evidence systems, and resume only after reviewer approval closes the gate.</p>
+              <div class="button-row">
+                <a class="btn secondary" href="/app?lane=operate">Open operator lane</a>
+              </div>
+            </article>
+
+            <article class="surface-card" id="surface-card-tenant-admin">
+              <div class="surface-card-head">
+                <div>
+                  <p class="eyebrow">Tenant admin / system</p>
+                  <h3>Tenant admin / system lane</h3>
+                </div>
+                <span class="pill surface-badge" id="surface-badge-tenant-admin">System health</span>
+              </div>
+              <p>Inspect managed data, connector readiness, search and graph stores, artifact previews, and platform health for the current diagnostics tenant.</p>
+              <div class="button-row">
+                <a class="btn secondary" href="/app?lane=system">Open system lane</a>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel" aria-label="Current role priorities">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Current lane</p>
+              <h2 id="role-task-title">Role priorities load after session check</h2>
+            </div>
+            <span class="pill" id="role-task-pill">Awaiting role</span>
+          </div>
+          <p id="role-task-note">Sign in, or use an auth-disabled environment, to see the next concrete actions for this lane.</p>
+          <div class="stack-list" id="role-task-list"></div>
         </section>
 
         <div class="cockpit-grid">
           <section class="panel mission-panel">
             <div class="brief-row">
               <div class="brief-copy">
-                <p class="eyebrow">Latest review</p>
-                <h1>Latest finance run</h1>
-                <p class="brief-note">Ask cited questions, inspect recovery exposure, or start a fresh source-pack analysis.</p>
+                 <p class="eyebrow">Governed workbench</p>
+                 <h1>Latest governed finance case</h1>
+                 <p class="brief-note">Ask cited questions, inspect recovery exposure, and move deliberately between BU/reviewer decisions, operator execution, and tenant-system support lanes below.</p>
               </div>
               <section class="cards" id="kpi-cards" aria-label="Latest run metrics">
                 <article class="card">
@@ -267,11 +348,43 @@
       <section class="drawer-panel system-panel">
         <div class="drawer-head">
           <div>
-            <p class="eyebrow">Evidence &amp; system</p>
-            <h2>Evidence map</h2>
+            <p class="eyebrow">Tenant governance</p>
+            <h2>System lane</h2>
           </div>
           <button class="btn secondary icon-btn" id="system-drawer-close" type="button" aria-label="Close evidence map drawer">Close</button>
         </div>
+
+        <section class="drawer-section" id="admin-context-panel">
+          <h3>Safe admin context</h3>
+          <div id="admin-context-summary" class="summary">Awaiting session context.</div>
+          <dl class="kv" id="admin-context-kv"></dl>
+          <dl class="kv" id="admin-capabilities-kv"></dl>
+          <details class="diagnostic-disclosure">
+            <summary>Raw admin context</summary>
+            <pre id="admin-context-payload-preview" class="code-block">Awaiting session payload.</pre>
+          </details>
+        </section>
+
+        <section class="drawer-section" id="system-workflow-panel">
+          <h3>Hosted workflow</h3>
+          <p class="muted">Use current safe surfaces to govern tenant context, connector posture, managed data, readiness, and governed artifacts without inventing deeper admin powers.</p>
+          <div id="system-workflow-summary" class="summary">Awaiting hosted workflow context.</div>
+          <div id="system-workflow-list" class="stack-list"></div>
+          <details class="diagnostic-disclosure">
+            <summary>Raw workspace contract</summary>
+            <pre id="system-workflow-payload-preview" class="code-block">Awaiting workspace contract payload.</pre>
+          </details>
+        </section>
+
+        <section class="drawer-section" id="connectors-panel">
+          <h3>Connector catalog</h3>
+          <div id="connectors-summary" class="summary">Awaiting connector catalog.</div>
+          <div id="connectors-list" class="stack-list"></div>
+          <details class="diagnostic-disclosure">
+            <summary>Raw connector payload</summary>
+            <pre id="connectors-payload-preview" class="code-block">Awaiting connector payload.</pre>
+          </details>
+        </section>
 
         <section class="drawer-section" id="kg-panel">
           <div class="section-title-row">
@@ -289,8 +402,8 @@
         </section>
 
         <div class="drawer-divider" id="analyst-tools-divider">
-          <p class="eyebrow">Analyst tools</p>
-          <p class="muted">Data, search, and runtime detail for analysts and operators.</p>
+          <p class="eyebrow">Shared diagnostics</p>
+          <p class="muted">Tenant-admin, operator, and reviewer detail for managed data, evidence, search, and runtime.</p>
         </div>
 
         <section class="drawer-section" id="data-panel">
@@ -417,6 +530,6 @@
 
     <script id="strategyos-bootstrap" type="application/json">__STRATEGYOS_BOOTSTRAP__</script>
     <script src="/static/vendor/cytoscape.min.js"></script>
-    <script src="/static/app.js?v=ux-20260615"></script>
+    <script src="/static/app.js?v=ux-20260619d"></script>
   </body>
 </html>

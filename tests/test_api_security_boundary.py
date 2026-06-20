@@ -45,6 +45,14 @@ def _auth_header(api_key: str) -> dict[str, str]:
     return {"X-API-Key": api_key}
 
 
+def _proxy_auth_headers(email: str, role_secret: str = "proxy-secret") -> dict[str, str]:
+    return {
+        "X-Auth-Request-Email": email,
+        "X-Auth-Request-User": email,
+        "X-StrategyOS-Proxy-Auth": role_secret,
+    }
+
+
 def test_run_and_data_endpoints_require_auth(monkeypatch):
     original = _apply_env(
         {
@@ -130,7 +138,7 @@ def test_demo_role_login_requires_explicit_flag():
         _restore_env(original)
 
 
-def test_demo_role_login_accepts_literal_operator_and_reviewer(monkeypatch):
+def test_demo_role_login_accepts_literal_multi_role_tokens(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -151,15 +159,95 @@ def test_demo_role_login_accepts_literal_operator_and_reviewer(monkeypatch):
 
         operator_session = client.get("/ui/session", headers=_auth_header("operator"))
         reviewer_session = client.get("/ui/session", headers=_auth_header("reviewer"))
+        bu_session = client.get("/ui/session", headers=_auth_header("bu"))
+        analyst_session = client.get("/ui/session", headers=_auth_header("analyst"))
+        executive_session = client.get("/ui/session", headers=_auth_header("executive"))
 
         assert operator_session.status_code == 200
         assert operator_session.json()["role"] == "operator"
         assert operator_session.json()["subject"] == "demo-role:operator"
         assert reviewer_session.status_code == 200
         assert reviewer_session.json()["role"] == "reviewer"
+        assert bu_session.status_code == 200
+        assert bu_session.json()["role"] == "bu"
+        assert analyst_session.status_code == 200
+        assert analyst_session.json()["role"] == "analyst"
+        assert executive_session.status_code == 200
+        assert executive_session.json()["role"] == "executive"
         assert client.post("/inputs/prepare", headers=_auth_header("operator")).status_code == 200
         assert client.get("/runs/latest", headers=_auth_header("reviewer")).status_code == 200
+        assert client.get("/runs/latest", headers=_auth_header("executive")).status_code == 200
+        assert client.get("/data/vector-search?query=test", headers=_auth_header("analyst")).status_code != 401
         assert client.post("/runs", headers=_auth_header("reviewer"), json={}).status_code == 403
+    finally:
+        _restore_env(original)
+
+
+def test_proxy_oidc_headers_map_email_allowlists(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_AUTH_MODE": "proxy_oidc",
+            "STRATEGYOS_TRUST_PROXY_AUTH": "true",
+            "STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET": "proxy-secret",
+            "STRATEGYOS_OPERATOR_EMAILS": "operator@example.com",
+            "STRATEGYOS_REVIEWER_EMAILS": "reviewer@example.com",
+            "OAUTH2_PROXY_OIDC_ISSUER_URL": "https://accounts.google.com",
+            "OAUTH2_PROXY_CLIENT_ID": "client-id",
+            "OAUTH2_PROXY_REDIRECT_URL": "https://strategyos.example.com/oauth2/callback",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1"})
+        monkeypatch.setattr(
+            api_module,
+            "prepare_agent_input",
+            lambda: (Path("/tmp/agent_input"), Path("/tmp/evaluation")),
+        )
+        client = TestClient(api_module.app)
+
+        operator = client.post(
+            "/inputs/prepare", headers=_proxy_auth_headers("operator@example.com")
+        )
+        reviewer = client.get("/runs/latest", headers=_proxy_auth_headers("reviewer@example.com"))
+        blocked = client.get("/runs/latest", headers=_proxy_auth_headers("intruder@example.com"))
+        missing_secret = client.get(
+            "/runs/latest",
+            headers={"X-Auth-Request-Email": "reviewer@example.com"},
+        )
+
+        assert operator.status_code == 200
+        assert reviewer.status_code == 200
+        assert blocked.status_code == 403
+        assert missing_secret.status_code == 401
+    finally:
+        _restore_env(original)
+
+
+def test_proxy_oidc_optional_session_uses_forwarded_identity_headers() -> None:
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_AUTH_MODE": "proxy_oidc",
+            "STRATEGYOS_TRUST_PROXY_AUTH": "true",
+            "STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET": "proxy-secret",
+            "STRATEGYOS_OPERATOR_EMAILS": "operator@example.com",
+            "STRATEGYOS_REVIEWER_EMAILS": "reviewer@example.com",
+            "OAUTH2_PROXY_OIDC_ISSUER_URL": "https://accounts.google.com",
+            "OAUTH2_PROXY_CLIENT_ID": "client-id",
+            "OAUTH2_PROXY_REDIRECT_URL": "https://strategyos.example.com/oauth2/callback",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+
+        response = client.get("/ui/session", headers=_proxy_auth_headers("reviewer@example.com"))
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["authenticated"] is True
+        assert payload["role"] == "reviewer"
+        assert payload["subject"] == "oidc:reviewer@example.com"
     finally:
         _restore_env(original)
 

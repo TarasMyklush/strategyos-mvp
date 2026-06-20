@@ -17,6 +17,7 @@ from .ingestion import RUN_CONTEXT_FILENAME
 from .models import AuditEvent
 from .neo4j_store import sync_knowledge_graph
 from .paths import AGENT_INPUT_DIR, DEFAULT_RUN_DIR
+from .platform_foundation import build_run_report_contracts, build_tenant_context
 from .plugins import load_configured_plugins, plugin_status
 from .prepare_inputs import prepare_agent_input
 from .run_registry import allocate_run_dir, update_run_pointers
@@ -200,6 +201,8 @@ def _write_source_pack_run_context(dataset_root: Path, source_pack_payload: dict
                 "available_roles": available_roles,
                 "missing_roles": missing_roles,
                 "duplicate_roles": duplicate_roles,
+                "tenant_context": source_pack_payload.get("tenant_context") or {},
+                "ingestion_job": source_pack_payload.get("ingestion_job") or {},
             },
             indent=2,
         ),
@@ -304,7 +307,23 @@ def _execute_strategyos_workflow(
     summary["run_mode"] = run_meta.get("run_mode", "full")
     summary["available_roles"] = run_meta.get("available_roles", [])
     summary["missing_roles"] = run_meta.get("missing_roles", [])
+    tenant_payload = run_meta.get("tenant_context") or source_pack_payload.get("tenant_context") if source_pack_payload else None
+    tenant_context = build_tenant_context(
+        tenant_id=(tenant_payload or {}).get("tenant_id") if isinstance(tenant_payload, dict) else None,
+        tenant_name=(tenant_payload or {}).get("tenant_name") if isinstance(tenant_payload, dict) else None,
+        workspace_id=(tenant_payload or {}).get("workspace_id") if isinstance(tenant_payload, dict) else None,
+    )
+    summary["tenant_context"] = asdict(tenant_context)
+    if source_pack_payload is not None and source_pack_payload.get("ingestion_job"):
+        summary["ingestion_job"] = source_pack_payload.get("ingestion_job")
     summary["artifacts"] = {key: str(path) for key, path in artifacts.items()}
+    summary["report_contracts"] = asdict(
+        build_run_report_contracts(
+            summary["artifacts"],
+            tenant_id=tenant_context.tenant_id,
+            run_id=str(summary.get("run_id") or "") or None,
+        )
+    )
     summary["audit_event_count"] = len(result.get("audit_events", []))
     summary["audit_verification"] = _normalize_json(
         result.get("audit_verification", {})
@@ -361,6 +380,13 @@ def _execute_strategyos_workflow(
         {key: Path(path) for key, path in summary["artifacts"].items()},
     )
     summary["artifacts"] = {key: str(path) for key, path in result["artifacts"].items()}
+    summary["report_contracts"] = asdict(
+        build_run_report_contracts(
+            summary["artifacts"],
+            tenant_id=tenant_context.tenant_id,
+            run_id=str(summary.get("run_id") or "") or None,
+        )
+    )
     summary["audit_event_count"] = len(result.get("audit_events", []))
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     summary["state_store"] = persist_run_summary(

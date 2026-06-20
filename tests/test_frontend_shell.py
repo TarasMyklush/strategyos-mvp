@@ -72,18 +72,27 @@ def _static_executive_js() -> str:
 def test_homepage_renders_executive_recovery_control_room():
     html = _homepage_response()
 
-    assert "StrategyOS.live Executive Command System" in html
+    marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
+    assert "StrategyOS.live Executive Cockpit" in html
     assert "RECOVERY INTELLIGENCE ONLINE" in html
-    assert "Good morning. Four finance decisions are blocking SAR 7.2M." in html
-    assert "Ask: what can I approve safely today?" in html
+    assert "Open review app" in html
     assert "Cash recovery radar" in html
     assert "STRATEGYOS COPILOT" in html
     assert "Case matrix" in html
-    assert "Open review app" in html
-    assert 'href="#command"' in html
-    assert 'href="#radar"' in html
+    assert "Reports" in html
+    assert "Board-safe narrative surface" in html
+    assert "Governed review lane" in html
+    assert "Run-control lane" in html
+    assert "Tenant admin / system altitude" in html
+    assert "Truth today: there is no standalone executive auth role; the BU backend role is now bounded and read-only." in html
+    assert marker in html
+    bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
+    bootstrap = json.loads(bootstrap_json)
+    assert bootstrap["product_name"] == "StrategyOS"
+    assert 'href="#overview"' in html
     assert 'href="#cases"' in html
-    assert 'href="#memo"' in html
+    assert 'href="#evidence"' in html
+    assert 'href="#reports"' in html
     assert '<script id="strategyos-bootstrap"' not in html
 
 
@@ -96,8 +105,8 @@ def test_executive_cockpit_renders_live_command_shell():
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
     assert "StrategyOS.live Executive Cockpit" in html
-    assert 'href="/static/executive.css"' in html
-    assert 'src="/static/executive.js"' in html
+    assert 'href="/static/executive.css?v=ux-20260619c"' in html
+    assert 'src="/static/executive.js?v=ux-20260619c"' in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -106,6 +115,23 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'id="exec-session-panel"' in html
     assert 'id="exec-decision-list"' in html
     assert 'id="exec-case-body"' in html
+    assert "Overview" in html
+    assert "Cases" in html
+    assert "Evidence" in html
+    assert "Reports" in html
+    assert 'id="exec-overview-status"' in html
+    assert 'id="exec-plan-health-status"' in html
+    assert 'id="exec-plan-kpi-value"' in html
+    assert 'id="exec-plan-kpi-cases"' in html
+    assert 'id="exec-plan-kpi-evidence"' in html
+    assert 'id="exec-evidence-preview"' in html
+    assert 'id="exec-report-list"' in html
+    assert 'id="exec-report-preview"' in html
+    assert "Executive altitude" in html
+    assert "BU / reviewer altitude" in html
+    assert "Operator altitude" in html
+    assert "Tenant admin / system altitude" in html
+    assert "Executive remains read-only." in html
     assert "strategyos.ui.token" in js
     assert "headers.Authorization" in js
     assert "`Bearer ${state.token}`" in js
@@ -113,7 +139,20 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'requestJson("/runs/latest")' in js
     assert 'requestJson("/runs/latest/audit-summary")' in js
     assert 'requestJson("/runs/latest/knowledge-graph")' in js
+    assert 'requestJson("/runs/latest/findings")' in js
+    assert 'requestJson("/public/runs/latest")' in js
+    assert 'requestJson("/public/runs/latest/findings")' in js
+    assert 'requestJson("/public/runs/latest/report-preview")' in js
+    assert 'requestJson("/reviewer/pending-reviews")' in js
+    assert 'requestJson(`/reviewer/runs/${encodeURIComponent(latestRun.run_id)}`)' in js
+    assert 'function renderPlanHealth(config)' in js
+    assert 'Finance-derived signal only' in js
+    assert 'not a full enterprise strategy compiler' in js
+    assert '"/data/evidence-preview" : "/public/data/evidence-preview"' in js
+    assert 'requestJson(`/public/data/evidence-preview?run_id=${encodeURIComponent(publicRun?.run_id || "")}&finding_id=${encodeURIComponent(preferredFinding)}`)' in js
     assert 'requestJson("/qa"' in js
+    assert "function selectFinding" in js
+    assert "function loadReportPreview" in js
     assert "mode: \"deterministic\"" in js
     assert '<script id="strategyos-bootstrap"' not in html
 
@@ -126,8 +165,8 @@ def test_dashboard_shell_is_served_from_app_route_and_alias():
 
     assert app_response.status_code == 200
     assert alias_response.status_code == 200
-    assert "StrategyOS.live Finance Review" in app_response.text
-    assert "StrategyOS.live Finance Review" in alias_response.text
+    assert "StrategyOS.live Governed Diagnostics Workspace" in app_response.text
+    assert "StrategyOS.live Governed Diagnostics Workspace" in alias_response.text
     assert '<script id="strategyos-bootstrap"' in app_response.text
     assert '<script id="strategyos-bootstrap"' in alias_response.text
 
@@ -136,17 +175,32 @@ def test_dashboard_renders_chat_dashboard_shell():
     html = _dashboard_response()
     js = _static_app_js()
 
-    assert "StrategyOS.live Finance Review" in html
-    assert "Latest review" in html
-    assert "Finance review workspace" in html
+    assert "StrategyOS.live Governed Diagnostics Workspace" in html
+    assert "Governed workbench" in html
+    assert "Latest governed finance case" in html
+    assert "Role-aware governed diagnostics workspace" in html
+    assert "Role entry points" in html
+    assert "Tenant admin / system lane" in html
+    assert "BU / reviewer decision lane" in html
+    assert "Run-control lane" in html
+    assert "Tenant admin / system" in html
+    assert "Truth today: StrategyOS now exposes a bounded BU backend role for read-only governed review access." in html
+    assert "Choose the truthful StrategyOS lane" in html
+    assert "BU leaders now have a bounded backend role for governed queue and report read paths, while reviewer sign-off remains the approval gate." in html
     assert 'id="app-name"' in html
+    assert 'id="workspace-subtitle"' in html
+    assert 'id="workspace-headline"' in html
+    assert 'id="workspace-note"' in html
+    assert 'id="role-lane-pill"' in html
     assert 'id="run-pill"' in html
     assert 'id="ui-identity"' in html
     assert 'id="new-run-button"' in html
     assert 'id="system-drawer-button"' in html
     assert 'id="graph-drawer-button"' in html
-    # Business path must never read "Diagnostics" (fix-list item 5).
-    assert "Diagnostics" not in html
+    assert "Current role priorities" in html
+    assert 'id="role-task-title"' in html
+    assert 'id="role-task-note"' in html
+    assert 'id="role-task-list"' in html
     assert "Evidence map" in html
     assert "Evidence map and sources" in html
     assert 'class="rail-nav"' not in html
@@ -157,8 +211,48 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert 'data-drawer-target="kg-panel"' in html
     assert 'querySelectorAll("[data-scroll-target]")' not in js
     assert 'querySelectorAll("[data-open-drawer]")' in js
-    assert 'src="/static/app.js?v=ux-20260615"' in html
-    assert 'href="/static/styles.css?v=ux-20260615"' in html
+    assert 'workspaceSubtitle: byId("workspace-subtitle")' in js
+    assert 'function renderRoleFrame()' in js
+    assert 'function renderRoleTasks()' in js
+    assert 'function applyLaneHint()' in js
+    assert 'tenant_admin' in js
+    assert 'els.workspaceSubtitle.textContent = "BU / reviewer decision lane"' in js
+    assert 'els.workspaceSubtitle.textContent = "Operator control plane"' in js
+    assert 'els.workspaceSubtitle.textContent = "Tenant admin / system lane"' in js
+    assert 'els.workspaceSubtitle.textContent = "Role-aware governed diagnostics workspace"' in js
+    assert 'src="/static/app.js?v=ux-20260619d"' in html
+    assert 'href="/static/styles.css?v=ux-20260619d"' in html
+
+
+def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": None,
+            "STRATEGYOS_REVIEWER_API_KEYS": None,
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        bu = client.get("/", headers={"X-API-Key": "bu"}, follow_redirects=False)
+        reviewer = client.get("/", headers={"X-API-Key": "reviewer"}, follow_redirects=False)
+        operator = client.get("/", headers={"X-API-Key": "operator"}, follow_redirects=False)
+        tenant_admin = client.get("/", headers={"X-API-Key": "tenant_admin"}, follow_redirects=False)
+        executive = client.get("/", headers={"X-API-Key": "executive"}, follow_redirects=False)
+
+        assert bu.status_code == 307
+        assert bu.headers["location"] == "/app?lane=review#bu"
+        assert reviewer.status_code == 307
+        assert reviewer.headers["location"] == "/app?lane=review#review"
+        assert operator.status_code == 307
+        assert operator.headers["location"] == "/app?lane=operate"
+        assert tenant_admin.status_code == 307
+        assert tenant_admin.headers["location"] == "/app?lane=system"
+        assert executive.status_code == 200
+        assert "StrategyOS.live Executive Cockpit" in executive.text
+    finally:
+        _restore_env(original)
 
 
 def test_dashboard_embeds_parseable_bootstrap_json():
@@ -343,12 +437,28 @@ def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
     js = _static_app_js()
 
     assert 'id="system-drawer"' in html
-    assert "Evidence map" in html
-    assert "Analyst tools" in html
+    assert "System lane" in html
+    assert "Safe admin context" in html
+    assert "Hosted workflow" in html
+    assert "Connector catalog" in html
+    assert "Shared diagnostics" in html
     assert "Managed data" in html
     assert "Relationship map" in html
     assert "Runtime health" in html
     assert "Artifact inspector" in html
+    assert 'id="admin-context-panel"' in html
+    assert 'id="admin-context-summary"' in html
+    assert 'id="admin-context-kv"' in html
+    assert 'id="admin-capabilities-kv"' in html
+    assert 'id="admin-context-payload-preview"' in html
+    assert 'id="system-workflow-panel"' in html
+    assert 'id="system-workflow-summary"' in html
+    assert 'id="system-workflow-list"' in html
+    assert 'id="system-workflow-payload-preview"' in html
+    assert 'id="connectors-panel"' in html
+    assert 'id="connectors-summary"' in html
+    assert 'id="connectors-list"' in html
+    assert 'id="connectors-payload-preview"' in html
     assert 'id="data-summary"' in html
     assert 'id="data-counts-kv"' in html
     assert 'id="data-systems-kv"' in html
@@ -375,8 +485,13 @@ def test_dashboard_renders_system_drawer_data_health_and_artifact_hooks():
     assert 'requestJson("/health/live")' in js
     assert 'requestJson("/health/ready")' in js
     assert 'requestJson("/health/dependencies")' in js
+    assert 'requestJson("/ingestion/connectors")' in js
+    assert 'requestJson("/ui/workspace-contract/latest")' in js
     assert "sanitizeUiPayload({ live, ready, config, dependencies })" in js
     assert "internal identity boundary" in js
+    assert "function renderAdminContext()" in js
+    assert "function renderSystemWorkflow()" in js
+    assert "function renderConnectors()" in js
 
 
 def test_dashboard_renders_vector_search_utility_hooks():
@@ -461,6 +576,7 @@ def test_ui_session_reports_authenticated_role_for_api_key():
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_BU_API_KEYS": "bu-key",
             "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
             "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-key",
         }
@@ -474,7 +590,131 @@ def test_ui_session_reports_authenticated_role_for_api_key():
         payload = response.json()
         assert payload["authenticated"] is True
         assert payload["role"] == "reviewer"
+        assert payload["altitude"] == "review"
+        assert payload["capabilities"]["can_review"] is True
         assert payload["subject"].startswith("api-key:reviewer:")
+    finally:
+        _restore_env(original)
+
+
+def test_ui_session_reports_bu_role_with_read_only_review_capabilities():
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_BU_API_KEYS": "bu-key",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-key",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+
+        response = client.get("/ui/session", headers={"X-API-Key": "bu-key"})
+        contract = client.get("/ui/workspace-contract/latest", headers={"X-API-Key": "bu-key"})
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["authenticated"] is True
+        assert payload["role"] == "bu"
+        assert payload["altitude"] == "review"
+        assert payload["capabilities"]["can_view_cases"] is True
+        assert payload["capabilities"]["can_review"] is False
+        assert contract.status_code == 200
+        workflow_surface = next(item for item in contract.json()["surfaces"] if item["surface_id"] == "workflow")
+        reports_surface = next(item for item in contract.json()["surfaces"] if item["surface_id"] == "reports")
+        assert workflow_surface["primary_route"] == "/bu/pending-reviews"
+        assert reports_surface["primary_route"] == "/bu/runs/{run_id}"
+    finally:
+        _restore_env(original)
+
+
+def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": None,
+            "STRATEGYOS_REVIEWER_API_KEYS": None,
+        }
+    )
+    try:
+        monkeypatch_summary = {
+            "run_id": "run-42",
+            "tenant_context": {
+                "tenant_id": "tenant-alpha",
+                "tenant_name": "Tenant Alpha",
+                "workspace_id": "tenant-alpha",
+            },
+            "artifacts": {
+                "case_file": "/tmp/Final consolidated case file.md",
+                "working_capital": "/tmp/Working Capital Memo.md",
+                "citation_audit": "/tmp/StrategyOS Citation Audit.json",
+            },
+            "report_contracts": {
+                "tenant_id": "tenant-alpha",
+                "run_id": "run-42",
+                "evidence": [
+                    {
+                        "artifact_key": "citation_audit",
+                        "title": "Citation audit",
+                        "category": "evidence",
+                        "format": "json",
+                        "path": "/tmp/StrategyOS Citation Audit.json",
+                        "restricted": True,
+                    }
+                ],
+                "reports": [
+                    {
+                        "artifact_key": "case_file",
+                        "title": "Case file",
+                        "category": "report",
+                        "format": "md",
+                        "path": "/tmp/Final consolidated case file.md",
+                        "restricted": True,
+                    },
+                    {
+                        "artifact_key": "working_capital",
+                        "title": "Working capital memo",
+                        "category": "report",
+                        "format": "md",
+                        "path": "/tmp/Working Capital Memo.md",
+                        "restricted": False,
+                    },
+                ],
+            },
+        }
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: monkeypatch_summary)
+        client = TestClient(api_module.app)
+
+        session = client.get("/ui/session", headers={"X-API-Key": "executive"})
+        contract = client.get(
+            "/ui/workspace-contract/latest", headers={"X-API-Key": "executive"}
+        )
+
+        assert session.status_code == 200
+        assert session.json()["role"] == "executive"
+        assert session.json()["display_name"] == "Executive"
+        assert contract.status_code == 200
+        payload = contract.json()
+        assert payload["principal"]["altitude"] == "executive"
+        cases_surface = next(item for item in payload["surfaces"] if item["surface_id"] == "cases")
+        assert cases_surface["primary_route"] == "/public/runs/latest/findings"
+        assert payload["evidence"]["preview_route"] == "/public/data/evidence-preview"
+        assert all("path" not in item for item in payload["reports"]["artifacts"])
+    finally:
+        _restore_env(original)
+
+
+def test_ui_session_reports_environment_label_from_config():
+    original = _apply_env({"STRATEGYOS_ENVIRONMENT_LABEL": "Hosted QA"})
+    try:
+        client = TestClient(api_module.app)
+
+        response = client.get("/ui/session")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["environment"] == "Hosted QA"
     finally:
         _restore_env(original)
 

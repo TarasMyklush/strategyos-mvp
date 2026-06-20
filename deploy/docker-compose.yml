@@ -39,7 +39,7 @@ services:
       STRATEGYOS_IDP_REVIEWER_PASSWORD: ${STRATEGYOS_IDP_REVIEWER_PASSWORD:?Set STRATEGYOS_IDP_REVIEWER_PASSWORD in deploy/.env.secrets}
       STRATEGYOS_IDP_TOKEN_TTL_SECONDS: ${STRATEGYOS_IDP_TOKEN_TTL_SECONDS:-3600}
       STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY: ${STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY:?Set STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY in deploy/.env.secrets}
-      STRATEGYOS_PUBLIC_HEALTH_ENABLED: ${STRATEGYOS_PUBLIC_HEALTH_ENABLED:-true}
+      STRATEGYOS_PUBLIC_HEALTH_ENABLED: ${STRATEGYOS_PUBLIC_HEALTH_ENABLED:-false}
       STRATEGYOS_REQUIRE_HUMAN_REVIEW: ${STRATEGYOS_REQUIRE_HUMAN_REVIEW:-true}
       STRATEGYOS_RUN_POLICY: ${STRATEGYOS_RUN_POLICY:-sovereign}
       STRATEGYOS_APPROVED_EXTERNAL_MODES: ${STRATEGYOS_APPROVED_EXTERNAL_MODES:-}
@@ -59,6 +59,7 @@ services:
       STRATEGYOS_RUNTIME_DEP_TESSERACT_ENG_VERSION: ${STRATEGYOS_RUNTIME_DEP_TESSERACT_ENG_VERSION:-1:4.1.0-2}
       STRATEGYOS_TENANT_SLUG: ${STRATEGYOS_TENANT_SLUG:-local-poc}
       STRATEGYOS_TENANT_NAME: ${STRATEGYOS_TENANT_NAME:-StrategyOS Local POC}
+      STRATEGYOS_ENVIRONMENT_LABEL: ${STRATEGYOS_ENVIRONMENT_LABEL:-Local development}
       STRATEGYOS_SOURCE_SYSTEM_NAME: ${STRATEGYOS_SOURCE_SYSTEM_NAME:-Synthetic Finance Dataset}
       STRATEGYOS_SOURCE_DATASET: ${STRATEGYOS_SOURCE_DATASET:-/app/workspace/source_dataset}
       STRATEGYOS_AGENT_INPUT_DIR: ${STRATEGYOS_AGENT_INPUT_DIR:-/app/workspace/agent_input}
@@ -91,7 +92,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "TOKEN=$$(curl -fsS -X POST \"$$STRATEGYOS_IDP_TOKEN_URL\" -H \"Content-Type: application/x-www-form-urlencoded\" --data \"grant_type=password&client_id=$$STRATEGYOS_IDP_CLIENT_ID&client_secret=$$STRATEGYOS_IDP_CLIENT_SECRET&username=$$STRATEGYOS_IDP_OPERATOR_USERNAME&password=$$STRATEGYOS_IDP_OPERATOR_PASSWORD\" | python -c \"import json,sys; print(json.load(sys.stdin)['access_token'])\") && curl -fsS http://127.0.0.1:8000/health/dependencies -H \"Authorization: Bearer $$TOKEN\" >/dev/null",
+          "TOKEN=$$(curl -fsS -X POST \"$$STRATEGYOS_IDP_TOKEN_URL\" -H \"Content-Type: application/x-www-form-urlencoded\" --data \"grant_type=password&client_id=$$STRATEGYOS_IDP_CLIENT_ID&client_secret=$$STRATEGYOS_IDP_CLIENT_SECRET&username=$$STRATEGYOS_IDP_OPERATOR_USERNAME&password=$$STRATEGYOS_IDP_OPERATOR_PASSWORD\" | python -c \"import json,sys; print(json.load(sys.stdin)['access_token'])\") && curl -fsS http://127.0.0.1:8000/health/ready -H \"Authorization: Bearer $$TOKEN\" >/dev/null",
         ]
       interval: 15s
       timeout: 5s
@@ -133,6 +134,7 @@ services:
       STRATEGYOS_RUN_EXECUTION_MODE: hatchet
       STRATEGYOS_TENANT_SLUG: ${STRATEGYOS_TENANT_SLUG:-local-poc}
       STRATEGYOS_TENANT_NAME: ${STRATEGYOS_TENANT_NAME:-StrategyOS Local POC}
+      STRATEGYOS_ENVIRONMENT_LABEL: ${STRATEGYOS_ENVIRONMENT_LABEL:-Local development}
       STRATEGYOS_SOURCE_SYSTEM_NAME: ${STRATEGYOS_SOURCE_SYSTEM_NAME:-Synthetic Finance Dataset}
       STRATEGYOS_SOURCE_DATASET: ${STRATEGYOS_SOURCE_DATASET:-/app/workspace/source_dataset}
       STRATEGYOS_AGENT_INPUT_DIR: ${STRATEGYOS_AGENT_INPUT_DIR:-/app/workspace/agent_input}

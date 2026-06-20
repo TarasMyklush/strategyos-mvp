@@ -55,6 +55,7 @@ def test_sync_artifacts_noops_without_object_store():
 
 
 def test_load_config_parses_runtime_auth_and_governance_flags(monkeypatch):
+    monkeypatch.setenv("STRATEGYOS_ENVIRONMENT_LABEL", "Hosted QA")
     monkeypatch.setenv("STRATEGYOS_API_AUTH_ENABLED", "true")
     monkeypatch.setenv("STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED", "true")
     monkeypatch.setenv("STRATEGYOS_REVIEWER_API_KEYS", "reviewer-a, reviewer-b")
@@ -78,6 +79,7 @@ def test_load_config_parses_runtime_auth_and_governance_flags(monkeypatch):
 
     config = load_config()
 
+    assert config.environment_label == "Hosted QA"
     assert config.api_auth_enabled is True
     assert config.demo_role_login_enabled is True
     assert config.reviewer_api_keys == ("reviewer-a", "reviewer-b")
@@ -100,6 +102,31 @@ def test_load_config_parses_runtime_auth_and_governance_flags(monkeypatch):
     assert config.llm_timeout_seconds == 7
     assert config.batch_apis_enabled is True
     assert config.hosted_ocr_vision_enabled is True
+
+
+def test_load_config_parses_proxy_oidc_boundary(monkeypatch):
+    monkeypatch.setenv("STRATEGYOS_AUTH_MODE", "proxy_oidc")
+    monkeypatch.setenv("STRATEGYOS_TRUST_PROXY_AUTH", "true")
+    monkeypatch.setenv("STRATEGYOS_OPERATOR_EMAILS", "operator@example.com")
+    monkeypatch.setenv("STRATEGYOS_REVIEWER_EMAILS", "reviewer@example.com")
+    monkeypatch.setenv("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET", "shared-secret")
+    monkeypatch.setenv("OAUTH2_PROXY_OIDC_ISSUER_URL", "https://accounts.google.com")
+    monkeypatch.setenv("OAUTH2_PROXY_CLIENT_ID", "client-id")
+    monkeypatch.setenv(
+        "OAUTH2_PROXY_REDIRECT_URL",
+        "https://strategyos.example.com/oauth2/callback",
+    )
+
+    config = load_config()
+
+    assert config.auth_mode == "proxy_oidc"
+    assert config.trust_proxy_auth is True
+    assert config.operator_emails == ("operator@example.com",)
+    assert config.reviewer_emails == ("reviewer@example.com",)
+    assert config.trusted_proxy_auth_secret == "shared-secret"
+    assert config.oidc_issuer_url == "https://accounts.google.com"
+    assert config.oidc_client_id == "client-id"
+    assert config.oidc_redirect_url == "https://strategyos.example.com/oauth2/callback"
 
 
 def test_load_config_uses_deepseek_defaults_and_key_fallback(monkeypatch):

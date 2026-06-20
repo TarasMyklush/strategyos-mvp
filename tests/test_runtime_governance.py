@@ -80,6 +80,13 @@ def test_runtime_governance_checkpoint_updates_lifecycle_without_database():
         assert updated["approval_status"] == "pending"
         assert len(updated["checkpoints"]) == 1
         assert updated["checkpoints"][0]["persistence"] == "skipped"
+        assert updated["last_checkpoint"]["state_json"]["quantification"] == {
+            "finding_count": 1,
+            "locked_finding_count": 1,
+            "total_recoverable_sar": 80.0,
+            "finding_ids": ["F-001"],
+        }
+        assert updated["last_checkpoint"]["state_json"]["checkpoint_fingerprint"]
     finally:
         for key, value in original_env.items():
             if value is not None:

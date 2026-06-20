@@ -14,6 +14,8 @@ import strategyos_mvp.source_pack as source_pack_module
 import strategyos_mvp.state_store as state_store
 import strategyos_mvp.storage as storage
 from strategyos_mvp.config import load_config
+from strategyos_mvp.ingestion import load_dataset
+from strategyos_mvp.skills.finance_controls import run_all_finance_skills
 
 
 def _apply_env(env_updates: dict[str, str | None]):
@@ -229,6 +231,53 @@ def test_source_pack_upload_expands_canonical_dataset_zip(tmp_path: Path):
         _restore_env(original)
 
 
+def test_ingestion_connectors_endpoint_surfaces_tenant_scoped_catalog(tmp_path: Path):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_TENANT_SLUG": "tenant-alpha",
+            "STRATEGYOS_TENANT_NAME": "Tenant Alpha",
+            "STRATEGYOS_WORKSPACE_ROOT": str(tmp_path / "workspace"),
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+
+        operator_response = client.get(
+            "/ingestion/connectors",
+            headers=_auth_header("operator-secret"),
+        )
+        reviewer_response = client.get(
+            "/ingestion/connectors",
+            headers=_auth_header("reviewer-secret"),
+        )
+
+        assert operator_response.status_code == 200
+        assert reviewer_response.status_code == 200
+        operator_payload = operator_response.json()
+        reviewer_payload = reviewer_response.json()
+        assert operator_payload["tenant_context"] == {
+            "tenant_id": "tenant-alpha",
+            "tenant_name": "Tenant Alpha",
+            "workspace_id": "tenant-alpha",
+        }
+        operator_catalog = {
+            item["connector_id"]: item for item in operator_payload["connectors"]
+        }
+        reviewer_catalog = {
+            item["connector_id"]: item for item in reviewer_payload["connectors"]
+        }
+        assert operator_catalog["local.workspace_path"]["permitted"] is True
+        assert operator_catalog["local.browser_upload"]["supports_manual_upload"] is True
+        assert "stage_source_pack" in operator_catalog["local.workspace_path"]["capabilities"]
+        assert reviewer_catalog["local.workspace_path"]["permitted"] is False
+    finally:
+        _restore_env(original)
+
+
 def test_source_pack_classification_and_run_creation_execute_end_to_end(tmp_path: Path):
     source_dataset = load_config().source_dataset
     workspace_root = tmp_path / "workspace"
@@ -317,6 +366,52 @@ def test_source_pack_classification_and_run_creation_execute_end_to_end(tmp_path
         _restore_env(original)
 
 
+def test_source_pack_staged_equivalent_dataset_preserves_core_finance_findings(tmp_path: Path):
+    source_dataset = load_config().source_dataset
+    workspace_root = tmp_path / "workspace"
+    output_root = tmp_path / "outputs"
+    staged_root = workspace_root / "packs" / "renamed-pack"
+    staged_root.mkdir(parents=True)
+
+    for index, source in enumerate(sorted(source_dataset.rglob("*")), start=1):
+        if not source.is_file():
+            continue
+        destination = staged_root / f"renamed-{index:03d}{source.suffix.lower()}"
+        shutil.copy2(source, destination)
+
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_WORKSPACE_ROOT": str(workspace_root),
+            "STRATEGYOS_OUTPUT_ROOT": str(output_root),
+            "STRATEGYOS_SOURCE_DATASET": str(source_dataset),
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        staged = client.post(
+            "/source-packs/from-path",
+            headers=_auth_header("operator-secret"),
+            json={"folder_path": str(staged_root)},
+        )
+
+        assert staged.status_code == 200
+        payload = staged.json()
+        assert payload["task_readiness"]["ready_for_run"] is True
+
+        baseline_findings = run_all_finance_skills(load_dataset(source_dataset))
+        staged_findings = run_all_finance_skills(load_dataset(Path(payload["normalized_dataset_root"])))
+
+        assert [finding.pattern_type for finding in staged_findings] == [finding.pattern_type for finding in baseline_findings]
+        assert sum(finding.recoverable_sar for finding in staged_findings) == sum(
+            finding.recoverable_sar for finding in baseline_findings
+        )
+    finally:
+        _restore_env(original)
+
+
 def test_source_pack_candidate_mapping_can_be_confirmed_and_canonicalized(tmp_path: Path):
     workspace_root = tmp_path / "workspace"
     output_root = tmp_path / "outputs"
@@ -378,6 +473,51 @@ def test_source_pack_candidate_mapping_can_be_confirmed_and_canonicalized(tmp_pa
         assert normalized.exists()
         frame = pd.read_excel(normalized)
         assert ["Invoice_ID", "Vendor_ID", "Amount_SAR", "Payment_Date", "PO_Reference"] == list(frame.columns[:5])
+    finally:
+        _restore_env(original)
+
+
+def test_source_pack_document_classifier_marks_ambiguous_text_with_reasons(tmp_path: Path):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_WORKSPACE_ROOT": str(tmp_path / "workspace"),
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/source-packs",
+            headers=_auth_header("operator-secret"),
+            files=[
+                (
+                    "files",
+                    (
+                        "folder/ambiguous.txt",
+                        b"Invoice Number INV-77\n"
+                        b"Bill To Tamween Distribution Co.\n"
+                        b"Amount Due SAR 200\n"
+                        b"Bank Statement\n"
+                        b"Account Balance\n",
+                        "text/plain",
+                    ),
+                )
+            ],
+        )
+
+        assert response.status_code == 200
+        source = response.json()["manifest"][0]
+        assert source["classification"]["status"] == "ambiguous"
+        assert source["classification"]["role"] is None
+        assert "Invoice document" in source["classification"]["basis"]
+        assert "Bank statement" in source["classification"]["basis"]
+        assert source["classification"]["issues"] == [
+            "Document content matched multiple supported role patterns."
+        ]
     finally:
         _restore_env(original)
 
@@ -450,6 +590,45 @@ def test_partial_source_pack_run_true_skips_missing_roles_without_synthetic_fill
         staged_names = {p.name for p in partial_root.rglob("*") if p.is_file()}
         assert "GL_Extract_H1_2026.csv" not in staged_names
         assert "PO_Log_H1_2026.csv" not in staged_names
+    finally:
+        _restore_env(original)
+
+
+def test_source_pack_task_readiness_reports_ap_only_gaps_per_business_task(tmp_path: Path):
+    source_dataset = load_config().source_dataset
+    workspace_root = tmp_path / "workspace"
+    output_root = tmp_path / "outputs"
+    staged_root = workspace_root / "packs" / "ap-only"
+    staged_root.mkdir(parents=True)
+    shutil.copy2(
+        source_dataset / "02_ERP_Extracts" / "AP_Invoices_H1_2026.xlsx",
+        staged_root / "renamed-ap.xlsx",
+    )
+
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_WORKSPACE_ROOT": str(workspace_root),
+            "STRATEGYOS_OUTPUT_ROOT": str(output_root),
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        staged = client.post(
+            "/source-packs/from-path",
+            headers=_auth_header("operator-secret"),
+            json={"folder_path": str(staged_root)},
+        )
+
+        assert staged.status_code == 200
+        tasks = {item["task_key"]: item for item in staged.json()["task_readiness"]["tasks"]}
+        assert tasks["cash_leakage_discovery"]["status"] == "partial"
+        assert tasks["working_capital_drift_check"]["status"] == "blocked"
+        assert "classified AR coverage" in tasks["working_capital_drift_check"]["missing"]
+        assert tasks["drill_down_qa"]["status"] == "blocked"
+        assert "current run-model normalization coverage" in tasks["drill_down_qa"]["missing"]
     finally:
         _restore_env(original)
 

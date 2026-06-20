@@ -104,6 +104,7 @@ class RunPolicyConfig:
 class StrategyOSConfig:
     tenant_slug: str
     tenant_name: str
+    environment_label: str
     source_system_name: str
     workspace_root: Path
     poc_root: Path
@@ -119,6 +120,7 @@ class StrategyOSConfig:
     neo4j_user: str | None
     neo4j_password: str | None
     qdrant_url: str | None
+    auth_mode: str
     api_auth_enabled: bool
     demo_role_login_enabled: bool
     idp_enabled: bool
@@ -132,8 +134,17 @@ class StrategyOSConfig:
     idp_reviewer_username: str | None
     idp_reviewer_password: str | None
     idp_token_ttl_seconds: int
+    bu_api_keys: tuple[str, ...]
     reviewer_api_keys: tuple[str, ...]
     operator_api_keys: tuple[str, ...]
+    trust_proxy_auth: bool
+    trusted_proxy_auth_secret: str | None
+    bu_emails: tuple[str, ...]
+    reviewer_emails: tuple[str, ...]
+    operator_emails: tuple[str, ...]
+    oidc_issuer_url: str | None
+    oidc_client_id: str | None
+    oidc_redirect_url: str | None
     sensitive_identifier_active_key_id: str
     sensitive_identifier_hmac_keys: dict[str, str]
     public_health_enabled: bool
@@ -224,6 +235,17 @@ def _run_policy_mode() -> str:
     return "sovereign"
 
 
+def _auth_mode() -> str:
+    explicit = (env("STRATEGYOS_AUTH_MODE") or "").strip().lower()
+    if explicit in {"api_key", "identity_provider", "proxy_oidc", "disabled"}:
+        return explicit
+    if env_bool("STRATEGYOS_IDP_ENABLED", False):
+        return "identity_provider"
+    if env_bool("STRATEGYOS_API_AUTH_ENABLED", False):
+        return "api_key"
+    return "disabled"
+
+
 def _approved_external_modes() -> tuple[str, ...]:
     normalized: list[str] = []
     for item in env_csv("STRATEGYOS_APPROVED_EXTERNAL_MODES"):
@@ -283,6 +305,8 @@ def load_config() -> StrategyOSConfig:
         tenant_slug=env("STRATEGYOS_TENANT_SLUG", "local-poc") or "local-poc",
         tenant_name=env("STRATEGYOS_TENANT_NAME", "StrategyOS Local POC")
         or "StrategyOS Local POC",
+        environment_label=env("STRATEGYOS_ENVIRONMENT_LABEL", "Local development")
+        or "Local development",
         source_system_name=env(
             "STRATEGYOS_SOURCE_SYSTEM_NAME", "Synthetic Finance Dataset"
         )
@@ -319,6 +343,7 @@ def load_config() -> StrategyOSConfig:
         neo4j_user=env("NEO4J_USER") or env("STRATEGYOS_NEO4J_USER"),
         neo4j_password=env("NEO4J_PASSWORD") or env("STRATEGYOS_NEO4J_PASSWORD"),
         qdrant_url=env("QDRANT_URL") or env("STRATEGYOS_QDRANT_URL"),
+        auth_mode=_auth_mode(),
         api_auth_enabled=env_bool("STRATEGYOS_API_AUTH_ENABLED", False),
         demo_role_login_enabled=env_bool("STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED", False),
         idp_enabled=env_bool("STRATEGYOS_IDP_ENABLED", False),
@@ -332,11 +357,20 @@ def load_config() -> StrategyOSConfig:
         idp_reviewer_username=env("STRATEGYOS_IDP_REVIEWER_USERNAME"),
         idp_reviewer_password=env("STRATEGYOS_IDP_REVIEWER_PASSWORD"),
         idp_token_ttl_seconds=env_int("STRATEGYOS_IDP_TOKEN_TTL_SECONDS", 3600),
+        bu_api_keys=env_csv("STRATEGYOS_BU_API_KEYS"),
         reviewer_api_keys=env_csv("STRATEGYOS_REVIEWER_API_KEYS"),
         operator_api_keys=env_csv("STRATEGYOS_OPERATOR_API_KEYS"),
+        trust_proxy_auth=env_bool("STRATEGYOS_TRUST_PROXY_AUTH", False),
+        trusted_proxy_auth_secret=env("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET"),
+        bu_emails=env_csv("STRATEGYOS_BU_EMAILS"),
+        reviewer_emails=env_csv("STRATEGYOS_REVIEWER_EMAILS"),
+        operator_emails=env_csv("STRATEGYOS_OPERATOR_EMAILS"),
+        oidc_issuer_url=env("OAUTH2_PROXY_OIDC_ISSUER_URL"),
+        oidc_client_id=env("OAUTH2_PROXY_CLIENT_ID"),
+        oidc_redirect_url=env("OAUTH2_PROXY_REDIRECT_URL"),
         sensitive_identifier_active_key_id=sensitive_identifier_active_key_id,
         sensitive_identifier_hmac_keys=sensitive_identifier_hmac_keys,
-        public_health_enabled=env_bool("STRATEGYOS_PUBLIC_HEALTH_ENABLED", True),
+        public_health_enabled=env_bool("STRATEGYOS_PUBLIC_HEALTH_ENABLED", False),
         require_human_review=env_bool("STRATEGYOS_REQUIRE_HUMAN_REVIEW", True),
         ocr_engine=(env("STRATEGYOS_OCR_ENGINE", "tesseract") or "tesseract").lower(),
         runtime_dep_ca_certificates_version=(

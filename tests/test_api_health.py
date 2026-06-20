@@ -78,6 +78,39 @@ def test_live_health_requires_operator_when_public_disabled():
         _restore_env(original)
 
 
+def test_live_health_accepts_proxy_oidc_operator_identity() -> None:
+    original = _apply_env(
+        {
+            "STRATEGYOS_PUBLIC_HEALTH_ENABLED": "false",
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_AUTH_MODE": "proxy_oidc",
+            "STRATEGYOS_TRUST_PROXY_AUTH": "true",
+            "STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET": "proxy-secret",
+            "STRATEGYOS_OPERATOR_EMAILS": "operator@example.com",
+            "STRATEGYOS_REVIEWER_EMAILS": "reviewer@example.com",
+            "OAUTH2_PROXY_OIDC_ISSUER_URL": "https://accounts.google.com",
+            "OAUTH2_PROXY_CLIENT_ID": "client-id",
+            "OAUTH2_PROXY_REDIRECT_URL": "https://strategyos.example.com/oauth2/callback",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        unauthorized = client.get("/health/live")
+        assert unauthorized.status_code == 401
+
+        authorized = client.get(
+            "/health/live",
+            headers={
+                "X-Auth-Request-Email": "operator@example.com",
+                "X-Auth-Request-User": "operator@example.com",
+                "X-StrategyOS-Proxy-Auth": "proxy-secret",
+            },
+        )
+        assert authorized.status_code == 200
+    finally:
+        _restore_env(original)
+
+
 def test_ready_health_requires_auth_and_surfaces_failed_dependencies(monkeypatch):
     original = _apply_env(
         {
@@ -225,3 +258,28 @@ def test_check_qdrant_uses_http_probe(monkeypatch):
 
     assert payload["status"] == "ok"
     assert payload["url"] == "http://qdrant:6333"
+
+
+def test_check_auth_boundary_reports_proxy_oidc_config():
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_AUTH_MODE": "proxy_oidc",
+            "STRATEGYOS_TRUST_PROXY_AUTH": "true",
+            "STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET": "proxy-secret",
+            "STRATEGYOS_OPERATOR_EMAILS": "operator@example.com",
+            "STRATEGYOS_REVIEWER_EMAILS": "reviewer@example.com",
+            "OAUTH2_PROXY_OIDC_ISSUER_URL": "https://accounts.google.com",
+            "OAUTH2_PROXY_CLIENT_ID": "client-id",
+            "OAUTH2_PROXY_REDIRECT_URL": "https://strategyos.example.com/oauth2/callback",
+        }
+    )
+    try:
+        payload = api_module._check_auth_boundary()
+
+        assert payload["status"] == "ok"
+        assert payload["mode"] == "proxy_oidc"
+        assert payload["operator_identities"] == 1
+        assert payload["reviewer_identities"] == 1
+    finally:
+        _restore_env(original)
