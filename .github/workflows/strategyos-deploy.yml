@@ -215,6 +215,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import os
+          from urllib.parse import urlparse
 
           env_path = Path("deploy/.env.ci")
           values = {}
@@ -269,8 +270,21 @@ jobs:
               "HATCHET_POSTGRES_DB": os.environ["HATCHET_POSTGRES_DB"],
               "HATCHET_POSTGRES_USER": os.environ["HATCHET_POSTGRES_USER"],
               "HATCHET_DASHBOARD_PORT": os.environ["HATCHET_DASHBOARD_PORT"],
-              "HATCHET_GRPC_PORT": os.environ["HATCHET_GRPC_PORT"],
-          }
+               "HATCHET_GRPC_PORT": os.environ["HATCHET_GRPC_PORT"],
+           }
+
+          public_url = os.environ.get("STRATEGYOS_PUBLIC_URL", "").strip()
+          site_address = str(overrides.get("STRATEGYOS_SITE_ADDRESS") or "").strip()
+          parsed_public_url = urlparse(public_url)
+          public_url_host = parsed_public_url.hostname or ""
+          public_url_port = parsed_public_url.port
+          if site_address in {"", ":80"} and parsed_public_url.scheme == "https" and public_url_host:
+              overrides["STRATEGYOS_SITE_ADDRESS"] = (
+                  f"{public_url_host}:{public_url_port}"
+                  if public_url_port and public_url_port != 443
+                  else public_url_host
+              )
+
           for key, value in overrides.items():
               if "\n" in value:
                   raise SystemExit(f"{key} contains a newline")

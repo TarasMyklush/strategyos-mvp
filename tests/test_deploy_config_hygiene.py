@@ -347,6 +347,16 @@ def test_public_edge_validation_script_checks_header_contract() -> None:
     assert 'Server header should be stripped at the public edge' in script
 
 
+def test_deploy_workflow_derives_https_site_address_from_public_url() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'from urllib.parse import urlparse' in workflow
+    assert 'site_address in {"", ":80"}' in workflow
+    assert 'parsed_public_url.scheme == "https"' in workflow
+    assert 'overrides["STRATEGYOS_SITE_ADDRESS"]' in workflow
+
+
 def test_validate_deploy_boundary_rejects_insecure_production_flags(
     tmp_path: Path,
 ) -> None:
