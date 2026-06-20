@@ -183,6 +183,46 @@ def test_demo_role_login_accepts_literal_multi_role_tokens(monkeypatch):
         _restore_env(original)
 
 
+def test_tenant_admin_can_reach_connector_and_runtime_surfaces(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": None,
+            "STRATEGYOS_REVIEWER_API_KEYS": None,
+        }
+    )
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "data_management_status",
+            lambda: {"status": "ok", "run_id": "run-1"},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "graph_status_for_run",
+            lambda run_id: {"status": "ready", "run_id": run_id},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "vector_status_for_run",
+            lambda run_id: {"status": "ready", "run_id": run_id},
+        )
+        monkeypatch.setattr(api_module, "readiness_payload", lambda: {"status": "ok"})
+
+        client = TestClient(api_module.app)
+
+        connectors = client.get("/ingestion/connectors", headers=_auth_header("tenant_admin"))
+        runtime = client.get("/data/status", headers=_auth_header("tenant_admin"))
+        ready = client.get("/health/ready", headers=_auth_header("tenant_admin"))
+
+        assert connectors.status_code == 200
+        assert runtime.status_code == 200
+        assert ready.status_code == 200
+    finally:
+        _restore_env(original)
+
+
 def test_proxy_oidc_headers_map_email_allowlists(monkeypatch):
     original = _apply_env(
         {

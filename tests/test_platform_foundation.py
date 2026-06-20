@@ -13,9 +13,11 @@ import strategyos_mvp.storage as storage
 from strategyos_mvp.config import load_config
 from strategyos_mvp.platform_foundation import (
     build_case_summary_contracts,
+    build_domain_filter_contracts,
     build_ingestion_connector_catalog,
     build_run_report_contracts,
     build_surface_contract,
+    build_switcher_contracts,
     principal_has_any_role,
 )
 
@@ -172,3 +174,37 @@ def test_surface_contract_builder_captures_route_and_audience():
     assert contract.surface_id == "overview"
     assert contract.public_route == "/public/runs/latest"
     assert contract.audience == ("executive", "reviewer")
+
+
+def test_switcher_and_domain_filter_contracts_capture_routes_and_counts():
+    switcher = build_switcher_contracts(
+        options={"group": "Group CEO demo", "tenant-alpha": "Tenant Alpha"},
+        active_id="tenant-alpha",
+        route_builder=lambda option_id: f"/executive?company={option_id}",
+    )
+    filters = build_domain_filter_contracts(
+        [
+            {
+                "finding_id": "F-1",
+                "recoverable_sar": 1200,
+                "citation_count": 2,
+                "challenged": True,
+                "classification": "CASH (recoverable now)",
+            },
+            {
+                "finding_id": "F-2",
+                "recoverable_sar": 400,
+                "citation_count": 0,
+                "challenged": False,
+                "classification": "CASH (recoverable going-forward)",
+            },
+        ],
+        active_filter_id="evidence_qa",
+    )
+
+    assert switcher[1].active is True
+    assert switcher[1].route == "/executive?company=tenant-alpha"
+    evidence_qa = next(item for item in filters if item.filter_id == "evidence_qa")
+    assert evidence_qa.case_count == 1
+    assert evidence_qa.active is True
+    assert evidence_qa.route.endswith("domain=evidence_qa")

@@ -104,6 +104,12 @@ class RunPolicyConfig:
 class StrategyOSConfig:
     tenant_slug: str
     tenant_name: str
+    company_slug: str
+    company_name: str
+    portfolio_slug: str
+    portfolio_name: str
+    company_options: dict[str, str]
+    portfolio_options: dict[str, str]
     environment_label: str
     source_system_name: str
     workspace_root: Path
@@ -305,6 +311,35 @@ def load_config() -> StrategyOSConfig:
         tenant_slug=env("STRATEGYOS_TENANT_SLUG", "local-poc") or "local-poc",
         tenant_name=env("STRATEGYOS_TENANT_NAME", "StrategyOS Local POC")
         or "StrategyOS Local POC",
+        company_slug=env("STRATEGYOS_COMPANY_SLUG", env("STRATEGYOS_TENANT_SLUG", "local-poc"))
+        or "local-poc",
+        company_name=env("STRATEGYOS_COMPANY_NAME", env("STRATEGYOS_TENANT_NAME", "StrategyOS Local POC"))
+        or "StrategyOS Local POC",
+        portfolio_slug=env("STRATEGYOS_PORTFOLIO_SLUG", "finance-diagnostics")
+        or "finance-diagnostics",
+        portfolio_name=env("STRATEGYOS_PORTFOLIO_NAME", "Finance diagnostics")
+        or "Finance diagnostics",
+        company_options=env_key_value_map(
+            "STRATEGYOS_COMPANY_OPTIONS",
+            {
+                env("STRATEGYOS_COMPANY_SLUG", env("STRATEGYOS_TENANT_SLUG", "local-poc"))
+                or "local-poc": env(
+                    "STRATEGYOS_COMPANY_NAME",
+                    env("STRATEGYOS_TENANT_NAME", "StrategyOS Local POC"),
+                )
+                or "StrategyOS Local POC",
+            },
+        ),
+        portfolio_options=env_key_value_map(
+            "STRATEGYOS_PORTFOLIO_OPTIONS",
+            {
+                env("STRATEGYOS_PORTFOLIO_SLUG", "finance-diagnostics")
+                or "finance-diagnostics": env(
+                    "STRATEGYOS_PORTFOLIO_NAME", "Finance diagnostics"
+                )
+                or "Finance diagnostics",
+            },
+        ),
         environment_label=env("STRATEGYOS_ENVIRONMENT_LABEL", "Local development")
         or "Local development",
         source_system_name=env(

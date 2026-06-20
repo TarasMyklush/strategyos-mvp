@@ -34,9 +34,11 @@ from .platform_foundation import (
     ARTIFACT_TITLES,
     artifact_contracts_payload,
     build_case_summary_contracts,
+    build_domain_filter_contracts,
     build_ingestion_connector_catalog,
     build_run_report_contracts,
     build_surface_contract,
+    build_switcher_contracts,
     build_tenant_context,
     principal_has_any_role,
 )
@@ -180,7 +182,15 @@ PATTERN_LABELS: dict[str, str] = {
     "vendor_collusion_ring": "Vendor collusion ring",
 }
 PRODUCT_READ_ROLES = ("operator", "reviewer", "bu", "analyst", "executive")
-SYSTEM_READ_ROLES = ("operator", "reviewer", "analyst", "executive")
+SYSTEM_READ_ROLES = (
+    "operator",
+    "reviewer",
+    "analyst",
+    "executive",
+    "tenant_operator",
+    "tenant_admin",
+    "system",
+)
 REVIEW_READ_ROLES = ("operator", "reviewer", "bu")
 INVESTIGATION_ROLES = ("operator", "reviewer", "analyst")
 REVIEW_WORKFLOW_ROLES = ("operator", "reviewer")
@@ -356,6 +366,18 @@ def _finding_case_contract_payloads(
         payload["report_preview_href"] = _finding_report_preview_href(
             public_safe=public_safe
         )
+        payload["contracts"] = {
+            "case": {"href": payload["case_href"]},
+            "evidence": {
+                "preview_href": payload["evidence_preview_href"],
+                "evidence_qa_href": (
+                    f"/runs/latest/findings?domain=evidence_qa#case={quote(case_id, safe='')}"
+                    if case_id
+                    else None
+                ),
+            },
+            "report": {"preview_href": payload["report_preview_href"]},
+        }
         payloads.append(payload)
     return payloads
 
@@ -907,16 +929,16 @@ def _role_altitude(role: str) -> str:
     normalized = role.strip().lower()
     if normalized in {"anonymous", "public"}:
         return "public"
+    if principal_has_any_role(normalized, "system", "tenant_admin"):
+        return "system"
+    if principal_has_any_role(normalized, "tenant_operator", "operator"):
+        return "operations"
+    if principal_has_any_role(normalized, "bu", "reviewer"):
+        return "review"
+    if principal_has_any_role(normalized, "analyst", "auditor"):
+        return "analysis"
     if principal_has_any_role(normalized, "executive"):
         return "executive"
-    if principal_has_any_role(normalized, "bu"):
-        return "review"
-    if principal_has_any_role(normalized, "reviewer"):
-        return "review"
-    if principal_has_any_role(normalized, "analyst"):
-        return "analysis"
-    if principal_has_any_role(normalized, "operator"):
-        return "operations"
     return "workspace"
 
 
@@ -927,8 +949,189 @@ def _principal_capabilities(role: str) -> dict[str, bool]:
         "can_view_cases": principal_has_any_role(normalized, *PRODUCT_READ_ROLES),
         "can_investigate_evidence": principal_has_any_role(normalized, *INVESTIGATION_ROLES),
         "can_review": principal_has_any_role(normalized, *REVIEW_WORKFLOW_ROLES),
-        "can_launch_runs": principal_has_any_role(normalized, "operator"),
-        "can_manage_ingestion": principal_has_any_role(normalized, "operator"),
+        "can_launch_runs": principal_has_any_role(
+            normalized, "operator", "tenant_operator", "system"
+        ),
+        "can_manage_ingestion": principal_has_any_role(
+            normalized, "operator", "tenant_operator", "tenant_admin", "system"
+        ),
+        "can_view_runtime": principal_has_any_role(normalized, *SYSTEM_READ_ROLES),
+        "can_switch_company": principal_has_any_role(
+            normalized, *PRODUCT_READ_ROLES, "tenant_admin", "system"
+        ),
+        "can_switch_portfolio": principal_has_any_role(
+            normalized, *PRODUCT_READ_ROLES, "tenant_admin", "system"
+        ),
+        "can_view_evidence_qa": principal_has_any_role(
+            normalized, "bu", "reviewer", "operator", "tenant_admin", "system"
+        ),
+    }
+
+
+def _switcher_base_route(principal: dict[str, Any]) -> str:
+    role = str(principal.get("role") or "anonymous")
+    if _principal_prefers_public_safe_surface(principal) and principal_has_any_role(
+        role, "executive"
+    ):
+        return "/executive"
+    return _default_surface_route(principal)
+
+
+def _company_switcher_payload(principal: dict[str, Any]) -> dict[str, Any]:
+    route_base = _switcher_base_route(principal)
+    options = build_switcher_contracts(
+        options=CONFIG.company_options,
+        active_id=CONFIG.company_slug,
+        route_builder=lambda option_id: f"{route_base}{'&' if '?' in route_base else '?'}company={quote(option_id, safe='')}",
+    )
+    return {
+        "active_company_id": CONFIG.company_slug,
+        "active_company_name": CONFIG.company_name,
+        "options": [artifact_contracts_payload(item) for item in options],
+    }
+
+
+def _portfolio_switcher_payload(principal: dict[str, Any]) -> dict[str, Any]:
+    route_base = _switcher_base_route(principal)
+    options = build_switcher_contracts(
+        options=CONFIG.portfolio_options,
+        active_id=CONFIG.portfolio_slug,
+        route_builder=lambda option_id: f"{route_base}{'&' if '?' in route_base else '?'}portfolio={quote(option_id, safe='')}",
+    )
+    return {
+        "active_portfolio_id": CONFIG.portfolio_slug,
+        "active_portfolio_name": CONFIG.portfolio_name,
+        "options": [artifact_contracts_payload(item) for item in options],
+    }
+
+
+def _filter_finding_rows(
+    rows: list[dict[str, Any]], domain_filter: str | None
+) -> list[dict[str, Any]]:
+    normalized = str(domain_filter or "finance_integrity").strip().lower()
+    if normalized in {"", "all", "finance", "finance_integrity"}:
+        return rows
+    if normalized == "cash_recovery":
+        return [row for row in rows if float(row.get("recoverable_sar") or 0.0) > 0]
+    if normalized == "evidence_qa":
+        return [
+            row
+            for row in rows
+            if bool(row.get("challenged")) or int(row.get("citation_count") or 0) > 0
+        ]
+    if normalized == "going_forward":
+        return [
+            row
+            for row in rows
+            if "going-forward" in str(row.get("classification") or "").lower()
+            or "going forward" in str(row.get("classification") or "").lower()
+        ]
+    return rows
+
+
+def _kpi_card_payloads(
+    summary: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+    audit_summary: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    challenged_count = sum(1 for row in rows if row.get("challenged"))
+    citation_count = sum(int(row.get("citation_count") or 0) for row in rows)
+    resolved_count = int((audit_summary or {}).get("resolved_count") or 0)
+    return [
+        {
+            "card_id": "recoverable_value",
+            "label": "Recoverable value",
+            "value": float(
+                (summary or {}).get("total_recoverable_sar")
+                or sum(float(row.get("recoverable_sar") or 0.0) for row in rows)
+            ),
+            "unit": "SAR",
+            "trend_hint": "bounded_finance_snapshot",
+        },
+        {
+            "card_id": "governed_cases",
+            "label": "Governed cases",
+            "value": len(rows),
+            "unit": "count",
+            "trend_hint": "case_worklist",
+        },
+        {
+            "card_id": "citation_resolution",
+            "label": "Citation resolution",
+            "value": {"resolved": resolved_count, "total": citation_count},
+            "unit": "count",
+            "trend_hint": "evidence_chain",
+        },
+        {
+            "card_id": "challenged_cases",
+            "label": "Challenged cases",
+            "value": challenged_count,
+            "unit": "count",
+            "trend_hint": "review_attention",
+        },
+    ]
+
+
+def _trend_card_payload(limit: int = 6) -> dict[str, Any]:
+    history = discover_run_history(limit=limit)
+    points = [
+        {
+            "run_id": item.get("run_id"),
+            "label": item.get("created_at") or item.get("run_id"),
+            "recoverable_sar": item.get("total_recoverable_sar") or 0,
+            "locked_findings": item.get("locked_findings") or item.get("findings") or 0,
+            "approval_status": item.get("approval_status"),
+        }
+        for item in history
+    ]
+    return {"count": len(points), "points": points}
+
+
+def _role_lane_contracts(principal: dict[str, Any]) -> dict[str, Any]:
+    role = str(principal.get("role") or "anonymous")
+    return {
+        "bu": {
+            "primary_route": "/app?lane=review#bu",
+            "domain_filters_route": "/runs/latest/findings?domain=finance_integrity",
+            "evidence_qa_route": "/runs/latest/findings?domain=evidence_qa",
+            "pending_reviews_route": "/bu/pending-reviews",
+            "case_route_template": "/bu/runs/{run_id}",
+            "active": principal_has_any_role(role, "bu"),
+        },
+        "reviewer": {
+            "primary_route": "/app?lane=review#review",
+            "pending_reviews_route": "/reviewer/pending-reviews",
+            "evidence_qa_route": "/runs/latest/findings?domain=evidence_qa",
+            "approve_route_template": "/reviewer/runs/{run_id}/approve",
+            "reject_route_template": "/reviewer/runs/{run_id}/reject",
+            "claim_route_template": "/reviewer/runs/{run_id}/claim",
+            "active": principal_has_any_role(role, "reviewer"),
+        },
+        "operator": {
+            "primary_route": "/app?lane=operate",
+            "launch_route": "/runs",
+            "resume_route_template": "/operator/runs/{run_id}/resume",
+            "intake_routes": {
+                "stage_upload": "/source-packs",
+                "stage_path": "/source-packs/from-path",
+                "validate": "/source-packs/validate",
+                "confirm_mapping": "/source-packs/confirm-mapping",
+                "connectors": "/ingestion/connectors",
+            },
+            "active": principal_has_any_role(role, "operator", "tenant_operator"),
+        },
+        "tenant_admin": {
+            "primary_route": "/app?lane=system",
+            "connectors_route": "/ingestion/connectors",
+            "runtime_routes": {
+                "data_status": "/data/status",
+                "health_ready": "/health/ready",
+                "health_config": "/health/config",
+                "health_dependencies": "/health/dependencies",
+                "run_jobs": "/runs/jobs/{job_id}",
+            },
+            "active": principal_has_any_role(role, "tenant_admin", "system"),
+        },
     }
 
 
@@ -987,12 +1190,10 @@ def _workspace_surface_contract_payload(
     role = str(principal.get("role") or "anonymous")
     public_safe = _principal_prefers_public_safe_surface(principal)
     tenant_context = _summary_tenant_context(summary, principal)
-    findings = (
-        build_case_summary_contracts(_finding_rows_from_summary(summary))
-        if isinstance(summary, dict)
-        else []
-    )
+    finding_rows = _finding_rows_from_summary(summary) if isinstance(summary, dict) else []
+    findings = build_case_summary_contracts(finding_rows) if isinstance(summary, dict) else []
     report_contracts = _summary_report_contracts(summary)
+    audit_summary = _latest_run_audit_summary_payload(summary) if isinstance(summary, dict) else None
     can_investigate = principal_has_any_role(role, *INVESTIGATION_ROLES)
     can_review = principal_has_any_role(role, *REVIEW_WORKFLOW_ROLES)
     can_read_review = principal_has_any_role(role, *REVIEW_READ_ROLES)
@@ -1097,10 +1298,20 @@ def _workspace_surface_contract_payload(
         ),
     ]
     findings_payload = _finding_case_contract_payloads(
-        _finding_rows_from_summary(summary) if isinstance(summary, dict) else [],
+        finding_rows,
         run_id=str(summary.get("run_id") or "") if isinstance(summary, dict) else None,
         public_safe=public_safe,
     )
+    domain_filters = [
+        artifact_contracts_payload(item)
+        for item in build_domain_filter_contracts(
+            finding_rows,
+            active_filter_id="finance_integrity",
+            base_route=(
+                "/public/runs/latest/findings" if public_safe else "/runs/latest/findings"
+            ),
+        )
+    ]
     return {
         "status": "ok" if summary else "missing",
         "public_safe": public_safe,
@@ -1115,6 +1326,12 @@ def _workspace_surface_contract_payload(
             "capabilities": _principal_capabilities(role),
         },
         "surfaces": [artifact_contracts_payload(item) for item in surfaces],
+        "company_switcher": _company_switcher_payload(principal),
+        "portfolio_switcher": _portfolio_switcher_payload(principal),
+        "domain_filters": domain_filters,
+        "kpi_cards": _kpi_card_payloads(summary, finding_rows, audit_summary),
+        "trend": _trend_card_payload(),
+        "lanes": _role_lane_contracts(principal),
         "cases": {
             "count": len(findings_payload),
             "items": findings_payload,
@@ -2404,6 +2621,8 @@ def ui_session(
         "altitude": _role_altitude(role),
         "capabilities": _principal_capabilities(role),
         "tenant_context": _summary_tenant_context(None, principal),
+        "company_switcher": _company_switcher_payload(principal),
+        "portfolio_switcher": _portfolio_switcher_payload(principal),
         "auth_disabled": bool(principal.get("auth_disabled", False)),
         "auth_mode": CONFIG.auth_mode,
         "api_auth_enabled": CONFIG.api_auth_enabled,
@@ -3039,6 +3258,7 @@ def _latest_run_findings_payload(
     *,
     include_run_dir: bool,
     public_safe: bool,
+    domain_filter: str | None = None,
 ) -> dict[str, Any]:
     if summary is None:
         return {
@@ -3050,24 +3270,41 @@ def _latest_run_findings_payload(
             "public_safe": public_safe,
         }
     rows = _finding_rows_from_summary(summary)
+    filtered_rows = _filter_finding_rows(rows, domain_filter)
     total_recoverable = summary.get("total_recoverable_sar")
     if total_recoverable is None and rows:
         total_recoverable = round(sum(row["recoverable_sar"] for row in rows), 2)
     findings_payload = _finding_case_contract_payloads(
-        rows,
+        filtered_rows,
         run_id=str(summary.get("run_id") or "") or None,
         public_safe=public_safe,
     )
+    audit_summary = _latest_run_audit_summary_payload(summary)
     payload = {
         "status": "ok",
         "run_id": summary.get("run_id"),
         "findings": findings_payload,
         "finding_count": len(findings_payload),
+        "domain_filter": str(domain_filter or "finance_integrity"),
+        "domain_filters": [
+            artifact_contracts_payload(item)
+            for item in build_domain_filter_contracts(
+                rows,
+                active_filter_id=str(domain_filter or "finance_integrity"),
+                base_route=(
+                    "/public/runs/latest/findings"
+                    if public_safe
+                    else "/runs/latest/findings"
+                ),
+            )
+        ],
         "locked_findings": summary.get("locked_findings"),
         "total_recoverable_sar": total_recoverable,
         "requires_human_review": bool(summary.get("requires_human_review")),
         "approval_status": summary.get("approval_status"),
         "public_safe": public_safe,
+        "kpi_cards": _kpi_card_payloads(summary, rows, audit_summary),
+        "trend": _trend_card_payload(),
     }
     if include_run_dir:
         payload["run_dir"] = summary.get("run_dir")
@@ -3212,6 +3449,7 @@ def _public_report_preview_payload(artifact_key: str | None = None) -> dict[str,
 
 @app.get("/runs/latest/findings")
 def latest_run_findings(
+    domain: str | None = None,
     principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
     """Decision worklist for the latest run: one actionable row per finding
@@ -3221,13 +3459,17 @@ def latest_run_findings(
         _latest_summary(),
         include_run_dir=not principal_has_any_role(str(principal.get("role") or ""), "executive"),
         public_safe=principal_has_any_role(str(principal.get("role") or ""), "executive"),
+        domain_filter=domain,
     )
 
 
 @app.get("/public/runs/latest/findings")
-def public_latest_run_findings() -> dict[str, Any]:
+def public_latest_run_findings(domain: str | None = None) -> dict[str, Any]:
     return _latest_run_findings_payload(
-        _latest_summary(), include_run_dir=False, public_safe=True
+        _latest_summary(),
+        include_run_dir=False,
+        public_safe=True,
+        domain_filter=domain,
     )
 
 

@@ -142,6 +142,26 @@ class SurfaceContract:
     notes: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class SwitchOptionContract:
+    option_id: str
+    label: str
+    route: str
+    active: bool = False
+
+
+@dataclass(frozen=True)
+class DomainFilterContract:
+    filter_id: str
+    label: str
+    case_count: int
+    recoverable_sar: float
+    citation_count: int
+    challenged_count: int
+    route: str
+    active: bool = False
+
+
 INGESTION_CONNECTOR_CATALOG: dict[str, IngestionConnector] = {
     "workspace_path": IngestionConnector(
         connector_id="local.workspace_path",
@@ -388,6 +408,79 @@ def build_surface_contract(
         actions=actions,
         notes=notes,
     )
+
+
+def build_switcher_contracts(
+    *,
+    options: dict[str, str],
+    active_id: str | None,
+    route_builder: Any,
+) -> list[SwitchOptionContract]:
+    contracts: list[SwitchOptionContract] = []
+    for option_id, label in options.items():
+        normalized_id = str(option_id or "").strip()
+        if not normalized_id:
+            continue
+        contracts.append(
+            SwitchOptionContract(
+                option_id=normalized_id,
+                label=str(label or normalized_id.replace("-", " ").title()),
+                route=str(route_builder(normalized_id)),
+                active=normalized_id == str(active_id or ""),
+            )
+        )
+    return contracts
+
+
+def build_domain_filter_contracts(
+    rows: list[dict[str, Any]],
+    *,
+    active_filter_id: str | None = None,
+    base_route: str = "/runs/latest/findings",
+) -> list[DomainFilterContract]:
+    def matches(filter_id: str, row: dict[str, Any]) -> bool:
+        classification = str(row.get("classification") or "").lower()
+        challenged = bool(row.get("challenged"))
+        citation_count = int(row.get("citation_count") or 0)
+        recoverable_sar = float(row.get("recoverable_sar") or 0.0)
+        if filter_id == "finance_integrity":
+            return True
+        if filter_id == "cash_recovery":
+            return recoverable_sar > 0
+        if filter_id == "evidence_qa":
+            return challenged or citation_count > 0
+        if filter_id == "going_forward":
+            return "going-forward" in classification or "going forward" in classification
+        return False
+
+    definitions = (
+        ("finance_integrity", "Finance integrity"),
+        ("cash_recovery", "Cash recovery"),
+        ("evidence_qa", "Evidence QA"),
+        ("going_forward", "Going forward"),
+    )
+    contracts: list[DomainFilterContract] = []
+    for filter_id, label in definitions:
+        subset = [row for row in rows if matches(filter_id, row)]
+        contracts.append(
+            DomainFilterContract(
+                filter_id=filter_id,
+                label=label,
+                case_count=len(subset),
+                recoverable_sar=round(
+                    sum(float(row.get("recoverable_sar") or 0.0) for row in subset), 2
+                ),
+                citation_count=sum(int(row.get("citation_count") or 0) for row in subset),
+                challenged_count=sum(1 for row in subset if row.get("challenged")),
+                route=(
+                    base_route
+                    if filter_id == "finance_integrity"
+                    else f"{base_route}?domain={filter_id}"
+                ),
+                active=filter_id == str(active_filter_id or "finance_integrity"),
+            )
+        )
+    return contracts
 
 
 def _artifact_category(key: str, path: str) -> ArtifactCategory:

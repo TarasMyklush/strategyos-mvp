@@ -140,6 +140,44 @@ def test_findings_endpoint_returns_worklist(monkeypatch):
             payload["findings"][0]["report_preview_href"]
             == "/public/runs/latest/report-preview"
         )
+        assert payload["findings"][0]["contracts"]["evidence"]["evidence_qa_href"].startswith(
+            "/runs/latest/findings?domain=evidence_qa"
+        )
+    finally:
+        _restore_env(original)
+
+
+def test_findings_endpoint_supports_domain_filters_and_kpi_contracts(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+        monkeypatch.setattr(
+            api_module,
+            "discover_run_history",
+            lambda limit=6: [
+                {
+                    "run_id": "run-test",
+                    "total_recoverable_sar": 223676,
+                    "locked_findings": 2,
+                    "approval_status": "approved",
+                }
+            ],
+        )
+
+        client = TestClient(api_module.app)
+        response = client.get("/runs/latest/findings?domain=evidence_qa")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["domain_filter"] == "evidence_qa"
+        assert payload["finding_count"] == 2
+        assert any(item["active"] is True for item in payload["domain_filters"])
+        assert payload["kpi_cards"][0]["card_id"] == "recoverable_value"
+        assert payload["trend"]["count"] == 1
     finally:
         _restore_env(original)
 
