@@ -162,20 +162,33 @@ def test_deploy_workflow_runs_boundary_validation() -> None:
     assert "bash deploy/scripts/validate_deploy_boundary.sh" in workflow
 
 
-def test_deploy_workflow_renders_demo_role_login_flag() -> None:
+def test_deploy_workflow_pins_hosted_governance_flags() -> None:
     workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
         encoding="utf-8"
     )
-    assert (
-        "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: "
-        "${{ vars.STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED || 'false' }}"
-        in workflow
-    )
+    assert "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: 'false'" in workflow
+    assert "STRATEGYOS_REQUIRE_HUMAN_REVIEW: 'true'" in workflow
     assert (
         '"STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": '
         'os.environ["STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED"]'
         in workflow
     )
+    assert (
+        '"STRATEGYOS_REQUIRE_HUMAN_REVIEW": '
+        'os.environ["STRATEGYOS_REQUIRE_HUMAN_REVIEW"]'
+        in workflow
+    )
+
+
+def test_deploy_workflow_derives_hosted_idp_issuer_from_public_url() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "STRATEGYOS_IDP_ISSUER: ${{ vars.STRATEGYOS_IDP_ISSUER || vars.STRATEGYOS_PUBLIC_URL }}"
+        in workflow
+    )
+    assert "http://localhost:8089" not in workflow.split("STRATEGYOS_IDP_ISSUER:", 1)[1].splitlines()[0]
 
 
 def test_deploy_workflow_renders_environment_label() -> None:

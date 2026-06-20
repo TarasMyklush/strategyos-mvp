@@ -154,10 +154,13 @@ jobs:
       STRATEGYOS_TRUST_PROXY_AUTH: ${{ vars.STRATEGYOS_TRUST_PROXY_AUTH || 'false' }}
       STRATEGYOS_OPERATOR_EMAILS: ${{ vars.STRATEGYOS_OPERATOR_EMAILS || '' }}
       STRATEGYOS_REVIEWER_EMAILS: ${{ vars.STRATEGYOS_REVIEWER_EMAILS || '' }}
-      STRATEGYOS_IDP_ISSUER: ${{ vars.STRATEGYOS_IDP_ISSUER || 'http://localhost:8089' }}
-      STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: ${{ vars.STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED || 'false' }}
+      # Hosted deploys must not inherit local/demo auth defaults from repo vars.
+      # Keep the deploy contract pinned to a review-gated, non-demo boundary and
+      # fall back to the hosted public URL for the externally visible IDP issuer.
+      STRATEGYOS_IDP_ISSUER: ${{ vars.STRATEGYOS_IDP_ISSUER || vars.STRATEGYOS_PUBLIC_URL }}
+      STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: 'false'
       STRATEGYOS_PUBLIC_HEALTH_ENABLED: ${{ vars.STRATEGYOS_PUBLIC_HEALTH_ENABLED || 'false' }}
-      STRATEGYOS_REQUIRE_HUMAN_REVIEW: ${{ vars.STRATEGYOS_REQUIRE_HUMAN_REVIEW || 'true' }}
+      STRATEGYOS_REQUIRE_HUMAN_REVIEW: 'true'
       STRATEGYOS_SYNC_ARTIFACTS: ${{ vars.STRATEGYOS_SYNC_ARTIFACTS || 'true' }}
       OAUTH2_PROXY_PROVIDER: ${{ vars.OAUTH2_PROXY_PROVIDER || 'oidc' }}
       OAUTH2_PROXY_OIDC_ISSUER_URL: ${{ vars.OAUTH2_PROXY_OIDC_ISSUER_URL || '' }}
