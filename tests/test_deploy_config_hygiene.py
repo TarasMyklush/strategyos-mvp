@@ -268,6 +268,16 @@ def test_remote_smoke_run_forwards_auth_header() -> None:
     assert 'curl -fsS -X POST "${base_url}/runs" -H "${RUN_AUTH_HEADER}"' in script
 
 
+def test_protected_readiness_script_retries_transient_failures() -> None:
+    script = (REPO_ROOT / "deploy/scripts/check_health.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'READINESS_MAX_ATTEMPTS="${READINESS_MAX_ATTEMPTS:-30}"' in script
+    assert 'READINESS_WAIT_SECONDS="${READINESS_WAIT_SECONDS:-2}"' in script
+    assert 'while [ "${attempt}" -le "${READINESS_MAX_ATTEMPTS}" ]; do' in script
+    assert 'Readiness attempt ${attempt}/${READINESS_MAX_ATTEMPTS} returned HTTP ${http_status}.' in script
+
+
 def test_compose_healthcheck_uses_protected_ready_endpoint() -> None:
     compose = (REPO_ROOT / "deploy/docker-compose.yml").read_text(encoding="utf-8")
     assert "/health/ready" in compose
@@ -275,6 +285,14 @@ def test_compose_healthcheck_uses_protected_ready_endpoint() -> None:
         "strategyos-worker:", 1
     )[0]
     assert "/health/dependencies" not in strategyos_api_block
+
+
+def test_remote_deploy_waits_for_container_health_before_returning() -> None:
+    script = (REPO_ROOT / "deploy/scripts/deploy_stack.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'COMPOSE_WAIT_TIMEOUT_SECONDS="${COMPOSE_WAIT_TIMEOUT_SECONDS:-180}"' in script
+    assert '--wait --wait-timeout' in script
 
 
 def test_caddy_sets_basic_security_headers() -> None:
