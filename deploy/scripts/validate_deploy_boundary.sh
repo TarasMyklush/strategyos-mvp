@@ -68,6 +68,13 @@ def looks_local_label(value: str | None) -> bool:
     return any(marker in normalized for marker in ("local", "broader testing", "broader-testing"))
 
 
+def looks_local_identity(value: str | None) -> bool:
+    normalized = str(value or "").strip().lower().replace("_", " ").replace("-", " ")
+    if not normalized:
+        return True
+    return any(marker in normalized for marker in ("local", "localhost", ".local", "local poc"))
+
+
 def normalized_csv(value: str | None) -> set[str]:
     normalized: set[str] = set()
     for item in str(value or "").split(","):
@@ -159,6 +166,27 @@ if target_public_url and not looks_local(target_public_url):
         not looks_local_label(merged.get("STRATEGYOS_ENVIRONMENT_LABEL")),
         "Hosted deploys must not use a local-looking STRATEGYOS_ENVIRONMENT_LABEL.",
     )
+    require(
+        not looks_local(merged.get("STRATEGYOS_IDP_ISSUER")),
+        "Hosted deploys must not use a localhost/local-container identity issuer.",
+    )
+    require(
+        not looks_local_identity(merged.get("STRATEGYOS_TENANT_SLUG")),
+        "Hosted deploys must not use a local-looking STRATEGYOS_TENANT_SLUG.",
+    )
+    require(
+        not looks_local_identity(merged.get("STRATEGYOS_TENANT_NAME")),
+        "Hosted deploys must not use a local-looking STRATEGYOS_TENANT_NAME.",
+    )
+    if resolved_auth_mode == "identity_provider":
+        require(
+            not looks_local_identity(merged.get("STRATEGYOS_IDP_OPERATOR_USERNAME")),
+            "Hosted identity-provider deploys must not use a local-looking STRATEGYOS_IDP_OPERATOR_USERNAME.",
+        )
+        require(
+            not looks_local_identity(merged.get("STRATEGYOS_IDP_REVIEWER_USERNAME")),
+            "Hosted identity-provider deploys must not use a local-looking STRATEGYOS_IDP_REVIEWER_USERNAME.",
+        )
 
 if target_environment == "production":
     require(target_public_url.startswith("https://"), "Production deploys require STRATEGYOS_PUBLIC_URL to use https://.")
@@ -167,7 +195,6 @@ if target_environment == "production":
     require(resolved_auth_mode != "api_key", "Production deploys must not use api_key auth mode for human access.")
     if resolved_auth_mode == "identity_provider":
         require(bool_is_true(merged.get("STRATEGYOS_IDP_ENABLED")), "Production identity_provider auth requires STRATEGYOS_IDP_ENABLED=true.")
-        require(not looks_local(merged.get("STRATEGYOS_IDP_ISSUER")), "Production deploys must not use a localhost/local-container identity issuer.")
         require(str(merged.get("STRATEGYOS_IDP_ISSUER", "")).strip().startswith("https://"), "Production deploys require the identity issuer to use https://.")
     if resolved_auth_mode == "proxy_oidc":
         require(not looks_local(merged.get("OAUTH2_PROXY_OIDC_ISSUER_URL")), "Production proxy_oidc deploys must not use a localhost/local-container OIDC issuer.")

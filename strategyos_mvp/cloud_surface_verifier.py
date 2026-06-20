@@ -82,6 +82,13 @@ def _is_demo_subject(payload: dict[str, Any]) -> bool:
     return subject.startswith("demo-role:")
 
 
+def _looks_local_identity(value: str | None) -> bool:
+    normalized = str(value or "").strip().lower().replace("_", " ").replace("-", " ")
+    if not normalized:
+        return False
+    return any(marker in normalized for marker in ("local", "localhost", ".local", "local poc"))
+
+
 def evaluate_surface_contract(
     *,
     anonymous_session: dict[str, Any],
@@ -181,6 +188,22 @@ def evaluate_surface_contract(
             failures.append("Operator session is using demo-role authentication.")
         if _is_demo_subject(reviewer_session):
             failures.append("Reviewer session is using demo-role authentication.")
+
+    for role_name, session in (("Operator", operator_session), ("Reviewer", reviewer_session)):
+        subject = str(session.get("subject") or "")
+        if subject and _looks_local_identity(subject):
+            failures.append(f"{role_name} session subject still looks local: {subject!r}.")
+        tenant_context = session.get("tenant_context") or {}
+        if isinstance(tenant_context, dict):
+            tenant_id = str(tenant_context.get("tenant_id") or "")
+            tenant_name = str(tenant_context.get("tenant_name") or "")
+            workspace_id = str(tenant_context.get("workspace_id") or "")
+            if tenant_id and _looks_local_identity(tenant_id):
+                failures.append(f"{role_name} session tenant_id still looks local: {tenant_id!r}.")
+            if tenant_name and _looks_local_identity(tenant_name):
+                failures.append(f"{role_name} session tenant_name still looks local: {tenant_name!r}.")
+            if workspace_id and _looks_local_identity(workspace_id):
+                failures.append(f"{role_name} session workspace_id still looks local: {workspace_id!r}.")
 
     return failures
 

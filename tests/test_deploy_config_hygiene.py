@@ -191,6 +191,20 @@ def test_deploy_workflow_derives_hosted_idp_issuer_from_public_url() -> None:
     assert "http://localhost:8089" not in workflow.split("STRATEGYOS_IDP_ISSUER:", 1)[1].splitlines()[0]
 
 
+def test_deploy_workflow_pins_hosted_tenant_and_identity_labels() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "STRATEGYOS_TENANT_SLUG: ${{ vars.STRATEGYOS_TENANT_SLUG || 'strategyos-live' }}" in workflow
+    assert "STRATEGYOS_TENANT_NAME: ${{ vars.STRATEGYOS_TENANT_NAME || 'StrategyOS Live' }}" in workflow
+    assert "STRATEGYOS_IDP_OPERATOR_USERNAME: ${{ vars.STRATEGYOS_IDP_OPERATOR_USERNAME || 'operator.hosted' }}" in workflow
+    assert "STRATEGYOS_IDP_REVIEWER_USERNAME: ${{ vars.STRATEGYOS_IDP_REVIEWER_USERNAME || 'reviewer.hosted' }}" in workflow
+    assert '"STRATEGYOS_TENANT_SLUG": os.environ["STRATEGYOS_TENANT_SLUG"]' in workflow
+    assert '"STRATEGYOS_TENANT_NAME": os.environ["STRATEGYOS_TENANT_NAME"]' in workflow
+    assert '"STRATEGYOS_IDP_OPERATOR_USERNAME": os.environ["STRATEGYOS_IDP_OPERATOR_USERNAME"]' in workflow
+    assert '"STRATEGYOS_IDP_REVIEWER_USERNAME": os.environ["STRATEGYOS_IDP_REVIEWER_USERNAME"]' in workflow
+
+
 def test_deploy_workflow_renders_environment_label() -> None:
     workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
         encoding="utf-8"
@@ -402,7 +416,11 @@ def test_validate_deploy_boundary_allows_hardened_qa_config(tmp_path: Path) -> N
                 "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED=false",
                 "STRATEGYOS_PUBLIC_HEALTH_ENABLED=false",
                 "STRATEGYOS_IDP_ENABLED=true",
-                "STRATEGYOS_IDP_ISSUER=http://localhost:8089",
+                "STRATEGYOS_IDP_ISSUER=https://strategyos-qa.example.test",
+                "STRATEGYOS_TENANT_SLUG=strategyos-qa",
+                "STRATEGYOS_TENANT_NAME=StrategyOS QA",
+                "STRATEGYOS_IDP_OPERATOR_USERNAME=operator.hosted",
+                "STRATEGYOS_IDP_REVIEWER_USERNAME=reviewer.hosted",
                 "STRATEGYOS_ENVIRONMENT_LABEL=hetzner-qa",
                 "STRATEGYOS_SITE_ADDRESS=:80",
             ]
@@ -790,6 +808,72 @@ def test_validate_deploy_boundary_rejects_localish_environment_label_for_hosted_
 
     assert result.returncode == 1
     assert "STRATEGYOS_ENVIRONMENT_LABEL" in result.stderr
+
+
+def test_validate_deploy_boundary_rejects_local_identity_and_tenant_values_for_hosted_target(
+    tmp_path: Path,
+) -> None:
+    env_path = tmp_path / ".env"
+    secrets_path = tmp_path / ".env.secrets"
+    env_path.write_text(
+        "\n".join(
+            [
+                "STRATEGYOS_API_AUTH_ENABLED=true",
+                "STRATEGYOS_REQUIRE_HUMAN_REVIEW=true",
+                "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED=false",
+                "STRATEGYOS_PUBLIC_HEALTH_ENABLED=false",
+                "STRATEGYOS_AUTH_MODE=identity_provider",
+                "STRATEGYOS_IDP_ENABLED=true",
+                "STRATEGYOS_IDP_ISSUER=http://localhost:8089",
+                "STRATEGYOS_TENANT_SLUG=local-poc",
+                "STRATEGYOS_TENANT_NAME=StrategyOS Local POC",
+                "STRATEGYOS_IDP_OPERATOR_USERNAME=operator.local",
+                "STRATEGYOS_IDP_REVIEWER_USERNAME=reviewer.local",
+                "STRATEGYOS_ENVIRONMENT_LABEL=Hosted QA",
+                "STRATEGYOS_SITE_ADDRESS=strategyos.live",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    secrets_path.write_text(
+        "\n".join(
+            [
+                "POSTGRES_PASSWORD=" + "a" * 48,
+                "NEO4J_PASSWORD=" + "b" * 48,
+                "STRATEGYOS_OBJECT_SECRET_ACCESS_KEY=" + "c" * 48,
+                "MINIO_ROOT_PASSWORD=" + "d" * 48,
+                "STRATEGYOS_IDP_CLIENT_SECRET=" + "e" * 48,
+                "STRATEGYOS_IDP_OPERATOR_PASSWORD=" + "f" * 48,
+                "STRATEGYOS_IDP_REVIEWER_PASSWORD=" + "1" * 48,
+                "STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY=" + "2" * 48,
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", "deploy/scripts/validate_deploy_boundary.sh"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "ENV_FILE": str(env_path),
+            "SECRETS_FILE": str(secrets_path),
+            "TARGET_ENVIRONMENT": "hetzner-qa",
+            "TARGET_PUBLIC_URL": "https://strategyos.live",
+            "TARGET_DEPLOY_USER": "deployer",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "identity issuer" in result.stderr
+    assert "STRATEGYOS_TENANT_SLUG" in result.stderr
+    assert "STRATEGYOS_TENANT_NAME" in result.stderr
+    assert "STRATEGYOS_IDP_OPERATOR_USERNAME" in result.stderr
+    assert "STRATEGYOS_IDP_REVIEWER_USERNAME" in result.stderr
 
 
 def test_source_dataset_sync_omits_macos_metadata_files() -> None:

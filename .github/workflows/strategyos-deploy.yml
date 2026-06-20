@@ -156,8 +156,12 @@ jobs:
       STRATEGYOS_REVIEWER_EMAILS: ${{ vars.STRATEGYOS_REVIEWER_EMAILS || '' }}
       # Hosted deploys must not inherit local/demo auth defaults from repo vars.
       # Keep the deploy contract pinned to a review-gated, non-demo boundary and
-      # fall back to the hosted public URL for the externally visible IDP issuer.
+      # render hosted tenant + identity labels instead of local/dev defaults.
       STRATEGYOS_IDP_ISSUER: ${{ vars.STRATEGYOS_IDP_ISSUER || vars.STRATEGYOS_PUBLIC_URL }}
+      STRATEGYOS_TENANT_SLUG: ${{ vars.STRATEGYOS_TENANT_SLUG || 'strategyos-live' }}
+      STRATEGYOS_TENANT_NAME: ${{ vars.STRATEGYOS_TENANT_NAME || 'StrategyOS Live' }}
+      STRATEGYOS_IDP_OPERATOR_USERNAME: ${{ vars.STRATEGYOS_IDP_OPERATOR_USERNAME || 'operator.hosted' }}
+      STRATEGYOS_IDP_REVIEWER_USERNAME: ${{ vars.STRATEGYOS_IDP_REVIEWER_USERNAME || 'reviewer.hosted' }}
       STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: 'false'
       STRATEGYOS_PUBLIC_HEALTH_ENABLED: ${{ vars.STRATEGYOS_PUBLIC_HEALTH_ENABLED || 'false' }}
       STRATEGYOS_REQUIRE_HUMAN_REVIEW: 'true'
@@ -232,6 +236,10 @@ jobs:
                "STRATEGYOS_OPERATOR_EMAILS": os.environ["STRATEGYOS_OPERATOR_EMAILS"],
                "STRATEGYOS_REVIEWER_EMAILS": os.environ["STRATEGYOS_REVIEWER_EMAILS"],
                "STRATEGYOS_IDP_ISSUER": os.environ["STRATEGYOS_IDP_ISSUER"],
+               "STRATEGYOS_TENANT_SLUG": os.environ["STRATEGYOS_TENANT_SLUG"],
+               "STRATEGYOS_TENANT_NAME": os.environ["STRATEGYOS_TENANT_NAME"],
+               "STRATEGYOS_IDP_OPERATOR_USERNAME": os.environ["STRATEGYOS_IDP_OPERATOR_USERNAME"],
+               "STRATEGYOS_IDP_REVIEWER_USERNAME": os.environ["STRATEGYOS_IDP_REVIEWER_USERNAME"],
                "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": os.environ["STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED"],
                "STRATEGYOS_PUBLIC_HEALTH_ENABLED": os.environ["STRATEGYOS_PUBLIC_HEALTH_ENABLED"],
                "STRATEGYOS_REQUIRE_HUMAN_REVIEW": os.environ["STRATEGYOS_REQUIRE_HUMAN_REVIEW"],
