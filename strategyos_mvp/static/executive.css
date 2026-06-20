@@ -128,6 +128,39 @@ a { color: inherit; text-decoration: none; }
   font-size: 13px;
   line-height: 1.5;
 }
+.scope-ribbon {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) auto minmax(220px, 0.8fr);
+  gap: 14px;
+  align-items: end;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(11, 15, 20, 0.82);
+  padding: 14px;
+}
+.scope-ribbon h2 { margin: 0; font-size: 18px; }
+.scope-ribbon p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.scope-ribbon-controls { display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 10px; }
+.scope-ribbon-controls label { color: var(--muted); font-size: 12px; }
+.scope-ribbon-controls select {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  color: var(--ink);
+  padding: 9px 10px;
+}
+.scope-ribbon-summary {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.035);
+  padding: 12px;
+}
+.scope-ribbon-summary strong,
+.scope-ribbon-summary span { display: block; }
+.scope-ribbon-summary span { margin-top: 6px; color: var(--muted); font-size: 12px; }
 .session-panel {
   display: grid; grid-template-columns: minmax(0, 1fr) 260px auto auto; align-items: end; gap: 10px;
   border: 1px solid var(--line); border-radius: 8px; background: rgba(11, 15, 20, 0.82);
@@ -266,7 +299,7 @@ a { color: inherit; text-decoration: none; }
 .report-button strong, .report-button span { display: block; }
 .report-button span { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 @media (max-width: 1160px) {
-  .command-grid, .module-grid, .bottom-grid, .brief-row, .reports-grid, .reports-layout, .overview-strip, .surface-ladder, .plan-health-grid { grid-template-columns: 1fr; }
+  .command-grid, .module-grid, .bottom-grid, .brief-row, .reports-grid, .reports-layout, .overview-strip, .surface-ladder, .plan-health-grid, .scope-ribbon, .scope-ribbon-controls { grid-template-columns: 1fr; }
   .assistant-panel { min-height: auto; }
 }
 @media (max-width: 760px) {

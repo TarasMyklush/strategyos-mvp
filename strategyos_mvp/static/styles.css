@@ -319,6 +319,151 @@ textarea {
   padding: 14px;
 }
 
+.scope-panel,
+.drilldown-panel {
+  margin-top: 14px;
+  padding: 16px;
+}
+
+.scope-grid,
+.drilldown-grid,
+.lane-matrix,
+.mini-kpi-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.scope-grid {
+  grid-template-columns: 180px 220px minmax(0, 1fr);
+  align-items: end;
+  margin-top: 12px;
+}
+
+.compact-field,
+.compact-field select {
+  font-size: 13px;
+}
+
+.compact-field select {
+  width: 100%;
+  margin-top: 6px;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--ink);
+  padding: 8px 10px;
+}
+
+.scope-summary-card,
+.drilldown-card,
+.mini-kpi {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.scope-summary-card {
+  padding: 12px 14px;
+}
+
+.scope-summary-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 15px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.detail-breadcrumb {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.lane-matrix {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.lane-panel {
+  padding: 16px;
+}
+
+.mini-kpi-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.mini-kpi {
+  padding: 12px;
+}
+
+.mini-kpi span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mini-kpi strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.mini-kpi p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mini-kpi.ok {
+  border-color: rgba(15, 110, 86, 0.28);
+  background: var(--ok-bg);
+}
+
+.mini-kpi.warn {
+  border-color: rgba(133, 79, 11, 0.28);
+  background: var(--warn-bg);
+}
+
+.drilldown-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.drilldown-card {
+  padding: 14px;
+}
+
+.drilldown-card h3 {
+  margin: 8px 0 0;
+  font-size: 16px;
+}
+
+.drilldown-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.drilldown-card .code-block {
+  margin-top: 12px;
+}
+
+.stack-list .item[data-bu-finding-id] {
+  cursor: pointer;
+}
+
 .surface-card.current {
   border-color: var(--accent);
   background: var(--accent-bg);
@@ -1409,6 +1554,13 @@ tr:last-child td {
   }
 
   .surface-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scope-grid,
+  .lane-matrix,
+  .drilldown-grid,
+  .mini-kpi-grid {
     grid-template-columns: 1fr;
   }
 

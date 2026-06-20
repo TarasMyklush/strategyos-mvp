@@ -105,8 +105,8 @@ def test_executive_cockpit_renders_live_command_shell():
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
     assert "StrategyOS.live Executive Cockpit" in html
-    assert 'href="/static/executive.css?v=ux-20260619c"' in html
-    assert 'src="/static/executive.js?v=ux-20260619c"' in html
+    assert 'href="/static/executive.css?v=ux-20260620a"' in html
+    assert 'src="/static/executive.js?v=ux-20260620a"' in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -124,6 +124,9 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'id="exec-plan-kpi-value"' in html
     assert 'id="exec-plan-kpi-cases"' in html
     assert 'id="exec-plan-kpi-evidence"' in html
+    assert 'id="exec-company-switcher"' in html
+    assert 'id="exec-portfolio-switcher"' in html
+    assert 'id="exec-scope-summary"' in html
     assert 'id="exec-evidence-preview"' in html
     assert 'id="exec-report-list"' in html
     assert 'id="exec-report-preview"' in html
@@ -146,6 +149,7 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'requestJson("/reviewer/pending-reviews")' in js
     assert 'requestJson(`/reviewer/runs/${encodeURIComponent(latestRun.run_id)}`)' in js
     assert 'function renderPlanHealth(config)' in js
+    assert 'function renderScopeRibbon()' in js
     assert 'Finance-derived signal only' in js
     assert 'not a full enterprise strategy compiler' in js
     assert '"/data/evidence-preview" : "/public/data/evidence-preview"' in js
@@ -184,6 +188,15 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert "BU / reviewer decision lane" in html
     assert "Run-control lane" in html
     assert "Tenant admin / system" in html
+    assert "Company and portfolio switching" in html
+    assert "Case → finding → evidence → report drill-down" in html
+    assert 'id="company-switcher"' in html
+    assert 'id="portfolio-switcher"' in html
+    assert 'id="bu-domain-filters"' in html
+    assert 'id="reviewer-queue-list"' in html
+    assert 'id="operator-workflow-list"' in html
+    assert 'id="system-surface-list"' in html
+    assert 'id="drilldown-report-list"' in html
     assert "Truth today: StrategyOS now exposes a bounded BU backend role for read-only governed review access." in html
     assert "Choose the truthful StrategyOS lane" in html
     assert "BU leaders now have a bounded backend role for governed queue and report read paths, while reviewer sign-off remains the approval gate." in html
@@ -214,14 +227,17 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert 'workspaceSubtitle: byId("workspace-subtitle")' in js
     assert 'function renderRoleFrame()' in js
     assert 'function renderRoleTasks()' in js
+    assert 'function renderRoleSurfaces()' in js
+    assert 'function renderSharedScope()' in js
+    assert 'function syncSharedDrilldown(findingId)' in js
     assert 'function applyLaneHint()' in js
     assert 'tenant_admin' in js
     assert 'els.workspaceSubtitle.textContent = "BU / reviewer decision lane"' in js
     assert 'els.workspaceSubtitle.textContent = "Operator control plane"' in js
     assert 'els.workspaceSubtitle.textContent = "Tenant admin / system lane"' in js
     assert 'els.workspaceSubtitle.textContent = "Role-aware governed diagnostics workspace"' in js
-    assert 'src="/static/app.js?v=ux-20260619d"' in html
-    assert 'href="/static/styles.css?v=ux-20260619d"' in html
+    assert 'src="/static/app.js?v=ux-20260620a"' in html
+    assert 'href="/static/styles.css?v=ux-20260620a"' in html
 
 
 def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
@@ -619,11 +635,17 @@ def test_ui_session_reports_bu_role_with_read_only_review_capabilities():
         assert payload["altitude"] == "review"
         assert payload["capabilities"]["can_view_cases"] is True
         assert payload["capabilities"]["can_review"] is False
+        assert payload["company_switcher"]["active_company_id"]
+        assert payload["portfolio_switcher"]["active_portfolio_id"]
         assert contract.status_code == 200
-        workflow_surface = next(item for item in contract.json()["surfaces"] if item["surface_id"] == "workflow")
-        reports_surface = next(item for item in contract.json()["surfaces"] if item["surface_id"] == "reports")
+        contract_payload = contract.json()
+        workflow_surface = next(item for item in contract_payload["surfaces"] if item["surface_id"] == "workflow")
+        reports_surface = next(item for item in contract_payload["surfaces"] if item["surface_id"] == "reports")
         assert workflow_surface["primary_route"] == "/bu/pending-reviews"
         assert reports_surface["primary_route"] == "/bu/runs/{run_id}"
+        assert contract_payload["domain_filters"][0]["filter_id"] == "finance_integrity"
+        assert contract_payload["lanes"]["bu"]["evidence_qa_route"].endswith("domain=evidence_qa")
+        assert contract_payload["kpi_cards"][0]["card_id"] == "recoverable_value"
     finally:
         _restore_env(original)
 

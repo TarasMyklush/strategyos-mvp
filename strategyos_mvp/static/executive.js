@@ -51,6 +51,11 @@
     planKpiCasesNote: byId("exec-plan-kpi-cases-note"),
     planKpiEvidence: byId("exec-plan-kpi-evidence"),
     planKpiEvidenceNote: byId("exec-plan-kpi-evidence-note"),
+    scopeNote: byId("exec-scope-note"),
+    companySwitcher: byId("exec-company-switcher"),
+    portfolioSwitcher: byId("exec-portfolio-switcher"),
+    scopeSummary: byId("exec-scope-summary"),
+    scopeBreadcrumb: byId("exec-scope-breadcrumb"),
   };
 
   const state = {
@@ -63,6 +68,7 @@
     pendingReviews: null,
     runDetail: null,
     selectedFindingId: null,
+    selectedPortfolio: "all",
     publicEvidencePreview: null,
     publicReportPreview: null,
     loading: false,
@@ -184,6 +190,38 @@
     return run?.approval_status || run?.approval?.approval_status || "pending";
   }
 
+  function currentTenantContext() {
+    return state.session?.tenant_context || state.runDetail?.summary_json?.tenant_context || {};
+  }
+
+  function renderScopeRibbon() {
+    const tenant = currentTenantContext();
+    const companyLabel = tenant.tenant_name || tenant.tenant_id || "Current company";
+    const portfolios = [
+      { value: "all", label: "All governed portfolios" },
+      { value: "finance", label: "Finance diagnostics" },
+      { value: "evidence", label: "Evidence posture" },
+      { value: "reports", label: "Report posture" },
+    ];
+    if (els.companySwitcher) {
+      els.companySwitcher.innerHTML = `<option value="current">${escapeHtml(companyLabel)}</option>`;
+      els.companySwitcher.value = "current";
+    }
+    if (els.portfolioSwitcher) {
+      els.portfolioSwitcher.innerHTML = portfolios.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("");
+      els.portfolioSwitcher.value = state.selectedPortfolio;
+    }
+    if (els.scopeSummary) {
+      const portfolioLabel = portfolios.find((item) => item.value === state.selectedPortfolio)?.label || "All governed portfolios";
+      els.scopeSummary.textContent = `${companyLabel} · ${portfolioLabel}`;
+    }
+    if (els.scopeBreadcrumb) {
+      els.scopeBreadcrumb.textContent = state.selectedFindingId
+        ? `${state.selectedFindingId} → evidence → reports`
+        : "Overview → cases → evidence → reports";
+    }
+  }
+
   function reportArtifacts() {
     const fromDetail = state.runDetail?.summary_json?.artifacts;
     if (fromDetail && typeof fromDetail === "object") return fromDetail;
@@ -244,6 +282,7 @@
         ? `Connected as ${display}. Executive remains read-only; use /app for approvals or run control.`
         : "Paste an operator or reviewer token to unlock live run data. Executive remains read-only.";
     els.railStatus.textContent = isAuthenticated() ? "SYSTEM ONLINE" : "AUTH REQUIRED";
+    renderScopeRibbon();
   }
 
   function renderLocked() {
@@ -351,6 +390,7 @@
           : `${formatCount(challenged || 0)} challenges`,
         evidenceNote: "Evidence and release posture stay deliberately narrow here: citation chain, challenge state, and board-safe preview only.",
       });
+      renderScopeRibbon();
       return;
     }
     els.runTitle.textContent = "Anonymous executive demo";
@@ -358,6 +398,7 @@
     els.headline.textContent = "See how StrategyOS turns finance evidence into governed executive action.";
     els.lead.textContent = "The anonymous surface shows the real workflow shape — overview, cases, evidence, and reports — while live run data, citations, approvals, and board artifacts stay behind operator or reviewer access.";
     els.primaryObjective.textContent = "4-stage flow";
+    renderScopeRibbon();
     els.primaryCaption.textContent = "Intake → governed findings → evidence packet → board-ready report.";
     els.commandOutput.textContent = "Connect a session before running commands.";
     byId("exec-overview-status").textContent = "Anonymous demo mode";
@@ -689,6 +730,7 @@
     });
     renderCases(run, citations, challenged);
     renderReports();
+    renderScopeRibbon();
   }
 
   function setEvidencePreviewFallback(message, badge) {
@@ -876,6 +918,11 @@
   });
 
   els.refresh.addEventListener("click", refreshLiveData);
+
+  els.portfolioSwitcher?.addEventListener("change", (event) => {
+    state.selectedPortfolio = event.target.value || "all";
+    renderScopeRibbon();
+  });
 
   els.evidenceCommand.addEventListener("click", () => {
     els.commandInput.value = "What is the total recoverable?";

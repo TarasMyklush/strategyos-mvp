@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StrategyOS.live Executive Cockpit</title>
-    <link rel="stylesheet" href="/static/executive.css?v=ux-20260619c" />
+    <link rel="stylesheet" href="/static/executive.css?v=ux-20260620a" />
   </head>
   <body>
     <main class="cockpit">
@@ -85,6 +85,28 @@
             <p>Connector readiness, managed data, graph and search stores, artifact previews, and runtime health stay here so executive and reviewer lanes remain clean.</p>
             <a class="surface-link" href="/app?lane=system">Open system lane</a>
           </article>
+        </section>
+
+        <section class="scope-ribbon" aria-label="Executive scope switching">
+          <div class="scope-ribbon-copy">
+            <p class="eyebrow">Shared scope</p>
+            <h2>Company and portfolio framing</h2>
+            <p id="exec-scope-note">Phase 1 truth boundary: the executive cockpit can switch framing inside the current governed tenant surface, but it does not yet mutate cross-company backend context.</p>
+          </div>
+          <div class="scope-ribbon-controls">
+            <label>
+              Company
+              <select id="exec-company-switcher"></select>
+            </label>
+            <label>
+              Portfolio
+              <select id="exec-portfolio-switcher"></select>
+            </label>
+          </div>
+          <div class="scope-ribbon-summary">
+            <strong id="exec-scope-summary">Waiting for run scope</strong>
+            <span id="exec-scope-breadcrumb">Overview → cases → evidence → reports</span>
+          </div>
         </section>
 
         <p class="surface-truth">Truth today: there is no standalone executive auth role; the BU backend role is now bounded and read-only. The executive surface stays read-only, while reviewer, operator, and tenant-admin/system work continue inside the governed workspace.</p>
@@ -363,6 +385,6 @@
     </main>
 
     <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
-    <script src="/static/executive.js?v=ux-20260619c"></script>
+    <script src="/static/executive.js?v=ux-20260620a"></script>
   </body>
 </html>

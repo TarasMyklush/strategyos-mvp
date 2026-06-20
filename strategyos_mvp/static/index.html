@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StrategyOS.live Governed Diagnostics Workspace</title>
-    <link rel="stylesheet" href="/static/styles.css?v=ux-20260619d" />
+    <link rel="stylesheet" href="/static/styles.css?v=ux-20260620a" />
   </head>
   <body>
     <div class="app-shell">
@@ -45,6 +45,34 @@
             </div>
           </div>
             <div class="muted" id="session-status">Session not connected.</div>
+        </section>
+
+        <section class="panel scope-panel" aria-label="Company and portfolio scope">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Shared scope</p>
+              <h2>Company and portfolio switching</h2>
+              <p class="muted">Phase 1 truth boundary: these controls currently filter and frame the active tenant surface only; they do not mutate cross-company backend state.</p>
+            </div>
+            <span class="pill" id="scope-status-pill">Current tenant only</span>
+          </div>
+          <div class="scope-grid">
+            <label class="compact-field">
+              Company
+              <select id="company-switcher"></select>
+            </label>
+            <label class="compact-field">
+              Portfolio
+              <select id="portfolio-switcher"></select>
+            </label>
+            <article class="scope-summary-card">
+              <span class="eyebrow">Current scope</span>
+              <strong id="scope-summary">Waiting for tenant context</strong>
+              <span class="muted" id="scope-note">The switchers will anchor board, BU, reviewer, operator, and tenant-admin views to the same governed case spine.</span>
+            </article>
+          </div>
+          <div class="chip-row" id="scope-chip-row"></div>
+          <div class="detail-breadcrumb" id="detail-breadcrumb">Case → finding → evidence → report</div>
         </section>
 
         <section class="panel surface-map" aria-label="Role entry points">
@@ -126,6 +154,91 @@
           </div>
           <p id="role-task-note">Sign in, or use an auth-disabled environment, to see the next concrete actions for this lane.</p>
           <div class="stack-list" id="role-task-list"></div>
+        </section>
+
+        <section class="lane-matrix" aria-label="Phase 1 role surfaces">
+          <section class="panel lane-panel" id="bu-surface-panel">
+            <div class="panel-title compact">
+              <div>
+                <p class="eyebrow">BU leader</p>
+                <h2>Domain dashboard</h2>
+              </div>
+              <span class="pill" id="bu-surface-pill">Awaiting cases</span>
+            </div>
+            <p class="muted" id="bu-surface-note">Filter the governed case list by bounded business domain, then drill into evidence before asking for reviewer release.</p>
+            <div class="chip-row" id="bu-domain-filters"></div>
+            <div class="stack-list" id="bu-case-list"></div>
+          </section>
+
+          <section class="panel lane-panel" id="reviewer-surface-panel">
+            <div class="panel-title compact">
+              <div>
+                <p class="eyebrow">Reviewer</p>
+                <h2>Pending review lane</h2>
+              </div>
+              <span class="pill" id="reviewer-surface-pill">Gate closed</span>
+            </div>
+            <p class="muted" id="reviewer-surface-note">Review queue state, evidence QA posture, and approve or hand off resume only when the case spine is safe.</p>
+            <div class="stack-list" id="reviewer-queue-list"></div>
+            <div class="mini-kpi-grid" id="reviewer-evidence-qa"></div>
+          </section>
+
+          <section class="panel lane-panel" id="operator-surface-panel">
+            <div class="panel-title compact">
+              <div>
+                <p class="eyebrow">Operator</p>
+                <h2>Launch and governed workflow</h2>
+              </div>
+              <span class="pill" id="operator-surface-pill">Run prep</span>
+            </div>
+            <p class="muted" id="operator-surface-note">Intake, workflow stage, and resume posture stay visible here so execution remains explicit.</p>
+            <div class="mini-kpi-grid" id="operator-intake-grid"></div>
+            <div class="stack-list" id="operator-workflow-list"></div>
+          </section>
+
+          <section class="panel lane-panel" id="system-surface-panel">
+            <div class="panel-title compact">
+              <div>
+                <p class="eyebrow">Tenant admin / system</p>
+                <h2>Data posture, connectors, runtime</h2>
+              </div>
+              <span class="pill" id="system-surface-pill">Posture pending</span>
+            </div>
+            <p class="muted" id="system-surface-note">Keep stores, connector truth, and readiness aligned with the active tenant before scaling beyond this governed slice.</p>
+            <div class="mini-kpi-grid" id="system-posture-grid"></div>
+            <div class="stack-list" id="system-surface-list"></div>
+          </section>
+        </section>
+
+        <section class="panel drilldown-panel" aria-label="Shared case to report drill-down">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Shared core</p>
+              <h2>Case → finding → evidence → report drill-down</h2>
+            </div>
+            <span class="pill" id="drilldown-status-pill">Awaiting selection</span>
+          </div>
+          <div class="drilldown-grid">
+            <article class="drilldown-card">
+              <span class="eyebrow">Case</span>
+              <h3 id="drilldown-case-title">No governed case selected</h3>
+              <p id="drilldown-case-summary">Choose a case from the worklist, BU dashboard, or executive surface to inspect the full governed spine.</p>
+              <dl class="kv" id="drilldown-case-kv"></dl>
+            </article>
+            <article class="drilldown-card">
+              <span class="eyebrow">Evidence</span>
+              <h3 id="drilldown-evidence-title">Evidence preview</h3>
+              <p id="drilldown-evidence-summary">No evidence preview loaded yet.</p>
+              <pre class="code-block" id="drilldown-evidence-preview">Select a finding to fetch the latest evidence excerpt.</pre>
+            </article>
+            <article class="drilldown-card">
+              <span class="eyebrow">Reports</span>
+              <h3 id="drilldown-report-title">Report posture</h3>
+              <p id="drilldown-report-summary">No report preview loaded yet.</p>
+              <div class="chip-row" id="drilldown-report-list"></div>
+              <pre class="code-block" id="drilldown-report-preview">Select a report artifact to preview it here.</pre>
+            </article>
+          </div>
         </section>
 
         <div class="cockpit-grid">
@@ -530,6 +643,6 @@
 
     <script id="strategyos-bootstrap" type="application/json">__STRATEGYOS_BOOTSTRAP__</script>
     <script src="/static/vendor/cytoscape.min.js"></script>
-    <script src="/static/app.js?v=ux-20260619d"></script>
+    <script src="/static/app.js?v=ux-20260620a"></script>
   </body>
 </html>

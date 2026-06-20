@@ -120,6 +120,13 @@
     vectorEvidence: { status: "idle", payload: null, error: "" },
     findings: null,
     openFindingId: "",
+    selectedFindingId: "",
+    selectedDomain: "all",
+    selectedCompany: "current",
+    selectedPortfolio: "all",
+    selectedReportKey: "",
+    drilldownEvidence: { status: "idle", payload: null, error: "" },
+    drilldownReport: { status: "idle", payload: null, error: "" },
     history: null,
     pollTimer: null,
     lastRunSignature: "",
@@ -145,6 +152,40 @@
     roleTaskNote: byId("role-task-note"),
     roleTaskPill: byId("role-task-pill"),
     roleTaskList: byId("role-task-list"),
+    scopeStatusPill: byId("scope-status-pill"),
+    companySwitcher: byId("company-switcher"),
+    portfolioSwitcher: byId("portfolio-switcher"),
+    scopeSummary: byId("scope-summary"),
+    scopeNote: byId("scope-note"),
+    scopeChipRow: byId("scope-chip-row"),
+    detailBreadcrumb: byId("detail-breadcrumb"),
+    buSurfacePill: byId("bu-surface-pill"),
+    buSurfaceNote: byId("bu-surface-note"),
+    buDomainFilters: byId("bu-domain-filters"),
+    buCaseList: byId("bu-case-list"),
+    reviewerSurfacePill: byId("reviewer-surface-pill"),
+    reviewerSurfaceNote: byId("reviewer-surface-note"),
+    reviewerQueueList: byId("reviewer-queue-list"),
+    reviewerEvidenceQa: byId("reviewer-evidence-qa"),
+    operatorSurfacePill: byId("operator-surface-pill"),
+    operatorSurfaceNote: byId("operator-surface-note"),
+    operatorIntakeGrid: byId("operator-intake-grid"),
+    operatorWorkflowList: byId("operator-workflow-list"),
+    systemSurfacePill: byId("system-surface-pill"),
+    systemSurfaceNote: byId("system-surface-note"),
+    systemPostureGrid: byId("system-posture-grid"),
+    systemSurfaceList: byId("system-surface-list"),
+    drilldownStatusPill: byId("drilldown-status-pill"),
+    drilldownCaseTitle: byId("drilldown-case-title"),
+    drilldownCaseSummary: byId("drilldown-case-summary"),
+    drilldownCaseKv: byId("drilldown-case-kv"),
+    drilldownEvidenceTitle: byId("drilldown-evidence-title"),
+    drilldownEvidenceSummary: byId("drilldown-evidence-summary"),
+    drilldownEvidencePreview: byId("drilldown-evidence-preview"),
+    drilldownReportTitle: byId("drilldown-report-title"),
+    drilldownReportSummary: byId("drilldown-report-summary"),
+    drilldownReportList: byId("drilldown-report-list"),
+    drilldownReportPreview: byId("drilldown-report-preview"),
     runPill: byId("run-pill"),
     identity: byId("ui-identity"),
     environmentBadge: byId("environment-badge"),
@@ -639,6 +680,82 @@
     return formatSubjectLabel(session?.subject, role);
   }
 
+  function currentTenantContext() {
+    return state.session?.tenant_context || state.workspaceContract?.tenant_context || {};
+  }
+
+  function availableCompanyOptions() {
+    const tenant = currentTenantContext();
+    const tenantName = tenant.tenant_name || tenant.tenant_id || "Current company";
+    const tenantId = tenant.tenant_id || "current";
+    return [{ value: "current", label: tenantName, detail: tenantId }];
+  }
+
+  function availablePortfolioOptions() {
+    const run = state.latestRun || {};
+    const findings = Array.isArray(state.findings?.findings) ? state.findings.findings : [];
+    const options = [{ value: "all", label: "All governed portfolios" }];
+    if (findings.length || run.total_recoverable_sar !== undefined) {
+      options.push({ value: "finance", label: "Finance diagnostics" });
+    }
+    if (findings.some((item) => item?.challenged || Number(item?.citation_count || 0) === 0)) {
+      options.push({ value: "evidence", label: "Evidence risk" });
+    }
+    if (Object.keys(state.latestRun?.artifacts || {}).length || Array.isArray(state.workspaceContract?.reports?.artifacts)) {
+      options.push({ value: "reports", label: "Release posture" });
+    }
+    if (state.readyStatus || state.dataStatus) {
+      options.push({ value: "runtime", label: "Runtime posture" });
+    }
+    return options;
+  }
+
+  function domainKeyForFinding(finding) {
+    const pattern = String(finding?.pattern_type || "").toLowerCase();
+    if (finding?.challenged || Number(finding?.citation_count || 0) === 0) return "evidence_risk";
+    if (pattern.includes("vendor") || pattern.includes("contract") || pattern.includes("renewal")) return "vendor_controls";
+    if (pattern.includes("discount") || pattern.includes("credit") || pattern.includes("fx")) return "working_capital";
+    return "cash_recovery";
+  }
+
+  function domainLabel(domain) {
+    return {
+      all: "All domains",
+      cash_recovery: "Cash recovery",
+      vendor_controls: "Vendor controls",
+      working_capital: "Working capital",
+      evidence_risk: "Evidence risk",
+    }[domain] || humanizeToken(domain);
+  }
+
+  function currentScopeFindings() {
+    const findings = Array.isArray(state.findings?.findings) ? state.findings.findings : [];
+    return findings.filter((finding) => {
+      const domain = domainKeyForFinding(finding);
+      if (state.selectedDomain !== "all" && domain !== state.selectedDomain) return false;
+      if (state.selectedPortfolio === "finance" && !["cash_recovery", "working_capital", "vendor_controls"].includes(domain)) return false;
+      if (state.selectedPortfolio === "evidence" && domain !== "evidence_risk") return false;
+      if (state.selectedPortfolio === "reports" && finding?.challenged) return false;
+      return true;
+    });
+  }
+
+  function activeFindingRecord() {
+    const rows = currentScopeFindings();
+    return rows.find((item) => String(item.finding_id) === String(state.selectedFindingId)) || rows[0] || null;
+  }
+
+  function metricCard(label, value, detail, tone) {
+    return `<article class="mini-kpi ${tone ? ` ${escapeHtml(tone)}` : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><p>${escapeHtml(detail)}</p></article>`;
+  }
+
+  function stageLabelList(run) {
+    const pipeline = Array.isArray(run?.runtime?.pipeline) && run.runtime.pipeline.length
+      ? run.runtime.pipeline
+      : DEFAULT_PIPELINE;
+    return (run?.requires_human_review ? pipeline : pipeline.filter((item) => item !== "awaiting_review")).map(humanizeStage);
+  }
+
   function isBuRole() {
     return roleHasAny(currentRole(), "bu") && !roleHasAny(currentRole(), "reviewer", "operator");
   }
@@ -818,6 +935,258 @@
     `).join("");
   }
 
+  function renderSharedScope() {
+    const tenant = currentTenantContext();
+    const companyOptions = availableCompanyOptions();
+    const portfolioOptions = availablePortfolioOptions();
+    if (!companyOptions.find((item) => item.value === state.selectedCompany)) state.selectedCompany = companyOptions[0]?.value || "current";
+    if (!portfolioOptions.find((item) => item.value === state.selectedPortfolio)) state.selectedPortfolio = portfolioOptions[0]?.value || "all";
+
+    if (els.companySwitcher) {
+      els.companySwitcher.innerHTML = companyOptions.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("");
+      els.companySwitcher.value = state.selectedCompany;
+    }
+    if (els.portfolioSwitcher) {
+      els.portfolioSwitcher.innerHTML = portfolioOptions.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("");
+      els.portfolioSwitcher.value = state.selectedPortfolio;
+    }
+
+    const findings = currentScopeFindings();
+    const companyLabel = companyOptions.find((item) => item.value === state.selectedCompany)?.label || tenant.tenant_name || tenant.tenant_id || "Current company";
+    const portfolioLabel = portfolioOptions.find((item) => item.value === state.selectedPortfolio)?.label || "All governed portfolios";
+    if (els.scopeSummary) els.scopeSummary.textContent = `${companyLabel} · ${portfolioLabel}`;
+    if (els.scopeNote) els.scopeNote.textContent = findings.length
+      ? `${formatCount(findings.length)} governed cases are visible inside the active tenant surface.`
+      : "No governed cases are visible for the current switcher state yet.";
+    if (els.scopeStatusPill) els.scopeStatusPill.textContent = tenant.tenant_id ? `Tenant ${tenant.tenant_id}` : "Current tenant only";
+    if (els.scopeChipRow) {
+      const chips = [
+        statusPill(state.session?.authenticated ? "ok" : "neutral", state.session?.authenticated ? formatRoleLabel(currentRole()) : "Anonymous"),
+        statusPill(state.selectedPortfolio === "runtime" ? "warn" : "neutral", portfolioLabel),
+        statusPill(state.selectedDomain === "all" ? "neutral" : "ok", domainLabel(state.selectedDomain)),
+      ];
+      els.scopeChipRow.innerHTML = chips.join("");
+    }
+  }
+
+  function renderBuSurface() {
+    if (!els.buCaseList) return;
+    const findings = Array.isArray(state.findings?.findings) ? state.findings.findings : [];
+    const domains = ["all"].concat(Array.from(new Set(findings.map((item) => domainKeyForFinding(item)))));
+    els.buDomainFilters.innerHTML = domains.map((domain) => `
+      <button class="btn ${state.selectedDomain === domain ? "primary" : "secondary"}" type="button" data-domain-filter="${escapeHtml(domain)}">${escapeHtml(domainLabel(domain))}</button>
+    `).join("");
+    const filtered = currentScopeFindings();
+    els.buSurfacePill.textContent = filtered.length ? `${formatCount(filtered.length)} cases` : "Awaiting cases";
+    els.buSurfaceNote.textContent = filtered.length
+      ? `Showing ${formatCount(filtered.length)} governed cases for ${domainLabel(state.selectedDomain)}.`
+      : "No governed cases match the current domain and portfolio selection.";
+    els.buCaseList.innerHTML = filtered.length
+      ? filtered.map((finding) => `
+        <div class="item" data-bu-finding-id="${escapeHtml(finding.finding_id)}">
+          <strong>${escapeHtml(finding.title || finding.finding_id || "Governed case")}</strong>
+          <span>${escapeHtml(domainLabel(domainKeyForFinding(finding)))} · ${escapeHtml(finding.owner || "reviewer")} · ${escapeHtml(formatSar(finding.recoverable_sar))}</span>
+        </div>
+      `).join("")
+      : '<div class="item"><strong>No BU cases</strong><span class="muted">Change the portfolio or domain filter, or load a governed run.</span></div>';
+  }
+
+  function renderReviewerSurface() {
+    if (!els.reviewerQueueList || !els.reviewerEvidenceQa) return;
+    const items = Array.isArray(state.pendingReviews?.items) ? state.pendingReviews.items : [];
+    const run = state.latestRun || {};
+    const findings = currentScopeFindings();
+    const citations = citationSummary(run);
+    const challenged = challengedSummary(run) || 0;
+    els.reviewerSurfacePill.textContent = items.length ? `${formatCount(items.length)} pending` : run.requires_human_review ? (runApprovalStatus(run) || "pending") : "No gate";
+    els.reviewerSurfaceNote.textContent = items.length
+      ? `Pending reviews stay ahead of report release. Open evidence before approving ${formatCount(items.length)} item${items.length === 1 ? "" : "s"}.`
+      : "No extra pending review rows are loaded beyond the current governed run context.";
+    els.reviewerQueueList.innerHTML = items.length
+      ? items.slice(0, 4).map((item) => `<div class="item"><strong>${escapeHtml(item.run_id || item.title || "Pending review")}</strong><span>${escapeHtml(item.current_stage || item.status || "awaiting_review")} · ${escapeHtml(item.approval_status || "pending")}</span></div>`).join("")
+      : `<div class="item"><strong>Latest governed run</strong><span>${escapeHtml(activeRunId() || "No active run")} · ${escapeHtml(runApprovalStatus(run) || "pending")}</span></div>`;
+    els.reviewerEvidenceQa.innerHTML = [
+      metricCard("Evidence QA", citations.count !== null && citations.count !== undefined ? `${formatCount(citations.resolved)} / ${formatCount(citations.count)}` : "--", "Resolved citations", citations.count && citations.resolved === citations.count ? "ok" : "warn"),
+      metricCard("Challenges", formatCount(challenged), "Auditor challenge events", challenged ? "warn" : "ok"),
+      metricCard("Cases in scope", formatCount(findings.length), "Bounded by current BU/reviewer surface", findings.length ? "neutral" : "warn"),
+    ].join("");
+  }
+
+  function renderOperatorSurface() {
+    if (!els.operatorIntakeGrid || !els.operatorWorkflowList) return;
+    const run = state.latestRun || {};
+    const sourcePack = state.sourcePack;
+    const readiness = sourcePack?.task_readiness || {};
+    const approval = runApprovalStatus(run) || "pending";
+    const stages = stageLabelList(run);
+    els.operatorSurfacePill.textContent = activeRunId() ? humanizeStage(run.current_stage || run.status || "created") : "Run prep";
+    els.operatorSurfaceNote.textContent = activeRunId()
+      ? `Run ${activeRunId()} is in ${humanizeStage(run.current_stage || run.status || "created")}. Resume remains downstream from reviewer approval.`
+      : "No governed run is active yet. Stage sources, validate inputs, then launch intentionally.";
+    els.operatorIntakeGrid.innerHTML = [
+      metricCard("Source pack", sourcePack ? (readiness.ready_for_run ? "Ready" : "Checking") : "Not staged", sourcePack ? (sourcePackBlockingReasons(sourcePack).join(" · ") || "Current pack is staged.") : "Upload a .zip or choose a folder.", sourcePack && readiness.ready_for_run ? "ok" : "warn"),
+      metricCard("Approval", approval || "pending", run.requires_human_review ? "Reviewer gate remains visible." : "Human gate optional in this environment.", approval === "approved" ? "ok" : "warn"),
+      metricCard("Workflow", activeRunId() ? formatCount(stages.length) : "--", activeRunId() ? "Governed stages are tracked from intake to writer." : "Stages appear after the first run starts.", activeRunId() ? "neutral" : "warn"),
+    ].join("");
+    els.operatorWorkflowList.innerHTML = stages.length
+      ? stages.map((label, index) => `<div class="item"><strong>${escapeHtml(`${index + 1}. ${label}`)}</strong><span>${escapeHtml(index === 0 ? "Launch path" : index === stages.length - 1 ? "Release path" : "Governed checkpoint")}</span></div>`).join("")
+      : '<div class="item"><strong>No workflow stages yet</strong><span class="muted">Start a governed run to populate this lane.</span></div>';
+  }
+
+  function renderSystemSurface() {
+    if (!els.systemPostureGrid || !els.systemSurfaceList) return;
+    const connectors = Array.isArray(state.connectorCatalog?.connectors) ? state.connectorCatalog.connectors : [];
+    const permitted = connectors.filter((item) => item?.permitted).length;
+    const ready = state.readyStatus || {};
+    const data = state.dataStatus || {};
+    const graphStatus = state.dataStatus?.neo4j?.status || "unknown";
+    const vectorStatus = state.dataStatus?.qdrant?.status || "unknown";
+    els.systemSurfacePill.textContent = ready.status || data.status || "Posture pending";
+    els.systemSurfaceNote.textContent = currentTenantContext().tenant_id
+      ? `Tenant ${currentTenantContext().tenant_id} remains the bounded system scope for this release.`
+      : "Connect a session to inspect tenant-admin posture.";
+    els.systemPostureGrid.innerHTML = [
+      metricCard("Readiness", ready.status || "unknown", "Runtime dependency posture", ready.status === "ok" ? "ok" : "warn"),
+      metricCard("Connectors", formatCount(connectors.length), `${formatCount(permitted)} permitted for this role`, connectors.length ? "neutral" : "warn"),
+      metricCard("Stores", `${graphStatus} / ${vectorStatus}`, "Graph and vector status", graphStatus === "ready" || vectorStatus === "ready" ? "ok" : "warn"),
+    ].join("");
+    els.systemSurfaceList.innerHTML = [
+      `<div class="item"><strong>Tenant context</strong><span>${escapeHtml(currentTenantContext().tenant_name || currentTenantContext().tenant_id || "Current tenant")} / ${escapeHtml(currentTenantContext().workspace_id || "workspace unknown")}</span></div>`,
+      `<div class="item"><strong>Managed data</strong><span>${escapeHtml(data.reason || `${formatCount(data.counts?.findings ?? 0)} findings · ${formatCount(data.counts?.artifacts ?? 0)} artifacts`)}</span></div>`,
+      `<div class="item"><strong>Connector posture</strong><span>${escapeHtml(connectors.length ? `${formatCount(permitted)} permitted of ${formatCount(connectors.length)}` : "No connector catalog loaded")}</span></div>`,
+    ].join("");
+  }
+
+  async function loadDrilldownEvidence(finding) {
+    if (!finding || !activeRunId()) {
+      state.drilldownEvidence = { status: "idle", payload: null, error: "" };
+      return;
+    }
+    state.drilldownEvidence = { status: "loading", payload: null, error: "" };
+    renderSharedDrilldown();
+    try {
+      const payload = await requestJson(`/data/evidence-preview?run_id=${encodeURIComponent(activeRunId())}&finding_id=${encodeURIComponent(finding.finding_id)}`);
+      state.drilldownEvidence = { status: "ready", payload, error: payload.reason || "" };
+    } catch (error) {
+      state.drilldownEvidence = { status: "failed", payload: error?.payload || null, error: error?.message || "Evidence preview failed." };
+    }
+    renderSharedDrilldown();
+  }
+
+  async function loadDrilldownReport(artifactKey) {
+    const key = artifactKey || state.selectedReportKey;
+    if (!key || !activeRunId()) {
+      state.drilldownReport = { status: "idle", payload: null, error: "" };
+      renderSharedDrilldown();
+      return;
+    }
+    state.selectedReportKey = key;
+    state.drilldownReport = { status: "loading", payload: null, error: "" };
+    renderSharedDrilldown();
+    try {
+      const payload = await requestJson(`${reviewArtifactBaseRoute()}/${encodeURIComponent(activeRunId())}/artifacts/${encodeURIComponent(key)}`);
+      state.drilldownReport = { status: "ready", payload, error: payload.reason || "" };
+    } catch (error) {
+      state.drilldownReport = { status: "failed", payload: error?.payload || null, error: error?.message || "Report preview failed." };
+    }
+    renderSharedDrilldown();
+  }
+
+  function renderSharedDrilldown() {
+    if (!els.drilldownCaseTitle) return;
+    const finding = activeFindingRecord();
+    const artifacts = state.workspaceContract?.reports?.artifacts || [];
+    const reportArtifacts = Array.isArray(artifacts) && artifacts.length
+      ? artifacts
+      : Object.keys(state.latestRun?.artifacts || {}).map((artifact_key) => ({ artifact_key, title: humanizeToken(artifact_key) }));
+    if (els.detailBreadcrumb) {
+      els.detailBreadcrumb.textContent = finding
+        ? `${finding.finding_id || "Case"} → ${finding.pattern_label || humanizePattern(finding.pattern_type)} → evidence → ${state.selectedReportKey || "report"}`
+        : "Case → finding → evidence → report";
+    }
+    if (!finding) {
+      els.drilldownStatusPill.textContent = "Awaiting selection";
+      els.drilldownCaseTitle.textContent = "No governed case selected";
+      els.drilldownCaseSummary.textContent = "Choose a case from the worklist, BU dashboard, or executive surface to inspect the full governed spine.";
+      els.drilldownCaseKv.innerHTML = "";
+      els.drilldownEvidenceTitle.textContent = "Evidence preview";
+      els.drilldownEvidenceSummary.textContent = "No evidence preview loaded yet.";
+      els.drilldownEvidencePreview.textContent = "Select a finding to fetch the latest evidence excerpt.";
+      els.drilldownReportTitle.textContent = "Report posture";
+      els.drilldownReportSummary.textContent = "No report preview loaded yet.";
+      els.drilldownReportList.innerHTML = "";
+      els.drilldownReportPreview.textContent = "Select a report artifact to preview it here.";
+      return;
+    }
+    els.drilldownStatusPill.textContent = findingStatus(finding).label;
+    els.drilldownCaseTitle.textContent = finding.title || finding.finding_id || "Governed case";
+    els.drilldownCaseSummary.textContent = `${domainLabel(domainKeyForFinding(finding))} · ${finding.owner || "reviewer"} · ${formatSar(finding.recoverable_sar)}.`;
+    els.drilldownCaseKv.innerHTML = kvHtml([
+      ["Finding", finding.finding_id || "--"],
+      ["Type", finding.pattern_label || humanizePattern(finding.pattern_type)],
+      ["Confidence", finding.confidence || "--"],
+      ["Citations", formatCount(finding.citation_count || 0)],
+      ["Action", finding.challenged ? "Resolve challenge" : "Review packet"],
+    ]);
+
+    const evidence = state.drilldownEvidence;
+    els.drilldownEvidenceTitle.textContent = evidence.payload?.title || finding.pattern_label || "Evidence preview";
+    if (evidence.status === "loading") {
+      els.drilldownEvidenceSummary.textContent = "Loading evidence excerpt from the governed run.";
+      els.drilldownEvidencePreview.textContent = "Loading evidence preview…";
+    } else if (evidence.status === "ready") {
+      els.drilldownEvidenceSummary.textContent = `${evidence.payload?.source_path || "Stored evidence"} · ${evidence.payload?.locator || "no locator"}`;
+      els.drilldownEvidencePreview.textContent = evidence.payload?.excerpt || compactJson(evidence.payload?.resolved_payload || evidence.payload);
+    } else if (evidence.status === "failed") {
+      els.drilldownEvidenceSummary.textContent = evidence.error || "Evidence preview unavailable.";
+      els.drilldownEvidencePreview.textContent = compactJson(evidence.payload || { status: "failed", detail: evidence.error });
+    } else {
+      els.drilldownEvidenceSummary.textContent = "No evidence preview loaded yet.";
+      els.drilldownEvidencePreview.textContent = "Select a finding to fetch the latest evidence excerpt.";
+    }
+
+    els.drilldownReportTitle.textContent = state.selectedReportKey ? reportLabel(state.selectedReportKey) : "Report posture";
+    els.drilldownReportSummary.textContent = reportArtifacts.length
+      ? `${formatCount(reportArtifacts.length)} report surface${reportArtifacts.length === 1 ? " is" : "s are"} available for this governed spine.`
+      : "No report artifacts are available yet.";
+    els.drilldownReportList.innerHTML = reportArtifacts.map((item) => `
+      <button class="btn ${state.selectedReportKey === item.artifact_key ? "primary" : "secondary"}" type="button" data-drilldown-report="${escapeHtml(item.artifact_key)}">${escapeHtml(item.title || reportLabel(item.artifact_key))}</button>
+    `).join("");
+    const report = state.drilldownReport;
+    if (report.status === "loading") {
+      els.drilldownReportPreview.textContent = "Loading report preview…";
+    } else if (report.status === "ready") {
+      els.drilldownReportPreview.textContent = report.payload?.preview_text || compactJson(report.payload?.preview_json || report.payload);
+    } else if (report.status === "failed") {
+      els.drilldownReportPreview.textContent = compactJson(report.payload || { status: "failed", detail: report.error });
+    } else {
+      els.drilldownReportPreview.textContent = "Select a report artifact to preview it here.";
+    }
+  }
+
+  function renderRoleSurfaces() {
+    renderSharedScope();
+    renderBuSurface();
+    renderReviewerSurface();
+    renderOperatorSurface();
+    renderSystemSurface();
+    renderSharedDrilldown();
+  }
+
+  async function syncSharedDrilldown(findingId) {
+    state.selectedFindingId = String(findingId || "");
+    const finding = activeFindingRecord();
+    if (!state.selectedReportKey) {
+      const firstReport = Array.isArray(state.workspaceContract?.reports?.artifacts) && state.workspaceContract.reports.artifacts.length
+        ? state.workspaceContract.reports.artifacts[0]?.artifact_key
+        : Object.keys(state.latestRun?.artifacts || {})[0];
+      state.selectedReportKey = firstReport || "";
+    }
+    renderRoleSurfaces();
+    await loadDrilldownEvidence(finding);
+    if (state.selectedReportKey) await loadDrilldownReport(state.selectedReportKey);
+  }
+
   function applyLaneHint() {
     const requested = requestedLane();
     const preferred = preferredLaneForRole(currentRole());
@@ -848,6 +1217,8 @@
     const displayName = formatSessionIdentity(session);
     renderRoleFrame();
     renderHeaderActions();
+    renderRoleTasks();
+    renderRoleSurfaces();
     els.identity.textContent = authDisabled ? "Auth disabled" : session.authenticated ? displayName : "Not signed in";
     els.sessionStatus.textContent = authDisabled
       ? "API auth is disabled for this environment. Reviewer and operator controls share this workspace."
@@ -1081,6 +1452,8 @@
         ? "No analysis yet - choose Start analysis to review findings."
         : "No findings in the latest run.";
       els.findingsList.innerHTML = "";
+      state.selectedFindingId = "";
+      renderRoleSurfaces();
       return;
     }
 
@@ -1090,6 +1463,10 @@
       ? `${formatSar(totalRecoverable)} recoverable across ${formatCount(rows.length)} findings. Tap a row for evidence.`
       : `${formatCount(rows.length)} findings. Tap a row for evidence.`;
     els.findingsList.innerHTML = rows.map(renderFindingRow).join("");
+    if (!rows.find((item) => String(item.finding_id) === String(state.selectedFindingId))) {
+      state.selectedFindingId = rows[0]?.finding_id || "";
+    }
+    renderRoleSurfaces();
   }
 
   function openFindingDetail(findingId) {
@@ -2586,6 +2963,10 @@
     }
     maybeAppendRunEvent(previousSignature);
     renderAll();
+    const nextFinding = activeFindingRecord()?.finding_id || currentScopeFindings()[0]?.finding_id || "";
+    if (nextFinding && (!state.drilldownEvidence.payload || state.selectedFindingId !== nextFinding)) {
+      syncSharedDrilldown(nextFinding);
+    }
   }
 
   function renderAll() {
@@ -2603,6 +2984,7 @@
     renderVectorSearch();
     renderSourcePackPanel();
     renderChat();
+    renderRoleSurfaces();
     applyLaneHint();
   }
 
@@ -2624,6 +3006,16 @@
   }
 
   function bindEvents() {
+    els.companySwitcher?.addEventListener("change", (event) => {
+      state.selectedCompany = event.target.value || "current";
+      renderRoleSurfaces();
+    });
+    els.portfolioSwitcher?.addEventListener("change", (event) => {
+      state.selectedPortfolio = event.target.value || "all";
+      state.selectedDomain = "all";
+      const nextFinding = currentScopeFindings()[0]?.finding_id || "";
+      syncSharedDrilldown(nextFinding);
+    });
     els.connectButton.addEventListener("click", async () => {
       state.token = els.sessionToken.value.trim();
       if (state.token) window.localStorage.setItem(TOKEN_KEY, state.token);
@@ -2664,17 +3056,41 @@
     if (els.findingsList) {
       els.findingsList.addEventListener("click", (event) => {
         const row = event.target.closest("[data-finding-id]");
-        if (row) openFindingDetail(row.getAttribute("data-finding-id") || "");
+        if (row) {
+          const findingId = row.getAttribute("data-finding-id") || "";
+          syncSharedDrilldown(findingId);
+          openFindingDetail(findingId);
+        }
       });
       els.findingsList.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         const row = event.target.closest("[data-finding-id]");
         if (row) {
           event.preventDefault();
-          openFindingDetail(row.getAttribute("data-finding-id") || "");
+          const findingId = row.getAttribute("data-finding-id") || "";
+          syncSharedDrilldown(findingId);
+          openFindingDetail(findingId);
         }
       });
     }
+    els.buDomainFilters?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-domain-filter]");
+      if (!button) return;
+      state.selectedDomain = button.getAttribute("data-domain-filter") || "all";
+      const nextFinding = currentScopeFindings()[0]?.finding_id || "";
+      syncSharedDrilldown(nextFinding);
+    });
+    els.buCaseList?.addEventListener("click", (event) => {
+      const row = event.target.closest("[data-bu-finding-id]");
+      if (!row) return;
+      const findingId = row.getAttribute("data-bu-finding-id") || "";
+      syncSharedDrilldown(findingId);
+      openFindingDetail(findingId);
+    });
+    els.drilldownReportList?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-drilldown-report]");
+      if (button) loadDrilldownReport(button.getAttribute("data-drilldown-report") || "");
+    });
     if (els.findingDrawerClose) {
       els.findingDrawerClose.addEventListener("click", () => closeDrawer("finding"));
     }
