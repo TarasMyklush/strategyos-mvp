@@ -161,6 +161,25 @@ a { color: inherit; text-decoration: none; }
 .scope-ribbon-summary strong,
 .scope-ribbon-summary span { display: block; }
 .scope-ribbon-summary span { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.executive-signal-panel {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(11, 15, 20, 0.82);
+}
+.executive-signal-grid {
+  padding-top: 0;
+}
+.publication-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 14px 14px;
+}
+.publication-grid h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
 .session-panel {
   display: grid; grid-template-columns: minmax(0, 1fr) 260px auto auto; align-items: end; gap: 10px;
   border: 1px solid var(--line); border-radius: 8px; background: rgba(11, 15, 20, 0.82);
@@ -299,7 +318,7 @@ a { color: inherit; text-decoration: none; }
 .report-button strong, .report-button span { display: block; }
 .report-button span { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 @media (max-width: 1160px) {
-  .command-grid, .module-grid, .bottom-grid, .brief-row, .reports-grid, .reports-layout, .overview-strip, .surface-ladder, .plan-health-grid, .scope-ribbon, .scope-ribbon-controls { grid-template-columns: 1fr; }
+  .command-grid, .module-grid, .bottom-grid, .brief-row, .reports-grid, .reports-layout, .overview-strip, .surface-ladder, .plan-health-grid, .scope-ribbon, .scope-ribbon-controls, .publication-grid { grid-template-columns: 1fr; }
   .assistant-panel { min-height: auto; }
 }
 @media (max-width: 760px) {

@@ -23,6 +23,7 @@ DEMO_ROLE_TOKENS = {
     "executive",
     "tenant_operator",
     "tenant_admin",
+    "system",
 }
 PROXY_EMAIL_HEADERS = (
     "X-Auth-Request-Email",
@@ -69,6 +70,12 @@ def role_for_api_key(api_key: str | None) -> str | None:
         return demo_role
     if api_key in CONFIG.bu_api_keys:
         return "bu"
+    if api_key in CONFIG.tenant_operator_api_keys:
+        return "tenant_operator"
+    if api_key in CONFIG.tenant_admin_api_keys:
+        return "tenant_admin"
+    if api_key in CONFIG.system_api_keys:
+        return "system"
     if api_key in CONFIG.operator_api_keys:
         return "operator"
     if api_key in CONFIG.reviewer_api_keys:
@@ -135,6 +142,12 @@ def _role_for_proxy_email(email: str | None) -> str | None:
         return None
     if normalized in {_normalize_email(item) for item in CONFIG.bu_emails}:
         return "bu"
+    if normalized in {_normalize_email(item) for item in CONFIG.tenant_operator_emails}:
+        return "tenant_operator"
+    if normalized in {_normalize_email(item) for item in CONFIG.tenant_admin_emails}:
+        return "tenant_admin"
+    if normalized in {_normalize_email(item) for item in CONFIG.system_emails}:
+        return "system"
     if normalized in {_normalize_email(item) for item in CONFIG.operator_emails}:
         return "operator"
     if normalized in {_normalize_email(item) for item in CONFIG.reviewer_emails}:
@@ -347,9 +360,11 @@ def require_live_health_access(
         x_forwarded_user=x_forwarded_user,
         x_strategyos_proxy_auth=x_strategyos_proxy_auth,
     )
-    if principal.get("role") != "operator":
+    if not principal_has_any_role(
+        str(principal.get("role") or ""), "operator", "tenant_admin", "system"
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operator access is required for private live health.",
+            detail="Operator, tenant admin, or system access is required for private live health.",
         )
     return principal

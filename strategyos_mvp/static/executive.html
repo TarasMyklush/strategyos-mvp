@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StrategyOS.live Executive Cockpit</title>
-    <link rel="stylesheet" href="/static/executive.css?v=ux-20260620a" />
+    <link rel="stylesheet" href="/static/executive.css?v=ux-20260622a" />
   </head>
   <body>
     <main class="cockpit">
@@ -109,6 +109,59 @@
           </div>
         </section>
 
+        <section class="executive-signal-panel" aria-label="Executive plan signal and publication runway">
+          <div class="panel-title compact">
+            <div>
+              <h2>Bounded domain signal and publication runway</h2>
+              <p id="exec-domain-signal-note">StrategyOS can now frame multi-domain finance signal, release posture, and report publication surfaces without claiming portfolio-wide strategic compilation.</p>
+            </div>
+            <span class="badge blue" id="exec-publication-badge">release posture</span>
+          </div>
+          <div class="plan-health-grid executive-signal-grid">
+            <article class="plan-health-card">
+              <span class="micro">KPI TREE</span>
+              <strong id="exec-kpi-tree-status">Awaiting governed run</strong>
+              <p id="exec-kpi-tree-note">The latest governed run will populate cash recovery, evidence risk, report release, and runtime branches.</p>
+            </article>
+            <article class="plan-health-card">
+              <span class="micro">DOMAINS</span>
+              <strong id="exec-domain-branch-count">--</strong>
+              <p id="exec-domain-branch-note">No domain branches are visible yet.</p>
+            </article>
+            <article class="plan-health-card">
+              <span class="micro">PUBLICATION</span>
+              <strong id="exec-publication-status">Protected until review</strong>
+              <p id="exec-publication-note">Public-safe previews and protected artifacts will appear here when the latest run exposes them.</p>
+            </article>
+            <article class="plan-health-card">
+              <span class="micro">EXECUTIVE HANDOFF</span>
+              <strong id="exec-publication-route">/executive</strong>
+              <p id="exec-publication-route-note">Final release still depends on reviewer and operator runtime controls in the governed workspace.</p>
+            </article>
+          </div>
+          <div class="publication-grid">
+            <div>
+              <h3>Domain branches</h3>
+              <div class="decision-stack" id="exec-domain-tree"></div>
+            </div>
+            <div>
+              <h3>Publication surfaces</h3>
+              <div class="decision-stack" id="exec-publication-list"></div>
+            </div>
+          </div>
+          <div class="publication-grid">
+            <div>
+              <h3>Value-driver mapping</h3>
+              <div class="decision-stack" id="exec-value-driver-list"></div>
+            </div>
+            <div>
+              <h3>Bounded strategy intent</h3>
+              <p id="exec-strategy-intent-summary">Strategy intent will appear here once the bounded substrate is loaded.</p>
+              <div class="decision-stack" id="exec-intent-reasoning-list"></div>
+            </div>
+          </div>
+        </section>
+
         <p class="surface-truth">Truth today: there is no standalone executive auth role; the BU backend role is now bounded and read-only. The executive surface stays read-only, while reviewer, operator, and tenant-admin/system work continue inside the governed workspace.</p>
 
         <section class="session-panel" id="exec-session-panel" aria-live="polite">
@@ -175,6 +228,7 @@
                 <div>
                   <h2>Plan health snapshot</h2>
                   <p id="exec-plan-health-boundary">Finance-derived signal only — StrategyOS is summarizing current case, evidence, and report posture, not a full enterprise strategy compiler.</p>
+                  <p id="exec-plan-health-source-note">Executive KPI cards and plan health reconcile against the same governed run, audit summary, and publication posture.</p>
                 </div>
                 <span class="badge blue" id="exec-plan-health-badge">bounded KPI layer</span>
               </div>
@@ -385,6 +439,6 @@
     </main>
 
     <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
-    <script src="/static/executive.js?v=ux-20260620a"></script>
+    <script src="/static/executive.js?v=ux-20260622a"></script>
   </body>
 </html>

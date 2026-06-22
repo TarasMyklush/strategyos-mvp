@@ -162,6 +162,85 @@ class DomainFilterContract:
     active: bool = False
 
 
+@dataclass(frozen=True)
+class DomainMetricContract:
+    metric_id: str
+    label: str
+    value_display: str
+    detail: str
+    tone: str = "neutral"
+
+
+@dataclass(frozen=True)
+class DomainNodeContract:
+    domain_id: str
+    label: str
+    portfolio_id: str
+    status: str
+    summary: str
+    route: str
+    tone: str = "neutral"
+    metrics: list[DomainMetricContract] = field(default_factory=list)
+    children: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlanHealthContract:
+    status: str
+    badge: str
+    label: str
+    summary: str
+    boundary: str
+    root_label: str
+    root_summary: str
+    tone: str = "neutral"
+    child_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class StrategyIntentContract:
+    intent_id: str
+    label: str
+    status: str
+    summary: str
+    horizon: str
+    next_decision: str
+    boundary: str
+    evidence_basis: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class StrategyKpiNodeContract:
+    node_id: str
+    parent_id: str | None
+    label: str
+    status: str
+    value_display: str
+    detail: str
+    tone: str = "neutral"
+
+
+@dataclass(frozen=True)
+class ValueDriverContract:
+    driver_id: str
+    label: str
+    status: str
+    metric: str
+    detail: str
+    owner_route: str
+    tone: str = "neutral"
+    maps_to: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class StrategyReasoningContract:
+    reasoning_id: str
+    claim: str
+    status: str
+    rationale: str
+    evidence_basis: tuple[str, ...] = ()
+
+
 INGESTION_CONNECTOR_CATALOG: dict[str, IngestionConnector] = {
     "workspace_path": IngestionConnector(
         connector_id="local.workspace_path",

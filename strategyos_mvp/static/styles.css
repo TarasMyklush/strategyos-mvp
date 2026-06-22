@@ -373,6 +373,30 @@ textarea {
   font-size: 15px;
 }
 
+.plan-signal-panel {
+  margin-top: 16px;
+}
+
+.plan-signal-grid {
+  margin-top: 0;
+}
+
+.kpi-tree-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 16px 16px;
+}
+
+.kpi-tree-grid h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.kpi-tree-grid .stack-list {
+  margin-top: 0;
+}
+
 .chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -1198,6 +1222,15 @@ select:focus {
   border-top: 0;
 }
 
+#publication-list .item strong,
+#plan-health-tree .item strong,
+#publication-surface-list .item strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .drawer-divider {
   margin-top: 20px;
   padding-top: 14px;
@@ -1560,7 +1593,8 @@ tr:last-child td {
   .scope-grid,
   .lane-matrix,
   .drilldown-grid,
-  .mini-kpi-grid {
+  .mini-kpi-grid,
+  .kpi-tree-grid {
     grid-template-columns: 1fr;
   }
 

@@ -141,11 +141,17 @@ class StrategyOSConfig:
     idp_reviewer_password: str | None
     idp_token_ttl_seconds: int
     bu_api_keys: tuple[str, ...]
+    tenant_operator_api_keys: tuple[str, ...]
+    tenant_admin_api_keys: tuple[str, ...]
+    system_api_keys: tuple[str, ...]
     reviewer_api_keys: tuple[str, ...]
     operator_api_keys: tuple[str, ...]
     trust_proxy_auth: bool
     trusted_proxy_auth_secret: str | None
     bu_emails: tuple[str, ...]
+    tenant_operator_emails: tuple[str, ...]
+    tenant_admin_emails: tuple[str, ...]
+    system_emails: tuple[str, ...]
     reviewer_emails: tuple[str, ...]
     operator_emails: tuple[str, ...]
     oidc_issuer_url: str | None
@@ -338,6 +344,9 @@ def load_config() -> StrategyOSConfig:
                     "STRATEGYOS_PORTFOLIO_NAME", "Finance diagnostics"
                 )
                 or "Finance diagnostics",
+                "evidence-governance": "Evidence governance",
+                "release-readiness": "Release readiness",
+                "runtime-governance": "Runtime governance",
             },
         ),
         environment_label=env("STRATEGYOS_ENVIRONMENT_LABEL", "Local development")
@@ -393,11 +402,17 @@ def load_config() -> StrategyOSConfig:
         idp_reviewer_password=env("STRATEGYOS_IDP_REVIEWER_PASSWORD"),
         idp_token_ttl_seconds=env_int("STRATEGYOS_IDP_TOKEN_TTL_SECONDS", 3600),
         bu_api_keys=env_csv("STRATEGYOS_BU_API_KEYS"),
+        tenant_operator_api_keys=env_csv("STRATEGYOS_TENANT_OPERATOR_API_KEYS"),
+        tenant_admin_api_keys=env_csv("STRATEGYOS_TENANT_ADMIN_API_KEYS"),
+        system_api_keys=env_csv("STRATEGYOS_SYSTEM_API_KEYS"),
         reviewer_api_keys=env_csv("STRATEGYOS_REVIEWER_API_KEYS"),
         operator_api_keys=env_csv("STRATEGYOS_OPERATOR_API_KEYS"),
         trust_proxy_auth=env_bool("STRATEGYOS_TRUST_PROXY_AUTH", False),
         trusted_proxy_auth_secret=env("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET"),
         bu_emails=env_csv("STRATEGYOS_BU_EMAILS"),
+        tenant_operator_emails=env_csv("STRATEGYOS_TENANT_OPERATOR_EMAILS"),
+        tenant_admin_emails=env_csv("STRATEGYOS_TENANT_ADMIN_EMAILS"),
+        system_emails=env_csv("STRATEGYOS_SYSTEM_EMAILS"),
         reviewer_emails=env_csv("STRATEGYOS_REVIEWER_EMAILS"),
         operator_emails=env_csv("STRATEGYOS_OPERATOR_EMAILS"),
         oidc_issuer_url=env("OAUTH2_PROXY_OIDC_ISSUER_URL"),

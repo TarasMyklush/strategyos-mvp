@@ -187,9 +187,9 @@ def test_tenant_admin_can_reach_connector_and_runtime_surfaces(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
-            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true",
-            "STRATEGYOS_OPERATOR_API_KEYS": None,
+            "STRATEGYOS_TENANT_ADMIN_API_KEYS": "tenant-admin-secret",
             "STRATEGYOS_REVIEWER_API_KEYS": None,
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
         }
     )
     try:
@@ -209,16 +209,35 @@ def test_tenant_admin_can_reach_connector_and_runtime_surfaces(monkeypatch):
             lambda run_id: {"status": "ready", "run_id": run_id},
         )
         monkeypatch.setattr(api_module, "readiness_payload", lambda: {"status": "ok"})
+        monkeypatch.setattr(
+            api_module,
+            "_latest_summary",
+            lambda: {
+                "run_id": "run-1",
+                "current_stage": "awaiting_review",
+                "approval_status": "approved",
+                "artifacts": {"working_capital": "/tmp/Working Capital Memo.md"},
+            },
+        )
 
         client = TestClient(api_module.app)
 
-        connectors = client.get("/ingestion/connectors", headers=_auth_header("tenant_admin"))
-        runtime = client.get("/data/status", headers=_auth_header("tenant_admin"))
-        ready = client.get("/health/ready", headers=_auth_header("tenant_admin"))
+        connectors = client.get(
+            "/ingestion/connectors", headers=_auth_header("tenant-admin-secret")
+        )
+        runtime = client.get("/data/status", headers=_auth_header("tenant-admin-secret"))
+        ready = client.get("/health/ready", headers=_auth_header("tenant-admin-secret"))
+        live = client.get("/health/live", headers=_auth_header("tenant-admin-secret"))
+        report_preview = client.get(
+            "/runs/latest/report-preview", headers=_auth_header("tenant-admin-secret")
+        )
 
         assert connectors.status_code == 200
         assert runtime.status_code == 200
         assert ready.status_code == 200
+        assert live.status_code == 200
+        assert report_preview.status_code == 200
+        assert report_preview.json()["publication"]["status"] == "approved_for_release"
     finally:
         _restore_env(original)
 
@@ -232,6 +251,7 @@ def test_proxy_oidc_headers_map_email_allowlists(monkeypatch):
             "STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET": "proxy-secret",
             "STRATEGYOS_OPERATOR_EMAILS": "operator@example.com",
             "STRATEGYOS_REVIEWER_EMAILS": "reviewer@example.com",
+            "STRATEGYOS_TENANT_ADMIN_EMAILS": "admin@example.com",
             "OAUTH2_PROXY_OIDC_ISSUER_URL": "https://accounts.google.com",
             "OAUTH2_PROXY_CLIENT_ID": "client-id",
             "OAUTH2_PROXY_REDIRECT_URL": "https://strategyos.example.com/oauth2/callback",
@@ -250,6 +270,7 @@ def test_proxy_oidc_headers_map_email_allowlists(monkeypatch):
             "/inputs/prepare", headers=_proxy_auth_headers("operator@example.com")
         )
         reviewer = client.get("/runs/latest", headers=_proxy_auth_headers("reviewer@example.com"))
+        admin = client.get("/data/status", headers=_proxy_auth_headers("admin@example.com"))
         blocked = client.get("/runs/latest", headers=_proxy_auth_headers("intruder@example.com"))
         missing_secret = client.get(
             "/runs/latest",
@@ -258,6 +279,7 @@ def test_proxy_oidc_headers_map_email_allowlists(monkeypatch):
 
         assert operator.status_code == 200
         assert reviewer.status_code == 200
+        assert admin.status_code in {200, 503}
         assert blocked.status_code == 403
         assert missing_secret.status_code == 401
     finally:

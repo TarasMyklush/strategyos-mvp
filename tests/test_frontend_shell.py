@@ -105,8 +105,8 @@ def test_executive_cockpit_renders_live_command_shell():
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
     assert "StrategyOS.live Executive Cockpit" in html
-    assert 'href="/static/executive.css?v=ux-20260620a"' in html
-    assert 'src="/static/executive.js?v=ux-20260620a"' in html
+    assert 'href="/static/executive.css?v=ux-20260622a"' in html
+    assert 'src="/static/executive.js?v=ux-20260622a"' in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -124,12 +124,19 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'id="exec-plan-kpi-value"' in html
     assert 'id="exec-plan-kpi-cases"' in html
     assert 'id="exec-plan-kpi-evidence"' in html
+    assert 'id="exec-plan-health-source-note"' in html
     assert 'id="exec-company-switcher"' in html
     assert 'id="exec-portfolio-switcher"' in html
     assert 'id="exec-scope-summary"' in html
     assert 'id="exec-evidence-preview"' in html
     assert 'id="exec-report-list"' in html
     assert 'id="exec-report-preview"' in html
+    assert 'id="exec-domain-tree"' in html
+    assert 'id="exec-publication-list"' in html
+    assert 'id="exec-kpi-tree-status"' in html
+    assert 'id="exec-value-driver-list"' in html
+    assert 'id="exec-strategy-intent-summary"' in html
+    assert 'id="exec-intent-reasoning-list"' in html
     assert "Executive altitude" in html
     assert "BU / reviewer altitude" in html
     assert "Operator altitude" in html
@@ -146,11 +153,16 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'requestJson("/public/runs/latest")' in js
     assert 'requestJson("/public/runs/latest/findings")' in js
     assert 'requestJson("/public/runs/latest/report-preview")' in js
+    assert 'requestJson("/ui/workspace-contract/latest")' in js
     assert 'requestJson("/reviewer/pending-reviews")' in js
     assert 'requestJson(`/reviewer/runs/${encodeURIComponent(latestRun.run_id)}`)' in js
     assert 'function renderPlanHealth(config)' in js
+    assert 'function normalizedCitationSummary(run, rows)' in js
+    assert 'function renderExecutiveSignalFoundation()' in js
+    assert 'function strategySubstrate()' in js
     assert 'function renderScopeRibbon()' in js
     assert 'Finance-derived signal only' in js
+    assert 'Value-driver mapping will appear once a governed packet exists.' in js
     assert 'not a full enterprise strategy compiler' in js
     assert '"/data/evidence-preview" : "/public/data/evidence-preview"' in js
     assert 'requestJson(`/public/data/evidence-preview?run_id=${encodeURIComponent(publicRun?.run_id || "")}&finding_id=${encodeURIComponent(preferredFinding)}`)' in js
@@ -193,8 +205,12 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert 'id="company-switcher"' in html
     assert 'id="portfolio-switcher"' in html
     assert 'id="bu-domain-filters"' in html
+    assert 'id="bu-surface-kpi-grid"' in html
+    assert 'id="bu-workflow-list"' in html
     assert 'id="reviewer-queue-list"' in html
     assert 'id="operator-workflow-list"' in html
+    assert 'id="system-workflow-compact"' in html
+    assert 'id="system-publication-list"' in html
     assert 'id="system-surface-list"' in html
     assert 'id="drilldown-report-list"' in html
     assert "Truth today: StrategyOS now exposes a bounded BU backend role for read-only governed review access." in html
@@ -236,8 +252,15 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert 'els.workspaceSubtitle.textContent = "Operator control plane"' in js
     assert 'els.workspaceSubtitle.textContent = "Tenant admin / system lane"' in js
     assert 'els.workspaceSubtitle.textContent = "Role-aware governed diagnostics workspace"' in js
-    assert 'src="/static/app.js?v=ux-20260620a"' in html
-    assert 'href="/static/styles.css?v=ux-20260620a"' in html
+    assert 'id="plan-health-status"' in html
+    assert 'id="plan-health-tree"' in html
+    assert 'id="publication-surface-list"' in html
+    assert 'id="publication-panel"' in html
+    assert 'function renderPlanSignalPanel()' in js
+    assert 'function renderPublicationGovernance()' in js
+    assert 'function publicationActionLabels(publication)' in js
+    assert 'src="/static/app.js?v=ux-20260622a"' in html
+    assert 'href="/static/styles.css?v=ux-20260622a"' in html
 
 
 def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
@@ -646,6 +669,10 @@ def test_ui_session_reports_bu_role_with_read_only_review_capabilities():
         assert contract_payload["domain_filters"][0]["filter_id"] == "finance_integrity"
         assert contract_payload["lanes"]["bu"]["evidence_qa_route"].endswith("domain=evidence_qa")
         assert contract_payload["kpi_cards"][0]["card_id"] == "recoverable_value"
+        assert contract_payload["reports"]["publication"]["allowed_actions"] == [
+            "view_governed_report_status",
+            "view_report_preview",
+        ]
     finally:
         _restore_env(original)
 
@@ -722,6 +749,12 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         cases_surface = next(item for item in payload["surfaces"] if item["surface_id"] == "cases")
         assert cases_surface["primary_route"] == "/public/runs/latest/findings"
         assert payload["evidence"]["preview_route"] == "/public/data/evidence-preview"
+        assert payload["plan_health"]["root_label"] == "Governed plan posture"
+        assert payload["domain_tree"]["nodes"][0]["domain_id"] == "finance"
+        assert payload["strategy_substrate"]["intent"]["label"] == "Convert governed finance signal into executive action"
+        assert payload["strategy_substrate"]["kpi_tree"]["nodes"][0]["node_id"] == "value_capture"
+        assert payload["strategy_substrate"]["value_drivers"][0]["driver_id"] == "cash_recovery"
+        assert any(item["option_id"] == "release-readiness" for item in payload["portfolio_switcher"]["options"])
         assert all("path" not in item for item in payload["reports"]["artifacts"])
     finally:
         _restore_env(original)

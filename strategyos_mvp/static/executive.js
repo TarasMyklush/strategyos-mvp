@@ -4,6 +4,7 @@
   const TOKEN_KEY = "strategyos.ui.token";
   const bootstrap = JSON.parse(document.getElementById("strategyos-executive-bootstrap").textContent);
   const byId = (id) => document.getElementById(id);
+  const query = new URLSearchParams(window.location.search);
 
   const els = {
     railStatus: byId("exec-rail-status"),
@@ -45,12 +46,28 @@
     planHealthStatus: byId("exec-plan-health-status"),
     planHealthNote: byId("exec-plan-health-note"),
     planHealthBoundary: byId("exec-plan-health-boundary"),
+    planHealthSourceNote: byId("exec-plan-health-source-note"),
     planKpiValue: byId("exec-plan-kpi-value"),
     planKpiValueNote: byId("exec-plan-kpi-value-note"),
     planKpiCases: byId("exec-plan-kpi-cases"),
     planKpiCasesNote: byId("exec-plan-kpi-cases-note"),
     planKpiEvidence: byId("exec-plan-kpi-evidence"),
     planKpiEvidenceNote: byId("exec-plan-kpi-evidence-note"),
+    domainSignalNote: byId("exec-domain-signal-note"),
+    publicationBadge: byId("exec-publication-badge"),
+    kpiTreeStatus: byId("exec-kpi-tree-status"),
+    kpiTreeNote: byId("exec-kpi-tree-note"),
+    domainBranchCount: byId("exec-domain-branch-count"),
+    domainBranchNote: byId("exec-domain-branch-note"),
+    publicationStatus: byId("exec-publication-status"),
+    publicationNote: byId("exec-publication-note"),
+    publicationRoute: byId("exec-publication-route"),
+    publicationRouteNote: byId("exec-publication-route-note"),
+    domainTree: byId("exec-domain-tree"),
+    publicationList: byId("exec-publication-list"),
+    valueDriverList: byId("exec-value-driver-list"),
+    strategyIntentSummary: byId("exec-strategy-intent-summary"),
+    intentReasoningList: byId("exec-intent-reasoning-list"),
     scopeNote: byId("exec-scope-note"),
     companySwitcher: byId("exec-company-switcher"),
     portfolioSwitcher: byId("exec-portfolio-switcher"),
@@ -68,9 +85,11 @@
     pendingReviews: null,
     runDetail: null,
     selectedFindingId: null,
-    selectedPortfolio: "all",
+    selectedCompany: query.get("company") || "current",
+    selectedPortfolio: query.get("portfolio") || "all",
     publicEvidencePreview: null,
     publicReportPreview: null,
+    workspaceContract: null,
     loading: false,
   };
 
@@ -102,6 +121,16 @@
     if (abs >= 1_000_000) return `SAR ${(number / 1_000_000).toFixed(1)}M`;
     if (abs >= 1_000) return `SAR ${(number / 1_000).toFixed(0)}K`;
     return `SAR ${Math.round(number).toLocaleString()}`;
+  }
+
+  function numericOrNull(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function sumFindingCitations(rows) {
+    const findings = Array.isArray(rows) ? rows : findingsPayload();
+    return findings.reduce((sum, item) => sum + (Number(item?.citation_count || 0) || 0), 0);
   }
 
   function compactRunId(run) {
@@ -170,6 +199,24 @@
     return { count: null, resolved: null };
   }
 
+  function normalizedCitationSummary(run, rows) {
+    const raw = citationSummary(run);
+    const findingLinked = sumFindingCitations(rows);
+    const rawCount = numericOrNull(raw.count);
+    const rawResolved = numericOrNull(raw.resolved);
+    const candidates = [rawCount, rawResolved, findingLinked].filter((value) => value !== null);
+    const total = candidates.length ? Math.max(...candidates) : null;
+    const resolved = rawResolved !== null ? rawResolved : findingLinked > 0 ? findingLinked : null;
+    const mismatch = rawCount !== null && findingLinked > 0 && rawCount !== findingLinked;
+    let detail = "Citation posture will reconcile after a governed run surfaces evidence and audit detail.";
+    if (total !== null && mismatch) {
+      detail = `Audit summary shows ${formatCount(rawResolved ?? resolved ?? 0)} resolved of ${formatCount(rawCount)} surfaced citations; current finding rows expose ${formatCount(findingLinked)} linked cites.`;
+    } else if (total !== null) {
+      detail = `Executive KPI cards and plan health are using the same governed citation posture: ${formatCount(resolved ?? 0)} / ${formatCount(total)}.`;
+    }
+    return { count: total, resolved, findingLinked, mismatch, detail };
+  }
+
   function challengedSummary(run) {
     if (Array.isArray(state.auditSummary?.challenged_finding_ids)) {
       return state.auditSummary.challenged_finding_ids.length;
@@ -190,29 +237,223 @@
     return run?.approval_status || run?.approval?.approval_status || "pending";
   }
 
+  function publicationContract() {
+    return state.workspaceContract?.reports?.publication || state.publicReportPreview?.publication || {};
+  }
+
+  function publicationStatusLabel(status) {
+    return {
+      published: "Published",
+      approved_for_release: "Approved for release",
+      awaiting_review: "Awaiting review",
+      blocked: "Blocked",
+      draft: "Draft",
+    }[String(status || "draft").toLowerCase()] || String(status || "draft").replaceAll("_", " ");
+  }
+
   function currentTenantContext() {
-    return state.session?.tenant_context || state.runDetail?.summary_json?.tenant_context || {};
+    return state.workspaceContract?.tenant_context || state.session?.tenant_context || state.runDetail?.summary_json?.tenant_context || {};
+  }
+
+  function contractCompanyOptions() {
+    const options = state.workspaceContract?.company_switcher?.options;
+    return Array.isArray(options) && options.length ? options : [];
+  }
+
+  function contractPortfolioOptions() {
+    const options = Array.isArray(state.workspaceContract?.portfolio_switcher?.options)
+      ? state.workspaceContract.portfolio_switcher.options.slice()
+      : [];
+    if (!options.find((item) => item?.option_id === "all")) {
+      options.unshift({ option_id: "all", label: "All governed portfolios", route: "/executive" });
+    }
+    return options;
+  }
+
+  function badgeTone(tone) {
+    if (tone === "ok") return "green";
+    if (tone === "warn") return "amber";
+    return "blue";
+  }
+
+  function filteredDomainNodes() {
+    const nodes = Array.isArray(state.workspaceContract?.domain_tree?.nodes)
+      ? state.workspaceContract.domain_tree.nodes
+      : [];
+    if (state.selectedPortfolio === "all") return nodes;
+    return nodes.filter((node) => node?.portfolio_id === state.selectedPortfolio);
+  }
+
+  function strategySubstrate() {
+    return state.workspaceContract?.strategy_substrate || {};
+  }
+
+  function strategyKpiNodes() {
+    const nodes = Array.isArray(strategySubstrate()?.kpi_tree?.nodes)
+      ? strategySubstrate().kpi_tree.nodes
+      : [];
+    return nodes;
+  }
+
+  function renderExecutiveSignalFoundation() {
+    const plan = state.workspaceContract?.plan_health || {};
+    const root = state.workspaceContract?.domain_tree?.root || {};
+    const strategy = strategySubstrate();
+    const kpiRoot = strategy?.kpi_tree?.root || {};
+    const nodes = strategyKpiNodes();
+    const publication = publicationContract();
+    const reportsRoute = publication.preview_route || state.workspaceContract?.reports?.preview_route || "/public/runs/latest/report-preview";
+    const routes = [
+      {
+        title: "Board-safe preview",
+        text: "Executive publication remains bounded to safe report preview and surfaced release posture.",
+        amount: `${reportsRoute} · ${publicationStatusLabel(publication.status)}`,
+        status: plan.badge || "preview",
+      },
+      {
+        title: "Reviewer gate",
+        text: "Release still depends on governed review queue state, not executive narration alone.",
+        amount: state.workspaceContract?.lanes?.reviewer?.pending_reviews_route || "/reviewer/pending-reviews",
+        status: "review",
+      },
+      {
+        title: "Runtime lane",
+        text: "Connector, graph, vector, and readiness truth remain protected in the tenant-admin / system lane.",
+        amount: state.workspaceContract?.lanes?.tenant_admin?.primary_route || "/app?lane=system",
+        status: "system",
+      },
+      {
+        title: "Report posture",
+        text: `${formatCount(publication.report_count ?? 0)} report surfaces · ${formatCount(publication.restricted_report_count ?? 0)} restricted`,
+        amount: `Approval ${approvalSummary(state.latestRun || {})}`,
+        status: publication.status || "draft",
+      },
+    ];
+    if (els.domainSignalNote) {
+      els.domainSignalNote.textContent = plan.boundary
+        || "StrategyOS can now frame multi-domain finance signal, release posture, and report publication surfaces without claiming portfolio-wide strategic compilation.";
+    }
+    if (els.publicationBadge) {
+      els.publicationBadge.textContent = plan.badge || "release posture";
+      els.publicationBadge.className = `badge ${badgeTone(plan.tone)}`;
+    }
+    if (els.kpiTreeStatus) {
+      els.kpiTreeStatus.textContent = kpiRoot.label || plan.label || root.status || "Awaiting governed run";
+    }
+    if (els.kpiTreeNote) {
+      els.kpiTreeNote.textContent = kpiRoot.summary || root.summary || plan.root_summary || "The latest governed run will populate cash recovery, evidence risk, report release, and runtime branches.";
+    }
+    if (els.domainBranchCount) {
+      els.domainBranchCount.textContent = nodes.length ? `${formatCount(nodes.length)} branches` : "--";
+    }
+    if (els.domainBranchNote) {
+      els.domainBranchNote.textContent = nodes.length
+        ? `${nodes.map((node) => node.label).join(" · ")} are now exposed as bounded executive branches.`
+        : "No domain branches are visible yet.";
+    }
+    if (els.publicationStatus) {
+      els.publicationStatus.textContent = plan.status === "release_posture_clear" ? "Preview available" : plan.label || "Protected until review";
+    }
+    if (els.publicationNote) {
+      els.publicationNote.textContent = plan.summary || "Public-safe previews and protected artifacts will appear here when the latest run exposes them.";
+    }
+    if (els.publicationRoute) {
+      els.publicationRoute.textContent = reportsRoute;
+    }
+    if (els.publicationRouteNote) {
+      els.publicationRouteNote.textContent = "Final release still depends on reviewer and operator runtime controls in the governed workspace.";
+    }
+    if (els.domainTree) {
+      els.domainTree.innerHTML = nodes.length
+        ? nodes.map((node) => {
+          const metricSummary = node.value_display || ((Array.isArray(node.metrics) ? node.metrics : [])
+            .slice(0, 2)
+            .map((metric) => `${metric.label}: ${metric.value_display}`)
+            .join(" · "));
+          return decisionCard(
+            node.label || "Domain",
+            `${node.detail || node.summary || ""}${metricSummary ? ` ${metricSummary}.` : ""}`.trim(),
+            metricSummary || node.route || "--",
+            node.status || "bounded",
+          );
+        }).join("")
+        : decisionCard(
+          "Awaiting bounded domain data",
+          "Finance, evidence, release, and runtime posture will appear once the current governed workspace contract is available.",
+          "--",
+          "pending",
+        );
+    }
+    if (els.publicationList) {
+      els.publicationList.innerHTML = routes.map((item) => decisionCard(item.title, item.text, item.amount, item.status)).join("");
+    }
+    if (els.valueDriverList) {
+      const drivers = Array.isArray(strategy?.value_drivers) ? strategy.value_drivers : [];
+      els.valueDriverList.innerHTML = drivers.length
+        ? drivers.map((driver) => decisionCard(
+          driver.label || "Value driver",
+          `${driver.detail || ""}${driver.maps_to?.length ? ` Maps to ${driver.maps_to.join(" · ")}.` : ""}`.trim(),
+          driver.metric || driver.owner_route || "--",
+          driver.status || driver.tone || "bounded",
+        )).join("")
+        : decisionCard(
+          "Awaiting value-driver map",
+          "Value-driver mapping will appear once a governed packet exists.",
+          "--",
+          "pending",
+        );
+    }
+    if (els.strategyIntentSummary) {
+      const intent = strategy?.intent || {};
+      els.strategyIntentSummary.textContent = intent.summary || strategy?.boundary || plan.boundary || "Strategy intent will appear here once the bounded substrate is loaded.";
+    }
+    if (els.intentReasoningList) {
+      const reasoning = Array.isArray(strategy?.reasoning) ? strategy.reasoning : [];
+      els.intentReasoningList.innerHTML = reasoning.length
+        ? reasoning.map((item) => decisionCard(
+          item.claim || "Bounded reasoning",
+          item.rationale || "",
+          Array.isArray(item.evidence_basis) && item.evidence_basis.length ? item.evidence_basis.join(" · ") : "evidence",
+          item.status || "bounded",
+        )).join("")
+        : decisionCard(
+          "Awaiting strategy reasoning",
+          "Reasoning will stay empty until governed evidence exists.",
+          "--",
+          "pending",
+        );
+    }
   }
 
   function renderScopeRibbon() {
     const tenant = currentTenantContext();
-    const companyLabel = tenant.tenant_name || tenant.tenant_id || "Current company";
-    const portfolios = [
-      { value: "all", label: "All governed portfolios" },
-      { value: "finance", label: "Finance diagnostics" },
-      { value: "evidence", label: "Evidence posture" },
-      { value: "reports", label: "Report posture" },
-    ];
+    const companyOptions = contractCompanyOptions();
+    const portfolioOptions = contractPortfolioOptions();
+    const companyLabel = companyOptions.find((item) => item.option_id === state.selectedCompany)?.label
+      || tenant.tenant_name
+      || tenant.tenant_id
+      || "Current company";
     if (els.companySwitcher) {
-      els.companySwitcher.innerHTML = `<option value="current">${escapeHtml(companyLabel)}</option>`;
-      els.companySwitcher.value = "current";
+      if (companyOptions.length) {
+        if (!companyOptions.find((item) => item.option_id === state.selectedCompany)) {
+          state.selectedCompany = companyOptions[0]?.option_id || "current";
+        }
+        els.companySwitcher.innerHTML = companyOptions.map((item) => `<option value="${escapeHtml(item.option_id)}">${escapeHtml(item.label)}</option>`).join("");
+        els.companySwitcher.value = state.selectedCompany;
+      } else {
+        els.companySwitcher.innerHTML = `<option value="current">${escapeHtml(companyLabel)}</option>`;
+        els.companySwitcher.value = "current";
+      }
     }
     if (els.portfolioSwitcher) {
-      els.portfolioSwitcher.innerHTML = portfolios.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("");
+      if (!portfolioOptions.find((item) => item.option_id === state.selectedPortfolio)) {
+        state.selectedPortfolio = portfolioOptions[0]?.option_id || "all";
+      }
+      els.portfolioSwitcher.innerHTML = portfolioOptions.map((item) => `<option value="${escapeHtml(item.option_id)}">${escapeHtml(item.label)}</option>`).join("");
       els.portfolioSwitcher.value = state.selectedPortfolio;
     }
     if (els.scopeSummary) {
-      const portfolioLabel = portfolios.find((item) => item.value === state.selectedPortfolio)?.label || "All governed portfolios";
+      const portfolioLabel = portfolioOptions.find((item) => item.option_id === state.selectedPortfolio)?.label || "All governed portfolios";
       els.scopeSummary.textContent = `${companyLabel} · ${portfolioLabel}`;
     }
     if (els.scopeBreadcrumb) {
@@ -228,6 +469,51 @@
     const fromRun = state.latestRun?.artifacts;
     if (fromRun && typeof fromRun === "object") return fromRun;
     return {};
+  }
+
+  function domainSummaryRows() {
+    const findings = findingsPayload();
+    const buckets = [
+      { key: "cash_recovery", label: "Cash recovery", test: (item) => Number(item?.recoverable_sar || 0) > 0 },
+      { key: "vendor_controls", label: "Vendor controls", test: (item) => /vendor|contract|renewal/i.test(String(item?.pattern_type || "")) },
+      { key: "evidence_risk", label: "Evidence risk", test: (item) => Boolean(item?.challenged) || Number(item?.citation_count || 0) === 0 },
+      { key: "working_capital", label: "Working capital", test: (item) => /discount|credit|fx/i.test(String(item?.pattern_type || "")) },
+    ];
+    return buckets.map((bucket) => {
+      const items = findings.filter(bucket.test);
+      const recoverable = items.reduce((sum, item) => sum + (Number(item?.recoverable_sar) || 0), 0);
+      return { key: bucket.key, label: bucket.label, count: items.length, recoverable, challenged: items.filter((item) => item?.challenged).length };
+    }).filter((item) => item.count > 0);
+  }
+
+  function publicationSurfaceRows() {
+    const report = state.publicReportPreview || {};
+    const artifacts = reportArtifacts();
+    const publication = publicationContract();
+    const publicChoices = Array.isArray(report?.available_artifacts) && report.available_artifacts.length ? report.available_artifacts : report?.artifact_key ? [{ artifact_key: report.artifact_key, title: report.title || report.artifact_key }] : [];
+    return [
+      { title: "Public-safe preview", detail: `${publication.preview_route || "/public/runs/latest/report-preview"} · ${publicationStatusLabel(publication.status)}`, tone: publicChoices.length ? "public" : "pending" },
+      { title: "Protected artifact lane", detail: isAuthenticated() ? `${formatCount(publication.report_count ?? Object.keys(artifacts).length)} report surfaces · ${formatCount(publication.restricted_report_count ?? 0)} restricted` : "Authenticate for restricted artifact bodies", tone: Object.keys(artifacts).length ? "review" : "pending" },
+      { title: "Review app handoff", detail: `${state.latestRun?.requires_human_review ? "Approval gate visible" : "Human gate optional"} · /app#review`, tone: state.latestRun?.requires_human_review ? "human" : "safe" },
+    ];
+  }
+
+  function renderExecutiveSignal(config) {
+    const domains = domainSummaryRows();
+    const publication = publicationSurfaceRows();
+    const artifactCount = Object.keys(reportArtifacts()).length;
+    els.kpiTreeStatus.textContent = domains.length ? `${formatCount(domains.length)} active finance branches` : config.status;
+    els.kpiTreeNote.textContent = domains.length ? "Branches roll up only from governed finance findings, evidence chain, report release, and runtime posture." : "No domain branches are visible until a governed run exposes truthful finance signal.";
+    els.domainBranchCount.textContent = domains.length ? formatCount(domains.length) : "--";
+    els.domainBranchNote.textContent = domains.length ? `${domains.map((item) => item.label).join(" · ")}` : "No domain branches are visible yet.";
+    els.domainSignalNote.textContent = "StrategyOS can now frame multi-domain finance signal, release posture, and report publication surfaces without claiming portfolio-wide strategic compilation.";
+    els.publicationBadge.textContent = config.badge;
+    els.publicationStatus.textContent = artifactCount ? `${formatCount(artifactCount)} protected artifact${artifactCount === 1 ? "" : "s"}` : config.status;
+    els.publicationNote.textContent = artifactCount ? `Public-safe previews and protected artifacts are both visible. Approval is ${approvalSummary(state.latestRun || {})}.` : "Public-safe previews and protected artifacts will appear here when the latest run exposes them.";
+    els.publicationRoute.textContent = isAuthenticated() ? "/reviewer/runs/{run_id}/artifacts/{artifact_key}" : "/public/runs/latest/report-preview";
+    els.publicationRouteNote.textContent = isAuthenticated() ? "Executive remains read-only; restricted artifact opening still happens through reviewer-protected surfaces." : "Anonymous viewers remain on public-safe report previews only.";
+    els.domainTree.innerHTML = domains.length ? domains.map((item) => decisionCard(`${item.label} branch`, `${formatCount(item.count)} cases with ${formatCount(item.challenged)} challenged and ${formatSarShort(item.recoverable)} recoverable signal.`, formatCount(item.count), item.challenged ? "human" : "safe")).join("") : decisionCard("Awaiting finance signal", "Run one governed analysis before showing multi-domain finance branches.", "--", "pending");
+    els.publicationList.innerHTML = publication.map((item) => decisionCard(item.title, item.detail, "route", item.tone)).join("");
   }
 
   function reportLabel(key) {
@@ -257,6 +543,7 @@
     els.planHealthStatus.textContent = config.status;
     els.planHealthNote.textContent = config.note;
     els.planHealthBoundary.textContent = config.boundary;
+    if (els.planHealthSourceNote) els.planHealthSourceNote.textContent = config.sourceNote || "Executive KPI cards and plan health reconcile against the same governed run boundary.";
     els.planKpiValue.textContent = config.value;
     els.planKpiValueNote.textContent = config.valueNote;
     els.planKpiCases.textContent = config.cases;
@@ -289,7 +576,7 @@
     displaySession();
     const run = state.latestRun || {};
     const findings = findingsPayload();
-    const citations = citationSummary(run);
+    const citations = normalizedCitationSummary(run, findings);
     const challenged = Array.isArray(state.auditSummary?.challenged_finding_ids)
       ? state.auditSummary.challenged_finding_ids.length
       : findings.filter((item) => item?.challenged).length;
@@ -389,7 +676,9 @@
           ? `${formatCount(citations.resolved)} / ${formatCount(citations.count)} cited`
           : `${formatCount(challenged || 0)} challenges`,
         evidenceNote: "Evidence and release posture stay deliberately narrow here: citation chain, challenge state, and board-safe preview only.",
+        sourceNote: citations.detail,
       });
+      renderExecutiveSignalFoundation();
       renderScopeRibbon();
       return;
     }
@@ -499,6 +788,7 @@
       evidence: "Boundary intact",
       evidenceNote: "Evidence and release remain visible as workflow stages, not as fabricated KPI output.",
     });
+    renderExecutiveSignalFoundation();
   }
 
   function decisionCard(title, text, amount, status) {
@@ -610,7 +900,7 @@
     displaySession();
     const run = state.latestRun || {};
     const missing = !run || run.status === "missing";
-    const citations = citationSummary(run);
+    const citations = normalizedCitationSummary(run, findingsPayload());
     const challenged = challengedSummary(run);
     const recoverable = run.total_recoverable_sar;
     const findings = run.locked_findings ?? run.findings;
@@ -727,7 +1017,9 @@
         : artifactCount
           ? `${formatCount(artifactCount)} report artifact${artifactCount === 1 ? " is" : "s are"} visible; approval is ${approval}.`
           : `Approval is ${approval}; report artifacts are not yet surfaced for executive inspection.`,
+      sourceNote: citations.detail,
     });
+    renderExecutiveSignalFoundation();
     renderCases(run, citations, challenged);
     renderReports();
     renderScopeRibbon();
@@ -813,6 +1105,7 @@
     els.refresh.textContent = "Refreshing...";
     try {
       state.session = await guarded("Session", requestJson("/ui/session"), { authenticated: false });
+      state.workspaceContract = await guarded("Workspace contract", requestJson("/ui/workspace-contract/latest"), null);
       if (!isAuthenticated()) {
         const [publicRun, publicAuditSummary, publicFindings, publicReportPreview] = await Promise.all([
           guarded("Public latest run", requestJson("/public/runs/latest"), { status: "missing" }),
@@ -921,6 +1214,12 @@
 
   els.portfolioSwitcher?.addEventListener("change", (event) => {
     state.selectedPortfolio = event.target.value || "all";
+    renderScopeRibbon();
+    renderExecutiveSignalFoundation();
+  });
+
+  els.companySwitcher?.addEventListener("change", (event) => {
+    state.selectedCompany = event.target.value || "current";
     renderScopeRibbon();
   });
 

@@ -12,6 +12,13 @@ import strategyos_mvp.state_store as state_store
 import strategyos_mvp.storage as storage
 from strategyos_mvp.config import load_config
 from strategyos_mvp.platform_foundation import (
+    DomainMetricContract,
+    DomainNodeContract,
+    PlanHealthContract,
+    StrategyIntentContract,
+    StrategyKpiNodeContract,
+    StrategyReasoningContract,
+    ValueDriverContract,
     build_case_summary_contracts,
     build_domain_filter_contracts,
     build_ingestion_connector_catalog,
@@ -208,3 +215,80 @@ def test_switcher_and_domain_filter_contracts_capture_routes_and_counts():
     assert evidence_qa.case_count == 1
     assert evidence_qa.active is True
     assert evidence_qa.route.endswith("domain=evidence_qa")
+
+
+def test_multi_domain_contract_dataclasses_serialize_cleanly():
+    metric = DomainMetricContract(
+        metric_id="recoverable_value",
+        label="Recoverable value",
+        value_display="SAR 224K",
+        detail="Bounded to the latest governed packet.",
+        tone="ok",
+    )
+    node = DomainNodeContract(
+        domain_id="finance",
+        label="Finance spine",
+        portfolio_id="finance-diagnostics",
+        status="Signal live",
+        summary="Recoverable value and governed cases anchor the current executive surface.",
+        route="/public/runs/latest/findings",
+        tone="ok",
+        metrics=[metric],
+        children=("finance_value",),
+    )
+    health = PlanHealthContract(
+        status="bounded_actionable",
+        badge="bounded KPI layer",
+        label="Finance signal is actionable",
+        summary="Current packet supports a bounded executive next move.",
+        boundary="Finance-derived signal only.",
+        root_label="Governed plan posture",
+        root_summary="Finance, evidence, release, and runtime are wired as bounded domains.",
+        tone="ok",
+        child_ids=("finance", "evidence"),
+    )
+    intent = StrategyIntentContract(
+        intent_id="bounded-finance-intent",
+        label="Convert governed finance signal into executive action",
+        status="bounded_actionable",
+        summary="Latest governed packet supports a bounded strategic readout.",
+        horizon="Latest governed run only",
+        next_decision="Close evidence gaps before broadening publication.",
+        boundary="Finance-derived signal only.",
+        evidence_basis=("summary", "audit_summary"),
+    )
+    kpi_node = StrategyKpiNodeContract(
+        node_id="value_capture",
+        parent_id="bounded-finance-intent",
+        label="Value capture",
+        status="live",
+        value_display="SAR 224K",
+        detail="Current packet carries recoverable value.",
+        tone="ok",
+    )
+    driver = ValueDriverContract(
+        driver_id="cash_recovery",
+        label="Cash recovery driver",
+        status="active",
+        metric="SAR 224K",
+        detail="Mapped from governed finance cases.",
+        owner_route="/runs/latest/findings",
+        tone="ok",
+        maps_to=("value_capture",),
+    )
+    reasoning = StrategyReasoningContract(
+        reasoning_id="protect-value",
+        claim="Protect current value signal before broadening strategy claims.",
+        status="backed",
+        rationale="Recoverable value is directly supported by the latest packet.",
+        evidence_basis=("summary.total_recoverable_sar",),
+    )
+
+    assert node.metrics[0].value_display == "SAR 224K"
+    assert node.children == ("finance_value",)
+    assert health.root_label == "Governed plan posture"
+    assert health.child_ids == ("finance", "evidence")
+    assert intent.evidence_basis == ("summary", "audit_summary")
+    assert kpi_node.parent_id == "bounded-finance-intent"
+    assert driver.maps_to == ("value_capture",)
+    assert reasoning.status == "backed"

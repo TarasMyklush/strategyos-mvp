@@ -177,6 +177,8 @@ def test_findings_endpoint_supports_domain_filters_and_kpi_contracts(monkeypatch
         assert payload["finding_count"] == 2
         assert any(item["active"] is True for item in payload["domain_filters"])
         assert payload["kpi_cards"][0]["card_id"] == "recoverable_value"
+        assert payload["metrics"]["finding_count"] == 2
+        assert payload["metrics"]["filtered_finding_count"] == 2
         assert payload["trend"]["count"] == 1
     finally:
         _restore_env(original)
@@ -353,6 +355,194 @@ def test_public_report_preview_returns_board_safe_summary(monkeypatch):
         assert payload["artifact_key"] == "executive_summary"
         assert "Recoverable value identified" in payload["preview_text"]
         assert "Top case: Duplicate payment for invoice INV-1" in payload["preview_text"]
+    finally:
+        _restore_env(original)
+
+
+def test_authenticated_bu_report_preview_returns_governed_publication_posture(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_BU_API_KEYS": "bu-key",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {
+            **_FAKE_SUMMARY,
+            "current_stage": "awaiting_review",
+            "artifacts": {
+                "case_file": "/tmp/Final consolidated case file.md",
+                "working_capital": "/tmp/Working Capital Memo.md",
+                "citation_audit": "/tmp/StrategyOS Citation Audit.json",
+            },
+        })
+        client = TestClient(api_module.app)
+
+        response = client.get(
+            "/runs/latest/report-preview", headers={"X-API-Key": "bu-key"}
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["public_safe"] is False
+        assert payload["publication"]["status"] == "approved_for_release"
+        assert payload["publication"]["report_count"] == 2
+        assert payload["publication"]["restricted_report_count"] == 1
+        assert payload["publication"]["allowed_actions"] == [
+            "view_governed_report_status",
+            "view_report_preview",
+        ]
+        assert "governed publication posture" in payload["preview_text"].lower()
+    finally:
+        _restore_env(original)
+
+
+def test_latest_run_and_findings_reconcile_to_graph_metrics(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_latest_summary",
+            lambda: {
+                **_FAKE_SUMMARY,
+                "locked_findings": 99,
+                "total_recoverable_sar": 999999,
+                "artifacts": {"working_capital": "/tmp/Working Capital Memo.md"},
+            },
+        )
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        latest = client.get("/runs/latest", headers={"X-API-Key": "operator-secret"})
+        findings = client.get(
+            "/runs/latest/findings", headers={"X-API-Key": "operator-secret"}
+        )
+
+        assert latest.status_code == 200
+        assert findings.status_code == 200
+        latest_payload = latest.json()
+        findings_payload = findings.json()
+        assert latest_payload["locked_findings"] == 2
+        assert latest_payload["total_recoverable_sar"] == 223676
+        assert findings_payload["locked_findings"] == 2
+        assert findings_payload["metrics"]["total_recoverable_sar"] == 223676
+        assert findings_payload["metrics"]["citation_count"] == 3
+    finally:
+        _restore_env(original)
+
+
+def test_pending_review_lists_include_item_workflow_and_publication(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_BU_API_KEYS": "bu-key",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(
+            api_module.state_store,
+            "list_pending_reviews",
+            lambda: [
+                {
+                    "run_id": "run-test",
+                    "status": "awaiting_review",
+                    "current_stage": "awaiting_review",
+                    "approval_status": "pending",
+                    "review_assignment": {"claimed": True, "claimed_by": "reviewer-1"},
+                    "summary_json": {
+                        **_FAKE_SUMMARY,
+                        "approval_status": "pending",
+                        "artifacts": {"working_capital": "/tmp/Working Capital Memo.md"},
+                    },
+                }
+            ],
+        )
+        client = TestClient(api_module.app)
+
+        response = client.get("/bu/pending-reviews", headers={"X-API-Key": "bu-key"})
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["workflow_summary"]["pending_count"] == 1
+        assert payload["items"][0]["workflow_summary"]["next_action"] == "review_decision"
+        assert payload["items"][0]["publication"]["report_count"] == 1
+    finally:
+        _restore_env(original)
+
+
+def test_data_status_includes_workflow_and_publication_posture(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_TENANT_ADMIN_API_KEYS": "tenant-admin-secret",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {
+            **_FAKE_SUMMARY,
+            "current_stage": "awaiting_review",
+            "status": "awaiting_review",
+            "artifacts": {"working_capital": "/tmp/Working Capital Memo.md"},
+            "tenant_context": {
+                "tenant_id": "tenant-alpha",
+                "tenant_name": "Tenant Alpha",
+                "workspace_id": "tenant-alpha",
+            },
+        })
+        monkeypatch.setattr(
+            api_module,
+            "data_management_status",
+            lambda: {"status": "ready", "run_id": "run-test", "counts": {"findings": 2}},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "graph_status_for_run",
+            lambda run_id: {"status": "ready", "run_id": run_id},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "vector_status_for_run",
+            lambda run_id: {"status": "ready", "run_id": run_id},
+        )
+        monkeypatch.setattr(
+            api_module.state_store,
+            "list_pending_reviews",
+            lambda: [{"run_id": "run-test", "review_assignment": {"claimed": True}}],
+        )
+        monkeypatch.setattr(
+            api_module.state_store,
+            "list_recent_runs",
+            lambda limit=5: [{"run_id": "run-test", "status": "awaiting_review"}],
+        )
+        client = TestClient(api_module.app)
+
+        response = client.get(
+            "/data/status", headers={"X-API-Key": "tenant-admin-secret"}
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["workflow"]["pending_reviews"] == 1
+        assert payload["workflow"]["recent_runs"] == 1
+        assert payload["publication"]["report_count"] == 1
+        assert payload["tenant_context"]["tenant_id"] == "tenant-alpha"
+        assert payload["runtime_posture"]["latest_run_id"] == "run-test"
     finally:
         _restore_env(original)
 

@@ -32,6 +32,13 @@ from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
 from .platform_foundation import (
     ARTIFACT_TITLES,
+    DomainMetricContract,
+    DomainNodeContract,
+    PlanHealthContract,
+    StrategyIntentContract,
+    StrategyKpiNodeContract,
+    StrategyReasoningContract,
+    ValueDriverContract,
     artifact_contracts_payload,
     build_case_summary_contracts,
     build_domain_filter_contracts,
@@ -301,16 +308,39 @@ def _latest_summary() -> dict[str, Any] | None:
 def _latest_run_public_payload(summary: dict[str, Any] | None) -> dict[str, Any]:
     if summary is None:
         return {"status": "missing"}
+    rows = _finding_rows_from_summary(summary)
+    audit_summary = _latest_run_audit_summary_payload(summary)
+    metrics = _governed_metrics_payload(summary, rows, audit_summary)
     return {
         "status": "ok",
         "run_id": summary.get("run_id"),
         "current_stage": summary.get("current_stage"),
         "approval_status": summary.get("approval_status"),
         "requires_human_review": bool(summary.get("requires_human_review")),
-        "total_recoverable_sar": summary.get("total_recoverable_sar"),
-        "locked_findings": summary.get("locked_findings"),
+        "total_recoverable_sar": metrics["total_recoverable_sar"],
+        "locked_findings": metrics["locked_findings"],
+        "citation_count": metrics["citation_count"],
+        "resolved_count": metrics["resolved_count"],
+        "challenged_cases": metrics["challenged_count"],
+        "report_count": metrics["report_count"],
         "public_safe": True,
     }
+
+
+def _summary_with_reconciled_metrics(summary: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {"status": "missing"}
+    rows = _finding_rows_from_summary(summary)
+    audit_summary = _latest_run_audit_summary_payload(summary)
+    metrics = _governed_metrics_payload(summary, rows, audit_summary)
+    payload = dict(summary)
+    payload["total_recoverable_sar"] = metrics["total_recoverable_sar"]
+    payload["locked_findings"] = metrics["locked_findings"]
+    payload["citation_count"] = metrics["citation_count"]
+    payload["resolved_count"] = metrics["resolved_count"]
+    payload["challenged_cases"] = metrics["challenged_count"]
+    payload["report_count"] = metrics["report_count"]
+    return payload
 
 
 def _finding_case_href(case_id: str, *, public_safe: bool) -> str:
@@ -1087,6 +1117,521 @@ def _trend_card_payload(limit: int = 6) -> dict[str, Any]:
     return {"count": len(points), "points": points}
 
 
+def _format_sar_brief(value: Any) -> str:
+    try:
+        number = float(value or 0.0)
+    except (TypeError, ValueError):
+        return "--"
+    absolute = abs(number)
+    if absolute >= 1_000_000:
+        return f"SAR {number / 1_000_000:.1f}M"
+    if absolute >= 1_000:
+        return f"SAR {round(number / 1_000):,.0f}K"
+    return f"SAR {round(number):,}"
+
+
+def _format_ratio_display(resolved: int | None, total: int | None) -> str:
+    if total in (None, 0):
+        return "--"
+    return f"{int(resolved or 0)} / {int(total)}"
+
+
+def _governed_metrics_payload(
+    summary: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+    audit_summary: dict[str, Any] | None,
+    *,
+    filtered_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    all_rows = list(rows or [])
+    view_rows = list(filtered_rows) if filtered_rows is not None else list(all_rows)
+    citation_count = sum(int(row.get("citation_count") or 0) for row in all_rows)
+    filtered_citation_count = sum(int(row.get("citation_count") or 0) for row in view_rows)
+    challenged_count = sum(1 for row in all_rows if row.get("challenged"))
+    filtered_challenged_count = sum(1 for row in view_rows if row.get("challenged"))
+    resolved_count = int((audit_summary or {}).get("resolved_count") or 0)
+    total_recoverable = round(
+        sum(float(row.get("recoverable_sar") or 0.0) for row in all_rows),
+        2,
+    )
+    filtered_total_recoverable = round(
+        sum(float(row.get("recoverable_sar") or 0.0) for row in view_rows),
+        2,
+    )
+    report_contracts = _summary_report_contracts(summary)
+    reports = list(report_contracts.get("reports") or [])
+    evidence = list(report_contracts.get("evidence") or [])
+    return {
+        "total_recoverable_sar": total_recoverable
+        if all_rows
+        else (summary or {}).get("total_recoverable_sar"),
+        "filtered_total_recoverable_sar": filtered_total_recoverable,
+        "locked_findings": len(all_rows) if all_rows else (summary or {}).get("locked_findings"),
+        "finding_count": len(all_rows),
+        "filtered_finding_count": len(view_rows),
+        "citation_count": citation_count,
+        "filtered_citation_count": filtered_citation_count,
+        "resolved_count": resolved_count,
+        "challenged_count": challenged_count,
+        "filtered_challenged_count": filtered_challenged_count,
+        "report_count": len(reports),
+        "evidence_count": len(evidence),
+        "artifact_count": len((summary or {}).get("artifacts") or {})
+        if isinstance(summary, dict)
+        else 0,
+    }
+
+
+def _bounded_plan_health_payload(
+    summary: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+    audit_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    metrics = _governed_metrics_payload(summary, rows, audit_summary)
+    challenged_count = metrics["challenged_count"]
+    case_count = metrics["finding_count"]
+    citation_count = metrics["citation_count"]
+    resolved_count = metrics["resolved_count"]
+    artifact_count = metrics["artifact_count"]
+    approval_status = str((summary or {}).get("approval_status") or "pending").lower()
+    if not summary:
+        contract = PlanHealthContract(
+            status="awaiting_run",
+            badge="story mode",
+            label="Awaiting governed run",
+            summary="No governed finance packet has landed yet, so multi-domain posture stays at substrate level only.",
+            boundary="Finance-derived signal only — StrategyOS is composing executive posture from current cases, evidence, release, and runtime boundary data, not a full enterprise strategy compiler.",
+            root_label="Governed plan posture",
+            root_summary="Finance, evidence, release, and runtime lanes are wired as a truthful substrate; live posture appears after the first governed run.",
+            tone="neutral",
+            child_ids=("finance", "evidence", "release", "runtime"),
+        )
+        return artifact_contracts_payload(contract)
+    if challenged_count:
+        status = "needs_reviewer_closure"
+        badge = "human gate"
+        label = "Needs reviewer closure"
+        summary_text = f"{challenged_count} challenged case{'s' if challenged_count != 1 else ''} keep the broader plan readout bounded by evidence closure."
+        tone = "warn"
+    elif approval_status == "approved" and artifact_count:
+        status = "release_posture_clear"
+        badge = "release posture"
+        label = "Release posture is clear"
+        summary_text = "Finance signal, evidence posture, and board-output readiness are aligned enough for a bounded executive release view."
+        tone = "ok"
+    elif approval_status in {"pending", "awaiting_review", ""}:
+        status = "review_gate_visible"
+        badge = "bounded KPI layer"
+        label = "Review gate visible"
+        summary_text = "Value, evidence, and release signals exist, but the workflow is still waiting for human sign-off."
+        tone = "neutral"
+    else:
+        status = "bounded_actionable"
+        badge = "bounded KPI layer"
+        label = "Finance signal is actionable"
+        summary_text = "The current packet supports a truthful next-move readout without claiming portfolio-wide strategic compilation."
+        tone = "ok"
+    contract = PlanHealthContract(
+        status=status,
+        badge=badge,
+        label=label,
+        summary=summary_text,
+        boundary="Finance-derived signal only — StrategyOS is composing executive posture from current cases, evidence, release, and runtime boundary data, not a full enterprise strategy compiler.",
+        root_label="Governed plan posture",
+        root_summary=f"{case_count} governed case{'s' if case_count != 1 else ''}, {_format_ratio_display(resolved_count, citation_count)} citations, and {artifact_count} surfaced artifact{'s' if artifact_count != 1 else ''} currently define the bounded executive plan readout.",
+        tone=tone,
+        child_ids=("finance", "evidence", "release", "runtime"),
+    )
+    return artifact_contracts_payload(contract)
+
+
+def _multi_domain_tree_payload(
+    summary: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+    audit_summary: dict[str, Any] | None,
+    principal: dict[str, Any],
+) -> dict[str, Any]:
+    challenged_count = sum(1 for row in rows if row.get("challenged"))
+    case_count = len(rows)
+    citation_count = sum(int(row.get("citation_count") or 0) for row in rows)
+    resolved_count = int((audit_summary or {}).get("resolved_count") or 0)
+    report_contracts = _summary_report_contracts(summary)
+    evidence_artifacts = len(list(report_contracts.get("evidence") or []))
+    report_artifacts = len(list(report_contracts.get("reports") or []))
+    approval_status = str((summary or {}).get("approval_status") or "pending")
+    requires_human_review = bool((summary or {}).get("requires_human_review", CONFIG.require_human_review))
+    public_safe = _principal_prefers_public_safe_surface(principal)
+    findings_route = "/public/runs/latest/findings" if public_safe else "/runs/latest/findings"
+    report_route = "/public/runs/latest/report-preview" if public_safe else "/reviewer/runs/{run_id}"
+    nodes = [
+        DomainNodeContract(
+            domain_id="finance",
+            label="Finance spine",
+            portfolio_id="finance-diagnostics",
+            status="Signal live" if summary else "Awaiting run",
+            summary=(
+                "Recoverable value and governed cases are the current anchor domain."
+                if summary
+                else "Value signal appears after the first governed finance run."
+            ),
+            route=findings_route,
+            tone="ok" if summary else "neutral",
+            metrics=[
+                DomainMetricContract(
+                    "recoverable_value",
+                    "Recoverable value",
+                    _format_sar_brief((summary or {}).get("total_recoverable_sar")),
+                    "Bounded to the latest governed finance packet.",
+                    "ok" if summary else "neutral",
+                ),
+                DomainMetricContract(
+                    "governed_cases",
+                    "Governed cases",
+                    str(case_count) if summary else "--",
+                    "Case count traced from the current governed run.",
+                    "neutral",
+                ),
+            ],
+            children=("finance_value", "finance_cases"),
+        ),
+        DomainNodeContract(
+            domain_id="evidence",
+            label="Evidence governance",
+            portfolio_id="evidence-governance",
+            status="Needs closure" if challenged_count else "Chain visible" if summary else "Awaiting run",
+            summary=(
+                f"{challenged_count} challenged case{'s' if challenged_count != 1 else ''} are still shaping release safety."
+                if challenged_count
+                else "Citation resolution and evidence packet posture are part of the executive view now."
+                if summary
+                else "Evidence posture becomes meaningful once a governed packet exists."
+            ),
+            route=f"{findings_route}?domain=evidence_qa",
+            tone="warn" if challenged_count else "ok" if summary else "neutral",
+            metrics=[
+                DomainMetricContract(
+                    "citation_resolution",
+                    "Citation resolution",
+                    _format_ratio_display(resolved_count, citation_count),
+                    "Resolved versus surfaced citations in the active packet.",
+                    "ok" if citation_count and resolved_count == citation_count else "warn" if summary else "neutral",
+                ),
+                DomainMetricContract(
+                    "evidence_artifacts",
+                    "Evidence artifacts",
+                    str(evidence_artifacts) if summary else "--",
+                    "Artifacts available for evidence QA and citation audit.",
+                    "neutral",
+                ),
+            ],
+            children=("evidence_citations", "evidence_artifacts"),
+        ),
+        DomainNodeContract(
+            domain_id="release",
+            label="Release posture",
+            portfolio_id="release-readiness",
+            status="Board-safe preview" if summary else "Awaiting run",
+            summary=(
+                "Approval state and surfaced report artifacts now shape a bounded board-output posture."
+                if summary
+                else "Report posture appears after the first governed packet lands."
+            ),
+            route=report_route,
+            tone="ok" if approval_status.lower() == "approved" and report_artifacts else "neutral",
+            metrics=[
+                DomainMetricContract(
+                    "approval_state",
+                    "Approval state",
+                    approval_status.replace("_", " ").title() if summary else "Pending",
+                    "Human review remains the release gate." if requires_human_review else "Human gate is optional in this environment.",
+                    "ok" if approval_status.lower() == "approved" else "warn" if summary else "neutral",
+                ),
+                DomainMetricContract(
+                    "report_artifacts",
+                    "Report artifacts",
+                    str(report_artifacts) if summary else "--",
+                    "Board-previewable outputs surfaced by the current run.",
+                    "neutral",
+                ),
+            ],
+            children=("release_approval", "release_artifacts"),
+        ),
+        DomainNodeContract(
+            domain_id="runtime",
+            label="Runtime boundary",
+            portfolio_id="runtime-governance",
+            status="Protected lane",
+            summary="System health, connectors, graph, and vector stores remain in the tenant-admin / system lane so executive posture stays clean.",
+            route="/app?lane=system",
+            tone="neutral",
+            metrics=[
+                DomainMetricContract(
+                    "runtime_backend",
+                    "Run backend",
+                    str(CONFIG.runtime_backend or "local"),
+                    "Current configured execution backend.",
+                    "neutral",
+                ),
+                DomainMetricContract(
+                    "auth_mode",
+                    "Auth boundary",
+                    str(CONFIG.auth_mode or "disabled").replace("_", " "),
+                    "Inspect live dependency and store detail through the protected system lane.",
+                    "neutral",
+                ),
+            ],
+            children=("runtime_backend", "runtime_auth"),
+        ),
+    ]
+    plan_health = _bounded_plan_health_payload(summary, rows, audit_summary)
+    return {
+        "root": {
+            "label": plan_health["root_label"],
+            "summary": plan_health["root_summary"],
+            "status": plan_health["label"],
+            "tone": plan_health["tone"],
+            "child_ids": list(plan_health["child_ids"]),
+        },
+        "nodes": [artifact_contracts_payload(item) for item in nodes],
+    }
+
+
+def _strategy_substrate_payload(
+    summary: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+    audit_summary: dict[str, Any] | None,
+    principal: dict[str, Any],
+) -> dict[str, Any]:
+    boundary = (
+        "Finance-derived signal only — StrategyOS is composing a bounded KPI tree, "
+        "value-driver map, and strategy intent from governed cases, evidence posture, "
+        "publication readiness, and runtime boundary truth; it is not claiming a full "
+        "enterprise strategy compiler."
+    )
+    challenged_count = sum(1 for row in rows if row.get("challenged"))
+    case_count = len(rows)
+    citation_count = sum(int(row.get("citation_count") or 0) for row in rows)
+    resolved_count = int((audit_summary or {}).get("resolved_count") or 0)
+    report_contracts = _summary_report_contracts(summary)
+    report_artifacts = len(list(report_contracts.get("reports") or []))
+    total_recoverable = float((summary or {}).get("total_recoverable_sar") or 0.0)
+    approval_status = str((summary or {}).get("approval_status") or "pending").lower()
+    requires_human_review = bool((summary or {}).get("requires_human_review", CONFIG.require_human_review))
+    public_safe = _principal_prefers_public_safe_surface(principal)
+    findings_route = "/public/runs/latest/findings" if public_safe else "/runs/latest/findings"
+    evidence_route = f"{findings_route}?domain=evidence_qa"
+    review_route = "/reviewer/pending-reviews"
+    report_route = "/public/runs/latest/report-preview" if public_safe else "/reviewer/runs/{run_id}"
+    runtime_route = "/app?lane=system"
+
+    if not summary:
+        intent = StrategyIntentContract(
+            intent_id="bounded-finance-intent",
+            label="Convert governed finance signal into executive action",
+            status="substrate_only",
+            summary="The strategy layer is live only as a truthful substrate. It will not infer plan direction until a governed run lands with cases, evidence posture, and release state.",
+            horizon="Current governed workspace only",
+            next_decision="Run the first governed packet before treating any KPI branch or value-driver path as actionable.",
+            boundary=boundary,
+            evidence_basis=("workspace_contract", "runtime_boundary"),
+        )
+        kpi_nodes = [
+            StrategyKpiNodeContract("value_capture", "bounded-finance-intent", "Value capture", "awaiting_run", "--", "Recoverable value appears after the first governed run."),
+            StrategyKpiNodeContract("evidence_confidence", "bounded-finance-intent", "Evidence confidence", "awaiting_run", "--", "Citation closure and challenge posture appear after the first governed run."),
+            StrategyKpiNodeContract("release_readiness", "bounded-finance-intent", "Release readiness", "awaiting_run", "--", "Approval state and surfaced report artifacts are not available yet."),
+            StrategyKpiNodeContract("runtime_boundary", "bounded-finance-intent", "Runtime boundary", "protected", str(CONFIG.auth_mode or "disabled").replace("_", " "), "The operating boundary exists already and remains protected in the system lane."),
+        ]
+        value_drivers = [
+            ValueDriverContract("cash_recovery", "Cash recovery driver", "awaiting_run", "--", "Will map recoverable value from governed findings once a packet exists.", findings_route, maps_to=("value_capture",)),
+            ValueDriverContract("evidence_closure", "Evidence closure driver", "awaiting_run", "--", "Will map citation resolution and challenge closure once evidence exists.", evidence_route, maps_to=("evidence_confidence",)),
+            ValueDriverContract("publication_handoff", "Publication handoff driver", "awaiting_run", "--", "Will map approval state and board-safe report surfaces after a governed run.", report_route, maps_to=("release_readiness",)),
+        ]
+        reasoning = [
+            StrategyReasoningContract(
+                reasoning_id="substrate-hold",
+                claim="Hold the strategy layer at substrate level until governed evidence exists.",
+                status="bounded",
+                rationale="No governed run summary is available, so StrategyOS can only expose the operating frame and not a fabricated strategic conclusion.",
+                evidence_basis=("workspace_contract", "runtime_boundary"),
+            )
+        ]
+        return {
+            "status": "awaiting_run",
+            "boundary": boundary,
+            "intent": artifact_contracts_payload(intent),
+            "kpi_tree": {
+                "root": {
+                    "node_id": intent.intent_id,
+                    "label": intent.label,
+                    "status": intent.status,
+                    "summary": intent.summary,
+                    "horizon": intent.horizon,
+                },
+                "nodes": [artifact_contracts_payload(item) for item in kpi_nodes],
+            },
+            "value_drivers": [artifact_contracts_payload(item) for item in value_drivers],
+            "reasoning": [artifact_contracts_payload(item) for item in reasoning],
+        }
+
+    value_status = "live" if total_recoverable > 0 else "thin"
+    evidence_status = (
+        "needs_closure"
+        if challenged_count or (citation_count and resolved_count < citation_count)
+        else "governed"
+    )
+    release_status = "clear" if approval_status == "approved" and report_artifacts else "gated"
+    runtime_status = "protected"
+    next_decision = (
+        f"Resolve {challenged_count} challenged case{'s' if challenged_count != 1 else ''} before widening the executive narrative."
+        if challenged_count
+        else "Keep the board surface in preview mode until reviewer approval is recorded."
+        if requires_human_review and approval_status != "approved"
+        else "Use the bounded board-safe preview to frame value capture while keeping protected artifacts in governed lanes."
+    )
+    intent = StrategyIntentContract(
+        intent_id="bounded-finance-intent",
+        label="Convert governed finance signal into executive action",
+        status="bounded_actionable" if total_recoverable > 0 else "bounded_visible",
+        summary=(
+            f"The latest governed packet exposes {_format_sar_brief(total_recoverable)} across {case_count} governed case{'s' if case_count != 1 else ''}. "
+            "StrategyOS can now support a bounded strategy readout: protect value, close evidence gaps, and respect the release gate."
+        ),
+        horizon="Latest governed run only",
+        next_decision=next_decision,
+        boundary=boundary,
+        evidence_basis=(
+            "summary.total_recoverable_sar",
+            "finding_rows",
+            "audit_summary",
+            "report_contracts",
+        ),
+    )
+    kpi_nodes = [
+        StrategyKpiNodeContract(
+            "value_capture",
+            intent.intent_id,
+            "Value capture",
+            value_status,
+            _format_sar_brief(total_recoverable),
+            f"{case_count} governed case{'s' if case_count != 1 else ''} currently carry the recoverable value signal.",
+            "ok" if total_recoverable > 0 else "neutral",
+        ),
+        StrategyKpiNodeContract(
+            "evidence_confidence",
+            intent.intent_id,
+            "Evidence confidence",
+            evidence_status,
+            _format_ratio_display(resolved_count, citation_count),
+            f"{challenged_count} challenged case{'s' if challenged_count != 1 else ''} and citation closure define how much strategic weight the packet can bear.",
+            "warn" if evidence_status == "needs_closure" else "ok",
+        ),
+        StrategyKpiNodeContract(
+            "release_readiness",
+            intent.intent_id,
+            "Release readiness",
+            release_status,
+            f"{approval_status.replace('_', ' ').title()} · {report_artifacts} artifact{'s' if report_artifacts != 1 else ''}",
+            "Publication remains governed by reviewer approval and surfaced report artifacts.",
+            "ok" if release_status == "clear" else "warn",
+        ),
+        StrategyKpiNodeContract(
+            "runtime_boundary",
+            intent.intent_id,
+            "Runtime boundary",
+            runtime_status,
+            str(CONFIG.auth_mode or "disabled").replace("_", " "),
+            "Execution, connectors, graph, and store truth remain protected outside the executive lane.",
+            "neutral",
+        ),
+    ]
+    value_drivers = [
+        ValueDriverContract(
+            "cash_recovery",
+            "Cash recovery driver",
+            "active" if total_recoverable > 0 else "thin",
+            _format_sar_brief(total_recoverable),
+            f"Mapped from {case_count} governed case{'s' if case_count != 1 else ''} in the current packet.",
+            findings_route,
+            "ok" if total_recoverable > 0 else "neutral",
+            ("value_capture",),
+        ),
+        ValueDriverContract(
+            "evidence_closure",
+            "Evidence closure driver",
+            "gated" if evidence_status == "needs_closure" else "active",
+            _format_ratio_display(resolved_count, citation_count),
+            f"Bounded by {challenged_count} challenged case{'s' if challenged_count != 1 else ''} and the current citation resolution ratio.",
+            evidence_route,
+            "warn" if evidence_status == "needs_closure" else "ok",
+            ("evidence_confidence",),
+        ),
+        ValueDriverContract(
+            "publication_handoff",
+            "Publication handoff driver",
+            "clear" if release_status == "clear" else "gated",
+            f"{approval_status.replace('_', ' ').title()} · {report_artifacts} report artifact{'s' if report_artifacts != 1 else ''}",
+            "Maps the governed review gate into executive publication posture.",
+            review_route if release_status != "clear" else report_route,
+            "ok" if release_status == "clear" else "warn",
+            ("release_readiness",),
+        ),
+        ValueDriverContract(
+            "runtime_governance",
+            "Runtime governance driver",
+            "protected",
+            str(CONFIG.runtime_backend or "local"),
+            "Keeps the strategy layer bounded to what the hosted runtime and auth boundary can honestly support now.",
+            runtime_route,
+            "neutral",
+            ("runtime_boundary",),
+        ),
+    ]
+    reasoning = [
+        StrategyReasoningContract(
+            reasoning_id="protect-value",
+            claim="Protect the current value signal before broadening strategy claims.",
+            status="backed" if total_recoverable > 0 else "thin",
+            rationale=f"The latest governed run surfaces {_format_sar_brief(total_recoverable)} across {case_count} cases, so value capture is the only strategy branch with direct quantitative support right now.",
+            evidence_basis=("summary.total_recoverable_sar", "finding_rows.recoverable_sar"),
+        ),
+        StrategyReasoningContract(
+            reasoning_id="close-evidence",
+            claim="Keep evidence closure ahead of narrative expansion.",
+            status="gated" if evidence_status == "needs_closure" else "backed",
+            rationale=(
+                f"Citation resolution is {_format_ratio_display(resolved_count, citation_count)} with {challenged_count} challenged case{'s' if challenged_count != 1 else ''}; that evidence posture bounds how assertive the executive layer may be."
+            ),
+            evidence_basis=("audit_summary.resolved_count", "finding_rows.citation_count", "finding_rows.challenged"),
+        ),
+        StrategyReasoningContract(
+            reasoning_id="respect-release-gate",
+            claim="Treat publication as governed intent, not autonomous release.",
+            status="ready" if release_status == "clear" else "gated",
+            rationale=(
+                f"Approval is {approval_status.replace('_', ' ')} and {report_artifacts} report artifact{'s' if report_artifacts != 1 else ''} are surfaced, so the executive layer can describe release posture but not bypass reviewer or operator controls."
+            ),
+            evidence_basis=("summary.approval_status", "report_contracts.reports", "runtime_boundary"),
+        ),
+    ]
+    return {
+        "status": "ok",
+        "boundary": boundary,
+        "intent": artifact_contracts_payload(intent),
+        "kpi_tree": {
+            "root": {
+                "node_id": intent.intent_id,
+                "label": intent.label,
+                "status": intent.status,
+                "summary": intent.summary,
+                "horizon": intent.horizon,
+            },
+            "nodes": [artifact_contracts_payload(item) for item in kpi_nodes],
+        },
+        "value_drivers": [artifact_contracts_payload(item) for item in value_drivers],
+        "reasoning": [artifact_contracts_payload(item) for item in reasoning],
+    }
+
+
 def _role_lane_contracts(principal: dict[str, Any]) -> dict[str, Any]:
     role = str(principal.get("role") or "anonymous")
     return {
@@ -1125,6 +1670,7 @@ def _role_lane_contracts(principal: dict[str, Any]) -> dict[str, Any]:
             "connectors_route": "/ingestion/connectors",
             "runtime_routes": {
                 "data_status": "/data/status",
+                "report_preview": "/runs/latest/report-preview",
                 "health_ready": "/health/ready",
                 "health_config": "/health/config",
                 "health_dependencies": "/health/dependencies",
@@ -1165,6 +1711,235 @@ def _summary_report_contracts(summary: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
+def _summary_publication_payload(
+    summary: dict[str, Any] | None,
+    *,
+    principal_role: str | None = None,
+    public_safe: bool = False,
+) -> dict[str, Any]:
+    role = str(principal_role or "anonymous")
+    metrics = _governed_metrics_payload(
+        summary,
+        _finding_rows_from_summary(summary) if isinstance(summary, dict) else [],
+        _latest_run_audit_summary_payload(summary) if isinstance(summary, dict) else None,
+    )
+    report_contracts = _summary_report_contracts(summary)
+    reports = list(report_contracts.get("reports") or [])
+    evidence = list(report_contracts.get("evidence") or [])
+    can_open_paths = principal_has_any_role(role, "operator", "reviewer")
+    can_open_restricted = principal_has_any_role(role, "operator", "reviewer")
+    visible_reports = _sanitize_contract_list(
+        reports,
+        include_paths=can_open_paths,
+        include_restricted=can_open_restricted,
+    )
+    restricted_reports = sum(1 for item in reports if item.get("restricted"))
+    unrestricted_reports = len(reports) - restricted_reports
+    approval_status = str((summary or {}).get("approval_status") or "pending").lower()
+    current_stage = _normalize_lifecycle_stage((summary or {}).get("current_stage"))
+    run_status = str((summary or {}).get("status") or "").lower()
+    if run_status == "completed":
+        release_status = "published"
+    elif approval_status == "approved":
+        release_status = "approved_for_release"
+    elif approval_status == "rejected":
+        release_status = "blocked"
+    elif current_stage == "awaiting_review":
+        release_status = "awaiting_review"
+    else:
+        release_status = "draft"
+    if public_safe or principal_has_any_role(role, "executive"):
+        allowed_actions = ("view_board_safe_preview",)
+    elif principal_has_any_role(role, "bu"):
+        allowed_actions = ("view_governed_report_status", "view_report_preview")
+    elif principal_has_any_role(role, "reviewer"):
+        allowed_actions = (
+            "view_governed_report_status",
+            "view_report_preview",
+            "open_report_artifact",
+            "approve_or_reject_release",
+        )
+    elif principal_has_any_role(role, "operator"):
+        allowed_actions = (
+            "view_governed_report_status",
+            "view_report_preview",
+            "open_report_artifact",
+            "resume_publication",
+        )
+    elif principal_has_any_role(role, "tenant_admin", "system"):
+        allowed_actions = (
+            "inspect_publication_boundary",
+            "inspect_artifact_posture",
+            "inspect_runtime_release_state",
+        )
+    else:
+        allowed_actions = ("view_report_preview",)
+    return {
+        "run_id": (summary or {}).get("run_id"),
+        "status": release_status,
+        "approval_status": approval_status,
+        "current_stage": current_stage,
+        "requires_human_review": bool((summary or {}).get("requires_human_review")),
+        "report_count": len(reports),
+        "evidence_count": len(evidence),
+        "restricted_report_count": restricted_reports,
+        "unrestricted_report_count": unrestricted_reports,
+        "challenged_cases": metrics["challenged_count"],
+        "has_public_preview": True,
+        "preview_route": "/public/runs/latest/report-preview"
+        if public_safe or principal_has_any_role(role, "executive")
+        else "/runs/latest/report-preview",
+        "publish_ready": approval_status == "approved" and bool(reports),
+        "available_artifacts": visible_reports,
+        "allowed_actions": allowed_actions,
+    }
+
+
+def _record_workflow_summary(record: dict[str, Any] | None) -> dict[str, Any]:
+    payload = record or {}
+    approval_status = str(
+        payload.get("approval_status")
+        or (payload.get("approval") or {}).get("approval_status")
+        or (payload.get("summary_json") or {}).get("approval_status")
+        or "pending"
+    ).lower()
+    current_stage = _normalize_lifecycle_stage(
+        payload.get("current_stage")
+        or (payload.get("latest_checkpoint") or {}).get("stage")
+        or (payload.get("summary_json") or {}).get("current_stage")
+    )
+    run_status = str(
+        payload.get("status")
+        or payload.get("run_status")
+        or (payload.get("summary_json") or {}).get("status")
+        or "unknown"
+    ).lower()
+    assignment = payload.get("review_assignment") or {}
+    claimed = bool(assignment.get("claimed"))
+    if run_status == "completed":
+        next_action = "inspect_published_outputs"
+    elif approval_status == "approved" and current_stage == "awaiting_review":
+        next_action = "operator_resume"
+    elif approval_status == "rejected":
+        next_action = "revise_evidence_or_rerun"
+    elif current_stage == "awaiting_review" and claimed:
+        next_action = "review_decision"
+    elif current_stage == "awaiting_review":
+        next_action = "claim_review"
+    else:
+        next_action = "continue_workflow"
+    return {
+        "run_status": run_status,
+        "current_stage": current_stage,
+        "approval_status": approval_status,
+        "claimed": claimed,
+        "claimed_by": assignment.get("claimed_by"),
+        "requires_human_review": bool(
+            payload.get("requires_human_review")
+            if payload.get("requires_human_review") is not None
+            else (payload.get("summary_json") or {}).get("requires_human_review")
+        ),
+        "resumable": approval_status == "approved" and current_stage == "awaiting_review",
+        "next_action": next_action,
+    }
+
+
+def _latest_report_preview_payload(
+    principal: dict[str, Any],
+    artifact_key: str | None = None,
+) -> dict[str, Any]:
+    role = str(principal.get("role") or "anonymous")
+    summary = _latest_summary()
+    if summary is None:
+        return {
+            "status": "missing",
+            "artifact_key": artifact_key or "executive_summary",
+            "title": "Report preview",
+            "preview_kind": "text",
+            "preview_text": "No latest governed run is available yet.",
+            "public_safe": principal_has_any_role(role, "executive"),
+            "publication": _summary_publication_payload(
+                None,
+                principal_role=role,
+                public_safe=principal_has_any_role(role, "executive"),
+            ),
+        }
+    if principal_has_any_role(role, "executive"):
+        payload = _public_report_preview_payload(artifact_key)
+        payload["publication"] = _summary_publication_payload(
+            summary,
+            principal_role=role,
+            public_safe=True,
+        )
+        return payload
+
+    publication = _summary_publication_payload(summary, principal_role=role)
+    report_contracts = _summary_report_contracts(summary)
+    reports = list(report_contracts.get("reports") or [])
+    if not reports:
+        return {
+            "status": "missing",
+            "run_id": summary.get("run_id"),
+            "artifact_key": artifact_key or "report",
+            "title": "Report preview",
+            "preview_kind": "text",
+            "preview_text": "The latest run has not surfaced report artifacts yet.",
+            "public_safe": False,
+            "available_artifacts": publication["available_artifacts"],
+            "publication": publication,
+        }
+    selected = next(
+        (item for item in reports if item.get("artifact_key") == artifact_key), None
+    ) if artifact_key else None
+    if selected is None:
+        selected = reports[0]
+    selected_key = str(selected.get("artifact_key") or artifact_key or "report")
+    title = str(selected.get("title") or ARTIFACT_TITLES.get(selected_key, "Report preview"))
+    if principal_has_any_role(role, "operator", "reviewer"):
+        payload = _run_artifact_payload(str(summary.get("run_id") or ""), selected_key, principal)
+        payload["available_artifacts"] = publication["available_artifacts"]
+        payload["publication"] = publication
+        payload["title"] = title
+        payload["public_safe"] = False
+        return payload
+
+    if not selected.get("restricted"):
+        artifact_path = Path(str(selected.get("path") or ""))
+        if str(selected.get("path") or ""):
+            payload = _read_artifact_payload(
+                artifact_key=selected_key,
+                artifact_path=artifact_path,
+                scope="run",
+                run_id=str(summary.get("run_id") or ""),
+            )
+            payload.pop("path", None)
+            payload["available_artifacts"] = publication["available_artifacts"]
+            payload["publication"] = publication
+            payload["title"] = title
+            payload["public_safe"] = False
+            return payload
+
+    approval_status = str(summary.get("approval_status") or "pending")
+    current_stage = _normalize_lifecycle_stage(summary.get("current_stage"))
+    preview_lines = [
+        f"Run {summary.get('run_id') or 'latest'} is at {current_stage} with approval status {approval_status}.",
+        f"{publication['report_count']} report artifact(s) are tracked; {publication['restricted_report_count']} remain protected.",
+        "Use reviewer/operator artifact access for restricted bodies; this role gets governed publication posture only.",
+    ]
+    return {
+        "status": "ok",
+        "run_id": summary.get("run_id"),
+        "artifact_key": selected_key,
+        "title": title,
+        "preview_kind": "text",
+        "preview_text": "\n\n".join(preview_lines),
+        "available_artifacts": publication["available_artifacts"],
+        "publication": publication,
+        "restricted": bool(selected.get("restricted")),
+        "public_safe": False,
+    }
+
+
 def _sanitize_contract_list(
     items: list[dict[str, Any]],
     *,
@@ -1194,6 +1969,11 @@ def _workspace_surface_contract_payload(
     findings = build_case_summary_contracts(finding_rows) if isinstance(summary, dict) else []
     report_contracts = _summary_report_contracts(summary)
     audit_summary = _latest_run_audit_summary_payload(summary) if isinstance(summary, dict) else None
+    metrics = (
+        _governed_metrics_payload(summary, finding_rows, audit_summary)
+        if isinstance(summary, dict)
+        else _governed_metrics_payload(None, [], None)
+    )
     can_investigate = principal_has_any_role(role, *INVESTIGATION_ROLES)
     can_review = principal_has_any_role(role, *REVIEW_WORKFLOW_ROLES)
     can_read_review = principal_has_any_role(role, *REVIEW_READ_ROLES)
@@ -1329,6 +2109,10 @@ def _workspace_surface_contract_payload(
         "company_switcher": _company_switcher_payload(principal),
         "portfolio_switcher": _portfolio_switcher_payload(principal),
         "domain_filters": domain_filters,
+        "metrics": metrics,
+        "plan_health": _bounded_plan_health_payload(summary, finding_rows, audit_summary),
+        "domain_tree": _multi_domain_tree_payload(summary, finding_rows, audit_summary, principal),
+        "strategy_substrate": _strategy_substrate_payload(summary, finding_rows, audit_summary, principal),
         "kpi_cards": _kpi_card_payloads(summary, finding_rows, audit_summary),
         "trend": _trend_card_payload(),
         "lanes": _role_lane_contracts(principal),
@@ -1345,6 +2129,11 @@ def _workspace_surface_contract_payload(
             "count": len(filtered_reports),
             "artifacts": filtered_reports,
             "preview_route": "/public/runs/latest/report-preview",
+            "publication": _summary_publication_payload(
+                summary,
+                principal_role=role,
+                public_safe=public_safe,
+            ),
         },
     }
 
@@ -1386,6 +2175,27 @@ def _latest_run_audit_summary_payload(summary: dict[str, Any] | None) -> dict[st
             "resolved_count", acceptance.get("resolved_citation_count")
         ),
     }
+
+
+def _workflow_item_payloads(
+    items: list[dict[str, Any]],
+    *,
+    principal_role: str,
+) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for item in items:
+        summary = item.get("summary_json") if isinstance(item.get("summary_json"), dict) else item
+        payloads.append(
+            {
+                **item,
+                "workflow_summary": _record_workflow_summary(item),
+                "publication": _summary_publication_payload(
+                    summary if isinstance(summary, dict) else None,
+                    principal_role=principal_role,
+                ),
+            }
+        )
+    return payloads
 
 
 def _health_check(status: str, **details: Any) -> dict[str, Any]:
@@ -1922,6 +2732,10 @@ def _check_auth_boundary() -> dict[str, Any]:
         return _health_check("failed", reason="STRATEGYOS_REVIEWER_API_KEYS is empty.")
     return _health_check(
         "ok",
+        bu_keys=len(CONFIG.bu_api_keys),
+        tenant_operator_keys=len(CONFIG.tenant_operator_api_keys),
+        tenant_admin_keys=len(CONFIG.tenant_admin_api_keys),
+        system_keys=len(CONFIG.system_api_keys),
         operator_keys=len(CONFIG.operator_api_keys),
         reviewer_keys=len(CONFIG.reviewer_api_keys),
         public_live_health=CONFIG.public_health_enabled,
@@ -2071,7 +2885,7 @@ def _load_summary_artifact_json(
 def _sanitize_summary_for_bu(summary: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(summary, dict):
         return {"status": "missing"}
-    payload = dict(summary)
+    payload = _summary_with_reconciled_metrics(summary)
     payload.pop("run_dir", None)
     payload.pop("dataset", None)
     payload.pop("artifacts", None)
@@ -2747,13 +3561,22 @@ def bu_pending_reviews(
         items = _local_pending_review_items()
     role = str(principal.get("role") or "unknown")
     subject = str(principal.get("subject") or "unknown")
+    item_payloads = _workflow_item_payloads(items, principal_role=role)
     return {
-        "items": items,
+        "items": item_payloads,
         "store_status": store_status,
         "viewer_role": role,
         "viewer_subject": subject,
         "viewer_display_name": _display_name_for_principal(role, subject),
         "read_only": not principal_has_any_role(role, "reviewer"),
+        "workflow_summary": {
+            "pending_count": len(item_payloads),
+            "claimed_count": sum(
+                1
+                for item in item_payloads
+                if bool((item.get("review_assignment") or {}).get("claimed"))
+            ),
+        },
     }
 
 
@@ -2768,7 +3591,7 @@ def bu_runs(
     role = str(principal.get("role") or "unknown")
     subject = str(principal.get("subject") or "unknown")
     return {
-        "items": items,
+        "items": _workflow_item_payloads(items, principal_role=role),
         "store_status": store_status,
         "viewer_role": role,
         "viewer_subject": subject,
@@ -2794,6 +3617,11 @@ def bu_run_detail(
     sanitized["lifecycle_timeline"] = _run_lifecycle_timeline(record)
     sanitized["viewer_role"] = str(principal.get("role") or "unknown")
     sanitized["read_only"] = True
+    sanitized["workflow_summary"] = _record_workflow_summary(record)
+    sanitized["publication"] = _summary_publication_payload(
+        record.get("summary_json") if isinstance(record.get("summary_json"), dict) else record,
+        principal_role=str(principal.get("role") or "unknown"),
+    )
     return sanitized
 
 
@@ -2843,12 +3671,21 @@ def pending_reviews(
         items = _local_pending_review_items()
     role = str(principal.get("role") or "unknown")
     subject = str(principal.get("subject") or "unknown")
+    item_payloads = _workflow_item_payloads(items, principal_role=role)
     return {
-        "items": items,
+        "items": item_payloads,
         "store_status": store_status,
         "viewer_role": role,
         "viewer_subject": subject,
         "viewer_display_name": _display_name_for_principal(role, subject),
+        "workflow_summary": {
+            "pending_count": len(item_payloads),
+            "claimed_count": sum(
+                1
+                for item in item_payloads
+                if bool((item.get("review_assignment") or {}).get("claimed"))
+            ),
+        },
     }
 
 
@@ -2863,7 +3700,7 @@ def reviewer_runs(
     role = str(principal.get("role") or "unknown")
     subject = str(principal.get("subject") or "unknown")
     return {
-        "items": items,
+        "items": _workflow_item_payloads(items, principal_role=role),
         "store_status": store_status,
         "viewer_role": role,
         "viewer_subject": subject,
@@ -2885,6 +3722,11 @@ def reviewer_run_detail(
     )
     assert isinstance(record, dict)
     record["lifecycle_timeline"] = _run_lifecycle_timeline(record)
+    record["workflow_summary"] = _record_workflow_summary(record)
+    record["publication"] = _summary_publication_payload(
+        record.get("summary_json") if isinstance(record.get("summary_json"), dict) else record,
+        principal_role="reviewer",
+    )
     return record
 
 
@@ -3176,7 +4018,7 @@ def latest_run(
         return _latest_run_public_payload(summary)
     if principal_has_any_role(str(principal.get("role") or ""), "bu"):
         return _sanitize_summary_for_bu(summary)
-    return summary
+    return _summary_with_reconciled_metrics(summary)
 
 
 @app.get("/runs/latest/audit-summary")
@@ -3271,20 +4113,23 @@ def _latest_run_findings_payload(
         }
     rows = _finding_rows_from_summary(summary)
     filtered_rows = _filter_finding_rows(rows, domain_filter)
-    total_recoverable = summary.get("total_recoverable_sar")
-    if total_recoverable is None and rows:
-        total_recoverable = round(sum(row["recoverable_sar"] for row in rows), 2)
     findings_payload = _finding_case_contract_payloads(
         filtered_rows,
         run_id=str(summary.get("run_id") or "") or None,
         public_safe=public_safe,
     )
     audit_summary = _latest_run_audit_summary_payload(summary)
+    metrics = _governed_metrics_payload(
+        summary,
+        rows,
+        audit_summary,
+        filtered_rows=filtered_rows,
+    )
     payload = {
         "status": "ok",
         "run_id": summary.get("run_id"),
         "findings": findings_payload,
-        "finding_count": len(findings_payload),
+        "finding_count": metrics["filtered_finding_count"],
         "domain_filter": str(domain_filter or "finance_integrity"),
         "domain_filters": [
             artifact_contracts_payload(item)
@@ -3298,11 +4143,13 @@ def _latest_run_findings_payload(
                 ),
             )
         ],
-        "locked_findings": summary.get("locked_findings"),
-        "total_recoverable_sar": total_recoverable,
+        "locked_findings": metrics["locked_findings"],
+        "total_recoverable_sar": metrics["total_recoverable_sar"],
+        "filtered_total_recoverable_sar": metrics["filtered_total_recoverable_sar"],
         "requires_human_review": bool(summary.get("requires_human_review")),
         "approval_status": summary.get("approval_status"),
         "public_safe": public_safe,
+        "metrics": metrics,
         "kpi_cards": _kpi_card_payloads(summary, rows, audit_summary),
         "trend": _trend_card_payload(),
     }
@@ -3537,13 +4384,53 @@ def data_status(
     _: dict[str, Any] = require_role(*SYSTEM_READ_ROLES),
 ) -> dict[str, Any]:
     status_payload = data_management_status()
+    latest_summary = _latest_summary() or {}
     run_id = status_payload.get("run_id")
     if run_id is None:
-        latest_summary = _latest_summary() or {}
         run_id = latest_summary.get("run_id")
     status_payload["neo4j"] = graph_status_for_run(str(run_id) if run_id else None)
     status_payload["qdrant"] = vector_status_for_run(str(run_id) if run_id else None)
+    workflow_items, workflow_store_status = _store_list_or_empty(
+        state_store.list_pending_reviews()
+    )
+    recent_runs, recent_runs_store_status = _store_list_or_empty(
+        state_store.list_recent_runs(limit=5)
+    )
+    summary_source = latest_summary if latest_summary else None
+    metrics = _governed_metrics_payload(
+        summary_source,
+        _finding_rows_from_summary(summary_source) if summary_source else [],
+        _latest_run_audit_summary_payload(summary_source) if summary_source else None,
+    )
+    status_payload["tenant_context"] = _summary_tenant_context(
+        summary_source,
+        {"tenant_id": CONFIG.tenant_slug},
+    )
+    status_payload["metrics"] = metrics
+    status_payload["workflow"] = {
+        "store_status": workflow_store_status,
+        "pending_reviews": len(workflow_items),
+        "recent_runs": len(recent_runs),
+        "latest": _record_workflow_summary(summary_source or {}),
+    }
+    status_payload["publication"] = _summary_publication_payload(
+        summary_source,
+        principal_role="tenant_admin",
+    )
+    status_payload["runtime_posture"] = {
+        "run_store_status": recent_runs_store_status,
+        "has_latest_run": bool(summary_source),
+        "latest_run_id": (summary_source or {}).get("run_id"),
+    }
     return status_payload
+
+
+@app.get("/runs/latest/report-preview")
+def latest_report_preview(
+    artifact_key: str | None = None,
+    principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES, "tenant_admin", "system"),
+) -> dict[str, Any]:
+    return _latest_report_preview_payload(principal, artifact_key)
 
 
 @app.get("/data/vector-search")

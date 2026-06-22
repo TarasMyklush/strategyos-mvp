@@ -90,6 +90,10 @@
     return INTENT_LABELS[key] || humanizeToken(key);
   }
 
+  function reportLabel(key) {
+    return humanizeToken(key || "report");
+  }
+
   const state = {
     token: window.localStorage.getItem(TOKEN_KEY) || "",
     session: null,
@@ -159,8 +163,19 @@
     scopeNote: byId("scope-note"),
     scopeChipRow: byId("scope-chip-row"),
     detailBreadcrumb: byId("detail-breadcrumb"),
+    planHealthPill: byId("plan-health-pill"),
+    planHealthStatus: byId("plan-health-status"),
+    planHealthNote: byId("plan-health-note"),
+    planHealthSourceNote: byId("plan-health-source-note"),
+    planHealthKpiTree: byId("plan-health-kpi-tree"),
+    publicationSurfaceSummary: byId("publication-surface-summary"),
+    domainKpiGrid: byId("domain-kpi-grid"),
+    planHealthTree: byId("plan-health-tree"),
+    publicationSurfaceList: byId("publication-surface-list"),
     buSurfacePill: byId("bu-surface-pill"),
     buSurfaceNote: byId("bu-surface-note"),
+    buSurfaceKpiGrid: byId("bu-surface-kpi-grid"),
+    buWorkflowList: byId("bu-workflow-list"),
     buDomainFilters: byId("bu-domain-filters"),
     buCaseList: byId("bu-case-list"),
     reviewerSurfacePill: byId("reviewer-surface-pill"),
@@ -174,6 +189,8 @@
     systemSurfacePill: byId("system-surface-pill"),
     systemSurfaceNote: byId("system-surface-note"),
     systemPostureGrid: byId("system-posture-grid"),
+    systemWorkflowCompact: byId("system-workflow-compact"),
+    systemPublicationList: byId("system-publication-list"),
     systemSurfaceList: byId("system-surface-list"),
     drilldownStatusPill: byId("drilldown-status-pill"),
     drilldownCaseTitle: byId("drilldown-case-title"),
@@ -685,6 +702,15 @@
   }
 
   function availableCompanyOptions() {
+    const switcher = state.workspaceContract?.company_switcher || state.session?.company_switcher || {};
+    const options = Array.isArray(switcher.options) ? switcher.options : [];
+    if (options.length) {
+      return options.map((item) => ({
+        value: String(item.option_id || item.value || "current"),
+        label: String(item.label || item.option_name || item.option_id || "Current company"),
+        detail: String(item.route || item.detail || ""),
+      }));
+    }
     const tenant = currentTenantContext();
     const tenantName = tenant.tenant_name || tenant.tenant_id || "Current company";
     const tenantId = tenant.tenant_id || "current";
@@ -692,9 +718,13 @@
   }
 
   function availablePortfolioOptions() {
+    const switcher = state.workspaceContract?.portfolio_switcher || state.session?.portfolio_switcher || {};
+    const switcherOptions = Array.isArray(switcher.options) ? switcher.options : [];
+    const options = switcherOptions.length
+      ? switcherOptions.map((item) => ({ value: String(item.option_id || item.value || "all"), label: String(item.label || item.option_name || item.option_id || "Portfolio") }))
+      : [{ value: "all", label: "All governed portfolios" }];
     const run = state.latestRun || {};
     const findings = Array.isArray(state.findings?.findings) ? state.findings.findings : [];
-    const options = [{ value: "all", label: "All governed portfolios" }];
     if (findings.length || run.total_recoverable_sar !== undefined) {
       options.push({ value: "finance", label: "Finance diagnostics" });
     }
@@ -708,6 +738,167 @@
       options.push({ value: "runtime", label: "Runtime posture" });
     }
     return options;
+  }
+
+  function reportArtifactsFromContract() {
+    return Array.isArray(state.workspaceContract?.reports?.artifacts) ? state.workspaceContract.reports.artifacts : [];
+  }
+
+  function numericOrNull(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function sumFindingCitations(rows) {
+    const findings = Array.isArray(rows) ? rows : currentScopeFindings();
+    return findings.reduce((sum, item) => sum + (Number(item?.citation_count || 0) || 0), 0);
+  }
+
+  function normalizedCitationSummary(run, rows) {
+    const raw = citationSummary(run);
+    const findingLinked = sumFindingCitations(rows);
+    const rawCount = numericOrNull(raw.count);
+    const rawResolved = numericOrNull(raw.resolved);
+    const candidates = [rawCount, rawResolved, findingLinked].filter((value) => value !== null);
+    const total = candidates.length ? Math.max(...candidates) : null;
+    const resolved = rawResolved !== null ? rawResolved : findingLinked > 0 ? findingLinked : null;
+    const mismatch = rawCount !== null && findingLinked > 0 && rawCount !== findingLinked;
+    let detail = "Citation posture loads after a governed run surfaces evidence.";
+    if (total !== null && mismatch) {
+      detail = `Audit summary shows ${formatCount(rawResolved ?? resolved ?? 0)} resolved of ${formatCount(rawCount)} surfaced citations; current finding rows expose ${formatCount(findingLinked)} linked cites.`;
+    } else if (total !== null) {
+      detail = `Citation chain reconciles across the current audit summary and governed finding rows at ${formatCount(resolved ?? 0)} / ${formatCount(total)}.`;
+    } else if (findingLinked > 0) {
+      detail = `${formatCount(findingLinked)} finding-linked citations are visible while richer audit detail is still loading.`;
+    }
+    return {
+      count: total,
+      resolved,
+      findingLinked,
+      mismatch,
+      detail,
+    };
+  }
+
+  function publicationContract() {
+    return state.workspaceContract?.reports?.publication || state.dataStatus?.publication || {};
+  }
+
+  function publicationStatusTone(status) {
+    const normalized = String(status || "draft").toLowerCase();
+    if (["published", "approved_for_release"].includes(normalized)) return "ok";
+    if (["awaiting_review", "blocked"].includes(normalized)) return "warn";
+    return "neutral";
+  }
+
+  function publicationStatusLabel(status) {
+    return {
+      published: "Published",
+      approved_for_release: "Approved for release",
+      awaiting_review: "Awaiting review",
+      blocked: "Blocked",
+      draft: "Draft",
+    }[String(status || "draft").toLowerCase()] || humanizeToken(status || "draft");
+  }
+
+  function publicationActionLabels(publication) {
+    const mapping = {
+      view_board_safe_preview: "Board-safe preview",
+      view_governed_report_status: "Governed report status",
+      view_report_preview: "Report preview",
+      open_report_artifact: "Restricted artifact open",
+      approve_or_reject_release: "Approve or reject release",
+      resume_publication: "Resume publication",
+      inspect_publication_boundary: "Inspect publication boundary",
+      inspect_artifact_posture: "Inspect artifact posture",
+      inspect_runtime_release_state: "Inspect runtime release state",
+    };
+    return (Array.isArray(publication?.allowed_actions) ? publication.allowed_actions : []).map((action) => mapping[action] || humanizeToken(action));
+  }
+
+  function publicationSurfaceItems() {
+    const contract = state.workspaceContract || {};
+    const surfaces = Array.isArray(contract.surfaces) ? contract.surfaces : [];
+    const reportsSurface = surfaces.find((item) => item.surface_id === "reports") || {};
+    const evidenceSurface = surfaces.find((item) => item.surface_id === "evidence") || {};
+    const workflowSurface = surfaces.find((item) => item.surface_id === "workflow") || {};
+    const artifacts = reportArtifactsFromContract();
+    const publication = publicationContract();
+    const approval = humanizeToken(publication.approval_status || state.latestRun?.approval_status || "pending");
+    const statusLabel = publicationStatusLabel(publication.status);
+    const actionLabels = publicationActionLabels(publication);
+    return [
+      {
+        title: "Public preview",
+        detail: `${publication.preview_route || reportsSurface.public_route || contract.reports?.preview_route || "/public/runs/latest/report-preview"} · ${statusLabel}`,
+        tone: publication.has_public_preview ? "ok" : "neutral",
+      },
+      {
+        title: "Governed reports",
+        detail: `${formatCount(publication.report_count ?? artifacts.length)} reports · ${formatCount(publication.restricted_report_count ?? 0)} restricted · approval ${approval}`,
+        tone: publicationStatusTone(publication.status),
+      },
+      {
+        title: "Evidence handoff",
+        detail: `${evidenceSurface.primary_route || contract.evidence?.preview_route || "/data/evidence-preview"} · ${formatCount(publication.evidence_count ?? contract.evidence?.count ?? 0)} evidence artifacts`,
+        tone: contract.evidence?.count ? "ok" : "neutral",
+      },
+      {
+        title: "Next valid action",
+        detail: actionLabels.length ? actionLabels.join(" → ") : (workflowSurface.primary_route || "Workflow route not exposed"),
+        tone: workflowSurface.permitted ? "ok" : publicationStatusTone(publication.status),
+      },
+    ];
+  }
+
+  function domainSummaryRows() {
+    const findings = Array.isArray(state.findings?.findings) ? state.findings.findings : [];
+    const domains = ["cash_recovery", "vendor_controls", "working_capital", "evidence_risk"];
+    return domains.map((domain) => {
+      const rows = findings.filter((item) => domainKeyForFinding(item) === domain);
+      const recoverable = rows.reduce((sum, item) => sum + (Number(item?.recoverable_sar) || 0), 0);
+      const challenged = rows.filter((item) => item?.challenged).length;
+      const cited = rows.reduce((sum, item) => sum + (Number(item?.citation_count) || 0), 0);
+      return { domain, label: domainLabel(domain), count: rows.length, recoverable, challenged, cited };
+    }).filter((item) => item.count > 0);
+  }
+
+  function boundedPlanHealthModel() {
+    const run = state.latestRun || {};
+    const findings = currentScopeFindings();
+    const citations = normalizedCitationSummary(run, findings);
+    const publication = publicationContract();
+    const approval = runApprovalStatus(run) || "pending";
+    const challenged = challengedSummary(run) || 0;
+    const domains = domainSummaryRows();
+    const reports = reportArtifactsFromContract();
+    const ready = state.readyStatus?.status || "unknown";
+    const publicPreview = publication.preview_route || "/public/runs/latest/report-preview";
+    let status = "Awaiting governed run";
+    let tone = "warn";
+    if (activeRunId()) {
+      if (challenged > 0 || ["pending", "awaiting_review", "rejected"].includes(String(approval).toLowerCase())) {
+        status = "Human gate visible";
+      } else if (reports.length && String(ready).toLowerCase() === "ok") {
+        status = "Release posture aligned";
+        tone = "ok";
+      } else {
+        status = "Finance signal available";
+        tone = "neutral";
+      }
+    }
+    return {
+      status,
+      tone,
+      note: !activeRunId() ? "Load a governed run to populate finance, evidence, release, and runtime branches." : challenged > 0 ? `${formatCount(challenged)} challenged case${challenged === 1 ? " is" : "s are"} keeping plan health bounded by evidence closure.` : `${formatCount(findings.length)} governed case${findings.length === 1 ? " is" : "s are"} informing the current tenant signal while publication stays ${publicationStatusLabel(publication.status).toLowerCase()}.`,
+      treeLabel: domains.length ? `${formatCount(domains.length)} domain branch${domains.length === 1 ? "" : "es"}` : "No domain branches yet",
+      publicationSummary: `${publicationStatusLabel(publication.status)} · ${formatCount(publication.report_count ?? reports.length)} report surface${Number(publication.report_count ?? reports.length) === 1 ? "" : "s"} · preview at ${publicPreview}`,
+      domains,
+      approval,
+      ready,
+      citations,
+      publication,
+    };
   }
 
   function domainKeyForFinding(finding) {
@@ -969,6 +1160,28 @@
     }
   }
 
+  function renderPlanSignalPanel() {
+    if (!els.planHealthPill) return;
+    const model = boundedPlanHealthModel();
+    els.planHealthPill.textContent = model.status;
+    els.planHealthPill.className = `pill ${statusTone(model.tone)}`;
+    els.planHealthStatus.textContent = model.status;
+    els.planHealthNote.textContent = model.note;
+    if (els.planHealthSourceNote) els.planHealthSourceNote.textContent = model.citations.detail;
+    els.planHealthKpiTree.textContent = model.treeLabel;
+    els.publicationSurfaceSummary.textContent = model.publicationSummary;
+    els.domainKpiGrid.innerHTML = [
+      metricCard("Recoverable value", state.latestRun?.total_recoverable_sar !== undefined ? formatSar(state.latestRun.total_recoverable_sar) : "--", "Latest governed finance signal", state.latestRun?.total_recoverable_sar ? "ok" : "warn"),
+      metricCard("Evidence chain", model.citations.count !== null && model.citations.count !== undefined ? `${formatCount(model.citations.resolved)} / ${formatCount(model.citations.count)}` : "--", model.citations.detail, model.citations.count && model.citations.resolved === model.citations.count ? "ok" : model.citations.count ? "neutral" : "warn"),
+      metricCard("Approval", humanizeToken(model.approval), "Reviewer / operator handoff state", ["approved", "completed"].includes(String(model.approval).toLowerCase()) ? "ok" : "warn"),
+      metricCard("Publication", publicationStatusLabel(model.publication.status), `${formatCount(model.publication.report_count ?? 0)} report surfaces · ${formatCount(model.publication.restricted_report_count ?? 0)} restricted`, publicationStatusTone(model.publication.status)),
+    ].join("");
+    els.planHealthTree.innerHTML = model.domains.length
+      ? model.domains.map((item) => `<div class="item"><strong>${statusPill(item.challenged ? "warn" : item.recoverable ? "ok" : "neutral", item.label)}</strong><span>${formatCount(item.count)} cases · ${formatSar(item.recoverable)} · ${formatCount(item.cited)} citations · ${formatCount(item.challenged)} challenged</span></div>`).join("")
+      : '<div class="item"><strong>No branches yet</strong><span class="muted">A governed run will create truthful finance-domain branches here.</span></div>';
+    els.publicationSurfaceList.innerHTML = publicationSurfaceItems().map((item) => `<div class="item"><strong>${statusPill(item.tone, item.title)}</strong><span>${escapeHtml(item.detail)}</span></div>`).join("");
+  }
+
   function renderBuSurface() {
     if (!els.buCaseList) return;
     const findings = Array.isArray(state.findings?.findings) ? state.findings.findings : [];
@@ -977,15 +1190,36 @@
       <button class="btn ${state.selectedDomain === domain ? "primary" : "secondary"}" type="button" data-domain-filter="${escapeHtml(domain)}">${escapeHtml(domainLabel(domain))}</button>
     `).join("");
     const filtered = currentScopeFindings();
+    const challenged = filtered.filter((item) => item?.challenged).length;
+    const citations = normalizedCitationSummary(state.latestRun, filtered);
+    const publication = publicationContract();
+    const buLane = state.workspaceContract?.lanes?.bu || {};
     els.buSurfacePill.textContent = filtered.length ? `${formatCount(filtered.length)} cases` : "Awaiting cases";
     els.buSurfaceNote.textContent = filtered.length
-      ? `Showing ${formatCount(filtered.length)} governed cases for ${domainLabel(state.selectedDomain)}.`
+      ? `Showing ${formatCount(filtered.length)} governed cases for ${domainLabel(state.selectedDomain)} with ${publicationStatusLabel(publication.status).toLowerCase()} publication posture.`
       : "No governed cases match the current domain and portfolio selection.";
+    if (els.buSurfaceKpiGrid) {
+      els.buSurfaceKpiGrid.innerHTML = [
+        metricCard("Cases in scope", formatCount(filtered.length), `Filtered for ${domainLabel(state.selectedDomain)}`, filtered.length ? "ok" : "warn"),
+        metricCard("Evidence QA", citations.count !== null ? `${formatCount(citations.resolved)} / ${formatCount(citations.count)}` : "--", citations.detail, citations.count ? "neutral" : "warn"),
+        metricCard("Challenges", formatCount(challenged), challenged ? "Reviewer closure is still needed on challenged packets." : "No challenged packets are visible in this BU slice.", challenged ? "warn" : "ok"),
+        metricCard("Report posture", publicationStatusLabel(publication.status), `${formatCount(publication.report_count ?? 0)} report surfaces · ${formatCount(publication.restricted_report_count ?? 0)} restricted`, publicationStatusTone(publication.status)),
+      ].join("");
+    }
+    if (els.buWorkflowList) {
+      els.buWorkflowList.innerHTML = [
+        `<div class="item"><strong>${statusPill(filtered.length ? "ok" : "neutral", "1. Triage domain worklist")}</strong><span>${escapeHtml(filtered.length ? `${formatCount(filtered.length)} governed cases are visible inside ${domainLabel(state.selectedDomain)}.` : "Load a governed run or widen the current domain filter.")}</span></div>`,
+        `<div class="item"><strong>${statusPill(challenged ? "warn" : citations.count ? "ok" : "neutral", "2. Inspect evidence posture")}</strong><span>${escapeHtml(`${buLane.evidence_qa_route || "/runs/latest/findings?domain=evidence_qa"} · ${citations.detail}`)}</span></div>`,
+        `<div class="item"><strong>${statusPill(publicationStatusTone(publication.status), "3. Read governed report posture")}</strong><span>${escapeHtml(`${buLane.case_route_template || "/bu/runs/{run_id}"} · allowed actions: ${publicationActionLabels(publication).join(", ") || "View governed report status"}`)}</span></div>`,
+        `<div class="item"><strong>${statusPill(challenged || publication.status === "awaiting_review" ? "warn" : "ok", "4. Hand off to reviewer")}</strong><span>${escapeHtml(`${buLane.pending_reviews_route || "/bu/pending-reviews"} remains read-only for BU; approve/reject still belongs to reviewer sign-off.`)}</span></div>`,
+      ].join("");
+    }
     els.buCaseList.innerHTML = filtered.length
       ? filtered.map((finding) => `
         <div class="item" data-bu-finding-id="${escapeHtml(finding.finding_id)}">
           <strong>${escapeHtml(finding.title || finding.finding_id || "Governed case")}</strong>
           <span>${escapeHtml(domainLabel(domainKeyForFinding(finding)))} · ${escapeHtml(finding.owner || "reviewer")} · ${escapeHtml(formatSar(finding.recoverable_sar))}</span>
+          <span>${escapeHtml(`${formatCount(finding.citation_count || 0)} citations · ${finding.challenged ? "challenge open" : finding.status || "review packet"}`)}</span>
         </div>
       `).join("")
       : '<div class="item"><strong>No BU cases</strong><span class="muted">Change the portfolio or domain filter, or load a governed run.</span></div>';
@@ -996,7 +1230,7 @@
     const items = Array.isArray(state.pendingReviews?.items) ? state.pendingReviews.items : [];
     const run = state.latestRun || {};
     const findings = currentScopeFindings();
-    const citations = citationSummary(run);
+    const citations = normalizedCitationSummary(run, findings);
     const challenged = challengedSummary(run) || 0;
     els.reviewerSurfacePill.textContent = items.length ? `${formatCount(items.length)} pending` : run.requires_human_review ? (runApprovalStatus(run) || "pending") : "No gate";
     els.reviewerSurfaceNote.textContent = items.length
@@ -1006,7 +1240,7 @@
       ? items.slice(0, 4).map((item) => `<div class="item"><strong>${escapeHtml(item.run_id || item.title || "Pending review")}</strong><span>${escapeHtml(item.current_stage || item.status || "awaiting_review")} · ${escapeHtml(item.approval_status || "pending")}</span></div>`).join("")
       : `<div class="item"><strong>Latest governed run</strong><span>${escapeHtml(activeRunId() || "No active run")} · ${escapeHtml(runApprovalStatus(run) || "pending")}</span></div>`;
     els.reviewerEvidenceQa.innerHTML = [
-      metricCard("Evidence QA", citations.count !== null && citations.count !== undefined ? `${formatCount(citations.resolved)} / ${formatCount(citations.count)}` : "--", "Resolved citations", citations.count && citations.resolved === citations.count ? "ok" : "warn"),
+      metricCard("Evidence QA", citations.count !== null && citations.count !== undefined ? `${formatCount(citations.resolved)} / ${formatCount(citations.count)}` : "--", citations.detail, citations.count && citations.resolved === citations.count ? "ok" : citations.count ? "neutral" : "warn"),
       metricCard("Challenges", formatCount(challenged), "Auditor challenge events", challenged ? "warn" : "ok"),
       metricCard("Cases in scope", formatCount(findings.length), "Bounded by current BU/reviewer surface", findings.length ? "neutral" : "warn"),
     ].join("");
@@ -1039,8 +1273,14 @@
     const permitted = connectors.filter((item) => item?.permitted).length;
     const ready = state.readyStatus || {};
     const data = state.dataStatus || {};
+    const workflow = data.workflow || {};
+    const publication = data.publication || publicationContract();
+    const actionLabels = publicationActionLabels(publication);
     const graphStatus = state.dataStatus?.neo4j?.status || "unknown";
     const vectorStatus = state.dataStatus?.qdrant?.status || "unknown";
+    const blockedChecks = Object.entries(ready.checks || {})
+      .filter(([, value]) => value && !["ok", "ready", "enabled"].includes(String(value.status || "").toLowerCase()))
+      .map(([key]) => humanizeToken(key));
     els.systemSurfacePill.textContent = ready.status || data.status || "Posture pending";
     els.systemSurfaceNote.textContent = currentTenantContext().tenant_id
       ? `Tenant ${currentTenantContext().tenant_id} remains the bounded system scope for this release.`
@@ -1049,11 +1289,26 @@
       metricCard("Readiness", ready.status || "unknown", "Runtime dependency posture", ready.status === "ok" ? "ok" : "warn"),
       metricCard("Connectors", formatCount(connectors.length), `${formatCount(permitted)} permitted for this role`, connectors.length ? "neutral" : "warn"),
       metricCard("Stores", `${graphStatus} / ${vectorStatus}`, "Graph and vector status", graphStatus === "ready" || vectorStatus === "ready" ? "ok" : "warn"),
+      metricCard("Publication", publicationStatusLabel(publication.status), `${formatCount(publication.report_count ?? 0)} reports · ${formatCount(publication.restricted_report_count ?? 0)} restricted`, publicationStatusTone(publication.status)),
     ].join("");
+    if (els.systemWorkflowCompact) {
+      els.systemWorkflowCompact.innerHTML = [
+        `<div class="item"><strong>${statusPill(ready.status || "unknown", "Workflow queue")}</strong><span>${escapeHtml(`${formatCount(workflow.pending_reviews ?? 0)} pending reviews · ${formatCount(workflow.recent_runs ?? 0)} recent runs in the store.`)}</span></div>`,
+        `<div class="item"><strong>${statusPill(blockedChecks.length ? "warn" : "ok", "Readiness blockers")}</strong><span>${escapeHtml(blockedChecks.length ? blockedChecks.join(", ") : "No blocked dependency checks are visible for the current tenant.")}</span></div>`,
+      ].join("");
+    }
+    if (els.systemPublicationList) {
+      els.systemPublicationList.innerHTML = [
+        `<div class="item"><strong>${statusPill(publicationStatusTone(publication.status), "Release state")}</strong><span>${escapeHtml(`${publicationStatusLabel(publication.status)} · approval ${humanizeToken(publication.approval_status || "pending")} · stage ${humanizeToken(publication.current_stage || "draft")}`)}</span></div>`,
+        `<div class="item"><strong>${statusPill(actionLabels.length ? "ok" : "neutral", "Allowed inspection")}</strong><span>${escapeHtml(actionLabels.length ? actionLabels.join(", ") : "No publication actions are exposed for this lane yet.")}</span></div>`,
+      ].join("");
+    }
     els.systemSurfaceList.innerHTML = [
       `<div class="item"><strong>Tenant context</strong><span>${escapeHtml(currentTenantContext().tenant_name || currentTenantContext().tenant_id || "Current tenant")} / ${escapeHtml(currentTenantContext().workspace_id || "workspace unknown")}</span></div>`,
       `<div class="item"><strong>Managed data</strong><span>${escapeHtml(data.reason || `${formatCount(data.counts?.findings ?? 0)} findings · ${formatCount(data.counts?.artifacts ?? 0)} artifacts`)}</span></div>`,
       `<div class="item"><strong>Connector posture</strong><span>${escapeHtml(connectors.length ? `${formatCount(permitted)} permitted of ${formatCount(connectors.length)}` : "No connector catalog loaded")}</span></div>`,
+      `<div class="item"><strong>Workflow store</strong><span>${escapeHtml(`${formatCount(workflow.pending_reviews ?? 0)} pending reviews · latest run ${workflow.latest?.run_id || workflow.latest?.id || data.runtime_posture?.latest_run_id || "not loaded"}`)}</span></div>`,
+      `<div class="item"><strong>Publication boundary</strong><span>${escapeHtml(`${publicationStatusLabel(publication.status)} · ${formatCount(publication.report_count ?? 0)} reports · ${formatCount(publication.evidence_count ?? 0)} evidence artifacts`)}</span></div>`,
     ].join("");
   }
 
@@ -1145,10 +1400,11 @@
       els.drilldownEvidencePreview.textContent = "Select a finding to fetch the latest evidence excerpt.";
     }
 
+    const publication = publicationContract();
     els.drilldownReportTitle.textContent = state.selectedReportKey ? reportLabel(state.selectedReportKey) : "Report posture";
     els.drilldownReportSummary.textContent = reportArtifacts.length
-      ? `${formatCount(reportArtifacts.length)} report surface${reportArtifacts.length === 1 ? " is" : "s are"} available for this governed spine.`
-      : "No report artifacts are available yet.";
+      ? `${formatCount(reportArtifacts.length)} report surface${reportArtifacts.length === 1 ? " is" : "s are"} available for this governed spine. Release is ${publicationStatusLabel(publication.status).toLowerCase()}.`
+      : `No report artifacts are available yet. Release is currently ${publicationStatusLabel(publication.status).toLowerCase()}.`;
     els.drilldownReportList.innerHTML = reportArtifacts.map((item) => `
       <button class="btn ${state.selectedReportKey === item.artifact_key ? "primary" : "secondary"}" type="button" data-drilldown-report="${escapeHtml(item.artifact_key)}">${escapeHtml(item.title || reportLabel(item.artifact_key))}</button>
     `).join("");
@@ -1166,6 +1422,7 @@
 
   function renderRoleSurfaces() {
     renderSharedScope();
+    renderPlanSignalPanel();
     renderBuSurface();
     renderReviewerSurface();
     renderOperatorSurface();
@@ -1312,7 +1569,7 @@
     els.kpiRecoverable.textContent = formatSar(run.total_recoverable_sar);
     els.kpiFindings.innerHTML = `${formatCount(run.locked_findings ?? run.findings)} <small>of ${formatCount(run.findings)} locked</small>`;
 
-    const citations = citationSummary(run);
+    const citations = normalizedCitationSummary(run, currentScopeFindings());
     if (citations.count !== null && citations.count !== undefined) {
       els.kpiCitations.textContent = `${formatCount(citations.resolved)} / ${formatCount(citations.count)}`;
       els.kpiCitations.classList.toggle("ok", Number(citations.count) > 0 && Number(citations.resolved) === Number(citations.count));
@@ -1933,6 +2190,23 @@
     ].join(" - ");
     els.systemWorkflowList.innerHTML = workflowItems.join("");
     els.systemWorkflowPayloadPreview.textContent = compactJson(sanitizeUiPayload(contract));
+  }
+
+  function renderPublicationGovernance() {
+    if (!els.publicationSummary) return;
+    if (!isAuthed()) {
+      els.publicationSummary.textContent = "Connect a session to inspect publication governance.";
+      els.publicationList.innerHTML = "";
+      els.publicationPayloadPreview.textContent = "Authentication required.";
+      return;
+    }
+    const contract = state.workspaceContract || {};
+    const items = publicationSurfaceItems();
+    const reports = reportArtifactsFromContract();
+    const publication = publicationContract();
+    els.publicationSummary.innerHTML = `${statusPill(publicationStatusTone(publication.status), publicationStatusLabel(publication.status))} · ${formatCount(publication.report_count ?? reports.length)} report artifact${Number(publication.report_count ?? reports.length) === 1 ? "" : "s"} · ${statusPill(["approved", "completed"].includes(String(publication.approval_status || "").toLowerCase()) ? "ok" : "warn", `Approval ${humanizeToken(publication.approval_status || "pending")}`)}`;
+    els.publicationList.innerHTML = items.map((item) => `<div class="item"><strong>${statusPill(item.tone, item.title)}</strong><span>${escapeHtml(item.detail)}</span></div>`).join("") + (reports.length ? reports.map((item) => `<div class="item"><strong>${statusPill(item.restricted ? "warn" : "ok", item.title || reportLabel(item.artifact_key))}</strong><span>${escapeHtml(`${item.category || "report"} · ${item.format || "file"}${item.restricted ? " · restricted" : " · previewable"}`)}</span></div>`).join("") : '<div class="item"><strong>No report artifacts</strong><span class="muted">Load a governed run to inspect publication surfaces.</span></div>');
+    els.publicationPayloadPreview.textContent = compactJson(sanitizeUiPayload({ reports: contract.reports, evidence: contract.evidence, surfaces: Array.isArray(contract.surfaces) ? contract.surfaces.filter((item) => ["reports", "evidence", "workflow"].includes(item.surface_id)) : [] }));
   }
 
   function renderConnectors() {
@@ -2977,6 +3251,7 @@
     renderRoleTasks();
     renderAdminContext();
     renderSystemWorkflow();
+    renderPublicationGovernance();
     renderConnectors();
     renderDataStatus();
     renderKnowledgeGraph();

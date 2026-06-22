@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StrategyOS.live Governed Diagnostics Workspace</title>
-    <link rel="stylesheet" href="/static/styles.css?v=ux-20260620a" />
+    <link rel="stylesheet" href="/static/styles.css?v=ux-20260622a" />
   </head>
   <body>
     <div class="app-shell">
@@ -73,6 +73,46 @@
           </div>
           <div class="chip-row" id="scope-chip-row"></div>
           <div class="detail-breadcrumb" id="detail-breadcrumb">Case → finding → evidence → report</div>
+        </section>
+
+        <section class="panel plan-signal-panel" aria-label="Bounded portfolio signal and KPI tree">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Bounded portfolio signal</p>
+              <h2>Multi-domain KPI tree and plan health</h2>
+              <p class="muted">Truth boundary: this layer synthesizes only the current governed tenant, latest findings, evidence chain, readiness, and report posture. It does not claim full enterprise strategy compilation.</p>
+              <p class="muted" id="plan-health-source-note">KPI cards, plan health, and publication posture stay anchored to the same governed run and audit boundary.</p>
+            </div>
+            <span class="pill" id="plan-health-pill">Awaiting governed run</span>
+          </div>
+          <div class="scope-grid plan-signal-grid">
+            <article class="scope-summary-card">
+              <span class="eyebrow">Plan health</span>
+              <strong id="plan-health-status">Awaiting governed run</strong>
+              <span class="muted" id="plan-health-note">Launch or load a governed run to derive a bounded posture from finance diagnostics reality.</span>
+            </article>
+            <article class="scope-summary-card">
+              <span class="eyebrow">KPI tree</span>
+              <strong id="plan-health-kpi-tree">No domain signal yet</strong>
+              <span class="muted">Finance diagnostics, evidence risk, release posture, and runtime posture roll up here when data exists.</span>
+            </article>
+            <article class="scope-summary-card">
+              <span class="eyebrow">Publication</span>
+              <strong id="publication-surface-summary">No report surface loaded</strong>
+              <span class="muted">Protected and public report routes are shown only from the current contract and artifact reality.</span>
+            </article>
+          </div>
+          <div class="mini-kpi-grid" id="domain-kpi-grid"></div>
+          <div class="kpi-tree-grid">
+            <div>
+              <h3>Portfolio branches</h3>
+              <div class="stack-list" id="plan-health-tree"></div>
+            </div>
+            <div>
+              <h3>Publication and release surfaces</h3>
+              <div class="stack-list" id="publication-surface-list"></div>
+            </div>
+          </div>
         </section>
 
         <section class="panel surface-map" aria-label="Role entry points">
@@ -166,6 +206,8 @@
               <span class="pill" id="bu-surface-pill">Awaiting cases</span>
             </div>
             <p class="muted" id="bu-surface-note">Filter the governed case list by bounded business domain, then drill into evidence before asking for reviewer release.</p>
+            <div class="mini-kpi-grid" id="bu-surface-kpi-grid"></div>
+            <div class="stack-list" id="bu-workflow-list"></div>
             <div class="chip-row" id="bu-domain-filters"></div>
             <div class="stack-list" id="bu-case-list"></div>
           </section>
@@ -206,6 +248,8 @@
             </div>
             <p class="muted" id="system-surface-note">Keep stores, connector truth, and readiness aligned with the active tenant before scaling beyond this governed slice.</p>
             <div class="mini-kpi-grid" id="system-posture-grid"></div>
+            <div class="stack-list" id="system-workflow-compact"></div>
+            <div class="stack-list" id="system-publication-list"></div>
             <div class="stack-list" id="system-surface-list"></div>
           </section>
         </section>
@@ -499,6 +543,17 @@
           </details>
         </section>
 
+        <section class="drawer-section" id="publication-panel">
+          <h3>Publication governance</h3>
+          <p class="muted">Show the current public-safe preview route, protected report routes, and release posture exactly as exposed by the latest workspace contract.</p>
+          <div id="publication-summary" class="summary">Awaiting governed publication context.</div>
+          <div id="publication-list" class="stack-list"></div>
+          <details class="diagnostic-disclosure">
+            <summary>Raw publication payload</summary>
+            <pre id="publication-payload-preview" class="code-block">Awaiting publication payload.</pre>
+          </details>
+        </section>
+
         <section class="drawer-section" id="kg-panel">
           <div class="section-title-row">
             <div>
@@ -643,6 +698,6 @@
 
     <script id="strategyos-bootstrap" type="application/json">__STRATEGYOS_BOOTSTRAP__</script>
     <script src="/static/vendor/cytoscape.min.js"></script>
-    <script src="/static/app.js?v=ux-20260620a"></script>
+    <script src="/static/app.js?v=ux-20260622a"></script>
   </body>
 </html>
