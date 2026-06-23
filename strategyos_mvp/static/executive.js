@@ -1,6 +1,8 @@
 (function(){"use strict";
 const H=function(t){return document.getElementById(t);};
 const $=function(t){return document.getElementById(t);};
+var bootstrapScript=document.getElementById("strategyos-executive-bootstrap");
+var bootstrap=bootstrapScript?JSON.parse(bootstrapScript.textContent):{};
 
 // ── humanize ──
 function humanizeToken(token){
