@@ -24,6 +24,7 @@
     "awaiting_review",
     "writer",
   ];
+  const EXECUTIVE_COCKPIT_ROUTE = "/executive?theme=paper";
 
   // Plain-language labels for internal identifiers a business user should never
   // see raw (fix-list item 7). Covers detector pattern_type values and the
@@ -1281,7 +1282,7 @@
         : lane === "system"
           ? "/app?lane=system"
           : lane === "executive"
-            ? "/executive"
+            ? EXECUTIVE_COCKPIT_ROUTE
             : "/app";
     const publicationLabel = publicationStatusLabel(publication.status || approval || "awaiting_review");
     const caseCount = findings.length;
@@ -1305,7 +1306,7 @@
 
     if (els.laneTabs) {
       const tabs = [
-        { key: "executive", label: "Executive", detail: "Board-safe narrative", href: "/executive" },
+        { key: "executive", label: "Executive", detail: "Board-safe narrative", href: EXECUTIVE_COCKPIT_ROUTE },
         { key: "review", label: isBuRole() ? "BU lane" : "Review", detail: isBuRole() ? "Read-only release posture" : "Queue and approval", href: isBuRole() ? "/app?lane=review#bu" : "/app?lane=review#review" },
         { key: "operate", label: "Operate", detail: "Source packs and resume", href: "/app?lane=operate" },
         { key: "system", label: "System", detail: "Connectors and runtime", href: "/app?lane=system" },

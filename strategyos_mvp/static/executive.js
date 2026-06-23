@@ -142,15 +142,19 @@
     pulseNote: byId("exec-pulse-note"),
     owedTitle: byId("exec-owed-title"),
     owedNote: byId("exec-owed-note"),
+    gravityInput: byId("exec-gravity-input"),
+    gravitySubmit: byId("exec-gravity-submit"),
     boardStateDetail: byId("exec-board-state-detail"),
     agentsSearchNote: byId("exec-agents-search-note"),
     agentsSearchInput: byId("exec-agents-search"),
     agentsFilterRow: byId("exec-agents-filter-row"),
     agentsBrowseButton: byId("exec-agents-browse-button"),
+    agentsSovereignNote: byId("exec-agents-sovereign-note"),
     threadList: byId("exec-thread-list"),
     assistantNetwork: byId("exec-assistant-network"),
     copilotTitle: byId("exec-copilot-title"),
     copilotSubtitle: byId("exec-copilot-subtitle"),
+    footerTime: byId("exec-footer-time"),
   };
 
   const state = {
@@ -172,7 +176,7 @@
     executivePersona: query.get("persona") || "ceo",
     lifecycleMode: query.get("board") || "pre",
     selectedDriverKey: query.get("driver") || "board_packet",
-    themeMode: query.get("theme") || "midnight",
+    themeMode: query.get("theme") || "paper",
     densityMode: query.get("density") || "comfortable",
     moversMode: query.get("movers") || "cards",
     selectedThreadKey: query.get("thread") || "briefing",
@@ -937,8 +941,13 @@
       els.personaMenu.hidden = !state.personaMenuOpen;
       els.personaMenu.innerHTML = personaTabs.map((item) => `
         <button class="persona-menu-item${item.key === persona.key ? " is-active" : ""}${item.key === "board" ? " is-board" : ""}" type="button" data-persona-menu-item="${escapeHtml(item.key)}">
-          <strong>${escapeHtml(item.label)}</strong>
-          <span>${escapeHtml(item.detail)} · ${escapeHtml(item.assistant || item.label)}</span>
+          <span class="persona-menu-item-top">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span class="persona-menu-item-tag">${escapeHtml(item.key === "board" ? "board" : "persona")}</span>
+            ${item.key === persona.key ? '<span class="persona-menu-item-check">✓</span>' : ""}
+          </span>
+          <span>${escapeHtml(item.detail)}</span>
+          <span>${escapeHtml(item.assistant || item.label)}</span>
         </button>
       `).join("");
     }
@@ -947,6 +956,7 @@
       <button class="mode-tab${item.key === persona.key ? " is-active" : ""}" type="button" data-exec-persona="${escapeHtml(item.key)}" role="tab" aria-selected="${item.key === persona.key ? "true" : "false"}">
         <strong>${escapeHtml(item.label)}</strong>
         <span>${escapeHtml(item.detail)}</span>
+        <small>${escapeHtml(item.assistant || item.label)}</small>
       </button>
     `).join("");
     els.lifecycleTabs.innerHTML = lifecycleTabs.map((item) => `
@@ -1028,6 +1038,11 @@
         <button class="gravity-prompt-btn" type="button" data-exec-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>
       `).join("");
     }
+    if (els.gravityInput && !els.gravityInput.value) {
+      els.gravityInput.placeholder = persona.key === "board"
+        ? "Ask the frozen packet a board-safe what-if…"
+        : `Ask ${personaModel.assistant} for a board-safe scenario…`;
+    }
 
     els.personaTabs.querySelectorAll("[data-exec-persona]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1039,10 +1054,10 @@
         refreshLiveData();
       });
     });
-    els.personaButton?.addEventListener("click", () => {
+    if (els.personaButton) els.personaButton.onclick = () => {
       state.personaMenuOpen = !state.personaMenuOpen;
       renderExecutiveModes();
-    });
+    };
     els.personaMenu?.querySelectorAll("[data-persona-menu-item]").forEach((button) => {
       button.addEventListener("click", () => {
         state.executivePersona = button.getAttribute("data-persona-menu-item") || "ceo";
@@ -1085,6 +1100,18 @@
         setCommandPrompt(prompt);
       });
     });
+    if (els.gravitySubmit) els.gravitySubmit.onclick = () => {
+      const prompt = String(els.gravityInput?.value || "").trim();
+      if (!prompt) return;
+      setCommandPrompt(prompt);
+    };
+    if (els.gravityInput) els.gravityInput.onkeydown = (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const prompt = String(els.gravityInput?.value || "").trim();
+      if (!prompt) return;
+      setCommandPrompt(prompt);
+    };
   }
 
   function renderExecutiveHero(run, citations, challenged) {
@@ -1453,11 +1480,13 @@
         ? "Between meetings, the board sees a frozen snapshot of the governed packet rather than live operational churn."
         : "Nothing reaches the board until the packet is approved and board-safe surfaces are explicit.");
     els.boardSummary.textContent = lifecycleNotes[lifecycle.key];
-    els.boardLifecycle.innerHTML = contractBoardLifecycles().map((item) => `
-      <div class="board-lifecycle-step${item.key === lifecycle.key ? " is-active" : ""}">
+    const lifecycleTabs = contractBoardLifecycles();
+    const activeLifecycleIndex = lifecycleTabs.findIndex((item) => item.key === lifecycle.key);
+    els.boardLifecycle.innerHTML = lifecycleTabs.map((item, index) => `
+      <button class="board-lifecycle-step${item.key === lifecycle.key ? " is-active" : ""}${activeLifecycleIndex > index ? " is-past" : ""}" type="button" data-board-lifecycle-step="${escapeHtml(item.key)}">
         <strong>${escapeHtml(item.label)}</strong>
-        <span>${escapeHtml(item.detail)}</span>
-      </div>
+        <span>${escapeHtml(item.summary || item.detail)}</span>
+      </button>
     `).join("");
     els.boardKpis.innerHTML = drivers.map((driver) => `
       <div class="board-kpi">
@@ -1466,6 +1495,13 @@
       </div>
     `).join("");
     renderBoardStateDetail(run, citations, challenged);
+    els.boardLifecycle.querySelectorAll("[data-board-lifecycle-step]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.lifecycleMode = button.getAttribute("data-board-lifecycle-step") || lifecycle.key;
+        syncExecutiveRouteState();
+        refreshLiveData();
+      });
+    });
 
     if (lifecycle.key === "pre") {
       els.boardColumnTitle.textContent = "CEO-approved material";
@@ -1799,6 +1835,11 @@
     els.agentsBadge.textContent = queueCount ? `${formatCount(queueCount)} review-aware` : (state.workspaceContract?.agents?.status || "bounded discovery");
     els.agentsActivityLine.textContent = state.workspaceContract?.agents?.activity?.line || DESIGN.activity?.line || `Agent activity: ${queueCount ? `${formatCount(queueCount)} review item(s) are waiting` : "the governed packet is stable"} · publication is ${publicationStatusLabel(publication.status || "draft")} · board pack ${humanizeToken(publication.board_pack?.status || "pending")}.`;
     els.agentsRunningBadge.textContent = `${formatCount(running.length)} active views`;
+    if (els.agentsSovereignNote) {
+      els.agentsSovereignNote.textContent = persona.key === "board"
+        ? "Sovereign · board-safe only · every action remains in-tenant and evidence-linked."
+        : "Sovereign · runs in-tenant · every action remains evidence-linked.";
+    }
     els.agentsRunningList.innerHTML = running.map(runtimeAgentCard).join("");
     els.subagentList.innerHTML = subagents.map((item) => `
       <div class="subagent-card">
@@ -2147,6 +2188,13 @@
     }
   }
 
+  function renderExecutiveFooter() {
+    if (!els.footerTime) return;
+    const now = new Date();
+    const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    els.footerTime.textContent = `refreshed today · ${time} · Riyadh`;
+  }
+
   function reportArtifacts() {
     const fromDetail = state.runDetail?.summary_json?.artifacts;
     if (fromDetail && typeof fromDetail === "object") return fromDetail;
@@ -2289,6 +2337,7 @@
     renderLowerRailFidelity(run, citations, challenged);
     renderAssistantNarrative(run, citations, challenged);
     renderScopeRibbon();
+    renderExecutiveFooter();
   }
 
   function renderLocked() {
@@ -2972,6 +3021,19 @@
   els.commandForm.addEventListener("submit", (event) => {
     event.preventDefault();
     submitCommand(els.commandInput.value);
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!state.personaMenuOpen) return;
+    if (els.personaMenu?.contains(event.target) || els.personaButton?.contains(event.target)) return;
+    state.personaMenuOpen = false;
+    renderExecutiveModes();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !state.personaMenuOpen) return;
+    state.personaMenuOpen = false;
+    renderExecutiveModes();
   });
 
   refreshLiveData();

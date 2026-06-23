@@ -161,6 +161,8 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'id="exec-board-primary-list"' in html
     assert 'id="exec-agents-running-list"' in html
     assert 'id="exec-agents-native-list"' in html
+    assert 'id="exec-agents-search"' in html
+    assert 'id="exec-agents-filter-row"' in html
     assert 'id="exec-developments-list"' in html
     assert 'id="exec-week-rail"' in html
     assert 'id="exec-pulse-grid"' in html
@@ -210,6 +212,7 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'data-exec-persona' in js
     assert 'data-persona-menu-item' in js
     assert 'data-board-state' in js
+    assert 'discover_type' in js
     assert 'data-driver-key' in js
     assert 'data-theme-mode' in js
     assert 'data-density-mode' in js
@@ -235,6 +238,9 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'requestJson(`/public/data/evidence-preview?run_id=${encodeURIComponent(publicRun?.run_id || "")}&finding_id=${encodeURIComponent(preferredFinding)}`)' in js
     assert 'Open governed approval lane' in js
     assert 'Open route' in js
+    assert 'data-agent-filter' in js
+    assert 'No native agents match this filter yet.' in js
+    assert 'No marketplace agents match this filter yet.' in js
     assert 'requestJson("/qa"' in js
     assert "function selectFinding" in js
     assert "function loadReportPreview" in js
@@ -470,7 +476,7 @@ def test_ui_session_reports_bu_role_with_read_only_review_capabilities():
         assert contract_payload["drilldown"]["gravity"]["rails"][1] in {"pre", "live", "closed"}
         assert contract_payload["drilldown"]["lower_rail"]["week_ahead"][0]["event_id"] == "prep"
         assert contract_payload["interaction_contracts"]["pending_reviews"]["route"] == "/bu/pending-reviews"
-        assert contract_payload["agents"]["discover"]["native"][0]["id"] == "native-evidence-qa"
+        assert contract_payload["agents"]["discover"]["native"][0]["id"] == "native-covenant"
         assert contract_payload["agent_modules"]["summary"]["running_count"] >= 4
         assert contract_payload["tenant_admin_system"]["connector_posture"]["count"] >= 3
         assert contract_payload["tenant_admin_system"]["workflow_posture"]["review_queue_route"] == "/reviewer/pending-reviews"
@@ -573,13 +579,19 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert payload["board_portal"]["presentation_state"] == "closed"
         assert payload["board_portal"]["lifecycle_flow"][2]["presented"] is True
         assert payload["board_portal"]["state_detail"]["state"] == "closed"
+        assert payload["board_portal"]["meeting"]["design_title"] == "Q2 Board Meeting"
+        assert payload["board_portal"]["kpis"][0]["key"] == "revenue"
+        assert payload["board_portal"]["decks"][0]["status"] == "approved"
         assert payload["drilldown"]["default_case_id"] is None
         assert payload["drilldown"]["cash_pulse"]["basis"] == "governed_findings"
         assert payload["drilldown"]["gravity"]["prompts"]
+        assert payload["drilldown"]["gravity"]["assistant"] == "Minerva"
         assert payload["drilldown"]["gravity"]["sandbox"]["board_state"] == "closed"
         assert payload["drilldown"]["lower_rail"]["board_state"]["presentation_state"] == "closed"
+        assert payload["drilldown"]["lower_rail"]["week_ahead"][0]["prompt"]
+        assert payload["drilldown"]["lower_rail"]["owed_upward"]["items"]
         assert payload["interaction_contracts"]["latest_run"]["route"] == "/public/runs/latest"
-        assert payload["agents"]["running"][0]["id"] == "evidence-qa"
+        assert payload["agents"]["running"][0]["id"] == "boardpack"
         assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
         assert payload["tenant_admin_system"]["managed_data"]["reports"]["report_count"] == 2
         assert payload["tenant_admin_system"]["trend"]["truth_basis"] == "reconciled_governed_metrics"
@@ -592,6 +604,8 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert any(item["reasoning_id"] == "hold-runtime-boundary" for item in payload["strategy_substrate"]["reasoning"])
         assert payload["executive_diagnostics"]["hero"]["persona_id"] == "board"
         assert payload["executive_diagnostics"]["hero"]["board_state"] == "closed"
+        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "Hermes"
+        assert payload["executive_diagnostics"]["board_packet"]["assistant"] == "Minerva"
         assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
         assert payload["executive_diagnostics"]["composition"]["gravity"]["sandbox"]["active_driver_key"] == "owed_upward"
         assert any(item["option_id"] == "release-readiness" for item in payload["portfolio_switcher"]["options"])

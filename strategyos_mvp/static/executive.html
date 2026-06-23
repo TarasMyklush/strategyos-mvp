@@ -160,6 +160,13 @@
                   <span class="gravity-kicker">Play on the model</span>
                   <h3>Prompt the packet</h3>
                   <div class="gravity-prompt-list" id="exec-gravity-prompt-list"></div>
+                  <div class="gravity-own">
+                    <label class="gravity-own-label" for="exec-gravity-input"><span>✦</span> Type your own board-safe scenario</label>
+                    <div class="gravity-own-compose">
+                      <input id="exec-gravity-input" type="text" placeholder="If FX worsens 5%, what changes in the packet?" autocomplete="off" />
+                      <button id="exec-gravity-submit" type="button">Stage prompt</button>
+                    </div>
+                  </div>
                 </article>
                 <article class="gravity-play-card quote-card">
                   <span class="gravity-kicker">What chiefs are signalling</span>
@@ -420,6 +427,7 @@
                 <span class="badge green" id="exec-agents-running-badge">0 active</span>
               </div>
               <div class="agents-running-list" id="exec-agents-running-list"></div>
+              <div class="agents-sovereign-note" id="exec-agents-sovereign-note">Sovereign · runs in-tenant · every action remains evidence-linked.</div>
               <div class="subagent-strip">
                 <h4>Sub-agents your chiefs call as tools</h4>
                 <div class="subagent-grid" id="exec-subagent-list"></div>
@@ -434,7 +442,13 @@
                 </div>
                 <span class="badge amber">No auto-deploy</span>
               </div>
-              <div class="discover-search"><span class="discover-search-icon">⌕</span><span id="exec-agents-search-note">Search the agent universe…</span></div>
+              <div class="discover-search">
+                <span class="discover-search-icon">⌕</span>
+                <label class="sr-only" for="exec-agents-search">Search the agent universe</label>
+                <input id="exec-agents-search" type="search" placeholder="Search the agent universe…" autocomplete="off" />
+                <span id="exec-agents-search-note">Search native and marketplace agents inside the governed boundary.</span>
+              </div>
+              <div class="discover-filter-row" id="exec-agents-filter-row" role="tablist" aria-label="Agent discovery source filter"></div>
               <div class="discover-group">
                 <span class="discover-label">Native on StrategyOS</span>
                 <div class="discover-list" id="exec-agents-native-list"></div>
@@ -733,6 +747,12 @@
             </div>
           </section>
         </div>
+
+        <footer class="executive-footer">
+          <span class="executive-footer-mark" aria-hidden="true"></span>
+          <span class="executive-footer-copy">Composed by StrategyOS from the governed packet and executive knowledge graph — a board-safe system of intent above the systems of record.</span>
+          <span class="executive-footer-time" id="exec-footer-time">refreshed today · Riyadh</span>
+        </footer>
       </section>
     </main>
 

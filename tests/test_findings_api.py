@@ -671,8 +671,12 @@ def test_executive_latest_run_uses_public_safe_summary(monkeypatch):
         assert payload["executive_modes"]["active_persona_id"] == "cfo"
         assert payload["executive_modes"]["active_board_state"] == "closed"
         assert payload["executive_modes"]["active_driver_key"] == "cash_pulse"
+        assert payload["executive_modes"]["transition_contract"]["sequence"] == ["pre", "live", "closed"]
         assert payload["drilldown"]["gravity"]["sandbox"]["persona_id"] == "cfo"
+        assert payload["drilldown"]["gravity"]["quote"]
+        assert payload["drilldown"]["lower_rail"]["week_ahead"][0]["prompt"]
         assert payload["drilldown"]["lower_rail"]["cash_pulse"]["basis"] == "governed_findings"
+        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "Atlas"
         assert payload["executive_diagnostics"]["hero"]["persona_id"] == "cfo"
         assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
         assert "run_dir" not in payload

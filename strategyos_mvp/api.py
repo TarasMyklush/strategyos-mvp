@@ -27,6 +27,14 @@ from .auth import (
     require_role,
 )
 from .config import CONFIG
+from .executive_design import (
+    executive_activity_design,
+    executive_board_design,
+    executive_discover_agents_design,
+    executive_persona_design,
+    executive_running_agents_design,
+    executive_subtools_design,
+)
 from .ingestion import load_dataset
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
@@ -2648,7 +2656,8 @@ def _summary_publication_payload(
         },
         "board_pack": {
             "status": board_pack_status,
-            "safe_for_board": bool(reports),
+            "safe_for_board": bool(reports)
+            and release_status in {"approved_for_release", "published"},
             "preview_route": board_pack_route,
             "detail_route": board_pack_route,
             "report_count": len(reports),
@@ -2712,6 +2721,7 @@ def _board_portal_payload(
     if presentation_state not in EXECUTIVE_BOARD_STATES:
         presentation_state = state
     board_pack = dict(publication.get("board_pack") or {})
+    board_design = executive_board_design()
     state_labels = {
         "pre": ("Pre-board", "prepare"),
         "live": ("Live", "in session"),
@@ -2775,6 +2785,10 @@ def _board_portal_payload(
                 "tenant_name"
             ),
             "run_id": (summary or {}).get("run_id"),
+            "design_title": (board_design.get("meeting") or {}).get("title"),
+            "when": (board_design.get("meeting") or {}).get("when"),
+            "date": (board_design.get("meeting") or {}).get("date"),
+            "room": (board_design.get("meeting") or {}).get("room"),
         },
         "deck_release": {
             "status": board_pack.get("status") or "pending",
@@ -2817,6 +2831,13 @@ def _board_portal_payload(
             "label": plan_health.get("label"),
             "next_action": plan_health.get("next_action"),
         },
+        "governance": board_design.get("governance"),
+        "kpis": list(board_design.get("kpis") or []),
+        "decks": list(board_design.get("decks") or []),
+        "supplementary_questions": list(board_design.get("supplementary") or []),
+        "live_prompts": list(board_design.get("livePrompts") or []),
+        "actions": list(board_design.get("actions") or []),
+        "board_summary": board_design.get("summary"),
     }
 
 
@@ -2915,6 +2936,14 @@ def _executive_modes_payload(
             "assistant": "Hermes",
         },
     ]
+    for item in personas:
+        blueprint = executive_persona_design(str(item.get("persona_id") or "ceo"))
+        item["assistant_role"] = blueprint.get("assistantRole")
+        item["index_label"] = blueprint.get("indexLabel")
+        item["quote"] = blueprint.get("quote")
+        item["quoted_by"] = blueprint.get("by")
+        item["prompt_count"] = len(list(blueprint.get("prompts") or []))
+        item["thread_count"] = len(list(blueprint.get("threads") or []))
     requested_persona = str(view_state.get("persona") or "").strip().lower() or "ceo"
     if requested_persona not in {item["persona_id"] for item in personas}:
         requested_persona = "ceo"
@@ -3066,6 +3095,12 @@ def _executive_modes_payload(
             "requested": dict(view_state),
             "truth_basis": "query_scoped_presentation_over_governed_packet",
         },
+        "transition_contract": {
+            "current": active_board_state,
+            "allowed": ["pre", "live", "closed"],
+            "sequence": ["pre", "live", "closed"],
+            "frozen_snapshot_state": "closed",
+        },
     }
 
 
@@ -3131,6 +3166,28 @@ def _drilldown_contract_payload(
     next_action = str(
         (publication.get("approval") or {}).get("next_action")
         or "capture_reviewer_decision"
+    )
+    persona_id = str((executive_modes or {}).get("active_persona_id") or "ceo")
+    persona_blueprint = executive_persona_design(persona_id)
+    board_design = executive_board_design()
+    active_driver_key = str((executive_modes or {}).get("active_driver_key") or "")
+    active_driver = next(
+        (
+            item
+            for item in list(persona_blueprint.get("drivers") or [])
+            if str(item.get("key") or "") == active_driver_key
+        ),
+        None,
+    )
+    gravity_assistant = str(
+        (board_design.get("assistant") if persona_id == "board" else None)
+        or persona_blueprint.get("assistant")
+        or persona_id
+    ).strip()
+    gravity_prompts = (
+        list(board_design.get("livePrompts") or [])
+        if persona_id == "board"
+        else list(persona_blueprint.get("prompts") or [])
     )
     return {
         "status": "ok" if summary else "missing",
@@ -3218,14 +3275,17 @@ def _drilldown_contract_payload(
             },
         ],
         "gravity": {
-            "quote": "Keep the room inside the packet; everything else is runtime truth.",
-            "by": "StrategyOS governance boundary",
+            "assistant": gravity_assistant,
+            "quote": persona_blueprint.get("quote")
+            or "Keep the room inside the packet; everything else is runtime truth.",
+            "by": persona_blueprint.get("by") or "StrategyOS governance boundary",
             "rails": [
                 str(publication.get("publish_state") or "draft"),
                 _publication_lifecycle_mode(publication),
                 f"{challenged_count} challenged",
             ],
-            "prompts": [
+            "prompts": gravity_prompts
+            or [
                 "What is still owed upward before this packet is board-safe?",
                 "Which governed case most changes the board-room narrative?",
                 "Show the cash pulse without leaving the approved packet.",
@@ -3240,52 +3300,61 @@ def _drilldown_contract_payload(
         "lower_rail": {
             "developments": [
                 {
+                    "development_id": f"design-{index}",
+                    "title": item.get("title") or "Development",
+                    "detail": f"{item.get('meta') or ''} · {item.get('impact') or ''}".strip(" ·")
+                    or item.get("detail")
+                    or "Awaiting development detail.",
+                    "chips": [str(item.get("kind") or "update"), str(persona_blueprint.get("assistant") or persona_id)],
+                }
+                for index, item in enumerate(list(persona_blueprint.get("developments") or [])[:3], start=1)
+            ]
+            or [
+                {
                     "development_id": "packet-focus",
                     "title": "Packet focus",
-                    "detail": first_finding.get("title")
-                    or "No governed case is in focus yet.",
-                    "chips": [
-                        f"{len(finding_rows)} case(s)",
-                        f"{challenged_count} challenged",
-                    ],
-                },
-                {
-                    "development_id": "board-release",
-                    "title": "Board-release choreography",
-                    "detail": f"Board pack is {str((publication.get('board_pack') or {}).get('status') or 'pending').replace('_', ' ')} and approval is {str(publication.get('approval_status') or 'pending').replace('_', ' ')}.",
-                    "chips": [
-                        next_action,
-                        publication.get("preview_route") or report_preview_route,
-                    ],
-                },
+                    "detail": first_finding.get("title") or "No governed case is in focus yet.",
+                    "chips": [f"{len(finding_rows)} case(s)", f"{challenged_count} challenged"],
+                }
             ],
             "week_ahead": [
                 {
-                    "event_id": "prep",
-                    "label": "Board prep",
-                    "detail": next_action,
-                },
-                {
-                    "event_id": "closure",
-                    "label": "Evidence closure",
-                    "detail": _format_ratio_display(resolved_count, citation_count),
-                },
-                {
-                    "event_id": "room",
-                    "label": "Room narrative",
-                    "detail": str(
-                        latest_point.get("approval_status")
-                        or publication.get("publish_state")
-                        or "draft"
-                    ),
-                },
+                    "event_id": "prep" if index == 1 else item.get("key") or f"week-{index}",
+                    "design_event_id": item.get("key") or f"week-{index}",
+                    "label": item.get("title") or "Executive event",
+                    "detail": item.get("when") or next_action,
+                    "prompt": item.get("prompt") or item.get("title") or next_action,
+                    "foot": item.get("prep") or next_action,
+                    "urgent": bool(item.get("urgent")),
+                }
+                for index, item in enumerate(list(persona_blueprint.get("week") or [])[:4], start=1)
+            ]
+            or [
+                {"event_id": "prep", "label": "Board prep", "detail": next_action},
+                {"event_id": "closure", "label": "Evidence closure", "detail": _format_ratio_display(resolved_count, citation_count)},
+                {"event_id": "room", "label": "Room narrative", "detail": str(latest_point.get("approval_status") or publication.get("publish_state") or "draft")},
             ],
             "cash_pulse": {
+                "title": (persona_blueprint.get("cashPulse") or {}).get("title") or "Cash pulse",
+                "note": (persona_blueprint.get("cashPulse") or {}).get("note") or "governed finance signal",
+                "pillars": list((persona_blueprint.get("cashPulse") or {}).get("pillars") or []),
                 "value_display": _format_sar_brief(total_recoverable),
                 "basis": "governed_findings",
                 "route": sample_case_route if active_case_id else report_preview_route,
             },
             "owed_upward": {
+                "title": (persona_blueprint.get("owedUpward") or {}).get("title") or "Owed upward",
+                "note": (persona_blueprint.get("owedUpward") or {}).get("note") or "Governed upward commentary",
+                "items": list((persona_blueprint.get("owedUpward") or {}).get("items") or [])
+                or [
+                    {
+                        "to": action.get("owner") or "Board lane",
+                        "on": action.get("item") or "Board follow-up",
+                        "status": "authored" if str((board_portal or {}).get("presentation_state") or "") == "closed" else "pending",
+                        "note": f"Due {action.get('due') or 'next board cycle'}.",
+                    }
+                    for action in list(board_design.get("actions") or [])[:3]
+                ],
                 "challenge_count": challenged_count,
                 "next_action": next_action,
                 "route": "/reviewer/pending-reviews",
@@ -3295,6 +3364,13 @@ def _drilldown_contract_payload(
                 "presentation_state": str((board_portal or {}).get("presentation_state") or (board_portal or {}).get("state") or _publication_lifecycle_mode(publication)),
                 "publish_state": publication.get("publish_state"),
             },
+        },
+        "drill": {
+            "active_driver": active_driver,
+            "selected_driver_key": active_driver_key or None,
+            "supports_gravity": True,
+            "supports_lower_rail": True,
+            "supports_movers": bool(active_driver and active_driver.get("movers")),
         },
     }
 
@@ -3329,17 +3405,22 @@ def _executive_diagnostics_payload(
         "Group CEO",
     )
     active_driver_key = str(executive_modes.get("active_driver_key") or "board_packet")
+    persona_blueprint = executive_persona_design(persona_id)
+    board_design = executive_board_design()
     driver_tiles = []
-    for item in list(executive_modes.get("driver_focus") or [])[:4]:
+    persona_drivers = list(persona_blueprint.get("drivers") or [])
+    for item in persona_drivers[:4] or list(executive_modes.get("driver_focus") or [])[:4]:
         driver_tiles.append(
             {
-                "driver_key": item.get("driver_key"),
+                "driver_key": item.get("key") or item.get("driver_key"),
                 "label": item.get("label"),
-                "metric": item.get("metric"),
-                "status": item.get("status"),
-                "detail": item.get("detail"),
-                "active": bool(item.get("active")),
+                "metric": item.get("value") or item.get("metric"),
+                "status": item.get("vsPlan") or item.get("status"),
+                "detail": item.get("story") or item.get("detail"),
+                "active": str(item.get("key") or item.get("driver_key") or "") == active_driver_key,
                 "portfolio_id": item.get("portfolio_id"),
+                "pct": item.get("pct"),
+                "sub": item.get("sub"),
             }
         )
     return {
@@ -3349,7 +3430,12 @@ def _executive_diagnostics_payload(
             "score": hero_score,
             "status": plan_health.get("status"),
             "label": plan_health.get("label"),
-            "summary": plan_health.get("summary"),
+            "summary": persona_blueprint.get("health", {}).get("headline")
+            or plan_health.get("summary"),
+            "body": persona_blueprint.get("health", {}).get("body"),
+            "score_note": persona_blueprint.get("health", {}).get("scoreNote"),
+            "quote": persona_blueprint.get("quote"),
+            "quoted_by": persona_blueprint.get("by"),
             "active_driver_key": active_driver_key,
             "board_state": board_portal.get("presentation_state") or board_portal.get("state"),
         },
@@ -3364,6 +3450,8 @@ def _executive_diagnostics_payload(
                 "presentation_state": board_portal.get("presentation_state"),
                 "publish_state": board_portal.get("publish_state"),
                 "state_detail": board_portal.get("state_detail"),
+                "meeting": board_portal.get("meeting"),
+                "governance": board_portal.get("governance") or board_design.get("governance"),
             },
         },
         "agents": {
@@ -3371,6 +3459,9 @@ def _executive_diagnostics_payload(
             "discoverable_count": (agent_modules.get("summary") or {}).get("discoverable_count"),
             "approval_count": (agent_modules.get("summary") or {}).get("approval_count"),
         },
+        "persona_blueprint": persona_blueprint,
+        "board_packet": board_design,
+        "drill": drilldown.get("drill") or {},
         "strategy": {
             "intent": (strategy_substrate.get("intent") or {}).get("label"),
             "driver_count": strategy_substrate.get("driver_count"),
@@ -3440,86 +3531,55 @@ def _agents_surface_payload(
     release_status = str((publication or {}).get("status") or "draft").lower()
     run_id = str((summary or {}).get("run_id") or "latest")
     created_label = str((summary or {}).get("created_at") or "latest run")
+    activity_design = executive_activity_design()
+    running_design = executive_running_agents_design()
+    discover_design = executive_discover_agents_design()
+    subtools_design = executive_subtools_design()
     running = [
         {
-            "id": "evidence-qa",
-            "name": "Evidence QA",
-            "status": "approval" if challenged_count else "done" if rows else "queued",
-            "tag": "native",
-            "doing": "Bounding challenged findings and citation posture before release.",
-            "by": "StrategyOS",
-            "progress": 68 if challenged_count else 100 if rows else 0,
-            "approval_required": challenged_count > 0,
-            "route": "/runs/latest/findings?domain=evidence_qa",
-            "log": [
-                {"t": created_label, "a": f"Tracked {challenged_count} challenged case(s) in the governed packet."},
-            ],
-        },
-        {
-            "id": "review-gate",
-            "name": "Governed review gate",
-            "status": "approval"
-            if current_stage == "awaiting_review" and approval_status != "approved"
-            else "running"
-            if approval_status == "approved" and release_status != "published"
-            else "done"
-            if release_status == "published"
-            else "queued",
-            "tag": "native",
-            "doing": "Holding release until reviewer/operator controls clear the packet.",
-            "by": "Reviewer lane",
-            "progress": 80 if current_stage == "awaiting_review" else 100 if approval_status == "approved" else 28,
-            "approval_required": current_stage == "awaiting_review" and approval_status != "approved",
-            "route": "/reviewer/pending-reviews",
-            "log": [
-                {"t": created_label, "a": f"Approval posture is {approval_status or 'pending'} at stage {current_stage or 'unknown'}."},
-            ],
-        },
-        {
-            "id": "board-pack-handoff",
-            "name": "Board-pack handoff",
-            "status": "done" if release_status == "published" else "running" if approval_status == "approved" else "queued",
-            "tag": "native",
-            "doing": "Keeping board-preview and report publication posture aligned.",
-            "by": "Publication lane",
-            "progress": 100 if release_status == "published" else 72 if approval_status == "approved" else 18,
-            "approval_required": False,
-            "route": publication.get("preview_route") or "/runs/latest/report-preview",
-            "log": [
-                {"t": created_label, "a": f"Publish state is {publication.get('publish_state') or 'draft'} with {publication.get('report_count') or 0} surfaced report(s)."},
-            ],
-        },
+            "id": item.get("id") or f"agent-{index}",
+            "name": item.get("name") or "Agent",
+            "status": item.get("status") or "queued",
+            "tag": item.get("tag") or item.get("source") or "native",
+            "doing": item.get("doing") or "Awaiting agent detail.",
+            "by": item.get("by") or "StrategyOS",
+            "progress": item.get("progress") or 0,
+            "approval_required": str(item.get("status") or "").lower() == "approval",
+            "route": "/reviewer/pending-reviews"
+            if str(item.get("status") or "").lower() == "approval"
+            else publication.get("preview_route") or "/runs/latest/report-preview",
+            "log": list(item.get("log") or [{"t": created_label, "a": item.get("doing") or "Awaiting agent detail."}]),
+        }
+        for index, item in enumerate(running_design, start=1)
     ]
     native_discovery = [
         {
-            "id": "native-evidence-qa",
-            "name": "Evidence QA agent",
-            "source": "native",
-            "glyph": "◌",
-            "by": "StrategyOS",
-            "desc": "Surfaces challenged findings and citation posture before any board-safe release claim is made.",
-            "connector": "/runs/latest/findings?domain=evidence_qa",
-        },
-        {
-            "id": "native-review-gate",
-            "name": "Governed review agent",
-            "source": "native",
-            "glyph": "⚖",
-            "by": "StrategyOS",
-            "desc": "Keeps approval, rejection, and operator resume inside the governed runtime path.",
-            "connector": "/reviewer/pending-reviews",
-        },
-        {
-            "id": "native-board-pack",
-            "name": "Board-pack publisher",
-            "source": "native",
-            "glyph": "▤",
-            "by": "StrategyOS",
-            "desc": "Bridges report preview posture into bounded board-pack release semantics.",
-            "connector": publication.get("preview_route") or "/runs/latest/report-preview",
-        },
+            "id": f"native-{item.get('id') or index}",
+            "name": item.get("name") or "Native agent",
+            "source": item.get("source") or "native",
+            "glyph": item.get("glyph") or "◌",
+            "by": item.get("by") or "StrategyOS",
+            "desc": item.get("desc") or "Native agent surface",
+            "connector": item.get("connector") or "/runs/latest/findings?domain=evidence_qa",
+        }
+        for index, item in enumerate(discover_design, start=1)
+        if str(item.get("source") or "native").lower() == "native"
     ]
     market_discovery = [
+        {
+            "id": f"market-{item.get('id') or index}",
+            "name": item.get("name") or "Marketplace agent",
+            "source": item.get("source") or "market",
+            "glyph": item.get("glyph") or "⚡",
+            "by": item.get("by") or "Connector catalog",
+            "desc": item.get("desc") or "Marketplace agent surface",
+            "connector": item.get("connector") or "/ingestion/connectors",
+            "permitted": True,
+            "capabilities": [],
+        }
+        for index, item in enumerate(discover_design, start=1)
+        if str(item.get("source") or "").lower() == "market"
+    ] + [
         {
             "id": f"connector-{item.get('connector_id')}",
             "name": item.get("display_name") or "Connector",
@@ -3534,18 +3594,20 @@ def _agents_surface_payload(
         for item in connectors
     ]
     return {
+        "design_activity": activity_design,
         "status": "ok" if summary else "awaiting_run",
         "activity": {
-            "line": plan_health.get("summary") or "No governed packet is available yet.",
+            "line": activity_design.get("line") or plan_health.get("summary") or "No governed packet is available yet.",
             "metrics": [
                 {"k": "running", "v": sum(1 for item in running if item["status"] in {"running", "approval"})},
                 {"k": "needs approval", "v": sum(1 for item in running if item["status"] == "approval")},
-                {"k": "discoverable", "v": len(native_discovery) + len(market_discovery)},
+                {"k": "discoverable", "v": len(discover_design) or len(native_discovery) + len(market_discovery)},
             ],
-            "log": [
+            "design_metrics": list(activity_design.get("metrics") or []),
+            "log": list(activity_design.get("log") or [
                 {"t": created_label, "who": "StrategyOS", "a": plan_health.get("next_action") or "continue_workflow"},
                 {"t": run_id, "who": "Runtime", "a": f"Publish state {publication.get('publish_state') or 'draft'}"},
-            ],
+            ]),
         },
         "running": running,
         "discover": {
@@ -3556,20 +3618,11 @@ def _agents_surface_payload(
         },
         "sub_agents": [
             {
-                "name": "Citation resolver",
-                "glyph": "⌁",
-                "desc": "Turns audit and finding evidence into governed citation posture.",
-            },
-            {
-                "name": "Graph sync",
-                "glyph": "◇",
-                "desc": "Keeps knowledge-graph publication truth aligned with the latest governed run.",
-            },
-            {
-                "name": "Vector retrieval",
-                "glyph": "↗",
-                "desc": "Maintains bounded search surfaces for evidence and governed findings.",
-            },
+                "name": item.get("name") or "Subtool",
+                "glyph": item.get("glyph") or "⌁",
+                "desc": item.get("desc") or "Subtool surface",
+            }
+            for item in subtools_design
         ],
         "sovereign_note": "Agents remain bounded to the tenant runtime; every action is surfaced through governed routes, not hidden automation.",
         "authenticated": authenticated,
