@@ -109,8 +109,9 @@ def test_executive_cockpit_renders_live_command_shell():
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
     assert "StrategyOS.live Executive Cockpit" in html
-    assert 'href="/static/executive.css?v=ux-20260623c"' in html
-    assert 'src="/static/executive.js?v=ux-20260623c"' in html
+    assert 'href="/static/executive.css?v=ux-20260623d"' in html
+    assert 'src="/static/executive.js?v=ux-20260623d"' in html
+    assert 'src="/static/executive_design_data.js?v=ux-20260623d"' in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -164,6 +165,9 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'id="exec-week-rail"' in html
     assert 'id="exec-pulse-grid"' in html
     assert 'id="exec-owed-list"' in html
+    assert 'id="exec-secondary-grid"' in html
+    assert 'id="exec-pulse-title"' in html
+    assert 'id="exec-owed-title"' in html
     assert 'id="exec-board-state-detail"' in html
     assert 'id="exec-thread-list"' in html
     assert 'id="exec-assistant-network"' in html
@@ -181,14 +185,14 @@ def test_executive_cockpit_renders_live_command_shell():
     assert "headers.Authorization" in js
     assert "`Bearer ${state.token}`" in js
     assert '"X-API-Key"' in js
-    assert 'requestJson("/runs/latest")' in js
+    assert 'requestJson(viewStateRoute("/runs/latest"))' in js
     assert 'requestJson("/runs/latest/audit-summary")' in js
     assert 'requestJson("/runs/latest/knowledge-graph")' in js
-    assert 'requestJson("/runs/latest/findings")' in js
-    assert 'requestJson("/public/runs/latest")' in js
-    assert 'requestJson("/public/runs/latest/findings")' in js
-    assert 'requestJson("/public/runs/latest/report-preview")' in js
-    assert 'requestJson("/ui/workspace-contract/latest")' in js
+    assert 'requestJson(viewStateRoute("/runs/latest/findings"))' in js
+    assert 'requestJson(viewStateRoute("/public/runs/latest"))' in js
+    assert 'requestJson(viewStateRoute("/public/runs/latest/findings"))' in js
+    assert 'requestJson(viewStateRoute("/public/runs/latest/report-preview"))' in js
+    assert 'requestJson(viewStateRoute("/ui/workspace-contract/latest"))' in js
     assert 'requestJson("/reviewer/pending-reviews")' in js
     assert 'requestJson(`/reviewer/runs/${encodeURIComponent(latestRun.run_id)}`)' in js
     assert 'function renderPlanHealth(config)' in js
@@ -210,9 +214,11 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'data-theme-mode' in js
     assert 'data-density-mode' in js
     assert 'data-movers-mode' in js
-    assert 'Good morning, Khalid' in js
-    assert 'assistantRole: "chief of staff"' in js
+    assert 'assistantRole:' in js
     assert 'function normalizedCitationSummary(run, rows)' in js
+    assert 'function executiveViewQueryParams()' in js
+    assert 'function viewStateRoute(path)' in js
+    assert 'function syncExecutiveRouteState()' in js
     assert 'function renderExecutiveSignalFoundation()' in js
     assert 'function executivePlanHealthConfig(fallback)' in js
     assert 'function publicationActionLabels(publication)' in js
@@ -227,6 +233,8 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'Next valid action: ${humanizeNextAction(nextAction)}.' in js
     assert '"/data/evidence-preview" : "/public/data/evidence-preview"' in js
     assert 'requestJson(`/public/data/evidence-preview?run_id=${encodeURIComponent(publicRun?.run_id || "")}&finding_id=${encodeURIComponent(preferredFinding)}`)' in js
+    assert 'Open governed approval lane' in js
+    assert 'Open route' in js
     assert 'requestJson("/qa"' in js
     assert "function selectFinding" in js
     assert "function loadReportPreview" in js
@@ -257,8 +265,9 @@ def test_app_entry_uses_design_faithful_executive_surface():
     js = _static_executive_js()
 
     assert "StrategyOS.live Executive Cockpit" in html
-    assert 'href="/static/executive.css?v=ux-20260623c"' in html
-    assert 'src="/static/executive.js?v=ux-20260623c"' in html
+    assert 'href="/static/executive.css?v=ux-20260623d"' in html
+    assert 'src="/static/executive.js?v=ux-20260623d"' in html
+    assert 'src="/static/executive_design_data.js?v=ux-20260623d"' in html
     assert 'class="rail-nav"' in html
     assert 'href="#overview"' in html
     assert 'href="#cases"' in html
@@ -288,15 +297,17 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert "Developments, prep, and weekly rhythm" in html
     assert "StrategyOS.live Governed Diagnostics Workspace" not in html
     assert 'strategyos.ui.token' in js
-    assert 'requestJson("/public/runs/latest")' in js
-    assert 'requestJson("/public/runs/latest/findings")' in js
-    assert 'requestJson("/public/runs/latest/report-preview")' in js
-    assert 'requestJson("/ui/workspace-contract/latest")' in js
+    assert 'requestJson(viewStateRoute("/public/runs/latest"))' in js
+    assert 'requestJson(viewStateRoute("/public/runs/latest/findings"))' in js
+    assert 'requestJson(viewStateRoute("/public/runs/latest/report-preview"))' in js
+    assert 'requestJson(viewStateRoute("/ui/workspace-contract/latest"))' in js
     assert 'function renderExecutiveModes()' in js
     assert 'function renderDriverDrillFidelity(selected, run, citations, challenged)' in js
     assert 'function renderLowerRailFidelity(run, citations, challenged)' in js
     assert 'function renderBoardPortal(run, citations, challenged)' in js
     assert 'function renderAgentsDiscovery(run, citations, challenged)' in js
+    assert 'function executiveViewQueryParams()' in js
+    assert 'function syncExecutiveRouteState()' in js
 
 
 def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
@@ -532,7 +543,8 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
 
         session = client.get("/ui/session", headers={"X-API-Key": "executive"})
         contract = client.get(
-            "/ui/workspace-contract/latest", headers={"X-API-Key": "executive"}
+            "/ui/workspace-contract/latest?persona=board&board=closed&driver=owed_upward&portfolio=release-readiness",
+            headers={"X-API-Key": "executive"},
         )
 
         assert session.status_code == 200
@@ -549,13 +561,23 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert payload["strategy_substrate"]["intent"]["label"] == "Convert governed finance signal into executive action"
         assert payload["strategy_substrate"]["intent"]["guardrails"]
         assert payload["board_portal"]["meeting"]["title"] == "Governed board packet"
-        assert payload["executive_modes"]["active_board_state"] == payload["board_portal"]["state"]
+        assert payload["executive_modes"]["active_persona_id"] == "board"
+        assert payload["executive_modes"]["active_board_state"] == "closed"
+        assert payload["executive_modes"]["active_driver_key"] == "owed_upward"
+        assert payload["executive_modes"]["portfolio_id"] == "release-readiness"
+        assert payload["executive_modes"]["state_contract"]["requested"]["board"] == "closed"
+        assert payload["executive_modes"]["state_contract"]["requested"]["persona"] == "board"
         assert payload["executive_modes"]["driver_focus"][0]["driver_key"] == "board_packet"
         assert any(item["persona_id"] == "cfo" for item in payload["executive_modes"]["personas"])
         assert any(item["persona_id"] == "logistics" for item in payload["executive_modes"]["personas"])
+        assert payload["board_portal"]["presentation_state"] == "closed"
+        assert payload["board_portal"]["lifecycle_flow"][2]["presented"] is True
+        assert payload["board_portal"]["state_detail"]["state"] == "closed"
         assert payload["drilldown"]["default_case_id"] is None
         assert payload["drilldown"]["cash_pulse"]["basis"] == "governed_findings"
         assert payload["drilldown"]["gravity"]["prompts"]
+        assert payload["drilldown"]["gravity"]["sandbox"]["board_state"] == "closed"
+        assert payload["drilldown"]["lower_rail"]["board_state"]["presentation_state"] == "closed"
         assert payload["interaction_contracts"]["latest_run"]["route"] == "/public/runs/latest"
         assert payload["agents"]["running"][0]["id"] == "evidence-qa"
         assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
@@ -568,6 +590,10 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert any(driver["driver_id"] == "board_pack_readiness_driver" for driver in payload["strategy_substrate"]["value_drivers"])
         assert any(item["portfolio_id"] == "release-readiness" for item in payload["strategy_substrate"]["portfolio_views"])
         assert any(item["reasoning_id"] == "hold-runtime-boundary" for item in payload["strategy_substrate"]["reasoning"])
+        assert payload["executive_diagnostics"]["hero"]["persona_id"] == "board"
+        assert payload["executive_diagnostics"]["hero"]["board_state"] == "closed"
+        assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
+        assert payload["executive_diagnostics"]["composition"]["gravity"]["sandbox"]["active_driver_key"] == "owed_upward"
         assert any(item["option_id"] == "release-readiness" for item in payload["portfolio_switcher"]["options"])
         assert all("path" not in item for item in payload["reports"]["artifacts"])
     finally:
@@ -586,6 +612,41 @@ def test_ui_session_reports_environment_label_from_config():
         assert payload["environment"] == "Hosted QA"
     finally:
         _restore_env(original)
+
+
+def test_workspace_contract_accepts_design_persona_ids_and_legacy_aliases(monkeypatch):
+    monkeypatch_summary = {
+        "run_id": "run-77",
+        "tenant_context": {
+            "tenant_id": "tenant-alpha",
+            "tenant_name": "Tenant Alpha",
+            "workspace_id": "tenant-alpha",
+        },
+        "artifacts": {},
+        "report_contracts": {
+            "tenant_id": "tenant-alpha",
+            "run_id": "run-77",
+            "evidence": [],
+            "reports": [],
+        },
+        "findings": [],
+    }
+    monkeypatch.setattr(api_module, "_latest_summary", lambda: monkeypatch_summary)
+    client = TestClient(api_module.app)
+
+    gm = client.get("/ui/workspace-contract/latest?persona=gm")
+    alias_gm = client.get("/ui/workspace-contract/latest?persona=pharma")
+    bu_cfo = client.get("/ui/workspace-contract/latest?persona=bucfo")
+    alias_bu_cfo = client.get("/ui/workspace-contract/latest?persona=distribution")
+
+    assert gm.status_code == 200
+    assert alias_gm.status_code == 200
+    assert bu_cfo.status_code == 200
+    assert alias_bu_cfo.status_code == 200
+    assert gm.json()["executive_modes"]["active_persona_id"] == "gm"
+    assert alias_gm.json()["executive_modes"]["active_persona_id"] == "gm"
+    assert bu_cfo.json()["executive_modes"]["active_persona_id"] == "bucfo"
+    assert alias_bu_cfo.json()["executive_modes"]["active_persona_id"] == "bucfo"
 
 
 def test_ui_session_returns_clean_display_identity_for_idp_subject(monkeypatch):

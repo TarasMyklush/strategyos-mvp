@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StrategyOS.live Executive Cockpit</title>
-    <link rel="stylesheet" href="/static/executive.css?v=ux-20260623c" />
+    <link rel="stylesheet" href="/static/executive.css?v=ux-20260623d" />
   </head>
   <body>
     <main class="cockpit">
@@ -203,12 +203,12 @@
               <div class="week-rail" id="exec-week-rail"></div>
             </aside>
           </div>
-          <div class="diagnostics-secondary-grid">
+          <div class="diagnostics-secondary-grid" id="exec-secondary-grid">
             <article class="lower-fidelity-card pulse-fidelity-card">
               <div class="lower-fidelity-head">
                 <div>
-                  <h3>Cash pulse and driver pressure</h3>
-                  <p>Ring-first diagnostics, carried downward into the exact pulse row the 22.06 board read expects.</p>
+                  <h3 id="exec-pulse-title">Cash pulse and driver pressure</h3>
+                  <p id="exec-pulse-note">Ring-first diagnostics, carried downward into the exact pulse row the 22.06 board read expects.</p>
                 </div>
                 <span class="badge blue">Pulse</span>
               </div>
@@ -217,8 +217,8 @@
             <article class="lower-fidelity-card owed-fidelity-card">
               <div class="lower-fidelity-head">
                 <div>
-                  <h3>Owed upward</h3>
-                  <p>Who still needs what from the packet before confidence can move upward cleanly.</p>
+                  <h3 id="exec-owed-title">Owed upward</h3>
+                  <p id="exec-owed-note">Who still needs what from the packet before confidence can move upward cleanly.</p>
                 </div>
                 <span class="badge amber">Dependencies</span>
               </div>
@@ -737,6 +737,7 @@
     </main>
 
     <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
-    <script src="/static/executive.js?v=ux-20260623c"></script>
+    <script src="/static/executive_design_data.js?v=ux-20260623d"></script>
+    <script src="/static/executive.js?v=ux-20260623d"></script>
   </body>
 </html>

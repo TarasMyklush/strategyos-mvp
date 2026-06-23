@@ -202,6 +202,9 @@ SYSTEM_READ_ROLES = (
 REVIEW_READ_ROLES = ("operator", "reviewer", "bu")
 INVESTIGATION_ROLES = ("operator", "reviewer", "analyst")
 REVIEW_WORKFLOW_ROLES = ("operator", "reviewer")
+EXECUTIVE_PERSONA_ALIASES = {"pharma": "gm", "distribution": "bucfo"}
+EXECUTIVE_PERSONA_IDS = {"ceo", "cfo", "gm", "bucfo", "logistics", "board"}
+EXECUTIVE_BOARD_STATES = {"pre", "live", "closed"}
 
 
 def _principal_prefers_public_safe_surface(principal: dict[str, Any] | None) -> bool:
@@ -224,6 +227,47 @@ def _normalize_lifecycle_stage(value: Any) -> str:
     if not normalized:
         return "created"
     return UI_LIFECYCLE_STAGE_ALIASES.get(normalized, normalized)
+
+
+def _requested_executive_view_state(
+    *,
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
+) -> dict[str, str | None]:
+    requested_persona = str(persona or "").strip().lower() or None
+    requested_persona = EXECUTIVE_PERSONA_ALIASES.get(
+        str(requested_persona), requested_persona
+    )
+    if requested_persona not in EXECUTIVE_PERSONA_IDS:
+        requested_persona = None
+    requested_board = str(board or "").strip().lower() or None
+    if requested_board not in EXECUTIVE_BOARD_STATES:
+        requested_board = None
+    requested_driver = str(driver or "").strip().lower() or None
+    if not requested_driver:
+        requested_driver = None
+    requested_week = str(week or "").strip().lower() or None
+    if not requested_week:
+        requested_week = None
+    requested_agent = str(agent or "").strip().lower() or None
+    if not requested_agent:
+        requested_agent = None
+    requested_company = str(company or CONFIG.company_slug or "current").strip() or "current"
+    requested_portfolio = str(portfolio or CONFIG.portfolio_slug or "all").strip() or "all"
+    return {
+        "persona": requested_persona,
+        "board": requested_board,
+        "driver": requested_driver,
+        "company": requested_company,
+        "portfolio": requested_portfolio,
+        "week": requested_week,
+        "agent": requested_agent,
+    }
 
 
 def _run_lifecycle_timeline(record: dict[str, Any]) -> list[dict[str, Any]]:
@@ -306,7 +350,11 @@ def _latest_summary() -> dict[str, Any] | None:
     return _with_local_run_identity(summary)
 
 
-def _latest_run_public_payload(summary: dict[str, Any] | None) -> dict[str, Any]:
+def _latest_run_public_payload(
+    summary: dict[str, Any] | None,
+    *,
+    view_state: dict[str, str | None] | None = None,
+) -> dict[str, Any]:
     if summary is None:
         return {"status": "missing"}
     rows = _finding_rows_from_summary(summary)
@@ -318,6 +366,32 @@ def _latest_run_public_payload(summary: dict[str, Any] | None) -> dict[str, Any]
         public_safe=True,
     )
     principal = {"role": "executive", "authenticated": False}
+    board_portal = _board_portal_payload(
+        summary,
+        principal_role="executive",
+        public_safe=True,
+        requested_state=(view_state or {}).get("board"),
+    )
+    strategy_substrate = _strategy_substrate_payload(summary, rows, audit_summary, principal)
+    executive_modes = _executive_modes_payload(
+        summary,
+        principal,
+        strategy_substrate=strategy_substrate,
+        board_portal=board_portal,
+        publication=publication,
+        view_state=view_state,
+    )
+    drilldown = _drilldown_contract_payload(
+        summary,
+        principal,
+        public_safe=True,
+        finding_rows=rows,
+        domain_filters=[],
+        report_artifacts=list((_summary_report_contracts(summary).get("reports") or [])),
+        board_portal=board_portal,
+        executive_modes=executive_modes,
+    )
+    agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
     return {
         "status": "ok",
         "run_id": summary.get("run_id"),
@@ -332,19 +406,34 @@ def _latest_run_public_payload(summary: dict[str, Any] | None) -> dict[str, Any]
         "report_count": metrics["report_count"],
         "plan_health": _bounded_plan_health_payload(summary, rows, audit_summary),
         "trend": _trend_card_payload(summary, rows, audit_summary),
+        "strategy_substrate": strategy_substrate,
         "publication": publication,
-        "board_portal": _board_portal_payload(
-            summary,
-            principal_role="executive",
-            public_safe=True,
-        ),
-        "agent_modules": _agent_modules_payload(summary, rows, audit_summary, principal),
+        "board_portal": board_portal,
+        "executive_modes": executive_modes,
+        "drilldown": drilldown,
+        "interaction_contracts": _interaction_contracts_payload(principal, public_safe=True),
+        "agent_modules": agent_modules,
         "role_actions": _role_actions_payload(summary, rows, audit_summary, principal),
+        "executive_diagnostics": _executive_diagnostics_payload(
+            summary,
+            principal=principal,
+            board_portal=board_portal,
+            executive_modes=executive_modes,
+            drilldown=drilldown,
+            strategy_substrate=strategy_substrate,
+            agent_modules=agent_modules,
+            audit_summary=audit_summary,
+            finding_rows=rows,
+        ),
         "public_safe": True,
     }
 
 
-def _summary_with_reconciled_metrics(summary: dict[str, Any] | None) -> dict[str, Any]:
+def _summary_with_reconciled_metrics(
+    summary: dict[str, Any] | None,
+    *,
+    view_state: dict[str, str | None] | None = None,
+) -> dict[str, Any]:
     if not isinstance(summary, dict):
         return {"status": "missing"}
     rows = _finding_rows_from_summary(summary)
@@ -352,6 +441,31 @@ def _summary_with_reconciled_metrics(summary: dict[str, Any] | None) -> dict[str
     metrics = _governed_metrics_payload(summary, rows, audit_summary)
     publication = _summary_publication_payload(summary, principal_role="operator")
     principal = {"role": "operator", "authenticated": True}
+    board_portal = _board_portal_payload(
+        summary,
+        principal_role="operator",
+        requested_state=(view_state or {}).get("board"),
+    )
+    strategy_substrate = _strategy_substrate_payload(summary, rows, audit_summary, principal)
+    executive_modes = _executive_modes_payload(
+        summary,
+        principal,
+        strategy_substrate=strategy_substrate,
+        board_portal=board_portal,
+        publication=publication,
+        view_state=view_state,
+    )
+    drilldown = _drilldown_contract_payload(
+        summary,
+        principal,
+        public_safe=False,
+        finding_rows=rows,
+        domain_filters=[],
+        report_artifacts=list((_summary_report_contracts(summary).get("reports") or [])),
+        board_portal=board_portal,
+        executive_modes=executive_modes,
+    )
+    agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
     payload = dict(summary)
     payload["total_recoverable_sar"] = metrics["total_recoverable_sar"]
     payload["locked_findings"] = metrics["locked_findings"]
@@ -361,10 +475,25 @@ def _summary_with_reconciled_metrics(summary: dict[str, Any] | None) -> dict[str
     payload["report_count"] = metrics["report_count"]
     payload["plan_health"] = _bounded_plan_health_payload(summary, rows, audit_summary)
     payload["trend"] = _trend_card_payload(summary, rows, audit_summary)
+    payload["strategy_substrate"] = strategy_substrate
     payload["publication"] = publication
-    payload["board_portal"] = _board_portal_payload(summary, principal_role="operator")
-    payload["agent_modules"] = _agent_modules_payload(summary, rows, audit_summary, principal)
+    payload["board_portal"] = board_portal
+    payload["executive_modes"] = executive_modes
+    payload["drilldown"] = drilldown
+    payload["interaction_contracts"] = _interaction_contracts_payload(principal, public_safe=False)
+    payload["agent_modules"] = agent_modules
     payload["role_actions"] = _role_actions_payload(summary, rows, audit_summary, principal)
+    payload["executive_diagnostics"] = _executive_diagnostics_payload(
+        summary,
+        principal=principal,
+        board_portal=board_portal,
+        executive_modes=executive_modes,
+        drilldown=drilldown,
+        strategy_substrate=strategy_substrate,
+        agent_modules=agent_modules,
+        audit_summary=audit_summary,
+        finding_rows=rows,
+    )
     return payload
 
 
@@ -2557,6 +2686,7 @@ def _board_portal_payload(
     *,
     principal_role: str | None = None,
     public_safe: bool = False,
+    requested_state: str | None = None,
 ) -> dict[str, Any]:
     role = str(principal_role or "anonymous")
     rows = _finding_rows_from_summary(summary) if isinstance(summary, dict) else []
@@ -2576,6 +2706,11 @@ def _board_portal_payload(
         "approval_status"
     ) == "approved":
         state = "live"
+    presentation_state = (
+        str(requested_state or "").strip().lower() if requested_state else ""
+    ) or state
+    if presentation_state not in EXECUTIVE_BOARD_STATES:
+        presentation_state = state
     board_pack = dict(publication.get("board_pack") or {})
     state_labels = {
         "pre": ("Pre-board", "prepare"),
@@ -2586,8 +2721,49 @@ def _board_portal_payload(
     report_count = int(publication.get("report_count") or 0)
     challenged_count = int(publication.get("challenged_cases") or 0)
     next_action = str((publication.get("approval") or {}).get("next_action") or "")
+    state_detail = {
+        "pre": {
+            "title": "Pre-board preparation",
+            "summary": "Prepare the governed packet, tighten supplementary questions, and keep release posture bounded before the room opens.",
+            "primary_actions": ["prepare_board_pack", next_action or "capture_reviewer_decision"],
+            "secondary_actions": ["inspect_report_preview", "review_supplementary_questions"],
+        },
+        "live": {
+            "title": "Live board session",
+            "summary": "Operate only inside the approved packet while questions stay linked to challenged evidence and governed release posture.",
+            "primary_actions": [next_action or "capture_reviewer_decision", "inspect_board_pack_status"],
+            "secondary_actions": ["open_supplementary_rail", "freeze_live_answers"],
+        },
+        "closed": {
+            "title": "Closed / frozen snapshot",
+            "summary": "Keep the board memory frozen and bounded to approved outputs after the session closes.",
+            "primary_actions": ["inspect_frozen_snapshot", "review_board_memory"],
+            "secondary_actions": ["compare_packet_release", "check_follow_up_obligations"],
+        },
+    }.get(presentation_state, {})
+    lifecycle_flow = []
+    for state_id, label, detail in (
+        ("pre", "Pre-board", "Prepare governed packet"),
+        ("live", "Live", "Run the room inside approved material"),
+        ("closed", "Closed", "Freeze memory after the room closes"),
+    ):
+        lifecycle_flow.append(
+            {
+                "state_id": state_id,
+                "label": label,
+                "detail": detail,
+                "actual": state_id == state,
+                "presented": state_id == presentation_state,
+                "publish_state": publication.get("publish_state"),
+                "next_action": next_action,
+                "allowed_actions": list(board_pack.get("allowed_actions") or ()),
+            }
+        )
     return {
         "state": state,
+        "actual_state": state,
+        "requested_state": requested_state,
+        "presentation_state": presentation_state,
         "state_label": state_label,
         "state_hint": state_hint,
         "publish_state": publication.get("publish_state"),
@@ -2623,6 +2799,19 @@ def _board_portal_payload(
             "board_safe": bool(public_safe or principal_has_any_role(role, "executive")),
             "summary": "Closed meetings retain a bounded frozen snapshot; live organisation data stays outside the board lane.",
         },
+        "session_chips": [
+            state_label,
+            str(publication.get("publish_state") or "draft").replace("_", " "),
+            f"{challenged_count} challenged",
+        ],
+        "lifecycle_flow": lifecycle_flow,
+        "state_detail": {
+            "state": presentation_state,
+            "title": state_detail.get("title") or "Board posture",
+            "summary": state_detail.get("summary") or "Board posture is bounded to the governed packet.",
+            "primary_actions": state_detail.get("primary_actions") or [],
+            "secondary_actions": state_detail.get("secondary_actions") or [],
+        },
         "plan_health": {
             "status": plan_health.get("status"),
             "label": plan_health.get("label"),
@@ -2638,9 +2827,11 @@ def _executive_modes_payload(
     strategy_substrate: dict[str, Any],
     board_portal: dict[str, Any],
     publication: dict[str, Any],
+    view_state: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
-    company_id = str(CONFIG.company_slug or "current")
-    portfolio_id = str(CONFIG.portfolio_slug or "all")
+    view_state = view_state or _requested_executive_view_state()
+    company_id = str(view_state.get("company") or CONFIG.company_slug or "current")
+    portfolio_id = str(view_state.get("portfolio") or CONFIG.portfolio_slug or "all")
     rows = _finding_rows_from_summary(summary) if isinstance(summary, dict) else []
     audit_summary = (
         _latest_run_audit_summary_payload(summary) if isinstance(summary, dict) else None
@@ -2688,19 +2879,19 @@ def _executive_modes_payload(
             "assistant": "Atlas",
         },
         {
-            "persona_id": "pharma",
-            "label": "e-Pharmacy",
-            "detail": "Iris · demand, growth, basket",
-            "summary": "Keeps the governed packet tied to pharmacy-facing growth and basket signal already present in the finance slice.",
+            "persona_id": "gm",
+            "label": "BU GM",
+            "detail": "Lina · growth, service, capacity",
+            "summary": "Keeps the governed packet tied to BU growth, service quality, and capacity signal already present in the finance slice.",
             "default_driver_key": "cash_pulse",
             "default_board_state": "pre",
             "assistant": "Iris",
         },
         {
-            "persona_id": "distribution",
-            "label": "Tamween",
-            "detail": "Argus · leakage, controls, exposure",
-            "summary": "Frames governed leakage, controls, and exposure posture for the distribution business slice.",
+            "persona_id": "bucfo",
+            "label": "BU CFO",
+            "detail": "Yusuf · leakage, controls, exposure",
+            "summary": "Frames governed leakage, controls, and exposure posture for the BU finance slice.",
             "default_driver_key": "owed_upward",
             "default_board_state": "pre",
             "assistant": "Argus",
@@ -2724,18 +2915,11 @@ def _executive_modes_payload(
             "assistant": "Hermes",
         },
     ]
-    persona_contracts = [
-        {
-            **item,
-            "route": route_for(
-                persona=item["persona_id"],
-                board=item["default_board_state"],
-                driver=item["default_driver_key"],
-            ),
-            "active": item["persona_id"] == "ceo",
-        }
-        for item in personas
-    ]
+    requested_persona = str(view_state.get("persona") or "").strip().lower() or "ceo"
+    if requested_persona not in {item["persona_id"] for item in personas}:
+        requested_persona = "ceo"
+    persona_lookup = {item["persona_id"]: item for item in personas}
+    active_persona = persona_lookup[requested_persona]
     board_states = []
     for state_id, label, detail, summary_text in (
         (
@@ -2768,7 +2952,13 @@ def _executive_modes_payload(
                 "allowed_actions": list(
                     (publication.get("board_pack") or {}).get("allowed_actions") or ()
                 ),
-                "active": state_id == str(board_portal.get("state") or "pre"),
+                "active": state_id
+                == str(
+                    view_state.get("board")
+                    or board_portal.get("presentation_state")
+                    or board_portal.get("state")
+                    or "pre"
+                ),
             }
         )
 
@@ -2793,7 +2983,7 @@ def _executive_modes_payload(
                 "status": "live" if total_recoverable > 0 else "thin",
                 "route": route_for(driver="cash_pulse"),
                 "active": False,
-                "persona_ids": ["cfo", "pharma"],
+                "persona_ids": ["cfo", "gm"],
             },
         {
             "driver_key": "owed_upward",
@@ -2804,7 +2994,7 @@ def _executive_modes_payload(
             "status": "needs_closure" if challenged_count else "clear",
             "route": route_for(driver="owed_upward"),
             "active": False,
-            "persona_ids": ["distribution", "board"],
+            "persona_ids": ["bucfo", "board"],
         },
         {
             "driver_key": "evidence_closure",
@@ -2815,7 +3005,7 @@ def _executive_modes_payload(
             "status": "needs_closure" if challenged_count else "governed",
             "route": route_for(driver="evidence_closure"),
             "active": False,
-            "persona_ids": ["ceo", "cfo", "distribution", "logistics", "board"],
+            "persona_ids": ["ceo", "cfo", "bucfo", "logistics", "board"],
         }
     ]
     for item in list(strategy_substrate.get("value_drivers") or [])[:4]:
@@ -2830,19 +3020,52 @@ def _executive_modes_payload(
                 "status": item.get("status") or "bounded",
                 "route": route_for(driver=driver_key),
                 "active": False,
+                "persona_ids": [],
             }
         )
+    requested_driver = str(view_state.get("driver") or "").strip().lower()
+    driver_keys = {str(item.get("driver_key") or "") for item in driver_focus}
+    active_driver_key = requested_driver if requested_driver in driver_keys else str(active_persona.get("default_driver_key") or driver_focus[0]["driver_key"] if driver_focus else "board_packet")
+    requested_board_state = str(view_state.get("board") or "").strip().lower()
+    active_board_state = requested_board_state if requested_board_state in EXECUTIVE_BOARD_STATES else str(board_portal.get("presentation_state") or board_portal.get("state") or active_persona.get("default_board_state") or "pre")
+    persona_contracts = [
+        {
+            **item,
+            "route": route_for(
+                persona=item["persona_id"],
+                board=item["default_board_state"],
+                driver=item["default_driver_key"],
+            ),
+            "active": item["persona_id"] == requested_persona,
+        }
+        for item in personas
+    ]
+    for item in driver_focus:
+        item["active"] = str(item.get("driver_key") or "") == active_driver_key
     return {
         "route_base": route_for(),
         "company_id": company_id,
         "portfolio_id": portfolio_id,
-        "active_persona_id": "ceo",
-        "active_board_state": str(board_portal.get("state") or "pre"),
-        "active_driver_key": driver_focus[0]["driver_key"] if driver_focus else "board_packet",
+        "active_persona_id": requested_persona,
+        "active_board_state": active_board_state,
+        "active_driver_key": active_driver_key,
         "personas": persona_contracts,
         "board_states": board_states,
         "driver_focus": driver_focus,
         "next_action": next_action,
+        "state_contract": {
+            "query_keys": {
+                "persona": "persona",
+                "board": "board",
+                "driver": "driver",
+                "company": "company",
+                "portfolio": "portfolio",
+                "week": "week",
+                "agent": "agent",
+            },
+            "requested": dict(view_state),
+            "truth_basis": "query_scoped_presentation_over_governed_packet",
+        },
     }
 
 
@@ -2854,6 +3077,8 @@ def _drilldown_contract_payload(
     finding_rows: list[dict[str, Any]],
     domain_filters: list[dict[str, Any]],
     report_artifacts: list[dict[str, Any]],
+    board_portal: dict[str, Any] | None = None,
+    executive_modes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     can_investigate = principal_has_any_role(
         str(principal.get("role") or "anonymous"), *INVESTIGATION_ROLES
@@ -3005,6 +3230,12 @@ def _drilldown_contract_payload(
                 "Which governed case most changes the board-room narrative?",
                 "Show the cash pulse without leaving the approved packet.",
             ],
+            "sandbox": {
+                "persona_id": str((executive_modes or {}).get("active_persona_id") or "ceo"),
+                "board_state": str((board_portal or {}).get("presentation_state") or (board_portal or {}).get("state") or _publication_lifecycle_mode(publication)),
+                "active_driver_key": str((executive_modes or {}).get("active_driver_key") or "board_packet"),
+                "truth_basis": "governed_packet_only",
+            },
         },
         "lower_rail": {
             "developments": [
@@ -3049,7 +3280,110 @@ def _drilldown_contract_payload(
                     ),
                 },
             ],
+            "cash_pulse": {
+                "value_display": _format_sar_brief(total_recoverable),
+                "basis": "governed_findings",
+                "route": sample_case_route if active_case_id else report_preview_route,
+            },
+            "owed_upward": {
+                "challenge_count": challenged_count,
+                "next_action": next_action,
+                "route": "/reviewer/pending-reviews",
+            },
+            "board_state": {
+                "actual_state": str((board_portal or {}).get("state") or _publication_lifecycle_mode(publication)),
+                "presentation_state": str((board_portal or {}).get("presentation_state") or (board_portal or {}).get("state") or _publication_lifecycle_mode(publication)),
+                "publish_state": publication.get("publish_state"),
+            },
         },
+    }
+
+
+def _executive_diagnostics_payload(
+    summary: dict[str, Any] | None,
+    *,
+    principal: dict[str, Any],
+    board_portal: dict[str, Any],
+    executive_modes: dict[str, Any],
+    drilldown: dict[str, Any],
+    strategy_substrate: dict[str, Any],
+    agent_modules: dict[str, Any],
+    audit_summary: dict[str, Any] | None,
+    finding_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    plan_health = _bounded_plan_health_payload(summary, finding_rows, audit_summary)
+    metrics = _governed_metrics_payload(summary, finding_rows, audit_summary)
+    challenged_count = int(metrics.get("challenged_count") or 0)
+    citation_count = int(metrics.get("citation_count") or 0)
+    resolved_count = int(metrics.get("resolved_count") or 0)
+    report_count = int(metrics.get("report_count") or 0)
+    approval_status = str((summary or {}).get("approval_status") or "pending").lower()
+    citation_ratio = (resolved_count / citation_count) if citation_count else 0.0
+    approval_bonus = 16 if approval_status == "approved" else 9 if approval_status == "pending" else 4
+    release_bonus = min(report_count * 6, 12)
+    challenge_penalty = min(challenged_count * 7, 24)
+    hero_score = max(38, min(96, round(58 + (citation_ratio * 18) + approval_bonus + release_bonus - challenge_penalty)))
+    persona_id = str(executive_modes.get("active_persona_id") or "ceo")
+    persona_label = next(
+        (item.get("label") for item in executive_modes.get("personas") or [] if item.get("persona_id") == persona_id),
+        "Group CEO",
+    )
+    active_driver_key = str(executive_modes.get("active_driver_key") or "board_packet")
+    driver_tiles = []
+    for item in list(executive_modes.get("driver_focus") or [])[:4]:
+        driver_tiles.append(
+            {
+                "driver_key": item.get("driver_key"),
+                "label": item.get("label"),
+                "metric": item.get("metric"),
+                "status": item.get("status"),
+                "detail": item.get("detail"),
+                "active": bool(item.get("active")),
+                "portfolio_id": item.get("portfolio_id"),
+            }
+        )
+    return {
+        "hero": {
+            "persona_id": persona_id,
+            "persona_label": persona_label,
+            "score": hero_score,
+            "status": plan_health.get("status"),
+            "label": plan_health.get("label"),
+            "summary": plan_health.get("summary"),
+            "active_driver_key": active_driver_key,
+            "board_state": board_portal.get("presentation_state") or board_portal.get("state"),
+        },
+        "driver_grid": driver_tiles,
+        "composition": {
+            "cash_pulse": drilldown.get("cash_pulse"),
+            "owed_upward": drilldown.get("owed_upward"),
+            "gravity": drilldown.get("gravity"),
+            "lower_rail": drilldown.get("lower_rail"),
+            "board_portal": {
+                "state": board_portal.get("state"),
+                "presentation_state": board_portal.get("presentation_state"),
+                "publish_state": board_portal.get("publish_state"),
+                "state_detail": board_portal.get("state_detail"),
+            },
+        },
+        "agents": {
+            "running_count": (agent_modules.get("summary") or {}).get("running_count"),
+            "discoverable_count": (agent_modules.get("summary") or {}).get("discoverable_count"),
+            "approval_count": (agent_modules.get("summary") or {}).get("approval_count"),
+        },
+        "strategy": {
+            "intent": (strategy_substrate.get("intent") or {}).get("label"),
+            "driver_count": strategy_substrate.get("driver_count"),
+            "node_count": strategy_substrate.get("node_count"),
+        },
+        "truth_basis": [
+            "plan_health",
+            "publication",
+            "board_portal",
+            "drilldown",
+            "strategy_substrate",
+            "agent_modules",
+        ],
     }
 
 
@@ -3715,6 +4049,8 @@ def _role_actions_payload(
 def _latest_report_preview_payload(
     principal: dict[str, Any],
     artifact_key: str | None = None,
+    *,
+    view_state: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
     role = str(principal.get("role") or "anonymous")
     summary = _latest_summary()
@@ -3741,9 +4077,40 @@ def _latest_report_preview_payload(
             "role_actions": _role_actions_payload(None, [], None, principal),
         }
     if principal_has_any_role(role, "executive"):
-        payload = _public_report_preview_payload(artifact_key)
+        payload = _public_report_preview_payload(artifact_key, view_state=view_state)
         rows = _finding_rows_from_summary(summary)
         audit_summary = _latest_run_audit_summary_payload(summary)
+        board_portal = _board_portal_payload(
+            summary,
+            principal_role=role,
+            public_safe=True,
+            requested_state=(view_state or {}).get("board"),
+        )
+        strategy_substrate = _strategy_substrate_payload(
+            summary,
+            rows,
+            audit_summary,
+            principal,
+        )
+        executive_modes = _executive_modes_payload(
+            summary,
+            principal,
+            strategy_substrate=strategy_substrate,
+            board_portal=board_portal,
+            publication=payload["publication"],
+            view_state=view_state,
+        )
+        drilldown = _drilldown_contract_payload(
+            summary,
+            principal,
+            public_safe=True,
+            finding_rows=rows,
+            domain_filters=[],
+            report_artifacts=list((_summary_report_contracts(summary).get("reports") or [])),
+            board_portal=board_portal,
+            executive_modes=executive_modes,
+        )
+        agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
         payload["publication"] = _summary_publication_payload(
             summary,
             principal_role=role,
@@ -3751,19 +4118,24 @@ def _latest_report_preview_payload(
         )
         payload["trend"] = _trend_card_payload(summary, rows, audit_summary)
         payload["plan_health"] = _bounded_plan_health_payload(summary, rows, audit_summary)
-        payload["strategy_substrate"] = _strategy_substrate_payload(
-            summary,
-            rows,
-            audit_summary,
-            principal,
-        )
-        payload["board_portal"] = _board_portal_payload(
-            summary,
-            principal_role=role,
-            public_safe=True,
-        )
-        payload["agent_modules"] = _agent_modules_payload(summary, rows, audit_summary, principal)
+        payload["strategy_substrate"] = strategy_substrate
+        payload["board_portal"] = board_portal
+        payload["executive_modes"] = executive_modes
+        payload["drilldown"] = drilldown
+        payload["interaction_contracts"] = _interaction_contracts_payload(principal, public_safe=True)
+        payload["agent_modules"] = agent_modules
         payload["role_actions"] = _role_actions_payload(summary, rows, audit_summary, principal)
+        payload["executive_diagnostics"] = _executive_diagnostics_payload(
+            summary,
+            principal=principal,
+            board_portal=board_portal,
+            executive_modes=executive_modes,
+            drilldown=drilldown,
+            strategy_substrate=strategy_substrate,
+            agent_modules=agent_modules,
+            audit_summary=audit_summary,
+            finding_rows=rows,
+        )
         return payload
 
     publication = _summary_publication_payload(summary, principal_role=role)
@@ -3771,6 +4143,31 @@ def _latest_report_preview_payload(
     reports = list(report_contracts.get("reports") or [])
     rows = _finding_rows_from_summary(summary)
     audit_summary = _latest_run_audit_summary_payload(summary)
+    board_portal = _board_portal_payload(
+        summary,
+        principal_role=role,
+        requested_state=(view_state or {}).get("board"),
+    )
+    strategy_substrate = _strategy_substrate_payload(summary, rows, audit_summary, principal)
+    executive_modes = _executive_modes_payload(
+        summary,
+        principal,
+        strategy_substrate=strategy_substrate,
+        board_portal=board_portal,
+        publication=publication,
+        view_state=view_state,
+    )
+    drilldown = _drilldown_contract_payload(
+        summary,
+        principal,
+        public_safe=False,
+        finding_rows=rows,
+        domain_filters=[],
+        report_artifacts=reports,
+        board_portal=board_portal,
+        executive_modes=executive_modes,
+    )
+    agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
     if not reports:
         return {
             "status": "missing",
@@ -3782,11 +4179,26 @@ def _latest_report_preview_payload(
             "public_safe": False,
             "available_artifacts": publication["available_artifacts"],
             "publication": publication,
-            "board_portal": _board_portal_payload(summary, principal_role=role),
+            "board_portal": board_portal,
             "trend": _trend_card_payload(summary, rows, audit_summary),
             "plan_health": _bounded_plan_health_payload(summary, rows, audit_summary),
-            "agent_modules": _agent_modules_payload(summary, rows, audit_summary, principal),
+            "executive_modes": executive_modes,
+            "drilldown": drilldown,
+            "interaction_contracts": _interaction_contracts_payload(principal, public_safe=False),
+            "strategy_substrate": strategy_substrate,
+            "agent_modules": agent_modules,
             "role_actions": _role_actions_payload(summary, rows, audit_summary, principal),
+            "executive_diagnostics": _executive_diagnostics_payload(
+                summary,
+                principal=principal,
+                board_portal=board_portal,
+                executive_modes=executive_modes,
+                drilldown=drilldown,
+                strategy_substrate=strategy_substrate,
+                agent_modules=agent_modules,
+                audit_summary=audit_summary,
+                finding_rows=rows,
+            ),
         }
     selected = next(
         (item for item in reports if item.get("artifact_key") == artifact_key), None
@@ -3799,12 +4211,26 @@ def _latest_report_preview_payload(
         payload = _run_artifact_payload(str(summary.get("run_id") or ""), selected_key, principal)
         payload["available_artifacts"] = publication["available_artifacts"]
         payload["publication"] = publication
-        payload["board_portal"] = _board_portal_payload(summary, principal_role=role)
+        payload["board_portal"] = board_portal
         payload["trend"] = _trend_card_payload(summary, rows, audit_summary)
         payload["plan_health"] = _bounded_plan_health_payload(summary, rows, audit_summary)
-        payload["strategy_substrate"] = _strategy_substrate_payload(summary, rows, audit_summary, principal)
-        payload["agent_modules"] = _agent_modules_payload(summary, rows, audit_summary, principal)
+        payload["strategy_substrate"] = strategy_substrate
+        payload["executive_modes"] = executive_modes
+        payload["drilldown"] = drilldown
+        payload["interaction_contracts"] = _interaction_contracts_payload(principal, public_safe=False)
+        payload["agent_modules"] = agent_modules
         payload["role_actions"] = _role_actions_payload(summary, rows, audit_summary, principal)
+        payload["executive_diagnostics"] = _executive_diagnostics_payload(
+            summary,
+            principal=principal,
+            board_portal=board_portal,
+            executive_modes=executive_modes,
+            drilldown=drilldown,
+            strategy_substrate=strategy_substrate,
+            agent_modules=agent_modules,
+            audit_summary=audit_summary,
+            finding_rows=rows,
+        )
         payload["title"] = title
         payload["public_safe"] = False
         return payload
@@ -3821,12 +4247,26 @@ def _latest_report_preview_payload(
             payload.pop("path", None)
             payload["available_artifacts"] = publication["available_artifacts"]
             payload["publication"] = publication
-            payload["board_portal"] = _board_portal_payload(summary, principal_role=role)
+            payload["board_portal"] = board_portal
             payload["trend"] = _trend_card_payload(summary, rows, audit_summary)
             payload["plan_health"] = _bounded_plan_health_payload(summary, rows, audit_summary)
-            payload["strategy_substrate"] = _strategy_substrate_payload(summary, rows, audit_summary, principal)
-            payload["agent_modules"] = _agent_modules_payload(summary, rows, audit_summary, principal)
+            payload["strategy_substrate"] = strategy_substrate
+            payload["executive_modes"] = executive_modes
+            payload["drilldown"] = drilldown
+            payload["interaction_contracts"] = _interaction_contracts_payload(principal, public_safe=False)
+            payload["agent_modules"] = agent_modules
             payload["role_actions"] = _role_actions_payload(summary, rows, audit_summary, principal)
+            payload["executive_diagnostics"] = _executive_diagnostics_payload(
+                summary,
+                principal=principal,
+                board_portal=board_portal,
+                executive_modes=executive_modes,
+                drilldown=drilldown,
+                strategy_substrate=strategy_substrate,
+                agent_modules=agent_modules,
+                audit_summary=audit_summary,
+                finding_rows=rows,
+            )
             payload["title"] = title
             payload["public_safe"] = False
             return payload
@@ -3847,12 +4287,26 @@ def _latest_report_preview_payload(
         "preview_text": "\n\n".join(preview_lines),
         "available_artifacts": publication["available_artifacts"],
         "publication": publication,
-        "board_portal": _board_portal_payload(summary, principal_role=role),
+        "board_portal": board_portal,
         "trend": _trend_card_payload(summary, rows, audit_summary),
         "plan_health": _bounded_plan_health_payload(summary, rows, audit_summary),
-        "strategy_substrate": _strategy_substrate_payload(summary, rows, audit_summary, principal),
-        "agent_modules": _agent_modules_payload(summary, rows, audit_summary, principal),
+        "strategy_substrate": strategy_substrate,
+        "executive_modes": executive_modes,
+        "drilldown": drilldown,
+        "interaction_contracts": _interaction_contracts_payload(principal, public_safe=False),
+        "agent_modules": agent_modules,
         "role_actions": _role_actions_payload(summary, rows, audit_summary, principal),
+        "executive_diagnostics": _executive_diagnostics_payload(
+            summary,
+            principal=principal,
+            board_portal=board_portal,
+            executive_modes=executive_modes,
+            drilldown=drilldown,
+            strategy_substrate=strategy_substrate,
+            agent_modules=agent_modules,
+            audit_summary=audit_summary,
+            finding_rows=rows,
+        ),
         "restricted": bool(selected.get("restricted")),
         "public_safe": False,
     }
@@ -3878,7 +4332,10 @@ def _sanitize_contract_list(
 def _workspace_surface_contract_payload(
     summary: dict[str, Any] | None,
     principal: dict[str, Any],
+    *,
+    view_state: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
+    view_state = view_state or _requested_executive_view_state()
     authenticated = bool(principal.get("authenticated"))
     role = str(principal.get("role") or "anonymous")
     public_safe = _principal_prefers_public_safe_surface(principal)
@@ -4018,6 +4475,7 @@ def _workspace_surface_contract_payload(
         summary,
         principal_role=role,
         public_safe=public_safe,
+        requested_state=view_state.get("board"),
     )
     agent_modules = _agent_modules_payload(summary, finding_rows, audit_summary, principal)
     role_actions = _role_actions_payload(summary, finding_rows, audit_summary, principal)
@@ -4025,6 +4483,24 @@ def _workspace_surface_contract_payload(
         summary,
         principal_role=role,
         public_safe=public_safe,
+    )
+    executive_modes = _executive_modes_payload(
+        summary,
+        principal,
+        strategy_substrate=strategy_substrate,
+        board_portal=board_portal,
+        publication=publication,
+        view_state=view_state,
+    )
+    drilldown = _drilldown_contract_payload(
+        summary,
+        principal,
+        public_safe=public_safe,
+        finding_rows=finding_rows,
+        domain_filters=domain_filters,
+        report_artifacts=filtered_reports,
+        board_portal=board_portal,
+        executive_modes=executive_modes,
     )
     return {
         "status": "ok" if summary else "missing",
@@ -4053,24 +4529,22 @@ def _workspace_surface_contract_payload(
         "board_portal": board_portal,
         "agent_modules": agent_modules,
         "role_actions": role_actions,
-        "executive_modes": _executive_modes_payload(
-            summary,
-            principal,
-            strategy_substrate=strategy_substrate,
-            board_portal=board_portal,
-            publication=publication,
-        ),
-        "drilldown": _drilldown_contract_payload(
-            summary,
-            principal,
-            public_safe=public_safe,
-            finding_rows=finding_rows,
-            domain_filters=domain_filters,
-            report_artifacts=filtered_reports,
-        ),
+        "executive_modes": executive_modes,
+        "drilldown": drilldown,
         "interaction_contracts": _interaction_contracts_payload(
             principal,
             public_safe=public_safe,
+        ),
+        "executive_diagnostics": _executive_diagnostics_payload(
+            summary,
+            principal=principal,
+            board_portal=board_portal,
+            executive_modes=executive_modes,
+            drilldown=drilldown,
+            strategy_substrate=strategy_substrate,
+            agent_modules=agent_modules,
+            audit_summary=audit_summary,
+            finding_rows=finding_rows,
         ),
         "agents": _agents_surface_payload(summary, principal),
         "tenant_admin_system": _tenant_admin_system_payload(summary, principal),
@@ -5448,14 +5922,52 @@ def ui_session(
 
 @app.get("/ui/workspace-contract/latest")
 def latest_workspace_contract(
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
-    return _workspace_surface_contract_payload(_latest_summary(), principal)
+    return _workspace_surface_contract_payload(
+        _latest_summary(),
+        principal,
+        view_state=_requested_executive_view_state(
+            persona=persona,
+            board=board,
+            driver=driver,
+            company=company,
+            portfolio=portfolio,
+            week=week,
+            agent=agent,
+        ),
+    )
 
 
 @app.get("/public/runs/latest")
-def public_latest_run() -> dict[str, Any]:
-    return _latest_run_public_payload(_latest_summary())
+def public_latest_run(
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
+) -> dict[str, Any]:
+    return _latest_run_public_payload(
+        _latest_summary(),
+        view_state=_requested_executive_view_state(
+            persona=persona,
+            board=board,
+            driver=driver,
+            company=company,
+            portfolio=portfolio,
+            week=week,
+            agent=agent,
+        ),
+    )
 
 
 @app.get("/public/runs/latest/audit-summary")
@@ -6066,18 +6578,34 @@ def run_job_status(
 
 @app.get("/runs/latest")
 def latest_run(
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
     principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
+    view_state = _requested_executive_view_state(
+        persona=persona,
+        board=board,
+        driver=driver,
+        company=company,
+        portfolio=portfolio,
+        week=week,
+        agent=agent,
+    )
     summary = _latest_summary()
     if summary is None:
         if principal_has_any_role(str(principal.get("role") or ""), "executive"):
             return {"status": "missing", "public_safe": True}
         return {"status": "missing", "run_dir": str(CONFIG.default_run_dir)}
     if principal_has_any_role(str(principal.get("role") or ""), "executive"):
-        return _latest_run_public_payload(summary)
+        return _latest_run_public_payload(summary, view_state=view_state)
     if principal_has_any_role(str(principal.get("role") or ""), "bu"):
         return _sanitize_summary_for_bu(summary)
-    return _summary_with_reconciled_metrics(summary)
+    return _summary_with_reconciled_metrics(summary, view_state=view_state)
 
 
 @app.get("/runs/latest/audit-summary")
@@ -6160,6 +6688,7 @@ def _latest_run_findings_payload(
     include_run_dir: bool,
     public_safe: bool,
     domain_filter: str | None = None,
+    view_state: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
     principal = {
         "role": "executive" if public_safe else "operator",
@@ -6190,6 +6719,26 @@ def _latest_run_findings_payload(
         audit_summary,
         filtered_rows=filtered_rows,
     )
+    publication = _summary_publication_payload(
+        summary,
+        principal_role="executive" if public_safe else "operator",
+        public_safe=public_safe,
+    )
+    board_portal = _board_portal_payload(
+        summary,
+        principal_role="executive" if public_safe else "operator",
+        public_safe=public_safe,
+        requested_state=(view_state or {}).get("board"),
+    )
+    strategy_substrate = _strategy_substrate_payload(summary, rows, audit_summary, principal)
+    executive_modes = _executive_modes_payload(
+        summary,
+        principal,
+        strategy_substrate=strategy_substrate,
+        board_portal=board_portal,
+        publication=publication,
+        view_state=view_state,
+    )
     drilldown = _drilldown_contract_payload(
         summary,
         principal,
@@ -6208,7 +6757,10 @@ def _latest_run_findings_payload(
             )
         ],
         report_artifacts=list(_summary_report_contracts(summary).get("reports") or []),
+        board_portal=board_portal,
+        executive_modes=executive_modes,
     )
+    agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
     payload = {
         "status": "ok",
         "run_id": summary.get("run_id"),
@@ -6237,11 +6789,8 @@ def _latest_run_findings_payload(
         "kpi_cards": _kpi_card_payloads(summary, rows, audit_summary),
         "trend": _trend_card_payload(summary, rows, audit_summary),
         "plan_health": _bounded_plan_health_payload(summary, rows, audit_summary),
-        "publication": _summary_publication_payload(
-            summary,
-            principal_role="executive" if public_safe else "operator",
-            public_safe=public_safe,
-        ),
+        "publication": publication,
+        "strategy_substrate": strategy_substrate,
         "drilldown": _drilldown_contract_payload(
             summary,
             principal,
@@ -6262,15 +6811,26 @@ def _latest_run_findings_payload(
             report_artifacts=list(
                 (_summary_report_contracts(summary).get("reports") or [])
             ),
+            board_portal=board_portal,
+            executive_modes=executive_modes,
         ),
-        "board_portal": _board_portal_payload(
-            summary,
-            principal_role="executive" if public_safe else "operator",
-            public_safe=public_safe,
-        ),
-        "agent_modules": _agent_modules_payload(summary, rows, audit_summary, principal),
+        "board_portal": board_portal,
+        "executive_modes": executive_modes,
+        "interaction_contracts": _interaction_contracts_payload(principal, public_safe=public_safe),
+        "agent_modules": agent_modules,
         "role_actions": _role_actions_payload(summary, rows, audit_summary, principal),
         "drilldown": drilldown,
+        "executive_diagnostics": _executive_diagnostics_payload(
+            summary,
+            principal=principal,
+            board_portal=board_portal,
+            executive_modes=executive_modes,
+            drilldown=drilldown,
+            strategy_substrate=strategy_substrate,
+            agent_modules=agent_modules,
+            audit_summary=audit_summary,
+            finding_rows=rows,
+        ),
     }
     if include_run_dir:
         payload["run_dir"] = summary.get("run_dir")
@@ -6358,7 +6918,11 @@ def _public_evidence_preview_payload(
     return _sanitize_public_evidence_preview(payload)
 
 
-def _public_report_preview_payload(artifact_key: str | None = None) -> dict[str, Any]:
+def _public_report_preview_payload(
+    artifact_key: str | None = None,
+    *,
+    view_state: dict[str, str | None] | None = None,
+) -> dict[str, Any]:
     principal = {"role": "executive", "authenticated": False}
     summary = _latest_summary()
     if summary is None:
@@ -6421,6 +6985,32 @@ def _public_report_preview_payload(artifact_key: str | None = None) -> dict[str,
     preview_lines.append(
         "Protected artifact bodies remain behind reviewer/operator authentication; this public preview is a synthesized board-safe status note."
     )
+    board_portal = _board_portal_payload(
+        summary,
+        principal_role="executive",
+        public_safe=True,
+        requested_state=(view_state or {}).get("board"),
+    )
+    strategy_substrate = _strategy_substrate_payload(summary, findings, audit, principal)
+    executive_modes = _executive_modes_payload(
+        summary,
+        principal,
+        strategy_substrate=strategy_substrate,
+        board_portal=board_portal,
+        publication=publication,
+        view_state=view_state,
+    )
+    drilldown = _drilldown_contract_payload(
+        summary,
+        principal,
+        public_safe=True,
+        finding_rows=findings,
+        domain_filters=[],
+        report_artifacts=list((_summary_report_contracts(summary).get("reports") or [])),
+        board_portal=board_portal,
+        executive_modes=executive_modes,
+    )
+    agent_modules = _agent_modules_payload(summary, findings, audit, principal)
     return {
         "status": "ok",
         "run_id": summary.get("run_id"),
@@ -6430,15 +7020,26 @@ def _public_report_preview_payload(artifact_key: str | None = None) -> dict[str,
         "preview_text": "\n\n".join(preview_lines),
         "available_artifacts": available_artifacts,
         "publication": publication,
-        "board_portal": _board_portal_payload(
-            summary,
-            principal_role="executive",
-            public_safe=True,
-        ),
-        "agent_modules": _agent_modules_payload(summary, findings, audit, principal),
+        "board_portal": board_portal,
+        "strategy_substrate": strategy_substrate,
+        "executive_modes": executive_modes,
+        "drilldown": drilldown,
+        "interaction_contracts": _interaction_contracts_payload(principal, public_safe=True),
+        "agent_modules": agent_modules,
         "role_actions": _role_actions_payload(summary, findings, audit, principal),
         "trend": _trend_card_payload(summary, findings, audit),
         "plan_health": _bounded_plan_health_payload(summary, findings, audit),
+        "executive_diagnostics": _executive_diagnostics_payload(
+            summary,
+            principal=principal,
+            board_portal=board_portal,
+            executive_modes=executive_modes,
+            drilldown=drilldown,
+            strategy_substrate=strategy_substrate,
+            agent_modules=agent_modules,
+            audit_summary=audit,
+            finding_rows=findings,
+        ),
         "public_safe": True,
     }
 
@@ -6446,6 +7047,13 @@ def _public_report_preview_payload(artifact_key: str | None = None) -> dict[str,
 @app.get("/runs/latest/findings")
 def latest_run_findings(
     domain: str | None = None,
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
     principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
     """Decision worklist for the latest run: one actionable row per finding
@@ -6456,16 +7064,43 @@ def latest_run_findings(
         include_run_dir=not principal_has_any_role(str(principal.get("role") or ""), "executive"),
         public_safe=principal_has_any_role(str(principal.get("role") or ""), "executive"),
         domain_filter=domain,
+        view_state=_requested_executive_view_state(
+            persona=persona,
+            board=board,
+            driver=driver,
+            company=company,
+            portfolio=portfolio,
+            week=week,
+            agent=agent,
+        ),
     )
 
 
 @app.get("/public/runs/latest/findings")
-def public_latest_run_findings(domain: str | None = None) -> dict[str, Any]:
+def public_latest_run_findings(
+    domain: str | None = None,
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
+) -> dict[str, Any]:
     return _latest_run_findings_payload(
         _latest_summary(),
         include_run_dir=False,
         public_safe=True,
         domain_filter=domain,
+        view_state=_requested_executive_view_state(
+            persona=persona,
+            board=board,
+            driver=driver,
+            company=company,
+            portfolio=portfolio,
+            week=week,
+            agent=agent,
+        ),
     )
 
 
@@ -6547,10 +7182,12 @@ def data_status(
     )
     summary_source = latest_summary if latest_summary else None
     principal = {"role": "tenant_admin", "authenticated": True}
+    finding_rows = _finding_rows_from_summary(summary_source) if summary_source else []
+    audit_summary = _latest_run_audit_summary_payload(summary_source) if summary_source else None
     metrics = _governed_metrics_payload(
         summary_source,
-        _finding_rows_from_summary(summary_source) if summary_source else [],
-        _latest_run_audit_summary_payload(summary_source) if summary_source else None,
+        finding_rows,
+        audit_summary,
     )
     status_payload["tenant_context"] = _summary_tenant_context(
         summary_source,
@@ -6569,18 +7206,18 @@ def data_status(
     )
     status_payload["plan_health"] = _bounded_plan_health_payload(
         summary_source,
-        _finding_rows_from_summary(summary_source) if summary_source else [],
-        _latest_run_audit_summary_payload(summary_source) if summary_source else None,
+        finding_rows,
+        audit_summary,
     )
     status_payload["trend"] = _trend_card_payload(
         summary_source,
-        _finding_rows_from_summary(summary_source) if summary_source else [],
-        _latest_run_audit_summary_payload(summary_source) if summary_source else None,
+        finding_rows,
+        audit_summary,
     )
     status_payload["strategy_substrate"] = _strategy_substrate_payload(
         summary_source,
-        _finding_rows_from_summary(summary_source) if summary_source else [],
-        _latest_run_audit_summary_payload(summary_source) if summary_source else None,
+        finding_rows,
+        audit_summary,
         {"role": "tenant_admin", "authenticated": True},
     )
     status_payload["agents"] = _agents_surface_payload(
@@ -6593,15 +7230,50 @@ def data_status(
     )
     status_payload["agent_modules"] = _agent_modules_payload(
         summary_source,
-        _finding_rows_from_summary(summary_source) if summary_source else [],
-        _latest_run_audit_summary_payload(summary_source) if summary_source else None,
+        finding_rows,
+        audit_summary,
         principal,
     )
     status_payload["role_actions"] = _role_actions_payload(
         summary_source,
-        _finding_rows_from_summary(summary_source) if summary_source else [],
-        _latest_run_audit_summary_payload(summary_source) if summary_source else None,
+        finding_rows,
+        audit_summary,
         principal,
+    )
+    status_payload["executive_modes"] = _executive_modes_payload(
+        summary_source,
+        principal,
+        strategy_substrate=status_payload["strategy_substrate"],
+        board_portal=status_payload["board_portal"],
+        publication=status_payload["publication"],
+        view_state=_requested_executive_view_state(),
+    )
+    status_payload["drilldown"] = _drilldown_contract_payload(
+        summary_source,
+        principal,
+        public_safe=False,
+        finding_rows=finding_rows,
+        domain_filters=[],
+        report_artifacts=list((_summary_report_contracts(summary_source).get("reports") or []))
+        if summary_source
+        else [],
+        board_portal=status_payload["board_portal"],
+        executive_modes=status_payload["executive_modes"],
+    )
+    status_payload["interaction_contracts"] = _interaction_contracts_payload(
+        principal,
+        public_safe=False,
+    )
+    status_payload["executive_diagnostics"] = _executive_diagnostics_payload(
+        summary_source,
+        principal=principal,
+        board_portal=status_payload["board_portal"],
+        executive_modes=status_payload["executive_modes"],
+        drilldown=status_payload["drilldown"],
+        strategy_substrate=status_payload["strategy_substrate"],
+        agent_modules=status_payload["agent_modules"],
+        audit_summary=audit_summary,
+        finding_rows=finding_rows,
     )
     status_payload["tenant_admin_system"] = _tenant_admin_system_payload(
         summary_source,
@@ -6624,9 +7296,28 @@ def data_status(
 @app.get("/runs/latest/report-preview")
 def latest_report_preview(
     artifact_key: str | None = None,
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
     principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES, "tenant_admin", "system"),
 ) -> dict[str, Any]:
-    return _latest_report_preview_payload(principal, artifact_key)
+    return _latest_report_preview_payload(
+        principal,
+        artifact_key,
+        view_state=_requested_executive_view_state(
+            persona=persona,
+            board=board,
+            driver=driver,
+            company=company,
+            portfolio=portfolio,
+            week=week,
+            agent=agent,
+        ),
+    )
 
 
 @app.get("/data/vector-search")
@@ -6720,8 +7411,28 @@ def public_evidence_preview(
 
 
 @app.get("/public/runs/latest/report-preview")
-def public_report_preview(artifact_key: str | None = None) -> dict[str, Any]:
-    return _public_report_preview_payload(artifact_key)
+def public_report_preview(
+    artifact_key: str | None = None,
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
+) -> dict[str, Any]:
+    return _public_report_preview_payload(
+        artifact_key,
+        view_state=_requested_executive_view_state(
+            persona=persona,
+            board=board,
+            driver=driver,
+            company=company,
+            portfolio=portfolio,
+            week=week,
+            agent=agent,
+        ),
+    )
 
 
 # Cache reloaded Q&A contexts by a stable run key so repeated chat questions do

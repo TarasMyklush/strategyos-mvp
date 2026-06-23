@@ -836,6 +836,8 @@ a { color: inherit; text-decoration: none; }
 .owed-status.s-due-now { color: var(--amber); background: var(--amber-soft); border-color: transparent; }
 .owed-status.s-awaiting,
 .owed-status.s-open { color: var(--red); background: var(--red-soft); border-color: transparent; }
+.owed-status.s-draft { color: var(--blue); background: var(--blue-soft); border-color: transparent; }
+.owed-status.s-due-tomorrow { color: var(--amber); background: var(--amber-soft); border-color: transparent; }
 .scope-ribbon {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) auto minmax(220px, 0.8fr);

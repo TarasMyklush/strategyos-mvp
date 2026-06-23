@@ -184,6 +184,35 @@ def test_findings_endpoint_supports_domain_filters_and_kpi_contracts(monkeypatch
         _restore_env(original)
 
 
+def test_findings_and_workspace_contract_accept_design_persona_aliases(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        workspace = client.get("/ui/workspace-contract/latest?persona=gm&board=closed&driver=owed_upward")
+        findings = client.get("/public/runs/latest/findings?persona=bucfo&board=live&driver=cash_pulse")
+
+        assert workspace.status_code == 200
+        workspace_payload = workspace.json()
+        assert workspace_payload["executive_modes"]["active_persona_id"] == "gm"
+        assert workspace_payload["executive_modes"]["active_board_state"] == "closed"
+        assert any(item["persona_id"] == "gm" for item in workspace_payload["executive_modes"]["personas"])
+        assert any(item["persona_id"] == "bucfo" for item in workspace_payload["executive_modes"]["personas"])
+
+        assert findings.status_code == 200
+        findings_payload = findings.json()
+        assert findings_payload["executive_modes"]["active_persona_id"] == "bucfo"
+        assert findings_payload["executive_modes"]["active_board_state"] == "live"
+        assert findings_payload["drilldown"]["gravity"]["sandbox"]["persona_id"] == "bucfo"
+    finally:
+        _restore_env(original)
+
+
 def test_findings_endpoint_handles_missing_run(monkeypatch):
     original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
     try:
@@ -628,13 +657,24 @@ def test_executive_latest_run_uses_public_safe_summary(monkeypatch):
         monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
 
         client = TestClient(api_module.app)
-        response = client.get("/runs/latest", headers={"X-API-Key": "executive"})
+        response = client.get(
+            "/runs/latest?persona=cfo&board=closed&driver=cash_pulse",
+            headers={"X-API-Key": "executive"},
+        )
 
         assert response.status_code == 200
         payload = response.json()
         assert payload["status"] == "ok"
         assert payload["public_safe"] is True
         assert payload["board_portal"]["state"] == "live"
+        assert payload["board_portal"]["presentation_state"] == "closed"
+        assert payload["executive_modes"]["active_persona_id"] == "cfo"
+        assert payload["executive_modes"]["active_board_state"] == "closed"
+        assert payload["executive_modes"]["active_driver_key"] == "cash_pulse"
+        assert payload["drilldown"]["gravity"]["sandbox"]["persona_id"] == "cfo"
+        assert payload["drilldown"]["lower_rail"]["cash_pulse"]["basis"] == "governed_findings"
+        assert payload["executive_diagnostics"]["hero"]["persona_id"] == "cfo"
+        assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
         assert "run_dir" not in payload
     finally:
         _restore_env(original)

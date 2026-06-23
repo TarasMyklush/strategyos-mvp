@@ -2,6 +2,7 @@
   "use strict";
 
   const TOKEN_KEY = "strategyos.ui.token";
+  const DESIGN = window.STRATEGYOS_EXECUTIVE_DESIGN || {};
   const bootstrap = JSON.parse(document.getElementById("strategyos-executive-bootstrap").textContent);
   const byId = (id) => document.getElementById(id);
   const query = new URLSearchParams(window.location.search);
@@ -136,6 +137,11 @@
     weekRail: byId("exec-week-rail"),
     pulseGrid: byId("exec-pulse-grid"),
     owedList: byId("exec-owed-list"),
+    secondaryGrid: byId("exec-secondary-grid"),
+    pulseTitle: byId("exec-pulse-title"),
+    pulseNote: byId("exec-pulse-note"),
+    owedTitle: byId("exec-owed-title"),
+    owedNote: byId("exec-owed-note"),
     boardStateDetail: byId("exec-board-state-detail"),
     agentsSearchNote: byId("exec-agents-search-note"),
     agentsBrowseButton: byId("exec-agents-browse-button"),
@@ -179,10 +185,10 @@
   const EXECUTIVE_PERSONAS = [
     { key: "ceo", label: "Group CEO", detail: "Khalid · value, release, board brief", assistant: "Hermes" },
     { key: "cfo", label: "Group CFO", detail: "Sara · margin, hedge, cash", assistant: "Atlas" },
-    { key: "pharma", label: "e-Pharmacy", detail: "Iris · demand, growth, basket", assistant: "Iris" },
-    { key: "distribution", label: "Tamween", detail: "Argus · leakage, controls, exposure", assistant: "Argus" },
-    { key: "logistics", label: "Logistics", detail: "Vega · cold chain, service, cost", assistant: "Vega" },
-    { key: "board", label: "Board room", detail: "Approved pack and room posture", assistant: "Hermes" },
+    { key: "gm", label: "BU GM", detail: "Lina · growth, service, capacity", assistant: "Iris" },
+    { key: "bucfo", label: "BU CFO", detail: "Yusuf · leakage, controls, exposure", assistant: "Argus" },
+    { key: "logistics", label: "Logistics", detail: "Hassan · cold chain, service, cost", assistant: "Vega" },
+    { key: "board", label: "Board room", detail: "Approved pack and frozen board posture", assistant: "Minerva" },
   ];
 
   const DISPLAY_THEMES = [
@@ -206,6 +212,67 @@
     { key: "live", label: "Live", detail: "In session" },
     { key: "closed", label: "Closed", detail: "Memory" },
   ];
+
+  const PERSONA_ALIASES = {
+    pharma: "gm",
+    distribution: "bucfo",
+    boardroom: "board",
+  };
+
+  function contractExecutivePersonas() {
+    const personas = Array.isArray(state.workspaceContract?.executive_modes?.personas)
+      ? state.workspaceContract.executive_modes.personas
+      : [];
+    if (!personas.length) return EXECUTIVE_PERSONAS;
+    return personas.map((item) => ({
+      key: item.persona_id,
+      label: item.label,
+      detail: item.detail,
+      assistant: item.assistant,
+    }));
+  }
+
+  function contractBoardLifecycles() {
+    const states = Array.isArray(state.workspaceContract?.executive_modes?.board_states)
+      ? state.workspaceContract.executive_modes.board_states
+      : [];
+    if (!states.length) return BOARD_LIFECYCLES;
+    return states.map((item) => ({
+      key: item.state_id,
+      label: item.label,
+      detail: item.detail,
+      summary: item.summary,
+      route: item.route,
+      active: Boolean(item.active),
+    }));
+  }
+
+  function executiveViewQueryParams() {
+    const params = new URLSearchParams();
+    const persona = PERSONA_ALIASES[state.executivePersona] || state.executivePersona;
+    if (persona) params.set("persona", persona);
+    if (state.lifecycleMode) params.set("board", state.lifecycleMode);
+    if (state.selectedDriverKey) params.set("driver", state.selectedDriverKey);
+    if (state.selectedCompany) params.set("company", state.selectedCompany);
+    if (state.selectedPortfolio) params.set("portfolio", state.selectedPortfolio);
+    if (state.selectedWeekEventKey) params.set("week", state.selectedWeekEventKey);
+    if (state.openAgentKey) params.set("agent", state.openAgentKey);
+    if (state.themeMode) params.set("theme", state.themeMode);
+    if (state.densityMode) params.set("density", state.densityMode);
+    if (state.moversMode) params.set("movers", state.moversMode);
+    if (state.selectedThreadKey) params.set("thread", state.selectedThreadKey);
+    return params;
+  }
+
+  function viewStateRoute(path) {
+    const queryString = executiveViewQueryParams().toString();
+    return queryString ? `${path}?${queryString}` : path;
+  }
+
+  function syncExecutiveRouteState() {
+    const nextUrl = viewStateRoute(window.location.pathname || "/executive");
+    window.history.replaceState({}, "", nextUrl);
+  }
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -482,7 +549,19 @@
   }
 
   function currentExecutivePersona() {
-    return EXECUTIVE_PERSONAS.find((item) => item.key === state.executivePersona) || EXECUTIVE_PERSONAS[0];
+    const normalizedKey = PERSONA_ALIASES[state.executivePersona] || state.executivePersona;
+    if (normalizedKey !== state.executivePersona) state.executivePersona = normalizedKey;
+    const personas = contractExecutivePersonas();
+    return personas.find((item) => item.key === normalizedKey) || personas[0] || EXECUTIVE_PERSONAS[0];
+  }
+
+  function personaBlueprint() {
+    const persona = currentExecutivePersona();
+    return (DESIGN.personas && DESIGN.personas[persona.key]) || (DESIGN.personas && DESIGN.personas.ceo) || null;
+  }
+
+  function boardBlueprint() {
+    return DESIGN.board || null;
   }
 
   function currentThemeMode() {
@@ -498,103 +577,91 @@
   }
 
   function currentPersonaModel() {
+    const blueprint = personaBlueprint();
     const persona = currentExecutivePersona();
     const publication = publicationContract();
     const findings = findingsPayload();
     const challenged = challengedSummary(state.latestRun || {}) || findings.filter((item) => item?.challenged).length;
-    const queueCount = Array.isArray(state.pendingReviews?.items) ? state.pendingReviews.items.length : 0;
     const shared = {
       ceo: {
-        greeting: "Good morning, Khalid",
+        greeting: `Good morning, ${blueprint?.health ? "Khalid" : "Khalid"}`,
         title: "Group CEO diagnostics",
-        designScore: 78,
-        assistant: "Hermes",
-        assistantRole: "chief of staff",
-        brief: "Revenue holds ahead of plan, EBITDA still needs hedge closure, and the board call remains about confidence in the packet rather than liquidity.",
-        quote: "Revenue is carrying the story at 102, EBITDA is still just shy at 99, and cash gives the room confidence at 123 — the call is hedge closure, not liquidity.",
-        by: "Hermes · Group CEO chief of staff",
-        threads: [
+        designScore: blueprint?.health?.score || 78,
+        assistant: blueprint?.assistant || "Hermes",
+        assistantRole: blueprint?.assistantRole || "chief of staff",
+        brief: blueprint?.brief || "Revenue holds ahead of plan, EBITDA still needs hedge closure, and the board call remains about confidence in the packet rather than liquidity.",
+        quote: blueprint?.quote || "Revenue is carrying the story at 102, EBITDA is still just shy at 99, and cash gives the room confidence at 123 — the call is hedge closure, not liquidity.",
+        by: blueprint?.by || "Hermes · Group CEO chief of staff",
+        threads: blueprint?.threads || [
           { key: "briefing", title: "Board on Thursday", preview: "Am I on track for the board on Thursday?" },
           { key: "hedge", title: "Hedge downside", preview: "Show the hedge downside before the room." },
           { key: "recognition", title: "Recognition this week", preview: "Who deserves recognition this week?" },
         ],
-        prompts: ["Am I on track for the board on Thursday?", "What is the single biggest risk to plan?", "Who deserves recognition this week?"],
+        prompts: blueprint?.prompts || ["Am I on track for the board on Thursday?", "What is the single biggest risk to plan?", "Who deserves recognition this week?"],
       },
       cfo: {
         greeting: "Good morning, Sara",
         title: "Group CFO diagnostics",
-        designScore: 76,
-        assistant: "Atlas",
-        assistantRole: "finance chief of staff",
-        brief: "The packet is now mostly a margin and hedge conversation: value is present, but EBITDA and FX discipline still decide confidence in the deck.",
-        quote: "Cash stays above the floor and the hedge is the real board question — not whether the business can fund the move.",
-        by: "Atlas · CFO assistant",
-        threads: [
+        designScore: blueprint?.health?.score || 76,
+        assistant: blueprint?.assistant || "Atlas",
+        assistantRole: blueprint?.assistantRole || "finance chief of staff",
+        brief: blueprint?.brief || "The packet is now mostly a margin and hedge conversation: value is present, but EBITDA and FX discipline still decide confidence in the deck.",
+        quote: blueprint?.quote || "Cash stays above the floor and the hedge is the real board question — not whether the business can fund the move.",
+        by: blueprint?.by || "Atlas · CFO assistant",
+        threads: blueprint?.threads || [
           { key: "briefing", title: "Margin pressure", preview: "What is the single biggest drag on EBITDA?" },
           { key: "hedge", title: "FX hedge", preview: "Show the hedge downside and action window." },
           { key: "recognition", title: "Cash posture", preview: "Can the JV be funded from cash?" },
         ],
-        prompts: ["What is the single biggest drag on EBITDA?", "Show the hedge downside.", "Can the JV be funded from cash?"],
+        prompts: blueprint?.prompts || ["What is the single biggest drag on EBITDA?", "Show the hedge downside.", "Can the JV be funded from cash?"],
       },
-      pharma: {
+      gm: {
         greeting: "Good morning, Iris",
-        title: "e-Pharmacy growth diagnostics",
-        designScore: 81,
-        assistant: "Iris",
-        assistantRole: "growth chief of staff",
-        brief: "Demand is still carrying momentum; the job is to protect service and conversion without leaking the margin signal back out of the packet.",
-        quote: "The growth line is healthy, but the board will still ask whether fulfilment and price discipline can protect it.",
-        by: "Iris · e-Pharmacy assistant",
-        threads: [
-          { key: "briefing", title: "Demand pulse", preview: "Which growth signal is strongest this week?" },
-          { key: "hedge", title: "Basket risk", preview: "Where is margin leaking in the digital basket?" },
-          { key: "recognition", title: "Service wins", preview: "Which team deserves recognition on execution?" },
-        ],
-        prompts: ["Which growth signal is strongest this week?", "Where is margin leaking in the digital basket?", "Which team deserves recognition on execution?"],
+        title: "BU GM diagnostics",
+        designScore: blueprint?.health?.score || 81,
+        assistant: blueprint?.assistant || "Iris",
+        assistantRole: blueprint?.assistantRole || "growth chief of staff",
+        brief: blueprint?.brief || "Demand is still carrying momentum; the job is to protect service and conversion without leaking the margin signal back out of the packet.",
+        quote: blueprint?.quote || "The growth line is healthy, but the board will still ask whether fulfilment and price discipline can protect it.",
+        by: blueprint?.by || "Iris · e-Pharmacy assistant",
+        threads: blueprint?.threads || [],
+        prompts: blueprint?.prompts || [],
       },
-      distribution: {
+      bucfo: {
         greeting: "Good morning, Argus",
-        title: "Tamween control diagnostics",
-        designScore: 72,
-        assistant: "Argus",
-        assistantRole: "distribution chief of staff",
-        brief: "Distribution remains the loudest control signal in the packet: leakage and proof discipline matter more than narrative flourish.",
-        quote: "The room can tolerate noise in the story, but not ambiguity in leakage or proof.",
-        by: "Argus · Tamween assistant",
-        threads: [
-          { key: "briefing", title: "Leakage review", preview: "What is driving the Tamween leakage line?" },
-          { key: "hedge", title: "Control gap", preview: "Which control gap reaches the board pack first?" },
-          { key: "recognition", title: "Stabilisation", preview: "What has already stabilised this week?" },
-        ],
-        prompts: ["What is driving the Tamween leakage line?", "Which control gap reaches the board pack first?", "What has already stabilised this week?"],
+        title: "BU CFO diagnostics",
+        designScore: blueprint?.health?.score || 72,
+        assistant: blueprint?.assistant || "Argus",
+        assistantRole: blueprint?.assistantRole || "distribution chief of staff",
+        brief: blueprint?.brief || "Distribution remains the loudest control signal in the packet: leakage and proof discipline matter more than narrative flourish.",
+        quote: blueprint?.quote || "The room can tolerate noise in the story, but not ambiguity in leakage or proof.",
+        by: blueprint?.by || "Argus · Tamween assistant",
+        threads: blueprint?.threads || [],
+        prompts: blueprint?.prompts || [],
       },
       logistics: {
         greeting: "Good morning, Vega",
         title: "Logistics resilience diagnostics",
-        designScore: 80,
-        assistant: "Vega",
-        assistantRole: "logistics chief of staff",
-        brief: "Cold-chain and service reliability are still the quiet strength in the packet; the concern is keeping cost and continuity aligned as the board asks for confidence.",
-        quote: "Cold-chain credibility lets the board focus on strategy instead of firefighting, provided cost stays disciplined.",
-        by: "Vega · logistics assistant",
-        threads: [
-          { key: "briefing", title: "Cold-chain watch", preview: "What keeps service credibility strongest this week?" },
-          { key: "hedge", title: "Continuity risk", preview: "Where could continuity slip before the board?" },
-          { key: "recognition", title: "Operational win", preview: "Which logistics win should the board hear?" },
-        ],
-        prompts: ["What keeps service credibility strongest this week?", "Where could continuity slip before the board?", "Which logistics win should the board hear?"],
+        designScore: blueprint?.health?.score || 80,
+        assistant: blueprint?.assistant || "Vega",
+        assistantRole: blueprint?.assistantRole || "logistics chief of staff",
+        brief: blueprint?.brief || "Cold-chain and service reliability are still the quiet strength in the packet; the concern is keeping cost and continuity aligned as the board asks for confidence.",
+        quote: blueprint?.quote || "Cold-chain credibility lets the board focus on strategy instead of firefighting, provided cost stays disciplined.",
+        by: blueprint?.by || "Vega · logistics assistant",
+        threads: blueprint?.threads || [],
+        prompts: blueprint?.prompts || [],
       },
       board: {
         greeting: "Good morning, board room",
         title: "Board room framing",
-        designScore: 78,
-        assistant: "Hermes",
+        designScore: blueprint?.health?.score || 78,
+        assistant: boardBlueprint()?.assistant || "Minerva",
         assistantRole: "board-safe assistant",
         brief: "Only the CEO-approved packet belongs here: the board can press on margin, hedge, and cash, but the answers must stay inside approved material.",
         quote: publication.status === "published"
           ? "The packet is now frozen into memory — board follow-up stays bounded to approved outputs."
           : "The room sees only what the CEO has approved, plus the KPIs the board expects to interrogate.",
-        by: "Hermes · board-safe assistant",
+        by: `${boardBlueprint()?.assistant || "Minerva"} · board-safe assistant`,
         threads: [
           { key: "briefing", title: "Room opener", preview: "How should we open the board conversation?" },
           { key: "hedge", title: "Approved packet only", preview: "What can I answer from the approved deck only?" },
@@ -608,6 +675,22 @@
 
   function executiveDriverBaseline() {
     const persona = currentExecutivePersona();
+    const blueprint = personaBlueprint();
+    if (Array.isArray(blueprint?.drivers) && blueprint.drivers.length) {
+      return blueprint.drivers.map((driver) => ({
+        key: driver.key,
+        title: driver.label,
+        percent: driver.pct,
+        metric: `${driver.pct}% of plan`,
+        sub: `${driver.value} · ${driver.sub}`,
+        story: driver.story,
+        chips: driver.chips || [],
+        vsPlan: driver.vsPlan,
+        trendLabel: driver.trendLabel,
+        unit: driver.unit,
+        movers: driver.movers || { lifting: [], dragging: [] },
+      }));
+    }
     const publication = publicationContract();
     const approvedMetric = publication.status === "published" ? "packet published" : publication.status === "approved_for_release" ? "packet ready" : "packet preparing";
     const baselines = {
@@ -673,10 +756,11 @@
   }
 
   function currentLifecycleMode() {
-    if (!BOARD_LIFECYCLES.find((item) => item.key === state.lifecycleMode)) {
+    const lifecycles = contractBoardLifecycles();
+    if (!lifecycles.find((item) => item.key === state.lifecycleMode)) {
       state.lifecycleMode = derivedLifecycleMode();
     }
-    return BOARD_LIFECYCLES.find((item) => item.key === state.lifecycleMode) || BOARD_LIFECYCLES[0];
+    return lifecycles.find((item) => item.key === state.lifecycleMode) || lifecycles[0] || BOARD_LIFECYCLES[0];
   }
 
   function scopeLabel() {
@@ -759,6 +843,8 @@
     const drivers = strategyValueDrivers();
     const domains = domainSummaryRows();
     const derived = derivedLifecycleMode();
+    const personaTabs = contractExecutivePersonas();
+    const lifecycleTabs = contractBoardLifecycles();
 
     const personaCopy = {
       ceo: {
@@ -819,7 +905,7 @@
     if (els.personaButton) els.personaButton.setAttribute("aria-expanded", state.personaMenuOpen ? "true" : "false");
     if (els.personaMenu) {
       els.personaMenu.hidden = !state.personaMenuOpen;
-      els.personaMenu.innerHTML = EXECUTIVE_PERSONAS.map((item) => `
+      els.personaMenu.innerHTML = personaTabs.map((item) => `
         <button class="persona-menu-item${item.key === persona.key ? " is-active" : ""}${item.key === "board" ? " is-board" : ""}" type="button" data-persona-menu-item="${escapeHtml(item.key)}">
           <strong>${escapeHtml(item.label)}</strong>
           <span>${escapeHtml(item.detail)} · ${escapeHtml(item.assistant || item.label)}</span>
@@ -827,13 +913,13 @@
       `).join("");
     }
 
-    els.personaTabs.innerHTML = EXECUTIVE_PERSONAS.map((item) => `
+    els.personaTabs.innerHTML = personaTabs.map((item) => `
       <button class="mode-tab${item.key === persona.key ? " is-active" : ""}" type="button" data-exec-persona="${escapeHtml(item.key)}" role="tab" aria-selected="${item.key === persona.key ? "true" : "false"}">
         <strong>${escapeHtml(item.label)}</strong>
         <span>${escapeHtml(item.detail)}</span>
       </button>
     `).join("");
-    els.lifecycleTabs.innerHTML = BOARD_LIFECYCLES.map((item) => `
+    els.lifecycleTabs.innerHTML = lifecycleTabs.map((item) => `
       <button class="mode-tab${item.key === lifecycle.key ? " is-active" : ""}" type="button" data-board-state="${escapeHtml(item.key)}" role="tab" aria-selected="${item.key === lifecycle.key ? "true" : "false"}">
         <strong>${escapeHtml(item.label)}</strong>
         <span>${escapeHtml(item.detail)}</span>
@@ -914,10 +1000,11 @@
     els.personaTabs.querySelectorAll("[data-exec-persona]").forEach((button) => {
       button.addEventListener("click", () => {
         state.executivePersona = button.getAttribute("data-exec-persona") || "ceo";
+        state.lifecycleMode = currentLifecycleMode().key;
         state.selectedThreadKey = "briefing";
         state.personaMenuOpen = false;
-        renderExecutiveModes();
-        rerenderExecutiveNarrative();
+        syncExecutiveRouteState();
+        refreshLiveData();
       });
     });
     els.personaButton?.addEventListener("click", () => {
@@ -927,17 +1014,18 @@
     els.personaMenu?.querySelectorAll("[data-persona-menu-item]").forEach((button) => {
       button.addEventListener("click", () => {
         state.executivePersona = button.getAttribute("data-persona-menu-item") || "ceo";
+        state.lifecycleMode = currentLifecycleMode().key;
         state.selectedThreadKey = "briefing";
         state.personaMenuOpen = false;
-        renderExecutiveModes();
-        rerenderExecutiveNarrative();
+        syncExecutiveRouteState();
+        refreshLiveData();
       });
     });
     els.lifecycleTabs.querySelectorAll("[data-board-state]").forEach((button) => {
       button.addEventListener("click", () => {
         state.lifecycleMode = button.getAttribute("data-board-state") || derivedLifecycleMode();
-        renderExecutiveModes();
-        rerenderExecutiveNarrative();
+        syncExecutiveRouteState();
+        refreshLiveData();
       });
     });
     els.themeTabs?.querySelectorAll("[data-theme-mode]").forEach((button) => {
@@ -972,6 +1060,7 @@
     const persona = currentExecutivePersona();
     const personaModel = currentPersonaModel();
     const publication = publicationContract();
+    const blueprint = personaBlueprint();
     const drivers = executiveDriverModels(run, citations, challenged);
     if (!drivers.find((item) => item.key === state.selectedDriverKey)) {
       state.selectedDriverKey = drivers[0]?.key || "board_packet";
@@ -982,15 +1071,15 @@
       ? "The packet is board-safe and closed into memory."
       : challenged && persona.key === "board"
         ? `${formatCount(challenged)} challenge${Number(challenged) === 1 ? " is" : "s are"} still shaping the approved board packet.`
-        : persona.key === "ceo"
-          ? "Revenue is carrying the room, but EBITDA and hedge discipline still decide confidence."
+        : blueprint?.health?.headline
+          ? blueprint.health.headline
           : personaModel.brief;
     els.heroGreeting.textContent = personaModel.greeting;
     els.heroHeadline.textContent = headline;
-    els.heroCopy.textContent = selected?.story || "The 22.06 hero composition stays grounded to current governed packet truth: evidence closure, release posture, board-pack readiness, and the latest finance signal only.";
+    els.heroCopy.textContent = blueprint?.health?.body || selected?.story || "The 22.06 hero composition stays grounded to current governed packet truth: evidence closure, release posture, board-pack readiness, and the latest finance signal only.";
     els.heroBoundary.textContent = `Composed from ${selected?.title || "bounded drivers"}, publication posture, and governed evidence inside ${scopeLabel()}. No enterprise-wide plan compiler claim is made.`;
     els.heroScore.textContent = String(score);
-    els.heroScoreNote.textContent = persona.key === "board" ? "CEO-approved board pack" : personaModel.title;
+    els.heroScoreNote.textContent = persona.key === "board" ? "CEO-approved board pack" : (blueprint?.health?.scoreNote || personaModel.title);
     els.driverTiles.innerHTML = drivers.map((driver) => `
       <button class="driver-tile${driver.key === selected?.key ? " is-active" : ""}" type="button" data-driver-key="${escapeHtml(driver.key)}">
         <div class="driver-tile-top">
@@ -1010,6 +1099,7 @@
     els.driverTiles.querySelectorAll("[data-driver-key]").forEach((button) => {
       button.addEventListener("click", () => {
         state.selectedDriverKey = button.getAttribute("data-driver-key") || drivers[0]?.key || "board_packet";
+        syncExecutiveRouteState();
         renderExecutiveHero(run, citations, challenged);
       });
     });
@@ -1018,16 +1108,19 @@
   function renderDriverDrillFidelity(selected, run, citations, challenged) {
     const moversMode = currentMoversMode();
     if (els.moversCaption) els.moversCaption.textContent = `${moversMode.label.toLowerCase()} view`;
+    const positive = Array.isArray(selected?.movers?.lifting) ? selected.movers.lifting.map((item) => ({ ...item, tone: "up" })) : [];
+    const negative = Array.isArray(selected?.movers?.dragging) ? selected.movers.dragging.map((item) => ({ ...item, tone: "down" })) : [];
+    const movers = positive.concat(negative);
     const trendRows = [
       {
         title: `${selected?.title || "Driver"} signal`,
-        detail: selected?.sub || "Awaiting driver signal",
-        meta: citations.detail,
+        detail: selected?.vsPlan ? `${selected.sub} · ${selected.vsPlan}` : selected?.sub || "Awaiting driver signal",
+        meta: selected?.trendLabel || citations.detail,
       },
       {
-        title: "Evidence chain",
-        detail: citations.count !== null && citations.count !== undefined ? `${formatCount(citations.resolved || 0)} / ${formatCount(citations.count)} cited` : "Awaiting cited chain",
-        meta: challenged ? `${formatCount(challenged)} challenges still visible` : "No open challenge visible on this slice",
+        title: "Driver story",
+        detail: selected?.story || "Awaiting cited chain",
+        meta: challenged ? `${formatCount(challenged)} challenges still visible` : citations.detail,
       },
       {
         title: "Release posture",
@@ -1045,35 +1138,30 @@
       `).join("");
     }
 
-    const movers = [
-      { name: "Topline", delta: "+2", detail: "ahead of plan on approved packet" },
-      { name: "Margin", delta: "-1", detail: "FX and API cost still visible" },
-      { name: "Cash", delta: "+23", detail: "board comfort remains strong" },
-    ];
     const moverHtml = movers.map((item) => {
-      const width = Math.max(18, Math.min(96, 50 + (Number(item.delta) * 3)));
+      const width = Math.max(18, Math.min(96, 50 + (Number(item.contribution || 0) * 1.5)));
       if (moversMode.key === "ledger") {
         return `
           <div class="mover-card">
-            <div class="mover-card-top"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.delta)} pts</span></div>
-            <small>${escapeHtml(item.detail)}</small>
+            <div class="mover-card-top"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.delta)} · ${escapeHtml(String(item.contribution || 0))}</span></div>
+            <small>${escapeHtml(item.note || `${item.tone === "up" ? "lifting" : "dragging"} this driver` )}</small>
           </div>
         `;
       }
       if (moversMode.key === "bar") {
         return `
           <div class="mover-card">
-            <div class="mover-card-top"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.delta)} pts</span></div>
+            <div class="mover-card-top"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.delta)}</span></div>
             <div class="mover-bar-track"><span class="mover-bar-fill" style="width:${width}%"></span></div>
-            <small>${escapeHtml(item.detail)}</small>
+            <small>${escapeHtml(item.note || `${Math.abs(Number(item.contribution || 0))} contribution points`)}</small>
           </div>
         `;
       }
       return `
         <div class="mover-card">
-          <div class="mover-card-top"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.delta)} pts</span></div>
-          <span>${escapeHtml(item.detail)}</span>
-          <small>${escapeHtml(selected?.title || "Driver")} view · ${escapeHtml(currentExecutivePersona().label)}</small>
+          <div class="mover-card-top"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.delta)}</span></div>
+          <span>${escapeHtml(item.note || `${item.tone === "up" ? "Lift" : "Drag"} on ${selected?.title || "driver"}`)}</span>
+          <small>${escapeHtml(item.tone === "up" ? "lifting" : "dragging")} · ${escapeHtml(String(item.contribution || 0))} contribution pts</small>
         </div>
       `;
     }).join("");
@@ -1093,29 +1181,26 @@
   }
 
   function renderLowerRailFidelity(run, citations, challenged) {
-    const findings = findingsPayload();
+    const blueprint = personaBlueprint();
     const publication = publicationContract();
     const persona = currentExecutivePersona();
-    const developments = [
-      {
+    const feedRows = [];
+    (blueprint?.findings || []).slice(0, 2).forEach((item) => {
+      feedRows.push({ title: item.title, detail: item.detail, chips: [item.tag, scopeLabel()] });
+    });
+    (blueprint?.developments || []).slice(0, 2).forEach((item) => {
+      feedRows.push({ title: item.title, detail: `${item.meta} · ${item.impact}`, chips: [item.kind, currentPersonaModel().assistant] });
+    });
+    if (!feedRows.length) {
+      feedRows.push({
         title: `${persona.label} brief`,
         detail: currentPersonaModel().brief,
         chips: [publicationStatusLabel(publication.status || "draft"), citations.count !== null && citations.count !== undefined ? `${formatCount(citations.resolved || 0)} / ${formatCount(citations.count)} cited` : "awaiting citations"],
-      },
-      {
-        title: findings.length ? `${formatCount(findings.length)} governed case${findings.length === 1 ? "" : "s"} in focus` : "Packet focus still bounded",
-        detail: findings.length ? `${findings[0]?.title || findings[0]?.pattern_label || "Latest finding"} leads the current narrative surface.` : "Load a governed run to turn this lower panel into real case rhythm.",
-        chips: [challenged ? `${formatCount(challenged)} challenged` : "challenge clear", scopeLabel()],
-      },
-      {
-        title: "Board-release choreography",
-        detail: `Board pack is ${humanizeToken(publication.board_pack?.status || "pending")} and approval is ${humanizeToken(publication.approval_status || approvalSummary(run || {}))}.`,
-        chips: [humanizeNextAction(publication.approval?.next_action || "prepare_board_pack"), publication.preview_route || "/public/runs/latest/report-preview"],
-      },
-    ];
-    if (els.lowerMainBadge) els.lowerMainBadge.textContent = findings.length ? `${formatCount(findings.length)} active` : "Design packet";
+      });
+    }
+    if (els.lowerMainBadge) els.lowerMainBadge.textContent = feedRows.length ? `${formatCount(feedRows.length)} live rows` : "Design packet";
     if (els.developmentsList) {
-      els.developmentsList.innerHTML = developments.map((item) => `
+      els.developmentsList.innerHTML = feedRows.map((item) => `
         <div class="lower-feed-row">
           <div class="lower-feed-top"><strong>${escapeHtml(item.title)}</strong><span class="badge blue">update</span></div>
           <span>${escapeHtml(item.detail)}</span>
@@ -1123,32 +1208,25 @@
         </div>
       `).join("");
     }
-    const weekEvents = [
-      {
-        key: "board_prep",
-        day: "TUE",
-        title: "Board prep",
-        detail: humanizeNextAction(publication.approval?.next_action || "prepare_board_pack"),
-        prompt: `${currentPersonaModel().assistant}: prepare the board pack with the latest bounded changes.`,
-        foot: `Board pack ${humanizeToken(publication.board_pack?.status || "pending")} · ${formatCount(challenged || 0)} challenges still shape room readiness.`,
-      },
-      {
-        key: "reviewer_closure",
-        day: "WED",
-        title: "Reviewer closure",
-        detail: challenged ? `${formatCount(challenged)} challenge${Number(challenged) === 1 ? "" : "s"} still visible` : "No open challenge visible",
-        prompt: `Summarise what still needs reviewer closure before release.`,
-        foot: citations.detail,
-      },
-      {
-        key: "room_narrative",
-        day: "THU",
-        title: "Room narrative",
-        detail: persona.key === "board" ? "Use approved pack only" : "Executive handoff stays board-safe",
-        prompt: `How should ${persona.label} open the board-room narrative?`,
-        foot: persona.key === "board" ? "Frozen board-safe narrative only." : currentPersonaModel().brief,
-      },
-    ];
+    const weekEvents = Array.isArray(blueprint?.week) && blueprint.week.length
+      ? blueprint.week.map((item) => ({
+          key: item.key,
+          day: String(item.day || "").toUpperCase(),
+          title: item.title,
+          detail: item.when,
+          prompt: item.prompt || item.title,
+          foot: item.prep,
+        }))
+      : [
+          {
+            key: "board_prep",
+            day: "TUE",
+            title: "Board prep",
+            detail: humanizeNextAction(publication.approval?.next_action || "prepare_board_pack"),
+            prompt: `${currentPersonaModel().assistant}: prepare the board pack with the latest bounded changes.`,
+            foot: `Board pack ${humanizeToken(publication.board_pack?.status || "pending")} · ${formatCount(challenged || 0)} challenges still shape room readiness.`,
+          },
+        ];
     if (!weekEvents.find((item) => item.key === state.selectedWeekEventKey)) {
       state.selectedWeekEventKey = weekEvents[0]?.key || "board_prep";
     }
@@ -1164,6 +1242,7 @@
       els.weekRail.querySelectorAll("[data-week-key]").forEach((button) => {
         button.addEventListener("click", () => {
           state.selectedWeekEventKey = button.getAttribute("data-week-key") || "board_prep";
+          syncExecutiveRouteState();
           renderLowerRailFidelity(run, citations, challenged);
           setCommandPrompt(button.getAttribute("data-week-prompt") || "");
         });
@@ -1173,42 +1252,49 @@
   }
 
   function renderCashPulseAndOwed(run, citations, challenged) {
+    const blueprint = personaBlueprint();
     const drivers = executiveDriverModels(run, citations, challenged).slice(0, 4);
     const publication = publicationContract();
     const persona = currentExecutivePersona();
+    const showSecondary = blueprint?.secondaryMode !== "hidden";
+    if (els.secondaryGrid) els.secondaryGrid.hidden = !showSecondary;
+    if (!showSecondary) return;
+    if (els.pulseTitle) els.pulseTitle.textContent = blueprint?.cashPulse?.title || "Driver pressure";
+    if (els.pulseNote) els.pulseNote.textContent = blueprint?.cashPulse?.note || "Four designed tiles carrying the current diagnostic pressure downward.";
+    if (els.owedTitle) els.owedTitle.textContent = blueprint?.owedUpward?.title || "Owed upward";
+    if (els.owedNote) els.owedNote.textContent = blueprint?.owedUpward?.note || "Commentary that still needs to move upward with the number.";
     if (els.pulseGrid) {
-      els.pulseGrid.innerHTML = drivers.map((driver) => {
-        const tone = driver.percent >= 101 ? "up" : driver.percent >= 99 ? "flat" : "down";
+      const pulseRows = Array.isArray(blueprint?.cashPulse?.pillars) && blueprint.cashPulse.pillars.length
+        ? blueprint.cashPulse.pillars
+        : drivers.map((driver) => ({ label: driver.title, value: String(driver.percent), sub: `${driver.metric} · ${driver.sub}`, delta: (driver.chips || [])[0] || scopeLabel(), tone: driver.percent >= 101 ? "up" : driver.percent >= 99 ? "flat" : "down" }));
+      els.pulseGrid.innerHTML = pulseRows.map((driver) => {
+        const tone = driver.tone || (driver.percent >= 101 ? "up" : driver.percent >= 99 ? "flat" : "down");
         return `
           <div class="pulse-tile tone-${tone}">
-            <span class="pulse-label">${escapeHtml(driver.title)}</span>
-            <strong class="pulse-value">${escapeHtml(String(driver.percent))}</strong>
-            <span class="pulse-sub">${escapeHtml(driver.metric)} · ${escapeHtml(driver.sub)}</span>
-            <span class="pulse-delta">${escapeHtml((driver.chips || []).slice(0, 1)[0] || scopeLabel())}</span>
+            <span class="pulse-label">${escapeHtml(driver.label)}</span>
+            <strong class="pulse-value">${escapeHtml(String(driver.value))}</strong>
+            <span class="pulse-sub">${escapeHtml(driver.sub)}</span>
+            <span class="pulse-delta">${escapeHtml(driver.delta)}</span>
           </div>
         `;
       }).join("");
     }
-    const owedRows = [
-      {
-        to: persona.key === "board" ? "To board secretary" : "To Group CEO",
-        on: `${humanizeNextAction(publication.approval?.next_action || "prepare_board_pack")}`,
-        note: `Current packet posture is ${publicationStatusLabel(publication.status || approvalSummary(run || {}))}; the handoff remains bounded to approved materials and cited evidence.`,
-        status: publication.status === "published" ? "authored" : challenged ? "due-today" : "awaiting",
-      },
-      {
-        to: "To CFO / finance lead",
-        on: challenged ? "Close the EBITDA and hedge tension before room confidence is claimed." : "Carry forward the approved downside note into the room.",
-        note: citations.detail,
-        status: challenged ? "due-now" : "authored",
-      },
-      {
-        to: "To reviewer lane",
-        on: `Keep ${formatCount(Array.isArray(state.pendingReviews?.items) ? state.pendingReviews.items.length : 0)} queue item(s) and ${formatCount(challenged || 0)} challenge(s) from leaking into the executive surface as fake certainty.`,
-        note: `Board pack ${humanizeToken(publication.board_pack?.status || "pending")} · ${persona.label} framing only.`,
-        status: Array.isArray(state.pendingReviews?.items) && state.pendingReviews.items.length ? "open" : "authored",
-      },
-    ];
+    const owedRows = Array.isArray(blueprint?.owedUpward?.items) && blueprint.owedUpward.items.length
+      ? blueprint.owedUpward.items
+      : [
+          {
+            to: persona.key === "board" ? "To board secretary" : "To Group CEO",
+            on: `${humanizeNextAction(publication.approval?.next_action || "prepare_board_pack")}`,
+            note: `Current packet posture is ${publicationStatusLabel(publication.status || approvalSummary(run || {}))}; the handoff remains bounded to approved materials and cited evidence.`,
+            status: publication.status === "published" ? "authored" : challenged ? "due-today" : "awaiting",
+          },
+          {
+            to: "To CFO / finance lead",
+            on: challenged ? "Close the EBITDA and hedge tension before room confidence is claimed." : "Carry forward the approved downside note into the room.",
+            note: citations.detail,
+            status: challenged ? "due-now" : "authored",
+          },
+        ];
     if (els.owedList) {
       els.owedList.innerHTML = owedRows.map((item) => `
         <div class="owed-row">
@@ -1250,7 +1336,7 @@
       });
     }
     if (els.assistantNetwork) {
-      els.assistantNetwork.innerHTML = EXECUTIVE_PERSONAS.filter((item) => item.key !== persona.key).slice(0, 4).map((item) => `
+      els.assistantNetwork.innerHTML = contractExecutivePersonas().filter((item) => item.key !== persona.key).slice(0, 4).map((item) => `
         <button class="network-item" type="button" data-network-persona="${escapeHtml(item.key)}">
           <strong>${escapeHtml(item.assistant || item.label)}</strong>
           <span>${escapeHtml(item.label)} · available for bounded handoff</span>
@@ -1261,8 +1347,8 @@
           const nextPersona = button.getAttribute("data-network-persona") || "ceo";
           state.executivePersona = nextPersona;
           state.selectedThreadKey = "briefing";
-          renderExecutiveModes();
-          rerenderExecutiveNarrative();
+          syncExecutiveRouteState();
+          refreshLiveData();
         });
       });
     }
@@ -1296,33 +1382,36 @@
 
   function renderBoardPortal(run, citations, challenged) {
     if (!els.boardLifecycle || !els.boardPrimaryList) return;
+    const board = boardBlueprint();
     const lifecycle = currentLifecycleMode();
     const publication = publicationContract();
     const artifacts = Array.isArray(state.workspaceContract?.reports?.artifacts) ? state.workspaceContract.reports.artifacts : [];
     const reasoning = strategyReasoningItems();
     const findings = findingsPayload();
     const queueItems = Array.isArray(state.pendingReviews?.items) ? state.pendingReviews.items : [];
-    const drivers = executiveDriverModels(run, citations, challenged).slice(0, 4);
+    const drivers = Array.isArray(board?.kpis) && board.kpis.length ? board.kpis : executiveDriverModels(run, citations, challenged).slice(0, 4);
     const boardTitle = lifecycle.key === "live"
-      ? `${scopeLabel()} · live board session`
+      ? `${board?.meeting?.title || scopeLabel()} · live board session`
       : lifecycle.key === "closed"
-        ? `${scopeLabel()} · closed board memory`
-        : `${scopeLabel()} · pre-board packet`;
+        ? `${board?.meeting?.title || scopeLabel()} · closed board memory`
+        : `${board?.meeting?.title || scopeLabel()} · pre-board packet`;
     const lifecycleNotes = {
       pre: "Only CEO-approved and board-safe material appears before the room opens.",
-      live: "The board room stays bounded to approved packet material and explicit review truth.",
+      live: "Live board Q&A stays attached to approved material only.",
       closed: "The packet is frozen into memory; follow-up can be reviewed without reopening raw execution controls.",
     };
     els.boardTitle.textContent = boardTitle;
-    els.boardMeta.textContent = `${lifecycle.label} posture · board pack ${humanizeToken(publication.board_pack?.status || "pending")} · approval ${humanizeToken(publication.approval_status || approvalSummary(run || {}))}`;
+    els.boardMeta.textContent = board?.meeting
+      ? `${board.meeting.date} · ${board.meeting.room} · ${board.meeting.when}`
+      : `${lifecycle.label} posture · board pack ${humanizeToken(publication.board_pack?.status || "pending")} · approval ${humanizeToken(publication.approval_status || approvalSummary(run || {}))}`;
     els.boardStateBadge.textContent = lifecycle.label;
-    els.boardGovernance.textContent = lifecycle.key === "live"
+    els.boardGovernance.textContent = board?.governance || (lifecycle.key === "live"
       ? "Answers must remain inside the approved packet; no uncited operator context should leak into the room."
       : lifecycle.key === "closed"
         ? "Between meetings, the board sees a frozen snapshot of the governed packet rather than live operational churn."
-        : "Nothing reaches the board until the packet is approved and board-safe surfaces are explicit.";
+        : "Nothing reaches the board until the packet is approved and board-safe surfaces are explicit.");
     els.boardSummary.textContent = lifecycleNotes[lifecycle.key];
-    els.boardLifecycle.innerHTML = BOARD_LIFECYCLES.map((item) => `
+    els.boardLifecycle.innerHTML = contractBoardLifecycles().map((item) => `
       <div class="board-lifecycle-step${item.key === lifecycle.key ? " is-active" : ""}">
         <strong>${escapeHtml(item.label)}</strong>
         <span>${escapeHtml(item.detail)}</span>
@@ -1338,27 +1427,29 @@
 
     if (lifecycle.key === "pre") {
       els.boardColumnTitle.textContent = "CEO-approved material";
-      els.boardColumnNote.textContent = "Decks and board-safe outputs released only after governed approval.";
-      const material = (artifacts.length ? artifacts : [{ artifact_key: "board_safe_preview", title: "Board-safe preview", restricted: false }]).slice(0, 4);
+      els.boardColumnNote.textContent = "Decks and documents released to the board — only what the CEO has approved appears.";
+      const material = Array.isArray(board?.decks) && board.decks.length ? board.decks : (artifacts.length ? artifacts : [{ artifact_key: "board_safe_preview", title: "Board-safe preview", restricted: false }]).slice(0, 4);
       els.boardPrimaryList.innerHTML = material.map((item) => boardListItem(
         item.title || reportLabel(item.artifact_key),
-        `${item.restricted ? "Restricted artifact" : "Previewable packet"} · ${publicationStatusLabel(publication.status || "awaiting_review")}`,
-        item.artifact_key || publication.preview_route || "/public/runs/latest/report-preview",
-        item.restricted ? "watch" : "safe",
+        item.by ? `${item.by} · ${item.pages} pages` : `${item.restricted ? "Restricted artifact" : "Previewable packet"} · ${publicationStatusLabel(publication.status || "awaiting_review")}`,
+        item.tag || item.artifact_key || publication.preview_route || "/public/runs/latest/report-preview",
+        String(item.status || "approved").toLowerCase().includes("pending") ? "watch" : (item.restricted ? "watch" : "safe"),
       )).join("");
       els.boardRailTitle.textContent = "Supplementary questions";
-      els.boardRailNote.textContent = "Prep items rise here before the room, especially when challenge or review is still open.";
-      const questions = (queueItems.map((item) => ({
-        title: item.title || item.run_id || "Pending review item",
-        detail: `${item.current_stage || item.status || "awaiting_review"} · ${item.approval_status || "pending"}`,
-        meta: "Reviewer queue",
-        tone: item.approval_status === "approved" ? "safe" : "watch",
-      })).concat(findings.filter((item) => item?.challenged).map((item) => ({
-        title: item.title || item.finding_id || "Challenge open",
-        detail: `${item.owner || "reviewer"} · ${formatCount(item.citation_count || 0)} cites`,
-        meta: "Needs closure before board release",
-        tone: "watch",
-      })))).slice(0, 4);
+      els.boardRailNote.textContent = "Raise prep items to the CEO before the meeting.";
+      const questions = Array.isArray(board?.supplementary) && board.supplementary.length
+        ? board.supplementary.map((item) => ({ title: item.q, detail: `to ${item.to}`, meta: item.status, tone: item.status === "answered" ? "safe" : "watch" }))
+        : (queueItems.map((item) => ({
+            title: item.title || item.run_id || "Pending review item",
+            detail: `${item.current_stage || item.status || "awaiting_review"} · ${item.approval_status || "pending"}`,
+            meta: "Reviewer queue",
+            tone: item.approval_status === "approved" ? "safe" : "watch",
+          })).concat(findings.filter((item) => item?.challenged).map((item) => ({
+            title: item.title || item.finding_id || "Challenge open",
+            detail: `${item.owner || "reviewer"} · ${formatCount(item.citation_count || 0)} cites`,
+            meta: "Needs closure before board release",
+            tone: "watch",
+          })))).slice(0, 4);
       els.boardSecondaryList.innerHTML = questions.length
         ? questions.map((item) => boardListItem(item.title, item.detail, item.meta, item.tone)).join("")
         : boardListItem("No outstanding board prep questions", "The current bounded packet has no extra prep rows beyond publication posture.", humanizeNextAction(publication.approval?.next_action || "prepare_board_pack"), "safe");
@@ -1369,7 +1460,9 @@
     if (lifecycle.key === "live") {
       els.boardColumnTitle.textContent = "Live session prompts";
       els.boardColumnNote.textContent = "Board-safe prompts stay attached to the approved packet only.";
-      const liveRows = (findings.length ? findings : [{ title: "Latest governed packet", finding_id: compactRunId(run) }]).slice(0, 4);
+      const liveRows = Array.isArray(board?.livePrompts) && board.livePrompts.length
+        ? board.livePrompts.map((prompt) => ({ title: prompt, owner: board.assistant || "board assistant", challenged: false }))
+        : (findings.length ? findings : [{ title: "Latest governed packet", finding_id: compactRunId(run) }]).slice(0, 4);
       els.boardPrimaryList.innerHTML = liveRows.map((item, index) => boardListItem(
         item.title || item.pattern_label || item.finding_id || `Board prompt ${index + 1}`,
         `${item.recoverable_sar ? formatSarShort(item.recoverable_sar) : publicationStatusLabel(publication.status || "approved_for_release")} · ${item.owner || "board assistant"}`,
@@ -1390,10 +1483,16 @@
 
     els.boardColumnTitle.textContent = "Meeting summary & action plan";
     els.boardColumnNote.textContent = "Closed-state summary stays grounded to the latest governed outputs and follow-up routes.";
-    const summaryRows = (reasoning.length ? reasoning : [
-      { claim: "Publication route", rationale: publication.preview_route || "/public/runs/latest/report-preview", status: publication.status || "published" },
-      { claim: "Latest value signal", rationale: formatSarShort(run?.total_recoverable_sar), status: approvalSummary(run || {}) },
-    ]).slice(0, 4);
+    const summaryRows = (
+      Array.isArray(board?.actions) && board.actions.length
+        ? board.actions.map((item) => ({ claim: item.item, rationale: item.owner, recommended_route: item.due, status: "published" }))
+        : reasoning.length
+          ? reasoning
+          : [
+              { claim: "Publication route", rationale: publication.preview_route || "/public/runs/latest/report-preview", status: publication.status || "published" },
+              { claim: "Latest value signal", rationale: formatSarShort(run?.total_recoverable_sar), status: approvalSummary(run || {}) },
+            ]
+    ).slice(0, 4);
     els.boardPrimaryList.innerHTML = summaryRows.map((item) => boardListItem(
       item.claim || item.title || "Board memory",
       item.rationale || item.detail || "Bounded retrospective summary",
@@ -1420,11 +1519,11 @@
           <strong>Live session · Q&amp;A on approved material</strong>
           <span>${escapeHtml(persona.assistant)} answers only from the CEO-approved packet. No uncited operator context belongs in the room.</span>
           <div class="board-chip-row">
-            ${[
+            ${(boardBlueprint()?.livePrompts || [
               "Why is EBITDA 20 bps under plan?",
               "Show the hedge downside",
               "Is the JV funded from cash?",
-            ].map((prompt) => `<button class="board-chip live" type="button" data-board-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`).join("")}
+            ]).map((prompt) => `<button class="board-chip live" type="button" data-board-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`).join("")}
           </div>
         </div>
       `;
@@ -1486,8 +1585,8 @@
             </div>
             ${agent.requiresApproval && !approved ? `
               <div class="agent-approve">
-                <span class="agent-approve-note">⚠ This agent would act downstream — the executive surface can stage the approval affordance, but not mutate real runtime state.</span>
-                <button class="agent-inline-button" type="button" data-agent-approve="${escapeHtml(key)}">Approve &amp; let it execute</button>
+                <span class="agent-approve-note">⚠ Downstream approval remains governed. Use the real reviewer lane instead of a fake executive-side mutation.</span>
+                <button class="agent-inline-button" type="button" data-agent-approve="${escapeHtml(key)}" data-agent-route="${escapeHtml(agent.route || "/reviewer/pending-reviews")}">Open governed approval lane</button>
               </div>
             ` : ""}
             ${logOpen ? `
@@ -1526,7 +1625,7 @@
             <p>${escapeHtml(agent.detail)}</p>
             <div class="discover-meta"><span>${escapeHtml(agent.meta)}</span></div>
           </div>
-          <button class="discover-deploy${deployed ? " is-added" : ""}" type="button" data-agent-deploy="${escapeHtml(key)}">${deployed ? "✓ added" : "+ deploy"}</button>
+          <button class="discover-deploy${deployed ? " is-added" : ""}" type="button" data-agent-deploy="${escapeHtml(key)}" data-agent-route="${escapeHtml(agent.route || agent.connector || "/ingestion/connectors")}">${deployed ? "Open route" : "Open route"}</button>
         </div>
       </div>
     `;
@@ -1537,132 +1636,75 @@
     const publication = publicationContract();
     const persona = currentExecutivePersona();
     const queueCount = Array.isArray(state.pendingReviews?.items) ? state.pendingReviews.items.length : 0;
-    const running = [
-      {
-        key: "evidence_qa_chief",
-        title: "Evidence QA chief",
-        status: challenged ? "needs your approval" : citations.count ? "running" : "queued",
-        metric: citations.count !== null && citations.count !== undefined ? `${formatCount(citations.resolved)} / ${formatCount(citations.count)}` : "--",
-        detail: "Keeps citation integrity, excerpt posture, and challenge visibility attached to the packet.",
-        tag: "evidence chief",
-        by: currentPersonaModel().assistant,
-        progress: citations.count ? Math.max(38, Math.min(96, Math.round((Number(citations.resolved || 0) / Number(citations.count || 1)) * 100))) : 28,
-        requiresApproval: false,
-        statusClass: challenged ? "approval" : citations.count ? "running" : "queued",
-        toneClass: challenged ? "down" : citations.count ? "flat" : "flat",
-        log: [
-          { time: "09:10", text: citations.detail },
-          { time: "09:24", text: challenged ? `${formatCount(challenged)} challenged packet(s) remain open.` : "No open challenge is visible on the current executive slice." },
-        ],
-      },
-      {
-        key: "reviewer_gate_relay",
-        title: "Reviewer gate relay",
-        status: humanizeToken(publication.approval_status || approvalSummary(run || {})),
-        metric: queueCount ? `${formatCount(queueCount)} pending` : "queue clear",
-        detail: "Holds release until reviewer posture is truly green, then passes the packet downstream.",
-        tag: "approval gate",
-        by: "review lane",
-        progress: publication.approval_status === "approved" || publication.status === "published" ? 92 : queueCount ? 58 : 66,
-        requiresApproval: publication.approval_status !== "approved" && publication.status !== "published",
-        statusClass: publication.approval_status === "approved" || publication.status === "published" ? "done" : "approval",
-        toneClass: publication.approval_status === "approved" || publication.status === "published" ? "up" : "down",
-        log: [
-          { time: "09:31", text: queueCount ? `${formatCount(queueCount)} pending review item(s) are visible.` : "No extra queue rows beyond the latest run." },
-          { time: "09:42", text: `Next action: ${humanizeNextAction(publication.approval?.next_action || "review_decision")}.` },
-        ],
-      },
-      {
-        key: "board_publisher",
-        title: "Board publisher",
-        status: publicationStatusLabel(publication.status || "draft"),
-        metric: `${formatCount(publication.report_count ?? 0)} surfaces`,
-        detail: "Owns board-safe preview and publication choreography without exposing raw runtime controls on the executive surface.",
-        tag: "board release",
-        by: "publish lane",
-        progress: publication.status === "published" ? 96 : publication.status === "approved_for_release" ? 78 : 52,
-        requiresApproval: false,
-        statusClass: publication.status === "published" ? "done" : publication.status === "approved_for_release" ? "standing" : "running",
-        toneClass: publication.status === "published" ? "up" : publication.status === "approved_for_release" ? "up" : "flat",
-        log: [
-          { time: "09:48", text: `Board pack ${humanizeToken(publication.board_pack?.status || "pending")}.` },
-          { time: "09:55", text: `Preview route ${publication.preview_route || "/public/runs/latest/report-preview"}.` },
-        ],
-      },
-    ];
-    const native = [
-      {
-        key: "supplementary_question_router",
-        title: "Supplementary question router",
-        source: "StrategyOS",
-        sourceClass: "native",
-        glyph: "⇄",
-        connector: "/reviewer/pending-reviews",
-        detail: "Routes prep questions back through reviewer and operator surfaces when the board packet still needs closure.",
-        meta: "Design-parity discovery card only — no automatic board escalation.",
-      },
-      {
-        key: "board_pack_publisher",
-        title: "Board pack publisher",
-        source: "StrategyOS",
-        sourceClass: "native",
-        glyph: "▤",
-        connector: publication.preview_route || "/public/runs/latest/report-preview",
-        detail: "Turns approved packet posture into board-safe preview and report surface visibility.",
-        meta: `${formatCount(publication.report_count ?? 0)} surfaced report artifact(s) in current contract.`,
-      },
-      {
-        key: "evidence_chain_mapper",
-        title: "Evidence chain mapper",
-        source: "StrategyOS",
-        sourceClass: "native",
-        glyph: "◎",
-        connector: isAuthenticated() ? "/runs/latest/knowledge-graph" : "/public/data/evidence-preview",
-        detail: "Keeps evidence, graph, and excerpt navigation visible as a bounded discovery surface.",
-        meta: isAuthenticated() ? "Protected graph surface available to trusted sessions." : "Public route stays sanitized.",
-      },
-    ];
-    const market = [
-      {
-        key: "market_scanner",
-        title: "Market scanner",
-        source: "Marketplace",
-        sourceClass: "market",
-        glyph: "⌕",
-        connector: "tenant connectors",
-        detail: "Design-space placeholder for discovering external signal agents without claiming they are deployed in this tenant.",
-        meta: "Shown for parity only; deployment still belongs to system governance.",
-      },
-      {
-        key: "treasury_what_if_pilot",
-        title: "Treasury what-if pilot",
-        source: "Marketplace",
-        sourceClass: "market",
-        glyph: "◇",
-        connector: "frozen snapshot",
-        detail: "Fits the closed-board snapshot pattern: model scenarios without reopening live operational data.",
-        meta: "No live org data should enter the board room through this surface.",
-      },
-    ];
-    const subagents = [
-      { title: "Citation resolver", detail: "Opens excerpt, locator, and challenge posture before release.", metric: citations.count !== null && citations.count !== undefined ? `${formatCount(citations.resolved)} resolved` : "awaiting evidence", tone: citations.count ? "ok" : "neutral" },
-      { title: "Publication guard", detail: "Checks preview route, restricted artifacts, and board-pack status.", metric: humanizeToken(publication.board_pack?.status || "pending"), tone: publication.status === "published" ? "ok" : "warn" },
-      { title: "Queue watcher", detail: "Tracks reviewer queue and next valid action without mutating state from the executive surface.", metric: queueCount ? `${formatCount(queueCount)} pending` : "queue clear", tone: queueCount ? "warn" : "ok" },
-    ];
+    const runningSource = Array.isArray(state.workspaceContract?.agents?.running) && state.workspaceContract.agents.running.length
+      ? state.workspaceContract.agents.running
+      : (DESIGN.runningAgents || []);
+    const running = runningSource.map((agent) => ({
+      key: agent.id,
+      title: agent.name,
+      status: agent.status,
+      metric: `${agent.progress}%`,
+      detail: agent.doing,
+      tag: agent.tag,
+      by: agent.by,
+      progress: agent.progress,
+      requiresApproval: agent.status === "approval",
+      statusClass: agent.status,
+      toneClass: agent.status === "approval" ? "down" : agent.status === "standing" ? "up" : "flat",
+      log: (agent.log || []).map((item) => ({ time: item.t, text: item.a })),
+    }));
+    const discoverSurface = state.workspaceContract?.agents?.discover || {};
+    const nativeSource = Array.isArray(discoverSurface.native) && discoverSurface.native.length
+      ? discoverSurface.native
+      : (DESIGN.discoverAgents || []).filter((item) => item.source === "native");
+    const marketSource = Array.isArray(discoverSurface.marketplace) && discoverSurface.marketplace.length
+      ? discoverSurface.marketplace
+      : (DESIGN.discoverAgents || []).filter((item) => item.source === "market");
+    const native = nativeSource.map((agent) => ({
+      key: agent.id || agent.module_id,
+      title: agent.name || agent.label,
+      source: agent.by || agent.source || "StrategyOS",
+      sourceClass: "native",
+      glyph: agent.glyph || "◌",
+      connector: agent.connector || agent.route,
+      detail: agent.desc || agent.summary,
+      meta: queueCount ? `${formatCount(queueCount)} review-aware surfaces visible` : (agent.meta || "Deploy on your data via platform connectors."),
+    }));
+    const market = marketSource.map((agent) => ({
+      key: agent.id || agent.module_id,
+      title: agent.name || agent.label,
+      source: agent.by || agent.source || "Marketplace",
+      sourceClass: "market",
+      glyph: agent.glyph || "⚡",
+      connector: agent.connector || agent.route,
+      detail: agent.desc || agent.summary,
+      meta: agent.meta || "Marketplace-style discovery only — deployment remains governed.",
+    }));
+    const subagentSource = Array.isArray(state.workspaceContract?.agents?.sub_agents) && state.workspaceContract.agents.sub_agents.length
+      ? state.workspaceContract.agents.sub_agents
+      : (DESIGN.subtools || []);
+    const subagents = subagentSource.map((item) => ({ title: item.name || item.title, detail: item.desc || item.detail, metric: item.glyph || item.metric, tone: "ok" }));
     if (!running.find((item) => slugifyToken(item.key || item.title) === state.openAgentKey)) {
       state.openAgentKey = slugifyToken((running.find((item) => item.requiresApproval)?.key || running[0]?.key || "reviewer_gate_relay"));
     }
     if (els.agentsSearchNote) {
       els.agentsSearchNote.textContent = persona.key === "board"
-        ? "Search the board-safe agent universe…"
-        : "Search the agent universe…";
+        ? (discoverSurface.search_placeholder || "Search the board-safe agent universe…")
+        : (discoverSurface.search_placeholder || "Search the agent universe…");
     }
     if (els.agentsBrowseButton) {
       els.agentsBrowseButton.textContent = persona.key === "board" ? "Browse all board-safe agents →" : "Browse all agents →";
-      els.agentsBrowseButton.onclick = () => setCommandPrompt(`Show the best next agent for ${currentExecutivePersona().label.toLowerCase()} inside the governed packet.`);
+      els.agentsBrowseButton.onclick = () => {
+        const browseRoute = discoverSurface.deploy_route || "/ingestion/connectors";
+        if (isAuthenticated()) {
+          window.location.href = browseRoute;
+          return;
+        }
+        setCommandPrompt(`Show the best next agent for ${currentExecutivePersona().label.toLowerCase()} inside the governed packet.`);
+      };
     }
-    els.agentsBadge.textContent = queueCount ? `${formatCount(queueCount)} review-aware` : "bounded discovery";
-    els.agentsActivityLine.textContent = `Agent activity: ${queueCount ? `${formatCount(queueCount)} review item(s) are waiting` : "the governed packet is stable"} · publication is ${publicationStatusLabel(publication.status || "draft")} · board pack ${humanizeToken(publication.board_pack?.status || "pending")}.`;
+    els.agentsBadge.textContent = queueCount ? `${formatCount(queueCount)} review-aware` : (state.workspaceContract?.agents?.status || "bounded discovery");
+    els.agentsActivityLine.textContent = state.workspaceContract?.agents?.activity?.line || DESIGN.activity?.line || `Agent activity: ${queueCount ? `${formatCount(queueCount)} review item(s) are waiting` : "the governed packet is stable"} · publication is ${publicationStatusLabel(publication.status || "draft")} · board pack ${humanizeToken(publication.board_pack?.status || "pending")}.`;
     els.agentsRunningBadge.textContent = `${formatCount(running.length)} active views`;
     els.agentsRunningList.innerHTML = running.map(runtimeAgentCard).join("");
     els.subagentList.innerHTML = subagents.map((item) => `
@@ -1682,6 +1724,7 @@
       button.addEventListener("click", () => {
         const key = button.getAttribute("data-agent-toggle") || "reviewer_gate_relay";
         state.openAgentKey = state.openAgentKey === key ? "" : key;
+        syncExecutiveRouteState();
         renderAgentsDiscovery(run, citations, challenged);
       });
     });
@@ -1697,7 +1740,14 @@
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         const key = button.getAttribute("data-agent-approve") || "reviewer_gate_relay";
+        const route = button.getAttribute("data-agent-route") || "/reviewer/pending-reviews";
         state.approvedAgentKeys[key] = true;
+        syncExecutiveRouteState();
+        if (isAuthenticated()) {
+          window.location.href = route;
+          return;
+        }
+        setCommandPrompt(`Open the governed approval lane for ${key.replaceAll("_", " ")}.`);
         renderAgentsDiscovery(run, citations, challenged);
       });
     });
@@ -1705,7 +1755,14 @@
       root?.querySelectorAll("[data-agent-deploy]").forEach((button) => {
         button.addEventListener("click", () => {
           const key = button.getAttribute("data-agent-deploy") || "agent";
-          state.deployedAgentKeys[key] = !state.deployedAgentKeys[key];
+          const route = button.getAttribute("data-agent-route") || "/ingestion/connectors";
+          state.deployedAgentKeys[key] = true;
+          syncExecutiveRouteState();
+          if (isAuthenticated()) {
+            window.location.href = route;
+            return;
+          }
+          setCommandPrompt(`Open the governed deploy route for ${key.replaceAll("_", " ")}.`);
           renderAgentsDiscovery(run, citations, challenged);
         });
       });
@@ -2657,7 +2714,7 @@
     try {
       const payload = isAuthenticated()
         ? await requestJson(`/reviewer/runs/${encodeURIComponent(state.latestRun.run_id)}/artifacts/${encodeURIComponent(artifactKey)}`)
-        : await requestJson(`/public/runs/latest/report-preview?artifact_key=${encodeURIComponent(artifactKey)}`);
+        : await requestJson(viewStateRoute(`/public/runs/latest/report-preview?artifact_key=${encodeURIComponent(artifactKey)}`));
       if (!isAuthenticated()) state.publicReportPreview = payload;
       const preview = payload.preview_text
         || (payload.preview_json ? JSON.stringify(payload.preview_json, null, 2) : "Preview unavailable for this artifact.");
@@ -2673,13 +2730,13 @@
     els.refresh.textContent = "Refreshing...";
     try {
       state.session = await guarded("Session", requestJson("/ui/session"), { authenticated: false });
-      state.workspaceContract = await guarded("Workspace contract", requestJson("/ui/workspace-contract/latest"), null);
+      state.workspaceContract = await guarded("Workspace contract", requestJson(viewStateRoute("/ui/workspace-contract/latest")), null);
       if (!isAuthenticated()) {
         const [publicRun, publicAuditSummary, publicFindings, publicReportPreview] = await Promise.all([
-          guarded("Public latest run", requestJson("/public/runs/latest"), { status: "missing" }),
+          guarded("Public latest run", requestJson(viewStateRoute("/public/runs/latest")), { status: "missing" }),
           guarded("Public audit summary", requestJson("/public/runs/latest/audit-summary"), { status: "missing", challenged_finding_ids: [] }),
-          guarded("Public latest findings", requestJson("/public/runs/latest/findings"), { status: "missing", findings: [] }),
-          guarded("Public report preview", requestJson("/public/runs/latest/report-preview"), { status: "missing" }),
+          guarded("Public latest findings", requestJson(viewStateRoute("/public/runs/latest/findings")), { status: "missing", findings: [] }),
+          guarded("Public report preview", requestJson(viewStateRoute("/public/runs/latest/report-preview")), { status: "missing" }),
         ]);
         state.latestRun = publicRun;
         state.auditSummary = publicAuditSummary;
@@ -2702,10 +2759,10 @@
       state.publicEvidencePreview = null;
       state.publicReportPreview = null;
       const [latestRun, auditSummary, knowledgeGraph, latestFindings, pendingReviews] = await Promise.all([
-        guarded("Latest run", requestJson("/runs/latest"), { status: "missing" }),
+        guarded("Latest run", requestJson(viewStateRoute("/runs/latest")), { status: "missing" }),
         guarded("Audit summary", requestJson("/runs/latest/audit-summary"), { status: "missing" }),
         guarded("Knowledge graph", requestJson("/runs/latest/knowledge-graph"), { status: "missing", nodes: [], edges: [], meta: {} }),
-        guarded("Latest findings", requestJson("/runs/latest/findings"), { status: "missing", findings: [] }),
+        guarded("Latest findings", requestJson(viewStateRoute("/runs/latest/findings")), { status: "missing", findings: [] }),
         guarded("Pending reviews", requestJson("/reviewer/pending-reviews"), { items: [] }),
       ]);
       state.latestRun = latestRun;
@@ -2782,12 +2839,14 @@
 
   els.portfolioSwitcher?.addEventListener("change", (event) => {
     state.selectedPortfolio = event.target.value || "all";
-    rerenderExecutiveNarrative();
+    syncExecutiveRouteState();
+    refreshLiveData();
   });
 
   els.companySwitcher?.addEventListener("change", (event) => {
     state.selectedCompany = event.target.value || "current";
-    rerenderExecutiveNarrative();
+    syncExecutiveRouteState();
+    refreshLiveData();
   });
 
   els.evidenceCommand.addEventListener("click", () => {
