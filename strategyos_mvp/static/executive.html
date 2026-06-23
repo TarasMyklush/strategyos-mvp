@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StrategyOS.live Executive Cockpit</title>
-    <link rel="stylesheet" href="/static/executive.css?v=ux-20260622a" />
+    <link rel="stylesheet" href="/static/executive.css?v=ux-20260623c" />
   </head>
   <body>
     <main class="cockpit">
@@ -33,9 +33,199 @@
               <strong id="exec-run-title">Latest finance review</strong><br />
               <span id="exec-run-meta">Waiting for authenticated run data</span>
             </div>
+            <div class="persona-menu exec-persona-menu">
+              <button class="persona-button" id="exec-persona-button" type="button" aria-haspopup="true" aria-expanded="false">
+                <span class="persona-button-eyebrow">Persona</span>
+                <strong id="exec-persona-button-role">Group CEO</strong>
+                <span class="persona-button-meta" id="exec-topbar-board-state">Pre-board</span>
+              </button>
+              <div class="persona-menu-panel" id="exec-persona-menu" hidden></div>
+            </div>
             <a class="open-app" href="/app">Open review app</a>
           </div>
         </header>
+
+        <section class="executive-hero" aria-label="Executive diagnostics hero">
+          <article class="hero-ring-card">
+            <p class="eyebrow">Executive diagnostics</p>
+            <div class="hero-ring-shell">
+              <div class="hero-ring-meter">
+                <div class="hero-ring-orbit">
+                  <strong id="exec-hero-score">78</strong>
+                  <span id="exec-hero-score-note">Board packet posture</span>
+                </div>
+              </div>
+              <div class="hero-copy">
+                <p class="hero-greeting" id="exec-hero-greeting">Good morning, Khalid</p>
+                <h2 id="exec-hero-headline">Revenue is carrying the room, but EBITDA and hedge discipline still decide confidence.</h2>
+                <p id="exec-hero-copy">The 22.06 hero composition stays grounded to current governed packet truth: evidence closure, release posture, board-pack readiness, and the latest finance signal only.</p>
+                <p class="hero-boundary" id="exec-hero-boundary">No full-enterprise strategy score is claimed here.</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="hero-driver-panel">
+            <div class="panel-title compact">
+              <div>
+                <p class="eyebrow">Driver index</p>
+                <h2>Ring-first executive drivers</h2>
+                <p>Design-inspired driver cards grounded in current findings, citation posture, publication state, and board-pack readiness.</p>
+              </div>
+              <span class="badge blue">Bounded posture</span>
+            </div>
+            <div class="driver-tile-grid" id="exec-driver-tiles"></div>
+            <div class="driver-drill-card">
+              <div class="driver-drill-head">
+                <div>
+                  <p class="eyebrow">Driver drill</p>
+                  <h3 id="exec-driver-detail-title">Awaiting driver selection</h3>
+                </div>
+                <span class="badge green" id="exec-driver-detail-metric">--</span>
+              </div>
+              <p id="exec-driver-detail-story">Select a driver card to inspect the bounded rationale behind it.</p>
+              <div class="chip-row executive-chip-row" id="exec-driver-detail-chips"></div>
+              <div class="driver-fidelity-grid">
+                <article class="driver-fidelity-card">
+                  <div class="driver-fidelity-head">
+                    <h4>Trend + evidence chain</h4>
+                    <span>why this driver moved</span>
+                  </div>
+                  <div class="driver-trend-list" id="exec-drill-trend"></div>
+                </article>
+                <article class="driver-fidelity-card">
+                  <div class="driver-fidelity-head">
+                    <h4>Movers</h4>
+                    <span id="exec-movers-caption">cards view</span>
+                  </div>
+                  <div class="driver-movers-list" id="exec-drill-movers"></div>
+                </article>
+              </div>
+              <div class="chip-row executive-chip-row drill-prompt-row" id="exec-drill-prompts"></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="executive-mode-grid" aria-label="Executive framing modes">
+          <article class="mode-card">
+            <div class="panel-title compact">
+              <div>
+                <p class="eyebrow">Operating personas</p>
+                <h2 id="exec-persona-title">Group CEO framing</h2>
+                <p id="exec-persona-note">Switch across the five executive personas and the embedded board room without leaving the governed packet.</p>
+              </div>
+              <span class="badge blue">5 + board</span>
+            </div>
+            <div class="mode-tab-row" id="exec-persona-tabs" role="tablist" aria-label="Executive persona framing"></div>
+          </article>
+
+          <article class="mode-card">
+            <div class="panel-title compact">
+              <div>
+                <p class="eyebrow">Board lifecycle</p>
+                <h2 id="exec-lifecycle-title">Pre-board preparation</h2>
+                <p id="exec-lifecycle-note">Lifecycle framing is derived from governed publication and approval posture, then can be inspected state by state.</p>
+              </div>
+              <span class="badge amber">Governed states</span>
+            </div>
+            <div class="mode-tab-row" id="exec-lifecycle-tabs" role="tablist" aria-label="Board lifecycle framing"></div>
+          </article>
+
+          <article class="mode-card">
+            <div class="panel-title compact">
+              <div>
+                <p class="eyebrow">Design controls + gravity</p>
+                <h2>Driver gravity, movers, and density</h2>
+                <p>Shift theme, density, and movers treatment while keeping the underlying executive packet truthful.</p>
+              </div>
+              <span class="badge green">Interactive layer</span>
+            </div>
+            <div class="design-control-stack">
+              <div class="design-control-group">
+                <span class="design-control-label">Theme</span>
+                <div class="mode-tab-row design-tab-row" id="exec-theme-tabs" role="tablist" aria-label="Executive theme mode"></div>
+              </div>
+              <div class="design-control-group">
+                <span class="design-control-label">Density</span>
+                <div class="mode-tab-row design-tab-row" id="exec-density-tabs" role="tablist" aria-label="Executive density mode"></div>
+              </div>
+              <div class="design-control-group">
+                <span class="design-control-label">Movers view</span>
+                <div class="mode-tab-row design-tab-row" id="exec-movers-tabs" role="tablist" aria-label="Executive movers mode"></div>
+              </div>
+            </div>
+            <div class="gravity-shell">
+              <div class="decision-stack mode-stack" id="exec-driver-stack"></div>
+              <div class="gravity-play-grid">
+                <article class="gravity-play-card">
+                  <span class="gravity-kicker">Play on the model</span>
+                  <h3>Prompt the packet</h3>
+                  <div class="gravity-prompt-list" id="exec-gravity-prompt-list"></div>
+                </article>
+                <article class="gravity-play-card quote-card">
+                  <span class="gravity-kicker">What chiefs are signalling</span>
+                  <p class="gravity-quote" id="exec-gravity-quote">Chief signals will appear when a persona is active.</p>
+                  <span class="gravity-by" id="exec-gravity-by">Hermes · chief of staff</span>
+                  <div class="chip-row executive-chip-row" id="exec-gravity-rails"></div>
+                </article>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="lower-fidelity-panel" aria-label="Lower rail and weekly rhythm">
+          <div class="panel-title compact">
+            <div>
+              <p class="eyebrow">Lower rail fidelity</p>
+              <h2>Developments, prep, and weekly rhythm</h2>
+              <p>Bring the designed lower-main and lower-rail pattern into the truthful executive cockpit without collapsing it into raw operator clutter.</p>
+            </div>
+            <span class="badge blue">Week ahead</span>
+          </div>
+          <div class="lower-fidelity-grid">
+            <article class="lower-fidelity-card">
+              <div class="lower-fidelity-head">
+                <div>
+                  <h3>Developments and findings</h3>
+                  <p>High-signal updates mapped to the active persona and the current governed packet.</p>
+                </div>
+                <span class="badge green" id="exec-lower-main-badge">Awaiting packet</span>
+              </div>
+              <div class="lower-feed-list" id="exec-developments-list"></div>
+            </article>
+            <aside class="lower-fidelity-card lower-rail-card">
+              <div class="lower-fidelity-head">
+                <div>
+                  <h3>Week ahead</h3>
+                  <p>Board prep, release sequencing, and executive follow-through in one rail.</p>
+                </div>
+                <span class="badge amber" id="exec-week-badge">Current cadence</span>
+              </div>
+              <div class="week-rail" id="exec-week-rail"></div>
+            </aside>
+          </div>
+          <div class="diagnostics-secondary-grid">
+            <article class="lower-fidelity-card pulse-fidelity-card">
+              <div class="lower-fidelity-head">
+                <div>
+                  <h3>Cash pulse and driver pressure</h3>
+                  <p>Ring-first diagnostics, carried downward into the exact pulse row the 22.06 board read expects.</p>
+                </div>
+                <span class="badge blue">Pulse</span>
+              </div>
+              <div class="pulse-grid" id="exec-pulse-grid"></div>
+            </article>
+            <article class="lower-fidelity-card owed-fidelity-card">
+              <div class="lower-fidelity-head">
+                <div>
+                  <h3>Owed upward</h3>
+                  <p>Who still needs what from the packet before confidence can move upward cleanly.</p>
+                </div>
+                <span class="badge amber">Dependencies</span>
+              </div>
+              <div class="owed-list" id="exec-owed-list"></div>
+            </article>
+          </div>
+        </section>
 
         <section class="surface-ladder" aria-label="StrategyOS role surfaces">
           <article class="surface-lane current">
@@ -159,6 +349,102 @@
               <p id="exec-strategy-intent-summary">Strategy intent will appear here once the bounded substrate is loaded.</p>
               <div class="decision-stack" id="exec-intent-reasoning-list"></div>
             </div>
+          </div>
+          <div class="board-portal-grid">
+            <div>
+              <h3>Board portal lifecycle</h3>
+              <div class="decision-stack" id="exec-board-lifecycle-list"></div>
+            </div>
+            <div>
+              <h3>Publish choreography</h3>
+              <div class="decision-stack" id="exec-publish-flow-list"></div>
+            </div>
+            <div>
+              <h3>Discovery modules</h3>
+              <div class="decision-stack" id="exec-discovery-module-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="board-portal-panel" aria-label="Board portal lifecycle">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Board portal lifecycle</p>
+              <h2 id="exec-board-title">Latest governed board packet</h2>
+              <p id="exec-board-meta">Pre / live / closed posture is derived from approval and board-pack truth, then can be inspected state by state.</p>
+            </div>
+            <span class="badge amber" id="exec-board-state-badge">Pre-board</span>
+          </div>
+          <div class="board-lifecycle-strip" id="exec-board-lifecycle"></div>
+          <div class="board-grid">
+            <article class="board-card board-summary-card">
+              <span class="micro">GOVERNANCE</span>
+              <strong id="exec-board-governance">Nothing reaches the board until the packet is approved.</strong>
+              <p id="exec-board-summary">Board-safe publication and review posture will populate here.</p>
+              <div class="board-kpi-grid" id="exec-board-kpis"></div>
+            </article>
+
+            <article class="board-card">
+              <h3 id="exec-board-column-title">CEO-approved material</h3>
+              <p class="muted" id="exec-board-column-note">Only approved material appears on the board surface.</p>
+              <div class="board-list" id="exec-board-primary-list"></div>
+            </article>
+
+            <article class="board-card">
+              <h3 id="exec-board-rail-title">Supplementary questions</h3>
+              <p class="muted" id="exec-board-rail-note">Executive assistants coordinate anything the board still needs before the room.</p>
+              <div class="board-list" id="exec-board-secondary-list"></div>
+              <p class="board-rail-foot" id="exec-board-rail-foot">No board follow-up is visible yet.</p>
+            </article>
+          </div>
+          <div class="board-state-detail" id="exec-board-state-detail"></div>
+        </section>
+
+        <section class="agents-panel" aria-label="Agents and discovery">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Agents</p>
+              <h2>Running now and discover more</h2>
+              <p>Design-parity agent framing stays truthful: current runtime, review, publication, and board-support surfaces are shown as bounded modules, not autonomous promises.</p>
+            </div>
+            <span class="badge blue" id="exec-agents-badge">Bounded discovery</span>
+          </div>
+          <div class="agents-activity-line" id="exec-agents-activity-line">Awaiting governed packet activity.</div>
+          <div class="agents-panel-grid">
+            <article class="agents-column">
+              <div class="agents-column-head">
+                <div>
+                  <h3>Running now</h3>
+                  <p>Approval, evidence, runtime, and publication posture in one view.</p>
+                </div>
+                <span class="badge green" id="exec-agents-running-badge">0 active</span>
+              </div>
+              <div class="agents-running-list" id="exec-agents-running-list"></div>
+              <div class="subagent-strip">
+                <h4>Sub-agents your chiefs call as tools</h4>
+                <div class="subagent-grid" id="exec-subagent-list"></div>
+              </div>
+            </article>
+
+            <article class="agents-column agents-discovery-column">
+              <div class="agents-column-head">
+                <div>
+                  <h3>Discover agents</h3>
+                  <p>Native StrategyOS surfaces and marketplace-style discovery cards mapped to the current governed boundary.</p>
+                </div>
+                <span class="badge amber">No auto-deploy</span>
+              </div>
+              <div class="discover-search"><span class="discover-search-icon">⌕</span><span id="exec-agents-search-note">Search the agent universe…</span></div>
+              <div class="discover-group">
+                <span class="discover-label">Native on StrategyOS</span>
+                <div class="discover-list" id="exec-agents-native-list"></div>
+              </div>
+              <div class="discover-group">
+                <span class="discover-label">From the marketplace</span>
+                <div class="discover-list" id="exec-agents-market-list"></div>
+              </div>
+              <button class="discover-browse" id="exec-agents-browse-button" type="button">Browse all agents →</button>
+            </article>
           </div>
         </section>
 
@@ -336,10 +622,22 @@
           <aside class="panel assistant-panel" aria-label="StrategyOS assistant">
             <div class="assistant-head">
               <p class="eyebrow">STRATEGYOS COPILOT</p>
-              <h2 id="exec-copilot-title">Executive brief from live run data.</h2>
-              <p id="exec-copilot-subtitle">No uncited claim should enter a vendor letter. Human gates stay visible.</p>
+              <h2 id="exec-copilot-title">Hermes · Executive brief from live run data.</h2>
+              <p id="exec-copilot-subtitle">Named, threaded, and board-safe. No uncited claim should enter a vendor letter. Human gates stay visible.</p>
             </div>
-            <div class="assistant-feed" id="exec-assistant-feed"></div>
+            <div class="assistant-thread-layout">
+              <div class="assistant-thread-column">
+                <div class="assistant-thread-section">
+                  <span class="assistant-section-label">Recent conversations</span>
+                  <div class="assistant-thread-list" id="exec-thread-list"></div>
+                </div>
+                <div class="assistant-thread-section">
+                  <span class="assistant-section-label">Assistant network</span>
+                  <div class="assistant-network-list" id="exec-assistant-network"></div>
+                </div>
+              </div>
+              <div class="assistant-feed" id="exec-assistant-feed"></div>
+            </div>
             <div class="assistant-actions">
               <a class="action-button primary" href="/app">Open dashboard controls</a>
               <button class="action-button" id="exec-refresh" type="button">Refresh live data</button>
@@ -439,6 +737,6 @@
     </main>
 
     <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
-    <script src="/static/executive.js?v=ux-20260622a"></script>
+    <script src="/static/executive.js?v=ux-20260623c"></script>
   </body>
 </html>

@@ -80,10 +80,21 @@ def test_homepage_renders_executive_recovery_control_room():
     assert "STRATEGYOS COPILOT" in html
     assert "Case matrix" in html
     assert "Reports" in html
+    assert 'id="exec-persona-tabs"' in html
+    assert 'id="exec-lifecycle-tabs"' in html
+    assert 'id="exec-driver-stack"' in html
+    assert 'id="exec-theme-tabs"' in html
+    assert 'id="exec-density-tabs"' in html
+    assert 'id="exec-movers-tabs"' in html
+    assert 'id="exec-thread-list"' in html
+    assert 'id="exec-assistant-network"' in html
+    assert 'id="exec-week-rail"' in html
     assert "Board-safe narrative surface" in html
     assert "Governed review lane" in html
     assert "Run-control lane" in html
     assert "Tenant admin / system altitude" in html
+    assert "Good morning, Khalid" in html
+    assert "Hermes · Executive brief from live run data." in html
     assert "Truth today: there is no standalone executive auth role; the BU backend role is now bounded and read-only." in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
@@ -105,8 +116,8 @@ def test_executive_cockpit_renders_live_command_shell():
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
     assert "StrategyOS.live Executive Cockpit" in html
-    assert 'href="/static/executive.css?v=ux-20260622a"' in html
-    assert 'src="/static/executive.js?v=ux-20260622a"' in html
+    assert 'href="/static/executive.css?v=ux-20260623c"' in html
+    assert 'src="/static/executive.js?v=ux-20260623c"' in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -137,10 +148,41 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'id="exec-value-driver-list"' in html
     assert 'id="exec-strategy-intent-summary"' in html
     assert 'id="exec-intent-reasoning-list"' in html
+    assert 'id="exec-persona-tabs"' in html
+    assert 'id="exec-persona-button"' in html
+    assert 'id="exec-persona-menu"' in html
+    assert 'id="exec-lifecycle-tabs"' in html
+    assert 'id="exec-driver-stack"' in html
+    assert 'id="exec-theme-tabs"' in html
+    assert 'id="exec-density-tabs"' in html
+    assert 'id="exec-movers-tabs"' in html
+    assert 'id="exec-hero-score"' in html
+    assert 'id="exec-driver-tiles"' in html
+    assert 'id="exec-drill-trend"' in html
+    assert 'id="exec-drill-movers"' in html
+    assert 'id="exec-drill-prompts"' in html
+    assert 'id="exec-gravity-prompt-list"' in html
+    assert 'id="exec-gravity-quote"' in html
+    assert 'id="exec-board-lifecycle"' in html
+    assert 'id="exec-board-primary-list"' in html
+    assert 'id="exec-agents-running-list"' in html
+    assert 'id="exec-agents-native-list"' in html
+    assert 'id="exec-developments-list"' in html
+    assert 'id="exec-week-rail"' in html
+    assert 'id="exec-pulse-grid"' in html
+    assert 'id="exec-owed-list"' in html
+    assert 'id="exec-board-state-detail"' in html
+    assert 'id="exec-thread-list"' in html
+    assert 'id="exec-assistant-network"' in html
     assert "Executive altitude" in html
     assert "BU / reviewer altitude" in html
     assert "Operator altitude" in html
     assert "Tenant admin / system altitude" in html
+    assert "Board portal lifecycle" in html
+    assert "Running now and discover more" in html
+    assert "Developments, prep, and weekly rhythm" in html
+    assert "Good morning, Khalid" in html
+    assert "Hermes · Executive brief from live run data." in html
     assert "Executive remains read-only." in html
     assert "strategyos.ui.token" in js
     assert "headers.Authorization" in js
@@ -157,13 +199,39 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'requestJson("/reviewer/pending-reviews")' in js
     assert 'requestJson(`/reviewer/runs/${encodeURIComponent(latestRun.run_id)}`)' in js
     assert 'function renderPlanHealth(config)' in js
+    assert 'function renderExecutiveModes()' in js
+    assert 'function renderExecutiveHero(run, citations, challenged)' in js
+    assert 'function renderDriverDrillFidelity(selected, run, citations, challenged)' in js
+    assert 'function renderLowerRailFidelity(run, citations, challenged)' in js
+    assert 'function renderCashPulseAndOwed(run, citations, challenged)' in js
+    assert 'function renderAssistantNarrative(run, citations, challenged)' in js
+    assert 'function renderBoardPortal(run, citations, challenged)' in js
+    assert 'function renderAgentsDiscovery(run, citations, challenged)' in js
+    assert 'const DISPLAY_THEMES = [' in js
+    assert 'const DISPLAY_DENSITIES = [' in js
+    assert 'const MOVERS_VIEWS = [' in js
+    assert 'data-exec-persona' in js
+    assert 'data-persona-menu-item' in js
+    assert 'data-board-state' in js
+    assert 'data-driver-key' in js
+    assert 'data-theme-mode' in js
+    assert 'data-density-mode' in js
+    assert 'data-movers-mode' in js
+    assert 'Good morning, Khalid' in js
+    assert 'assistantRole: "chief of staff"' in js
     assert 'function normalizedCitationSummary(run, rows)' in js
     assert 'function renderExecutiveSignalFoundation()' in js
+    assert 'function executivePlanHealthConfig(fallback)' in js
+    assert 'function publicationActionLabels(publication)' in js
     assert 'function strategySubstrate()' in js
     assert 'function renderScopeRibbon()' in js
+    assert 'function rerenderExecutiveNarrative()' in js
+    assert 'function humanizeNextAction(value)' in js
     assert 'Finance-derived signal only' in js
     assert 'Value-driver mapping will appear once a governed packet exists.' in js
     assert 'not a full enterprise strategy compiler' in js
+    assert 'board pack ${humanizeToken(boardPack.status || "pending")}' in js
+    assert 'Next valid action: ${humanizeNextAction(nextAction)}.' in js
     assert '"/data/evidence-preview" : "/public/data/evidence-preview"' in js
     assert 'requestJson(`/public/data/evidence-preview?run_id=${encodeURIComponent(publicRun?.run_id || "")}&finding_id=${encodeURIComponent(preferredFinding)}`)' in js
     assert 'requestJson("/qa"' in js
@@ -213,6 +281,12 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert 'id="system-publication-list"' in html
     assert 'id="system-surface-list"' in html
     assert 'id="drilldown-report-list"' in html
+    assert 'id="parity-status-pill"' in html
+    assert 'id="parity-executive-list"' in html
+    assert 'id="parity-review-list"' in html
+    assert 'id="parity-system-list"' in html
+    assert 'id="publication-summary"' in html
+    assert 'id="publication-payload-preview"' in html
     assert "Truth today: StrategyOS now exposes a bounded BU backend role for read-only governed review access." in html
     assert "Choose the truthful StrategyOS lane" in html
     assert "BU leaders now have a bounded backend role for governed queue and report read paths, while reviewer sign-off remains the approval gate." in html
@@ -255,12 +329,30 @@ def test_dashboard_renders_chat_dashboard_shell():
     assert 'id="plan-health-status"' in html
     assert 'id="plan-health-tree"' in html
     assert 'id="publication-surface-list"' in html
+    assert 'id="strategy-intent-pill"' in html
+    assert 'id="strategy-intent-summary"' in html
+    assert 'id="strategy-intent-next"' in html
+    assert 'id="strategy-kpi-list"' in html
+    assert 'id="value-driver-list"' in html
+    assert 'id="strategy-reasoning-list"' in html
     assert 'id="publication-panel"' in html
     assert 'function renderPlanSignalPanel()' in js
+    assert 'function renderStrategyPanel()' in js
+    assert 'function renderParityPanel()' in js
     assert 'function renderPublicationGovernance()' in js
     assert 'function publicationActionLabels(publication)' in js
-    assert 'src="/static/app.js?v=ux-20260622a"' in html
-    assert 'href="/static/styles.css?v=ux-20260622a"' in html
+    assert 'publicationSummary: byId("publication-summary")' in js
+    assert 'publicationPayloadPreview: byId("publication-payload-preview")' in js
+    assert 'function reviewQueueRoute()' in js
+    assert 'guarded("Pending reviews", requestJson(reviewQueueRoute()), { status: "empty", items: [] })' in js
+    assert 'const meaningfulRows = rows.filter((row) => {' in js
+    assert 'across ${formatCount(meaningfulRows.length)} trustworthy reviews' in js
+    assert 'src="/static/app.js?v=ux-20260623a"' in html
+    assert 'href="/static/styles.css?v=ux-20260623a"' in html
+    assert 'function selectedStrategyView()' in js
+    assert 'function currentTrendPayload()' in js
+    assert 'function humanizeNextAction(value)' in js
+    assert 'board pack ${humanizeToken(publication.board_pack?.status || "pending")}' in js
 
 
 def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
@@ -669,6 +761,23 @@ def test_ui_session_reports_bu_role_with_read_only_review_capabilities():
         assert contract_payload["domain_filters"][0]["filter_id"] == "finance_integrity"
         assert contract_payload["lanes"]["bu"]["evidence_qa_route"].endswith("domain=evidence_qa")
         assert contract_payload["kpi_cards"][0]["card_id"] == "recoverable_value"
+        assert contract_payload["board_portal"]["state"] in {"pre", "live", "closed"}
+        assert contract_payload["board_portal"]["publish_state"] == contract_payload["reports"]["publication"]["publish_state"]
+        assert contract_payload["executive_modes"]["active_persona_id"] == "ceo"
+        assert any(item["persona_id"] == "cfo" for item in contract_payload["executive_modes"]["personas"])
+        assert any(item["persona_id"] == "board" for item in contract_payload["executive_modes"]["personas"])
+        assert any(item["active"] for item in contract_payload["executive_modes"]["board_states"])
+        assert any(item["driver_key"] == "cash_pulse" for item in contract_payload["executive_modes"]["driver_focus"])
+        assert any(item["driver_key"] == "owed_upward" for item in contract_payload["executive_modes"]["driver_focus"])
+        assert contract_payload["drilldown"]["routes"]["case_detail"].endswith("{finding_id}")
+        assert contract_payload["drilldown"]["gravity"]["rails"][1] in {"pre", "live", "closed"}
+        assert contract_payload["drilldown"]["lower_rail"]["week_ahead"][0]["event_id"] == "prep"
+        assert contract_payload["interaction_contracts"]["pending_reviews"]["route"] == "/bu/pending-reviews"
+        assert contract_payload["agents"]["discover"]["native"][0]["id"] == "native-evidence-qa"
+        assert contract_payload["agent_modules"]["summary"]["running_count"] >= 4
+        assert contract_payload["tenant_admin_system"]["connector_posture"]["count"] >= 3
+        assert contract_payload["tenant_admin_system"]["workflow_posture"]["review_queue_route"] == "/reviewer/pending-reviews"
+        assert contract_payload["role_actions"]["viewer_role"] == "bu"
         assert contract_payload["reports"]["publication"]["allowed_actions"] == [
             "view_governed_report_status",
             "view_report_preview",
@@ -752,8 +861,27 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert payload["plan_health"]["root_label"] == "Governed plan posture"
         assert payload["domain_tree"]["nodes"][0]["domain_id"] == "finance"
         assert payload["strategy_substrate"]["intent"]["label"] == "Convert governed finance signal into executive action"
+        assert payload["strategy_substrate"]["intent"]["guardrails"]
+        assert payload["board_portal"]["meeting"]["title"] == "Governed board packet"
+        assert payload["executive_modes"]["active_board_state"] == payload["board_portal"]["state"]
+        assert payload["executive_modes"]["driver_focus"][0]["driver_key"] == "board_packet"
+        assert any(item["persona_id"] == "cfo" for item in payload["executive_modes"]["personas"])
+        assert any(item["persona_id"] == "logistics" for item in payload["executive_modes"]["personas"])
+        assert payload["drilldown"]["default_case_id"] is None
+        assert payload["drilldown"]["cash_pulse"]["basis"] == "governed_findings"
+        assert payload["drilldown"]["gravity"]["prompts"]
+        assert payload["interaction_contracts"]["latest_run"]["route"] == "/public/runs/latest"
+        assert payload["agents"]["running"][0]["id"] == "evidence-qa"
+        assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
+        assert payload["tenant_admin_system"]["managed_data"]["reports"]["report_count"] == 2
+        assert payload["tenant_admin_system"]["trend"]["truth_basis"] == "reconciled_governed_metrics"
+        assert payload["role_actions"]["viewer_role"] == "executive"
         assert payload["strategy_substrate"]["kpi_tree"]["nodes"][0]["node_id"] == "value_capture"
+        assert any(node["node_id"] == "publication_boundary" for node in payload["strategy_substrate"]["kpi_tree"]["nodes"])
         assert payload["strategy_substrate"]["value_drivers"][0]["driver_id"] == "cash_recovery"
+        assert any(driver["driver_id"] == "board_pack_readiness_driver" for driver in payload["strategy_substrate"]["value_drivers"])
+        assert any(item["portfolio_id"] == "release-readiness" for item in payload["strategy_substrate"]["portfolio_views"])
+        assert any(item["reasoning_id"] == "hold-runtime-boundary" for item in payload["strategy_substrate"]["reasoning"])
         assert any(item["option_id"] == "release-readiness" for item in payload["portfolio_switcher"]["options"])
         assert all("path" not in item for item in payload["reports"]["artifacts"])
     finally:

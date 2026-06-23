@@ -355,6 +355,8 @@ def test_public_report_preview_returns_board_safe_summary(monkeypatch):
         assert payload["artifact_key"] == "executive_summary"
         assert "Recoverable value identified" in payload["preview_text"]
         assert "Top case: Duplicate payment for invoice INV-1" in payload["preview_text"]
+        assert payload["publication"]["publish_state"] == "approved_for_release"
+        assert payload["board_portal"]["state"] == "live"
     finally:
         _restore_env(original)
 
@@ -395,6 +397,22 @@ def test_authenticated_bu_report_preview_returns_governed_publication_posture(mo
             "view_governed_report_status",
             "view_report_preview",
         ]
+        assert payload["publication"]["board_pack"]["status"] == "ready"
+        assert payload["publication"]["board_pack"]["allowed_actions"] == [
+            "view_board_pack_preview",
+            "inspect_board_pack_status",
+        ]
+        assert payload["board_portal"]["deck_release"]["status"] == "ready"
+        assert payload["board_portal"]["supplementary"]["next_action"] == "prepare_board_pack"
+        assert payload["agent_modules"]["summary"]["running_count"] >= 4
+        reviewer_actions = next(
+            section
+            for section in payload["role_actions"]["sections"]
+            if section["role_id"] == "reviewer"
+        )
+        assert reviewer_actions["actions"][1]["route"] == "/reviewer/runs/run-test/approve"
+        assert payload["plan_health"]["next_action"] == "prepare_board_pack"
+        assert payload["strategy_substrate"]["node_count"] >= 8
         assert "governed publication posture" in payload["preview_text"].lower()
     finally:
         _restore_env(original)
@@ -480,6 +498,8 @@ def test_pending_review_lists_include_item_workflow_and_publication(monkeypatch)
         assert payload["workflow_summary"]["pending_count"] == 1
         assert payload["items"][0]["workflow_summary"]["next_action"] == "review_decision"
         assert payload["items"][0]["publication"]["report_count"] == 1
+        assert payload["items"][0]["board_portal"]["state"] == "pre"
+        assert payload["items"][0]["role_actions"]["viewer_role"] == "bu"
     finally:
         _restore_env(original)
 
@@ -541,8 +561,56 @@ def test_data_status_includes_workflow_and_publication_posture(monkeypatch):
         assert payload["workflow"]["pending_reviews"] == 1
         assert payload["workflow"]["recent_runs"] == 1
         assert payload["publication"]["report_count"] == 1
+        assert payload["board_pack"]["status"] == "preview_only"
+        assert payload["agents"]["activity"]["metrics"][2] == {"k": "discoverable", "v": 6}
+        assert payload["board_portal"]["state"] == "live"
+        assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
+        assert payload["tenant_admin_system"]["managed_data"]["graph_store"]["status"] == "ready"
+        assert payload["tenant_admin_system"]["managed_data"]["vector_store"]["status"] == "ready"
+        assert payload["tenant_admin_system"]["workflow_posture"]["pending_reviews"] == 1
+        assert payload["tenant_admin_system"]["publication_posture"]["board_pack"]["status"] == "preview_only"
+        assert payload["role_actions"]["viewer_role"] == "tenant_admin"
+        assert payload["plan_health"]["next_action"] == "capture_reviewer_decision"
+        assert payload["trend"]["truth_basis"] == "reconciled_governed_metrics"
+        assert payload["strategy_substrate"]["driver_count"] >= 4
         assert payload["tenant_context"]["tenant_id"] == "tenant-alpha"
         assert payload["runtime_posture"]["latest_run_id"] == "run-test"
+    finally:
+        _restore_env(original)
+
+
+def test_latest_run_findings_exposes_reconciled_plan_health_and_publication(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        response = client.get(
+            "/runs/latest/findings", headers={"X-API-Key": "operator-secret"}
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["plan_health"]["root_label"] == "Governed plan posture"
+        assert payload["publication"]["publish_state"] == "approved_for_release"
+        assert payload["board_portal"]["publish_state"] == "approved_for_release"
+        assert payload["agent_modules"]["summary"]["approval_count"] == 3
+        assert payload["role_actions"]["viewer_role"] == "operator"
+        assert payload["trend"]["truth_basis"] == "reconciled_governed_metrics"
+        assert payload["trend"]["latest_point"]["recoverable_sar"] == 223676
+        assert payload["drilldown"]["cash_pulse"]["value_display"].startswith("SAR ")
+        assert payload["drilldown"]["owed_upward"]["next_action"] == "close_challenged_cases"
+        assert payload["drilldown"]["movers"][0]["mover_id"] == "cash_pulse"
     finally:
         _restore_env(original)
 
@@ -566,6 +634,7 @@ def test_executive_latest_run_uses_public_safe_summary(monkeypatch):
         payload = response.json()
         assert payload["status"] == "ok"
         assert payload["public_safe"] is True
+        assert payload["board_portal"]["state"] == "live"
         assert "run_dir" not in payload
     finally:
         _restore_env(original)

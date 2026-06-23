@@ -195,6 +195,9 @@ class PlanHealthContract:
     root_summary: str
     tone: str = "neutral"
     child_ids: tuple[str, ...] = ()
+    next_action: str = ""
+    governance_status: str = ""
+    evidence_basis: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -207,6 +210,11 @@ class StrategyIntentContract:
     next_decision: str
     boundary: str
     evidence_basis: tuple[str, ...] = ()
+    guardrails: tuple[str, ...] = ()
+    focus_areas: tuple[str, ...] = ()
+    portfolio_id: str | None = None
+    confidence: str = "bounded"
+    supporting_kpis: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -218,6 +226,15 @@ class StrategyKpiNodeContract:
     value_display: str
     detail: str
     tone: str = "neutral"
+    portfolio_id: str | None = None
+    branch_type: str = "kpi"
+    unit: str | None = None
+    child_ids: tuple[str, ...] = ()
+    driver_ids: tuple[str, ...] = ()
+    evidence_basis: tuple[str, ...] = ()
+    node_type: str = "metric"
+    owner_route: str = ""
+    children: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -230,6 +247,10 @@ class ValueDriverContract:
     owner_route: str
     tone: str = "neutral"
     maps_to: tuple[str, ...] = ()
+    portfolio_id: str | None = None
+    influence: str = "supports"
+    depends_on: tuple[str, ...] = ()
+    evidence_basis: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -239,6 +260,12 @@ class StrategyReasoningContract:
     status: str
     rationale: str
     evidence_basis: tuple[str, ...] = ()
+    portfolio_id: str | None = None
+    affected_node_ids: tuple[str, ...] = ()
+    affected_driver_ids: tuple[str, ...] = ()
+    recommended_route: str = ""
+    guardrail: str = ""
+    supports_nodes: tuple[str, ...] = ()
 
 
 INGESTION_CONNECTOR_CATALOG: dict[str, IngestionConnector] = {

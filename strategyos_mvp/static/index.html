@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StrategyOS.live Governed Diagnostics Workspace</title>
-    <link rel="stylesheet" href="/static/styles.css?v=ux-20260622a" />
+    <link rel="stylesheet" href="/static/styles.css?v=ux-20260623a" />
   </head>
   <body>
     <div class="app-shell">
@@ -43,8 +43,56 @@
               <button class="btn primary" id="connect-button" type="button">Connect</button>
               <button class="btn secondary" id="clear-button" type="button">Clear</button>
             </div>
-          </div>
+            </div>
             <div class="muted" id="session-status">Session not connected.</div>
+        </section>
+
+        <section class="panel shell-hero" aria-label="Role-aware operating shell">
+          <div class="shell-hero-grid">
+            <div class="shell-hero-copy">
+              <p class="eyebrow">Operating shell</p>
+              <h1 id="shell-title">Role-aware StrategyOS operations</h1>
+              <p class="shell-body" id="shell-body">Queue, evidence, runtime, and publication stay inside one governed product shell while each role sees only its truthful lane.</p>
+            </div>
+            <aside class="shell-assistant-card" aria-live="polite">
+              <span class="eyebrow">Lane guide</span>
+              <strong id="shell-assistant-name">StrategyOS copilot</strong>
+              <p id="shell-assistant-detail">Load a session to see the next valid move for this lane.</p>
+              <span class="pill neutral" id="shell-next-action">Awaiting governed action</span>
+            </aside>
+          </div>
+
+          <div class="shell-signal-grid" aria-label="Current shell status">
+            <article class="shell-signal-card">
+              <span class="eyebrow">Current surface</span>
+              <strong id="shell-surface-label">Shared governed lane</strong>
+              <span class="muted" id="shell-status-note">Reviewer and operator controls share this workspace until auth narrows the lane.</span>
+            </article>
+            <article class="shell-signal-card">
+              <span class="eyebrow">Role and route</span>
+              <strong id="shell-role-label">Anonymous viewer</strong>
+              <span class="muted" id="shell-context-line">Sign in to unlock a role-specific route.</span>
+            </article>
+            <article class="shell-signal-card">
+              <span class="eyebrow">Cases in scope</span>
+              <strong id="shell-case-count">--</strong>
+              <span class="muted" id="shell-case-note">Governed findings will appear after the latest run is loaded.</span>
+            </article>
+            <article class="shell-signal-card">
+              <span class="eyebrow">Release posture</span>
+              <strong id="shell-publication-status">Awaiting governed run</strong>
+              <span class="muted" id="shell-publication-note">Publication remains bound to approval, evidence, and report truth.</span>
+            </article>
+          </div>
+
+          <div class="lane-tab-row" id="lane-tabs" role="navigation" aria-label="StrategyOS lane navigation"></div>
+
+          <div class="shell-jump-row" aria-label="Jump to current work surfaces">
+            <a class="shell-jump-link" href="#command">Overview</a>
+            <a class="shell-jump-link" href="#review">Queue</a>
+            <button class="shell-jump-link" type="button" data-open-drawer="system" data-drawer-target="kg-panel">Evidence map</button>
+            <button class="shell-jump-link" type="button" data-open-drawer="new-run" data-drawer-target="source-pack-section">Start analysis</button>
+          </div>
         </section>
 
         <section class="panel scope-panel" aria-label="Company and portfolio scope">
@@ -111,6 +159,61 @@
             <div>
               <h3>Publication and release surfaces</h3>
               <div class="stack-list" id="publication-surface-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel strategy-panel" aria-label="Bounded strategy layer">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Bounded strategy layer</p>
+              <h2>Intent, value drivers, and reasoning</h2>
+              <p class="muted">This layer stays tied to the hosted workspace contract only: governed cases, evidence closure, publication posture, and runtime boundary truth.</p>
+            </div>
+            <span class="pill" id="strategy-intent-pill">Awaiting strategy substrate</span>
+          </div>
+          <div class="strategy-grid">
+            <article class="scope-summary-card strategy-lead">
+              <span class="eyebrow">Strategy intent</span>
+              <strong id="strategy-intent-summary">Awaiting bounded strategy substrate.</strong>
+              <span class="muted" id="strategy-intent-next">Load a governed run to expose the next truthful decision.</span>
+            </article>
+            <div>
+              <h3>KPI branches</h3>
+              <div class="stack-list" id="strategy-kpi-list"></div>
+            </div>
+            <div>
+              <h3>Value-driver map</h3>
+              <div class="stack-list" id="value-driver-list"></div>
+            </div>
+            <div>
+              <h3>Reasoning guardrails</h3>
+              <div class="stack-list" id="strategy-reasoning-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel discovery-panel" aria-label="Discovery modules and role fidelity">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Hosted parity closure</p>
+              <h2>Discovery modules, publish flow, and role fidelity</h2>
+              <p class="muted">This tranche makes the shell read like one governed product: discovery modules stay visible, publish flow stays explicit, and each lane keeps a distinct operating contract.</p>
+            </div>
+            <span class="pill" id="discovery-status-pill">Awaiting governed module data</span>
+          </div>
+          <div class="discovery-grid">
+            <div>
+              <h3>Discovery modules</h3>
+              <div class="stack-list" id="discovery-module-list"></div>
+            </div>
+            <div>
+              <h3>Role fidelity</h3>
+              <div class="stack-list" id="role-fidelity-list"></div>
+            </div>
+            <div>
+              <h3>Publish choreography</h3>
+              <div class="stack-list" id="publish-flow-list"></div>
             </div>
           </div>
         </section>
@@ -283,6 +386,60 @@
               <pre class="code-block" id="drilldown-report-preview">Select a report artifact to preview it here.</pre>
             </article>
           </div>
+        </section>
+
+        <section class="panel parity-panel" aria-label="Shell parity and release choreography">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Design parity tranche</p>
+              <h2>Shell parity and release choreography</h2>
+              <p class="muted" id="parity-status-note">Executive, BU/reviewer, and tenant-admin/system surfaces should now read as one truthful product shell instead of disconnected screens.</p>
+            </div>
+            <span class="pill" id="parity-status-pill">Awaiting governed run</span>
+          </div>
+          <div class="parity-grid">
+            <div>
+              <h3>Executive handoff</h3>
+              <div class="stack-list" id="parity-executive-list"></div>
+            </div>
+            <div>
+              <h3>BU / reviewer choreography</h3>
+              <div class="stack-list" id="parity-review-list"></div>
+            </div>
+            <div>
+              <h3>Tenant-admin / system truth</h3>
+              <div class="stack-list" id="parity-system-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel agents-panel" aria-label="Agents and discovery module">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Agent fabric</p>
+              <h2>Running agents and discovery</h2>
+              <p class="muted">Design-inspired agent visibility, grounded only in current workflow, readiness, publication, and connector truth for this tenant.</p>
+            </div>
+            <span class="pill" id="agents-summary">Awaiting agent surface</span>
+          </div>
+          <div class="agent-fabric-grid">
+            <section>
+              <h3>Running now</h3>
+              <div class="stack-list" id="agents-running-list"></div>
+            </section>
+            <section>
+              <h3>Discover agents</h3>
+              <div class="stack-list" id="agents-discover-list"></div>
+            </section>
+          </div>
+          <section class="agent-subtools">
+            <h3>Sub-agents your chiefs call</h3>
+            <div class="stack-list" id="agents-tools-list"></div>
+          </section>
+          <details class="diagnostic-disclosure">
+            <summary>Raw agent surface payload</summary>
+            <pre id="agents-payload-preview" class="code-block">Awaiting agent surface payload.</pre>
+          </details>
         </section>
 
         <div class="cockpit-grid">
@@ -533,6 +690,12 @@
           </details>
         </section>
 
+        <section class="drawer-section" id="agents-panel">
+          <h3>Agent discovery surface</h3>
+          <p class="muted">Use the live agent module in the main workspace to inspect approval-held stewards, deployable discovery cards, and sub-agent tools without inventing new backend powers.</p>
+          <div class="summary">Open the agent fabric panel in the main workspace for interactive parity.</div>
+        </section>
+
         <section class="drawer-section" id="connectors-panel">
           <h3>Connector catalog</h3>
           <div id="connectors-summary" class="summary">Awaiting connector catalog.</div>
@@ -698,6 +861,6 @@
 
     <script id="strategyos-bootstrap" type="application/json">__STRATEGYOS_BOOTSTRAP__</script>
     <script src="/static/vendor/cytoscape.min.js"></script>
-    <script src="/static/app.js?v=ux-20260622a"></script>
+    <script src="/static/app.js?v=ux-20260623a"></script>
   </body>
 </html>
