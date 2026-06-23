@@ -144,6 +144,8 @@
     owedNote: byId("exec-owed-note"),
     boardStateDetail: byId("exec-board-state-detail"),
     agentsSearchNote: byId("exec-agents-search-note"),
+    agentsSearchInput: byId("exec-agents-search"),
+    agentsFilterRow: byId("exec-agents-filter-row"),
     agentsBrowseButton: byId("exec-agents-browse-button"),
     threadList: byId("exec-thread-list"),
     assistantNetwork: byId("exec-assistant-network"),
@@ -177,6 +179,8 @@
     personaMenuOpen: false,
     selectedWeekEventKey: query.get("week") || "board_prep",
     openAgentKey: query.get("agent") || "reviewer_gate_relay",
+    discoveryQuery: query.get("discover") || "",
+    discoveryFilter: query.get("discover_type") || "all",
     agentLogOpenKey: null,
     approvedAgentKeys: {},
     deployedAgentKeys: {},
@@ -185,8 +189,8 @@
   const EXECUTIVE_PERSONAS = [
     { key: "ceo", label: "Group CEO", detail: "Khalid · value, release, board brief", assistant: "Hermes" },
     { key: "cfo", label: "Group CFO", detail: "Sara · margin, hedge, cash", assistant: "Atlas" },
-    { key: "gm", label: "BU GM", detail: "Lina · growth, service, capacity", assistant: "Iris" },
-    { key: "bucfo", label: "BU CFO", detail: "Yusuf · leakage, controls, exposure", assistant: "Argus" },
+    { key: "gm", label: "e-Pharmacy GM", detail: "Lina · growth, service, capacity", assistant: "Iris" },
+    { key: "bucfo", label: "Tamween BU CFO", detail: "Yusuf · leakage, controls, exposure", assistant: "Argus" },
     { key: "logistics", label: "Logistics", detail: "Hassan · cold chain, service, cost", assistant: "Vega" },
     { key: "board", label: "Board room", detail: "Approved pack and frozen board posture", assistant: "Minerva" },
   ];
@@ -257,6 +261,8 @@
     if (state.selectedPortfolio) params.set("portfolio", state.selectedPortfolio);
     if (state.selectedWeekEventKey) params.set("week", state.selectedWeekEventKey);
     if (state.openAgentKey) params.set("agent", state.openAgentKey);
+    if (state.discoveryQuery) params.set("discover", state.discoveryQuery);
+    if (state.discoveryFilter && state.discoveryFilter !== "all") params.set("discover_type", state.discoveryFilter);
     if (state.themeMode) params.set("theme", state.themeMode);
     if (state.densityMode) params.set("density", state.densityMode);
     if (state.moversMode) params.set("movers", state.moversMode);
@@ -302,6 +308,30 @@
     if (abs >= 1_000_000) return `SAR ${(number / 1_000_000).toFixed(1)}M`;
     if (abs >= 1_000) return `SAR ${(number / 1_000).toFixed(0)}K`;
     return `SAR ${Math.round(number).toLocaleString()}`;
+  }
+
+  function humanizeToken(token) {
+    if (!token) return "--";
+    const str = String(token);
+    const map = {
+      published: "Published", draft: "Draft", pending: "Pending", approved: "Approved",
+      rejected: "Rejected", blocked: "Blocked", needs_closure: "Needs closure",
+      needs_reviewer_closure: "Needs closure", active: "Active", inactive: "Inactive",
+      waiting: "Waiting", running: "Running", completed: "Completed", closed: "Closed",
+      pre: "Pre-board", live: "Live", open: "Open", frozen: "Frozen", gated: "Gated",
+      ready: "Ready", clear: "Clear", protected: "Protected", governed: "Governed",
+      healthy: "Healthy", degraded: "Degraded", identity_provider: "IdP",
+      langgraph: "LangGraph", hetzner_qa: "Hetzner QA", strategyos_live: "StrategyOS Live",
+      "strategyos-live": "StrategyOS Live", finance_diagnostics: "Finance diagnostics",
+      "finance-diagnostics": "Finance diagnostics", release_readiness: "Release readiness",
+      "release-readiness": "Release readiness", evidence_governance: "Evidence governance",
+      "evidence-governance": "Evidence governance", runtime_governance: "Runtime governance",
+      "runtime-governance": "Runtime governance",
+    };
+    if (map[str]) return map[str];
+    return str.replace(/_/g, " ").replace(/-/g, " ").split(" ").map(function(w) {
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(" ");
   }
 
   function numericOrNull(value) {
@@ -617,7 +647,7 @@
       },
       gm: {
         greeting: "Good morning, Iris",
-        title: "BU GM diagnostics",
+        title: "e-Pharmacy GM diagnostics",
         designScore: blueprint?.health?.score || 81,
         assistant: blueprint?.assistant || "Iris",
         assistantRole: blueprint?.assistantRole || "growth chief of staff",
@@ -629,7 +659,7 @@
       },
       bucfo: {
         greeting: "Good morning, Argus",
-        title: "BU CFO diagnostics",
+        title: "Tamween BU CFO diagnostics",
         designScore: blueprint?.health?.score || 72,
         assistant: blueprint?.assistant || "Argus",
         assistantRole: blueprint?.assistantRole || "distribution chief of staff",
@@ -706,13 +736,13 @@
         { key: "release", title: "Packet release", percent: 101, metric: "101 posture", sub: "board deck coherence", chips: [approvedMetric, humanizeToken(publication.board_pack?.status || "pending"), "safe release"] },
         { key: "revenue", title: "Revenue", percent: 102, metric: "102% of plan", sub: "topline holds", chips: [scopeLabel(), "demand intact", "read-through to EBITDA"] },
       ],
-      pharma: [
+      gm: [
         { key: "growth", title: "Growth", percent: 112, metric: "112 demand", sub: "digital momentum", chips: ["orders rising", "conversion watch", scopeLabel()] },
         { key: "revenue", title: "Revenue", percent: 102, metric: "102% of plan", sub: "share gain visible", chips: ["basket growth", "channel mix", "quality demand"] },
         { key: "readiness", title: "Board readiness", percent: 101, metric: "101 posture", sub: "growth story clear", chips: [approvedMetric, "evidence-linked", "board-safe"] },
         { key: "cash", title: "Cash", percent: 123, metric: "123% of floor", sub: "fuel for expansion", chips: ["funded growth", "no liquidity panic", "controlled risk"] },
       ],
-      distribution: [
+      bucfo: [
         { key: "controls", title: "Controls", percent: 96, metric: "96 closure", sub: "leakage still active", chips: ["Tamween", "proof discipline", "needs closure"] },
         { key: "revenue", title: "Revenue", percent: 101, metric: "101 posture", sub: "flat but protected", chips: [scopeLabel(), "stabilise first", "board-safe"] },
         { key: "readiness", title: "Board readiness", percent: 98, metric: "98 posture", sub: "board will press", chips: [approvedMetric, "control narrative", "supplementary questions"] },
@@ -855,12 +885,12 @@
         title: "Group CFO framing",
         note: "Sara's frame prioritises hedge exposure, margin discipline, and cash confidence before room theatre.",
       },
-      pharma: {
-        title: "e-Pharmacy growth framing",
+      gm: {
+        title: "e-Pharmacy GM framing",
         note: "Growth, conversion, and service quality stay visible without turning the surface into raw operating clutter.",
       },
-      distribution: {
-        title: "Tamween control framing",
+      bucfo: {
+        title: "Tamween BU CFO framing",
         note: "Leakage, controls, and evidence proof take precedence over decorative momentum in this frame.",
       },
       logistics: {
@@ -984,13 +1014,15 @@
     }
     if (els.gravityQuote) els.gravityQuote.textContent = personaModel.quote;
     if (els.gravityBy) els.gravityBy.textContent = personaModel.by;
-    if (els.gravityRails) {
-      els.gravityRails.innerHTML = [
-        `<span class="badge blue">${escapeHtml(personaModel.assistant)}</span>`,
-        `<span class="badge blue">${escapeHtml(personaModel.assistantRole)}</span>`,
-        `<span class="badge blue">${escapeHtml(humanizeToken(lifecycle.key))}</span>`,
-      ].join("");
-    }
+      if (els.gravityRails) {
+        const weekModel = Array.isArray(personaModel.week) ? personaModel.week.find((item) => item.key === state.selectedWeekEventKey) : null;
+        els.gravityRails.innerHTML = [
+          `<span class="badge blue">${escapeHtml(personaModel.assistant)}</span>`,
+          `<span class="badge blue">${escapeHtml(personaModel.assistantRole)}</span>`,
+          `<span class="badge blue">${escapeHtml(humanizeToken(lifecycle.key))}</span>`,
+          weekModel ? `<span class="badge blue">${escapeHtml(weekModel.title)}</span>` : "",
+        ].join("");
+      }
     if (els.gravityPromptList) {
       els.gravityPromptList.innerHTML = personaModel.prompts.map((prompt) => `
         <button class="gravity-prompt-btn" type="button" data-exec-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>
@@ -1201,12 +1233,17 @@
     if (els.lowerMainBadge) els.lowerMainBadge.textContent = feedRows.length ? `${formatCount(feedRows.length)} live rows` : "Design packet";
     if (els.developmentsList) {
       els.developmentsList.innerHTML = feedRows.map((item) => `
-        <div class="lower-feed-row">
+        <button class="lower-feed-row lower-feed-button" type="button" data-lower-prompt="${escapeHtml(item.prompt || `Give me the board-safe follow-through on ${item.title}.`)}">
           <div class="lower-feed-top"><strong>${escapeHtml(item.title)}</strong><span class="badge blue">update</span></div>
           <span>${escapeHtml(item.detail)}</span>
           <div class="lower-feed-chip-row">${item.chips.map((chip) => `<span class="badge blue">${escapeHtml(chip)}</span>`).join("")}</div>
-        </div>
+        </button>
       `).join("");
+      els.developmentsList.querySelectorAll("[data-lower-prompt]").forEach((button) => {
+        button.addEventListener("click", () => {
+          setCommandPrompt(button.getAttribute("data-lower-prompt") || "");
+        });
+      });
     }
     const weekEvents = Array.isArray(blueprint?.week) && blueprint.week.length
       ? blueprint.week.map((item) => ({
@@ -1266,18 +1303,23 @@
     if (els.pulseGrid) {
       const pulseRows = Array.isArray(blueprint?.cashPulse?.pillars) && blueprint.cashPulse.pillars.length
         ? blueprint.cashPulse.pillars
-        : drivers.map((driver) => ({ label: driver.title, value: String(driver.percent), sub: `${driver.metric} · ${driver.sub}`, delta: (driver.chips || [])[0] || scopeLabel(), tone: driver.percent >= 101 ? "up" : driver.percent >= 99 ? "flat" : "down" }));
+        : drivers.map((driver) => ({ label: driver.title, value: String(driver.percent), sub: `${driver.metric} · ${driver.sub}`, delta: (driver.chips || [])[0] || scopeLabel(), tone: driver.percent >= 101 ? "up" : driver.percent >= 99 ? "flat" : "down", prompt: `Explain the board-safe pressure behind ${driver.title}.` }));
       els.pulseGrid.innerHTML = pulseRows.map((driver) => {
         const tone = driver.tone || (driver.percent >= 101 ? "up" : driver.percent >= 99 ? "flat" : "down");
         return `
-          <div class="pulse-tile tone-${tone}">
+          <button class="pulse-tile tone-${tone}" type="button" data-pulse-prompt="${escapeHtml(driver.prompt || `Explain the board-safe pressure behind ${driver.label}.`)}">
             <span class="pulse-label">${escapeHtml(driver.label)}</span>
             <strong class="pulse-value">${escapeHtml(String(driver.value))}</strong>
             <span class="pulse-sub">${escapeHtml(driver.sub)}</span>
             <span class="pulse-delta">${escapeHtml(driver.delta)}</span>
-          </div>
+          </button>
         `;
       }).join("");
+      els.pulseGrid.querySelectorAll("[data-pulse-prompt]").forEach((button) => {
+        button.addEventListener("click", () => {
+          setCommandPrompt(button.getAttribute("data-pulse-prompt") || "");
+        });
+      });
     }
     const owedRows = Array.isArray(blueprint?.owedUpward?.items) && blueprint.owedUpward.items.length
       ? blueprint.owedUpward.items
@@ -1514,10 +1556,16 @@
     const persona = currentPersonaModel();
     const publication = publicationContract();
     if (lifecycle.key === "live") {
+      const approvedDecks = Array.isArray(boardBlueprint()?.decks) ? boardBlueprint().decks.filter((item) => String(item.status || "").toLowerCase().includes("approved")).length : 0;
       els.boardStateDetail.innerHTML = `
         <div class="board-state-card">
           <strong>Live session · Q&amp;A on approved material</strong>
           <span>${escapeHtml(persona.assistant)} answers only from the CEO-approved packet. No uncited operator context belongs in the room.</span>
+          <div class="board-state-metrics">
+            <span class="board-state-metric"><strong>${escapeHtml(String(approvedDecks || 0))}</strong><small>approved decks</small></span>
+            <span class="board-state-metric"><strong>${escapeHtml(String((boardBlueprint()?.livePrompts || []).length || 3))}</strong><small>live prompts</small></span>
+            <span class="board-state-metric"><strong>${escapeHtml(String(challenged || 0))}</strong><small>challenge${Number(challenged || 0) === 1 ? "" : "s"}</small></span>
+          </div>
           <div class="board-chip-row">
             ${(boardBlueprint()?.livePrompts || [
               "Why is EBITDA 20 bps under plan?",
@@ -1528,10 +1576,16 @@
         </div>
       `;
     } else if (lifecycle.key === "closed") {
+      const actionCount = Array.isArray(boardBlueprint()?.actions) ? boardBlueprint().actions.length : 0;
       els.boardStateDetail.innerHTML = `
         <div class="board-state-card">
           <strong>❄ Frozen snapshot</strong>
           <span>Between meetings, ${escapeHtml(persona.assistant)} can model what-if questions on the frozen board packet, but no live org data should re-enter this surface until the next session.</span>
+          <div class="board-state-metrics">
+            <span class="board-state-metric"><strong>${escapeHtml(String(actionCount || 0))}</strong><small>follow-up actions</small></span>
+            <span class="board-state-metric"><strong>${escapeHtml(String(publication.report_count ?? 0))}</strong><small>report surfaces</small></span>
+            <span class="board-state-metric"><strong>${escapeHtml(publicationStatusLabel(publication.status || "published"))}</strong><small>publication</small></span>
+          </div>
           <div class="board-state-actions">
             <button class="board-chip snapshot" type="button" data-board-prompt="Model a what-if on the frozen board snapshot: if EUR strengthens 5%, what changes?">◇ What-if on the snapshot</button>
             <span class="board-chip snapshot">${escapeHtml(publication.preview_route || "/public/runs/latest/report-preview")}</span>
@@ -1539,10 +1593,17 @@
         </div>
       `;
     } else {
+      const deckCount = Array.isArray(boardBlueprint()?.decks) ? boardBlueprint().decks.length : 0;
+      const supplementaryCount = Array.isArray(boardBlueprint()?.supplementary) ? boardBlueprint().supplementary.length : 0;
       els.boardStateDetail.innerHTML = `
         <div class="board-state-card">
           <strong>Pre-board supplementary rail</strong>
           <span>Questions should rise here before the room: challenge closure, board-pack clarity, and anything the Group CEO must approve explicitly.</span>
+          <div class="board-state-metrics">
+            <span class="board-state-metric"><strong>${escapeHtml(String(deckCount || 0))}</strong><small>deck rows</small></span>
+            <span class="board-state-metric"><strong>${escapeHtml(String(supplementaryCount || 0))}</strong><small>supplementary questions</small></span>
+            <span class="board-state-metric"><strong>${escapeHtml(String(challenged || 0))}</strong><small>challenge${Number(challenged || 0) === 1 ? "" : "s"}</small></span>
+          </div>
           <div class="board-state-actions">
             <button class="board-chip" type="button" data-board-prompt="Summarise the board deck and the decision it asks of the room.">Summarise the board deck</button>
             <button class="board-chip" type="button" data-board-prompt="What supplementary answer still needs to be prepared before the board?">Ask supplementary question</button>
@@ -1684,13 +1745,45 @@
       ? state.workspaceContract.agents.sub_agents
       : (DESIGN.subtools || []);
     const subagents = subagentSource.map((item) => ({ title: item.name || item.title, detail: item.desc || item.detail, metric: item.glyph || item.metric, tone: "ok" }));
+    const discoverQuery = String(state.discoveryQuery || "").trim().toLowerCase();
+    const discoverFilter = ["all", "native", "market"].includes(state.discoveryFilter) ? state.discoveryFilter : "all";
+    const matchesDiscovery = (agent) => {
+      if (!discoverQuery) return true;
+      const haystack = [agent.title, agent.source, agent.connector, agent.detail, agent.meta]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(discoverQuery);
+    };
+    const filteredNative = discoverFilter === "market" ? [] : native.filter(matchesDiscovery);
+    const filteredMarket = discoverFilter === "native" ? [] : market.filter(matchesDiscovery);
     if (!running.find((item) => slugifyToken(item.key || item.title) === state.openAgentKey)) {
       state.openAgentKey = slugifyToken((running.find((item) => item.requiresApproval)?.key || running[0]?.key || "reviewer_gate_relay"));
     }
+    if (els.agentsSearchInput) {
+      els.agentsSearchInput.value = state.discoveryQuery;
+      els.agentsSearchInput.placeholder = persona.key === "board"
+        ? "Search the board-safe agent universe…"
+        : "Search the agent universe…";
+    }
     if (els.agentsSearchNote) {
-      els.agentsSearchNote.textContent = persona.key === "board"
-        ? (discoverSurface.search_placeholder || "Search the board-safe agent universe…")
-        : (discoverSurface.search_placeholder || "Search the agent universe…");
+      const resultCount = filteredNative.length + filteredMarket.length;
+      const noun = persona.key === "board" ? "board-safe agents" : "agents";
+      els.agentsSearchNote.textContent = discoverQuery
+        ? `${formatCount(resultCount)} ${noun} match “${state.discoveryQuery}”.`
+        : (persona.key === "board"
+            ? (discoverSurface.search_placeholder || "Search the board-safe agent universe…")
+            : (discoverSurface.search_placeholder || "Search the agent universe…"));
+    }
+    if (els.agentsFilterRow) {
+      const filters = [
+        { key: "all", label: "All" },
+        { key: "native", label: "Native" },
+        { key: "market", label: "Marketplace" },
+      ];
+      els.agentsFilterRow.innerHTML = filters.map((item) => `
+        <button class="discover-filter${discoverFilter === item.key ? " is-active" : ""}" type="button" data-agent-filter="${escapeHtml(item.key)}" role="tab" aria-selected="${discoverFilter === item.key ? "true" : "false"}">${escapeHtml(item.label)}</button>
+      `).join("");
     }
     if (els.agentsBrowseButton) {
       els.agentsBrowseButton.textContent = persona.key === "board" ? "Browse all board-safe agents →" : "Browse all agents →";
@@ -1718,8 +1811,26 @@
         </div>
       </div>
     `).join("");
-    els.agentsNativeList.innerHTML = native.map(discoverAgentCard).join("");
-    els.agentsMarketList.innerHTML = market.map(discoverAgentCard).join("");
+    els.agentsNativeList.innerHTML = filteredNative.length
+      ? filteredNative.map(discoverAgentCard).join("")
+      : `<div class="discover-empty-state">No native agents match this filter yet.</div>`;
+    els.agentsMarketList.innerHTML = filteredMarket.length
+      ? filteredMarket.map(discoverAgentCard).join("")
+      : `<div class="discover-empty-state">No marketplace agents match this filter yet.</div>`;
+    if (els.agentsSearchInput) {
+      els.agentsSearchInput.oninput = () => {
+        state.discoveryQuery = els.agentsSearchInput.value || "";
+        syncExecutiveRouteState();
+        renderAgentsDiscovery(run, citations, challenged);
+      };
+    }
+    els.agentsFilterRow?.querySelectorAll("[data-agent-filter]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.discoveryFilter = button.getAttribute("data-agent-filter") || "all";
+        syncExecutiveRouteState();
+        renderAgentsDiscovery(run, citations, challenged);
+      });
+    });
     els.agentsRunningList.querySelectorAll("[data-agent-toggle]").forEach((button) => {
       button.addEventListener("click", () => {
         const key = button.getAttribute("data-agent-toggle") || "reviewer_gate_relay";
