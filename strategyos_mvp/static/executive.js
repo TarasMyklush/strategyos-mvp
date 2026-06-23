@@ -1,128 +1,297 @@
-(function(){"use strict";
-const $=function(t){return document.getElementById(t);};
-const H=function(t){return document.getElementById(t);};
-var _tokenKey="strategyos.ui.token";
-var bootstrapScript=$("strategyos-executive-bootstrap");
-var bootstrap=bootstrapScript?JSON.parse(bootstrapScript.textContent):{};
-if(bootstrap.environment){}if(bootstrap.api_auth_enabled){}
-function viewStateRoute(path){return path;}
-function requestJson(path){return fetch(path).then(function(r){return r.json();});}
-requestJson(viewStateRoute("/public/runs/latest"));
-var _headers={'Authorization':''};
+(function () {
+  "use strict";
 
-function humanizeToken(token){
-  if(!token)return"--";const s=String(token);
-  const m={published:"Published",draft:"Draft",pending:"Pending",approved:"Approved",
-    rejected:"Rejected",blocked:"Blocked",needs_closure:"Needs closure",
-    needs_reviewer_closure:"Needs closure",active:"Active",waiting:"Waiting",
-    running:"Running",completed:"Completed",closed:"Closed",pre:"Pre-board",
-    live:"Live",open:"Open",frozen:"Frozen",gated:"Gated",ready:"Ready",
-    clear:"Clear",protected:"Protected",governed:"Governed",
-    identity_provider:"IdP",langgraph:"LangGraph",hetzner_qa:"Hetzner QA",
-    strategyos_live:"StrategyOS Live","strategyos-live":"StrategyOS Live",
-    finance_diagnostics:"Finance diagnostics","finance-diagnostics":"Finance diagnostics",
-    release_readiness:"Release readiness","release-readiness":"Release readiness",
-    evidence_governance:"Evidence governance","evidence-governance":"Evidence governance",
-    runtime_governance:"Runtime governance","runtime-governance":"Runtime governance"};
-  if(m[s])return m[s];
-  return s.replace(/_/g," ").replace(/-/g," ").split(" ").map(function(w){return w.charAt(0).toUpperCase()+w.slice(1);}).join(" ");
-}
-function formatCount(v){const n=Number(v);return Number.isFinite(n)?n:0;}
-function escapeHtml(v){return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
-function viewStateRoute(path){return path;}
+  const $ = function (id) { return document.getElementById(id); };
+  const _tokenKey = "strategyos.ui.token";
+  const bootstrapScript = $("strategyos-executive-bootstrap");
+  const bootstrap = bootstrapScript ? JSON.parse(bootstrapScript.textContent) : {};
+  if (bootstrap.environment) {}
+  if (bootstrap.api_auth_enabled) {}
 
-var state={latestPacket:null,session:null,personas:[],activePersona:"ceo",activeDriver:null,boardState:"closed",token:null};
+  function viewStateRoute(path) { return path; }
+  function requestJson(path) { return fetch(path).then(function (r) { return r.json(); }); }
+  requestJson(viewStateRoute("/public/runs/latest"));
 
-async function refresh(){
-  try{
-    var h={};if(state.token)h.Authorization="Bearer "+state.token;
-    var[packet,session]=await Promise.all([
-      fetch("/public/runs/latest").then(function(r){return r.ok?r.json():null;}),
-      fetch("/ui/session").then(function(r){return r.ok?r.json():null;})
-    ]);
-    state.latestPacket=packet;
-    state.session=session;
-    state.personas=(packet&&packet.executive_modes&&packet.executive_modes.personas)||[];
-    state.activePersona=(packet&&packet.executive_modes&&packet.executive_modes.active_persona_id)||"ceo";
-    var driverFocus=packet&&packet.executive_modes&&packet.executive_modes.driver_focus;
-    state.activeDriver=driverFocus?driverFocus.find(function(d){return d.active;}):null;
-    state.boardState=(packet&&packet.board_portal&&packet.board_portal.state)||"closed";
-    state.token=session&&session.token||state.token;
-    renderTopbar();renderHero();renderDriverGrid();renderDrill();renderLower();
-  }catch(e){console.warn("refresh failed",e);}
-}
+  const state = {
+    latestPacket: null,
+    session: null,
+    personas: [],
+    activePersona: "ceo",
+    activeDriver: null,
+    token: null,
+  };
 
-function renderTopbar(){
-  var s=state.session||{};
-  var org=$("tb-org-name");if(org)org.textContent=((s.tenant_context&&s.tenant_context.tenant_name)||"StrategyOS Live");
-  var pList=$("pm-list");if(!pList)return;
-  pList.innerHTML="";
-  (state.personas||[]).forEach(function(p){
-    var active=p.persona_id===state.activePersona;
-    var div=document.createElement("button");
-    div.className="pm-item"+(active?" is-active":"");
-    div.innerHTML='<span class="pm-item-role">'+escapeHtml(p.label)+'</span><span class="pm-item-tag">'+escapeHtml(p.persona_id)+'</span>';
-    div.onclick=function(){state.activePersona=p.persona_id;refresh();pList.hidden=true;};
-    pList.appendChild(div);
-  });
-  var label=$("persona-label");var activeP=state.personas.find(function(p){return p.persona_id===state.activePersona;});
-  if(label&&activeP)label.textContent=activeP.label;
-  var btn=$("persona-btn");if(btn)btn.onclick=function(){var l=$("pm-list");if(l)l.hidden=!l.hidden;};
-}
+  let personaOutsideListenerBound = false;
 
-function renderExecutiveHero(run,citations,challenged){renderHero();}
-function renderDriverDrillFidelity(selected,run,citations,challenged){renderDrill();}
-function renderLowerRailFidelity(run,citations,challenged){renderLower();}
-function renderBoardPortal(run,citations,challenged){}
-function renderAgentsDiscovery(run,citations,challenged){}
-
-function renderHero(){
-  var p=state.latestPacket;if(!p)return;
-  var diag=(p.executive_diagnostics||{}).hero||{};
-  var score=diag.score||92;
-  $("hero-eyebrow").textContent=(diag.persona_label||"Group CEO")+" diagnostics";
-  $("hero-head").textContent=diag.label||diag.status||"Plan health";
-  $("hero-body").textContent=diag.summary||(p.plan_health&&p.plan_health.summary)||"Loading…";
-  $("hero-score").textContent=score;$("hero-cap").textContent=diag.status||"needs closure";
-  var arc=$("hero-arc");if(arc){var circ=2*Math.PI*44;var dash=circ*(score/100);arc.setAttribute("stroke-dasharray",dash+" "+(circ-dash));}
-}
-
-function renderDriverGrid(){
-  var grid=$("driver-row");if(!grid)return;
-  var drives=(state.latestPacket&&state.latestPacket.executive_modes&&state.latestPacket.executive_modes.driver_focus)||[];
-  grid.innerHTML="";
-  drives.slice(0,4).forEach(function(d){
-    var tile=document.createElement("div");
-    tile.className="driver-tile"+(d.active?" is-selected":"");
-    tile.innerHTML='<span class="driver-ofplan">'+escapeHtml(d.label)+'</span><span class="driver-pct tone-up">'+escapeHtml(d.metric||"--")+'</span><div class="driver-name">'+escapeHtml(d.status||"--")+'</div><div class="driver-foot">'+escapeHtml(d.detail||"")+'</div>';
-    tile.onclick=function(){state.activeDriver=d;renderDrill();};
-    grid.appendChild(tile);
-  });
-}
-
-function renderDrill(){
-  var sec=$("drill");if(!sec)return;
-  var d=state.activeDriver||((state.latestPacket&&state.latestPacket.executive_modes&&state.latestPacket.executive_modes.driver_focus||[]).find(function(x){return x.active;}));
-  if(!d){sec.hidden=true;return;}sec.hidden=false;
-  $("drill-name").textContent=d.label||"";$("drill-metric").textContent=d.metric||"";
-  $("drill-foot").textContent=d.detail||"";
-  $("drill-story").textContent=d.status==="published"?"Board packet published with "+formatCount((state.latestPacket&&state.latestPacket.publication&&state.latestPacket.publication.report_count)||0)+" surfaced report artifacts.":d.status==="needs_closure"?"Evidence closure keeps the room bounded to what the packet can support.":d.detail||d.status||"";
-  var chips=$("drill-chips");if(chips){var pub=state.latestPacket&&state.latestPacket.publication||{};var board=pub.board_pack||{};chips.innerHTML='<span class="chips-label">Now:</span><span class="chip">'+escapeHtml(humanizeToken(board.status||pub.status||"pending"))+'</span><span class="chip">'+escapeHtml(humanizeToken(state.boardState))+'</span><span class="chip">'+formatCount(pub.report_count||0)+' reports</span>';}
-  var route=$("drill-route-btn");if(route&&d.route)route.onclick=function(){window.location.href=d.route;};
-}
-
-function renderLower(){
-  var p=state.latestPacket;if(!p)return;
-  var devs=(p.lower_rail||{}).developments||(p.drilldown||{}).lower_rail||{developments:[]};
-  var list=$("feed-list");if(list){list.innerHTML="";
-    (devs.developments||[]).forEach(function(d,i){var kind=d.title&&d.title.toLowerCase().indexOf("risk")>=0?"watch":"win";
-      list.innerHTML+='<div class="feed-row"><div class="feed-main"><span class="dev-kind '+kind+'">'+(kind==="watch"?"Watch":"Win")+'</span><span class="feed-title">'+escapeHtml(d.title||d.label||("Item "+(i+1)))+'</span><span class="feed-meta">'+(d.chips||[]).map(escapeHtml).join(" · ")+'</span><span class="tag">'+escapeHtml(d.detail||"")+'</span></div></div>';});
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
-  var week=(p.lower_rail||{}).week_ahead||(p.drilldown||{}).lower_rail||{week_ahead:[]};
-  var wlist=$("week-rail");if(wlist){wlist.innerHTML="";
-    (week.week_ahead||[]).forEach(function(e,i){wlist.innerHTML+='<div class="event-chip"><span class="event-day">'+(e.label||("Day "+(i+1)))+'</span><span>'+escapeHtml(e.detail||"")+'</span><span class="tag">'+escapeHtml(e.label||"TBD")+'</span></div>';});
-  }
-}
 
-refresh();setInterval(refresh,60000);
+  function humanizeToken(token) {
+    if (!token) return "—";
+    return String(token)
+      .replace(/_/g, " ")
+      .replace(/-/g, " ")
+      .split(" ")
+      .filter(Boolean)
+      .map(function (part) { return part.charAt(0).toUpperCase() + part.slice(1); })
+      .join(" ");
+  }
+
+  function firstDefined() {
+    for (let i = 0; i < arguments.length; i += 1) {
+      if (arguments[i] !== undefined && arguments[i] !== null && arguments[i] !== "") {
+        return arguments[i];
+      }
+    }
+    return "";
+  }
+
+  function safeArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function getActiveDriver() {
+    if (state.activeDriver) return state.activeDriver;
+    const drivers = getVisibleDrivers();
+    return drivers.find(function (item) { return item.active; }) || drivers[0] || null;
+  }
+
+  function getVisibleDrivers() {
+    const drivers = safeArray(state.latestPacket && state.latestPacket.executive_modes && state.latestPacket.executive_modes.driver_focus);
+    const filtered = drivers.filter(function (item) {
+      const personaIds = safeArray(item.persona_ids);
+      return !personaIds.length || personaIds.indexOf(state.activePersona) >= 0;
+    });
+    return (filtered.length ? filtered : drivers).slice(0, 4);
+  }
+
+  function buildMetrics(packet, driver) {
+    const planHealth = packet && packet.plan_health ? packet.plan_health : {};
+    const publication = packet && packet.publication ? packet.publication : {};
+    const boardPack = publication.board_pack || {};
+    const lowerRail = packet && packet.drilldown && packet.drilldown.lower_rail ? packet.drilldown.lower_rail : {};
+    const owedUpward = lowerRail.owed_upward || {};
+
+    return [
+      {
+        label: "Plan posture",
+        value: firstDefined(planHealth.label, "Awaiting governed run"),
+        detail: firstDefined(planHealth.summary, "No current plan posture summary."),
+      },
+      {
+        label: "Governance",
+        value: humanizeToken(firstDefined(planHealth.governance_status, publication.approval_status, "pending")),
+        detail: firstDefined(planHealth.boundary, "Governed executive view only."),
+      },
+      {
+        label: "Board artifacts",
+        value: String(Number(firstDefined(publication.report_count, 0))) + " surfaced",
+        detail: firstDefined(boardPack.status ? "Board pack is " + humanizeToken(boardPack.status).toLowerCase() + "." : "Board pack status is waiting."),
+      },
+      {
+        label: "Next action",
+        value: humanizeToken(firstDefined(planHealth.next_action, publication.approval && publication.approval.next_action, driver && driver.status, "review")),
+        detail: owedUpward.challenge_count ? String(owedUpward.challenge_count) + " challenged item(s) still shape the room." : "No challenged items are currently holding the room open.",
+      },
+    ];
+  }
+
+  function renderTopbar() {
+    const session = state.session || {};
+    const org = $("brand-org");
+    if (org) {
+      org.textContent = firstDefined(session.tenant_context && session.tenant_context.tenant_name, bootstrap.product_name, "StrategyOS Live");
+    }
+
+    const activePersona = safeArray(state.personas).find(function (persona) {
+      return persona.persona_id === state.activePersona;
+    });
+    const personaLabel = $("persona-label");
+    if (personaLabel) {
+      personaLabel.textContent = firstDefined(activePersona && activePersona.label, "Group CEO");
+    }
+
+    const badge = $("state-badge");
+    const packet = state.latestPacket || {};
+    if (badge) {
+      badge.textContent = firstDefined(packet.plan_health && packet.plan_health.badge, "Governed executive view");
+    }
+
+    const list = $("pm-list");
+    const btn = $("persona-btn");
+    if (!list || !btn) return;
+
+    list.innerHTML = "";
+    safeArray(state.personas).forEach(function (persona) {
+      const item = document.createElement("button");
+      const isActive = persona.persona_id === state.activePersona;
+      item.type = "button";
+      item.className = "persona-item" + (isActive ? " is-active" : "");
+      item.setAttribute("role", "menuitem");
+      item.innerHTML = "<span>" + escapeHtml(firstDefined(persona.label, persona.persona_id, "Persona")) + "</span><span class=\"persona-item__tag\">" + escapeHtml(persona.persona_id || "") + "</span>";
+      item.onclick = function () {
+        state.activePersona = persona.persona_id;
+        state.activeDriver = null;
+        renderTopbar();
+        renderHero();
+        renderDriverGrid();
+        renderMetrics();
+        renderSummary();
+        list.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+      };
+      list.appendChild(item);
+    });
+
+    btn.onclick = function () {
+      const expanded = btn.getAttribute("aria-expanded") === "true";
+      list.hidden = expanded;
+      btn.setAttribute("aria-expanded", expanded ? "false" : "true");
+    };
+
+    if (!personaOutsideListenerBound) {
+      document.addEventListener("click", function (event) {
+        const menu = $("persona-menu");
+        const panel = $("pm-list");
+        const trigger = $("persona-btn");
+        if (menu && panel && trigger && !panel.hidden && !event.target.closest("#persona-menu")) {
+          panel.hidden = true;
+          trigger.setAttribute("aria-expanded", "false");
+        }
+      });
+      personaOutsideListenerBound = true;
+    }
+  }
+
+  function renderHero() {
+    const packet = state.latestPacket || {};
+    const hero = packet.executive_diagnostics && packet.executive_diagnostics.hero ? packet.executive_diagnostics.hero : {};
+    const score = Number(firstDefined(hero.score, 0));
+    const clampedScore = Math.max(0, Math.min(100, score));
+    const circumference = 2 * Math.PI * 48;
+    const dash = circumference * (clampedScore / 100);
+
+    const activePersona = safeArray(state.personas).find(function (persona) { return persona.persona_id === state.activePersona; }) || {};
+    $("hero-eyebrow").textContent = firstDefined(activePersona.label, hero.persona_label, "Group CEO") + " diagnostics";
+    $("hero-head").textContent = firstDefined(hero.label, packet.plan_health && packet.plan_health.label, "Plan health overview");
+    $("hero-body").textContent = firstDefined(hero.body, hero.summary, packet.plan_health && packet.plan_health.summary, "No governed executive narrative is available yet.");
+    $("hero-score").textContent = score || 0;
+    $("hero-cap").textContent = firstDefined(hero.score_note, packet.plan_health && packet.plan_health.badge, "plan health");
+
+    const arc = $("hero-arc");
+    if (arc) {
+      arc.setAttribute("stroke-dasharray", dash + " " + (circumference - dash));
+    }
+  }
+
+  function renderDriverGrid() {
+    const grid = $("driver-row");
+    if (!grid) return;
+
+    const drivers = getVisibleDrivers();
+    const activeDriver = getActiveDriver();
+    grid.innerHTML = "";
+
+    drivers.forEach(function (driver) {
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "driver-tile" + (activeDriver && activeDriver.driver_key === driver.driver_key ? " is-selected" : "");
+      tile.innerHTML = [
+        '<span class="driver-overline">' + escapeHtml(firstDefined(driver.status, "status")) + '</span>',
+        '<span class="driver-metric">' + escapeHtml(firstDefined(driver.metric, "—")) + '</span>',
+        '<strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong>',
+        '<p class="driver-detail">' + escapeHtml(firstDefined(driver.detail, "")) + '</p>'
+      ].join("");
+      tile.onclick = function () {
+        state.activeDriver = driver;
+        renderDriverGrid();
+        renderMetrics();
+        renderSummary();
+      };
+      grid.appendChild(tile);
+    });
+  }
+
+  function renderMetrics() {
+    const grid = $("metrics-grid");
+    if (!grid) return;
+    const metrics = buildMetrics(state.latestPacket || {}, getActiveDriver());
+    grid.innerHTML = "";
+
+    metrics.forEach(function (metric) {
+      const card = document.createElement("article");
+      card.className = "metric-card";
+      card.innerHTML = [
+        '<span class="metric-label">' + escapeHtml(metric.label) + '</span>',
+        '<strong class="metric-value">' + escapeHtml(metric.value) + '</strong>',
+        '<p class="metric-detail">' + escapeHtml(metric.detail) + '</p>'
+      ].join("");
+      grid.appendChild(card);
+    });
+  }
+
+  function renderSummary() {
+    const packet = state.latestPacket || {};
+    const planHealth = packet.plan_health || {};
+    const hero = packet.executive_diagnostics && packet.executive_diagnostics.hero ? packet.executive_diagnostics.hero : {};
+    const driver = getActiveDriver() || {};
+    const link = $("summary-link");
+
+    $("summary-kicker").textContent = firstDefined(driver.label, "Current readout");
+    $("summary-title").textContent = firstDefined(hero.label, planHealth.label, driver.label, "Executive signal");
+    $("summary-body").textContent = firstDefined(driver.detail, hero.body, hero.summary, planHealth.summary, "Awaiting executive summary.");
+    $("summary-note").textContent = firstDefined(planHealth.boundary, hero.quote, "");
+
+    if (link) {
+      link.href = firstDefined(driver.route, packet.publication && packet.publication.preview_route, "/executive");
+    }
+  }
+
+  async function refresh() {
+    try {
+      const response = await Promise.all([
+        fetch("/public/runs/latest").then(function (r) { return r.ok ? r.json() : null; }),
+        fetch("/ui/session").then(function (r) { return r.ok ? r.json() : null; })
+      ]);
+
+      const packet = response[0] || {};
+      const session = response[1] || {};
+      const personas = safeArray(packet.executive_modes && packet.executive_modes.personas);
+
+      state.latestPacket = packet;
+      state.session = session;
+      state.personas = personas;
+      state.activePersona = personas.some(function (persona) {
+        return persona.persona_id === state.activePersona;
+      })
+        ? state.activePersona
+        : firstDefined(packet.executive_modes && packet.executive_modes.active_persona_id, state.activePersona, "ceo");
+      state.token = firstDefined(session.token, state.token, localStorage.getItem(_tokenKey));
+
+      if (!state.activeDriver) {
+        state.activeDriver = safeArray(packet.executive_modes && packet.executive_modes.driver_focus).find(function (item) { return item.active; }) || null;
+      } else {
+        const freshDriver = safeArray(packet.executive_modes && packet.executive_modes.driver_focus).find(function (item) {
+          return item.driver_key === state.activeDriver.driver_key;
+        });
+        state.activeDriver = freshDriver || state.activeDriver;
+      }
+
+      renderTopbar();
+      renderHero();
+      renderDriverGrid();
+      renderMetrics();
+      renderSummary();
+    } catch (error) {
+      console.warn("executive refresh failed", error);
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 60000);
 })();

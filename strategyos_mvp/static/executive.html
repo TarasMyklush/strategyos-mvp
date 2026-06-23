@@ -1,89 +1,85 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light" data-accent="navy" data-density="comfortable">
+<html lang="en" data-theme="light" data-accent="navy" data-serif="on">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>StrategyOS.live Executive Cockpit</title>
-<link rel="stylesheet" href="/static/executive.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StrategyOS — Group CEO Diagnostics</title>
+  <link rel="stylesheet" href="/static/executive.css" />
 </head>
 <body>
-
-<header class="topbar" id="topbar">
-  <div class="tb-left">
-    <div class="brand">
-      <div class="brand-mark"></div>
-      <div class="brand-lockup">
-        <span class="brand-name">StrategyOS</span>
-        <span class="brand-org" id="brand-org">Mizan Group</span>
+  <header class="topbar" id="topbar">
+    <div class="topbar__brand">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <div class="brand-name">StrategyOS</div>
+          <div class="brand-subtitle" id="brand-org">Mizan Group</div>
+        </div>
       </div>
     </div>
-    <div class="tb-div"></div>
-    <div class="tb-org" id="tb-org">
-      <div class="tb-org-name" id="tb-org-name">StrategyOS Live</div>
-    </div>
-  </div>
-  <div class="tb-right">
-    <div class="badge-sov" id="sov-badge"><span class="sov-dot"></span> System of Intent</div>
-    <div class="persona-menu" id="persona-menu">
-      <button class="persona-btn" id="persona-btn">
-        <span class="persona-btn-eyebrow">Viewing as</span>
-        <span class="persona-btn-role" id="persona-label">Group CEO</span>
-        <span class="persona-caret">▾</span>
-      </button>
-      <div class="pm-list" id="pm-list" hidden></div>
-    </div>
-  </div>
-</header>
 
-<main class="sheet" id="sheet">
-  <section class="banner tone-up" id="hero">
-    <div class="banner-copy">
-      <div class="banner-eyebrow" id="hero-eyebrow">Group CEO diagnostics</div>
-      <h1 class="banner-head" id="hero-head">Plan health needs reviewer closure</h1>
-      <p class="banner-body" id="hero-body">Loading executive diagnostics from the latest governed run…</p>
-    </div>
-    <div class="ring" id="hero-ring">
-      <svg width="100" height="100" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r="44" fill="none" stroke="var(--ring-track)" stroke-width="7" />
-        <circle cx="50" cy="50" r="44" fill="none" stroke="var(--accent)" stroke-width="7"
-          stroke-linecap="round" class="ring-arc" id="hero-arc" />
-      </svg>
-      <div class="ring-label">
-        <span class="ph-score" id="hero-score">--</span>
-        <span class="ph-cap" id="hero-cap">loading</span>
+    <div class="topbar__meta">
+      <span class="topbar__badge" id="state-badge">Governed executive view</span>
+      <div class="persona-menu" id="persona-menu">
+        <button class="persona-btn" id="persona-btn" type="button" aria-haspopup="menu" aria-expanded="false">
+          <span class="persona-btn__label">Viewing as</span>
+          <span class="persona-btn__value" id="persona-label">Group CEO</span>
+        </button>
+        <div class="persona-list" id="pm-list" role="menu" hidden></div>
       </div>
     </div>
-  </section>
+  </header>
 
-  <section class="driver-row" id="driver-row"></section>
-
-  <section class="drill" id="drill" hidden>
-    <div class="drill-head">
-      <div class="drill-title">
-        <span class="drill-name" id="drill-name"></span>
-        <span class="drill-pct" id="drill-metric"></span>
+  <main class="page" id="sheet">
+    <section class="hero card" id="hero" aria-labelledby="hero-head">
+      <div class="hero-copy">
+        <p class="eyebrow" id="hero-eyebrow">Group CEO diagnostics</p>
+        <h1 class="hero-title" id="hero-head">Plan health overview</h1>
+        <p class="hero-body" id="hero-body">Loading executive diagnostics from the latest governed run…</p>
       </div>
-      <button class="link-btn" id="drill-route-btn">→ evidence</button>
-    </div>
-    <p class="drill-foot" id="drill-foot"></p>
-    <p class="drill-story" id="drill-story"></p>
-    <div class="chips" id="drill-chips"></div>
-  </section>
 
-  <section class="lower" id="lower">
-    <div class="lower-main">
-      <div class="section-head"><h2 class="section-title">Developments</h2></div>
-      <div class="feed-list" id="feed-list"></div>
-    </div>
-    <div class="lower-rail">
-      <div class="section-head"><h2 class="section-title">Week ahead</h2></div>
-      <div class="week-rail" id="week-rail"></div>
-    </div>
-  </section>
-</main>
+      <div class="hero-score" aria-label="Plan health score">
+        <svg class="score-ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle cx="60" cy="60" r="48" class="score-ring__track"></circle>
+          <circle cx="60" cy="60" r="48" class="score-ring__value" id="hero-arc"></circle>
+        </svg>
+        <div class="hero-score__label">
+          <span class="hero-score__value" id="hero-score">--</span>
+          <span class="hero-score__caption" id="hero-cap">loading</span>
+        </div>
+      </div>
+    </section>
 
-<script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
-<script>window.MIZAN=window.MIZAN||{};window.MIZAN_X=window.MIZAN_X||{threads:{},assistants:{}};</script>
-<script src="/static/executive.js"></script>
+    <section class="section" aria-labelledby="driver-heading">
+      <div class="section-head">
+        <h2 class="section-title" id="driver-heading">Driver index</h2>
+      </div>
+      <div class="driver-grid" id="driver-row"></div>
+    </section>
+
+    <section class="section" aria-labelledby="metrics-heading">
+      <div class="section-head">
+        <h2 class="section-title" id="metrics-heading">Key metrics</h2>
+      </div>
+      <div class="metrics-grid" id="metrics-grid"></div>
+    </section>
+
+    <section class="section" aria-labelledby="summary-heading">
+      <div class="section-head">
+        <h2 class="section-title" id="summary-heading">Summary</h2>
+      </div>
+      <article class="summary card" id="summary-card">
+        <p class="summary-kicker" id="summary-kicker">Current readout</p>
+        <h3 class="summary-title" id="summary-title">Executive signal</h3>
+        <p class="summary-body" id="summary-body">Loading summary…</p>
+        <p class="summary-note" id="summary-note"></p>
+        <a class="summary-link" id="summary-link" href="/executive">Open governed view</a>
+      </article>
+    </section>
+  </main>
+
+  <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
+  <script>window.MIZAN=window.MIZAN||{};window.MIZAN_X=window.MIZAN_X||{threads:{},assistants:{}};</script>
+  <script src="/static/executive.js"></script>
 </body>
 </html>

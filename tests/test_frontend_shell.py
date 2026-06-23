@@ -62,11 +62,11 @@ def _static_executive_js() -> str:
     return response.text
 
 
-def test_homepage_renders_executive_recovery_control_room():
+def test_homepage_renders_minimal_executive_diagnostics_surface():
     html = _homepage_response()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS.live Executive Cockpit" in html
+    assert "StrategyOS — Group CEO Diagnostics" in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -79,24 +79,24 @@ def test_homepage_renders_executive_recovery_control_room():
     assert 'class="brand-mark"' in html
     # Persona switcher
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
-    # System of Intent badge
-    assert "System of Intent" in html
+    # Minimal top bar
+    assert "Governed executive view" in html
     # Hero banner
-    assert 'id="hero"' in html or 'class="banner"' in html
-    assert 'id="hero-head"' in html or 'class="banner-head"' in html
-    assert 'id="hero-body"' in html or 'class="banner-body"' in html
-    assert 'id="hero-score"' in html or 'class="ph-score"' in html
+    assert 'id="hero"' in html or 'class="hero"' in html
+    assert 'id="hero-head"' in html or 'class="hero-title"' in html
+    assert 'id="hero-body"' in html or 'class="hero-body"' in html
+    assert 'id="hero-score"' in html or 'class="hero-score__value"' in html
     # Driver grid
-    assert 'id="driver-row"' in html or 'class="driver-row"' in html
-    # Drill section
-    assert 'id="drill"' in html or 'class="drill"' in html
-    # Lower section
-    assert 'id="lower"' in html or 'class="lower"' in html
-    assert 'id="feed-list"' in html or 'class="feed-list"' in html
-    assert 'id="week-rail"' in html or 'class="week-rail"' in html
+    assert 'id="driver-row"' in html or 'class="driver-grid"' in html
+    # Key metrics and summary only
+    assert 'id="metrics-grid"' in html or 'class="metrics-grid"' in html
+    assert 'id="summary-card"' in html or 'class="summary"' in html
+    assert 'id="feed-list"' not in html
+    assert 'id="week-rail"' not in html
+    assert 'id="drill"' not in html
 
 
-def test_executive_cockpit_renders_live_command_shell():
+def test_executive_route_renders_minimal_live_diagnostics_shell():
     client = TestClient(api_module.app)
     response = client.get("/executive")
     assert response.status_code == 200
@@ -104,7 +104,7 @@ def test_executive_cockpit_renders_live_command_shell():
     js = _static_executive_js()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS.live Executive Cockpit" in html
+    assert "StrategyOS — Group CEO Diagnostics" in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -112,15 +112,16 @@ def test_executive_cockpit_renders_live_command_shell():
     # Design-faithful UI elements
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
-    assert "System of Intent" in html
-    assert 'id="hero"' in html or 'class="banner"' in html
-    assert 'id="hero-score"' in html or 'class="ph-score"' in html
-    assert 'id="hero-head"' in html or 'class="banner-head"' in html
-    assert 'id="driver-row"' in html or 'class="driver-row"' in html
-    assert 'id="drill"' in html or 'class="drill"' in html
-    assert 'id="lower"' in html or 'class="lower"' in html
-    assert 'id="feed-list"' in html or 'class="feed-list"' in html
-    assert 'id="week-rail"' in html or 'class="week-rail"' in html
+    assert "Governed executive view" in html
+    assert 'id="hero"' in html or 'class="hero"' in html
+    assert 'id="hero-score"' in html or 'class="hero-score__value"' in html
+    assert 'id="hero-head"' in html or 'class="hero-title"' in html
+    assert 'id="driver-row"' in html or 'class="driver-grid"' in html
+    assert 'id="metrics-grid"' in html or 'class="metrics-grid"' in html
+    assert 'id="summary-card"' in html or 'class="summary"' in html
+    assert 'id="feed-list"' not in html
+    assert 'id="week-rail"' not in html
+    assert 'id="drill"' not in html
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
     assert "strategyos.ui.token" in js
     assert '<script id="strategyos-bootstrap"' not in html
@@ -134,8 +135,8 @@ def test_app_entry_routes_render_executive_shell():
 
     assert app_response.status_code == 200
     assert alias_response.status_code == 200
-    assert "StrategyOS.live Executive Cockpit" in app_response.text
-    assert "StrategyOS.live Executive Cockpit" in alias_response.text
+    assert "StrategyOS — Group CEO Diagnostics" in app_response.text
+    assert "StrategyOS — Group CEO Diagnostics" in alias_response.text
     assert '<script id="strategyos-executive-bootstrap"' in app_response.text
     assert '<script id="strategyos-executive-bootstrap"' in alias_response.text
     assert '<script id="strategyos-bootstrap"' not in app_response.text
@@ -148,17 +149,18 @@ def test_app_entry_uses_design_faithful_executive_surface():
     html = _app_entry_response()
     js = _static_executive_js()
 
-    assert "StrategyOS.live Executive Cockpit" in html
+    assert "StrategyOS — Group CEO Diagnostics" in html
     assert "StrategyOS" in html
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
-    assert "System of Intent" in html
-    assert 'id="hero"' in html or 'class="banner"' in html
-    assert 'id="driver-row"' in html or 'class="driver-row"' in html
-    assert 'id="drill"' in html or 'class="drill"' in html
-    assert 'id="lower"' in html or 'class="lower"' in html
-    assert 'id="feed-list"' in html or 'class="feed-list"' in html
-    assert 'id="week-rail"' in html or 'class="week-rail"' in html
+    assert "Governed executive view" in html
+    assert 'id="hero"' in html or 'class="hero"' in html
+    assert 'id="driver-row"' in html or 'class="driver-grid"' in html
+    assert 'id="metrics-grid"' in html or 'class="metrics-grid"' in html
+    assert 'id="summary-card"' in html or 'class="summary"' in html
+    assert 'id="feed-list"' not in html
+    assert 'id="week-rail"' not in html
+    assert 'id="drill"' not in html
     assert "StrategyOS.live Governed Diagnostics Workspace" not in html
     assert 'strategyos.ui.token' in js
     assert 'requestJson(viewStateRoute("/public/runs/latest"))' in js
@@ -190,7 +192,7 @@ def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
         assert tenant_admin.status_code == 307
         assert tenant_admin.headers["location"] == "/app?lane=system"
         assert executive.status_code == 200
-        assert "StrategyOS.live Executive Cockpit" in executive.text
+        assert "StrategyOS — Group CEO Diagnostics" in executive.text
     finally:
         _restore_env(original)
 
