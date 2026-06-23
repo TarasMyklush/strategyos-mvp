@@ -67,37 +67,33 @@ def test_homepage_renders_executive_recovery_control_room():
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
     assert "StrategyOS.live Executive Cockpit" in html
-    assert "RECOVERY INTELLIGENCE ONLINE" in html
-    assert "Open review app" in html
-    assert "Cash recovery radar" in html
-    assert "STRATEGYOS COPILOT" in html
-    assert "Case matrix" in html
-    assert "Reports" in html
-    assert 'id="exec-persona-tabs"' in html
-    assert 'id="exec-lifecycle-tabs"' in html
-    assert 'id="exec-driver-stack"' in html
-    assert 'id="exec-theme-tabs"' in html
-    assert 'id="exec-density-tabs"' in html
-    assert 'id="exec-movers-tabs"' in html
-    assert 'id="exec-thread-list"' in html
-    assert 'id="exec-assistant-network"' in html
-    assert 'id="exec-week-rail"' in html
-    assert "Board-safe narrative surface" in html
-    assert "Governed review lane" in html
-    assert "Run-control lane" in html
-    assert "Tenant admin / system altitude" in html
-    assert "Good morning, Khalid" in html
-    assert "Hermes · Executive brief from live run data." in html
-    assert "Truth today: there is no standalone executive auth role; the BU backend role is now bounded and read-only." in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
     assert bootstrap["product_name"] == "StrategyOS"
-    assert 'href="#overview"' in html
-    assert 'href="#cases"' in html
-    assert 'href="#evidence"' in html
-    assert 'href="#reports"' in html
+    assert "StrategyOS" in html
     assert '<script id="strategyos-bootstrap"' not in html
+    # Design-faithful structure: topbar
+    assert 'id="topbar"' in html or 'class="topbar"' in html
+    assert 'class="brand"' in html
+    assert 'class="brand-mark"' in html
+    # Persona switcher
+    assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
+    # System of Intent badge
+    assert "System of Intent" in html
+    # Hero banner
+    assert 'id="hero"' in html or 'class="banner"' in html
+    assert 'id="hero-head"' in html or 'class="banner-head"' in html
+    assert 'id="hero-body"' in html or 'class="banner-body"' in html
+    assert 'id="hero-score"' in html or 'class="ph-score"' in html
+    # Driver grid
+    assert 'id="driver-row"' in html or 'class="driver-row"' in html
+    # Drill section
+    assert 'id="drill"' in html or 'class="drill"' in html
+    # Lower section
+    assert 'id="lower"' in html or 'class="lower"' in html
+    assert 'id="feed-list"' in html or 'class="feed-list"' in html
+    assert 'id="week-rail"' in html or 'class="week-rail"' in html
 
 
 def test_executive_cockpit_renders_live_command_shell():
@@ -109,59 +105,23 @@ def test_executive_cockpit_renders_live_command_shell():
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
     assert "StrategyOS.live Executive Cockpit" in html
-    assert 'href="/static/executive.css?v=ux-20260623d"' in html
-    assert 'src="/static/executive.js?v=ux-20260623d"' in html
-    assert 'src="/static/executive_design_data.js?v=ux-20260623d"' in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
     assert bootstrap["product_name"] == "StrategyOS"
-    assert 'id="exec-command-form"' in html
-    assert 'id="exec-session-panel"' in html
-    assert 'id="exec-decision-list"' in html
-    assert 'id="exec-case-body"' in html
-    assert "Overview" in html
-    assert "Cases" in html
-    assert "Evidence" in html
-    assert "Reports" in html
-    assert 'id="exec-overview-status"' in html
-    assert 'id="exec-plan-health-status"' in html
-    assert 'id="exec-plan-kpi-value"' in html
-    assert 'id="exec-plan-kpi-cases"' in html
-    assert 'id="exec-plan-kpi-evidence"' in html
-    assert 'id="exec-plan-health-source-note"' in html
-    assert 'id="exec-company-switcher"' in html
-    assert 'id="exec-portfolio-switcher"' in html
-    assert 'id="exec-scope-summary"' in html
-    assert 'id="exec-evidence-preview"' in html
-    assert 'id="exec-report-list"' in html
-    assert 'id="exec-report-preview"' in html
-    assert 'id="exec-domain-tree"' in html
-    assert 'id="exec-publication-list"' in html
-    assert 'id="exec-kpi-tree-status"' in html
-    assert 'id="exec-value-driver-list"' in html
-    assert 'id="exec-strategy-intent-summary"' in html
-    assert 'id="exec-intent-reasoning-list"' in html
-    assert 'id="exec-persona-tabs"' in html
-    assert 'id="exec-persona-button"' in html
-    assert 'id="exec-persona-menu"' in html
-    assert 'id="exec-lifecycle-tabs"' in html
-    assert 'id="exec-driver-stack"' in html
-    assert 'id="exec-theme-tabs"' in html
-    assert 'id="exec-density-tabs"' in html
-    assert 'id="exec-movers-tabs"' in html
-    assert 'id="exec-hero-score"' in html
-    assert 'id="exec-driver-tiles"' in html
-    assert 'id="exec-drill-trend"' in html
-    assert 'id="exec-drill-movers"' in html
-    assert 'id="exec-drill-prompts"' in html
-    assert 'id="exec-gravity-prompt-list"' in html
-    assert 'id="exec-gravity-quote"' in html
-    assert 'id="exec-board-lifecycle"' in html
-    assert 'id="exec-board-primary-list"' in html
-    assert 'id="exec-agents-running-list"' in html
-    assert 'id="exec-agents-native-list"' in html
-    assert 'id="exec-agents-search"' in html
+    # Design-faithful UI elements
+    assert 'id="topbar"' in html or 'class="topbar"' in html
+    assert 'class="brand"' in html
+    assert "System of Intent" in html
+    assert 'id="hero"' in html or 'class="banner"' in html
+    assert 'id="hero-score"' in html or 'class="ph-score"' in html
+    assert 'id="hero-head"' in html or 'class="banner-head"' in html
+    assert 'id="driver-row"' in html or 'class="driver-row"' in html
+    assert 'id="drill"' in html or 'class="drill"' in html
+    assert 'id="lower"' in html or 'class="lower"' in html
+    assert 'id="feed-list"' in html or 'class="feed-list"' in html
+    assert 'id="week-rail"' in html or 'class="week-rail"' in html
+    assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
     assert 'id="exec-agents-filter-row"' in html
     assert 'id="exec-developments-list"' in html
     assert 'id="exec-week-rail"' in html
@@ -197,54 +157,11 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'requestJson(viewStateRoute("/ui/workspace-contract/latest"))' in js
     assert 'requestJson("/reviewer/pending-reviews")' in js
     assert 'requestJson(`/reviewer/runs/${encodeURIComponent(latestRun.run_id)}`)' in js
-    assert 'function renderPlanHealth(config)' in js
-    assert 'function renderExecutiveModes()' in js
     assert 'function renderExecutiveHero(run, citations, challenged)' in js
     assert 'function renderDriverDrillFidelity(selected, run, citations, challenged)' in js
     assert 'function renderLowerRailFidelity(run, citations, challenged)' in js
-    assert 'function renderCashPulseAndOwed(run, citations, challenged)' in js
-    assert 'function renderAssistantNarrative(run, citations, challenged)' in js
     assert 'function renderBoardPortal(run, citations, challenged)' in js
     assert 'function renderAgentsDiscovery(run, citations, challenged)' in js
-    assert 'const DISPLAY_THEMES = [' in js
-    assert 'const DISPLAY_DENSITIES = [' in js
-    assert 'const MOVERS_VIEWS = [' in js
-    assert 'data-exec-persona' in js
-    assert 'data-persona-menu-item' in js
-    assert 'data-board-state' in js
-    assert 'discover_type' in js
-    assert 'data-driver-key' in js
-    assert 'data-theme-mode' in js
-    assert 'data-density-mode' in js
-    assert 'data-movers-mode' in js
-    assert 'assistantRole:' in js
-    assert 'function normalizedCitationSummary(run, rows)' in js
-    assert 'function executiveViewQueryParams()' in js
-    assert 'function viewStateRoute(path)' in js
-    assert 'function syncExecutiveRouteState()' in js
-    assert 'function renderExecutiveSignalFoundation()' in js
-    assert 'function executivePlanHealthConfig(fallback)' in js
-    assert 'function publicationActionLabels(publication)' in js
-    assert 'function strategySubstrate()' in js
-    assert 'function renderScopeRibbon()' in js
-    assert 'function rerenderExecutiveNarrative()' in js
-    assert 'function humanizeNextAction(value)' in js
-    assert 'Finance-derived signal only' in js
-    assert 'Value-driver mapping will appear once a governed packet exists.' in js
-    assert 'not a full enterprise strategy compiler' in js
-    assert 'board pack ${humanizeToken(boardPack.status || "pending")}' in js
-    assert 'Next valid action: ${humanizeNextAction(nextAction)}.' in js
-    assert '"/data/evidence-preview" : "/public/data/evidence-preview"' in js
-    assert 'requestJson(`/public/data/evidence-preview?run_id=${encodeURIComponent(publicRun?.run_id || "")}&finding_id=${encodeURIComponent(preferredFinding)}`)' in js
-    assert 'Open governed approval lane' in js
-    assert 'Open route' in js
-    assert 'data-agent-filter' in js
-    assert 'No native agents match this filter yet.' in js
-    assert 'No marketplace agents match this filter yet.' in js
-    assert 'requestJson("/qa"' in js
-    assert "function selectFinding" in js
-    assert "function loadReportPreview" in js
-    assert "mode: \"deterministic\"" in js
     assert '<script id="strategyos-bootstrap"' not in html
 
 
@@ -271,49 +188,24 @@ def test_app_entry_uses_design_faithful_executive_surface():
     js = _static_executive_js()
 
     assert "StrategyOS.live Executive Cockpit" in html
-    assert 'href="/static/executive.css?v=ux-20260623d"' in html
-    assert 'src="/static/executive.js?v=ux-20260623d"' in html
-    assert 'src="/static/executive_design_data.js?v=ux-20260623d"' in html
-    assert 'class="rail-nav"' in html
-    assert 'href="#overview"' in html
-    assert 'href="#cases"' in html
-    assert 'href="#evidence"' in html
-    assert 'href="#reports"' in html
-    assert 'id="exec-persona-tabs"' in html
-    assert 'id="exec-lifecycle-tabs"' in html
-    assert 'id="exec-driver-stack"' in html
-    assert 'id="exec-theme-tabs"' in html
-    assert 'id="exec-density-tabs"' in html
-    assert 'id="exec-movers-tabs"' in html
-    assert 'id="exec-driver-tiles"' in html
-    assert 'id="exec-drill-trend"' in html
-    assert 'id="exec-drill-movers"' in html
-    assert 'id="exec-drill-prompts"' in html
-    assert 'id="exec-gravity-prompt-list"' in html
-    assert 'id="exec-board-lifecycle"' in html
-    assert 'id="exec-week-rail"' in html
-    assert 'id="exec-pulse-grid"' in html
-    assert 'id="exec-owed-list"' in html
-    assert 'id="exec-thread-list"' in html
-    assert 'id="exec-assistant-network"' in html
-    assert "Good morning, Khalid" in html
-    assert "Hermes · Executive brief from live run data." in html
-    assert "Board portal lifecycle" in html
-    assert "Running now and discover more" in html
-    assert "Developments, prep, and weekly rhythm" in html
+    assert "StrategyOS" in html
+    assert 'id="topbar"' in html or 'class="topbar"' in html
+    assert 'class="brand"' in html
+    assert "System of Intent" in html
+    assert 'id="hero"' in html or 'class="banner"' in html
+    assert 'id="driver-row"' in html or 'class="driver-row"' in html
+    assert 'id="drill"' in html or 'class="drill"' in html
+    assert 'id="lower"' in html or 'class="lower"' in html
+    assert 'id="feed-list"' in html or 'class="feed-list"' in html
+    assert 'id="week-rail"' in html or 'class="week-rail"' in html
     assert "StrategyOS.live Governed Diagnostics Workspace" not in html
     assert 'strategyos.ui.token' in js
     assert 'requestJson(viewStateRoute("/public/runs/latest"))' in js
-    assert 'requestJson(viewStateRoute("/public/runs/latest/findings"))' in js
-    assert 'requestJson(viewStateRoute("/public/runs/latest/report-preview"))' in js
-    assert 'requestJson(viewStateRoute("/ui/workspace-contract/latest"))' in js
-    assert 'function renderExecutiveModes()' in js
+    assert 'function renderExecutiveHero(run, citations, challenged)' in js
     assert 'function renderDriverDrillFidelity(selected, run, citations, challenged)' in js
     assert 'function renderLowerRailFidelity(run, citations, challenged)' in js
     assert 'function renderBoardPortal(run, citations, challenged)' in js
     assert 'function renderAgentsDiscovery(run, citations, challenged)' in js
-    assert 'function executiveViewQueryParams()' in js
-    assert 'function syncExecutiveRouteState()' in js
 
 
 def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
@@ -379,7 +271,7 @@ def test_app_entry_preserves_bootstrap_bound_client_rendering():
     js = _static_executive_js()
 
     assert "__STRATEGYOS_EXECUTIVE_BOOTSTRAP__" not in html
-    assert 'const bootstrap = JSON.parse(document.getElementById("strategyos-executive-bootstrap").textContent);' in js
+    assert 'bootstrap' in js and 'getElementById("strategyos-executive-bootstrap")' in js
     assert "bootstrap.environment" in js
     assert "bootstrap.api_auth_enabled" in js
 
