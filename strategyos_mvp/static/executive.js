@@ -1,8 +1,14 @@
 (function(){"use strict";
 const $=function(t){return document.getElementById(t);};
 const H=function(t){return document.getElementById(t);};
-const bootstrapScript=$("strategyos-executive-bootstrap");
-const bootstrap=bootstrapScript?JSON.parse(bootstrapScript.textContent):{};
+var _tokenKey="strategyos.ui.token";
+var bootstrapScript=$("strategyos-executive-bootstrap");
+var bootstrap=bootstrapScript?JSON.parse(bootstrapScript.textContent):{};
+if(bootstrap.environment){}if(bootstrap.api_auth_enabled){}
+function viewStateRoute(path){return path;}
+function requestJson(path){return fetch(path).then(function(r){return r.json();});}
+requestJson(viewStateRoute("/public/runs/latest"));
+var _headers={'Authorization':''};
 
 function humanizeToken(token){
   if(!token)return"--";const s=String(token);

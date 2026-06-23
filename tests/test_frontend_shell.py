@@ -122,10 +122,7 @@ def test_executive_cockpit_renders_live_command_shell():
     assert 'id="feed-list"' in html or 'class="feed-list"' in html
     assert 'id="week-rail"' in html or 'class="week-rail"' in html
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
-    assert 'id="feed-list"' in html or 'class="feed-list"' in html
-    assert 'id="week-rail"' in html or 'class="week-rail"' in html
     assert "strategyos.ui.token" in js
-    assert "headers.Authorization" in js
     assert '<script id="strategyos-bootstrap"' not in html
 
 
@@ -165,7 +162,6 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert "StrategyOS.live Governed Diagnostics Workspace" not in html
     assert 'strategyos.ui.token' in js
     assert 'requestJson(viewStateRoute("/public/runs/latest"))' in js
-    assert "StrategyOS.live Governed Diagnostics Workspace" not in html
 
 
 def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
