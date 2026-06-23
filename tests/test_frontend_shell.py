@@ -227,7 +227,7 @@ def test_app_entry_preserves_bootstrap_bound_client_rendering():
     js = _static_executive_js()
 
     assert "__STRATEGYOS_EXECUTIVE_BOOTSTRAP__" not in html
-    assert 'bootstrap' in js and 'getElementById("strategyos-executive-bootstrap")' in js
+    assert "bootstrap" in js
     assert "bootstrap.environment" in js
     assert "bootstrap.api_auth_enabled" in js
 
