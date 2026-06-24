@@ -6029,6 +6029,13 @@ def architecture_page() -> HTMLResponse:
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
 
 
+@app.get("/plan", response_class=HTMLResponse)
+def plan_page() -> HTMLResponse:
+    """Serve the Digital Twin execution plan page."""
+    template_path = STATIC_DIR / "plan.html"
+    return HTMLResponse(template_path.read_text(encoding="utf-8"))
+
+
 @app.get("/ui/session")
 def ui_session(
     principal: dict[str, Any] = Depends(authenticate_optional_request),

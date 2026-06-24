@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Execution Plan · StrategyOS → Digital Twin</title>
+<style>
+:root {
+  --bg: #f4f2ed;
+  --surface: #ffffff;
+  --surface-alt: #fbfaf7;
+  --ink: #1d1c19;
+  --accent: #25335c;
+  --accent-2: #8c6a3d;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --serif: Georgia, "Times New Roman", serif;
+  --border: rgba(29, 28, 25, 0.12);
+  --border-strong: rgba(37, 51, 92, 0.22);
+  --muted: rgba(29, 28, 25, 0.68);
+  --soft: rgba(29, 28, 25, 0.44);
+  --accent-soft: rgba(37, 51, 92, 0.08);
+  --ok-soft: rgba(26, 110, 84, 0.08);
+  --warn-soft: rgba(169, 110, 32, 0.11);
+  --danger-soft: rgba(155, 52, 52, 0.09);
+  --shadow: 0 12px 32px rgba(29, 28, 25, 0.06);
+  --shadow-sm: 0 4px 12px rgba(29, 28, 25, 0.05);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --gap: 24px;
+  --navy: #25335c;
+  --gold: #8c6a3d;
+  --green: #1a6e54;
+  --amber: #a96e20;
+  --red: #9b3434;
+  --gray: #9a9a96;
+  --gray-light: rgba(29, 28, 25, 0.06);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.5;
+}
+
+/* ─── Topbar ─── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px clamp(18px, 4vw, 40px);
+  background: rgba(244, 242, 237, 0.94);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.brand-mark {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--surface);
+}
+.brand-name {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar__nav a {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
+}
+.topbar__nav a:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.topbar__nav a.current {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ─── Layout ─── */
+.container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 clamp(18px, 4vw, 40px);
+}
+section { padding: 60px 0; }
+section + section { border-top: 1px solid var(--border); }
+
+/* ─── Typography ─── */
+h1, h2, h3, h4 {
+  font-family: var(--serif);
+  font-weight: 500;
+  line-height: 1.25;
+  margin: 0 0 12px;
+}
+h1 {
+  font-size: clamp(32px, 5vw, 48px);
+  letter-spacing: -0.02em;
+}
+h2 {
+  font-size: clamp(24px, 3.5vw, 34px);
+  color: var(--accent);
+  letter-spacing: -0.01em;
+}
+h3 {
+  font-size: clamp(18px, 2.5vw, 22px);
+  color: var(--accent);
+}
+h4 {
+  font-size: 16px;
+  color: var(--ink);
+}
+p { margin: 0 0 16px; color: var(--muted); }
+p:last-child { margin-bottom: 0; }
+
+.section-eyebrow {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-2);
+  margin-bottom: 8px;
+}
+.section-sub {
+  font-size: 15px;
+  color: var(--muted);
+  max-width: 640px;
+  margin-bottom: 40px;
+}
+
+/* ─── Hero ─── */
+.hero {
+  text-align: center;
+  padding: 80px 0 60px;
+}
+.hero h1 { margin-bottom: 16px; }
+.hero p {
+  font-size: 17px;
+  max-width: 600px;
+  margin: 0 auto 32px;
+}
+.hero__caption {
+  font-size: 13px;
+  color: var(--soft);
+  font-style: italic;
+}
+.hero__badge-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.hero__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+/* ─── Status Note ─── */
+.status-note {
+  background: var(--warn-soft);
+  border: 1px solid rgba(169, 110, 32, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 40px;
+  text-align: center;
+}
+.status-note strong {
+  color: var(--amber);
+}
+
+/* ─── Overall Progress ─── */
+.overall-progress {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 40px;
+}
+.overall-progress__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.overall-progress__title {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--accent);
+  margin: 0;
+}
+.overall-progress__stats {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.overall-progress__stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.overall-progress__bar {
+  height: 8px;
+  background: var(--gray-light);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.overall-progress__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease, background 0.6s ease;
+}
+
+/* ─── Phase Card ─── */
+.phase-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--gap);
+}
+.phase-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.phase-card__badge {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: white;
+}
+.badge-not_started { background: var(--gray); }
+.badge-in_progress { background: var(--amber); }
+.badge-completed { background: var(--green); }
+
+.phase-card__info {
+  flex: 1;
+  min-width: 0;
+}
+.phase-card__info h3 {
+  margin: 0 0 4px;
+}
+.phase-card__subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.phase-card__meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--soft);
+}
+.phase-card__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ─── Phase Progress Bar ─── */
+.phase-progress {
+  margin-bottom: 20px;
+}
+.phase-progress__bar {
+  height: 6px;
+  background: var(--gray-light);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.phase-progress__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease, background 0.6s ease;
+}
+.phase-progress__label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--soft);
+  margin-top: 4px;
+}
+
+/* ─── Story List ─── */
+.story-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.story-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+.story-item:hover {
+  background: var(--surface-alt);
+}
+.story-item__checkbox {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.story-item__checkbox input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-strong);
+  border-radius: 5px;
+  cursor: default;
+  position: relative;
+  transition: background 0.2s, border-color 0.2s;
+}
+.story-item__checkbox input[type="checkbox"]:checked {
+  background: var(--green);
+  border-color: var(--green);
+}
+.story-item__checkbox input[type="checkbox"]:checked::after {
+  content: "\2713";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+}
+.story-item__body { flex: 1; min-width: 0; }
+.story-item__title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+.story-item__desc {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.story-item__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.story-item__file {
+  font-size: 11px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.story-item__status-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.tag-not_started {
+  background: var(--gray-light);
+  color: var(--gray);
+}
+.tag-in_progress {
+  background: var(--warn-soft);
+  color: var(--amber);
+}
+.tag-completed {
+  background: var(--ok-soft);
+  color: var(--green);
+}
+
+/* ─── Footer ─── */
+.footer {
+  text-align: center;
+  padding: 40px 0;
+  font-size: 12px;
+  color: var(--soft);
+}
+.footer a { color: var(--accent); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+
+/* ─── Responsive ─── */
+@media (max-width: 600px) {
+  section { padding: 40px 0; }
+  .card, .phase-card { padding: 20px 16px; }
+  .topbar__nav a { font-size: 12px; padding: 4px 10px; }
+  .hero { padding: 48px 0 36px; }
+  .overall-progress { padding: 20px 16px; }
+  .phase-card__header { flex-direction: column; gap: 12px; }
+}
+
+/* ─── Utility ─── */
+.mb-0 { margin-bottom: 0; }
+.mt-0 { margin-top: 0; }
+.text-center { text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ Topbar ═══════════ -->
+<header class="topbar">
+  <a href="/" class="topbar__brand">
+    <span class="brand-mark"></span>
+    <span class="brand-name">StrategyOS</span>
+  </a>
+  <nav class="topbar__nav">
+    <a href="/architecture">Architecture</a>
+    <a href="/plan" class="current">Plan</a>
+  </nav>
+</header>
+
+<!-- ═══════════ Hero ═══════════ -->
+<section class="hero container">
+  <div class="hero__badge-row">
+    <span class="hero__badge">🏗️ Digital Twin MVP</span>
+    <span class="hero__badge">📋 5 Phases · 28 Stories</span>
+    <span class="hero__badge">⏱ 10–13 Weeks</span>
+  </div>
+  <h1>Execution Plan</h1>
+  <p>A living roadmap from passive platform to autonomous operating system. Each phase builds on the last — status updates as code ships.</p>
+  <div class="hero__caption">strategyos.live/plan · v1.0</div>
+</section>
+
+<!-- ═══════════ Content ═══════════ -->
+<section class="container">
+
+  <div class="status-note">
+    <strong>⏳ Living document.</strong> This plan updates as code is developed. Status reflects current implementation reality — no manual page rebuilds required.
+  </div>
+
+  <!-- overall progress rendered here by JS -->
+  <div id="overall-progress"></div>
+
+  <!-- phases rendered here by JS -->
+  <div id="phase-list"></div>
+
+</section>
+
+<!-- ═══════════ Data ═══════════ -->
+<script src="/static/plan_data.js"></script>
+
+<script>
+(function () {
+  const PLAN = window.STRATEGYOS_PLAN;
+  if (!PLAN) { console.error("STRATEGYOS_PLAN not found"); return; }
+
+  const statusLabels = {
+    not_started: "Not started",
+    in_progress: "In progress",
+    completed: "Completed"
+  };
+
+  function statusColor(status) {
+    if (status === "completed") return "var(--green)";
+    if (status === "in_progress") return "var(--amber)";
+    return "var(--gray)";
+  }
+
+  function statusBg(status) {
+    if (status === "completed") return "var(--ok-soft)";
+    if (status === "in_progress") return "var(--warn-soft)";
+    return "var(--gray-light)";
+  }
+
+  /* ─── Build overall progress ─── */
+  function renderOverallProgress() {
+    var phases = PLAN.phases;
+    var total = phases.length;
+    var completed = phases.filter(function (p) { return p.status === "completed"; }).length;
+    var inProgress = phases.filter(function (p) { return p.status === "in_progress"; }).length;
+    var pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    var el = document.getElementById("overall-progress");
+    el.innerHTML =
+      '<div class="overall-progress">' +
+        '<div class="overall-progress__header">' +
+          '<h2 class="overall-progress__title">Overall Progress</h2>' +
+          '<div class="overall-progress__stats">' +
+            '<span><span style="color:var(--green);font-weight:700;">' + completed + '</span> completed</span>' +
+            '<span><span style="color:var(--amber);font-weight:700;">' + inProgress + '</span> in progress</span>' +
+            '<span><span style="color:var(--gray);font-weight:700;">' + (total - completed - inProgress) + '</span> remaining</span>' +
+            '<span style="font-weight:600;">' + pct + '%</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="overall-progress__bar">' +
+          '<div class="overall-progress__fill" style="width:' + pct + '%;background:' + statusColor(PLAN.overallStatus) + ';"></div>' +
+        '</div>' +
+        '<div style="margin-top:12px;font-size:12px;color:var(--soft);">Last updated: ' + PLAN.updated + '</div>' +
+      '</div>';
+  }
+
+  /* ─── Build phase cards ─── */
+  function renderPhases() {
+    var container = document.getElementById("phase-list");
+    var html = "";
+
+    PLAN.phases.forEach(function (phase) {
+      var stories = phase.stories;
+      var total = stories.length;
+      var done = stories.filter(function (s) { return s.status === "completed"; }).length;
+      var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+      html +=
+        '<div class="phase-card">' +
+          '<div class="phase-card__header">' +
+            '<div class="phase-card__badge badge-' + phase.status + '">' + phase.num + '</div>' +
+            '<div class="phase-card__info">' +
+              '<h3>' + phase.title + '</h3>' +
+              '<div class="phase-card__subtitle">' + phase.subtitle + '</div>' +
+              '<div class="phase-card__meta">' +
+                '<span>\u23f1 ' + phase.weeks + ' weeks</span>' +
+                '<span>\u2726 ' + statusLabels[phase.status] + '</span>' +
+                '<span>' + done + ' / ' + total + ' stories</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<div class="phase-progress">' +
+            '<div class="phase-progress__bar">' +
+              '<div class="phase-progress__fill" style="width:' + pct + '%;background:' + statusColor(phase.status) + ';"></div>' +
+            '</div>' +
+            '<div class="phase-progress__label">' +
+              '<span>' + pct + '%</span>' +
+              '<span>' + done + ' of ' + total + ' stories</span>' +
+            '</div>' +
+          '</div>' +
+
+          '<div class="story-list">' + buildStories(stories) + '</div>' +
+        '</div>';
+    });
+
+    container.innerHTML = html;
+  }
+
+  function buildStories(stories) {
+    var html = "";
+    stories.forEach(function (story) {
+      var checked = story.status === "completed" ? "checked" : "";
+      var tagLabel = statusLabels[story.status] || "Not started";
+
+      html +=
+        '<div class="story-item">' +
+          '<div class="story-item__checkbox"><input type="checkbox" ' + checked + ' onclick="return false;"></div>' +
+          '<div class="story-item__body">' +
+            '<div class="story-item__title">' + story.id + '. ' + story.title + '</div>' +
+            '<div class="story-item__desc">' + story.description + '</div>' +
+            (story.files ? buildFileTags(story.files) : "") +
+          '</div>' +
+          '<div class="story-item__status-tag tag-' + story.status + '">' + tagLabel + '</div>' +
+        '</div>';
+    });
+    return html;
+  }
+
+  function buildFileTags(files) {
+    var html = '<div class="story-item__files">';
+    files.forEach(function (f) {
+      html += '<span class="story-item__file">' + escapeHtml(f) + '</span>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement("div");
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  /* ─── Init ─── */
+  renderOverallProgress();
+  renderPhases();
+
+})();
+</script>
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<footer class="footer container">
+  <p>StrategyOS · Digital Twin Execution Plan · <a href="https://strategyos.live">strategyos.live</a></p>
+  <p style="font-size:11px;">Data-driven · Update plan_data.js to reflect progress · No HTML changes needed</p>
+</footer>
+
+</body>
+</html>
