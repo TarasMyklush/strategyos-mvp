@@ -278,6 +278,25 @@ def _requested_executive_view_state(
     }
 
 
+def _build_executive_route(
+    view_state: dict[str, Any] | None = None,
+    *,
+    base_route: str = "/app",
+) -> str:
+    params = {
+        key: value
+        for key, value in (view_state or {}).items()
+        if value not in (None, "")
+    }
+    if not params:
+        return base_route
+    query_string = "&".join(
+        f"{quote(str(key), safe='')}={quote(str(value), safe='')}"
+        for key, value in params.items()
+    )
+    return f"{base_route}?{query_string}" if query_string else base_route
+
+
 def _run_lifecycle_timeline(record: dict[str, Any]) -> list[dict[str, Any]]:
     latest_checkpoint = record.get("latest_checkpoint") or {}
     approval = record.get("approval") or {}
@@ -400,6 +419,14 @@ def _latest_run_public_payload(
         executive_modes=executive_modes,
     )
     agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
+    agents = _agents_surface_payload(summary, principal)
+    chat = _chat_threads_payload(
+        summary,
+        principal,
+        executive_modes=executive_modes,
+        board_portal=board_portal,
+        publication=publication,
+    )
     return {
         "status": "ok",
         "run_id": summary.get("run_id"),
@@ -420,7 +447,9 @@ def _latest_run_public_payload(
         "executive_modes": executive_modes,
         "drilldown": drilldown,
         "interaction_contracts": _interaction_contracts_payload(principal, public_safe=True),
+        "agents": agents,
         "agent_modules": agent_modules,
+        "chat": chat,
         "role_actions": _role_actions_payload(summary, rows, audit_summary, principal),
         "executive_diagnostics": _executive_diagnostics_payload(
             summary,
@@ -474,6 +503,14 @@ def _summary_with_reconciled_metrics(
         executive_modes=executive_modes,
     )
     agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
+    agents = _agents_surface_payload(summary, principal)
+    chat = _chat_threads_payload(
+        summary,
+        principal,
+        executive_modes=executive_modes,
+        board_portal=board_portal,
+        publication=publication,
+    )
     payload = dict(summary)
     payload["total_recoverable_sar"] = metrics["total_recoverable_sar"]
     payload["locked_findings"] = metrics["locked_findings"]
@@ -489,7 +526,9 @@ def _summary_with_reconciled_metrics(
     payload["executive_modes"] = executive_modes
     payload["drilldown"] = drilldown
     payload["interaction_contracts"] = _interaction_contracts_payload(principal, public_safe=False)
+    payload["agents"] = agents
     payload["agent_modules"] = agent_modules
+    payload["chat"] = chat
     payload["role_actions"] = _role_actions_payload(summary, rows, audit_summary, principal)
     payload["executive_diagnostics"] = _executive_diagnostics_payload(
         summary,
@@ -3512,6 +3551,153 @@ def _interaction_contracts_payload(
     }
 
 
+def _chat_threads_payload(
+    summary: dict[str, Any] | None,
+    principal: dict[str, Any],
+    *,
+    executive_modes: dict[str, Any],
+    board_portal: dict[str, Any],
+    publication: dict[str, Any],
+) -> dict[str, Any]:
+    def _humanize_chat_token(value: str) -> str:
+        text = str(value or "").replace("_", " ").replace("-", " ").strip()
+        return " ".join(part.capitalize() for part in text.split()) if text else ""
+
+    persona_id = str(executive_modes.get("active_persona_id") or "ceo")
+    persona_label = next(
+        (
+            item.get("label")
+            for item in executive_modes.get("personas") or []
+            if item.get("persona_id") == persona_id
+        ),
+        "Group CEO",
+    )
+    persona_blueprint = executive_persona_design(persona_id)
+    board_design = executive_board_design()
+    assistant_name = str(
+        (board_design.get("assistant") if persona_id == "board" else None)
+        or persona_blueprint.get("assistant")
+        or "StrategyOS"
+    )
+    assistant_role = str(
+        persona_blueprint.get("assistantRole")
+        or ("board guide" if persona_id == "board" else "assistant")
+    )
+    active_board_state = str(
+        board_portal.get("presentation_state")
+        or board_portal.get("state")
+        or executive_modes.get("active_board_state")
+        or "pre"
+    )
+    current_stage = _normalize_lifecycle_stage((summary or {}).get("current_stage"))
+    challenged_count = int(publication.get("challenged_cases") or 0)
+    run_id = str((summary or {}).get("run_id") or "latest")
+    active_driver_key = str(executive_modes.get("active_driver_key") or "board_packet")
+    starter_threads: list[dict[str, Any]] = []
+    for index, item in enumerate(list(persona_blueprint.get("threads") or [])[:3], start=1):
+        thread_key = str(item.get("key") or f"thread-{index}")
+        starter_threads.append(
+            {
+                "thread_id": f"{persona_id}:{thread_key}",
+                "kind": "starter_prompt",
+                "persona_id": persona_id,
+                "persona_label": persona_label,
+                "assistant": assistant_name,
+                "title": item.get("title") or _humanize_chat_token(thread_key),
+                "preview": item.get("preview") or "Open this governed thread.",
+                "starter_prompt": item.get("preview") or item.get("title") or "",
+                "message_count": 0,
+                "read_only": False,
+                "route": _build_executive_route(
+                    {
+                        "persona": persona_id,
+                        "board": active_board_state,
+                        "driver": active_driver_key,
+                        "company": executive_modes.get("company_id"),
+                        "portfolio": executive_modes.get("portfolio_id"),
+                    }
+                ),
+            }
+        )
+    workflow_preview = (
+        f"Run {run_id} is {str((summary or {}).get('status') or 'governed').replace('_', ' ')}"
+        f" at {current_stage.replace('_', ' ')}"
+    )
+    if challenged_count:
+        workflow_preview += f" · {challenged_count} challenged item{'s' if challenged_count != 1 else ''}"
+    threads = [
+        {
+            "thread_id": f"system:{run_id}",
+            "kind": "system",
+            "persona_id": persona_id,
+            "persona_label": persona_label,
+            "assistant": assistant_name,
+            "title": "Governed run status",
+            "preview": workflow_preview,
+            "starter_prompt": None,
+            "message_count": 1,
+            "read_only": True,
+            "route": publication.get("preview_route") or "/public/runs/latest/report-preview",
+        },
+        *starter_threads,
+    ]
+    board_pack_actions = list((publication.get("board_pack") or {}).get("allowed_actions") or [])
+    return {
+        "status": "ok" if summary else "awaiting_run",
+        "run_id": (summary or {}).get("run_id"),
+        "assistant": {
+            "assistant_id": assistant_name.lower().replace(" ", "-"),
+            "name": assistant_name,
+            "role": assistant_role,
+            "persona_id": persona_id,
+            "persona_label": persona_label,
+            "board_state": active_board_state,
+        },
+        "store": {
+            "mode": "client_session",
+            "storage_key_prefix": "strategyos.chat.",
+            "scope": "run_id",
+            "retention_limit": 60,
+            "persistence": "sessionStorage",
+            "server_memory": False,
+        },
+        "active_thread_id": threads[0]["thread_id"] if threads else None,
+        "threads": threads,
+        "starter_prompts": list(persona_blueprint.get("prompts") or [])[:3],
+        "a2a": {
+            "enabled": True,
+            "mode": "derived_handoff_only",
+            "items": [
+                {
+                    "handoff_id": f"action:{index}",
+                    "label": str(action_id).replace("_", " ").replace("-", " ").strip().title(),
+                    "status": publication.get("approval_status") or "pending",
+                    "route": publication.get("preview_route") or "/public/runs/latest/report-preview",
+                }
+                for index, action_id in enumerate(board_pack_actions, start=1)
+            ],
+        },
+        "contracts": {
+            "qa": {"method": "POST", "route": "/qa", "default_mode": "deterministic"},
+            "latest_run": {
+                "method": "GET",
+                "route": "/public/runs/latest"
+                if _principal_prefers_public_safe_surface(principal)
+                else "/runs/latest",
+            },
+            "workspace_contract": {"method": "GET", "route": "/ui/workspace-contract/latest"},
+            "report_preview": {
+                "method": "GET",
+                "route": publication.get("preview_route") or "/public/runs/latest/report-preview",
+            },
+        },
+        "notes": [
+            "Frontend owns per-run thread history in sessionStorage.",
+            "Server seeds assistant identity, starter threads, and governed workflow posture only.",
+        ],
+    }
+
+
 def _agents_surface_payload(
     summary: dict[str, Any] | None,
     principal: dict[str, Any],
@@ -4530,8 +4716,6 @@ def _workspace_surface_contract_payload(
         public_safe=public_safe,
         requested_state=view_state.get("board"),
     )
-    agent_modules = _agent_modules_payload(summary, finding_rows, audit_summary, principal)
-    role_actions = _role_actions_payload(summary, finding_rows, audit_summary, principal)
     publication = _summary_publication_payload(
         summary,
         principal_role=role,
@@ -4545,6 +4729,15 @@ def _workspace_surface_contract_payload(
         publication=publication,
         view_state=view_state,
     )
+    agent_modules = _agent_modules_payload(summary, finding_rows, audit_summary, principal)
+    chat = _chat_threads_payload(
+        summary,
+        principal,
+        executive_modes=executive_modes,
+        board_portal=board_portal,
+        publication=publication,
+    )
+    role_actions = _role_actions_payload(summary, finding_rows, audit_summary, principal)
     drilldown = _drilldown_contract_payload(
         summary,
         principal,
@@ -4588,6 +4781,7 @@ def _workspace_surface_contract_payload(
             principal,
             public_safe=public_safe,
         ),
+        "chat": chat,
         "executive_diagnostics": _executive_diagnostics_payload(
             summary,
             principal=principal,
@@ -5339,6 +5533,26 @@ def _ui_bootstrap(
         "executive_route_base": "/app",
         "executive_entry_route": entry_route,
         "requested_view_state": dict(view_state or _requested_executive_view_state()),
+        "route_contracts": {
+            "entry": _build_executive_route(view_state, base_route=entry_route),
+            "app": "/app",
+            "dashboard": "/dashboard",
+            "executive": "/executive",
+            "workspace_contract": "/ui/workspace-contract/latest",
+            "public_latest_run": "/public/runs/latest",
+            "public_report_preview": "/public/runs/latest/report-preview",
+            "ui_session": "/ui/session",
+            "qa": "/qa",
+            "view_state_query_keys": {
+                "persona": "persona",
+                "board": "board",
+                "driver": "driver",
+                "company": "company",
+                "portfolio": "portfolio",
+                "week": "week",
+                "agent": "agent",
+            },
+        },
         "generated_at": datetime.now(UTC).isoformat(),
     }
 
@@ -6912,6 +7126,14 @@ def _latest_run_findings_payload(
         executive_modes=executive_modes,
     )
     agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
+    agents = _agents_surface_payload(summary, principal)
+    chat = _chat_threads_payload(
+        summary,
+        principal,
+        executive_modes=executive_modes,
+        board_portal=board_portal,
+        publication=publication,
+    )
     payload = {
         "status": "ok",
         "run_id": summary.get("run_id"),
@@ -6968,7 +7190,9 @@ def _latest_run_findings_payload(
         "board_portal": board_portal,
         "executive_modes": executive_modes,
         "interaction_contracts": _interaction_contracts_payload(principal, public_safe=public_safe),
+        "agents": agents,
         "agent_modules": agent_modules,
+        "chat": chat,
         "role_actions": _role_actions_payload(summary, rows, audit_summary, principal),
         "drilldown": drilldown,
         "executive_diagnostics": _executive_diagnostics_payload(

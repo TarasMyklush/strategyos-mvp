@@ -95,6 +95,10 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="board-portal"' in html
     assert 'id="lower-rail-fidelity"' in html
     assert 'id="agents-activity"' in html
+    assert 'id="workspace-nav"' in html
+    assert "Overview" in html and "Cases" in html and "Evidence" in html and "Reports" in html
+    assert 'id="assistant-studio"' in html
+    assert 'id="assistant-form"' in html
 
 
 def test_executive_route_renders_minimal_live_diagnostics_shell():
@@ -125,6 +129,8 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="lower-rail-fidelity"' in html
     assert 'id="agents-activity"' in html
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
+    assert 'id="workspace-nav"' in html
+    assert 'id="assistant-studio"' in html
     assert "strategyos.ui.token" in js
     assert '<script id="strategyos-bootstrap"' not in html
 
@@ -164,13 +170,16 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert 'id="board-portal"' in html
     assert 'id="lower-rail-fidelity"' in html
     assert 'id="agents-activity"' in html
+    assert 'id="workspace-nav"' in html
+    assert 'id="assistant-studio"' in html
     assert "StrategyOS.live Governed Diagnostics Workspace" not in html
     assert 'strategyos.ui.token' in js
-    assert 'renderExecutiveHero' in js
+    assert 'renderWorkspaceNav' in js
     assert 'renderDriverDrillFidelity' in js
     assert 'renderLowerRailFidelity' in js
     assert 'renderBoardPortal' in js
     assert 'renderAgentsDiscovery' in js
+    assert 'renderAssistantStudio' in js
 
 
 def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
@@ -216,6 +225,10 @@ def test_app_entry_embeds_parseable_executive_bootstrap_json():
     assert bootstrap["executive_route_base"] == "/app"
     assert bootstrap["executive_entry_route"] == "/app"
     assert bootstrap["requested_view_state"]["persona"] is None
+    assert bootstrap["route_contracts"]["app"].startswith("/app")
+    assert bootstrap["route_contracts"]["dashboard"] == "/dashboard"
+    assert bootstrap["route_contracts"]["executive"] == "/executive"
+    assert bootstrap["route_contracts"]["workspace_contract"] == "/ui/workspace-contract/latest"
     assert bootstrap["qa_modes"]["deterministic"]["enabled"] is True
     assert "enabled" in bootstrap["qa_modes"]["llm"]
 
@@ -233,6 +246,10 @@ def test_app_entry_bootstrap_preserves_requested_view_state():
     assert bootstrap["requested_view_state"]["driver"] == "owed_upward"
     assert bootstrap["requested_view_state"]["company"] == "tenant-alpha"
     assert bootstrap["requested_view_state"]["portfolio"] == "release-readiness"
+    assert (
+        bootstrap["route_contracts"]["entry"]
+        == "/app?persona=board&board=closed&driver=owed_upward&company=tenant-alpha&portfolio=release-readiness"
+    )
 
 
 def test_entry_routes_static_assets_have_no_external_origins():
@@ -466,6 +483,10 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert payload["drilldown"]["lower_rail"]["week_ahead"][0]["prompt"]
         assert payload["drilldown"]["lower_rail"]["owed_upward"]["items"]
         assert payload["interaction_contracts"]["latest_run"]["route"] == "/public/runs/latest"
+        assert payload["chat"]["assistant"]["persona_id"] == "board"
+        assert payload["chat"]["assistant"]["board_state"] == "closed"
+        assert payload["chat"]["store"]["mode"] == "client_session"
+        assert payload["chat"]["threads"][0]["thread_id"] == "system:run-42"
         assert payload["agents"]["running"][0]["id"] == "boardpack"
         assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
         assert payload["tenant_admin_system"]["managed_data"]["reports"]["report_count"] == 2

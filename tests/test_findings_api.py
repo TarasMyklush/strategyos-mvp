@@ -203,12 +203,40 @@ def test_findings_and_workspace_contract_accept_design_persona_aliases(monkeypat
         assert workspace_payload["executive_modes"]["active_board_state"] == "closed"
         assert any(item["persona_id"] == "gm" for item in workspace_payload["executive_modes"]["personas"])
         assert any(item["persona_id"] == "bucfo" for item in workspace_payload["executive_modes"]["personas"])
+        assert workspace_payload["chat"]["assistant"]["persona_id"] == "gm"
+        assert workspace_payload["chat"]["assistant"]["name"] == "Iris"
+        assert workspace_payload["chat"]["store"]["storage_key_prefix"] == "strategyos.chat."
 
         assert findings.status_code == 200
         findings_payload = findings.json()
         assert findings_payload["executive_modes"]["active_persona_id"] == "bucfo"
         assert findings_payload["executive_modes"]["active_board_state"] == "live"
         assert findings_payload["drilldown"]["gravity"]["sandbox"]["persona_id"] == "bucfo"
+        assert findings_payload["chat"]["assistant"]["persona_id"] == "bucfo"
+        assert findings_payload["chat"]["threads"][0]["thread_id"] == "system:run-test"
+    finally:
+        _restore_env(original)
+
+
+def test_public_latest_run_includes_agents_and_chat_contracts(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        response = client.get("/public/runs/latest?persona=cfo&board=live&driver=cash_pulse")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["agents"]["running"][0]["id"] == "boardpack"
+        assert payload["chat"]["assistant"]["persona_id"] == "cfo"
+        assert payload["chat"]["assistant"]["name"] == "Atlas"
+        assert payload["chat"]["threads"][0]["thread_id"] == "system:run-test"
+        assert payload["chat"]["store"]["server_memory"] is False
     finally:
         _restore_env(original)
 

@@ -1,224 +1,371 @@
 (function () {
   "use strict";
 
-  const $ = function (id) { return document.getElementById(id); };
-  const _tokenKey = "strategyos.ui.token";
-  const bootstrapScript = $("strategyos-executive-bootstrap");
-  const bootstrap = bootstrapScript ? JSON.parse(bootstrapScript.textContent) : {};
+  var $ = function (id) { return document.getElementById(id); };
+  var bootstrapScript = $("strategyos-executive-bootstrap");
+  var bootstrap = bootstrapScript ? JSON.parse(bootstrapScript.textContent) : {};
   if (bootstrap.environment) {}
   if (bootstrap.api_auth_enabled) {}
+  var _tokenKey = "strategyos.ui.token";
+  var DESIGN = (window.STRATEGYOS_EXECUTIVE_DESIGN && window.STRATEGYOS_EXECUTIVE_DESIGN.personas) || {};
 
-  function viewStateRoute(path) { return path; }
-  function requestJson(path) { return fetch(path).then(function (r) { return r.json(); }); }
-  requestJson(viewStateRoute("/public/runs/latest"));
+  function safeArray(value) { return Array.isArray(value) ? value : []; }
 
-  const state = {
-    latestPacket: null,
-    session: null,
-    personas: [],
-    activePersona: "ceo",
-    activeDriver: null,
-    token: null,
-    hasPersonaOverride: false,
-    personaSelectionVersion: 0,
-  };
-
-  let personaOutsideListenerBound = false;
+  function firstDefined() {
+    for (var i = 0; i < arguments.length; i += 1) {
+      if (arguments[i] !== undefined && arguments[i] !== null && arguments[i] !== "") return arguments[i];
+    }
+    return "";
+  }
 
   function escapeHtml(value) {
-    return String(value)
+    return String(value == null ? "" : value)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+      .replace(/\"/g, "&quot;");
   }
 
   function humanizeToken(token) {
     if (!token) return "—";
     return String(token)
-      .replace(/_/g, " ")
-      .replace(/-/g, " ")
+      .replace(/[_-]/g, " ")
       .split(" ")
       .filter(Boolean)
       .map(function (part) { return part.charAt(0).toUpperCase() + part.slice(1); })
       .join(" ");
   }
 
-  function firstDefined() {
-    for (let i = 0; i < arguments.length; i += 1) {
-      if (arguments[i] !== undefined && arguments[i] !== null && arguments[i] !== "") {
-        return arguments[i];
-      }
-    }
-    return "";
+  function toneClass(value) {
+    var text = String(value || "").toLowerCase();
+    if (/(published|approved|clear|ready|ok|strong|win|up|live|authored)/.test(text)) return "ok";
+    if (/(challenged|blocked|needs|pending|watch|prepare|draft|thin|warning|review)/.test(text)) return "warn";
+    if (/(rejected|failed|danger|down)/.test(text)) return "danger";
+    return "ok";
   }
 
-  function safeArray(value) {
-    return Array.isArray(value) ? value : [];
+  function buildQuery(params) {
+    var search = new URLSearchParams();
+    Object.keys(params || {}).forEach(function (key) {
+      if (params[key]) search.set(key, params[key]);
+    });
+    var query = search.toString();
+    return query ? "?" + query : "";
   }
 
-  function setActivePersona(personaId) {
-    if (!personaId || personaId === state.activePersona) return false;
-    state.activePersona = personaId;
-    state.activeDriver = null;
-    state.hasPersonaOverride = true;
-    state.personaSelectionVersion += 1;
-    return true;
+  function fetchJson(path) {
+    return fetch(path).then(function (response) {
+      return response.ok ? response.json() : null;
+    });
   }
 
-  function getActiveDriver() {
-    if (state.activeDriver) return state.activeDriver;
-    const drivers = getVisibleDrivers();
-    return drivers.find(function (item) { return item.active; }) || drivers[0] || null;
+  function animateCard(id) {
+    var node = $(id);
+    if (!node) return;
+    node.classList.add("is-transitioning");
+    window.setTimeout(function () { node.classList.remove("is-transitioning"); }, 240);
+  }
+
+  function updateHistory() {
+    var route = firstDefined(bootstrap.executive_entry_route, window.location.pathname, "/app");
+    var query = buildQuery({
+      persona: state.activePersona,
+      board: state.activeBoard,
+      driver: state.activeDriverKey,
+      company: state.activeCompany,
+      portfolio: state.activePortfolio
+    });
+    window.history.replaceState({}, "", route + query);
+  }
+
+  function currentViewParams() {
+    return {
+      persona: state.activePersona,
+      board: state.activeBoard,
+      driver: state.activeDriverKey,
+      company: state.activeCompany,
+      portfolio: state.activePortfolio
+    };
+  }
+
+  function getPersonaBlueprint(personaId) {
+    return DESIGN[personaId] || DESIGN.ceo || {};
+  }
+
+  function getPersonaContract(personaId) {
+    return safeArray(state.personas).find(function (item) { return item.persona_id === personaId; }) || {};
+  }
+
+  function getPersonaLabel(personaId) {
+    var contract = getPersonaContract(personaId);
+    return firstDefined(contract.label, humanizeToken(personaId), "Group CEO");
+  }
+
+  function getExecutiveDiagnostics() {
+    return (state.latestPacket && state.latestPacket.executive_diagnostics) || {};
+  }
+
+  function getBoardPortal() {
+    return (state.latestPacket && state.latestPacket.board_portal) || {};
+  }
+
+  function getPublication() {
+    return (state.latestPacket && state.latestPacket.publication) || {};
+  }
+
+  function getPlanHealth() {
+    return (state.latestPacket && state.latestPacket.plan_health) || {};
+  }
+
+  function getDrilldown() {
+    return (state.latestPacket && state.latestPacket.drilldown) || {};
+  }
+
+  function getAgentsModule() {
+    return (state.latestPacket && state.latestPacket.agent_modules) || {};
   }
 
   function getVisibleDrivers() {
-    const drivers = safeArray(state.latestPacket && state.latestPacket.executive_modes && state.latestPacket.executive_modes.driver_focus);
-    const filtered = drivers.filter(function (item) {
-      const personaIds = safeArray(item.persona_ids);
-      return !personaIds.length || personaIds.indexOf(state.activePersona) >= 0;
+    var blueprint = getPersonaBlueprint(state.activePersona);
+    var designDrivers = safeArray(blueprint.drivers).map(function (item) {
+      return {
+        driver_key: item.key,
+        label: item.label,
+        metric: item.value,
+        status: item.vsPlan,
+        detail: item.story,
+        pct: item.pct,
+        sub: item.sub,
+        chips: safeArray(item.chips),
+        movers: item.movers || {},
+        trendLabel: item.trendLabel,
+        unit: item.unit
+      };
     });
-    return (filtered.length ? filtered : drivers).slice(0, 4);
+    var packetDrivers = safeArray(getExecutiveDiagnostics().driver_grid);
+    return (designDrivers.length ? designDrivers : packetDrivers).slice(0, 4);
   }
 
-  function buildMetrics(packet, driver) {
-    const planHealth = packet && packet.plan_health ? packet.plan_health : {};
-    const publication = packet && packet.publication ? packet.publication : {};
-    const boardPack = publication.board_pack || {};
-    const lowerRail = packet && packet.drilldown && packet.drilldown.lower_rail ? packet.drilldown.lower_rail : {};
-    const owedUpward = lowerRail.owed_upward || {};
+  function getActiveDriver() {
+    var drivers = getVisibleDrivers();
+    var active = drivers.find(function (item) {
+      return String(item.driver_key || item.key || "") === String(state.activeDriverKey || "");
+    });
+    return active || drivers[0] || null;
+  }
 
+  function getHeroPrompts() {
+    var gravity = getDrilldown().gravity || {};
+    var blueprint = getPersonaBlueprint(state.activePersona);
+    return safeArray(gravity.prompts).length ? safeArray(gravity.prompts) : safeArray(blueprint.prompts);
+  }
+
+  function buildAssistantReply(message) {
+    var cleanMessage = String(message || "").trim();
+    var driver = getActiveDriver() || {};
+    var publication = getPublication();
+    var boardPortal = getBoardPortal();
+    var planHealth = getPlanHealth();
+    var persona = getPersonaContract(state.activePersona);
+    var blueprint = getPersonaBlueprint(state.activePersona);
+    var assistantName = firstDefined(persona.assistant, blueprint.assistant, "Hermes");
+    var challenged = firstDefined(publication.challenged_cases, (getDrilldown().owed_upward || {}).challenge_count, 0);
     return [
-      {
-        label: "Plan posture",
-        value: firstDefined(planHealth.label, "Awaiting governed run"),
-        detail: firstDefined(planHealth.summary, "No current plan posture summary."),
-      },
-      {
-        label: "Governance",
-        value: humanizeToken(firstDefined(planHealth.governance_status, publication.approval_status, "pending")),
-        detail: firstDefined(planHealth.boundary, "Governed executive view only."),
-      },
-      {
-        label: "Board artifacts",
-        value: String(Number(firstDefined(publication.report_count, 0))) + " surfaced",
-        detail: firstDefined(boardPack.status ? "Board pack is " + humanizeToken(boardPack.status).toLowerCase() + "." : "Board pack status is waiting."),
-      },
-      {
-        label: "Next action",
-        value: humanizeToken(firstDefined(planHealth.next_action, publication.approval && publication.approval.next_action, driver && driver.status, "review")),
-        detail: owedUpward.challenge_count ? String(owedUpward.challenge_count) + " challenged item(s) still shape the room." : "No challenged items are currently holding the room open.",
-      },
-    ];
+      assistantName + " keeps the answer inside the packet: " + firstDefined(driver.label, planHealth.label, "current posture") + " is the active lens.",
+      firstDefined(driver.detail, planHealth.summary, blueprint.brief, "No broader strategic claim should escape the governed run."),
+      "Board state is " + humanizeToken(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) + ", publication is " + humanizeToken(firstDefined(publication.publish_state, "draft")) + ", and " + challenged + " challenged item(s) still shape the room.",
+      cleanMessage ? "Follow-up captured: “" + cleanMessage + "”." : "Prompt captured for the current lane."
+    ].join(" ");
+  }
+
+  function threadStore() {
+    window.MIZAN_X = window.MIZAN_X || { threads: {}, assistants: {} };
+    return window.MIZAN_X.threads;
+  }
+
+  function currentThreadKey() {
+    return state.activeThreadKey || (state.activePersona + ":briefing");
+  }
+
+  function ensureThreads() {
+    var blueprint = getPersonaBlueprint(state.activePersona);
+    var persona = getPersonaContract(state.activePersona);
+    var assistantName = firstDefined(persona.assistant, blueprint.assistant, "Hermes");
+    safeArray(blueprint.threads).forEach(function (thread, index) {
+      var key = state.activePersona + ":" + firstDefined(thread.key, "thread-" + (index + 1));
+      if (!threadStore()[key]) {
+        threadStore()[key] = {
+          key: key,
+          title: firstDefined(thread.title, "Thread"),
+          preview: firstDefined(thread.preview, blueprint.brief, "Board-safe follow-up"),
+          messages: [
+            {
+              role: "assistant",
+              text: assistantName + " is holding the room in " + getPersonaLabel(state.activePersona) + " mode. Ask for the next governed move, the board-safe summary, or the evidence gap.",
+              timestamp: "now"
+            }
+          ]
+        };
+      }
+    });
+    if (!state.activeThreadKey || !threadStore()[state.activeThreadKey]) {
+      var firstThread = safeArray(blueprint.threads)[0];
+      state.activeThreadKey = state.activePersona + ":" + firstDefined(firstThread && firstThread.key, "briefing");
+    }
+  }
+
+  function pushThreadMessage(role, text) {
+    ensureThreads();
+    var thread = threadStore()[currentThreadKey()];
+    if (!thread) return;
+    thread.messages.push({ role: role, text: text, timestamp: "now" });
   }
 
   function renderTopbar() {
-    const session = state.session || {};
-    const org = $("brand-org");
-    if (org) {
-      org.textContent = firstDefined(session.tenant_context && session.tenant_context.tenant_name, bootstrap.product_name, "StrategyOS Live");
-    }
+    var session = state.session || {};
+    var packet = state.latestPacket || {};
+    var activePersona = getPersonaContract(state.activePersona);
+    var org = $("brand-org");
+    var badge = $("state-badge");
+    var personaLabel = $("persona-label");
+    var list = $("pm-list");
+    var btn = $("persona-btn");
 
-    const activePersona = safeArray(state.personas).find(function (persona) {
-      return persona.persona_id === state.activePersona;
-    });
-    const personaLabel = $("persona-label");
-    if (personaLabel) {
-      personaLabel.textContent = firstDefined(activePersona && activePersona.label, "Group CEO");
-    }
-
-    const badge = $("state-badge");
-    const packet = state.latestPacket || {};
-    if (badge) {
-      badge.textContent = firstDefined(packet.plan_health && packet.plan_health.badge, "Governed executive view");
-    }
-
-    const list = $("pm-list");
-    const btn = $("persona-btn");
+    if (org) org.textContent = firstDefined(session.tenant_context && session.tenant_context.tenant_name, bootstrap.product_name, "StrategyOS");
+    if (badge) badge.textContent = firstDefined((packet.plan_health || {}).badge, "Governed executive view");
+    if (personaLabel) personaLabel.textContent = firstDefined(activePersona.label, "Group CEO");
     if (!list || !btn) return;
 
     list.innerHTML = "";
     safeArray(state.personas).forEach(function (persona) {
-      const item = document.createElement("button");
-      const isActive = persona.persona_id === state.activePersona;
+      var isActive = persona.persona_id === state.activePersona;
+      var item = document.createElement("button");
       item.type = "button";
       item.className = "persona-item" + (isActive ? " is-active" : "");
       item.setAttribute("role", "menuitem");
       item.innerHTML = "<span>" + escapeHtml(firstDefined(persona.label, persona.persona_id, "Persona")) + "</span><span class=\"persona-item__tag\">" + escapeHtml(persona.persona_id || "") + "</span>";
       item.onclick = function () {
-        const didChange = setActivePersona(persona.persona_id);
+        if (persona.persona_id === state.activePersona) return;
+        state.activePersona = persona.persona_id;
+        state.activeDriverKey = "";
+        state.activeThreadKey = "";
         list.hidden = true;
         btn.setAttribute("aria-expanded", "false");
-        if (didChange) {
-          renderPersonaView();
-        }
+        refresh(true);
       };
       list.appendChild(item);
     });
 
     btn.onclick = function () {
-      const expanded = btn.getAttribute("aria-expanded") === "true";
+      var expanded = btn.getAttribute("aria-expanded") === "true";
       list.hidden = expanded;
       btn.setAttribute("aria-expanded", expanded ? "false" : "true");
     };
 
-    if (!personaOutsideListenerBound) {
+    if (!state.personaOutsideListenerBound) {
       document.addEventListener("click", function (event) {
-        const menu = $("persona-menu");
-        const panel = $("pm-list");
-        const trigger = $("persona-btn");
-        if (menu && panel && trigger && !panel.hidden && !event.target.closest("#persona-menu")) {
-          panel.hidden = true;
-          trigger.setAttribute("aria-expanded", "false");
+        if (!event.target.closest("#persona-menu")) {
+          list.hidden = true;
+          btn.setAttribute("aria-expanded", "false");
         }
       });
-      personaOutsideListenerBound = true;
+      state.personaOutsideListenerBound = true;
     }
   }
 
+  function renderWorkspaceNav() {
+    safeArray(document.querySelectorAll("[data-nav-target]")).forEach(function (link) {
+      link.classList.toggle("is-active", link.getAttribute("data-nav-target") === state.activeNav);
+    });
+  }
+
   function renderHero() {
-    const packet = state.latestPacket || {};
-    const hero = packet.executive_diagnostics && packet.executive_diagnostics.hero ? packet.executive_diagnostics.hero : {};
-    const score = Number(firstDefined(hero.score, 0));
-    const clampedScore = Math.max(0, Math.min(100, score));
-    const circumference = 2 * Math.PI * 48;
-    const dash = circumference * (clampedScore / 100);
+    var diagnostics = getExecutiveDiagnostics();
+    var hero = diagnostics.hero || {};
+    var publication = getPublication();
+    var boardPortal = getBoardPortal();
+    var agents = getAgentsModule();
+    var score = Number(firstDefined(hero.score, 0));
+    var clampedScore = Math.max(0, Math.min(100, score));
+    var circumference = 2 * Math.PI * 48;
+    var dash = circumference * (clampedScore / 100);
+    var prompts = getHeroPrompts();
+    var miniStats = [
+      { label: "Board state", value: humanizeToken(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
+      { label: "Reports", value: String(firstDefined(publication.report_count, 0)) + " surfaced" },
+      { label: "Agents", value: String(firstDefined((agents.summary || {}).running_count, diagnostics.agents && diagnostics.agents.running_count, 0)) + " running" },
+      { label: "Next move", value: humanizeToken(firstDefined(getPlanHealth().next_action, (boardPortal.state_detail || {}).title, "review")) }
+    ];
 
-    const activePersona = safeArray(state.personas).find(function (persona) { return persona.persona_id === state.activePersona; }) || {};
-    $("hero-eyebrow").textContent = firstDefined(activePersona.label, hero.persona_label, "Group CEO") + " diagnostics";
-    $("hero-head").textContent = firstDefined(hero.label, packet.plan_health && packet.plan_health.label, "Plan health overview");
-    $("hero-body").textContent = firstDefined(hero.body, hero.summary, packet.plan_health && packet.plan_health.summary, "No governed executive narrative is available yet.");
-    $("hero-score").textContent = score || 0;
-    $("hero-cap").textContent = firstDefined(hero.score_note, packet.plan_health && packet.plan_health.badge, "plan health");
+    $("hero-eyebrow").textContent = getPersonaLabel(state.activePersona) + " diagnostics";
+    $("hero-head").textContent = firstDefined(hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
+    $("hero-body").textContent = firstDefined(hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
+    $("hero-score").textContent = String(clampedScore || 0);
+    $("hero-cap").textContent = firstDefined(hero.score_note, getPlanHealth().badge, "plan health");
+    $("hero-byline").textContent = firstDefined(hero.quoted_by, "Governed packet only");
 
-    const arc = $("hero-arc");
-    if (arc) {
-      arc.setAttribute("stroke-dasharray", dash + " " + (circumference - dash));
+    var quote = $("hero-quote");
+    if (quote) {
+      if (hero.quote) {
+        quote.hidden = false;
+        quote.textContent = hero.quote;
+      } else {
+        quote.hidden = true;
+        quote.textContent = "";
+      }
+    }
+
+    var arc = $("hero-arc");
+    if (arc) arc.setAttribute("stroke-dasharray", dash + " " + (circumference - dash));
+
+    var promptRow = $("hero-prompts");
+    if (promptRow) {
+      promptRow.innerHTML = "";
+      prompts.slice(0, 3).forEach(function (prompt) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "prompt-chip";
+        button.textContent = prompt;
+        button.onclick = function () {
+          pushThreadMessage("user", prompt);
+          pushThreadMessage("assistant", buildAssistantReply(prompt));
+          renderAssistantStudio();
+        };
+        promptRow.appendChild(button);
+      });
+    }
+
+    var statRow = $("hero-mini-stats");
+    if (statRow) {
+      statRow.innerHTML = miniStats.map(function (item) {
+        return '<div class="mini-stat"><strong>' + escapeHtml(item.value) + '</strong><span>' + escapeHtml(item.label) + '</span></div>';
+      }).join("");
     }
   }
 
   function renderDriverGrid() {
-    const grid = $("driver-row");
+    var grid = $("driver-row");
     if (!grid) return;
-
-    const drivers = getVisibleDrivers();
-    const activeDriver = getActiveDriver();
+    var drivers = getVisibleDrivers();
+    var activeDriver = getActiveDriver();
     grid.innerHTML = "";
-
     drivers.forEach(function (driver) {
-      const tile = document.createElement("button");
+      var key = String(driver.driver_key || driver.key || "");
+      var tile = document.createElement("button");
       tile.type = "button";
-      tile.className = "driver-tile" + (activeDriver && activeDriver.driver_key === driver.driver_key ? " is-selected" : "");
+      tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
       tile.innerHTML = [
-        '<span class="driver-overline">' + escapeHtml(firstDefined(driver.status, "status")) + '</span>',
+        '<span class="driver-overline">' + escapeHtml(firstDefined(driver.status, driver.sub, "status")) + '</span>',
         '<span class="driver-metric">' + escapeHtml(firstDefined(driver.metric, "—")) + '</span>',
         '<strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong>',
         '<p class="driver-detail">' + escapeHtml(firstDefined(driver.detail, "")) + '</p>'
       ].join("");
       tile.onclick = function () {
-        state.activeDriver = driver;
+        state.activeDriverKey = key;
+        updateHistory();
         renderDriverGrid();
         renderMetrics();
+        renderDriverDrillFidelity();
         renderSummary();
       };
       grid.appendChild(tile);
@@ -226,116 +373,414 @@
   }
 
   function renderMetrics() {
-    const grid = $("metrics-grid");
+    var grid = $("metrics-grid");
+    var driver = getActiveDriver() || {};
+    var publication = getPublication();
+    var boardPortal = getBoardPortal();
+    var drilldown = getDrilldown();
     if (!grid) return;
-    const metrics = buildMetrics(state.latestPacket || {}, getActiveDriver());
-    grid.innerHTML = "";
-
-    metrics.forEach(function (metric) {
-      const card = document.createElement("article");
-      card.className = "metric-card";
-      card.innerHTML = [
-        '<span class="metric-label">' + escapeHtml(metric.label) + '</span>',
-        '<strong class="metric-value">' + escapeHtml(metric.value) + '</strong>',
-        '<p class="metric-detail">' + escapeHtml(metric.detail) + '</p>'
-      ].join("");
-      grid.appendChild(card);
-    });
-  }
-
-  function renderSummary() {
-    const packet = state.latestPacket || {};
-    const planHealth = packet.plan_health || {};
-    const hero = packet.executive_diagnostics && packet.executive_diagnostics.hero ? packet.executive_diagnostics.hero : {};
-    const driver = getActiveDriver() || {};
-    const link = $("summary-link");
-
-    $("summary-kicker").textContent = firstDefined(driver.label, "Current readout");
-    $("summary-title").textContent = firstDefined(hero.label, planHealth.label, driver.label, "Executive signal");
-    $("summary-body").textContent = firstDefined(driver.detail, hero.body, hero.summary, planHealth.summary, "Awaiting executive summary.");
-    $("summary-note").textContent = firstDefined(planHealth.boundary, hero.quote, "");
-
-    if (link) {
-      link.href = firstDefined(driver.route, packet.publication && packet.publication.preview_route, "/executive");
-    }
-  }
-
-  function renderMinimalExecutiveSurface() {
-    renderDriverGrid();
-    renderMetrics();
-    renderSummary();
-  }
-
-  function renderExecutiveHero() {
-    renderHero();
+    var metrics = [
+      {
+        label: "Driver posture",
+        value: firstDefined(driver.label, getPlanHealth().label, "Awaiting packet"),
+        detail: firstDefined(driver.detail, getPlanHealth().summary, "No governed driver summary yet.")
+      },
+      {
+        label: "Board lifecycle",
+        value: humanizeToken(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")),
+        detail: firstDefined((boardPortal.state_detail || {}).summary, "Board-safe lifecycle stays explicit.")
+      },
+      {
+        label: "Evidence closure",
+        value: String(firstDefined((drilldown.owed_upward || {}).challenge_count, publication.challenged_cases, 0)) + " challenged",
+        detail: "Questions stay attached to evidence, not theatre."
+      },
+      {
+        label: "Report surface",
+        value: String(firstDefined(publication.report_count, 0)) + " routes",
+        detail: firstDefined(publication.preview_route, "Board pack preview waits for the current governed packet.")
+      }
+    ];
+    grid.innerHTML = metrics.map(function (metric) {
+      return '<article class="metric-card"><span class="metric-label">' + escapeHtml(metric.label) + '</span><strong class="metric-value">' + escapeHtml(metric.value) + '</strong><p class="metric-detail">' + escapeHtml(metric.detail) + '</p></article>';
+    }).join("");
   }
 
   function renderDriverDrillFidelity() {
-    renderMinimalExecutiveSurface();
+    var driver = getActiveDriver() || {};
+    var drillCard = $("driver-drill");
+    var gravityPanel = $("gravity-panel");
+    var publication = getPublication();
+    var gravity = getDrilldown().gravity || {};
+    var movers = driver.movers || {};
+    var lifting = safeArray(movers.lifting);
+    var dragging = safeArray(movers.dragging);
+    if (drillCard) {
+      drillCard.innerHTML = [
+        '<div class="detail-head"><div><p class="detail-eyebrow">Cases</p><h3 class="detail-title">' + escapeHtml(firstDefined(driver.label, "Driver drill")) + '</h3></div><span class="pill-inline ' + toneClass(firstDefined(driver.status, publication.publish_state, "governed")) + '">' + escapeHtml(firstDefined(driver.status, publication.publish_state, "governed")) + '</span></div>',
+        '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, "Awaiting drill detail.")) + '</p>',
+        '<div class="detail-stat-row">',
+        '<div class="detail-stat-block"><strong class="detail-stat">' + escapeHtml(firstDefined(driver.metric, "—")) + '</strong><span>' + escapeHtml(firstDefined(driver.sub, "Current measure")) + '</span></div>',
+        '<div class="detail-stat-block"><strong class="detail-stat">' + escapeHtml(firstDefined(driver.pct, "—")) + '</strong><span>% of plan</span></div>',
+        '<div class="detail-stat-block"><strong class="detail-stat">' + escapeHtml(firstDefined(driver.trendLabel, "Governed trend")) + '</strong><span>' + escapeHtml(firstDefined(driver.unit, "packet basis")) + '</span></div>',
+        '</div>',
+        '<p class="detail-subtitle">What is lifting</p>',
+        '<div class="mini-list">' + (lifting.length ? lifting.map(function (item) {
+          return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.name, "Lift")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.note, item.delta, "Momentum visible in the packet.")) + '</p></div><span class="pill-inline ok">' + escapeHtml(firstDefined(item.delta, item.contribution, "up")) + '</span></div>';
+        }).join("") : '<div class="discovery-empty">No lifting signal is attached to this driver yet.</div>') + '</div>',
+        '<p class="detail-subtitle">What still drags</p>',
+        '<div class="mini-list">' + (dragging.length ? dragging.map(function (item) {
+          return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.name, "Constraint")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.note, item.delta, "Constraint still needs closure.")) + '</p></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.delta, item.contribution, "watch")) + '</span></div>';
+        }).join("") : '<div class="discovery-empty">No dragging signal is attached to this driver yet.</div>') + '</div>'
+      ].join("");
+    }
+    if (gravityPanel) {
+      gravityPanel.innerHTML = [
+        '<div class="detail-head"><div><p class="detail-eyebrow">Evidence</p><h3 class="detail-title">Gravity and guardrails</h3></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, "draft")) + '">' + escapeHtml(firstDefined(publication.publish_state, "draft")) + '</span></div>',
+        '<p class="detail-copy">' + escapeHtml(firstDefined(gravity.quote, "Keep the room inside governed packet truth.")) + '</p>',
+        '<p class="panel-note">' + escapeHtml(firstDefined(gravity.by, "StrategyOS")) + '</p>',
+        '<div class="pill-row">' + safeArray(gravity.rails).map(function (item) {
+          return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(item) + '</span>';
+        }).join("") + '</div>',
+        '<p class="detail-subtitle">Suggested questions</p>',
+        '<div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) {
+          return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>';
+        }).join("") + '</div>'
+      ].join("");
+      safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
+        button.onclick = function () {
+          var prompt = button.getAttribute("data-chat-prompt") || "";
+          pushThreadMessage("user", prompt);
+          pushThreadMessage("assistant", buildAssistantReply(prompt));
+          renderAssistantStudio();
+        };
+      });
+    }
   }
 
-  function renderLowerRailFidelity() {
-    renderMinimalExecutiveSurface();
+  function renderBoardStateTabs() {
+    var row = $("board-state-row");
+    var modes = ((state.latestPacket || {}).executive_modes || {}).board_states || [];
+    if (!row) return;
+    row.innerHTML = "";
+    safeArray(modes).forEach(function (mode) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "state-tab" + (mode.state_id === state.activeBoard ? " is-active" : "");
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", mode.state_id === state.activeBoard ? "true" : "false");
+      button.innerHTML = '<span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id)) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, "")) + '</span></span>';
+      button.onclick = function () {
+        if (state.activeBoard === mode.state_id) return;
+        state.activeBoard = mode.state_id;
+        animateCard("board-portal");
+        refresh(true);
+      };
+      row.appendChild(button);
+    });
   }
 
   function renderBoardPortal() {
-    renderMinimalExecutiveSurface();
+    var board = getBoardPortal();
+    var portal = $("board-portal");
+    var note = $("board-note");
+    if (note) note.textContent = firstDefined(board.governance_note, "Board-safe lifecycle, materials, and governed memory.");
+    if (!portal) return;
+
+    var decks = safeArray(board.decks).slice(0, 4);
+    var actions = safeArray(board.actions).slice(0, 3);
+    var questions = safeArray(board.supplementary_questions).slice(0, 3);
+    portal.innerHTML = [
+      '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined((board.state_detail || {}).title, board.state_label, "Governed board packet")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined((board.state_detail || {}).summary, board.board_summary, "Board posture stays bounded to the current packet.")) + '</p></div><span class="pill-inline ' + toneClass(firstDefined(board.presentation_state, board.state, "pre")) + '">' + escapeHtml(firstDefined(board.state_label, board.presentation_state, board.state, "pre")) + '</span></div>',
+      '<div class="board-kpis">' + safeArray(board.kpis).slice(0, 4).map(function (item) {
+        return '<div class="board-kpi"><span class="board-kpi__label">' + escapeHtml(firstDefined(item.label, "Metric")) + '</span><strong class="board-kpi__value">' + escapeHtml(firstDefined(item.value, item.pct, "—")) + '</strong><span class="board-kpi__sub">' + escapeHtml(firstDefined(item.sub, item.pct ? String(item.pct) + "%" : "Governed packet")) + '</span></div>';
+      }).join("") + '</div>',
+      '<div class="board-detail-grid">',
+      '<section class="board-panel"><p class="detail-eyebrow">Meeting posture</p><div class="mini-list"><div class="board-deck"><div><strong>' + escapeHtml(firstDefined((board.meeting || {}).design_title, (board.meeting || {}).title, "Board meeting")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined((board.meeting || {}).date, (board.meeting || {}).when, "Board timing pending")) + '</p></div><span class="pill-inline ok">' + escapeHtml(firstDefined((board.meeting || {}).room, "board-safe")) + '</span></div></div></section>',
+      '<section class="board-panel"><p class="detail-eyebrow">Lifecycle actions</p><div class="mini-list">' + actions.map(function (item) {
+        return '<div class="board-action"><div><strong>' + escapeHtml(firstDefined(item.item, "Action")) + '</strong><small>' + escapeHtml(firstDefined(item.owner, "Owner")) + '</small></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.due, "next")) + '</span></div>';
+      }).join("") + '</div></section>',
+      '<section class="board-panel"><p class="detail-eyebrow">Decks</p><div class="mini-list">' + decks.map(function (item) {
+        return '<div class="board-deck"><div><strong>' + escapeHtml(firstDefined(item.title, "Deck")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.by, item.tag, "Board material")) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, item.pages ? item.pages + " pages" : "ready")) + '</span></div>';
+      }).join("") + '</div></section>',
+      '<section class="board-panel"><p class="detail-eyebrow">Supplementary questions</p><div class="mini-list">' + (questions.length ? questions.map(function (item) {
+        return '<div class="board-deck"><div><strong>' + escapeHtml(firstDefined(item.q, "Question")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.to, "Board lane")) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, "governed")) + '</span></div>';
+      }).join("") : '<div class="discovery-empty">No supplementary questions are attached to this lifecycle state.</div>') + '</div></section>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderLowerRailFidelity() {
+    var lowerRail = (getExecutiveDiagnostics().composition || {}).lower_rail || getDrilldown().lower_rail || {};
+    var developmentsPanel = $("developments-panel");
+    var weekPanel = $("week-panel");
+    var fidelityPanel = $("lower-rail-fidelity");
+    var developments = safeArray(lowerRail.developments).slice(0, 3);
+    var weekAhead = safeArray(lowerRail.week_ahead).slice(0, 3);
+    var owed = (lowerRail.owed_upward || {}).items || [];
+
+    if (developmentsPanel) {
+      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Evidence</p><h3 class="detail-title">Developments in focus</h3></div><span class="pill-inline ok">live signal</span></div><div class="mini-list">' + developments.map(function (item) {
+        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, "Development")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, "Awaiting detail.")) + '</p></div><span class="pill-inline ' + toneClass((item.chips || [])[0]) + '">' + escapeHtml(firstDefined((item.chips || [])[0], "update")) + '</span></div>';
+      }).join("") + '</div>';
+    }
+
+    if (weekPanel) {
+      weekPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Week ahead</p><h3 class="detail-title">Upcoming decision moments</h3></div><span class="pill-inline warn">time-bound</span></div><div class="mini-list">' + weekAhead.map(function (item) {
+        return '<button class="timeline-chip' + (item.urgent ? ' is-urgent' : '') + '" type="button" data-chat-prompt="' + escapeHtml(firstDefined(item.prompt, item.label)) + '"><span><strong>' + escapeHtml(firstDefined(item.label, "Event")) + '</strong><span>' + escapeHtml(firstDefined(item.foot, item.detail, "")) + '</span></span><span>' + escapeHtml(firstDefined(item.detail, "soon")) + '</span></button>';
+      }).join("") + '</div>';
+      safeArray(weekPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
+        button.onclick = function () {
+          var prompt = button.getAttribute("data-chat-prompt") || "";
+          pushThreadMessage("user", prompt);
+          pushThreadMessage("assistant", buildAssistantReply(prompt));
+          renderAssistantStudio();
+        };
+      });
+    }
+
+    if (fidelityPanel) {
+      fidelityPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Evidence closure</p><h3 class="detail-title">What is still owed upward</h3></div><span class="pill-inline warn">governed</span></div><div class="mini-list">' + safeArray(owed).slice(0, 3).map(function (item) {
+        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.on, item.to, "Obligation")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.note, "Awaiting authored line.")) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, "pending")) + '</span></div>';
+      }).join("") + '</div>';
+    }
   }
 
   function renderAgentsDiscovery() {
-    renderMinimalExecutiveSurface();
+    var modules = getAgentsModule();
+    var activityCard = $("agents-activity");
+    var runningCard = $("running-agents");
+    var discoveryCard = $("discovery-panel");
+    var subtoolsCard = $("subtools-panel");
+    var filterRow = $("discovery-filter-row");
+    var discoverable = safeArray(modules.discoverable);
+    var running = safeArray(modules.running);
+    var approvals = safeArray(modules.approvals);
+
+    if (filterRow) {
+      filterRow.innerHTML = ["all", "executive", "review", "operate", "system"].map(function (lane) {
+        var isActive = state.discoveryFilter === lane;
+        return '<button type="button" class="filter-chip' + (isActive ? ' is-active' : '') + '" data-discovery-filter="' + lane + '">' + escapeHtml(lane === 'all' ? 'All surfaces' : humanizeToken(lane)) + '</button>';
+      }).join("");
+      safeArray(filterRow.querySelectorAll("[data-discovery-filter]")).forEach(function (button) {
+        button.onclick = function () {
+          state.discoveryFilter = button.getAttribute("data-discovery-filter") || "all";
+          renderAgentsDiscovery();
+        };
+      });
+    }
+
+    if (activityCard) {
+      activityCard.innerHTML = [
+        '<div class="detail-head"><div><p class="detail-eyebrow">Agents</p><h3 class="detail-title">Runtime activity</h3></div><span class="pill-inline ok">active</span></div>',
+        '<p class="detail-copy">' + escapeHtml(firstDefined((modules.audit_log || [])[0] && (modules.audit_log || [])[0].detail, "Governed agent activity appears here as visible operating posture.")) + '</p>',
+        '<div class="activity-metrics">' + [
+          { label: 'Running', value: firstDefined((modules.summary || {}).running_count, running.length, 0) },
+          { label: 'Discoverable', value: firstDefined((modules.summary || {}).discoverable_count, discoverable.length, 0) },
+          { label: 'Approvals', value: firstDefined((modules.summary || {}).approval_count, approvals.length, 0) },
+          { label: 'Boundary', value: 'tenant scoped' }
+        ].map(function (item) {
+          return '<div class="mini-stat"><strong>' + escapeHtml(item.value) + '</strong><span>' + escapeHtml(item.label) + '</span></div>';
+        }).join("") + '</div>'
+      ].join("");
+    }
+
+    if (runningCard) {
+      runningCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Running</p><h3 class="detail-title">Running agents list</h3></div><span class="pill-inline ok">' + escapeHtml(String(running.length)) + ' visible</span></div><div class="running-list">' + running.map(function (item) {
+        return '<div class="agent-row"><div class="agent-head"><strong>' + escapeHtml(firstDefined(item.label, item.module_id, 'Agent')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'idle')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.summary, 'Awaiting agent summary.')) + '</p><div class="agent-progress"><div class="agent-progress-bar"><i style="width:' + escapeHtml(item.status === 'published' ? '100%' : item.status === 'running' ? '72%' : item.status === 'blocked' ? '38%' : '56%') + '"></i></div><span>' + escapeHtml(firstDefined(item.output_metric, item.approval_dependency, 'tenant runtime')) + '</span></div></div>';
+      }).join("") + '</div>';
+    }
+
+    if (discoveryCard) {
+      var filtered = discoverable.filter(function (item) {
+        return state.discoveryFilter === 'all' || item.lane === state.discoveryFilter;
+      });
+      discoveryCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Discover</p><h3 class="detail-title">Discoverable agents</h3></div><span class="pill-inline warn">expandable</span></div><div class="discovery-list">' + filtered.map(function (item) {
+        return '<div class="agent-row"><div class="discovery-head"><strong>' + escapeHtml(firstDefined(item.label, item.module_id, 'Module')) + '</strong><span class="pill-inline ' + (item.permitted ? 'ok' : 'warn') + '">' + escapeHtml(item.permitted ? 'permitted' : 'role-bound') + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.summary, 'Discoverable module surface.')) + '</p><span class="panel-note">' + escapeHtml(firstDefined(item.route, 'no route')) + '</span></div>';
+      }).join("") + '</div>';
+    }
+
+    if (subtoolsCard) {
+      subtoolsCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Governance</p><h3 class="detail-title">Approvals and audit trail</h3></div><span class="pill-inline ok">traceable</span></div><div class="subtools-list">' + approvals.map(function (item) {
+        return '<div class="agent-row"><div class="subtool-head"><strong>' + escapeHtml(firstDefined(item.label, item.approval_id, 'Approval')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'waiting')) + '</span></div><p class="list-copy">Next action: ' + escapeHtml(firstDefined(item.next_action, 'continue')) + '</p><span class="panel-note">' + escapeHtml(firstDefined(item.route, 'no route')) + '</span></div>';
+      }).join("") + '</div>';
+    }
+  }
+
+  function renderAssistantStudio() {
+    ensureThreads();
+    var blueprint = getPersonaBlueprint(state.activePersona);
+    var persona = getPersonaContract(state.activePersona);
+    var assistantName = firstDefined(persona.assistant, blueprint.assistant, "Hermes");
+    var assistantRole = firstDefined(persona.assistant_role, blueprint.assistantRole, "chief of staff");
+    var threadList = $("assistant-thread-list");
+    var threadTitle = $("assistant-thread-title");
+    var threadMeta = $("assistant-thread-meta");
+    var messages = $("assistant-messages");
+    var promptRow = $("assistant-prompt-row");
+    var assistantHeading = $("assistant-heading");
+    var assistantSubtitle = $("assistant-subtitle");
+    var assistantState = $("assistant-state");
+    var threads = safeArray(blueprint.threads);
+    var current = threadStore()[currentThreadKey()];
+
+    if (assistantHeading) assistantHeading.textContent = assistantName;
+    if (assistantSubtitle) assistantSubtitle.textContent = getPersonaLabel(state.activePersona) + " · " + assistantRole + " · simple local thread memory";
+    if (assistantState) assistantState.textContent = humanizeToken(firstDefined(state.activeBoard, "ready"));
+
+    if (threadList) {
+      threadList.innerHTML = threads.map(function (thread, index) {
+        var key = state.activePersona + ":" + firstDefined(thread.key, "thread-" + (index + 1));
+        var record = threadStore()[key] || {};
+        var active = key === currentThreadKey();
+        return '<button type="button" class="assistant-thread' + (active ? ' is-active' : '') + '" data-thread-key="' + escapeHtml(key) + '"><strong>' + escapeHtml(firstDefined(record.title, thread.title, 'Thread')) + '</strong><span>' + escapeHtml(firstDefined(record.preview, thread.preview, 'Board-safe follow-up')) + '</span></button>';
+      }).join("");
+      safeArray(threadList.querySelectorAll("[data-thread-key]")).forEach(function (button) {
+        button.onclick = function () {
+          state.activeThreadKey = button.getAttribute("data-thread-key") || "";
+          renderAssistantStudio();
+        };
+      });
+    }
+
+    if (threadTitle) threadTitle.textContent = firstDefined(current && current.title, "Thread");
+    if (threadMeta) threadMeta.textContent = firstDefined(current && current.preview, blueprint.brief, "Select a governed follow-up.");
+
+    if (messages) {
+      messages.innerHTML = safeArray(current && current.messages).map(function (message) {
+        return '<div class="assistant-message assistant-message--' + escapeHtml(firstDefined(message.role, 'assistant')) + '"><span class="assistant-message__role">' + escapeHtml(firstDefined(message.role, 'assistant')) + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p></div>';
+      }).join("");
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    if (promptRow) {
+      promptRow.innerHTML = getHeroPrompts().slice(0, 3).map(function (prompt) {
+        return '<button class="prompt-chip" type="button" data-assistant-prompt="' + escapeHtml(prompt) + '">' + escapeHtml(prompt) + '</button>';
+      }).join("");
+      safeArray(promptRow.querySelectorAll("[data-assistant-prompt]")).forEach(function (button) {
+        button.onclick = function () {
+          var prompt = button.getAttribute("data-assistant-prompt") || "";
+          pushThreadMessage("user", prompt);
+          pushThreadMessage("assistant", buildAssistantReply(prompt));
+          renderAssistantStudio();
+        };
+      });
+    }
+  }
+
+  function renderReportSurface() {
+    var reportCard = $("report-surface-card");
+    var publication = getPublication();
+    if (!reportCard) return;
+    reportCard.innerHTML = [
+      '<div class="detail-head"><div><p class="detail-eyebrow">Report surface</p><h3 class="detail-title">Previewable report routes</h3></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, 'draft')) + '">' + escapeHtml(firstDefined(publication.publish_state, 'draft')) + '</span></div>',
+      '<p class="detail-copy">Overview, cases, evidence, and reports now sing as one workspace. This rail keeps the board-safe output explicit.</p>',
+      '<div class="mini-list">' + safeArray(publication.available_artifacts).slice(0, 5).map(function (item) {
+        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, item.artifact_key, 'Artifact')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.category, 'report')) + ' · ' + escapeHtml(firstDefined(item.format, 'file')) + '</p></div><span class="pill-inline ' + (item.restricted ? 'warn' : 'ok') + '">' + escapeHtml(item.restricted ? 'restricted' : 'board-safe') + '</span></div>';
+      }).join("") + '</div>',
+      '<a class="summary-link" href="' + escapeHtml(firstDefined(publication.preview_route, '/public/runs/latest/report-preview')) + '">Open report preview</a>'
+    ].join("");
+  }
+
+  function renderSummary() {
+    var driver = getActiveDriver() || {};
+    var hero = getExecutiveDiagnostics().hero || {};
+    var link = $("summary-link");
+    $("summary-kicker").textContent = firstDefined(driver.label, "Current readout");
+    $("summary-title").textContent = firstDefined(hero.summary, hero.label, getPlanHealth().label, "Executive signal");
+    $("summary-body").textContent = firstDefined(driver.detail, hero.body, getPlanHealth().summary, "Awaiting summary.");
+    $("summary-note").textContent = firstDefined(getBoardPortal().governance_note, hero.quote, "");
+    if (link) link.href = firstDefined(getPublication().preview_route, "/public/runs/latest/report-preview");
   }
 
   function renderPersonaView() {
     renderTopbar();
-    renderExecutiveHero();
+    renderWorkspaceNav();
+    renderHero();
     renderDriverGrid();
     renderMetrics();
     renderDriverDrillFidelity();
+    renderBoardStateTabs();
     renderBoardPortal();
     renderLowerRailFidelity();
     renderAgentsDiscovery();
+    renderAssistantStudio();
+    renderReportSurface();
     renderSummary();
   }
 
-  async function refresh() {
+  async function refresh(withAnimation) {
     try {
-      const response = await Promise.all([
-        fetch("/public/runs/latest").then(function (r) { return r.ok ? r.json() : null; }),
-        fetch("/ui/session").then(function (r) { return r.ok ? r.json() : null; })
+      if (withAnimation) {
+        animateCard("sheet");
+        animateCard("board-portal");
+      }
+      var params = currentViewParams();
+      var response = await Promise.all([
+        fetchJson("/public/runs/latest" + buildQuery(params)),
+        fetchJson("/ui/session")
       ]);
 
-      const packet = response[0] || {};
-      const session = response[1] || {};
-      const personas = safeArray(packet.executive_modes && packet.executive_modes.personas);
-
-      state.latestPacket = packet;
-      state.session = session;
-      state.personas = personas;
-      state.token = firstDefined(session.token, state.token, localStorage.getItem(_tokenKey));
-
-      if (!state.hasPersonaOverride || !personas.some(function (persona) {
-        return persona.persona_id === state.activePersona;
-      })) {
-        state.activePersona = firstDefined(packet.executive_modes && packet.executive_modes.active_persona_id, state.activePersona, "ceo");
-        state.hasPersonaOverride = false;
-      }
-
-      if (!state.activeDriver) {
-        state.activeDriver = safeArray(packet.executive_modes && packet.executive_modes.driver_focus).find(function (item) { return item.active; }) || null;
-      } else {
-        const freshDriver = safeArray(packet.executive_modes && packet.executive_modes.driver_focus).find(function (item) {
-          return item.driver_key === state.activeDriver.driver_key;
-        });
-        state.activeDriver = freshDriver || getVisibleDrivers()[0] || null;
-      }
-
+      state.latestPacket = response[0] || {};
+      state.session = response[1] || {};
+      state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
+      state.token = firstDefined((state.session || {}).token, state.token, window.localStorage.getItem(_tokenKey));
+      state.activePersona = firstDefined((state.latestPacket.executive_modes || {}).active_persona_id, state.activePersona, "ceo");
+      state.activeBoard = firstDefined((state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, state.activeBoard, "pre");
+      state.activeDriverKey = firstDefined((state.latestPacket.executive_modes || {}).active_driver_key, state.activeDriverKey, "board_packet");
+      state.activeCompany = firstDefined((state.latestPacket.executive_modes || {}).company_id, state.activeCompany);
+      state.activePortfolio = firstDefined((state.latestPacket.executive_modes || {}).portfolio_id, state.activePortfolio);
+      ensureThreads();
+      updateHistory();
       renderPersonaView();
     } catch (error) {
       console.warn("executive refresh failed", error);
     }
   }
 
-  refresh();
-  setInterval(refresh, 60000);
+  function bindAssistantForm() {
+    var form = $("assistant-form");
+    var input = $("assistant-input");
+    if (!form || !input) return;
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var message = String(input.value || "").trim();
+      if (!message) return;
+      pushThreadMessage("user", message);
+      pushThreadMessage("assistant", buildAssistantReply(message));
+      input.value = "";
+      renderAssistantStudio();
+    });
+  }
+
+  function bindWorkspaceNav() {
+    safeArray(document.querySelectorAll("[data-nav-target]")).forEach(function (link) {
+      link.addEventListener("click", function () {
+        state.activeNav = link.getAttribute("data-nav-target") || "overview";
+        renderWorkspaceNav();
+      });
+    });
+  }
+
+  var requested = (bootstrap.requested_view_state || {});
+  var state = {
+    latestPacket: null,
+    session: null,
+    personas: [],
+    token: null,
+    activePersona: firstDefined(requested.persona, "ceo"),
+    activeDriverKey: firstDefined(requested.driver, "board_packet"),
+    activeBoard: firstDefined(requested.board, "pre"),
+    activeCompany: firstDefined(requested.company, ""),
+    activePortfolio: firstDefined(requested.portfolio, ""),
+    activeThreadKey: "",
+    activeNav: "overview",
+    discoveryFilter: "all",
+    personaOutsideListenerBound: false
+  };
+
+  bindAssistantForm();
+  bindWorkspaceNav();
+  refresh(false);
+  window.setInterval(function () { refresh(false); }, 60000);
 })();

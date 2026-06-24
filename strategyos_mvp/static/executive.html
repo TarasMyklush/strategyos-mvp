@@ -31,6 +31,16 @@
   </header>
 
   <main class="page fidelity-shell" id="sheet">
+    <section class="workspace-nav-card card" aria-label="Workspace navigation">
+      <nav class="workspace-nav" id="workspace-nav">
+        <a class="workspace-nav__link is-active" href="#overview" data-nav-target="overview">Overview</a>
+        <a class="workspace-nav__link" href="#cases" data-nav-target="cases">Cases</a>
+        <a class="workspace-nav__link" href="#evidence" data-nav-target="evidence">Evidence</a>
+        <a class="workspace-nav__link" href="#reports" data-nav-target="reports">Reports</a>
+      </nav>
+    </section>
+
+    <span id="overview" class="section-anchor" aria-hidden="true"></span>
     <section class="hero card" id="hero" aria-labelledby="hero-head">
       <div class="hero-copy">
         <p class="eyebrow" id="hero-eyebrow">Group CEO diagnostics</p>
@@ -70,7 +80,7 @@
       <div class="metrics-grid" id="metrics-grid"></div>
     </section>
 
-    <section class="section" aria-labelledby="drill-heading">
+    <section class="section" id="cases" aria-labelledby="drill-heading">
       <div class="section-head">
         <h2 class="section-title" id="drill-heading">Driver drill and gravity</h2>
       </div>
@@ -80,7 +90,7 @@
       </div>
     </section>
 
-    <section class="section" aria-labelledby="board-heading">
+    <section class="section" id="reports" aria-labelledby="board-heading">
       <div class="section-head section-head--split">
         <div>
           <h2 class="section-title" id="board-heading">Board portal</h2>
@@ -89,9 +99,41 @@
         <div class="state-tabs" id="board-state-row" role="tablist" aria-label="Board lifecycle states"></div>
       </div>
       <article class="card board-portal" id="board-portal"></article>
+      <div class="reports-secondary">
+        <article class="card assistant-studio" id="assistant-studio" aria-labelledby="assistant-heading">
+          <div class="assistant-head">
+            <div>
+              <p class="eyebrow">Named assistant</p>
+              <h3 class="detail-title" id="assistant-heading">Executive assistant</h3>
+              <p class="section-note" id="assistant-subtitle">Simple thread memory for board-safe follow-up and role-aware prompts.</p>
+            </div>
+            <span class="pill-inline ok" id="assistant-state">ready</span>
+          </div>
+          <div class="assistant-layout">
+            <aside class="assistant-threads">
+              <div class="assistant-thread-list" id="assistant-thread-list"></div>
+            </aside>
+            <div class="assistant-conversation">
+              <div class="assistant-conversation__head">
+                <strong id="assistant-thread-title">Thread</strong>
+                <span class="section-note" id="assistant-thread-meta">Select a thread to continue.</span>
+              </div>
+              <div class="assistant-messages" id="assistant-messages" aria-live="polite"></div>
+              <div class="assistant-prompts" id="assistant-prompt-row"></div>
+              <form class="assistant-form" id="assistant-form">
+                <label class="sr-only" for="assistant-input">Ask assistant</label>
+                <input id="assistant-input" name="assistant-input" type="text" placeholder="Ask the assistant for the next board-safe move…" autocomplete="off" />
+                <button type="submit">Send</button>
+              </form>
+            </div>
+          </div>
+        </article>
+
+        <article class="card report-surface-card" id="report-surface-card"></article>
+      </div>
     </section>
 
-    <section class="section" aria-labelledby="lower-rail-heading">
+    <section class="section" id="evidence" aria-labelledby="lower-rail-heading">
       <div class="section-head">
         <h2 class="section-title" id="lower-rail-heading">Lower rail</h2>
       </div>
