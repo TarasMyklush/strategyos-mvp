@@ -172,6 +172,7 @@
     pollTimer: null,
     lastRunSignature: "",
     laneSignature: "",
+    workspaceNavSelection: "overview",
   };
 
   const byId = (id) => document.getElementById(id);
@@ -977,13 +978,17 @@
     if (!row) return;
     const items = workspaceNavItems();
     const nodes = Array.from(row.children || []);
+    if (!items.find((item) => item.key === state.workspaceNavSelection)) {
+      state.workspaceNavSelection = items[0]?.key || "overview";
+    }
     row.classList.add("is-contractual");
     nodes.forEach((node, index) => {
       const item = items[index];
       if (!item) return;
       node.textContent = item.label;
       node.title = item.detail;
-      node.classList.toggle("is-active", index === 0);
+      node.dataset.contractNav = item.key;
+      node.classList.toggle("is-active", item.key === state.workspaceNavSelection);
       if (node.tagName === "A") {
         node.setAttribute("href", item.href || "#command");
       } else {
@@ -4083,14 +4088,20 @@
       }
     });
     document.querySelector(".shell-jump-row")?.addEventListener("click", (event) => {
+      const navItem = event.target.closest("[data-contract-nav]");
+      if (navItem) {
+        state.workspaceNavSelection = navItem.getAttribute("data-contract-nav") || "overview";
+        renderWorkspaceContractNav();
+      }
       const button = event.target.closest("[data-contract-kind='button']");
       if (!button) return;
       const route = button.getAttribute("data-contract-route") || "";
+      const navKey = button.getAttribute("data-contract-nav") || "overview";
       if (route.includes("report-preview")) {
         window.location.href = route;
         return;
       }
-      openDrawer("system", route.includes("evidence") ? "kg-panel" : route.includes("findings") || route.includes("pending-reviews") ? "publication-panel" : "system-workflow-panel");
+      openDrawer("system", navKey === "evidence" || route.includes("evidence") ? "kg-panel" : navKey === "cases" || route.includes("findings") || route.includes("pending-reviews") ? "publication-panel" : navKey === "overview" ? "command-panel" : "system-workflow-panel");
     });
     if (els.findingsList) {
       els.findingsList.addEventListener("click", (event) => {

@@ -9,6 +9,15 @@
   box-shadow: inset 0 0 0 1px rgba(37, 51, 92, 0.22);
 }
 
+.shell-jump-link[data-contract-nav] {
+  position: relative;
+}
+
+.shell-jump-link[data-contract-nav].is-active {
+  background: rgba(37, 51, 92, 0.08);
+  color: #1e293b;
+}
+
 .agent-filter-row {
   display: flex;
   flex-wrap: wrap;
