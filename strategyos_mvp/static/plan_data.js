@@ -1,7 +1,7 @@
 (function () {
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-26",
-    overallStatus: "in_progress",
+    overallStatus: "completed",
     phases: [
       {
         id: "phase-0",
@@ -71,14 +71,14 @@
         title: "Full UI",
         subtitle: "Complete per-role dashboards, conversation views, human override",
         weeks: "2",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "4.1", title: "Complete CEO dashboard", description: "Full KPI health overview, active investigations panel, decision queue, board packet preview", status: "not_started", files: ["twins/static/ceo.html"] },
-          { id: "4.2", title: "CFO dashboard", description: "Financial metrics, budget variance, cash monitoring, pending approvals", status: "not_started", files: ["twins/static/cfo.html"] },
-          { id: "4.3", title: "GM dashboard", description: "BU performance, initiative tracking, resource requests, escalations", status: "not_started", files: ["twins/static/gm.html"] },
-          { id: "4.4", title: "Conversation views for all roles", description: "Twin-to-twin message history with evidence citations, thread view, search", status: "not_started", files: ["twins/static/*.html", "twins/api.py"] },
-          { id: "4.5", title: "Human override interface", description: "Approve, redirect, query, escalate controls on every dashboard. Decision audit trail.", status: "not_started", files: ["twins/static/*.html"] },
-          { id: "4.6", title: "E2E acceptance tests", description: "Full acceptance: all 6 twins, multi-hop resolution, governance gates, UI flows", status: "not_started", files: ["tests/test_twins_acceptance.py"] }
+          { id: "4.1", title: "Complete CEO dashboard", description: "Full KPI health overview, active investigations panel, decision queue, board packet preview", status: "completed", files: ["twins/static/ceo.html"] },
+          { id: "4.2", title: "CFO dashboard", description: "Financial metrics, budget variance, cash monitoring, pending approvals", status: "completed", files: ["twins/static/cfo.html"] },
+          { id: "4.3", title: "GM dashboard", description: "BU performance, initiative tracking, resource requests, escalations", status: "completed", files: ["twins/static/gm.html"] },
+          { id: "4.4", title: "Conversation views for all roles", description: "Twin-to-twin message history with evidence citations, thread view, search", status: "completed", files: ["twins/static/*.html"] },
+          { id: "4.5", title: "Human override interface", description: "Approve, redirect, query, escalate controls on every dashboard. Decision audit trail.", status: "completed", files: ["twins/static/*.html"] },
+          { id: "4.6", title: "E2E acceptance tests", description: "Full acceptance: all 6 twins, multi-hop resolution, governance gates, UI flows", status: "completed", files: ["tests/test_twins_phase4.py"] }
         ]
       }
     ]

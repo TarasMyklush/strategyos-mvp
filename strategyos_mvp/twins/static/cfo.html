@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>CEO Twin · StrategyOS Digital Twin</title>
+<title>CFO Twin · StrategyOS Digital Twin</title>
 <style>
 :root {
   --bg: #f4f2ed;
@@ -282,6 +282,38 @@ body {
 .btn-secondary:hover { background: var(--accent-soft); }
 .btn-approve:disabled, .btn-reject:disabled, .btn-secondary:disabled { opacity: 0.4; cursor: default; }
 
+/* Cash monitoring bar */
+.cash-bar-container {
+  margin-top: 8px;
+}
+.cash-bar {
+  height: 24px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.cash-bar-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+.cash-bar-target {
+  position: absolute;
+  top: -4px; bottom: -4px;
+  width: 2px;
+  background: var(--red);
+  z-index: 2;
+}
+.cash-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
 /* Inbox */
 .inbox-list { list-style: none; margin: 0; padding: 0; }
 .inbox-item {
@@ -319,7 +351,7 @@ body {
 .priority-badge.normal { background: var(--accent-soft); color: var(--accent); }
 .priority-badge.low { background: rgba(29,28,25,0.06); color: var(--soft); }
 
-/* Conversation / thread view */
+/* Thread view */
 .thread-view {
   display: none;
   margin-top: 12px;
@@ -519,9 +551,6 @@ body {
 .text-sm { font-size: 13px; }
 .mt-8 { margin-top: 8px; }
 .mb-0 { margin-bottom: 0; }
-.flex { display: flex; }
-.gap-8 { gap: 8px; }
-.items-center { align-items: center; }
 </style>
 </head>
 <body>
@@ -531,7 +560,7 @@ body {
     <span class="brand-mark" aria-hidden="true"></span>
     <div>
       <div class="brand-name">StrategyOS</div>
-      <div class="brand-subtitle">CEO Twin Dashboard</div>
+      <div class="brand-subtitle">CFO Twin Dashboard</div>
     </div>
   </div>
   <div class="topbar-status">
@@ -550,126 +579,154 @@ body {
     </div>
     <div class="status-bar-item">
       <span class="status-bar-label">Cycles</span>
-      <span class="status-bar-value" id="cycle-count">47</span>
+      <span class="status-bar-value" id="cycle-count">38</span>
     </div>
     <div class="status-bar-item">
       <span class="status-bar-label">Last Wake</span>
       <span class="status-bar-value" id="last-wake">2026-06-26 08:15</span>
     </div>
     <div class="status-bar-item">
-      <span class="status-bar-label">Active Investigations</span>
-      <span class="status-bar-value" id="inv-count-bar">3</span>
+      <span class="status-bar-label">Budget Requests</span>
+      <span class="status-bar-value" id="pending-count-bar">3</span>
     </div>
     <div class="status-bar-item">
-      <span class="status-bar-label">Pending Decisions</span>
-      <span class="status-bar-value" id="pending-count-bar">2</span>
+      <span class="status-bar-label">Active Investigations</span>
+      <span class="status-bar-value" id="inv-count-bar">4</span>
     </div>
     <div class="status-bar-item">
       <span class="status-bar-label">Unread Messages</span>
-      <span class="status-bar-value" id="unread-count-bar">4</span>
+      <span class="status-bar-value" id="unread-count-bar">3</span>
     </div>
   </div>
 
-  <!-- KPI Health Overview -->
-  <section class="card" aria-label="KPI health summary">
-    <h2 class="card-title">KPI Health Overview</h2>
-    <p class="card-subtitle">Q2 performance overview from the KPI tree</p>
+  <!-- Financial KPI Cards -->
+  <section class="card" aria-label="Financial KPI cards">
+    <h2 class="card-title">Financial KPI Overview</h2>
+    <p class="card-subtitle">Key financial metrics monitored by CFO Twin</p>
     <div class="kpi-grid" id="kpi-grid">
       <div class="kpi-card">
-        <span class="kpi-dot amber" id="kpi-dot-margin"></span>
+        <span class="kpi-dot green"></span>
+        <div class="kpi-name">Revenue Q2</div>
+        <div class="kpi-value">2.1B</div>
+        <span class="kpi-status current">current</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-dot amber"></span>
         <div class="kpi-name">Margin Q2</div>
-        <div class="kpi-value" id="kpi-val-margin">&mdash;</div>
+        <div class="kpi-value">&mdash;</div>
         <span class="kpi-status stale">stale</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-dot green" id="kpi-dot-revenue"></span>
-        <div class="kpi-name">Revenue Q2</div>
-        <div class="kpi-value" id="kpi-val-revenue">2.1B</div>
+        <span class="kpi-dot green"></span>
+        <div class="kpi-name">Cash Flow Q2</div>
+        <div class="kpi-value">340M</div>
         <span class="kpi-status current">current</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-dot red" id="kpi-dot-cogs"></span>
-        <div class="kpi-name">COGS Q2</div>
-        <div class="kpi-value" id="kpi-val-cogs">&mdash;</div>
-        <span class="kpi-status missing">missing</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-dot red" id="kpi-dot-rm"></span>
-        <div class="kpi-name">Raw Materials Q2</div>
-        <div class="kpi-value" id="kpi-val-rm">&mdash;</div>
-        <span class="kpi-status missing">missing</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-dot green" id="kpi-dot-ebitda"></span>
-        <div class="kpi-name">EBITDA Q2</div>
-        <div class="kpi-value" id="kpi-val-ebitda">620M</div>
+        <span class="kpi-dot green"></span>
+        <div class="kpi-name">Working Capital</div>
+        <div class="kpi-value">1.8B</div>
         <span class="kpi-status current">current</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-dot green" id="kpi-dot-cash"></span>
-        <div class="kpi-name">Cash on Hand</div>
-        <div class="kpi-value" id="kpi-val-cash">1.2B</div>
-        <span class="kpi-status current">current</span>
+        <span class="kpi-dot amber"></span>
+        <div class="kpi-name">Budget Variance</div>
+        <div class="kpi-value">-3.2%</div>
+        <span class="kpi-status stale">stale</span>
       </div>
     </div>
+  </section>
+
+  <!-- Cash Monitoring Widget -->
+  <section class="card" aria-label="Cash monitoring">
+    <h2 class="card-title">Cash Monitoring</h2>
+    <p class="card-subtitle">Actual vs Plan cash position</p>
+    <div class="cash-bar-container">
+      <div class="cash-bar">
+        <div class="cash-bar-fill" id="cash-bar-fill" style="width:78%"></div>
+        <div class="cash-bar-target" id="cash-bar-target" style="left:85%"></div>
+      </div>
+      <div class="cash-bar-label">
+        <span>Actual: $1.56B</span>
+        <span>Target: $2.0B</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pending Approvals -->
+  <section class="card" aria-label="Pending approvals">
+    <h2 class="card-title">Pending Approvals</h2>
+    <p class="card-subtitle">Budget requests from GMs requiring CFO sign-off</p>
+    <ul class="decision-list" id="decision-list">
+      <li class="decision-item" data-decision-id="bud-001">
+        <div class="decision-item__info">
+          <div class="decision-item__title">Q3 Marketing Budget — North America BU</div>
+          <div class="decision-item__desc">GM North America requests $850K for Q3 digital campaign</div>
+        </div>
+        <div class="decision-item__actions">
+          <button class="btn-approve" onclick="approveDecision('bud-001')">Approve</button>
+          <button class="btn-reject" onclick="rejectDecision('bud-001')">Reject</button>
+        </div>
+      </li>
+      <li class="decision-item" data-decision-id="bud-002">
+        <div class="decision-item__info">
+          <div class="decision-item__title">Q3 R&amp;D Equipment — Europe BU</div>
+          <div class="decision-item__desc">GM Europe requests $1.2M for lab equipment upgrade</div>
+        </div>
+        <div class="decision-item__actions">
+          <button class="btn-approve" onclick="approveDecision('bud-002')">Approve</button>
+          <button class="btn-reject" onclick="rejectDecision('bud-002')">Reject</button>
+        </div>
+      </li>
+      <li class="decision-item" data-decision-id="bud-003">
+        <div class="decision-item__info">
+          <div class="decision-item__title">Q3 Headcount — APAC BU</div>
+          <div class="decision-item__desc">GM APAC requests $2.1M for 15 new sales positions</div>
+        </div>
+        <div class="decision-item__actions">
+          <button class="btn-approve" onclick="approveDecision('bud-003')">Approve</button>
+          <button class="btn-reject" onclick="rejectDecision('bud-003')">Reject</button>
+        </div>
+      </li>
+    </ul>
   </section>
 
   <!-- Active Investigations -->
   <section class="card" aria-label="Active investigations">
     <h2 class="card-title">Active Investigations</h2>
-    <p class="card-subtitle" id="inv-count">3 active investigations</p>
+    <p class="card-subtitle" id="inv-count">4 active investigations</p>
     <ul class="inv-list" id="inv-list">
       <li class="inv-item">
         <div class="inv-item__info">
-          <div class="inv-item__title">Margin Q2 data gap</div>
-          <div class="inv-item__assignee">Assignee: CFO Twin</div>
-          <div class="progress-bar"><div class="progress-fill active" style="width:65%"></div></div>
+          <div class="inv-item__title">COGS data reconciliation</div>
+          <div class="inv-item__assignee">Assignee: Group Manager Twin</div>
+          <div class="progress-bar"><div class="progress-fill active" style="width:60%"></div></div>
         </div>
         <span class="inv-item__status in-progress">in progress</span>
       </li>
       <li class="inv-item">
         <div class="inv-item__info">
-          <div class="inv-item__title">COGS data reconciliation</div>
+          <div class="inv-item__title">Margin Q2 calculation</div>
           <div class="inv-item__assignee">Assignee: CFO Twin</div>
-          <div class="progress-bar"><div class="progress-fill open" style="width:30%"></div></div>
+          <div class="progress-bar"><div class="progress-fill active" style="width:45%"></div></div>
+        </div>
+        <span class="inv-item__status in-progress">in progress</span>
+      </li>
+      <li class="inv-item">
+        <div class="inv-item__info">
+          <div class="inv-item__title">Budget variance analysis</div>
+          <div class="inv-item__assignee">Assignee: Analyst Twin</div>
+          <div class="progress-bar"><div class="progress-fill open" style="width:20%"></div></div>
         </div>
         <span class="inv-item__status open">open</span>
       </li>
       <li class="inv-item">
         <div class="inv-item__info">
-          <div class="inv-item__title">Raw materials cost verification</div>
-          <div class="inv-item__assignee">Assignee: Group Manager Twin</div>
+          <div class="inv-item__title">Working capital optimization</div>
+          <div class="inv-item__assignee">Assignee: Strategy Twin</div>
           <div class="progress-bar"><div class="progress-fill resolved" style="width:100%"></div></div>
         </div>
         <span class="inv-item__status resolved">resolved</span>
-      </li>
-    </ul>
-  </section>
-
-  <!-- Decision Queue -->
-  <section class="card" aria-label="Decision queue">
-    <h2 class="card-title">Decision Queue</h2>
-    <p class="card-subtitle">Pending governance items requiring your approval</p>
-    <ul class="decision-list" id="decision-list">
-      <li class="decision-item" data-decision-id="dec-001">
-        <div class="decision-item__info">
-          <div class="decision-item__title">Approve Q3 budget reallocation</div>
-          <div class="decision-item__desc">CFO Twin requests reallocation of $2.5M from marketing to R&amp;D for Q3</div>
-        </div>
-        <div class="decision-item__actions">
-          <button class="btn-approve" onclick="approveDecision('dec-001')">Approve</button>
-          <button class="btn-reject" onclick="rejectDecision('dec-001')">Reject</button>
-        </div>
-      </li>
-      <li class="decision-item" data-decision-id="dec-002">
-        <div class="decision-item__info">
-          <div class="decision-item__title">Adjust margin target from 22% to 24%</div>
-          <div class="decision-item__desc">Group Manager requests target adjustment based on Q2 actuals</div>
-        </div>
-        <div class="decision-item__actions">
-          <button class="btn-approve" onclick="approveDecision('dec-002')">Approve</button>
-          <button class="btn-reject" onclick="rejectDecision('dec-002')">Reject</button>
-        </div>
       </li>
     </ul>
   </section>
@@ -682,10 +739,10 @@ body {
       <li class="inbox-item" data-msg-id="msg-001" onclick="toggleThread('msg-001')">
         <div class="inbox-item__icon">C</div>
         <div class="inbox-item__body">
-          <div class="inbox-item__sender">CFO Twin</div>
-          <div class="inbox-item__subject">Q3 budget reallocation proposal ready for review</div>
+          <div class="inbox-item__sender">CEO Twin</div>
+          <div class="inbox-item__subject">Q3 budget reallocation — please confirm ROI projections</div>
           <div class="inbox-item__meta">
-            <span>2 hours ago</span>
+            <span>1 hour ago</span>
             <span class="priority-badge high">high</span>
           </div>
         </div>
@@ -694,76 +751,50 @@ body {
         <div class="inbox-item__icon">G</div>
         <div class="inbox-item__body">
           <div class="inbox-item__sender">Group Manager Twin</div>
-          <div class="inbox-item__subject">Raw materials data update — all suppliers confirmed</div>
+          <div class="inbox-item__subject">Q3 budget request — North America digital campaign</div>
           <div class="inbox-item__meta">
-            <span>5 hours ago</span>
+            <span>3 hours ago</span>
             <span class="priority-badge normal">normal</span>
           </div>
         </div>
       </li>
       <li class="inbox-item" data-msg-id="msg-003" onclick="toggleThread('msg-003')">
-        <div class="inbox-item__icon">S</div>
-        <div class="inbox-item__body">
-          <div class="inbox-item__sender">Strategy Twin</div>
-          <div class="inbox-item__subject">KPI tree maintenance — proposed value driver updates</div>
-          <div class="inbox-item__meta">
-            <span>1 day ago</span>
-            <span class="priority-badge low">low</span>
-          </div>
-        </div>
-      </li>
-      <li class="inbox-item" data-msg-id="msg-004" onclick="toggleThread('msg-004')">
         <div class="inbox-item__icon">A</div>
         <div class="inbox-item__body">
           <div class="inbox-item__sender">Analyst Twin</div>
-          <div class="inbox-item__subject">Data quality report for Q2 evidence chain</div>
+          <div class="inbox-item__subject">Budget variance report — Q2 actuals vs plan</div>
           <div class="inbox-item__meta">
-            <span>2 days ago</span>
+            <span>1 day ago</span>
             <span class="priority-badge normal">normal</span>
           </div>
         </div>
       </li>
     </ul>
 
-    <!-- Thread views (hidden by default) -->
+    <!-- Thread views -->
     <div id="thread-msg-001" class="thread-view">
       <div class="thread-message">
         <div class="thread-message__header">
-          <span class="thread-message__role">CFO Twin</span>
-          <span>2 hours ago</span>
+          <span class="thread-message__role">CEO Twin</span>
+          <span>1 hour ago</span>
           <span class="thread-message__status-badge responded">responded</span>
         </div>
         <div class="thread-message__body">
-          The Q3 budget reallocation proposal is ready. We recommend moving $2.5M from marketing to R&amp;D based on the growth analysis. This aligns with our margin improvement target of 24%.
-        </div>
-        <div class="thread-message__citations">
-          <a class="citation-link" href="#" onclick="return false;">KPI: margin_q2</a>
-          <a class="citation-link" href="#" onclick="return false;">Evidence: Q2 Growth Analysis</a>
-          <a class="citation-link" href="#" onclick="return false;">Plan: Budget Reallocation Model</a>
+          Reviewed your Q3 budget reallocation proposal. Please confirm the R&amp;D ROI projections support moving $2.5M from marketing to R&amp;D before I approve.
         </div>
       </div>
       <div class="thread-message">
         <div class="thread-message__header">
-          <span class="thread-message__role">CEO Twin (you)</span>
-          <span>1 hour ago</span>
-          <span class="thread-message__status-badge delivered">delivered</span>
-        </div>
-        <div class="thread-message__body">
-          Reviewed. Please confirm the R&amp;D ROI projections support this reallocation before I approve.
-        </div>
-      </div>
-      <div class="thread-message">
-        <div class="thread-message__header">
-          <span class="thread-message__role">CFO Twin</span>
+          <span class="thread-message__role">CFO Twin (you)</span>
           <span>30 min ago</span>
           <span class="thread-message__status-badge delivered">delivered</span>
         </div>
         <div class="thread-message__body">
-          R&amp;D ROI projection shows 32% IRR over 18 months. Full model is attached to this thread. Recommendation stands.
+          R&amp;D ROI projection shows 32% IRR over 18 months. Full model is attached. The reallocation supports our margin improvement target of 24%.
         </div>
         <div class="thread-message__citations">
           <a class="citation-link" href="#" onclick="return false;">Evidence: R&amp;D ROI Model Q3</a>
-          <a class="citation-link" href="#" onclick="return false;">KPI: ebitda_q2</a>
+          <a class="citation-link" href="#" onclick="return false;">KPI: margin_q2</a>
         </div>
       </div>
     </div>
@@ -772,15 +803,15 @@ body {
       <div class="thread-message">
         <div class="thread-message__header">
           <span class="thread-message__role">Group Manager Twin</span>
-          <span>5 hours ago</span>
-          <span class="thread-message__status-badge delivered">delivered</span>
+          <span>3 hours ago</span>
+          <span class="thread-message__status-badge pending">pending</span>
         </div>
         <div class="thread-message__body">
-          All raw materials suppliers have confirmed their Q2 cost data. I've attached the consolidated spreadsheet. No discrepancies found vs forecast.
+          North America BU requests $850K for Q3 digital campaign. Expected ROI is 15% based on Q1-Q2 performance data. Please review and approve.
         </div>
         <div class="thread-message__citations">
-          <a class="citation-link" href="#" onclick="return false;">Evidence: Supplier Confirmation Log</a>
-          <a class="citation-link" href="#" onclick="return false;">KPI: raw_materials_q2</a>
+          <a class="citation-link" href="#" onclick="return false;">KPI: revenue_q2</a>
+          <a class="citation-link" href="#" onclick="return false;">Evidence: NA Campaign Performance</a>
         </div>
       </div>
     </div>
@@ -788,33 +819,16 @@ body {
     <div id="thread-msg-003" class="thread-view">
       <div class="thread-message">
         <div class="thread-message__header">
-          <span class="thread-message__role">Strategy Twin</span>
-          <span>1 day ago</span>
-          <span class="thread-message__status-badge pending">pending</span>
-        </div>
-        <div class="thread-message__body">
-          I've identified three value drivers that need updating based on Q2 data: raw material efficiency, logistics optimization, and channel mix. Proposed updates are in the KPI tree maintenance document.
-        </div>
-        <div class="thread-message__citations">
-          <a class="citation-link" href="#" onclick="return false;">Plan: Value Driver Updates Q3</a>
-          <a class="citation-link" href="#" onclick="return false;">KPI: strategic_objectives</a>
-        </div>
-      </div>
-    </div>
-
-    <div id="thread-msg-004" class="thread-view">
-      <div class="thread-message">
-        <div class="thread-message__header">
           <span class="thread-message__role">Analyst Twin</span>
-          <span>2 days ago</span>
-          <span class="thread-message__status-badge responded">responded</span>
+          <span>1 day ago</span>
+          <span class="thread-message__status-badge delivered">delivered</span>
         </div>
         <div class="thread-message__body">
-          Q2 evidence chain quality report is complete. 92% of citations verified. Three citations flagged for review — all related to margin COGS estimates.
+          Q2 budget variance report is complete. Overall variance is -3.2% (underspend). Main driver: delayed R&amp;D equipment procurement in Europe BU. Full breakdown attached.
         </div>
         <div class="thread-message__citations">
-          <a class="citation-link" href="#" onclick="return false;">Evidence: Quality Report Q2</a>
-          <a class="citation-link" href="#" onclick="return false;">KPI: cogs_q2</a>
+          <a class="citation-link" href="#" onclick="return false;">Evidence: Q2 Variance Report</a>
+          <a class="citation-link" href="#" onclick="return false;">KPI: budget_variance_q2</a>
         </div>
       </div>
     </div>
@@ -828,14 +842,14 @@ body {
     <div class="override-controls">
       <span class="text-sm" style="font-weight:600;color:var(--accent);">Redirect Investigation:</span>
       <input type="text" id="redirect-input" placeholder="Investigation ID e.g. inv-001" style="min-width:140px;" />
-      <input type="text" id="redirect-target-input" placeholder="Target twin (cfo, gm, strategy)" style="min-width:160px;" />
+      <input type="text" id="redirect-target-input" placeholder="Target twin (gm, analyst, strategy)" style="min-width:160px;" />
       <button class="btn-secondary" onclick="redirectInvestigation()">Redirect</button>
     </div>
 
     <div class="override-controls">
       <span class="text-sm" style="font-weight:600;color:var(--accent);">Escalate:</span>
-      <input type="text" id="escalate-input" placeholder="Decision ID e.g. dec-001" style="min-width:140px;" />
-      <button class="btn-escalate" onclick="escalateDecision()">Escalate</button>
+      <input type="text" id="escalate-input" placeholder="Decision ID e.g. bud-001" style="min-width:140px;" />
+      <button class="btn-escalate" onclick="escalateDecision()">Escalate to CEO</button>
     </div>
 
     <div style="margin-top:12px;">
@@ -843,44 +857,43 @@ body {
       <div class="audit-log" id="audit-log">
         <div class="audit-entry">
           <span class="audit-entry__time">2026-06-26 08:15</span>
-          <span class="audit-entry__action">Approved <strong>Q3 budget reallocation</strong></span>
+          <span class="audit-entry__action">Approved <strong>NA marketing budget</strong></span>
           <span class="audit-entry__result approved">APPROVED</span>
         </div>
         <div class="audit-entry">
-          <span class="audit-entry__time">2026-06-25 14:30</span>
-          <span class="audit-entry__action">Rejected <strong>Marketing spend increase</strong></span>
-          <span class="audit-entry__result rejected">REJECTED</span>
+          <span class="audit-entry__time">2026-06-25 16:00</span>
+          <span class="audit-entry__action">Approved <strong>Europe R&amp;D equipment</strong></span>
+          <span class="audit-entry__result approved">APPROVED</span>
         </div>
         <div class="audit-entry">
-          <span class="audit-entry__time">2026-06-25 11:00</span>
-          <span class="audit-entry__action">Escalated <strong>margin_q2 investigation</strong> to CFO Twin</span>
-          <span class="audit-entry__result escalated">ESCALATED</span>
+          <span class="audit-entry__time">2026-06-24 11:30</span>
+          <span class="audit-entry__action">Rejected <strong>APAC headcount increase</strong></span>
+          <span class="audit-entry__result rejected">REJECTED</span>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Ask Your Twin -->
-  <section class="card" aria-label="Ask your twin">
-    <h2 class="card-title">Ask Your Twin</h2>
-    <p class="card-subtitle">Query the CEO twin about plan health, risks, or performance</p>
+  <!-- Ask Your CFO -->
+  <section class="card" aria-label="Ask your CFO">
+    <h2 class="card-title">Ask Your CFO</h2>
+    <p class="card-subtitle">Query the CFO twin about financial performance, budget, or cash flow</p>
     <div class="query-area">
       <div class="input-wrapper">
-        <input type="text" id="query-input" placeholder="e.g. Why is Q2 margin down?" autocomplete="off" />
+        <input type="text" id="query-input" placeholder="e.g. What is our cash position?" autocomplete="off" />
         <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
       </div>
       <button id="query-btn">Ask</button>
     </div>
     <div class="prompt-suggestions">
-      <span class="prompt-chip" data-prompt="Why is Q2 margin down?">Why is Q2 margin down?</span>
-      <span class="prompt-chip" data-prompt="What is the biggest risk to the plan?">Biggest risk?</span>
-      <span class="prompt-chip" data-prompt="Are we on track to meet annual objectives?">Annual objectives?</span>
-      <span class="prompt-chip" data-prompt="Top 3 risks right now">Top 3 risks</span>
-      <span class="prompt-chip" data-prompt="Board packet for this week">Board packet</span>
-      <span class="prompt-chip" data-prompt="Which business units need attention?">BUs needing attention?</span>
+      <span class="prompt-chip" data-prompt="What is our cash position?">Cash position</span>
+      <span class="prompt-chip" data-prompt="Show me budget variance by BU">Budget variance</span>
+      <span class="prompt-chip" data-prompt="What is the Q2 revenue breakdown?">Revenue breakdown</span>
+      <span class="prompt-chip" data-prompt="Top 3 cost reduction opportunities">Cost reduction</span>
+      <span class="prompt-chip" data-prompt="Working capital trends">Working capital</span>
     </div>
     <div class="response-box" id="response-box">
-      <span class="text-muted">Twin is ready. Ask a question above to start an investigation.</span>
+      <span class="text-muted">CFO Twin is ready. Ask a question above to start an investigation.</span>
     </div>
   </section>
 
@@ -897,103 +910,106 @@ body {
   const invList = document.getElementById('inv-list');
   const autoDropdown = document.getElementById('autocomplete-dropdown');
 
-  // Simulated KPI tree state
-  const KPI_TREE = {
-    margin_q2: { owner: 'cfo', value: null, status: 'stale', last_updated: '2026-05-15' },
-    revenue_q2: { owner: 'group_manager', value: 2100000000, status: 'current' },
-    cogs_q2: { owner: 'cfo', value: null, status: 'missing' },
-    raw_materials_q2: { owner: 'group_manager', value: null, status: 'missing' }
-  };
-
-  // Auto-complete suggestions
   const AUTOCOMPLETE_SUGGESTIONS = [
-    'Why is Q2 margin down?',
-    'What is the biggest risk to the plan?',
-    'Are we on track to meet annual objectives?',
-    'Top 3 risks right now',
-    'Board packet for this week',
-    'Which business units need attention?',
-    'How is cash flow looking?',
-    'What is our EBITDA forecast?',
-    'Board packet for this month',
-    'Summarize Q2 performance'
+    'What is our cash position?',
+    'Show me budget variance by BU',
+    'What is the Q2 revenue breakdown?',
+    'Top 3 cost reduction opportunities',
+    'Working capital trends',
+    'How is margin tracking vs target?',
+    'What pending budget requests need my sign-off?',
+    'Cash flow forecast for Q3'
   ];
 
   function setStatus(state) {
     statusDot.className = 'status-dot ' + state;
     statusLabel.textContent = state.charAt(0).toUpperCase() + state.slice(1);
-    var statusVal = document.getElementById('twin-status-value');
-    if (statusVal) statusVal.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+    var sv = document.getElementById('twin-status-value');
+    if (sv) sv.textContent = state.charAt(0).toUpperCase() + state.slice(1);
   }
 
   function simulateInvestigation(query) {
     setStatus('investigating');
-    responseBox.textContent = 'CEO Twin is investigating\u2026';
+    responseBox.textContent = 'CFO Twin is investigating\u2026';
 
     setTimeout(function () {
       var response;
       var q = query.toLowerCase();
 
-      if (q.indexOf('margin') !== -1) {
-        response = 'Q2 margin is currently stale (last updated 2026-05-15). '
-          + 'COGS Q2 data is missing, which prevents margin calculation. '
-          + 'A data request has been routed to the CFO Twin to resolve the COGS gap.';
-      } else if (q.indexOf('risk') !== -1) {
-        response = 'Top 3 risks:\n'
-          + '1. Missing COGS Q2 data \u2014 directly impacts margin reporting\n'
-          + '2. Raw materials cost data unavailable \u2014 affects EBITDA calculation\n'
-          + '3. Budget reallocation pending \u2014 Q3 planning delayed by 2 days\n'
-          + 'All gaps are being pursued through the CFO and Group Manager twins.';
-      } else if (q.indexOf('annual') !== -1 || q.indexOf('objective') !== -1) {
-        response = 'Revenue Q2 is on track (2.1B reported, status: current). '
-          + 'However, the margin calculation is blocked by missing COGS data. '
-          + 'Annual outlook depends on resolving this gap in the next cycle.';
-      } else if (q.indexOf('board') !== -1 || q.indexOf('packet') !== -1) {
-        response = 'Board packet for this week:\n'
-          + '\u2022 KPI Dashboard: 4 of 6 KPIs current, 1 stale (margin), 1 missing (cogs)\n'
-          + '\u2022 Risk Register: 2 open risks \u2014 margin data gap, raw materials verification\n'
-          + '\u2022 Pending Decisions: 2 items in queue (budget reallocation, margin target)\n'
-          + '\u2022 Evidence Citations: 12 verified, 3 flagged for review';
-      } else if (q.indexOf('bu') !== -1 || q.indexOf('unit') !== -1) {
-        response = 'Revenue Q2 is reported as current (2.1B). '
-          + 'Raw materials Q2 data is missing \u2014 this may indicate an operational '
-          + 'data readiness issue at the BU level. Recommend checking with '
-          + 'Group Manager Twin for BU-level details.';
-      } else if (q.indexOf('hello') !== -1 || q.indexOf('hi') !== -1) {
-        response = 'Hello. I am your CEO Twin. I monitor plan health, strategic '
-          + 'objectives, and cross-functional alignment. Current focus: resolving '
-          + 'the Q2 margin data gap.';
+      if (q.indexOf('cash') !== -1) {
+        response = 'Cash position as of Q2:\n'
+          + '\u2022 Cash on hand: $1.56B (78% of $2.0B target)\n'
+          + '\u2022 Operating cash flow: $340M (current)\n'
+          + '\u2022 Working capital: $1.8B\n'
+          + '\u2022 Forecast Q3: $1.7\u2013$1.9B depending on budget approvals\n'
+          + 'Cash monitoring is active. No liquidity concerns at this time.';
+      } else if (q.indexOf('budget') !== -1 || q.indexOf('variance') !== -1) {
+        response = 'Q2 Budget Variance by BU:\n'
+          + '\u2022 North America: -2.1% (slightly under budget)\n'
+          + '\u2022 Europe: -5.8% (delayed R&D equipment)\n'
+          + '\u2022 APAC: +1.2% (slightly over on headcount)\n'
+          + 'Overall variance: -3.2% (favorable). 3 pending budget requests in queue.';
+      } else if (q.indexOf('revenue') !== -1) {
+        response = 'Q2 Revenue Breakdown:\n'
+          + '\u2022 North America: $980M (47% of total)\n'
+          + '\u2022 Europe: $650M (31%)\n'
+          + '\u2022 APAC: $470M (22%)\n'
+          + 'Total Q2 revenue: $2.1B (current, on track)';
+      } else if (q.indexOf('cost') !== -1) {
+        response = 'Top 3 cost reduction opportunities:\n'
+          + '1. Raw materials procurement \u2014 renegotiate 3 supplier contracts (est. savings $12M)\n'
+          + '2. Logistics optimization \u2014 consolidate regional distribution (est. savings $8M)\n'
+          + '3. Marketing efficiency \u2014 reallocate spend to high-ROI channels (est. savings $5M)';
+      } else if (q.indexOf('working capital') !== -1) {
+        response = 'Working capital trends:\n'
+          + '\u2022 Current: $1.8B (stable)\n'
+          + '\u2022 DSO: 38 days (within target of 40)\n'
+          + '\u2022 DPO: 52 days (improved from 48)\n'
+          + '\u2022 Inventory turnover: 6.2x (healthy)\n'
+          + 'Working capital optimization investigation is resolved.';
+      } else if (q.indexOf('margin') !== -1) {
+        response = 'Margin Q2 is currently stale (last updated 2026-05-15). '
+          + 'COGS data is missing, preventing calculation. '
+          + 'A data reconciliation investigation is in progress with the Group Manager Twin. '
+          + 'Target margin is 24%.';
       } else {
-        response = 'I analysed the question against available KPI data. '
-          + 'The Q2 margin has a known data gap driven by missing COGS and '
-          + 'raw materials figures. Would you like me to investigate any '
-          + 'specific aspect?';
+        response = 'I analysed the question against available financial data. '
+          + 'The Q2 financial position is stable: revenue on track at $2.1B, '
+          + 'cash position healthy at $1.56B, working capital at $1.8B. '
+          + 'Main concern is the stale margin data pending COGS reconciliation.';
       }
 
-      // Update investigation count
-      invCount.textContent = '3 active investigations';
+      invCount.textContent = '4 active investigations';
       invList.innerHTML = ''
         + '<li class="inv-item">'
         + '  <div class="inv-item__info">'
         + '    <div class="inv-item__title">Investigation: ' + query.slice(0, 40) + '</div>'
-        + '    <div class="inv-item__assignee">Assignee: CEO Twin</div>'
+        + '    <div class="inv-item__assignee">Assignee: CFO Twin</div>'
         + '    <div class="progress-bar"><div class="progress-fill resolved" style="width:100%"></div></div>'
         + '  </div>'
         + '  <span class="inv-item__status resolved">resolved</span>'
         + '</li>'
         + '<li class="inv-item">'
         + '  <div class="inv-item__info">'
-        + '    <div class="inv-item__title">Margin Q2 data gap</div>'
-        + '    <div class="inv-item__assignee">Assignee: CFO Twin</div>'
-        + '    <div class="progress-bar"><div class="progress-fill active" style="width:65%"></div></div>'
+        + '    <div class="inv-item__title">COGS data reconciliation</div>'
+        + '    <div class="inv-item__assignee">Assignee: Group Manager Twin</div>'
+        + '    <div class="progress-bar"><div class="progress-fill active" style="width:60%"></div></div>'
         + '  </div>'
         + '  <span class="inv-item__status in-progress">in progress</span>'
         + '</li>'
         + '<li class="inv-item">'
         + '  <div class="inv-item__info">'
-        + '    <div class="inv-item__title">COGS data reconciliation</div>'
+        + '    <div class="inv-item__title">Margin Q2 calculation</div>'
         + '    <div class="inv-item__assignee">Assignee: CFO Twin</div>'
-        + '    <div class="progress-bar"><div class="progress-fill open" style="width:30%"></div></div>'
+        + '    <div class="progress-bar"><div class="progress-fill active" style="width:45%"></div></div>'
+        + '  </div>'
+        + '  <span class="inv-item__status in-progress">in progress</span>'
+        + '</li>'
+        + '<li class="inv-item">'
+        + '  <div class="inv-item__info">'
+        + '    <div class="inv-item__title">Budget variance analysis</div>'
+        + '    <div class="inv-item__assignee">Assignee: Analyst Twin</div>'
+        + '    <div class="progress-bar"><div class="progress-fill open" style="width:20%"></div></div>'
         + '  </div>'
         + '  <span class="inv-item__status open">open</span>'
         + '</li>';
@@ -1004,9 +1020,9 @@ body {
   }
 
   function handleQuery() {
-    var query = queryInput.value.trim();
-    if (!query) return;
-    simulateInvestigation(query);
+    var q = queryInput.value.trim();
+    if (!q) return;
+    simulateInvestigation(q);
     queryInput.value = '';
     autoDropdown.classList.remove('visible');
   }
@@ -1016,7 +1032,6 @@ body {
     if (e.key === 'Enter') handleQuery();
   });
 
-  // Prompt chip clicks
   document.querySelectorAll('.prompt-chip').forEach(function (chip) {
     chip.addEventListener('click', function () {
       queryInput.value = chip.getAttribute('data-prompt');
@@ -1024,20 +1039,13 @@ body {
     });
   });
 
-  // Auto-complete
   queryInput.addEventListener('input', function () {
     var val = queryInput.value.trim().toLowerCase();
-    if (!val) {
-      autoDropdown.classList.remove('visible');
-      return;
-    }
+    if (!val) { autoDropdown.classList.remove('visible'); return; }
     var matches = AUTOCOMPLETE_SUGGESTIONS.filter(function (s) {
       return s.toLowerCase().indexOf(val) !== -1;
     });
-    if (matches.length === 0) {
-      autoDropdown.classList.remove('visible');
-      return;
-    }
+    if (matches.length === 0) { autoDropdown.classList.remove('visible'); return; }
     autoDropdown.innerHTML = '';
     matches.forEach(function (m) {
       var div = document.createElement('div');
@@ -1054,91 +1062,67 @@ body {
   });
 
   document.addEventListener('click', function (e) {
-    if (!e.target.closest('.input-wrapper')) {
-      autoDropdown.classList.remove('visible');
-    }
+    if (!e.target.closest('.input-wrapper')) autoDropdown.classList.remove('visible');
   });
 
-  // Initial status
   setStatus('active');
 })();
 
-// Conversation thread toggle
 function toggleThread(msgId) {
-  var thread = document.getElementById('thread-' + msgId);
-  if (!thread) return;
-  var isVisible = thread.classList.contains('visible');
-  // Hide all threads
-  document.querySelectorAll('.thread-view').forEach(function (t) {
-    t.classList.remove('visible');
-  });
-  if (!isVisible) {
-    thread.classList.add('visible');
-  }
+  var t = document.getElementById('thread-' + msgId);
+  if (!t) return;
+  var vis = t.classList.contains('visible');
+  document.querySelectorAll('.thread-view').forEach(function (tv) { tv.classList.remove('visible'); });
+  if (!vis) t.classList.add('visible');
 }
 
-// Decision approve/reject
 function approveDecision(decId) {
   var item = document.querySelector('[data-decision-id="' + decId + '"]');
   if (!item) return;
-  var btns = item.querySelectorAll('button');
-  btns.forEach(function (b) { b.disabled = true; });
+  item.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
   var title = item.querySelector('.decision-item__title').textContent;
   addAuditEntry('Approved ' + title, 'APPROVED', 'approved');
-  console.log('[Human Override] Approved decision:', decId, title);
+  console.log('[Human Override] Approved budget:', decId, title);
 }
 
 function rejectDecision(decId) {
   var item = document.querySelector('[data-decision-id="' + decId + '"]');
   if (!item) return;
-  var btns = item.querySelectorAll('button');
-  btns.forEach(function (b) { b.disabled = true; });
+  item.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
   var title = item.querySelector('.decision-item__title').textContent;
   addAuditEntry('Rejected ' + title, 'REJECTED', 'rejected');
-  console.log('[Human Override] Rejected decision:', decId, title);
+  console.log('[Human Override] Rejected budget:', decId, title);
 }
 
-// Redirect investigation
 function redirectInvestigation() {
   var invId = document.getElementById('redirect-input').value.trim();
   var target = document.getElementById('redirect-target-input').value.trim();
-  if (!invId || !target) {
-    alert('Please enter both investigation ID and target twin.');
-    return;
-  }
-  addAuditEntry('Redirected investigation ' + invId + ' to ' + target, 'REDIRECTED', 'escalated');
-  console.log('[Human Override] Redirected investigation:', invId, '->', target);
+  if (!invId || !target) { alert('Please enter both investigation ID and target twin.'); return; }
+  addAuditEntry('Redirected ' + invId + ' to ' + target, 'REDIRECTED', 'escalated');
+  console.log('[Human Override] Redirected:', invId, '->', target);
   document.getElementById('redirect-input').value = '';
   document.getElementById('redirect-target-input').value = '';
 }
 
-// Escalate decision
 function escalateDecision() {
   var decId = document.getElementById('escalate-input').value.trim();
-  if (!decId) {
-    alert('Please enter a decision ID.');
-    return;
-  }
-  addAuditEntry('Escalated decision ' + decId + ' to next role', 'ESCALATED', 'escalated');
-  console.log('[Human Override] Escalated decision:', decId);
+  if (!decId) { alert('Please enter a decision ID.'); return; }
+  addAuditEntry('Escalated ' + decId + ' to CEO', 'ESCALATED', 'escalated');
+  console.log('[Human Override] Escalated:', decId);
   document.getElementById('escalate-input').value = '';
 }
 
-// Audit trail
 function addAuditEntry(action, result, resultClass) {
-  var auditLog = document.getElementById('audit-log');
+  var log = document.getElementById('audit-log');
   var now = new Date();
-  var timeStr = now.toISOString().slice(0, 16).replace('T', ' ');
+  var ts = now.toISOString().slice(0, 16).replace('T', ' ');
   var entry = document.createElement('div');
   entry.className = 'audit-entry';
-  entry.innerHTML = '<span class="audit-entry__time">' + timeStr + '</span>'
+  entry.innerHTML = '<span class="audit-entry__time">' + ts + '</span>'
     + '<span class="audit-entry__action">' + action + '</span>'
     + '<span class="audit-entry__result ' + resultClass + '">' + result + '</span>';
-  auditLog.insertBefore(entry, auditLog.firstChild);
-  // Keep max 20 entries
-  while (auditLog.children.length > 20) {
-    auditLog.removeChild(auditLog.lastChild);
-  }
+  log.insertBefore(entry, log.firstChild);
+  while (log.children.length > 20) log.removeChild(log.lastChild);
 }
 </script>
 </body>
