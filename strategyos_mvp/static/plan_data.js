@@ -1,7 +1,7 @@
 (function () {
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-24",
-    overallStatus: "not_started",
+    overallStatus: "in_progress",
     phases: [
       {
         id: "phase-0",
