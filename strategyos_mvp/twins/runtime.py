@@ -17,6 +17,12 @@ from strategyos_mvp.twins.memory import (
     resolve_investigation,
 )
 from strategyos_mvp.twins.persona import TwinPersona, lookup_persona
+from strategyos_mvp.twins.protocol import (
+    InterTwinMessage,
+    check_escalation,
+    escalate_message,
+    get_escalation_timeout,
+)
 from strategyos_mvp.twins.resolution import KPIResolutionEngine, KPI_TREE
 from strategyos_mvp.twins.tools import (
     escalate_to_human,
@@ -339,6 +345,44 @@ class TwinRuntime:
                                 "priority": msg.priority,
                                 "subject": msg.subject,
                                 "body": msg.body,
+                                "deadline_seconds": msg.deadline_seconds,
+                                "created_at": msg.created_at,
+                                "status": msg.status,
+                            },
+                        )
+
+                elif action_type == "send_escalation":
+                    msg = dec.get("message")
+                    if msg:
+                        send_message(msg)
+                        self.state.pending_requests[msg.message_id] = (
+                            f"escalated to {msg.recipient_role}"
+                        )
+                        action_record["message_id"] = msg.message_id
+                        action_record["target"] = msg.recipient_role
+                        add_to_history(
+                            self.state,
+                            {
+                                "role": self.persona.role,
+                                "action": "sent_escalation",
+                                "message_id": msg.message_id,
+                                "recipient": msg.recipient_role,
+                                "subject": msg.subject,
+                            },
+                        )
+                        _deliver_to_inbox(
+                            msg.recipient_role,
+                            {
+                                "message_id": msg.message_id,
+                                "sender_role": msg.sender_role,
+                                "recipient_role": msg.recipient_role,
+                                "message_type": msg.message_type,
+                                "priority": msg.priority,
+                                "subject": msg.subject,
+                                "body": msg.body,
+                                "deadline_seconds": msg.deadline_seconds,
+                                "created_at": msg.created_at,
+                                "status": msg.status,
                             },
                         )
 
@@ -358,6 +402,7 @@ class TwinRuntime:
                         },
                     )
                     # Deliver acknowledgment to the original sender's inbox
+                    now_iso = datetime.now(timezone.utc).isoformat()
                     _deliver_to_inbox(
                         sender,
                         {
@@ -368,6 +413,9 @@ class TwinRuntime:
                             "priority": "normal",
                             "subject": f"Re: {dec.get('message_id', 'message')}",
                             "body": response_body,
+                            "deadline_seconds": 3600,
+                            "created_at": now_iso,
+                            "status": "pending",
                         },
                     )
                     action_record["target"] = sender
@@ -404,11 +452,62 @@ class TwinRuntime:
         self._cycle_summary["actions"] = actions
 
     # ------------------------------------------------------------------
+    # Escalation processing (Phase 2)
+    # ------------------------------------------------------------------
+
+    def process_escalations(self) -> list[InterTwinMessage]:
+        """Check all pending inbox messages for timeout and escalate.
+
+        Scans the twin's inbox for messages whose deadline has expired,
+        creates escalation messages addressed to the next role in the
+        sending twin's escalation path, and removes the expired messages
+        from the inbox.
+
+        Returns:
+            A list of escalated :class:`InterTwinMessage` instances.
+        """
+        escalated: list[InterTwinMessage] = []
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        inbox = _INBOX.get(self.persona.role, [])
+        expired_indices: list[int] = []
+
+        for idx, msg_dict in enumerate(inbox):
+            # Reconstruct an InterTwinMessage from the inbox dict
+            msg = InterTwinMessage(
+                message_id=msg_dict.get("message_id", ""),
+                sender_role=msg_dict.get("sender_role", ""),
+                recipient_role=msg_dict.get("recipient_role", ""),
+                message_type=msg_dict.get("message_type", "data_request"),
+                priority=msg_dict.get("priority", "normal"),
+                subject=msg_dict.get("subject", ""),
+                body=msg_dict.get("body", ""),
+                deadline_seconds=msg_dict.get("deadline_seconds", 3600),
+                created_at=msg_dict.get("created_at", now_iso),
+                status=msg_dict.get("status", "pending"),
+            )
+
+            escalated_role = check_escalation(msg, now_iso)
+            if escalated_role:
+                esc_msg = escalate_message(msg, now_iso)
+                escalated.append(esc_msg)
+                expired_indices.append(idx)
+
+        # Remove expired messages (reverse order to preserve indices)
+        for idx in reversed(expired_indices):
+            inbox.pop(idx)
+
+        return escalated
+
+    # ------------------------------------------------------------------
     # Full cycle
     # ------------------------------------------------------------------
 
     def run_once(self) -> dict[str, Any]:
         """Execute a complete Observe → Orient → Decide → Act cycle.
+
+        Also calls :meth:`process_escalations` to handle timed-out
+        pending messages during the cycle.
 
         Returns:
             A summary dict with the cycle results, suitable for logging
@@ -416,9 +515,25 @@ class TwinRuntime:
         """
         self.wake()
         try:
+            # Process escalations first — catch expired messages before
+            # the inbox is consumed by observe()
+            escalated = self.process_escalations()
+
             observations = self.observe()
             issues = self.orient(observations)
             decisions = self.decide(issues)
+
+            if escalated:
+                decisions.extend(
+                    {
+                        "investigation_id": f"esc-{e.message_id}",
+                        "action": "send_escalation",
+                        "message": e,
+                        "target_role": e.recipient_role,
+                    }
+                    for e in escalated
+                )
+
             self.act(decisions)
         except Exception as exc:
             self._cycle_summary["errors"].append(str(exc))

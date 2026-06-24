@@ -239,6 +239,85 @@ CFO_DATA_OWNERSHIP: dict[str, tuple[str, ...]] = {
 the Group Manager, and what it reports to the CEO."""
 
 
+# ---------------------------------------------------------------------------
+# Phase 2 — Enhanced persona extensions
+# ---------------------------------------------------------------------------
+
+GROUP_MANAGER_INVESTIGATION_PROMPTS: tuple[str, ...] = (
+    "Why is BU3 missing revenue target?",
+    "What resources do I need?",
+    "Which BUs are underperforming operationally?",
+    "Are initiative milestones on track?",
+    "Do I have the right talent allocation across BUs?",
+)
+"""Default investigation prompts suitable for Group Manager twin initiation."""
+
+GROUP_MANAGER_DATA_OWNERSHIP: dict[str, tuple[str, ...]] = {
+    "owns": ("bu_revenue", "bu_growth", "operational_metrics", "initiative_progress"),
+    "reports_to_cfo": ("bu_revenue", "bu_growth", "resource_requests"),
+    "requests_from_analyst": ("evidence_quality", "source_validation"),
+}
+"""Mapping of Group Manager data ownership: what it owns, what it reports
+to the CFO, and what it requests from the Analyst."""
+
+ANALYST_INVESTIGATION_PROMPTS: tuple[str, ...] = (
+    "Check evidence freshness for Q2 data",
+    "Validate latest source pack",
+    "Check data lineage for revenue metrics",
+    "Verify evidence quality scores across all KPIs",
+    "Flag any stale or missing source documents",
+)
+"""Default investigation prompts suitable for Analyst twin initiation."""
+
+ANALYST_DATA_OWNERSHIP: dict[str, tuple[str, ...]] = {
+    "owns": ("evidence_quality_scores", "source_validation_results", "data_readiness"),
+    "reports_to_group_manager": ("validation_findings", "quality_scores"),
+    "requests_from_kpi_tree": ("kpi_status", "evidence_references"),
+}
+"""Mapping of Analyst data ownership: what it owns, what it reports
+to the Group Manager, and what it queries from the KPI tree."""
+
+STRATEGY_INVESTIGATION_PROMPTS: tuple[str, ...] = (
+    "Check KPI tree alignment",
+    "Flag stale value drivers",
+    "Verify initiative-to-objective mapping",
+    "Identify structural gaps in the KPI tree",
+    "Assess leading vs lagging indicator balance",
+)
+"""Default investigation prompts suitable for Strategy twin initiation."""
+
+STRATEGY_DATA_OWNERSHIP: dict[str, tuple[str, ...]] = {
+    "owns": ("kpi_tree_structure", "value_driver_definitions", "initiative_portfolio"),
+    "reports_to_ceo": ("alignment_status", "structural_gaps", "value_driver_health"),
+}
+"""Mapping of Strategy data ownership: what it owns and what it reports
+to the CEO."""
+
+REVIEWER_INVESTIGATION_PROMPTS: tuple[str, ...] = (
+    "Review pending findings",
+    "Check compliance status",
+    "Verify evidence completeness for open findings",
+    "Flag insufficiently supported evidence packets",
+    "Check audit trail for recent adjudications",
+)
+"""Default investigation prompts suitable for Reviewer twin initiation."""
+
+REVIEWER_DATA_OWNERSHIP: dict[str, tuple[str, ...]] = {
+    "owns": (
+        "finding_adjudication_status",
+        "compliance_checks",
+        "evidence_verification",
+    ),
+    "reports_to_cfo": (
+        "adjudication_results",
+        "compliance_findings",
+        "evidence_packet_approvals",
+    ),
+}
+"""Mapping of Reviewer data ownership: what it owns and what it reports
+to the CFO."""
+
+
 def get_twin(persona: TwinPersona) -> "TwinRuntime":  # noqa: F821
     """Create an initialised :class:`TwinRuntime` for a given persona.
 

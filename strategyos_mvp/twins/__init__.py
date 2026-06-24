@@ -7,8 +7,16 @@ from strategyos_mvp.twins.persona import (
     CEO_INVESTIGATION_PROMPTS,
     CFO_DATA_OWNERSHIP,
     GROUP_MANAGER_TWIN,
-    REVIEWER_TWIN,
+    GROUP_MANAGER_INVESTIGATION_PROMPTS,
+    GROUP_MANAGER_DATA_OWNERSHIP,
+    ANALYST_INVESTIGATION_PROMPTS,
+    ANALYST_DATA_OWNERSHIP,
     STRATEGY_TWIN,
+    STRATEGY_INVESTIGATION_PROMPTS,
+    STRATEGY_DATA_OWNERSHIP,
+    REVIEWER_TWIN,
+    REVIEWER_INVESTIGATION_PROMPTS,
+    REVIEWER_DATA_OWNERSHIP,
     TWIN_CATALOG,
     TwinPersona,
     get_twin,
@@ -18,7 +26,11 @@ from strategyos_mvp.twins.protocol import (
     InterTwinMessage,
     TwinResponse,
     validate_message,
+    validate_response,
     should_escalate,
+    check_escalation,
+    escalate_message,
+    get_escalation_timeout,
 )
 from strategyos_mvp.twins.memory import (
     TwinState,
@@ -39,6 +51,7 @@ from strategyos_mvp.twins.tools import (
 from strategyos_mvp.twins.resolution import (
     KPI_TREE,
     KPIResolutionEngine,
+    resolve_multi_hop,
 )
 from strategyos_mvp.twins.runtime import (
     TwinRuntime,
@@ -58,11 +71,23 @@ __all__ = [
     "get_twin",
     "CEO_INVESTIGATION_PROMPTS",
     "CFO_DATA_OWNERSHIP",
+    "GROUP_MANAGER_INVESTIGATION_PROMPTS",
+    "GROUP_MANAGER_DATA_OWNERSHIP",
+    "ANALYST_INVESTIGATION_PROMPTS",
+    "ANALYST_DATA_OWNERSHIP",
+    "STRATEGY_INVESTIGATION_PROMPTS",
+    "STRATEGY_DATA_OWNERSHIP",
+    "REVIEWER_INVESTIGATION_PROMPTS",
+    "REVIEWER_DATA_OWNERSHIP",
     # Protocol
     "InterTwinMessage",
     "TwinResponse",
     "validate_message",
+    "validate_response",
     "should_escalate",
+    "check_escalation",
+    "escalate_message",
+    "get_escalation_timeout",
     # Memory
     "TwinState",
     "create_twin_state",
@@ -80,6 +105,7 @@ __all__ = [
     # Resolution
     "KPI_TREE",
     "KPIResolutionEngine",
+    "resolve_multi_hop",
     # Runtime
     "TwinRuntime",
 ]

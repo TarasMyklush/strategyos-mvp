@@ -233,3 +233,118 @@ def should_escalate(msg: InterTwinMessage, current_time: str | None = None) -> b
 
     elapsed = (now - created).total_seconds()
     return elapsed > msg.deadline_seconds
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Enhanced escalation
+# ---------------------------------------------------------------------------
+
+
+def get_escalation_timeout(priority: str) -> int:
+    """Return the timeout in seconds for a given priority level.
+
+    Args:
+        priority: One of ``"low"``, ``"normal"``, ``"high"``, ``"critical"``.
+
+    Returns:
+        Timeout in seconds: critical=300, high=600, normal=1800, low=3600.
+    """
+    mapping: dict[str, int] = {
+        "critical": 300,
+        "high": 600,
+        "normal": 1800,
+        "low": 3600,
+    }
+    return mapping.get(priority, 1800)
+
+
+def check_escalation(msg: InterTwinMessage, current_time: str) -> str | None:
+    """Check if a message should be escalated based on timeout.
+
+    A pending message past its deadline is escalated to the next role
+    in the sender's escalation path (using the sender's persona).
+
+    Args:
+        msg: The message to check.
+        current_time: ISO-8601 timestamp for "now".
+
+    Returns:
+        The escalated role string (e.g. ``"ceo"``) if escalation is
+        needed, or *None* if the message is within deadline or not
+        pending.
+    """
+    from strategyos_mvp.twins.persona import TWIN_CATALOG, lookup_persona
+
+    if msg.status != "pending":
+        return None
+    if not msg.created_at:
+        return None
+
+    try:
+        now = datetime.fromisoformat(current_time)
+    except (ValueError, TypeError):
+        return None
+
+    try:
+        created = datetime.fromisoformat(msg.created_at)
+    except (ValueError, TypeError):
+        return None
+
+    elapsed = (now - created).total_seconds()
+    if elapsed <= msg.deadline_seconds:
+        return None
+
+    # Find the next role in the sender's escalation path
+    sender_persona = lookup_persona(msg.sender_role)
+    if sender_persona is None:
+        return None
+
+    path = sender_persona.escalation_path
+    if not path:
+        return None
+
+    # Return the first role in the escalation path
+    return path[0]
+
+
+def escalate_message(msg: InterTwinMessage, current_time: str) -> InterTwinMessage:
+    """Create an escalated copy of the message.
+
+    The new message is addressed to the next role in the escalation chain,
+    has type ``"escalation"``, priority ``"critical"``, and references the
+    original as ``parent_message_id``.
+
+    Args:
+        msg: The original message that timed out.
+        current_time: ISO-8601 timestamp for "now".
+
+    Returns:
+        A new :class:`InterTwinMessage` representing the escalated request.
+    """
+    escalated_role = check_escalation(msg, current_time)
+    if escalated_role is None:
+        escalated_role = "human"
+
+    new_id = f"esc-{msg.message_id}-{int(datetime.now(timezone.utc).timestamp())}"
+
+    return InterTwinMessage(
+        message_id=new_id,
+        sender_role=msg.sender_role,
+        recipient_role=escalated_role,
+        message_type="escalation",
+        priority="critical",
+        subject=f"ESCALATED: {msg.subject}",
+        body=(
+            f"Message {msg.message_id} from {msg.sender_role} to "
+            f"{msg.recipient_role} has timed out.\n\n"
+            f"Original subject: {msg.subject}\n"
+            f"Original body: {msg.body}\n"
+            f"Deadline: {msg.deadline_seconds}s\n"
+            f"Escalated to: {escalated_role}"
+        ),
+        evidence_citations=msg.evidence_citations,
+        parent_message_id=msg.message_id,
+        deadline_seconds=300,  # escalated messages have shorter deadlines
+        created_at=current_time,
+        status="pending",
+    )

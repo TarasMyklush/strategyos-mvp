@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from strategyos_mvp.twins.protocol import InterTwinMessage
+from strategyos_mvp.twins.protocol import InterTwinMessage, check_escalation
 
 # ---------------------------------------------------------------------------
 # Hardcoded KPI tree (Phase 1 — no live Neo4j yet)
@@ -222,6 +222,151 @@ class KPIResolutionEngine:
         return gaps
 
     # ------------------------------------------------------------------
+    # Component chain (Phase 2 — multi-hop)
+    # ------------------------------------------------------------------
+
+    def get_component_chain(self, kpi_node_id: str) -> list[str]:
+        """Return a flat list of all component KPI node IDs recursively.
+
+        Traverses the component tree under *kpi_node_id* and collects
+        every descendant node ID.
+
+        Args:
+            kpi_node_id: The root KPI node to traverse from.
+
+        Returns:
+            A flat list of descendant node IDs (excluding the root).
+        """
+        chain: list[str] = []
+        node = KPI_TREE.get(kpi_node_id)
+        if not node or "components" not in node:
+            return chain
+
+        visited: set[str] = set()
+        self._collect_components(kpi_node_id, chain, visited)
+        return chain
+
+    def _collect_components(
+        self, node_id: str, chain: list[str], visited: set[str]
+    ) -> None:
+        """Recursively collect component node IDs into *chain*."""
+        if node_id in visited:
+            return
+        visited.add(node_id)
+
+        node = KPI_TREE.get(node_id)
+        if not node or "components" not in node:
+            return
+
+        for comp_id in node["components"]:
+            if comp_id not in chain:
+                chain.append(comp_id)
+            self._collect_components(comp_id, chain, visited)
+
+    def find_resolution_path(
+        self, kpi_node_id: str, target_data: str
+    ) -> list[str]:
+        """Find the chain of roles from root owner to target data owner.
+
+        Traces from *kpi_node_id* down the component tree searching for
+        a node whose ID contains *target_data* as a substring. Returns
+        the ordered list of owning roles from root to leaf.
+
+        Args:
+            kpi_node_id: The root KPI node.
+            target_data: Substring to match against descendant node IDs.
+
+        Returns:
+            A list of role strings (e.g. ``["cfo", "group_manager"]``)
+            representing the ownership chain. Returns empty list if the
+            target is not found or the root is unknown.
+        """
+        root_owner = self.find_owner(kpi_node_id)
+        if root_owner is None:
+            return []
+
+        # Find the target node by traversing components
+        result_container: list[str | None] = []
+        self._find_target_in_tree(kpi_node_id, target_data, set(), result_container)
+        target_node_id = result_container[0] if result_container else None
+
+        # If target not found via tree, search KPI_TREE directly
+        if target_node_id is None:
+            for nid in KPI_TREE:
+                if target_data.lower() in nid.lower():
+                    target_node_id = nid
+                    break
+
+        if target_node_id is None or target_node_id == kpi_node_id:
+            return [root_owner]
+
+        # Build the ownership chain from root to target
+        chain: list[str] = []
+        self._build_owner_chain(kpi_node_id, target_node_id, chain, set())
+        # Deduplicate consecutive duplicates (same owner for adjacent nodes)
+        deduped: list[str] = []
+        for role in chain:
+            if not deduped or deduped[-1] != role:
+                deduped.append(role)
+        return deduped
+
+    def _find_target_in_tree(
+        self,
+        node_id: str,
+        target_data: str,
+        visited: set[str],
+        result: list[str | None],
+    ) -> None:
+        """DFS search for a node whose ID contains *target_data*."""
+        if node_id in visited:
+            return
+        visited.add(node_id)
+
+        if target_data.lower() in node_id.lower():
+            result.append(node_id)
+            return
+
+        node = KPI_TREE.get(node_id)
+        if node and "components" in node:
+            for comp_id in node["components"]:
+                self._find_target_in_tree(comp_id, target_data, visited, result)
+                if result:
+                    return
+
+    def _build_owner_chain(
+        self,
+        from_node: str,
+        to_node: str,
+        chain: list[str],
+        visited: set[str],
+    ) -> bool:
+        """Build owner chain from *from_node* to *to_node* via DFS.
+
+        Returns *True* if the target was found along this path.
+        """
+        if from_node in visited:
+            return False
+        visited.add(from_node)
+
+        owner = self.find_owner(from_node)
+        if owner:
+            chain.append(owner)
+
+        if from_node == to_node:
+            return True
+
+        node = KPI_TREE.get(from_node)
+        if node and "components" in node:
+            for comp_id in node["components"]:
+                if self._build_owner_chain(comp_id, to_node, chain, visited):
+                    return True
+
+        # Backtrack — this path didn't lead to target
+        if owner and chain and chain[-1] == owner:
+            chain.pop()
+        return False
+
+    # ------------------------------------------------------------------
     # Request routing
     # ------------------------------------------------------------------
 
@@ -265,3 +410,77 @@ class KPIResolutionEngine:
             created_at=datetime.now(timezone.utc).isoformat(),
             status="pending",
         )
+
+
+# ---------------------------------------------------------------------------
+# Multi-hop resolution (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def resolve_multi_hop(
+    engine: KPIResolutionEngine,
+    kpi_node_id: str,
+    requestor_role: str,
+) -> list[InterTwinMessage]:
+    """Trace KPI ownership chain and generate all messages needed.
+
+    Starting from *requestor_role*, detects gaps on the KPI node and
+    follows the component tree to generate a chain of data request
+    messages. Each hop routes to the owner of the next unresolved
+    component.
+
+    Example::
+
+        CEO asks about margin → finds COGS component → routes to CFO
+        → CFO finds raw_materials → routes to GM
+
+    Args:
+        engine: The :class:`KPIResolutionEngine` instance to use.
+        kpi_node_id: The root KPI node to resolve.
+        requestor_role: The role initiating the resolution.
+
+    Returns:
+        An ordered list of :class:`InterTwinMessage` instances
+        representing the full resolution chain.
+    """
+    messages: list[InterTwinMessage] = []
+
+    # Collect the full component chain
+    components = engine.get_component_chain(kpi_node_id)
+    if not components:
+        # Single node with no components — request data for it directly
+        gaps = engine.detect_gaps(kpi_node_id)
+        if gaps:
+            messages.append(
+                engine.route_request(kpi_node_id, gaps[0], requestor_role)
+            )
+        return messages
+
+    # Build the resolution chain: for each level, find gaps and route
+    current_role: str = requestor_role
+
+    # Start with the root KPI if it has gaps
+    root_gaps = engine.detect_gaps(kpi_node_id)
+    if root_gaps:
+        root_owner = engine.find_owner(kpi_node_id)
+        if root_owner and root_owner != current_role:
+            # First hop: requestor → root owner
+            msg = engine.route_request(kpi_node_id, root_gaps[0], current_role)
+            messages.append(msg)
+            current_role = root_owner
+
+    # Then trace through components
+    for comp_id in components:
+        comp_gaps = engine.detect_gaps(comp_id)
+        if comp_gaps:
+            comp_owner = engine.find_owner(comp_id)
+            if comp_owner and comp_owner != current_role:
+                msg = engine.route_request(comp_id, comp_gaps[0], current_role)
+                messages.append(msg)
+                current_role = comp_owner
+            elif comp_owner and comp_owner == current_role:
+                # Same owner, create an internal notification
+                msg = engine.route_request(comp_id, comp_gaps[0], current_role)
+                messages.append(msg)
+
+    return messages

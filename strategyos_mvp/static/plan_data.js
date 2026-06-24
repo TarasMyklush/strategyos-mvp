@@ -1,6 +1,6 @@
 (function () {
   window.STRATEGYOS_PLAN = {
-    updated: "2026-06-24",
+    updated: "2026-06-25",
     overallStatus: "in_progress",
     phases: [
       {
@@ -40,14 +40,14 @@
         title: "Expanded Roles",
         subtitle: "Group Manager, Analyst, Strategy, Reviewer twins + multi-hop chains",
         weeks: "2",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "2.1", title: "Group Manager Twin", description: "BU metrics, growth KPIs, operational data ownership", status: "not_started", files: ["twins/persona.py"] },
-          { id: "2.2", title: "Analyst Twin", description: "Data prep, source validation, evidence quality monitoring", status: "not_started", files: ["twins/persona.py"] },
-          { id: "2.3", title: "Strategy Twin", description: "KPI tree maintenance, value driver mapping, initiative tracking", status: "not_started", files: ["twins/persona.py"] },
-          { id: "2.4", title: "Reviewer Twin", description: "Evidence verification, finding adjudication, compliance checks", status: "not_started", files: ["twins/persona.py"] },
-          { id: "2.5", title: "Multi-hop resolution chains", description: "CEO \u2192 CFO \u2192 GM \u2192 Analyst chain, passing structured requests through hierarchy", status: "not_started", files: ["twins/protocol.py", "twins/resolution.py"] },
-          { id: "2.6", title: "Escalation + deadline enforcement", description: "Auto-escalate if no response by deadline, configurable timeouts per role", status: "not_started", files: ["twins/protocol.py"] }
+          { id: "2.1", title: "Group Manager Twin", description: "BU metrics, growth KPIs, operational data ownership", status: "completed", files: ["twins/persona.py"] },
+          { id: "2.2", title: "Analyst Twin", description: "Data prep, source validation, evidence quality monitoring", status: "completed", files: ["twins/persona.py"] },
+          { id: "2.3", title: "Strategy Twin", description: "KPI tree maintenance, value driver mapping, initiative tracking", status: "completed", files: ["twins/persona.py"] },
+          { id: "2.4", title: "Reviewer Twin", description: "Evidence verification, finding adjudication, compliance checks", status: "completed", files: ["twins/persona.py"] },
+          { id: "2.5", title: "Multi-hop resolution chains", description: "CEO \u2192 CFO \u2192 GM \u2192 Analyst chain, passing structured requests through hierarchy", status: "completed", files: ["twins/protocol.py", "twins/resolution.py"] },
+          { id: "2.6", title: "Escalation + deadline enforcement", description: "Auto-escalate if no response by deadline, configurable timeouts per role", status: "completed", files: ["twins/protocol.py"] }
         ]
       },
       {

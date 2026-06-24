@@ -1,0 +1,452 @@
+- main [ref=e2]:
+  - complementary "StrategyOS executive navigation" [ref=e3]:
+    - link "StrategyOS home" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - text: S
+    - navigation [ref=e5]:
+      - link "Overview" [ref=e6] [cursor=pointer]:
+        - /url: "#overview"
+      - link "Cases" [ref=e7] [cursor=pointer]:
+        - /url: "#cases"
+      - link "Evidence" [ref=e8] [cursor=pointer]:
+        - /url: "#evidence"
+      - link "Reports" [ref=e9] [cursor=pointer]:
+        - /url: "#reports"
+    - generic [ref=e10]: AUTH REQUIRED
+  - generic [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e15]:
+        - heading "StrategyOS.live" [level=1] [ref=e16]
+        - text: Executive altitude · evidence-linked overview
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - strong [ref=e19]: Latest finance review
+          - text: Waiting for authenticated run data
+        - button "Persona Group CEO Pre-board" [ref=e21] [cursor=pointer]:
+          - generic [ref=e22]: Persona
+          - strong [ref=e23]: Group CEO
+          - generic [ref=e24]: Pre-board
+        - link "Open review app" [ref=e25] [cursor=pointer]:
+          - /url: /app
+    - region "Executive diagnostics hero" [ref=e26]:
+      - article [ref=e27]:
+        - paragraph [ref=e28]: Executive diagnostics
+        - generic [ref=e29]:
+          - generic [ref=e31]:
+            - strong [ref=e32]: "78"
+            - generic [ref=e33]: Board packet posture
+          - generic [ref=e34]:
+            - paragraph [ref=e35]: Good morning, Khalid
+            - heading "Revenue is carrying the room, but EBITDA and hedge discipline still decide confidence." [level=2] [ref=e36]
+            - paragraph [ref=e37]: "The 22.06 hero composition stays grounded to current governed packet truth: evidence closure, release posture, board-pack readiness, and the latest finance signal only."
+            - paragraph [ref=e38]: No full-enterprise strategy score is claimed here.
+      - article [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - paragraph [ref=e42]: Driver index
+            - heading "Ring-first executive drivers" [level=2] [ref=e43]
+            - paragraph [ref=e44]: Design-inspired driver cards grounded in current findings, citation posture, publication state, and board-pack readiness.
+          - generic [ref=e45]: Bounded posture
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - paragraph [ref=e50]: Driver drill
+              - heading "Awaiting driver selection" [level=3] [ref=e51]
+            - generic [ref=e52]: "--"
+          - paragraph [ref=e53]: Select a driver card to inspect the bounded rationale behind it.
+          - generic [ref=e54]:
+            - article [ref=e55]:
+              - generic [ref=e56]:
+                - heading "Trend + evidence chain" [level=4] [ref=e57]
+                - generic [ref=e58]: why this driver moved
+            - article [ref=e59]:
+              - generic [ref=e60]:
+                - heading "Movers" [level=4] [ref=e61]
+                - generic [ref=e62]: cards view
+    - region "Executive framing modes" [ref=e63]:
+      - article [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]:
+            - paragraph [ref=e67]: Operating personas
+            - heading "Group CEO framing" [level=2] [ref=e68]
+            - paragraph [ref=e69]: Switch across the five executive personas and the embedded board room without leaving the governed packet.
+          - generic [ref=e70]: 5 + board
+        - tablist "Executive persona framing" [ref=e71]
+      - article [ref=e72]:
+        - generic [ref=e73]:
+          - generic [ref=e74]:
+            - paragraph [ref=e75]: Board lifecycle
+            - heading "Pre-board preparation" [level=2] [ref=e76]
+            - paragraph [ref=e77]: Lifecycle framing is derived from governed publication and approval posture, then can be inspected state by state.
+          - generic [ref=e78]: Governed states
+        - tablist "Board lifecycle framing" [ref=e79]
+      - article [ref=e80]:
+        - generic [ref=e81]:
+          - generic [ref=e82]:
+            - paragraph [ref=e83]: Design controls + gravity
+            - heading "Driver gravity, movers, and density" [level=2] [ref=e84]
+            - paragraph [ref=e85]: Shift theme, density, and movers treatment while keeping the underlying executive packet truthful.
+          - generic [ref=e86]: Interactive layer
+        - generic [ref=e87]:
+          - generic [ref=e88]:
+            - generic [ref=e89]: Theme
+            - tablist "Executive theme mode" [ref=e90]
+          - generic [ref=e91]:
+            - generic [ref=e92]: Density
+            - tablist "Executive density mode" [ref=e93]
+          - generic [ref=e94]:
+            - generic [ref=e95]: Movers view
+            - tablist "Executive movers mode" [ref=e96]
+        - generic [ref=e99]:
+          - article [ref=e100]:
+            - text: Play on the model
+            - heading "Prompt the packet" [level=3] [ref=e101]
+          - article [ref=e102]:
+            - text: What chiefs are signalling
+            - paragraph [ref=e103]: Chief signals will appear when a persona is active.
+            - generic [ref=e104]: Hermes · chief of staff
+    - region "Lower rail and weekly rhythm" [ref=e105]:
+      - generic [ref=e106]:
+        - generic [ref=e107]:
+          - paragraph [ref=e108]: Lower rail fidelity
+          - heading "Developments, prep, and weekly rhythm" [level=2] [ref=e109]
+          - paragraph [ref=e110]: Bring the designed lower-main and lower-rail pattern into the truthful executive cockpit without collapsing it into raw operator clutter.
+        - generic [ref=e111]: Week ahead
+      - generic [ref=e112]:
+        - article [ref=e113]:
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - heading "Developments and findings" [level=3] [ref=e116]
+              - paragraph [ref=e117]: High-signal updates mapped to the active persona and the current governed packet.
+            - generic [ref=e118]: Awaiting packet
+        - complementary [ref=e119]:
+          - generic [ref=e120]:
+            - generic [ref=e121]:
+              - heading "Week ahead" [level=3] [ref=e122]
+              - paragraph [ref=e123]: Board prep, release sequencing, and executive follow-through in one rail.
+            - generic [ref=e124]: Current cadence
+      - generic [ref=e125]:
+        - article [ref=e126]:
+          - generic [ref=e127]:
+            - generic [ref=e128]:
+              - heading "Cash pulse and driver pressure" [level=3] [ref=e129]
+              - paragraph [ref=e130]: Ring-first diagnostics, carried downward into the exact pulse row the 22.06 board read expects.
+            - generic [ref=e131]: Pulse
+        - article [ref=e132]:
+          - generic [ref=e133]:
+            - generic [ref=e134]:
+              - heading "Owed upward" [level=3] [ref=e135]
+              - paragraph [ref=e136]: Who still needs what from the packet before confidence can move upward cleanly.
+            - generic [ref=e137]: Dependencies
+    - region "StrategyOS role surfaces" [ref=e138]:
+      - article [ref=e139]:
+        - generic [ref=e140]:
+          - generic [ref=e141]:
+            - paragraph [ref=e142]: Executive altitude
+            - heading "Board-safe narrative surface" [level=2] [ref=e143]
+          - generic [ref=e144]: Current surface
+        - paragraph [ref=e145]: Overview, cases, evidence, and reports are framed for executive scan. This cockpit stays read-only even when it borrows a live operator or reviewer session.
+        - generic [ref=e146]: You are here
+      - article [ref=e147]:
+        - generic [ref=e148]:
+          - generic [ref=e149]:
+            - paragraph [ref=e150]: BU / reviewer altitude
+            - heading "Governed review lane" [level=2] [ref=e151]
+          - generic [ref=e152]: Approval gate
+        - paragraph [ref=e153]: Queue-first review, checkpoint inspection, evidence packet validation, and release posture. BU leaders now have a distinct read-only backend lane here; reviewer sign-off still owns approve/reject decisions.
+        - link "Open review lane" [ref=e154] [cursor=pointer]:
+          - /url: /app#review
+      - article [ref=e155]:
+        - generic [ref=e156]:
+          - generic [ref=e157]:
+            - paragraph [ref=e158]: Operator altitude
+            - heading "Run-control lane" [level=2] [ref=e159]
+          - generic [ref=e160]: Run control
+        - paragraph [ref=e161]: Source-pack intake, run launch, runtime diagnostics, and post-approval resume. This is where governed execution is operated, not narrated.
+        - link "Open operator lane" [ref=e162] [cursor=pointer]:
+          - /url: /app?lane=operate
+      - article [ref=e163]:
+        - generic [ref=e164]:
+          - generic [ref=e165]:
+            - paragraph [ref=e166]: Tenant admin / system altitude
+            - heading "Governance and runtime lane" [level=2] [ref=e167]
+          - generic [ref=e168]: Tenant controls
+        - paragraph [ref=e169]: Connector readiness, managed data, graph and search stores, artifact previews, and runtime health stay here so executive and reviewer lanes remain clean.
+        - link "Open system lane" [ref=e170] [cursor=pointer]:
+          - /url: /app?lane=system
+    - region "Executive scope switching" [ref=e171]:
+      - generic [ref=e172]:
+        - paragraph [ref=e173]: Shared scope
+        - heading "Company and portfolio framing" [level=2] [ref=e174]
+        - paragraph [ref=e175]: "Phase 1 truth boundary: the executive cockpit can switch framing inside the current governed tenant surface, but it does not yet mutate cross-company backend context."
+      - generic [ref=e176]:
+        - generic [ref=e177]:
+          - text: Company
+          - combobox "Company" [ref=e178]:
+            - option "StrategyOS Live" [selected]
+        - generic [ref=e179]:
+          - text: Portfolio
+          - combobox "Portfolio" [ref=e180]:
+            - option "All governed portfolios" [selected]
+            - option "Finance diagnostics"
+            - option "Evidence governance"
+            - option "Release readiness"
+            - option "Runtime governance"
+      - generic [ref=e181]:
+        - strong [ref=e182]: StrategyOS Live · All governed portfolios
+        - generic [ref=e183]: Overview → cases → evidence → reports
+    - region "Executive plan signal and publication runway" [ref=e184]:
+      - generic [ref=e185]:
+        - generic [ref=e186]:
+          - heading "Bounded domain signal and publication runway" [level=2] [ref=e187]
+          - paragraph [ref=e188]: StrategyOS can now frame multi-domain finance signal, release posture, and report publication surfaces without claiming portfolio-wide strategic compilation.
+        - generic [ref=e189]: release posture
+      - generic [ref=e190]:
+        - article [ref=e191]:
+          - text: KPI TREE
+          - strong [ref=e192]: Awaiting governed run
+          - paragraph [ref=e193]: The latest governed run will populate cash recovery, evidence risk, report release, and runtime branches.
+        - article [ref=e194]:
+          - text: DOMAINS
+          - strong [ref=e195]: "--"
+          - paragraph [ref=e196]: No domain branches are visible yet.
+        - article [ref=e197]:
+          - text: PUBLICATION
+          - strong [ref=e198]: Protected until review
+          - paragraph [ref=e199]: Public-safe previews and protected artifacts will appear here when the latest run exposes them.
+        - article [ref=e200]:
+          - text: EXECUTIVE HANDOFF
+          - strong [ref=e201]: /executive
+          - paragraph [ref=e202]: Final release still depends on reviewer and operator runtime controls in the governed workspace.
+      - generic [ref=e203]:
+        - heading "Domain branches" [level=3] [ref=e205]
+        - heading "Publication surfaces" [level=3] [ref=e208]
+      - generic [ref=e210]:
+        - heading "Value-driver mapping" [level=3] [ref=e212]
+        - generic [ref=e214]:
+          - heading "Bounded strategy intent" [level=3] [ref=e215]
+          - paragraph [ref=e216]: Strategy intent will appear here once the bounded substrate is loaded.
+      - generic [ref=e218]:
+        - heading "Board portal lifecycle" [level=3] [ref=e220]
+        - heading "Publish choreography" [level=3] [ref=e223]
+        - heading "Discovery modules" [level=3] [ref=e226]
+    - region "Board portal lifecycle" [ref=e228]:
+      - generic [ref=e229]:
+        - generic [ref=e230]:
+          - paragraph [ref=e231]: Board portal lifecycle
+          - heading "Latest governed board packet" [level=2] [ref=e232]
+          - paragraph [ref=e233]: Pre / live / closed posture is derived from approval and board-pack truth, then can be inspected state by state.
+        - generic [ref=e234]: Pre-board
+      - generic [ref=e236]:
+        - article [ref=e237]:
+          - text: GOVERNANCE
+          - strong [ref=e238]: Nothing reaches the board until the packet is approved.
+          - paragraph [ref=e239]: Board-safe publication and review posture will populate here.
+        - article [ref=e240]:
+          - heading "CEO-approved material" [level=3] [ref=e241]
+          - paragraph [ref=e242]: Only approved material appears on the board surface.
+        - article [ref=e243]:
+          - heading "Supplementary questions" [level=3] [ref=e244]
+          - paragraph [ref=e245]: Executive assistants coordinate anything the board still needs before the room.
+          - paragraph [ref=e246]: No board follow-up is visible yet.
+    - region "Agents and discovery" [ref=e248]:
+      - generic [ref=e249]:
+        - generic [ref=e250]:
+          - paragraph [ref=e251]: Agents
+          - heading "Running now and discover more" [level=2] [ref=e252]
+          - paragraph [ref=e253]: "Design-parity agent framing stays truthful: current runtime, review, publication, and board-support surfaces are shown as bounded modules, not autonomous promises."
+        - generic [ref=e254]: Bounded discovery
+      - generic [ref=e255]: Awaiting governed packet activity.
+      - generic [ref=e256]:
+        - article [ref=e257]:
+          - generic [ref=e258]:
+            - generic [ref=e259]:
+              - heading "Running now" [level=3] [ref=e260]
+              - paragraph [ref=e261]: Approval, evidence, runtime, and publication posture in one view.
+            - generic [ref=e262]: 0 active
+          - heading "Sub-agents your chiefs call as tools" [level=4] [ref=e264]
+        - article [ref=e265]:
+          - generic [ref=e266]:
+            - generic [ref=e267]:
+              - heading "Discover agents" [level=3] [ref=e268]
+              - paragraph [ref=e269]: Native StrategyOS surfaces and marketplace-style discovery cards mapped to the current governed boundary.
+            - generic [ref=e270]: No auto-deploy
+          - generic [ref=e271]:
+            - generic [ref=e272]: ⌕
+            - generic [ref=e273]: Search the agent universe…
+          - generic [ref=e275]: Native on StrategyOS
+          - generic [ref=e277]: From the marketplace
+          - button "Browse all agents →" [ref=e278] [cursor=pointer]
+    - paragraph [ref=e279]: "Truth today: there is no standalone executive auth role; the BU backend role is now bounded and read-only. The executive surface stays read-only, while reviewer, operator, and tenant-admin/system work continue inside the governed workspace."
+    - generic [ref=e280]:
+      - generic [ref=e281]:
+        - strong [ref=e282]: Connect live packet data
+        - generic [ref=e283]: Paste an operator or reviewer token to unlock live run data. Executive remains read-only.
+      - generic [ref=e284]:
+        - text: Access token
+        - textbox "Access token" [ref=e285]:
+          - /placeholder: Bearer token or API key
+      - button "Connect" [ref=e286] [cursor=pointer]
+      - button "Clear" [ref=e287] [cursor=pointer]
+    - generic [ref=e288]:
+      - generic [ref=e289]:
+        - generic [ref=e290]:
+          - generic [ref=e291]:
+            - paragraph [ref=e292]: RECOVERY INTELLIGENCE ONLINE
+            - heading "Awaiting live StrategyOS run." [level=2] [ref=e293]
+            - paragraph [ref=e294]: Connect a reviewer or operator session. I will summarize what can be approved, what is blocked, and what should not be automated.
+            - generic [ref=e295]:
+              - generic [ref=e296]: ">"
+              - textbox "Ask StrategyOS command" [ref=e297]: What is the total recoverable?
+              - button "Run" [ref=e298] [cursor=pointer]
+            - generic [ref=e299]: Command answers will appear here with citations.
+          - complementary [ref=e300]:
+            - text: PRIMARY OBJECTIVE
+            - strong [ref=e301]: "--"
+            - paragraph [ref=e302]: Recoverable value will load from the latest run.
+        - generic "Executive validation overview" [ref=e303]:
+          - article [ref=e304]:
+            - text: OVERVIEW
+            - strong [ref=e305]: Awaiting authenticated run
+            - paragraph [ref=e306]: StrategyOS will translate the latest governed run into board-safe priorities.
+          - article [ref=e307]:
+            - text: CASES
+            - strong [ref=e308]: "--"
+            - paragraph [ref=e309]: Pending review queue will load after authentication.
+          - article [ref=e310]:
+            - text: EVIDENCE
+            - strong [ref=e311]: "--"
+            - paragraph [ref=e312]: Citation integrity and live excerpts stay attached to every claim.
+          - article [ref=e313]:
+            - text: REPORTS
+            - strong [ref=e314]: "--"
+            - paragraph [ref=e315]: Publication readiness depends on human review and report artifact availability.
+        - region "Bounded plan health and KPI snapshot" [ref=e316]:
+          - generic [ref=e317]:
+            - generic [ref=e318]:
+              - heading "Plan health snapshot" [level=2] [ref=e319]
+              - paragraph [ref=e320]: Finance-derived signal only — StrategyOS is summarizing current case, evidence, and report posture, not a full enterprise strategy compiler.
+              - paragraph [ref=e321]: Executive KPI cards and plan health reconcile against the same governed run, audit summary, and publication posture.
+            - generic [ref=e322]: bounded KPI layer
+          - generic [ref=e323]:
+            - article [ref=e324]:
+              - text: PLAN HEALTH
+              - strong [ref=e325]: Awaiting governed run
+              - paragraph [ref=e326]: Connect live run data to derive a board-safe health readout from finance cases and evidence.
+            - article [ref=e327]:
+              - text: VALUE SIGNAL
+              - strong [ref=e328]: "--"
+              - paragraph [ref=e329]: Recoverable value will load from the current finance diagnostics run.
+            - article [ref=e330]:
+              - text: CASE READINESS
+              - strong [ref=e331]: "--"
+              - paragraph [ref=e332]: Case progression will summarize what is ready, blocked, or still waiting for review.
+            - article [ref=e333]:
+              - text: EVIDENCE & RELEASE
+              - strong [ref=e334]: "--"
+              - paragraph [ref=e335]: Evidence chain and report release posture stay human-governed.
+        - generic [ref=e336]:
+          - generic [ref=e337]:
+            - generic [ref=e338]:
+              - generic [ref=e339]:
+                - heading "Cash recovery radar" [level=2] [ref=e340]
+                - paragraph [ref=e341]: Live relationship map between value, evidence, owner, and risk.
+              - generic [ref=e342]: "-- citations"
+            - img "Cash recovery radar" [ref=e343]:
+              - generic [ref=e356]:
+                - generic [ref=e358]: "--"
+                - generic [ref=e359]: FOUND
+                - generic [ref=e361]: "--"
+                - generic [ref=e362]: Ready
+                - generic [ref=e364]: "--"
+                - generic [ref=e365]: Blocked
+                - generic [ref=e367]: "--"
+                - generic [ref=e368]: Review
+                - generic [ref=e370]: "--"
+                - generic [ref=e371]: Hold
+                - generic [ref=e373]: "--"
+                - generic [ref=e374]: Cites
+            - generic [ref=e375]:
+              - generic [ref=e376]:
+                - generic [ref=e377]: Recoverable
+                - strong [ref=e378]: "--"
+              - generic [ref=e379]:
+                - generic [ref=e380]: Findings
+                - strong [ref=e381]: "--"
+              - generic [ref=e382]:
+                - generic [ref=e383]: Challenges
+                - strong [ref=e384]: "--"
+          - generic [ref=e386]:
+            - generic [ref=e387]:
+              - heading "Decision controls" [level=2] [ref=e388]
+              - paragraph [ref=e389]: Each control has a cash impact, owner, and current safety posture.
+            - generic [ref=e390]: pending
+      - complementary "StrategyOS assistant" [ref=e392]:
+        - generic [ref=e393]:
+          - paragraph [ref=e394]: STRATEGYOS COPILOT
+          - heading "Hermes · Executive brief from live run data." [level=2] [ref=e395]
+          - paragraph [ref=e396]: Named, threaded, and board-safe. No uncited claim should enter a vendor letter. Human gates stay visible.
+        - generic [ref=e398]:
+          - generic [ref=e400]: Recent conversations
+          - generic [ref=e402]: Assistant network
+        - generic [ref=e404]:
+          - link "Open dashboard controls" [ref=e405] [cursor=pointer]:
+            - /url: /app
+          - button "Refresh live data" [ref=e466] [cursor=pointer]
+          - button "Ask evidence status" [ref=e407] [cursor=pointer]
+    - generic [ref=e408]:
+      - generic [ref=e409]:
+        - generic [ref=e410]:
+          - generic [ref=e411]:
+            - heading "Case matrix" [level=2] [ref=e412]
+            - paragraph [ref=e413]: "Designed for CFO scan: owner, decision, evidence, and risk. Select a case to inspect the governed evidence thread."
+          - generic [ref=e414]: live queue
+        - table [ref=e415]:
+          - rowgroup [ref=e416]:
+            - row "Case Owner Evidence Action Risk" [ref=e417]:
+              - columnheader "Case" [ref=e418]
+              - columnheader "Owner" [ref=e419]
+              - columnheader "Evidence" [ref=e420]
+              - columnheader "Action" [ref=e421]
+              - columnheader "Risk" [ref=e422]
+          - rowgroup [ref=e423]:
+            - row "Connect a session to load cases." [ref=e424]:
+              - cell "Connect a session to load cases." [ref=e425]
+      - complementary [ref=e426]:
+        - generic [ref=e427]:
+          - generic [ref=e428]:
+            - heading "Evidence packet" [level=2] [ref=e429]
+            - paragraph [ref=e430]: Selected case evidence, excerpt preview, and why the claim is safe or blocked.
+          - generic [ref=e431]: awaiting selection
+        - generic [ref=e432]:
+          - generic [ref=e433]:
+            - text: SELECTED CASE
+            - strong [ref=e434]: No finding selected
+            - paragraph [ref=e435]: Choose a case from the matrix to load cited evidence and validation posture.
+          - generic [ref=e436]:
+            - generic [ref=e437]:
+              - generic [ref=e438]: Source
+              - strong [ref=e439]: "--"
+            - generic [ref=e440]:
+              - generic [ref=e441]: Locator
+              - strong [ref=e442]: "--"
+            - generic [ref=e443]:
+              - generic [ref=e444]: Confidence
+              - strong [ref=e445]: "--"
+            - generic [ref=e446]:
+              - generic [ref=e447]: Status
+              - strong [ref=e448]: "--"
+          - generic [ref=e449]: Evidence preview will appear here.
+          - button "Open in review app" [ref=e451] [cursor=pointer]
+    - generic [ref=e452]:
+      - generic [ref=e453]:
+        - paragraph [ref=e454]: BOARD PACK SNAPSHOT
+        - heading "What to say in the room" [level=2] [ref=e455]
+        - paragraph [ref=e456]: Live board narrative will load from the latest run state.
+      - generic [ref=e457]:
+        - generic [ref=e458]:
+          - generic [ref=e459]:
+            - heading "Reports" [level=2] [ref=e460]
+            - paragraph [ref=e461]: Available run artifacts and the latest previewable packet for executive validation.
+          - generic [ref=e462]: locked
+        - generic [ref=e465]: Connect a session to inspect report surfaces.
