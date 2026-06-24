@@ -1355,3 +1355,13 @@ a { color: inherit; }
     transition: none !important;
   }
 }
+
+/* ===== CEO PAGE UX — collapse to design proportions ===== */
+#cases.section, #evidence.section, #reports.section {
+  max-height: 0; overflow: hidden; padding: 0; margin: 0; border: 0;
+}
+#cases.section.is-open, #evidence.section.is-open, #reports.section.is-open {
+  max-height: 600px; overflow: auto;
+}
+.board-panel { max-height: 280px; overflow: hidden; }
+.board-panel + .board-panel { display: none; }
