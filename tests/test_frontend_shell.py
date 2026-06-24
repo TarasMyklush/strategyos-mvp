@@ -88,12 +88,13 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="hero-score"' in html or 'class="hero-score__value"' in html
     # Driver grid
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
-    # Key metrics and summary only
+    # Key metrics and richer fidelity sections
     assert 'id="metrics-grid"' in html or 'class="metrics-grid"' in html
     assert 'id="summary-card"' in html or 'class="summary"' in html
-    assert 'id="feed-list"' not in html
-    assert 'id="week-rail"' not in html
-    assert 'id="drill"' not in html
+    assert 'id="drill"' in html or 'class="drill-layout"' in html
+    assert 'id="board-portal"' in html
+    assert 'id="lower-rail-fidelity"' in html
+    assert 'id="agents-activity"' in html
 
 
 def test_executive_route_renders_minimal_live_diagnostics_shell():
@@ -119,9 +120,10 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
     assert 'id="metrics-grid"' in html or 'class="metrics-grid"' in html
     assert 'id="summary-card"' in html or 'class="summary"' in html
-    assert 'id="feed-list"' not in html
-    assert 'id="week-rail"' not in html
-    assert 'id="drill"' not in html
+    assert 'id="drill"' in html or 'class="drill-layout"' in html
+    assert 'id="board-portal"' in html
+    assert 'id="lower-rail-fidelity"' in html
+    assert 'id="agents-activity"' in html
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
     assert "strategyos.ui.token" in js
     assert '<script id="strategyos-bootstrap"' not in html
@@ -158,12 +160,18 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
     assert 'id="metrics-grid"' in html or 'class="metrics-grid"' in html
     assert 'id="summary-card"' in html or 'class="summary"' in html
-    assert 'id="feed-list"' not in html
-    assert 'id="week-rail"' not in html
-    assert 'id="drill"' not in html
+    assert 'id="drill"' in html or 'class="drill-layout"' in html
+    assert 'id="board-portal"' in html
+    assert 'id="lower-rail-fidelity"' in html
+    assert 'id="agents-activity"' in html
     assert "StrategyOS.live Governed Diagnostics Workspace" not in html
     assert 'strategyos.ui.token' in js
-    assert 'requestJson(viewStateRoute("/public/runs/latest"))' in js
+    assert 'renderExecutiveHero' in js
+    assert 'renderDriverDrillFidelity' in js
+    assert 'renderLowerRailFidelity' in js
+    assert 'renderBoardPortal' in js
+    assert 'renderAgentsDiscovery' in js
+    assert '/ui/workspace-contract/latest' in js
 
 
 def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
@@ -191,8 +199,8 @@ def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
         assert operator.headers["location"] == "/app?lane=operate"
         assert tenant_admin.status_code == 307
         assert tenant_admin.headers["location"] == "/app?lane=system"
-        assert executive.status_code == 200
-        assert "StrategyOS — Group CEO Diagnostics" in executive.text
+        assert executive.status_code == 307
+        assert executive.headers["location"] == "/app"
     finally:
         _restore_env(original)
 
@@ -206,8 +214,26 @@ def test_app_entry_embeds_parseable_executive_bootstrap_json():
     assert "&quot;" not in bootstrap_json
     bootstrap = json.loads(bootstrap_json)
     assert bootstrap["product_name"] == "StrategyOS"
+    assert bootstrap["executive_route_base"] == "/app"
+    assert bootstrap["executive_entry_route"] == "/app"
+    assert bootstrap["requested_view_state"]["persona"] is None
     assert bootstrap["qa_modes"]["deterministic"]["enabled"] is True
     assert "enabled" in bootstrap["qa_modes"]["llm"]
+
+
+def test_app_entry_bootstrap_preserves_requested_view_state():
+    client = TestClient(api_module.app)
+    response = client.get("/app?persona=board&board=closed&driver=owed_upward&company=tenant-alpha&portfolio=release-readiness")
+
+    assert response.status_code == 200
+    marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
+    bootstrap_json = response.text.partition(marker)[2].partition("</script>")[0]
+    bootstrap = json.loads(bootstrap_json)
+    assert bootstrap["requested_view_state"]["persona"] == "board"
+    assert bootstrap["requested_view_state"]["board"] == "closed"
+    assert bootstrap["requested_view_state"]["driver"] == "owed_upward"
+    assert bootstrap["requested_view_state"]["company"] == "tenant-alpha"
+    assert bootstrap["requested_view_state"]["portfolio"] == "release-readiness"
 
 
 def test_entry_routes_static_assets_have_no_external_origins():
@@ -232,6 +258,8 @@ def test_app_entry_preserves_bootstrap_bound_client_rendering():
     assert "bootstrap" in js
     assert "bootstrap.environment" in js
     assert "bootstrap.api_auth_enabled" in js
+    assert "bootstrap.requested_view_state" in js
+    assert "history.replaceState" in js
 
 
 def test_ui_session_reports_anonymous_when_auth_enabled_and_no_credentials():

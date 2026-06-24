@@ -5313,7 +5313,11 @@ def _ui_environment_label() -> str:
     return CONFIG.environment_label.strip() or "Local development"
 
 
-def _ui_bootstrap() -> dict[str, Any]:
+def _ui_bootstrap(
+    *,
+    view_state: dict[str, str | None] | None = None,
+    entry_route: str = "/app",
+) -> dict[str, Any]:
     llm_status = llm_qa.chat_status(CONFIG)
     return {
         "product_name": "StrategyOS",
@@ -5332,6 +5336,9 @@ def _ui_bootstrap() -> dict[str, Any]:
             "deterministic": {"enabled": True},
             "llm": llm_status,
         },
+        "executive_route_base": "/app",
+        "executive_entry_route": entry_route,
+        "requested_view_state": dict(view_state or _requested_executive_view_state()),
         "generated_at": datetime.now(UTC).isoformat(),
     }
 
@@ -5353,9 +5360,13 @@ def _homepage_html() -> str:
     return template_path.read_text(encoding="utf-8")
 
 
-def _executive_html() -> str:
+def _executive_html(
+    *,
+    view_state: dict[str, str | None] | None = None,
+    entry_route: str = "/app",
+) -> str:
     bootstrap_json = (
-        json.dumps(_ui_bootstrap())
+        json.dumps(_ui_bootstrap(view_state=view_state, entry_route=entry_route))
         .replace("&", "\\u0026")
         .replace("<", "\\u003c")
         .replace(">", "\\u003e")
@@ -5376,7 +5387,7 @@ def _default_surface_route(principal: dict[str, Any]) -> str:
     if principal_has_any_role(role, "operator"):
         return "/app?lane=operate"
     if principal_has_any_role(role, "executive"):
-        return "/executive"
+        return "/app"
     return "/executive"
 
 
@@ -5914,28 +5925,101 @@ def _record_reviewer_decision(
 
 @app.get("/", response_class=HTMLResponse)
 def homepage(
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> Any:
+    view_state = _requested_executive_view_state(
+        persona=persona,
+        board=board,
+        driver=driver,
+        company=company,
+        portfolio=portfolio,
+        week=week,
+        agent=agent,
+    )
     if principal.get("authenticated"):
         default_route = _default_surface_route(principal)
         if default_route != "/executive":
             return RedirectResponse(url=default_route, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-    return HTMLResponse(_executive_html())
+    return HTMLResponse(_executive_html(view_state=view_state, entry_route="/"))
 
 
 @app.get("/app", response_class=HTMLResponse)
-def dashboard() -> str:
-    return _executive_html()
+def dashboard(
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
+) -> str:
+    return _executive_html(
+        view_state=_requested_executive_view_state(
+            persona=persona,
+            board=board,
+            driver=driver,
+            company=company,
+            portfolio=portfolio,
+            week=week,
+            agent=agent,
+        ),
+        entry_route="/app",
+    )
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def dashboard_alias() -> str:
-    return _executive_html()
+def dashboard_alias(
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
+) -> str:
+    return _executive_html(
+        view_state=_requested_executive_view_state(
+            persona=persona,
+            board=board,
+            driver=driver,
+            company=company,
+            portfolio=portfolio,
+            week=week,
+            agent=agent,
+        ),
+        entry_route="/dashboard",
+    )
 
 
 @app.get("/executive", response_class=HTMLResponse)
-def executive_cockpit() -> str:
-    return _executive_html()
+def executive_cockpit(
+    persona: str | None = None,
+    board: str | None = None,
+    driver: str | None = None,
+    company: str | None = None,
+    portfolio: str | None = None,
+    week: str | None = None,
+    agent: str | None = None,
+) -> str:
+    return _executive_html(
+        view_state=_requested_executive_view_state(
+            persona=persona,
+            board=board,
+            driver=driver,
+            company=company,
+            portfolio=portfolio,
+            week=week,
+            agent=agent,
+        ),
+        entry_route="/executive",
+    )
 
 
 @app.get("/ui/session")

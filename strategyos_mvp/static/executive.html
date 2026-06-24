@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StrategyOS — Group CEO Diagnostics</title>
-  <link rel="stylesheet" href="/static/executive.css" />
+  <link rel="stylesheet" href="/static/executive.css?v=ux-20260624a" />
 </head>
 <body>
   <header class="topbar" id="topbar">
@@ -30,23 +30,29 @@
     </div>
   </header>
 
-  <main class="page" id="sheet">
+  <main class="page fidelity-shell" id="sheet">
     <section class="hero card" id="hero" aria-labelledby="hero-head">
       <div class="hero-copy">
         <p class="eyebrow" id="hero-eyebrow">Group CEO diagnostics</p>
         <h1 class="hero-title" id="hero-head">Plan health overview</h1>
         <p class="hero-body" id="hero-body">Loading executive diagnostics from the latest governed run…</p>
+        <blockquote class="hero-quote" id="hero-quote" hidden></blockquote>
+        <p class="hero-byline" id="hero-byline"></p>
+        <div class="hero-prompts" id="hero-prompts"></div>
       </div>
 
-      <div class="hero-score" aria-label="Plan health score">
-        <svg class="score-ring" viewBox="0 0 120 120" aria-hidden="true">
-          <circle cx="60" cy="60" r="48" class="score-ring__track"></circle>
-          <circle cx="60" cy="60" r="48" class="score-ring__value" id="hero-arc"></circle>
-        </svg>
-        <div class="hero-score__label">
-          <span class="hero-score__value" id="hero-score">--</span>
-          <span class="hero-score__caption" id="hero-cap">loading</span>
+      <div class="hero-score-wrap">
+        <div class="hero-score" aria-label="Plan health score">
+          <svg class="score-ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle cx="60" cy="60" r="48" class="score-ring__track"></circle>
+            <circle cx="60" cy="60" r="48" class="score-ring__value" id="hero-arc"></circle>
+          </svg>
+          <div class="hero-score__label">
+            <span class="hero-score__value" id="hero-score">--</span>
+            <span class="hero-score__caption" id="hero-cap">loading</span>
+          </div>
         </div>
+        <div class="hero-mini-stats" id="hero-mini-stats"></div>
       </div>
     </section>
 
@@ -62,6 +68,54 @@
         <h2 class="section-title" id="metrics-heading">Key metrics</h2>
       </div>
       <div class="metrics-grid" id="metrics-grid"></div>
+    </section>
+
+    <section class="section" aria-labelledby="drill-heading">
+      <div class="section-head">
+        <h2 class="section-title" id="drill-heading">Driver drill and gravity</h2>
+      </div>
+      <div class="drill-layout" id="drill">
+        <article class="card detail-card" id="driver-drill"></article>
+        <article class="card detail-card" id="gravity-panel"></article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="board-heading">
+      <div class="section-head section-head--split">
+        <div>
+          <h2 class="section-title" id="board-heading">Board portal</h2>
+          <p class="section-note" id="board-note">Board-safe lifecycle, materials, and governed memory.</p>
+        </div>
+        <div class="state-tabs" id="board-state-row" role="tablist" aria-label="Board lifecycle states"></div>
+      </div>
+      <article class="card board-portal" id="board-portal"></article>
+    </section>
+
+    <section class="section" aria-labelledby="lower-rail-heading">
+      <div class="section-head">
+        <h2 class="section-title" id="lower-rail-heading">Lower rail</h2>
+      </div>
+      <div class="lower-rail-grid">
+        <article class="card detail-card" id="developments-panel"></article>
+        <article class="card detail-card" id="week-panel"></article>
+        <article class="card detail-card" id="lower-rail-fidelity"></article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="agents-heading">
+      <div class="section-head section-head--split">
+        <div>
+          <h2 class="section-title" id="agents-heading">Agents and discovery</h2>
+          <p class="section-note">Governed runtime activity, approval posture, and expandable discovery.</p>
+        </div>
+        <div class="filter-row" id="discovery-filter-row" role="tablist" aria-label="Discovery source filters"></div>
+      </div>
+      <div class="agents-layout">
+        <article class="card detail-card" id="agents-activity"></article>
+        <article class="card detail-card" id="running-agents"></article>
+        <article class="card detail-card" id="discovery-panel"></article>
+        <article class="card detail-card" id="subtools-panel"></article>
+      </div>
     </section>
 
     <section class="section" aria-labelledby="summary-heading">
@@ -80,6 +134,7 @@
 
   <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
   <script>window.MIZAN=window.MIZAN||{};window.MIZAN_X=window.MIZAN_X||{threads:{},assistants:{}};</script>
+  <script src="/static/executive_design_data.js"></script>
   <script src="/static/executive.js"></script>
 </body>
 </html>

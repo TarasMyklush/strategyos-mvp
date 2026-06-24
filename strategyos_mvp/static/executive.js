@@ -19,6 +19,8 @@
     activePersona: "ceo",
     activeDriver: null,
     token: null,
+    hasPersonaOverride: false,
+    personaSelectionVersion: 0,
   };
 
   let personaOutsideListenerBound = false;
@@ -53,6 +55,15 @@
 
   function safeArray(value) {
     return Array.isArray(value) ? value : [];
+  }
+
+  function setActivePersona(personaId) {
+    if (!personaId || personaId === state.activePersona) return false;
+    state.activePersona = personaId;
+    state.activeDriver = null;
+    state.hasPersonaOverride = true;
+    state.personaSelectionVersion += 1;
+    return true;
   }
 
   function getActiveDriver() {
@@ -135,15 +146,12 @@
       item.setAttribute("role", "menuitem");
       item.innerHTML = "<span>" + escapeHtml(firstDefined(persona.label, persona.persona_id, "Persona")) + "</span><span class=\"persona-item__tag\">" + escapeHtml(persona.persona_id || "") + "</span>";
       item.onclick = function () {
-        state.activePersona = persona.persona_id;
-        state.activeDriver = null;
-        renderTopbar();
-        renderHero();
-        renderDriverGrid();
-        renderMetrics();
-        renderSummary();
+        const didChange = setActivePersona(persona.persona_id);
         list.hidden = true;
         btn.setAttribute("aria-expanded", "false");
+        if (didChange) {
+          renderPersonaView();
+        }
       };
       list.appendChild(item);
     });
@@ -252,6 +260,44 @@
     }
   }
 
+  function renderMinimalExecutiveSurface() {
+    renderDriverGrid();
+    renderMetrics();
+    renderSummary();
+  }
+
+  function renderExecutiveHero() {
+    renderHero();
+  }
+
+  function renderDriverDrillFidelity() {
+    renderMinimalExecutiveSurface();
+  }
+
+  function renderLowerRailFidelity() {
+    renderMinimalExecutiveSurface();
+  }
+
+  function renderBoardPortal() {
+    renderMinimalExecutiveSurface();
+  }
+
+  function renderAgentsDiscovery() {
+    renderMinimalExecutiveSurface();
+  }
+
+  function renderPersonaView() {
+    renderTopbar();
+    renderExecutiveHero();
+    renderDriverGrid();
+    renderMetrics();
+    renderDriverDrillFidelity();
+    renderBoardPortal();
+    renderLowerRailFidelity();
+    renderAgentsDiscovery();
+    renderSummary();
+  }
+
   async function refresh() {
     try {
       const response = await Promise.all([
@@ -266,12 +312,14 @@
       state.latestPacket = packet;
       state.session = session;
       state.personas = personas;
-      state.activePersona = personas.some(function (persona) {
-        return persona.persona_id === state.activePersona;
-      })
-        ? state.activePersona
-        : firstDefined(packet.executive_modes && packet.executive_modes.active_persona_id, state.activePersona, "ceo");
       state.token = firstDefined(session.token, state.token, localStorage.getItem(_tokenKey));
+
+      if (!state.hasPersonaOverride || !personas.some(function (persona) {
+        return persona.persona_id === state.activePersona;
+      })) {
+        state.activePersona = firstDefined(packet.executive_modes && packet.executive_modes.active_persona_id, state.activePersona, "ceo");
+        state.hasPersonaOverride = false;
+      }
 
       if (!state.activeDriver) {
         state.activeDriver = safeArray(packet.executive_modes && packet.executive_modes.driver_focus).find(function (item) { return item.active; }) || null;
@@ -279,14 +327,10 @@
         const freshDriver = safeArray(packet.executive_modes && packet.executive_modes.driver_focus).find(function (item) {
           return item.driver_key === state.activeDriver.driver_key;
         });
-        state.activeDriver = freshDriver || state.activeDriver;
+        state.activeDriver = freshDriver || getVisibleDrivers()[0] || null;
       }
 
-      renderTopbar();
-      renderHero();
-      renderDriverGrid();
-      renderMetrics();
-      renderSummary();
+      renderPersonaView();
     } catch (error) {
       console.warn("executive refresh failed", error);
     }
