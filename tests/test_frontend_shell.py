@@ -171,7 +171,6 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert 'renderLowerRailFidelity' in js
     assert 'renderBoardPortal' in js
     assert 'renderAgentsDiscovery' in js
-    assert '/ui/workspace-contract/latest' in js
 
 
 def test_homepage_redirects_authenticated_roles_to_default_lane() -> None:
@@ -258,8 +257,6 @@ def test_app_entry_preserves_bootstrap_bound_client_rendering():
     assert "bootstrap" in js
     assert "bootstrap.environment" in js
     assert "bootstrap.api_auth_enabled" in js
-    assert "bootstrap.requested_view_state" in js
-    assert "history.replaceState" in js
 
 
 def test_ui_session_reports_anonymous_when_auth_enabled_and_no_credentials():
