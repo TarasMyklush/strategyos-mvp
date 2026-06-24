@@ -9,13 +9,13 @@
         title: "Foundation",
         subtitle: "Protocol, state, persona models, integration hooks",
         weeks: "2\u20133",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "0.1", title: "TwinPersona model + role definitions", description: "Define persona dataclass with role, goals, authority boundaries, escalation path", status: "not_started", files: ["twins/persona.py"] },
-          { id: "0.2", title: "InterTwinMessage protocol + message store", description: "Structured message envelope with typed fields, PostgreSQL table for audit trail", status: "not_started", files: ["twins/protocol.py"] },
-          { id: "0.3", title: "Twin state persistence (memory)", description: "Persistent state: working memory, active investigations, pending requests", status: "not_started", files: ["twins/memory.py"] },
-          { id: "0.4", title: "Integration hooks with existing APIs", description: "Evidence spine, knowledge graph, KPI substrate access from twin context", status: "not_started", files: ["twins/tools.py", "api.py"] },
-          { id: "0.5", title: "Unit tests for foundation layer", description: "Test persona instantiation, protocol validation, state persistence", status: "not_started", files: ["tests/test_twins_foundation.py"] }
+          { id: "0.1", title: "TwinPersona model + role definitions", description: "Define persona dataclass with role, goals, authority boundaries, escalation path", status: "completed", files: ["twins/persona.py"] },
+          { id: "0.2", title: "InterTwinMessage protocol + message store", description: "Structured message envelope with typed fields, PostgreSQL table for audit trail", status: "completed", files: ["twins/protocol.py"] },
+          { id: "0.3", title: "Twin state persistence (memory)", description: "Persistent state: working memory, active investigations, pending requests", status: "completed", files: ["twins/memory.py"] },
+          { id: "0.4", title: "Integration hooks with existing APIs", description: "Evidence spine, knowledge graph, KPI substrate access from twin context", status: "completed", files: ["twins/tools.py", "api.py"] },
+          { id: "0.5", title: "Unit tests for foundation layer", description: "Test persona instantiation, protocol validation, state persistence", status: "completed", files: ["tests/test_twins_foundation.py"] }
         ]
       },
       {
