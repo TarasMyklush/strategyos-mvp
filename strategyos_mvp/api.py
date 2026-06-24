@@ -6022,6 +6022,13 @@ def executive_cockpit(
     )
 
 
+@app.get("/architecture", response_class=HTMLResponse)
+def architecture_page() -> HTMLResponse:
+    """Serve the architecture evolution page."""
+    template_path = STATIC_DIR / "architecture.html"
+    return HTMLResponse(template_path.read_text(encoding="utf-8"))
+
+
 @app.get("/ui/session")
 def ui_session(
     principal: dict[str, Any] = Depends(authenticate_optional_request),

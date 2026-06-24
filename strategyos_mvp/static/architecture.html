@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture · StrategyOS → Digital Twin</title>
+<style>
+:root {
+  --bg: #f4f2ed;
+  --surface: #ffffff;
+  --surface-alt: #fbfaf7;
+  --ink: #1d1c19;
+  --accent: #25335c;
+  --accent-2: #8c6a3d;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --serif: Georgia, "Times New Roman", serif;
+  --border: rgba(29, 28, 25, 0.12);
+  --border-strong: rgba(37, 51, 92, 0.22);
+  --muted: rgba(29, 28, 25, 0.68);
+  --soft: rgba(29, 28, 25, 0.44);
+  --accent-soft: rgba(37, 51, 92, 0.08);
+  --ok-soft: rgba(26, 110, 84, 0.08);
+  --warn-soft: rgba(169, 110, 32, 0.11);
+  --danger-soft: rgba(155, 52, 52, 0.09);
+  --shadow: 0 12px 32px rgba(29, 28, 25, 0.06);
+  --shadow-sm: 0 4px 12px rgba(29, 28, 25, 0.05);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --gap: 24px;
+  --navy: #25335c;
+  --gold: #8c6a3d;
+  --green: #1a6e54;
+  --amber: #a96e20;
+  --red: #9b3434;
+  --new-badge: #1a6e54;
+  --unchanged-badge: #25335c;
+  --modified-badge: #8c6a3d;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.5;
+}
+
+/* ─── Topbar ─── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px clamp(18px, 4vw, 40px);
+  background: rgba(244, 242, 237, 0.94);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.brand-mark {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--surface);
+}
+.brand-name {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar__nav a {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
+}
+.topbar__nav a:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ─── Layout ─── */
+.container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 clamp(18px, 4vw, 40px);
+}
+section { padding: 60px 0; }
+section + section { border-top: 1px solid var(--border); }
+
+/* ─── Typography ─── */
+h1, h2, h3, h4 {
+  font-family: var(--serif);
+  font-weight: 500;
+  line-height: 1.25;
+  margin: 0 0 12px;
+}
+h1 {
+  font-size: clamp(32px, 5vw, 48px);
+  letter-spacing: -0.02em;
+}
+h2 {
+  font-size: clamp(24px, 3.5vw, 34px);
+  color: var(--accent);
+  letter-spacing: -0.01em;
+}
+h3 {
+  font-size: clamp(18px, 2.5vw, 22px);
+  color: var(--accent);
+}
+h4 {
+  font-size: 16px;
+  color: var(--ink);
+}
+p { margin: 0 0 16px; color: var(--muted); }
+p:last-child { margin-bottom: 0; }
+
+.section-eyebrow {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-2);
+  margin-bottom: 8px;
+}
+.section-sub {
+  font-size: 15px;
+  color: var(--muted);
+  max-width: 640px;
+  margin-bottom: 40px;
+}
+
+/* ─── Hero ─── */
+.hero {
+  text-align: center;
+  padding: 80px 0 60px;
+}
+.hero h1 { margin-bottom: 16px; }
+.hero p {
+  font-size: 17px;
+  max-width: 600px;
+  margin: 0 auto 32px;
+}
+.hero__caption {
+  font-size: 13px;
+  color: var(--soft);
+  font-style: italic;
+}
+.hero__badge-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.hero__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+/* ─── Cards ─── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  box-shadow: var(--shadow-sm);
+}
+.card + .card { margin-top: var(--gap); }
+
+/* ─── Architecture Diagrams ─── */
+.diagram-wrapper {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+}
+@media (max-width: 860px) {
+  .diagram-wrapper { grid-template-columns: 1fr; }
+}
+
+.diagram-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+.diagram-card__badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+.diagram-card__badge--before {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.diagram-card__badge--after {
+  background: rgba(26, 110, 84, 0.1);
+  color: var(--green);
+}
+
+.diagram-card h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 16px;
+  color: var(--ink);
+}
+
+.diagram-card__caption {
+  font-size: 12px;
+  color: var(--soft);
+  font-style: italic;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+/* ─── Layer Stack ─── */
+.layer-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 8px 0;
+}
+.layer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  position: relative;
+  margin-top: -1px;
+}
+.layer:first-child { margin-top: 0; }
+.layer__icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.layer__icon--ui { background: rgba(37, 51, 92, 0.1); }
+.layer__icon--runtime { background: rgba(26, 110, 84, 0.1); }
+.layer__icon--foundation { background: rgba(140, 106, 61, 0.1); }
+.layer__icon--infra { background: rgba(29, 28, 25, 0.06); }
+.layer__body { flex: 1; min-width: 0; }
+.layer__title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.layer__desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.layer__tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.tag-new { background: rgba(26, 110, 84, 0.1); color: var(--green); }
+.tag-unchanged { background: var(--accent-soft); color: var(--accent); }
+.tag-modified { background: rgba(169, 110, 32, 0.11); color: var(--amber); }
+
+/* Arrow between layers */
+.layer-arrow {
+  text-align: center;
+  font-size: 14px;
+  color: var(--soft);
+  padding: 4px 0;
+  line-height: 1;
+}
+
+/* ─── Twin Grid ─── */
+.twin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.twin-node {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 14px 12px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+.twin-node__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+}
+.twin-node__icon--ceo { background: #25335c; }
+.twin-node__icon--cfo { background: #1a6e54; }
+.twin-node__icon--gm { background: #8c6a3d; }
+.twin-node__icon--strategy { background: #5b4b8a; }
+.twin-node__icon--analyst { background: #3d7a9a; }
+.twin-node__icon--reviewer { background: #9b6b3a; }
+
+.twin-node__label {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.twin-node__sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.twin-connections {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--soft);
+  margin: 12px 0;
+}
+.twin-connections span {
+  background: var(--accent-soft);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* ─── Delta Grid ─── */
+.delta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--gap);
+  margin-top: 8px;
+}
+@media (max-width: 760px) {
+  .delta-grid { grid-template-columns: 1fr; }
+}
+.delta-col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.delta-col__head {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid;
+}
+.delta-col__head--unchanged { color: var(--accent); border-color: var(--accent); }
+.delta-col__head--new { color: var(--green); border-color: var(--green); }
+.delta-col__head--modified { color: var(--amber); border-color: var(--amber); }
+
+.delta-item {
+  font-size: 13px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.delta-item:last-child { border-bottom: none; }
+.delta-item__mark {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+.mark-unchanged { background: var(--accent); opacity: 0.3; }
+.mark-new { background: var(--green); }
+.mark-modified { background: var(--amber); }
+
+/* ─── Layer Cards ─── */
+.layer-cards { display: flex; flex-direction: column; gap: var(--gap); }
+.layer-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 640px) {
+  .layer-card { grid-template-columns: 1fr; }
+}
+.layer-card__num {
+  font-family: var(--serif);
+  font-size: 48px;
+  color: var(--accent);
+  line-height: 1;
+  opacity: 0.15;
+  margin-bottom: -12px;
+}
+.layer-card__left h3 {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+.layer-card__left p {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.layer-card__tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+.layer-card__right {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.layer-card__right ul {
+  margin: 8px 0 0;
+  padding: 0 0 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.layer-card__right li { margin-bottom: 4px; }
+.layer-card__right li:last-child { margin-bottom: 0; }
+.layer-card__right strong { color: var(--ink); }
+
+/* ─── Table ─── */
+.table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+thead th {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-strong);
+}
+tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--surface-alt); }
+tbody td:first-child { font-weight: 600; }
+
+/* ─── Flow ─── */
+.flow-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+.flow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.flow-step__num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flow-step__body { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.flow-step__body strong { color: var(--ink); }
+.flow-arrow {
+  text-align: center;
+  font-size: 12px;
+  color: var(--soft);
+  padding: 2px 0;
+}
+
+/* ─── Phasing ─── */
+.phase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--gap);
+}
+.phase-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+}
+.phase-card__num {
+  font-family: var(--serif);
+  font-size: 36px;
+  color: var(--accent);
+  opacity: 0.2;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.phase-card h4 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.phase-card p {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.phase-card__duration {
+  font-size: 11px;
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+/* ─── Footer ─── */
+.footer {
+  text-align: center;
+  padding: 40px 0;
+  font-size: 12px;
+  color: var(--soft);
+}
+.footer a { color: var(--accent); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+
+/* ─── Responsive ─── */
+@media (max-width: 600px) {
+  section { padding: 40px 0; }
+  .card, .diagram-card, .delta-col { padding: 20px 16px; }
+  .layer-card { padding: 20px 16px; }
+  .layer { padding: 10px 12px; flex-wrap: wrap; }
+  .topbar__nav a { font-size: 12px; padding: 4px 10px; }
+  .hero { padding: 48px 0 36px; }
+  table { font-size: 12px; }
+  thead th, tbody td { padding: 8px 10px; }
+}
+
+/* ─── Utility ─── */
+.mb-0 { margin-bottom: 0; }
+.mt-0 { margin-top: 0; }
+.text-center { text-align: center; }
+.gap-sm { gap: 12px; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ Topbar ═══════════ -->
+<header class="topbar">
+  <a href="/" class="topbar__brand">
+    <span class="brand-mark"></span>
+    <span class="brand-name">StrategyOS</span>
+  </a>
+  <nav class="topbar__nav">
+    <a href="#current">Current</a>
+    <a href="#target">Target</a>
+    <a href="#delta">Changes</a>
+    <a href="#layers">Layers</a>
+    <a href="#twins">Twins</a>
+    <a href="#phasing">Phasing</a>
+  </nav>
+</header>
+
+<!-- ═══════════ Hero ═══════════ -->
+<section class="hero container">
+  <div class="hero__badge-row">
+    <span class="hero__badge">🏗️ StrategyOS v0.x</span>
+    <span class="hero__badge">🧠 Digital Twin System</span>
+    <span class="hero__badge">📐 Six-Layer Architecture</span>
+  </div>
+  <h1>Architecture Evolution</h1>
+  <p>From a passive strategic evidence platform to an active operating system with autonomous Digital Twins that monitor, investigate, and resolve — built on the proven StrategyOS foundation.</p>
+  <div class="hero__caption">strategyos.live/architecture · v1.0</div>
+</section>
+
+<!-- ═══════════ BEFORE / AFTER ═══════════ -->
+<section id="current" class="container">
+  <div class="section-eyebrow">Phase 1 — Baseline</div>
+  <h2 id="current-state">Current Architecture</h2>
+  <p class="section-sub">Today's StrategyOS is a <strong>passive system</strong> — it surfaces strategic evidence, KPIs, and knowledge. Humans read, decide, and act. The platform stores, indexes, and retrieves.</p>
+
+  <div class="diagram-wrapper">
+    <!-- BEFORE -->
+    <div class="diagram-card">
+      <div class="diagram-card__badge diagram-card__badge--before">Current State</div>
+      <h3>Human Users → UI → API → Foundation</h3>
+
+      <div class="layer-stack">
+        <div class="layer">
+          <div class="layer__icon layer__icon--ui">👤</div>
+          <div class="layer__body">
+            <div class="layer__title">User Roles</div>
+            <div class="layer__desc">Executive · Reviewer · Operator · Tenant Admin</div>
+          </div>
+        </div>
+        <div class="layer-arrow">↓</div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--ui">🖥️</div>
+          <div class="layer__body">
+            <div class="layer__title">UI Surface Layer</div>
+            <div class="layer__desc">executive.html · index.html · home.html · Static HTML served by FastAPI</div>
+          </div>
+        </div>
+        <div class="layer-arrow">↓</div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--foundation">⚡</div>
+          <div class="layer__body">
+            <div class="layer__title">API Layer (FastAPI)</div>
+            <div class="layer__desc">/public/* · /reviewer/* · /operator/* · /data/* · /executive</div>
+          </div>
+        </div>
+        <div class="layer-arrow">↓</div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--foundation">📊</div>
+          <div class="layer__body">
+            <div class="layer__title">Evidence Spine</div>
+            <div class="layer__desc">Governed findings, artifacts, citations with structured review cycles</div>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--foundation">🔗</div>
+          <div class="layer__body">
+            <div class="layer__title">Knowledge Graph (Neo4j)</div>
+            <div class="layer__desc">Entity relationships, data lineage, role taxonomy, KPI substrate</div>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--foundation">🔍</div>
+          <div class="layer__body">
+            <div class="layer__title">Vector Search (Qdrant)</div>
+            <div class="layer__desc">Semantic retrieval over evidence, strategy artifacts, documents</div>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--foundation">🧩</div>
+          <div class="layer__body">
+            <div class="layer__title">Strategy Substrate</div>
+            <div class="layer__desc">KPI nodes · Value drivers · Strategy intents · Metric tree</div>
+          </div>
+        </div>
+        <div class="layer-arrow">↓</div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--infra">⚙️</div>
+          <div class="layer__body">
+            <div class="layer__title">Infrastructure</div>
+            <div class="layer__desc">Auth/IDP · PostgreSQL · MinIO (S3) · LiteLLM · Hetzner</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="diagram-card__caption">"See the data. Make the call." — passive decision support</div>
+    </div>
+
+    <!-- AFTER -->
+    <div class="diagram-card">
+      <div class="diagram-card__badge diagram-card__badge--after">Target State</div>
+      <h3>Human Users → Twin UI → Twin Runtime → Foundation</h3>
+
+      <div class="layer-stack">
+        <div class="layer">
+          <div class="layer__icon layer__icon--ui">👤</div>
+          <div class="layer__body">
+            <div class="layer__title">Human Executives</div>
+            <div class="layer__desc">CEO · CFO · Group Manager · Strategist · Analyst · Reviewer</div>
+          </div>
+          <span class="layer__tag tag-unchanged">EXISTS</span>
+        </div>
+        <div class="layer-arrow">↓ <span style="font-size:11px;color:var(--soft)">"Why is Q2 margin down?"</span></div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--ui">🖥️</div>
+          <div class="layer__body">
+            <div class="layer__title">NEW: Twin UI Layer</div>
+            <div class="layer__desc">Per-role dashboards · KPI health · Active investigations · Pending decisions</div>
+          </div>
+          <span class="layer__tag tag-new">NEW</span>
+        </div>
+        <div class="layer-arrow">↓</div>
+        <div class="layer" style="border-color:var(--green);border-width:2px;background:rgba(26,110,84,0.04);">
+          <div class="layer__icon layer__icon--runtime">🧠</div>
+          <div class="layer__body">
+            <div class="layer__title" style="color:var(--green);">★ NEW: Digital Twin Runtime</div>
+            <div class="layer__desc">Per-role autonomous agents · Observe → Orient → Decide → Act loop</div>
+          </div>
+          <span class="layer__tag tag-new">NEW</span>
+        </div>
+        <div class="layer-arrow">↓</div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--foundation">📊</div>
+          <div class="layer__body">
+            <div class="layer__title">StrategyOS Foundation</div>
+            <div class="layer__desc">Evidence Spine · Knowledge Graph · Vector Search · Strategy Substrate</div>
+          </div>
+          <span class="layer__tag tag-unchanged">UNCHANGED</span>
+        </div>
+        <div class="layer-arrow">↓</div>
+        <div class="layer">
+          <div class="layer__icon layer__icon--infra">⚙️</div>
+          <div class="layer__body">
+            <div class="layer__title">Infrastructure</div>
+            <div class="layer__desc">Auth/IDP · PostgreSQL · MinIO · LiteLLM · Hetzner</div>
+          </div>
+          <span class="layer__tag tag-unchanged">UNCHANGED</span>
+        </div>
+      </div>
+
+      <div class="twin-connections" style="margin-top:20px;">
+        <span>🧑‍💼 CEO Twin</span>
+        <span>↔</span>
+        <span>💰 CFO Twin</span>
+        <span>↔</span>
+        <span>🏢 GM Twin</span>
+        <span>↔</span>
+        <span>📋 Strategy Twin</span>
+        <span>↔</span>
+        <span>🔬 Analyst Twin</span>
+        <span>↔</span>
+        <span>✅ Reviewer Twin</span>
+      </div>
+
+      <div class="diagram-card__caption">"Twins watch. Twins ask. Twins resolve. Humans oversee." — active operating system</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTA ═══════════ -->
+<section id="delta" class="container">
+  <div class="section-eyebrow">What Changes</div>
+  <h2>Architecture Delta</h2>
+  <p class="section-sub">Three categories of change: what stays solid, what's built from scratch, and what evolves.</p>
+
+  <div class="delta-grid">
+    <div class="delta-col">
+      <div class="delta-col__head delta-col__head--unchanged">◼ Unchanged</div>
+      <div class="delta-item"><span class="delta-item__mark mark-unchanged"></span> Evidence spine with governed reviews</div>
+      <div class="delta-item"><span class="delta-item__mark mark-unchanged"></span> Knowledge Graph (Neo4j) — entities, lineage</div>
+      <div class="delta-item"><span class="delta-item__mark mark-unchanged"></span> Vector Search (Qdrant) — semantic retrieval</div>
+      <div class="delta-item"><span class="delta-item__mark mark-unchanged"></span> Strategy Substrate — KPI nodes, value drivers</div>
+      <div class="delta-item"><span class="delta-item__mark mark-unchanged"></span> Auth / IDP — role-based access control</div>
+      <div class="delta-item"><span class="delta-item__mark mark-unchanged"></span> Infrastructure — PostgreSQL, MinIO, LiteLLM, Hetzner</div>
+      <div class="delta-item"><span class="delta-item__mark mark-unchanged"></span> LLM QA — question answering over evidence</div>
+    </div>
+
+    <div class="delta-col">
+      <div class="delta-col__head delta-col__head--new">◆ New</div>
+      <div class="delta-item"><span class="delta-item__mark mark-new"></span> <strong>Twin Runtime</strong> — per-role autonomous agent loop</div>
+      <div class="delta-item"><span class="delta-item__mark mark-new"></span> <strong>Twin Personas</strong> — CEO, CFO, GM, Strategy, Analyst, Reviewer</div>
+      <div class="delta-item"><span class="delta-item__mark mark-new"></span> <strong>Inter-Twin Protocol</strong> — structured M2M messaging</div>
+      <div class="delta-item"><span class="delta-item__mark mark-new"></span> <strong>KPI Resolution Engine</strong> — tree traversal, gap detection, routing</div>
+      <div class="delta-item"><span class="delta-item__mark mark-new"></span> <strong>Twin Memory</strong> — persistent state, working memory, investigations</div>
+      <div class="delta-item"><span class="delta-item__mark mark-new"></span> <strong>Orchestration</strong> — cycles, triggers, governance gates, scheduling</div>
+      <div class="delta-item"><span class="delta-item__mark mark-new"></span> <strong>Twin Tools</strong> — evidence retrieval, KPI queries, messaging, escalation</div>
+      <div class="delta-item"><span class="delta-item__mark mark-new"></span> <strong>Twin UI</strong> — per-role dashboards, conversation views, human override</div>
+    </div>
+
+    <div class="delta-col">
+      <div class="delta-col__head delta-col__head--modified">◈ Modified</div>
+      <div class="delta-item"><span class="delta-item__mark mark-modified"></span> <strong>platform_foundation.py</strong> — add TwinPersona model, personality, goals</div>
+      <div class="delta-item"><span class="delta-item__mark mark-modified"></span> <strong>api.py</strong> — add <code>/twin/*</code> routes for twin dashboards</div>
+      <div class="delta-item"><span class="delta-item__mark mark-modified"></span> <strong>auth.py</strong> — extend for twin access, persona permissions</div>
+      <div class="delta-item"><span class="delta-item__mark mark-modified"></span> <strong>state_store.py</strong> — add twin state tables, conversation history</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ LAYERS DEEP DIVE ═══════════ -->
+<section id="layers" class="container">
+  <div class="section-eyebrow">Six-Layer Architecture</div>
+  <h2>Architecture Deep Dive</h2>
+  <p class="section-sub">The Digital Twin system is organised into six distinct layers — from the persistent foundation to the human-facing UI.</p>
+
+  <div class="layer-cards">
+
+    <!-- Layer 1 -->
+    <div class="layer-card">
+      <div>
+        <div class="layer-card__num">01</div>
+        <span class="layer-card__tag tag-unchanged">UNCHANGED</span>
+        <h3>StrategyOS Foundation</h3>
+        <p>The existing platform — proven, stable, unchanged.</p>
+      </div>
+      <div class="layer-card__right">
+        <p>Evidence spine with governed findings, artifacts, and citations. Knowledge graph (Neo4j) maintaining entity relationships and data lineage. Role model with auth, permissions, and role implications. KPI substrate with metric nodes, value drivers, and strategy intents. Vector search (Qdrant) for semantic retrieval. LLM QA (LiteLLM) for question answering over evidence.</p>
+        <ul>
+          <li><strong>Evidence Spine</strong> — governed findings with review cycles</li>
+          <li><strong>Knowledge Graph</strong> — Neo4j entities, relationships, lineage</li>
+          <li><strong>KPI Substrate</strong> — metric nodes, value drivers, strategy intents</li>
+          <li><strong>Vector Search</strong> — Qdrant semantic retrieval</li>
+          <li><strong>LLM QA</strong> — LiteLLM question answering</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Layer 2 -->
+    <div class="layer-card">
+      <div>
+        <div class="layer-card__num">02</div>
+        <span class="layer-card__tag tag-new">NEW</span>
+        <h3>Twin Runtime</h3>
+        <p>Per-role autonomous agents with persistent identity and state.</p>
+      </div>
+      <div class="layer-card__right">
+        <p>Each role (CEO, CFO, GM, etc.) gets a persistent twin with its own agent loop: <strong>Observe</strong> (check KPIs) → <strong>Orient</strong> (identify gaps) → <strong>Decide</strong> (who to ask) → <strong>Act</strong> (send request). Wake-up triggers include scheduled cycles, event-driven KPI breaches, and on-demand executive queries. State includes working memory, active investigations, pending requests, and resolution stack.</p>
+        <ul>
+          <li><strong>Agent Loop</strong> — Observe → Orient → Decide → Act</li>
+          <li><strong>Wake Triggers</strong> — Scheduled · KPI breach · On-demand</li>
+          <li><strong>Persistent State</strong> — Memory, investigations, resolution stack</li>
+          <li><strong>Tool Access</strong> — Evidence retrieval, KPI queries, twin messaging</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Layer 3 -->
+    <div class="layer-card">
+      <div>
+        <div class="layer-card__num">03</div>
+        <span class="layer-card__tag tag-new">NEW</span>
+        <h3>KPI/OKR Resolution Engine</h3>
+        <p>Intelligent routing through the KPI ownership tree.</p>
+      </div>
+      <div class="layer-card__right">
+        <p>Traces metrics up to strategic objectives and down to data sources. Resolves ownership — which role owns each node in the KPI tree. Detects gaps between expected and actual values, missing data, and stale data. When data is missing, identifies the owner twin and routes a structured request. Supports multi-hop resolution chains: CEO → CFO → Group Manager → Analyst.</p>
+        <ul>
+          <li><strong>KPI Tree Traversal</strong> — up to objectives, down to sources</li>
+          <li><strong>Ownership Resolution</strong> — which role owns each node</li>
+          <li><strong>Gap Detection</strong> — expected vs actual, missing, stale</li>
+          <li><strong>Request Routing</strong> — structured KPI/data requests to owner twin</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Layer 4 -->
+    <div class="layer-card">
+      <div>
+        <div class="layer-card__num">04</div>
+        <span class="layer-card__tag tag-new">NEW</span>
+        <h3>Inter-Twin Protocol</h3>
+        <p>Structured M2M communication with evidence grounding.</p>
+      </div>
+      <div class="layer-card__right">
+        <p>All twin-to-twin messages use structured envelopes with typed fields: sender_role, recipient_role, message_type, priority, deadline, evidence_citations (linking to StrategyOS artifacts), request_body, and response_body. Message types include data_request, escalation, approval, notification, and status_update. Async by default with configurable deadlines and full audit trail. Escalation chain: analyst → group_manager → cfo → ceo.</p>
+        <ul>
+          <li><strong>Structured Envelopes</strong> — typed fields, evidence citations</li>
+          <li><strong>Message Types</strong> — data_request · escalation · approval · notification</li>
+          <li><strong>Async + Audit Trail</strong> — non-blocking with full logging</li>
+          <li><strong>Escalation Chain</strong> — analyst → GM → CFO → CEO</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Layer 5 -->
+    <div class="layer-card">
+      <div>
+        <div class="layer-card__num">05</div>
+        <span class="layer-card__tag tag-new">NEW</span>
+        <h3>Orchestration &amp; Scheduling</h3>
+        <p>Timed cycles and event-driven governance.</p>
+      </div>
+      <div class="layer-card__right">
+        <p>Periodic review cycles: daily standup, weekly KPI review, monthly board packet generation. Event-driven triggers for KPI threshold breaches, data staleness, and deadline expiry. Governance gates enforce configurable approval thresholds per role and action. Generates cycle reports and decision packets for human review.</p>
+        <ul>
+          <li><strong>Review Cycles</strong> — daily · weekly · monthly cadences</li>
+          <li><strong>Event Triggers</strong> — KPI breach, data staleness, deadline</li>
+          <li><strong>Governance Gates</strong> — configurable human approval thresholds</li>
+          <li><strong>Report Generation</strong> — decision packets, board materials</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Layer 6 -->
+    <div class="layer-card">
+      <div>
+        <div class="layer-card__num">06</div>
+        <span class="layer-card__tag tag-new">NEW</span>
+        <h3>Twin UI Surfaces</h3>
+        <p>Per-role dashboards with human override.</p>
+      </div>
+      <div class="layer-card__right">
+        <p>Each executive sees their twin's dashboard: KPI health, active investigations, pending decisions, and recent twin-to-twin conversations with evidence citations. Human override controls let executives approve, redirect, query, or escalate. Board packet generation for strategic meetings.</p>
+        <ul>
+          <li><strong>Per-Role Dashboard</strong> — KPI health, investigations, decisions</li>
+          <li><strong>Conversation View</strong> — twin-to-twin interactions with citations</li>
+          <li><strong>Human Override</strong> — approve · redirect · query · escalate</li>
+          <li><strong>Board Packets</strong> — automated strategic report generation</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════ ROLE TWIN CATALOG ═══════════ -->
+<section id="twins" class="container">
+  <div class="section-eyebrow">Twin Catalog</div>
+  <h2>Role Twin Catalog</h2>
+  <p class="section-sub">Each organisational role gets a digital twin with specific KPIs, interactions, and authority boundaries. Twins converse via the inter-twin protocol and escalate through the chain.</p>
+
+  <div class="twin-grid">
+    <div class="twin-node">
+      <div class="twin-node__icon twin-node__icon--ceo">C</div>
+      <div class="twin-node__label">CEO Twin</div>
+      <div class="twin-node__sub">Strategic objectives</div>
+    </div>
+    <div class="twin-node">
+      <div class="twin-node__icon twin-node__icon--cfo">F</div>
+      <div class="twin-node__label">CFO Twin</div>
+      <div class="twin-node__sub">Revenue · Margin · Cash</div>
+    </div>
+    <div class="twin-node">
+      <div class="twin-node__icon twin-node__icon--gm">GM</div>
+      <div class="twin-node__label">GM Twin</div>
+      <div class="twin-node__sub">BU growth · Operations</div>
+    </div>
+    <div class="twin-node">
+      <div class="twin-node__icon twin-node__icon--strategy">S</div>
+      <div class="twin-node__label">Strategy Twin</div>
+      <div class="twin-node__sub">KPI tree · Initiatives</div>
+    </div>
+    <div class="twin-node">
+      <div class="twin-node__icon twin-node__icon--analyst">A</div>
+      <div class="twin-node__label">Analyst Twin</div>
+      <div class="twin-node__sub">Data prep · Evidence</div>
+    </div>
+    <div class="twin-node">
+      <div class="twin-node__icon twin-node__icon--reviewer">R</div>
+      <div class="twin-node__label">Reviewer Twin</div>
+      <div class="twin-node__sub">Evidence · Compliance</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Role Twin</th>
+          <th>KPIs Owned</th>
+          <th>Interacts With</th>
+          <th>Initiates</th>
+          <th>Authority</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CEO Twin</td>
+          <td>Strategic objectives, plan health, board narrative</td>
+          <td>CFO, Group Managers, Strategy</td>
+          <td>Weekly reviews, board packets, strategic queries</td>
+          <td>Request any data; escalate to human for decisions</td>
+        </tr>
+        <tr>
+          <td>CFO Twin</td>
+          <td>Revenue, margin, cash flow, budget, financial controls</td>
+          <td>CEO, Group Managers, Auditor</td>
+          <td>Monthly close, variance analysis, cash monitoring</td>
+          <td>Approve within budget thresholds; escalate above</td>
+        </tr>
+        <tr>
+          <td>Group Manager Twin</td>
+          <td>BU revenue, growth, customer/operational metrics</td>
+          <td>CEO, CFO, Analysts</td>
+          <td>BU reviews, initiative tracking, resource requests</td>
+          <td>Adjust BU targets; escalate blockers</td>
+        </tr>
+        <tr>
+          <td>Strategy Twin</td>
+          <td>KPI tree structure, value drivers, initiatives</td>
+          <td>All role twins</td>
+          <td>Strategy reviews, KPI maintenance, alignment checks</td>
+          <td>Maintain KPI structure; flag misalignment</td>
+        </tr>
+        <tr>
+          <td>Analyst Twin</td>
+          <td>Data prep, source validation, evidence quality</td>
+          <td>Group Managers, Reviewers</td>
+          <td>Data readiness, evidence quality reports</td>
+          <td>Prepare data; cannot make strategic decisions</td>
+        </tr>
+        <tr>
+          <td>Reviewer Twin</td>
+          <td>Evidence verification, finding adjudication, compliance</td>
+          <td>CFO, Analysts</td>
+          <td>Review cycles, challenge escalations</td>
+          <td>Challenge findings; approve evidence packets</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════ EXAMPLE FLOW ═══════════ -->
+<section class="container">
+  <div class="section-eyebrow">Example Interaction</div>
+  <h2>CEO Investigates Q2 Margin Decline</h2>
+  <p class="section-sub">A concrete walkthrough showing how the twin runtime, KPI engine, and inter-twin protocol collaborate to resolve an executive query.</p>
+
+  <div class="card">
+    <div class="flow-diagram">
+      <div class="flow-step">
+        <span class="flow-step__num">1</span>
+        <div class="flow-step__body"><strong>CEO asks twin:</strong> "Why is Q2 gross margin down 3 points?"</div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <span class="flow-step__num">2</span>
+        <div class="flow-step__body"><strong>CEO Twin analyses KPI tree:</strong> margin = f(revenue, COGS). COGS data is stale — not refreshed since May.</div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <span class="flow-step__num">3</span>
+        <div class="flow-step__body"><strong>CEO Twin sends structured request to CFO Twin:</strong> "Need Q2 raw material cost breakdown. KPI node margin_q2_grp shows -3pt. COGS not refreshed since May."</div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <span class="flow-step__num">4</span>
+        <div class="flow-step__body"><strong>CFO Twin forwards to Procurement GM Twin</strong> — the actual data owner for raw material costs.</div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <span class="flow-step__num">5</span>
+        <div class="flow-step__body"><strong>Procurement GM Twin resolves:</strong> pulls supplier contracts, updates COGS data, links evidence artifacts.</div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <span class="flow-step__num">6</span>
+        <div class="flow-step__body"><strong>Response flows back</strong> with full evidence trail: Procurement → CFO → CEO. Each hop cites StrategyOS artifacts.</div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step" style="border-color:var(--accent);border-width:2px;background:var(--accent-soft);">
+        <span class="flow-step__num" style="background:var(--accent-2);">7</span>
+        <div class="flow-step__body"><strong>CEO Twin presents updated analysis</strong> with complete citation chain and recommended actions for human approval.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DUAL-FACE DESIGN ═══════════ -->
+<section class="container">
+  <div class="section-eyebrow">Design Pattern</div>
+  <h2>Dual-Face Twin Architecture</h2>
+  <p class="section-sub">Each twin has two interfaces: a <strong>Human Executive Interface</strong> for oversight and an <strong>Inter-Twin Interface</strong> for autonomous M2M communication.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);">
+    <div class="card" style="border-left:3px solid var(--accent);">
+      <h3 style="font-family:var(--sans);font-weight:600;font-size:14px;color:var(--accent);">Face 1 — Human Executive Interface</h3>
+      <p style="font-size:13px;">The executive sees their twin's dashboard with KPI health, active investigations, and conversation history. They can query, override, redirect, and approve. This is where humans stay in control.</p>
+    </div>
+    <div class="card" style="border-left:3px solid var(--green);">
+      <h3 style="font-family:var(--sans);font-weight:600;font-size:14px;color:var(--green);">Face 2 — Inter-Twin Interface</h3>
+      <p style="font-size:13px;">Structured async messages between twins. Every claim cites StrategyOS evidence artifacts. Multi-hop resolution follows the ownership chain. Full audit trail. No hallucinated numbers — every assertion is grounded.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ PHASING ═══════════ -->
+<section id="phasing" class="container">
+  <div class="section-eyebrow">Implementation Roadmap</div>
+  <h2>Build Phasing</h2>
+  <p class="section-sub">Eight to twelve weeks for a complete MVP, organised into five focused phases.</p>
+
+  <div class="phase-grid">
+    <div class="phase-card">
+      <div class="phase-card__num">0</div>
+      <h4>Foundation</h4>
+      <p>TwinPersona model · InterTwinMessage protocol · State persistence · Integration points</p>
+      <div class="phase-card__duration">2–3 weeks</div>
+    </div>
+    <div class="phase-card">
+      <div class="phase-card__num">1</div>
+      <h4>First Two Twins</h4>
+      <p>CEO + CFO twins · Single KPI resolution flow · Minimal dashboard</p>
+      <div class="phase-card__duration">2–3 weeks</div>
+    </div>
+    <div class="phase-card">
+      <div class="phase-card__num">2</div>
+      <h4>Expanded Roles</h4>
+      <p>Group Manager, Analyst, Strategy · Multi-hop resolution · Escalation chains</p>
+      <div class="phase-card__duration">2 weeks</div>
+    </div>
+    <div class="phase-card">
+      <div class="phase-card__num">3</div>
+      <h4>Orchestration</h4>
+      <p>Scheduled cycles · Event triggers · Governance gates · Board packets</p>
+      <div class="phase-card__duration">2 weeks</div>
+    </div>
+    <div class="phase-card">
+      <div class="phase-card__num">4</div>
+      <h4>Full UI</h4>
+      <p>Complete per-role dashboards · Conversation views · Human override</p>
+      <div class="phase-card__duration">2 weeks</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ KEY DECISIONS ═══════════ -->
+<section class="container">
+  <div class="section-eyebrow">Architecture Decisions</div>
+  <h2>Key Architectural Decisions</h2>
+  <p class="section-sub">The design principles that guide the Digital Twin system.</p>
+
+  <div class="card">
+    <ol style="margin:0;padding:0 0 0 20px;color:var(--muted);font-size:14px;line-height:1.8;">
+      <li><strong style="color:var(--ink);">Strict role boundaries</strong> — enforced at protocol level, not just LLM prompting</li>
+      <li><strong style="color:var(--ink);">Hybrid push/pull</strong> — scheduled monitoring + on-demand executive queries</li>
+      <li><strong style="color:var(--ink);">Async twin interaction</strong> — non-blocking, supports multi-hop resolution</li>
+      <li><strong style="color:var(--ink);">Persistent state, ephemeral computation</strong> — state survives, agent loop runs on schedule/trigger</li>
+      <li><strong style="color:var(--ink);">Structured envelopes + NL bodies</strong> — protocol fields validated, body flexible</li>
+      <li><strong style="color:var(--ink);">Tiered autonomy</strong> — info gathering: auto. Recommendations: auto. Financial decisions: human approval</li>
+      <li><strong style="color:var(--ink);">Evidence grounding</strong> — every twin response <strong>MUST</strong> cite StrategyOS artifacts. No unfounded claims.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══════════ NEW MODULE STRUCTURE ═══════════ -->
+<section class="container">
+  <div class="section-eyebrow">Code</div>
+  <h2>New Module Structure</h2>
+  <p class="section-sub">The twin system lives in a dedicated <code>twins/</code> package beneath the existing StrategyOS codebase.</p>
+
+  <div class="card" style="font-family:var(--sans);font-size:13px;line-height:1.8;">
+    <code style="font-size:13px;">
+strategyos_mvp/twins/<br>
+&nbsp;&nbsp;├── <strong>persona.py</strong>       # TwinPersona, role definitions, goal sets<br>
+&nbsp;&nbsp;├── <strong>runtime.py</strong>       # Agent loop, wake/sleep, state machine<br>
+&nbsp;&nbsp;├── <strong>protocol.py</strong>      # InterTwinMessage, types, routing, validation<br>
+&nbsp;&nbsp;├── <strong>resolution.py</strong>    # KPI tree traversal, gap detection, owner routing<br>
+&nbsp;&nbsp;├── <strong>orchestration.py</strong> # Cycles, triggers, governance gates<br>
+&nbsp;&nbsp;├── <strong>memory.py</strong>        # State persistence, conversation history<br>
+&nbsp;&nbsp;├── <strong>tools.py</strong>         # Twin tools: query_kpi, request_data, escalate<br>
+&nbsp;&nbsp;├── <strong>api.py</strong>           # FastAPI routes for twin dashboards<br>
+&nbsp;&nbsp;└── <strong>static/</strong>          # Per-role twin UI
+    </code>
+  </div>
+</section>
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<footer class="footer container">
+  <p>StrategyOS · Digital Twin Architecture · <a href="https://strategyos.live">strategyos.live</a></p>
+  <p style="font-size:11px;">Built on the governed evidence spine · Neo4j Knowledge Graph · Qdrant Vector Search · FastAPI · Python</p>
+</footer>
+
+</body>
+</html>
