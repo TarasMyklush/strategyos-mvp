@@ -23,11 +23,15 @@ KPI_TREE: dict[str, dict[str, Any]] = {
         "status": "stale",
         "last_updated": "2026-05-15",
         "components": ["revenue_q2", "cogs_q2"],
+        "threshold": 18.0,
+        "alert_below": 17.0,
     },
     "revenue_q2": {
         "owner": "group_manager",
         "value": 2_100_000_000,
         "status": "current",
+        "threshold": 2_000_000_000,
+        "alert_below": 1_950_000_000,
     },
     "cogs_q2": {
         "owner": "cfo",

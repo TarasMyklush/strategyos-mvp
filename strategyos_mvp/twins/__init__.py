@@ -56,6 +56,15 @@ from strategyos_mvp.twins.resolution import (
 from strategyos_mvp.twins.runtime import (
     TwinRuntime,
 )
+from strategyos_mvp.twins.orchestration import (
+    CycleScheduler,
+    TriggerEngine,
+    GovernanceGate,
+    GovernanceEngine,
+    CycleRecord,
+    CycleHistory,
+    generate_board_packet,
+)
 
 __all__ = [
     # Persona
@@ -108,4 +117,12 @@ __all__ = [
     "resolve_multi_hop",
     # Runtime
     "TwinRuntime",
+    # Orchestration
+    "CycleScheduler",
+    "TriggerEngine",
+    "GovernanceGate",
+    "GovernanceEngine",
+    "CycleRecord",
+    "CycleHistory",
+    "generate_board_packet",
 ]

@@ -1,6 +1,6 @@
 (function () {
   window.STRATEGYOS_PLAN = {
-    updated: "2026-06-25",
+    updated: "2026-06-26",
     overallStatus: "in_progress",
     phases: [
       {
@@ -56,13 +56,13 @@
         title: "Orchestration",
         subtitle: "Scheduled cycles, event triggers, governance gates, board packets",
         weeks: "2",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "3.1", title: "Scheduled review cycles", description: "Daily standup, weekly KPI review, monthly board packet \u2014 automatic wake-up and processing", status: "not_started", files: ["twins/orchestration.py"] },
-          { id: "3.2", title: "Event-driven KPI triggers", description: "Threshold breach \u2192 automatic investigation, data staleness \u2192 request refresh", status: "not_started", files: ["twins/orchestration.py"] },
-          { id: "3.3", title: "Governance gates", description: "Configurable human approval thresholds per role, per action type, per value threshold", status: "not_started", files: ["twins/orchestration.py", "twins/persona.py"] },
-          { id: "3.4", title: "Board packet generation", description: "Automated strategic report: KPI summary, risk flags, pending decisions, evidence citations", status: "not_started", files: ["twins/orchestration.py"] },
-          { id: "3.5", title: "Cycle history + audit", description: "All cycle results persisted, searchable, with full evidence trail", status: "not_started", files: ["twins/memory.py", "twins/api.py"] }
+          { id: "3.1", title: "Scheduled review cycles", description: "Daily standup, weekly KPI review, monthly board packet \u2014 automatic wake-up and processing", status: "completed", files: ["twins/orchestration.py"] },
+          { id: "3.2", title: "Event-driven KPI triggers", description: "Threshold breach \u2192 automatic investigation, data staleness \u2192 request refresh", status: "completed", files: ["twins/orchestration.py", "twins/resolution.py"] },
+          { id: "3.3", title: "Governance gates", description: "Configurable human approval thresholds per role, per action type, per value threshold", status: "completed", files: ["twins/orchestration.py"] },
+          { id: "3.4", title: "Board packet generation", description: "Automated strategic report: KPI summary, risk flags, pending decisions, evidence citations", status: "completed", files: ["twins/orchestration.py"] },
+          { id: "3.5", title: "Cycle history + audit", description: "All cycle results persisted, searchable, with full evidence trail", status: "completed", files: ["twins/orchestration.py"] }
         ]
       },
       {
