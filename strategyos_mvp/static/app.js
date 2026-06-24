@@ -26,6 +26,16 @@
   ];
   const EXECUTIVE_COCKPIT_ROUTE = "/executive?theme=paper";
 
+  function ensureAppStyles() {
+    if (document.querySelector('link[href*="/static/app.css"]')) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "/static/app.css?v=ux-20260624a";
+    document.head.appendChild(link);
+  }
+
+  ensureAppStyles();
+
   // Plain-language labels for internal identifiers a business user should never
   // see raw (fix-list item 7). Covers detector pattern_type values and the
   // internal pipeline stage names. Anything not present falls back to a
@@ -157,6 +167,8 @@
     pendingReviews: null,
     agentApprovals: {},
     agentDeployments: {},
+    agentSurfaceFilter: "all",
+    agentSurfaceSelection: "",
     pollTimer: null,
     lastRunSignature: "",
     laneSignature: "",
@@ -945,6 +957,40 @@
   function strategyPortfolioViews() {
     const views = strategySubstrate()?.portfolio_views;
     return Array.isArray(views) ? views : [];
+  }
+
+  function workspaceNavItems() {
+    const contract = state.workspaceContract || {};
+    const surfaces = Array.isArray(contract.surfaces) ? contract.surfaces : [];
+    const surface = (id) => surfaces.find((item) => item.surface_id === id) || {};
+    const publication = publicationContract();
+    return [
+      { key: "overview", label: "Overview", href: "#command", detail: contract.plan_health?.label || "Plan posture" },
+      { key: "cases", label: "Cases", href: surface("cases").primary_route || reviewQueueRoute(), detail: surface("cases").summary || "Governed case spine" },
+      { key: "evidence", label: "Evidence", href: contract.evidence?.preview_route || surface("evidence").primary_route || "#review", detail: contract.evidence?.count ? `${formatCount(contract.evidence.count)} surfaced evidence artifacts` : "Evidence previews and graph" },
+      { key: "reports", label: "Reports", href: publication.preview_route || surface("reports").public_route || "/public/runs/latest/report-preview", detail: `${publicationStatusLabel(publication.status)} · ${formatCount(publication.report_count ?? 0)} report surfaces` },
+    ];
+  }
+
+  function renderWorkspaceContractNav() {
+    const row = document.querySelector(".shell-jump-row");
+    if (!row) return;
+    const items = workspaceNavItems();
+    const nodes = Array.from(row.children || []);
+    row.classList.add("is-contractual");
+    nodes.forEach((node, index) => {
+      const item = items[index];
+      if (!item) return;
+      node.textContent = item.label;
+      node.title = item.detail;
+      node.classList.toggle("is-active", index === 0);
+      if (node.tagName === "A") {
+        node.setAttribute("href", item.href || "#command");
+      } else {
+        node.dataset.contractKind = "button";
+        node.dataset.contractRoute = item.href || "";
+      }
+    });
   }
 
   function selectedStrategyView() {
@@ -1945,6 +1991,7 @@
     renderRoleFrame();
     renderHeaderActions();
     renderRoleTasks();
+    renderWorkspaceContractNav();
     renderRoleSurfaces();
     els.identity.textContent = authDisabled ? "Auth disabled" : session.authenticated ? displayName : "Not signed in";
     els.sessionStatus.textContent = authDisabled
@@ -2612,6 +2659,7 @@
         detail: `${publicationStatusLabel(publication.status)} · board pack ${humanizeToken(publication.board_pack?.status || "pending")}.`,
         action: ["pending", "awaiting_review", "rejected", ""].includes(String(approval).toLowerCase()) ? "Approve before release" : "Publication can continue inside governed routes.",
         route: "publication-panel",
+        lane: "reports",
         log: [
           `Run ${activeRunId() || "latest"} packet prepared.`,
           `${formatCount(publication.report_count ?? 0)} report surface${Number(publication.report_count ?? 0) === 1 ? "" : "s"} are visible.`,
@@ -2629,6 +2677,7 @@
             : "No governed case spine is loaded yet.",
         action: challenged ? "Reviewer decision required" : "Keep citation chain stable",
         route: "review",
+        lane: "evidence",
         log: [
           `${formatCount(findings.length)} findings in scope.`,
           `${formatCount(pendingReviews)} queued review item${pendingReviews === 1 ? "" : "s"}.`,
@@ -2644,6 +2693,7 @@
           : "No connector catalog is loaded for this role yet.",
         action: connectors.length ? "Inspect source boundaries and allowed writes" : "Load connector catalog",
         route: "connectors-panel",
+        lane: "system",
         log: connectors.length
           ? connectors.slice(0, 3).map((item) => `${item.display_name || item.connector_id}: ${item.permitted ? "permitted" : "not permitted"}.`)
           : ["Connector catalog unavailable."],
@@ -2659,6 +2709,7 @@
             : "Runtime health has not been checked yet.",
         action: blockedChecks.length ? "Open runtime health" : "Hold steady",
         route: "health-panel",
+        lane: "overview",
         log: [
           `Readiness status: ${ready.status || "unknown"}.`,
           blockedChecks.length ? `Blocked checks: ${blockedChecks.join(", ")}.` : "No blocked checks are visible.",
@@ -2673,6 +2724,7 @@
         source: "StrategyOS native",
         detail: "Turns current publication, approval, and board-pack posture into room-safe prompts and follow-through.",
         target: "publication-panel",
+        lane: "reports",
       },
       {
         id: "domain-pulse-brief",
@@ -2680,6 +2732,7 @@
         source: "StrategyOS native",
         detail: "Summarises KPI branches, value drivers, and the next bounded decision from the current strategy substrate.",
         target: "system-workflow-panel",
+        lane: "overview",
       },
     ].concat(connectors.slice(0, 4).map((connector) => ({
       id: `connector-${connector.connector_id || connector.display_name || Math.random().toString(36).slice(2)}`,
@@ -2687,6 +2740,7 @@
       source: connector.permitted ? "Marketplace connected" : "Marketplace available",
       detail: `${humanizeToken(connector.source_boundary || "tenant boundary")} · ${(Array.isArray(connector.capabilities) && connector.capabilities.length ? connector.capabilities.map((item) => humanizeToken(item)).join(", ") : "No write actions listed")}`,
       target: "connectors-panel",
+      lane: "system",
     })));
     const tools = [
       { name: "Graph probe", detail: `${humanizeToken(state.dataStatus?.neo4j?.status || "unknown")} relationship map`, target: "kg-panel" },
@@ -2706,13 +2760,24 @@
   function renderAgentFabric() {
     if (!els.agentsSummary || !els.agentsRunningList || !els.agentsDiscoverList || !els.agentsToolsList) return;
     const model = buildAgentFabricModel();
-    els.agentsSummary.textContent = model.summary;
-    els.agentsRunningList.innerHTML = model.running.map((agent) => {
+    const filter = state.agentSurfaceFilter || "all";
+    const running = model.running.filter((agent) => filter === "all" || agent.lane === filter);
+    const discover = model.discover.filter((agent) => filter === "all" || agent.lane === filter);
+    const selected = model.running.concat(model.discover).find((item) => item.id === state.agentSurfaceSelection) || running[0] || discover[0] || null;
+    if (selected) state.agentSurfaceSelection = selected.id;
+    els.agentsSummary.innerHTML = `<strong>${escapeHtml(model.summary)}</strong>`;
+    els.agentsRunningList.innerHTML = `<div class="agent-filter-row">${[
+      ["all", "All"],
+      ["overview", "Overview"],
+      ["evidence", "Evidence"],
+      ["reports", "Reports"],
+      ["system", "System"],
+    ].map(([key, label]) => `<button class="agent-filter-chip${filter === key ? " is-active" : ""}" type="button" data-agent-filter="${escapeHtml(key)}">${escapeHtml(label)}</button>`).join("")}</div>` + running.map((agent) => {
       const approved = Boolean(state.agentApprovals[agent.id]);
       const meta = agentStatusMeta(approved && agent.status === "approval" ? "running" : agent.status);
       const actionLabel = approved && agent.status === "approval" ? "Approval recorded in this session view" : agent.action;
       return `
-        <details class="agent-card" ${agent.status === "approval" ? "open" : ""}>
+        <details class="agent-card${state.agentSurfaceSelection === agent.id ? " is-selected" : ""}" ${agent.status === "approval" || state.agentSurfaceSelection === agent.id ? "open" : ""} data-agent-select="${escapeHtml(agent.id)}">
           <summary>
             <div>
               <strong>${escapeHtml(agent.name)}</strong>
@@ -2730,10 +2795,10 @@
           </div>
         </details>`;
     }).join("");
-    els.agentsDiscoverList.innerHTML = model.discover.map((agent) => {
+    els.agentsDiscoverList.innerHTML = discover.map((agent) => {
       const deployed = Boolean(state.agentDeployments[agent.id]);
       return `
-        <div class="item">
+        <div class="item${state.agentSurfaceSelection === agent.id ? " is-selected" : ""}" data-agent-select="${escapeHtml(agent.id)}">
           <strong>${escapeHtml(agent.name)}</strong>
           <span>${escapeHtml(agent.source)}</span>
           <span>${escapeHtml(agent.detail)}</span>
@@ -2741,9 +2806,10 @@
             <button class="btn secondary" type="button" data-workflow-target="${escapeHtml(agent.target)}">Inspect route</button>
             <button class="btn ${deployed ? "secondary" : "primary"}" type="button" data-agent-deploy="${escapeHtml(agent.id)}">${deployed ? "Added" : "Deploy"}</button>
           </div>
-        </div>`;
+          </div>`;
     }).join("");
-    els.agentsToolsList.innerHTML = model.tools.map((tool) => `
+    const selectedDetail = selected ? `<div class="item agent-fabric-detail"><strong>${escapeHtml(selected.name)}</strong><span class="agent-fabric-detail__meta">${escapeHtml(selected.source || selected.status || selected.lane || "governed surface")}</span><span>${escapeHtml(selected.detail || selected.action || "Awaiting detail")}</span>${Array.isArray(selected.log) && selected.log.length ? `<ol class="agent-fabric-detail__log">${selected.log.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ol>` : ""}</div>` : "";
+    els.agentsToolsList.innerHTML = selectedDetail + model.tools.map((tool) => `
       <div class="item">
         <strong>${escapeHtml(tool.name)}</strong>
         <span>${escapeHtml(tool.detail)}</span>
@@ -2752,8 +2818,20 @@
         </div>
       </div>`).join("");
     if (els.agentsPayloadPreview) {
-      els.agentsPayloadPreview.textContent = compactJson(sanitizeUiPayload(model.payload));
+      els.agentsPayloadPreview.textContent = compactJson(sanitizeUiPayload(selected ? { selected, tools: model.tools } : model.payload));
     }
+    document.querySelectorAll("[data-agent-filter]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.agentSurfaceFilter = button.getAttribute("data-agent-filter") || "all";
+        renderAgentFabric();
+      });
+    });
+    document.querySelectorAll("[data-agent-select]").forEach((node) => {
+      node.addEventListener("click", () => {
+        state.agentSurfaceSelection = node.getAttribute("data-agent-select") || "";
+        renderAgentFabric();
+      });
+    });
   }
 
   function workflowStep(status, title, detail, targetId) {
@@ -4003,6 +4081,16 @@
         state.openCitationKey = state.openCitationKey === key ? "" : key;
         renderChat();
       }
+    });
+    document.querySelector(".shell-jump-row")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-contract-kind='button']");
+      if (!button) return;
+      const route = button.getAttribute("data-contract-route") || "";
+      if (route.includes("report-preview")) {
+        window.location.href = route;
+        return;
+      }
+      openDrawer("system", route.includes("evidence") ? "kg-panel" : route.includes("findings") || route.includes("pending-reviews") ? "publication-panel" : "system-workflow-panel");
     });
     if (els.findingsList) {
       els.findingsList.addEventListener("click", (event) => {

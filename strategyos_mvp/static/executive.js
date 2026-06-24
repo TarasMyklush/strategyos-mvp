@@ -109,6 +109,10 @@
     return (state.latestPacket && state.latestPacket.board_portal) || {};
   }
 
+  function getChatContract() {
+    return (state.latestPacket && state.latestPacket.chat) || {};
+  }
+
   function getPublication() {
     return (state.latestPacket && state.latestPacket.publication) || {};
   }
@@ -157,7 +161,74 @@
   function getHeroPrompts() {
     var gravity = getDrilldown().gravity || {};
     var blueprint = getPersonaBlueprint(state.activePersona);
-    return safeArray(gravity.prompts).length ? safeArray(gravity.prompts) : safeArray(blueprint.prompts);
+    var chatPrompts = safeArray(getChatContract().starter_prompts);
+    return safeArray(gravity.prompts).length ? safeArray(gravity.prompts) : (chatPrompts.length ? chatPrompts : safeArray(blueprint.prompts));
+  }
+
+  function storageArea() {
+    var persistence = ((getChatContract().store || {}).persistence || "sessionStorage").toLowerCase();
+    return persistence === "localstorage" ? window.localStorage : window.sessionStorage;
+  }
+
+  function threadStorageKey() {
+    var chat = getChatContract();
+    var prefix = firstDefined((chat.store || {}).storage_key_prefix, "strategyos.chat.").replace(/\.$/, "");
+    var runId = firstDefined(chat.run_id, state.latestPacket && state.latestPacket.run_id, "latest");
+    return [prefix, runId, state.activePersona].join(".");
+  }
+
+  function nowStamp() {
+    return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function loadStoredThreads() {
+    try {
+      var raw = storageArea().getItem(threadStorageKey());
+      return raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveStoredThreads() {
+    try {
+      storageArea().setItem(threadStorageKey(), JSON.stringify(threadStore()));
+    } catch (error) {}
+  }
+
+  function buildDriverSparkline(driver, index) {
+    var trend = safeArray((state.latestPacket && state.latestPacket.trend && state.latestPacket.trend.points) || []);
+    var values = trend.slice(-6).map(function (point) {
+      var value = Number(point.recoverable_sar || point.locked_findings || point.findings || 0);
+      return Number.isFinite(value) ? value : 0;
+    });
+    if (!values.length) {
+      var base = Number(firstDefined(driver.pct, 0)) || 0;
+      var lift = safeArray((driver.movers || {}).lifting).length * 2;
+      var drag = safeArray((driver.movers || {}).dragging).length;
+      values = [base - drag - 4, base - drag, base, base + lift - 1, base + lift, base + lift + (index || 0)];
+    }
+    var min = Math.min.apply(null, values);
+    var max = Math.max.apply(null, values);
+    var span = Math.max(1, max - min);
+    var width = 124;
+    var height = 30;
+    var points = values.map(function (value, idx) {
+      var x = values.length === 1 ? width / 2 : (idx * width) / (values.length - 1);
+      var y = height - (((value - min) / span) * 22 + 4);
+      return [x, y];
+    });
+    var line = points.map(function (pair) { return pair[0].toFixed(1) + "," + pair[1].toFixed(1); }).join(" ");
+    var area = "0," + height + " " + line + " " + width + "," + height;
+    return { line: line, area: area };
+  }
+
+  function driverRingMarkup(driver) {
+    var pct = Math.max(0, Math.min(100, Number(firstDefined(driver.pct, 0)) || 0));
+    var radius = 15;
+    var circumference = 2 * Math.PI * radius;
+    var dash = circumference * (pct / 100);
+    return '<svg class="driver-ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="driver-ring__track" cx="18" cy="18" r="15"></circle><circle class="driver-ring__value" cx="18" cy="18" r="15" stroke-dasharray="' + dash + ' ' + (circumference - dash) + '" transform="rotate(-90 18 18)"></circle></svg>';
   }
 
   function buildAssistantReply(message) {
@@ -188,37 +259,93 @@
   }
 
   function ensureThreads() {
+    var chat = getChatContract();
     var blueprint = getPersonaBlueprint(state.activePersona);
     var persona = getPersonaContract(state.activePersona);
     var assistantName = firstDefined(persona.assistant, blueprint.assistant, "Hermes");
-    safeArray(blueprint.threads).forEach(function (thread, index) {
-      var key = state.activePersona + ":" + firstDefined(thread.key, "thread-" + (index + 1));
+    var persisted = loadStoredThreads();
+    Object.keys(persisted).forEach(function (key) {
+      if (!threadStore()[key]) threadStore()[key] = persisted[key];
+    });
+    var seededThreads = safeArray(chat.threads).length ? safeArray(chat.threads) : safeArray(blueprint.threads).map(function (thread, index) {
+      return {
+        thread_id: state.activePersona + ":" + firstDefined(thread.key, "thread-" + (index + 1)),
+        title: firstDefined(thread.title, "Thread"),
+        preview: firstDefined(thread.preview, blueprint.brief, "Board-safe follow-up"),
+        starter_prompt: firstDefined(thread.preview, thread.title, ""),
+        read_only: false,
+        kind: "starter"
+      };
+    });
+    seededThreads.forEach(function (thread, index) {
+      var key = firstDefined(thread.thread_id, state.activePersona + ":" + firstDefined(thread.key, "thread-" + (index + 1)));
       if (!threadStore()[key]) {
+        var initial = {
+          role: "assistant",
+          text: assistantName + " is holding the room in " + getPersonaLabel(state.activePersona) + " mode. Ask for the next governed move, the board-safe summary, or the evidence gap.",
+          timestamp: nowStamp()
+        };
+        if (thread.kind === "system") {
+          initial.text = firstDefined(thread.preview, "Governed run status is attached here.");
+        }
         threadStore()[key] = {
           key: key,
           title: firstDefined(thread.title, "Thread"),
           preview: firstDefined(thread.preview, blueprint.brief, "Board-safe follow-up"),
-          messages: [
-            {
-              role: "assistant",
-              text: assistantName + " is holding the room in " + getPersonaLabel(state.activePersona) + " mode. Ask for the next governed move, the board-safe summary, or the evidence gap.",
-              timestamp: "now"
-            }
-          ]
+          route: firstDefined(thread.route, ""),
+          readOnly: Boolean(thread.read_only),
+          kind: firstDefined(thread.kind, "starter"),
+          assistant: firstDefined(thread.assistant, assistantName),
+          messages: [initial],
+          lastUpdated: nowStamp()
         };
       }
     });
     if (!state.activeThreadKey || !threadStore()[state.activeThreadKey]) {
-      var firstThread = safeArray(blueprint.threads)[0];
-      state.activeThreadKey = state.activePersona + ":" + firstDefined(firstThread && firstThread.key, "briefing");
+      state.activeThreadKey = firstDefined(chat.active_thread_id, seededThreads[0] && seededThreads[0].thread_id, Object.keys(threadStore())[0]);
     }
+    saveStoredThreads();
+  }
+
+  function ensureWritableThread() {
+    ensureThreads();
+    var current = threadStore()[currentThreadKey()];
+    if (current && !current.readOnly) return current;
+    var blueprint = getPersonaBlueprint(state.activePersona);
+    var persona = getPersonaContract(state.activePersona);
+    var assistantName = firstDefined((getChatContract().assistant || {}).name, persona.assistant, blueprint.assistant, "Hermes");
+    var key = state.activePersona + ":followup-" + String(state.activeBoard || "pre");
+    if (!threadStore()[key]) {
+      threadStore()[key] = {
+        key: key,
+        title: getPersonaLabel(state.activePersona) + " follow-up",
+        preview: "Writable board-safe thread.",
+        route: firstDefined(getPublication().preview_route, "/public/runs/latest/report-preview"),
+        readOnly: false,
+        kind: "followup",
+        assistant: firstDefined((getChatContract().assistant || {}).name, assistantName),
+        messages: [
+          {
+            role: "assistant",
+            text: "This writable thread inherits the governed packet and keeps follow-up bounded to the current room.",
+            timestamp: nowStamp()
+          }
+        ],
+        lastUpdated: nowStamp()
+      };
+    }
+    state.activeThreadKey = key;
+    saveStoredThreads();
+    return threadStore()[key];
   }
 
   function pushThreadMessage(role, text) {
-    ensureThreads();
-    var thread = threadStore()[currentThreadKey()];
+    var thread = role === "user" ? ensureWritableThread() : threadStore()[currentThreadKey()] || ensureWritableThread();
     if (!thread) return;
-    thread.messages.push({ role: role, text: text, timestamp: "now" });
+    thread.messages.push({ role: role, text: text, timestamp: nowStamp() });
+    thread.preview = String(text || thread.preview || "").slice(0, 84);
+    thread.lastUpdated = nowStamp();
+    saveStoredThreads();
   }
 
   function renderTopbar() {
@@ -349,16 +476,19 @@
     var drivers = getVisibleDrivers();
     var activeDriver = getActiveDriver();
     grid.innerHTML = "";
-    drivers.forEach(function (driver) {
+    drivers.forEach(function (driver, index) {
       var key = String(driver.driver_key || driver.key || "");
+      var spark = buildDriverSparkline(driver, index);
       var tile = document.createElement("button");
       tile.type = "button";
       tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
       tile.innerHTML = [
-        '<span class="driver-overline">' + escapeHtml(firstDefined(driver.status, driver.sub, "status")) + '</span>',
+        '<div class="driver-topline"><span class="driver-overline">' + escapeHtml(firstDefined(driver.status, driver.sub, "status")) + '</span>' + driverRingMarkup(driver) + '</div>',
         '<span class="driver-metric">' + escapeHtml(firstDefined(driver.metric, "—")) + '</span>',
         '<strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong>',
-        '<p class="driver-detail">' + escapeHtml(firstDefined(driver.detail, "")) + '</p>'
+        '<p class="driver-detail">' + escapeHtml(firstDefined(driver.detail, "")) + '</p>',
+        '<div class="sparkline-wrap"><svg class="driver-sparkline" viewBox="0 0 124 30" aria-hidden="true"><polygon class="driver-sparkline__fill" points="' + escapeHtml(spark.area) + '"></polygon><polyline class="driver-sparkline__line" points="' + escapeHtml(spark.line) + '"></polyline></svg></div>',
+        '<div class="driver-footer"><span>' + escapeHtml(firstDefined(driver.trendLabel, "Governed trend")) + '</span><strong>' + escapeHtml(firstDefined(driver.pct, "—")) + '%</strong></div>'
       ].join("");
       tile.onclick = function () {
         state.activeDriverKey = key;
@@ -431,7 +561,14 @@
         '<p class="detail-subtitle">What still drags</p>',
         '<div class="mini-list">' + (dragging.length ? dragging.map(function (item) {
           return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.name, "Constraint")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.note, item.delta, "Constraint still needs closure.")) + '</p></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.delta, item.contribution, "watch")) + '</span></div>';
-        }).join("") : '<div class="discovery-empty">No dragging signal is attached to this driver yet.</div>') + '</div>'
+        }).join("") : '<div class="discovery-empty">No dragging signal is attached to this driver yet.</div>') + '</div>',
+        '<p class="detail-subtitle">Tornado view</p>',
+        '<div class="detail-tornado">' + lifting.concat(dragging).slice(0, 5).map(function (item, idx) {
+          var tone = idx < lifting.length ? '' : ' warn';
+          var contribution = Math.abs(Number(firstDefined(item.contribution, 0)) || 0);
+          var width = Math.max(14, Math.min(100, contribution * 3.2 || 20));
+          return '<div class="mover-bar"><span class="mover-bar__label">' + escapeHtml(firstDefined(item.name, 'Signal')) + '</span><span class="mover-bar__track"><i class="mover-bar__fill' + tone + '" style="width:' + width + '%"></i></span><span class="mover-bar__value">' + escapeHtml(firstDefined(item.delta, item.contribution, 'trend')) + '</span></div>';
+        }).join("") + '</div>'
       ].join("");
     }
     if (gravityPanel) {
@@ -460,7 +597,9 @@
 
   function renderBoardStateTabs() {
     var row = $("board-state-row");
-    var modes = ((state.latestPacket || {}).executive_modes || {}).board_states || [];
+    var board = getBoardPortal();
+    var modes = safeArray(board.lifecycle_flow).length ? safeArray(board.lifecycle_flow) : (((state.latestPacket || {}).executive_modes || {}).board_states || []);
+    var note = $("board-state-note");
     if (!row) return;
     row.innerHTML = "";
     safeArray(modes).forEach(function (mode) {
@@ -478,6 +617,7 @@
       };
       row.appendChild(button);
     });
+    if (note) note.textContent = firstDefined((board.state_detail || {}).summary, "Board lifecycle stays explicit from pre-board preparation through frozen close.");
   }
 
   function renderBoardPortal() {
@@ -490,10 +630,25 @@
     var decks = safeArray(board.decks).slice(0, 4);
     var actions = safeArray(board.actions).slice(0, 3);
     var questions = safeArray(board.supplementary_questions).slice(0, 3);
+    var lifecycle = safeArray(board.lifecycle_flow);
+    var deckRelease = board.deck_release || {};
+    var snapshot = board.frozen_snapshot || {};
+    var stateDetail = board.state_detail || {};
     portal.innerHTML = [
       '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined((board.state_detail || {}).title, board.state_label, "Governed board packet")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined((board.state_detail || {}).summary, board.board_summary, "Board posture stays bounded to the current packet.")) + '</p></div><span class="pill-inline ' + toneClass(firstDefined(board.presentation_state, board.state, "pre")) + '">' + escapeHtml(firstDefined(board.state_label, board.presentation_state, board.state, "pre")) + '</span></div>',
       '<div class="board-kpis">' + safeArray(board.kpis).slice(0, 4).map(function (item) {
         return '<div class="board-kpi"><span class="board-kpi__label">' + escapeHtml(firstDefined(item.label, "Metric")) + '</span><strong class="board-kpi__value">' + escapeHtml(firstDefined(item.value, item.pct, "—")) + '</strong><span class="board-kpi__sub">' + escapeHtml(firstDefined(item.sub, item.pct ? String(item.pct) + "%" : "Governed packet")) + '</span></div>';
+      }).join("") + '</div>',
+      '<div class="board-state-stack">' + lifecycle.map(function (item) {
+        var flags = [];
+        if (item.actual) flags.push('<span class="pill-inline ok">actual</span>');
+        if (item.presented) flags.push('<span class="pill-inline warn">presented</span>');
+        if (item.next_action) flags.push('<span class="pill-inline">' + escapeHtml(humanizeToken(item.next_action)) + '</span>');
+        return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Governed board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
+      }).join("") + '</div>',
+      '<div class="snapshot-grid"><div class="snapshot-card"><strong>Deck release</strong><span>' + escapeHtml(humanizeToken(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s) · ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview')) + '</span></div><div class="snapshot-card"><strong>Frozen snapshot</strong><span>' + escapeHtml(humanizeToken(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
+      '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).concat(safeArray(stateDetail.secondary_actions).slice(0, 2)).map(function (item) {
+        return '<span class="assistant-tool-chip">' + escapeHtml(humanizeToken(item)) + '</span>';
       }).join("") + '</div>',
       '<div class="board-detail-grid">',
       '<section class="board-panel"><p class="detail-eyebrow">Meeting posture</p><div class="mini-list"><div class="board-deck"><div><strong>' + escapeHtml(firstDefined((board.meeting || {}).design_title, (board.meeting || {}).title, "Board meeting")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined((board.meeting || {}).date, (board.meeting || {}).when, "Board timing pending")) + '</p></div><span class="pill-inline ok">' + escapeHtml(firstDefined((board.meeting || {}).room, "board-safe")) + '</span></div></div></section>',
@@ -556,6 +711,7 @@
     var discoverable = safeArray(modules.discoverable);
     var running = safeArray(modules.running);
     var approvals = safeArray(modules.approvals);
+    var selected = state.selectedAgentModuleKey;
 
     if (filterRow) {
       filterRow.innerHTML = ["all", "executive", "review", "operate", "system"].map(function (lane) {
@@ -586,8 +742,12 @@
     }
 
     if (runningCard) {
-      runningCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Running</p><h3 class="detail-title">Running agents list</h3></div><span class="pill-inline ok">' + escapeHtml(String(running.length)) + ' visible</span></div><div class="running-list">' + running.map(function (item) {
-        return '<div class="agent-row"><div class="agent-head"><strong>' + escapeHtml(firstDefined(item.label, item.module_id, 'Agent')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'idle')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.summary, 'Awaiting agent summary.')) + '</p><div class="agent-progress"><div class="agent-progress-bar"><i style="width:' + escapeHtml(item.status === 'published' ? '100%' : item.status === 'running' ? '72%' : item.status === 'blocked' ? '38%' : '56%') + '"></i></div><span>' + escapeHtml(firstDefined(item.output_metric, item.approval_dependency, 'tenant runtime')) + '</span></div></div>';
+      var runningFiltered = running.filter(function (item) {
+        return state.discoveryFilter === 'all' || item.lane === state.discoveryFilter;
+      });
+      runningCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Running</p><h3 class="detail-title">Running agents list</h3></div><span class="pill-inline ok">' + escapeHtml(String(runningFiltered.length)) + ' visible</span></div><div class="running-list">' + runningFiltered.map(function (item) {
+        var key = firstDefined(item.module_id, item.label, 'agent');
+        return '<button type="button" class="agent-select' + (selected === key ? ' is-active' : '') + '" data-agent-select="' + escapeHtml(key) + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.module_id, 'Agent')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.summary, 'Awaiting agent summary.')) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'idle')) + '</span></button>';
       }).join("") + '</div>';
     }
 
@@ -596,15 +756,29 @@
         return state.discoveryFilter === 'all' || item.lane === state.discoveryFilter;
       });
       discoveryCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Discover</p><h3 class="detail-title">Discoverable agents</h3></div><span class="pill-inline warn">expandable</span></div><div class="discovery-list">' + filtered.map(function (item) {
-        return '<div class="agent-row"><div class="discovery-head"><strong>' + escapeHtml(firstDefined(item.label, item.module_id, 'Module')) + '</strong><span class="pill-inline ' + (item.permitted ? 'ok' : 'warn') + '">' + escapeHtml(item.permitted ? 'permitted' : 'role-bound') + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.summary, 'Discoverable module surface.')) + '</p><span class="panel-note">' + escapeHtml(firstDefined(item.route, 'no route')) + '</span></div>';
+        var key = firstDefined(item.module_id, item.label, 'module');
+        return '<button type="button" class="agent-select' + (selected === key ? ' is-active' : '') + '" data-agent-select="' + escapeHtml(key) + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.module_id, 'Module')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.summary, 'Discoverable module surface.')) + '</p></div><span class="pill-inline ' + (item.permitted ? 'ok' : 'warn') + '">' + escapeHtml(item.permitted ? 'permitted' : 'role-bound') + '</span></button>';
       }).join("") + '</div>';
     }
 
     if (subtoolsCard) {
-      subtoolsCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Governance</p><h3 class="detail-title">Approvals and audit trail</h3></div><span class="pill-inline ok">traceable</span></div><div class="subtools-list">' + approvals.map(function (item) {
+      var selectedItem = running.concat(discoverable).find(function (item) {
+        return firstDefined(item.module_id, item.label, '') === selected;
+      }) || running[0] || discoverable[0] || null;
+      if (!selected && selectedItem) state.selectedAgentModuleKey = firstDefined(selectedItem.module_id, selectedItem.label, '');
+      subtoolsCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Governance</p><h3 class="detail-title">Approvals and audit trail</h3></div><span class="pill-inline ok">traceable</span></div>'
+        + (selectedItem ? '<div class="agent-detail-grid"><div class="agent-detail-card"><strong>' + escapeHtml(firstDefined(selectedItem.label, selectedItem.module_id, 'Selected agent')) + '</strong><span>' + escapeHtml(firstDefined(selectedItem.summary, 'Governed module surface.')) + '</span><span class="panel-note">' + escapeHtml(firstDefined(selectedItem.route, selectedItem.output_metric, 'Route pending')) + '</span></div><div class="agent-detail-card"><strong>Filter</strong><span>' + escapeHtml(humanizeToken(state.discoveryFilter)) + '</span><span class="panel-note">Running and discover lists now reconcile against the same surface filter.</span></div></div>' : '')
+        + '<div class="subtools-list">' + approvals.map(function (item) {
         return '<div class="agent-row"><div class="subtool-head"><strong>' + escapeHtml(firstDefined(item.label, item.approval_id, 'Approval')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'waiting')) + '</span></div><p class="list-copy">Next action: ' + escapeHtml(firstDefined(item.next_action, 'continue')) + '</p><span class="panel-note">' + escapeHtml(firstDefined(item.route, 'no route')) + '</span></div>';
       }).join("") + '</div>';
     }
+
+    safeArray(document.querySelectorAll('[data-agent-select]')).forEach(function (button) {
+      button.onclick = function () {
+        state.selectedAgentModuleKey = button.getAttribute('data-agent-select') || '';
+        renderAgentsDiscovery();
+      };
+    });
   }
 
   function renderAssistantStudio() {
@@ -618,6 +792,7 @@
     var threadMeta = $("assistant-thread-meta");
     var messages = $("assistant-messages");
     var promptRow = $("assistant-prompt-row");
+    var threadTools = $("assistant-thread-tools");
     var assistantHeading = $("assistant-heading");
     var assistantSubtitle = $("assistant-subtitle");
     var assistantState = $("assistant-state");
@@ -645,10 +820,18 @@
 
     if (threadTitle) threadTitle.textContent = firstDefined(current && current.title, "Thread");
     if (threadMeta) threadMeta.textContent = firstDefined(current && current.preview, blueprint.brief, "Select a governed follow-up.");
+    if (threadTools) {
+      var tools = [];
+      tools.push('<span class="assistant-tool-chip">' + escapeHtml(firstDefined((getChatContract().assistant || {}).name, assistantName)) + '</span>');
+      tools.push('<span class="assistant-tool-chip">' + escapeHtml(humanizeToken(firstDefined(state.activeBoard, (getChatContract().assistant || {}).board_state, 'pre'))) + '</span>');
+      tools.push('<span class="assistant-tool-chip">' + escapeHtml((current && current.readOnly) ? 'read only thread' : 'send and receive') + '</span>');
+      if (current && current.route) tools.push('<span class="assistant-tool-chip">' + escapeHtml(current.route) + '</span>');
+      threadTools.innerHTML = tools.join('');
+    }
 
     if (messages) {
       messages.innerHTML = safeArray(current && current.messages).map(function (message) {
-        return '<div class="assistant-message assistant-message--' + escapeHtml(firstDefined(message.role, 'assistant')) + '"><span class="assistant-message__role">' + escapeHtml(firstDefined(message.role, 'assistant')) + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p></div>';
+        return '<div class="assistant-message assistant-message--' + escapeHtml(firstDefined(message.role, 'assistant')) + '"><span class="assistant-message__role">' + escapeHtml(firstDefined(message.role, 'assistant')) + ' · ' + escapeHtml(firstDefined(message.timestamp, 'now')) + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p></div>';
       }).join("");
       messages.scrollTop = messages.scrollHeight;
     }
@@ -773,11 +956,12 @@
     activeBoard: firstDefined(requested.board, "pre"),
     activeCompany: firstDefined(requested.company, ""),
     activePortfolio: firstDefined(requested.portfolio, ""),
-    activeThreadKey: "",
-    activeNav: "overview",
-    discoveryFilter: "all",
-    personaOutsideListenerBound: false
-  };
+      activeThreadKey: "",
+      activeNav: "overview",
+      discoveryFilter: "all",
+      selectedAgentModuleKey: "",
+      personaOutsideListenerBound: false
+    };
 
   bindAssistantForm();
   bindWorkspaceNav();
