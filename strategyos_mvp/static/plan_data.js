@@ -24,14 +24,14 @@
         title: "First Two Twins",
         subtitle: "CEO + CFO twins, single KPI resolution flow, minimal dashboard",
         weeks: "2\u20133",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "1.1", title: "Twin runtime \u2014 agent loop", description: "Observe \u2192 Orient \u2192 Decide \u2192 Act loop, wake/sleep cycle, state machine", status: "not_started", files: ["twins/runtime.py"] },
-          { id: "1.2", title: "KPI resolution engine", description: "Tree traversal, gap detection, ownership routing for single-hop resolution", status: "not_started", files: ["twins/resolution.py"] },
-          { id: "1.3", title: "CEO Twin persona + first investigation", description: "CEO goals, KPI ownership, ability to trace margin/health and request data", status: "not_started", files: ["twins/persona.py", "twins/runtime.py"] },
-          { id: "1.4", title: "CFO Twin persona + CEO interaction", description: "CFO goals, financial KPI ownership, response to CEO data requests", status: "not_started", files: ["twins/persona.py", "twins/runtime.py"] },
-          { id: "1.5", title: "Minimal CEO twin dashboard", description: "Single-page dashboard: KPI health, active investigation, pending requests. Human can query their twin.", status: "not_started", files: ["twins/static/ceo.html", "twins/api.py"] },
-          { id: "1.6", title: "Integration + end-to-end test", description: "Full flow: CEO queries margin \u2192 twin traces KPI \u2192 requests CFO \u2192 response", status: "not_started", files: ["tests/test_twins_e2e.py"] }
+          { id: "1.1", title: "Twin runtime \u2014 agent loop", description: "Observe \u2192 Orient \u2192 Decide \u2192 Act loop, wake/sleep cycle, state machine", status: "completed", files: ["twins/runtime.py"] },
+          { id: "1.2", title: "KPI resolution engine", description: "Tree traversal, gap detection, ownership routing for single-hop resolution", status: "completed", files: ["twins/resolution.py"] },
+          { id: "1.3", title: "CEO Twin persona + first investigation", description: "CEO goals, KPI ownership, ability to trace margin/health and request data", status: "completed", files: ["twins/persona.py", "twins/runtime.py"] },
+          { id: "1.4", title: "CFO Twin persona + CEO interaction", description: "CFO goals, financial KPI ownership, response to CEO data requests", status: "completed", files: ["twins/persona.py", "twins/runtime.py"] },
+          { id: "1.5", title: "Minimal CEO twin dashboard", description: "Single-page dashboard: KPI health, active investigation, pending requests. Human can query their twin.", status: "completed", files: ["twins/static/ceo.html"] },
+          { id: "1.6", title: "Integration + end-to-end test", description: "Full flow: CEO queries margin \u2192 twin traces KPI \u2192 requests CFO \u2192 response", status: "completed", files: ["tests/test_twins_phase1.py"] }
         ]
       },
       {

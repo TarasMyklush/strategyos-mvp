@@ -67,7 +67,7 @@ def create_twin_state(role: str) -> TwinState:
         raise KeyError(f"Unknown twin role: {role!r}. Valid roles: {list(TWIN_CATALOG)}")
 
     now = datetime.now(timezone.utc)
-    twin_id = f"{role}_twin_{now.strftime('%Y%m%d_%H%M%S')}"
+    twin_id = f"{role}_twin_{now.strftime('%Y%m%d_%H%M%S%f')}"
     return TwinState(twin_id=twin_id, role=role)
 
 

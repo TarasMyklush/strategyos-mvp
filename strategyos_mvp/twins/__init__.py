@@ -4,11 +4,15 @@ from strategyos_mvp.twins.persona import (
     ANALYST_TWIN,
     CEO_TWIN,
     CFO_TWIN,
+    CEO_INVESTIGATION_PROMPTS,
+    CFO_DATA_OWNERSHIP,
     GROUP_MANAGER_TWIN,
     REVIEWER_TWIN,
     STRATEGY_TWIN,
     TWIN_CATALOG,
     TwinPersona,
+    get_twin,
+    lookup_persona,
 )
 from strategyos_mvp.twins.protocol import (
     InterTwinMessage,
@@ -32,6 +36,13 @@ from strategyos_mvp.twins.tools import (
     escalate_to_human,
     check_health,
 )
+from strategyos_mvp.twins.resolution import (
+    KPI_TREE,
+    KPIResolutionEngine,
+)
+from strategyos_mvp.twins.runtime import (
+    TwinRuntime,
+)
 
 __all__ = [
     # Persona
@@ -43,6 +54,10 @@ __all__ = [
     "ANALYST_TWIN",
     "REVIEWER_TWIN",
     "TWIN_CATALOG",
+    "lookup_persona",
+    "get_twin",
+    "CEO_INVESTIGATION_PROMPTS",
+    "CFO_DATA_OWNERSHIP",
     # Protocol
     "InterTwinMessage",
     "TwinResponse",
@@ -62,4 +77,9 @@ __all__ = [
     "send_message",
     "escalate_to_human",
     "check_health",
+    # Resolution
+    "KPI_TREE",
+    "KPIResolutionEngine",
+    # Runtime
+    "TwinRuntime",
 ]

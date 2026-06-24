@@ -215,3 +215,44 @@ def lookup_persona(role: str) -> TwinPersona | None:
         The matching TwinPersona, or *None* if the role is unknown.
     """
     return TWIN_CATALOG.get(role.strip().lower())
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 — Investigation context per role
+# ---------------------------------------------------------------------------
+
+CEO_INVESTIGATION_PROMPTS: tuple[str, ...] = (
+    "Why is Q2 margin down?",
+    "What is the biggest risk to the plan?",
+    "Are we on track to meet annual objectives?",
+    "Which business units need attention?",
+    "Do we have sufficient cash runway?",
+)
+"""Default investigation prompts suitable for CEO twin initiation."""
+
+CFO_DATA_OWNERSHIP: dict[str, tuple[str, ...]] = {
+    "owns": ("margin_q2", "cogs_q2", "cash_flow", "budget_variance"),
+    "requests_from_group_manager": ("revenue_q2", "raw_materials_q2"),
+    "reports_to_ceo": ("margin_q2", "cash_flow", "financial_risk_flags"),
+}
+"""Mapping of CFO data ownership: what it owns, what it requests from
+the Group Manager, and what it reports to the CEO."""
+
+
+def get_twin(persona: TwinPersona) -> "TwinRuntime":  # noqa: F821
+    """Create an initialised :class:`TwinRuntime` for a given persona.
+
+    This is a convenience factory that imports lazily to avoid circular
+    dependencies at module level.
+
+    Args:
+        persona: The :class:`TwinPersona` to create a runtime for.
+
+    Returns:
+        A :class:`TwinRuntime` instance with a fresh :class:`TwinState`.
+    """
+    from strategyos_mvp.twins.memory import create_twin_state
+    from strategyos_mvp.twins.runtime import TwinRuntime
+
+    state = create_twin_state(persona.role)
+    return TwinRuntime(persona=persona, state=state)
