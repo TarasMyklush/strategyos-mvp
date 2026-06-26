@@ -90,6 +90,13 @@ body {
 .status-dot.active { background: var(--green); }
 .status-dot.sleeping { background: var(--soft); }
 .status-dot.investigating { background: var(--amber); }
+.topbar-nav { display: flex; gap: 4px; }
+.topbar-nav a {
+  font-size: 12px; color: var(--muted); text-decoration: none;
+  padding: 4px 10px; border-radius: 6px;
+}
+.topbar-nav a:hover { background: var(--accent-soft); color: var(--accent); }
+.topbar-nav a.active { background: var(--accent); color: #fff; }
 .status-dot.error { background: var(--red); }
 
 /* Status bar row */
@@ -538,6 +545,12 @@ body {
     <span class="status-dot active" id="status-dot"></span>
     <span id="status-label">Active</span>
   </div>
+  <nav class="topbar-nav">
+    <a href="/twin/ceo" class="active">CEO</a>
+    <a href="/twin/cfo">CFO</a>
+    <a href="/twin/gm">GM</a>
+    <a href="/plan">Plan</a>
+  </nav>
 </header>
 
 <main class="page">
@@ -1140,6 +1153,50 @@ function addAuditEntry(action, result, resultClass) {
     auditLog.removeChild(auditLog.lastChild);
   }
 }
+</script>
+
+<script>
+// Live twin data fetching
+(function() {
+  var ROLE = 'ceo';
+
+  async function loadTwinData() {
+    try {
+      var [status, kpis, inbox] = await Promise.all([
+        fetch('/twin/api/status/' + ROLE).then(function(r) { return r.json(); }),
+        fetch('/twin/api/kpis/' + ROLE).then(function(r) { return r.json(); }),
+        fetch('/twin/api/inbox/' + ROLE).then(function(r) { return r.json(); })
+      ]);
+      if (status && status.cycle_count !== undefined) {
+        document.getElementById('cycle-count').textContent = status.cycle_count;
+      }
+      if (status && status.active_investigations) {
+        document.getElementById('active-inv-count').textContent = status.active_investigations.length;
+      }
+    } catch(e) {
+      console.error('Twin data load:', e);
+    }
+  }
+
+  window.askTwin = async function() {
+    var query = document.getElementById('twin-query').value.trim();
+    if (!query) return;
+    var panel = document.getElementById('response-panel');
+    panel.innerHTML = '<p>Investigating...</p>';
+    try {
+      var resp = await fetch('/twin/api/investigate/' + ROLE + '?query=' + encodeURIComponent(query), { method: 'POST' });
+      var data = await resp.json();
+      panel.innerHTML = '<div class="response-card"><h4>Twin Response</h4>'
+        + '<p>Cycle: ' + (data.cycle_count || 0) + ' | Issues found: ' + (data.issues_found || 0) + ' | Actions: ' + (data.actions_taken || 0) + '</p>'
+        + '<pre style="font-size:12px;white-space:pre-wrap;">' + JSON.stringify(data.summary, null, 2) + '</pre>'
+        + '</div>';
+    } catch(e) {
+      panel.innerHTML = '<p style="color:var(--red);">Failed to reach twin: ' + e.message + '</p>';
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', loadTwinData);
+})();
 </script>
 </body>
 </html>

@@ -80,6 +80,21 @@
           { id: "4.5", title: "Human override interface", description: "Approve, redirect, query, escalate controls on every dashboard. Decision audit trail.", status: "completed", files: ["twins/static/*.html"] },
           { id: "4.6", title: "E2E acceptance tests", description: "Full acceptance: all 6 twins, multi-hop resolution, governance gates, UI flows", status: "completed", files: ["tests/test_twins_phase4.py"] }
         ]
+      {
+        id: "phase-5",
+        num: 5,
+        title: "Live Integration",
+        subtitle: "API routes, auth wiring, live data fetching, deploy dashboards to strategyos.live",
+        weeks: "1",
+        status: "completed",
+        stories: [
+          { id: "5.1", title: "Twin API endpoints (status, kpis, inbox, investigate)", description: "FastAPI router at /twin/api/* — live data for dashboards", status: "completed", files: ["twins/api.py"] },
+          { id: "5.2", title: "Route integration + auth", description: "Include twin router in main app, serve dashboard HTML at /twin/ceo, /twin/cfo, /twin/gm", status: "completed", files: ["api.py"] },
+          { id: "5.3", title: "Live data fetching in dashboards", description: "JavaScript fetch() to twin API — dashboards now show real KPI/inbox/investigation data", status: "completed", files: ["twins/static/*.html"] },
+          { id: "5.4", title: "Cross-dashboard navigation", description: "Nav links between CEO/CFO/GM dashboards + plan + architecture", status: "completed", files: ["twins/static/*.html"] },
+          { id: "5.5", title: "Integration tests", description: "Test all API endpoints, dashboard routes, live JS, no regressions", status: "completed", files: ["tests/test_twins_phase5.py"] },
+          { id: "5.6", title: "Deploy to strategyos.live", description: "Dashboards live at /twin/ceo, /twin/cfo, /twin/gm — authenticated users can query their twins", status: "completed", files: [] }
+        ]
       }
     ]
   };

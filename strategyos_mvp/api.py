@@ -127,9 +127,13 @@ class QaRequest(BaseModel):
     mode: str | None = "deterministic"
 
 
+from .twins.api import router as twin_router
+
 app = FastAPI(title="StrategyOS MVP API", version="0.1.0")
 STATIC_DIR = Path(__file__).with_name("static")
+TWINS_STATIC_DIR = Path(__file__).parent / "twins" / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.include_router(twin_router)
 
 ARTIFACT_PREVIEW_LIMIT_BYTES = 24_000
 ARTIFACT_JSON_PARSE_LIMIT_BYTES = 200_000
@@ -6248,6 +6252,24 @@ def plan_page() -> HTMLResponse:
     """Serve the Digital Twin execution plan page."""
     template_path = STATIC_DIR / "plan.html"
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
+
+
+@app.get("/twin/ceo", response_class=HTMLResponse)
+def twin_ceo_dashboard() -> HTMLResponse:
+    """Serve the CEO twin dashboard."""
+    return HTMLResponse((TWINS_STATIC_DIR / "ceo.html").read_text(encoding="utf-8"))
+
+
+@app.get("/twin/cfo", response_class=HTMLResponse)
+def twin_cfo_dashboard() -> HTMLResponse:
+    """Serve the CFO twin dashboard."""
+    return HTMLResponse((TWINS_STATIC_DIR / "cfo.html").read_text(encoding="utf-8"))
+
+
+@app.get("/twin/gm", response_class=HTMLResponse)
+def twin_gm_dashboard() -> HTMLResponse:
+    """Serve the Group Manager twin dashboard."""
+    return HTMLResponse((TWINS_STATIC_DIR / "gm.html").read_text(encoding="utf-8"))
 
 
 @app.get("/ui/session")

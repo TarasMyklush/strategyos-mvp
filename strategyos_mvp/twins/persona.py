@@ -199,6 +199,7 @@ TWIN_CATALOG: dict[str, TwinPersona] = {
     "ceo": CEO_TWIN,
     "cfo": CFO_TWIN,
     "group_manager": GROUP_MANAGER_TWIN,
+    "gm": GROUP_MANAGER_TWIN,
     "strategy": STRATEGY_TWIN,
     "analyst": ANALYST_TWIN,
     "reviewer": REVIEWER_TWIN,

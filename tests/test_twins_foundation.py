@@ -107,11 +107,13 @@ class TestPersonaInstantiation:
 class TestTwinCatalog:
     """TWIN_CATALOG contains all 6 roles."""
 
-    def test_catalog_has_exactly_six_roles(self):
-        assert len(TWIN_CATALOG) == 6
+    def test_catalog_has_exactly_six_unique_roles(self):
+        # 7 keys in catalog: 6 roles + 1 alias (gm → group_manager)
+        unique_roles = set(v.display_name for v in TWIN_CATALOG.values())
+        assert len(unique_roles) == 6
 
     def test_catalog_keys(self):
-        expected_roles = {"ceo", "cfo", "group_manager", "strategy", "analyst", "reviewer"}
+        expected_roles = {"ceo", "cfo", "group_manager", "gm", "strategy", "analyst", "reviewer"}
         assert set(TWIN_CATALOG.keys()) == expected_roles
 
     def test_catalog_values_are_twin_persona_instances(self):
