@@ -103,13 +103,13 @@
         title: "Persistent reality layer",
         subtitle: "Replace hardcoded KPI tree, inbox, investigations, and dashboard state with durable persistence",
         weeks: "1–2",
-        status: "in_progress",
+        status: "completed",
         stories: [
-          { id: "6.1", title: "Persist KPI tree instead of serving hardcoded structures", description: "Move KPI hierarchy reads from demo fixtures into durable tables and repository-backed queries so dashboard state survives restarts", status: "in_progress", files: [] },
-          { id: "6.2", title: "Replace hardcoded inbox queues with stored twin work items", description: "Back inbox cards with persisted requests, ownership, due dates, and status transitions instead of static response payloads", status: "not_started", files: [] },
-          { id: "6.3", title: "Store investigations as durable records", description: "Persist investigation threads, evidence links, findings, and status so active cases can be resumed and audited", status: "not_started", files: [] },
-          { id: "6.4", title: "Introduce repository-backed twin state services", description: "Centralize twin reads/writes behind repositories so APIs and schedulers stop mutating in-memory demo state directly", status: "not_started", files: [] },
-          { id: "6.5", title: "Rewire dashboards to repository-backed reality", description: "Update KPI, inbox, and investigation screens to render persisted state rather than hardcoded UI/demo data", status: "not_started", files: [] }
+          { id: "6.1", title: "Persist KPI tree instead of serving hardcoded structures", description: "Move KPI hierarchy reads from demo fixtures into durable tables and repository-backed queries so dashboard state survives restarts", status: "completed", files: [] },
+          { id: "6.2", title: "Replace hardcoded inbox queues with stored twin work items", description: "Back inbox cards with persisted requests, ownership, due dates, and status transitions instead of static response payloads", status: "completed", files: [] },
+          { id: "6.3", title: "Store investigations as durable records", description: "Persist investigation threads, evidence links, findings, and status so active cases can be resumed and audited", status: "completed", files: [] },
+          { id: "6.4", title: "Introduce repository-backed twin state services", description: "Centralize twin reads/writes behind repositories so APIs and schedulers stop mutating in-memory demo state directly", status: "completed", files: [] },
+          { id: "6.5", title: "Rewire dashboards to repository-backed reality", description: "Update KPI, inbox, and investigation screens to render persisted state rather than hardcoded UI/demo data", status: "completed", files: [] }
         ]
       },
       {
