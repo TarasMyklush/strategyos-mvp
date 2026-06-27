@@ -13,6 +13,10 @@ from strategyos_mvp.auth import authenticate_request
 from strategyos_mvp.platform_foundation import principal_has_any_role
 from strategyos_mvp.twins import memory, persona, resolution, runtime as twin_runtime
 from strategyos_mvp.twins.store import TwinRepositories, build_app_repositories
+from strategyos_mvp.twins.strategyos_data import (
+    build_surface_payload,
+    compose_investigation_payload,
+)
 
 router = APIRouter(prefix="/twin/api", tags=["twins"])
 
@@ -120,6 +124,23 @@ def _governance_payload(role: str, repositories: TwinRepositories) -> dict[str, 
     }
 
 
+def _fallback_kpis(role: str, twin_persona: persona.TwinPersona, repositories: TwinRepositories) -> dict[str, Any]:
+    eng = resolution.KPIResolutionEngine(repository=repositories.kpis)
+    results: dict[str, Any] = {}
+    for kpi_id in twin_persona.kpis_owned:
+        gaps = eng.detect_gaps(kpi_id)
+        node = eng.get_node(kpi_id) or {}
+        results[kpi_id] = {
+            "label": node.get("label", kpi_id),
+            "value": node.get("value"),
+            "status": node.get("status", "unknown"),
+            "gaps": gaps,
+            "health": "healthy" if not gaps else ("warning" if len(gaps) == 1 else "critical"),
+            "source": "twin_repository",
+        }
+    return results
+
+
 def _actor_identity(principal: dict[str, Any]) -> tuple[str, str]:
     return (
         str(principal.get("role") or "anonymous"),
@@ -152,6 +173,7 @@ def twin_status(
     repositories = _get_repositories()
     state = _load_or_create_state(canonical_role, repositories)
     investigations = repositories.investigations.list(canonical_role)
+    strategyos_surface = build_surface_payload(canonical_role)
     return {
         "role": role,
         "canonical_role": canonical_role,
@@ -160,8 +182,10 @@ def twin_status(
         "cycle_count": state.cycle_count,
         "last_wake": state.last_wake_at,
         "active_investigations": [item.get("id") for item in investigations],
+        "active_investigation_details": investigations[-20:],
         "pending_requests": len(state.pending_requests),
         "governance": _governance_payload(canonical_role, repositories),
+        "strategyos": strategyos_surface,
         "viewer": {
             "role": str(principal.get("role") or "anonymous"),
             "subject": str(principal.get("subject") or "anonymous"),
@@ -181,21 +205,23 @@ def twin_kpis(
     assert twin_persona is not None
 
     repositories = _get_repositories()
-    eng = resolution.KPIResolutionEngine(repository=repositories.kpis)
-    results: dict[str, Any] = {}
+    surface = build_surface_payload(canonical_role, _fallback_kpis(canonical_role, twin_persona, repositories))
 
-    for kpi_id in twin_persona.kpis_owned:
-        gaps = eng.detect_gaps(kpi_id)
-        node = eng.get_node(kpi_id) or {}
-        results[kpi_id] = {
-            "label": node.get("label", kpi_id),
-            "value": node.get("value"),
-            "status": node.get("status", "unknown"),
-            "gaps": gaps,
-            "health": "healthy" if not gaps else ("warning" if len(gaps) == 1 else "critical"),
-        }
-
-    return {"role": role, "canonical_role": canonical_role, "display_name": twin_persona.display_name, "kpis": results}
+    return {
+        "role": role,
+        "canonical_role": canonical_role,
+        "display_name": twin_persona.display_name,
+        "data_source": surface["data_source"],
+        "bounded_fallback": surface["bounded_fallback"],
+        "kpis": surface["kpis"],
+        "run_context": surface["run_context"],
+        "board": surface["board"],
+        "evidence": surface["evidence"],
+        "consistency": surface["consistency"],
+        "metrics": surface["metrics"],
+        "publication": surface["publication"],
+        "plan_health": surface["plan_health"],
+    }
 
 
 @router.get("/inbox/{role}")
@@ -255,6 +281,23 @@ def twin_investigate(
         repositories.states.save(canonical_role, tw.state)
 
     summary = tw.run_once()
+    strategyos_payload = compose_investigation_payload(canonical_role, query)
+
+    if query:
+        persisted = repositories.investigations.load(canonical_role, query_id) or {"id": query_id, "query": query}
+        persisted.update({
+            "id": query_id,
+            "query": query,
+            "response": strategyos_payload["response"],
+            "evidence": strategyos_payload["evidence"],
+            "board": strategyos_payload["board"],
+            "run_context": strategyos_payload["run_context"],
+            "consistency": strategyos_payload["consistency"],
+            "linked_finding_ids": strategyos_payload["linked_finding_ids"],
+            "linked_run_id": strategyos_payload["run_context"].get("run_id"),
+            "data_source": strategyos_payload["data_source"],
+        })
+        repositories.investigations.save(canonical_role, persisted)
 
     return {
         "role": role,
@@ -267,6 +310,13 @@ def twin_investigate(
         "issues_found": len(summary.get("issues", [])),
         "actions_taken": len(summary.get("decisions", [])),
         "summary": summary,
+        "response": strategyos_payload["response"],
+        "evidence": strategyos_payload["evidence"],
+        "board": strategyos_payload["board"],
+        "run_context": strategyos_payload["run_context"],
+        "consistency": strategyos_payload["consistency"],
+        "data_source": strategyos_payload["data_source"],
+        "bounded_fallback": strategyos_payload["bounded_fallback"],
         "governance": _governance_payload(canonical_role, repositories),
     }
 
