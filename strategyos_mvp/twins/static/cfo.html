@@ -1089,27 +1089,25 @@ function toggleThread(msgId) {
 function approveDecision(decId) {
   var item = document.querySelector('[data-decision-id="' + decId + '"]');
   if (!item) return;
-  item.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
   var title = item.querySelector('.decision-item__title').textContent;
-  addAuditEntry('Approved ' + title, 'APPROVED', 'approved');
-  console.log('[Human Override] Approved budget:', decId, title);
+  var rationale = window.prompt('Approval note (optional):', '') || '';
+  persistDecision('/twin/api/approve/' + ROLE, decId, title, rationale, item);
 }
 
 function rejectDecision(decId) {
   var item = document.querySelector('[data-decision-id="' + decId + '"]');
   if (!item) return;
-  item.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
   var title = item.querySelector('.decision-item__title').textContent;
-  addAuditEntry('Rejected ' + title, 'REJECTED', 'rejected');
-  console.log('[Human Override] Rejected budget:', decId, title);
+  var rationale = window.prompt('Rejection rationale:', '') || '';
+  persistDecision('/twin/api/reject/' + ROLE, decId, title, rationale, item);
 }
 
 function redirectInvestigation() {
   var invId = document.getElementById('redirect-input').value.trim();
   var target = document.getElementById('redirect-target-input').value.trim();
   if (!invId || !target) { alert('Please enter both investigation ID and target twin.'); return; }
-  addAuditEntry('Redirected ' + invId + ' to ' + target, 'REDIRECTED', 'escalated');
-  console.log('[Human Override] Redirected:', invId, '->', target);
+  var reason = window.prompt('Redirect reason:', '') || '';
+  persistRouting('/twin/api/redirect/' + ROLE, invId, 'Investigation ' + invId, target, reason);
   document.getElementById('redirect-input').value = '';
   document.getElementById('redirect-target-input').value = '';
 }
@@ -1117,38 +1115,88 @@ function redirectInvestigation() {
 function escalateDecision() {
   var decId = document.getElementById('escalate-input').value.trim();
   if (!decId) { alert('Please enter a decision ID.'); return; }
-  addAuditEntry('Escalated ' + decId + ' to CEO', 'ESCALATED', 'escalated');
-  console.log('[Human Override] Escalated:', decId);
+  var reason = window.prompt('Escalation reason:', '') || '';
+  persistRouting('/twin/api/escalate/' + ROLE, decId, 'Decision ' + decId, 'ceo', reason);
   document.getElementById('escalate-input').value = '';
 }
 
-function addAuditEntry(action, result, resultClass) {
+function addAuditEntry(action, result, resultClass, timestamp, reason) {
   var log = document.getElementById('audit-log');
-  var now = new Date();
-  var ts = now.toISOString().slice(0, 16).replace('T', ' ');
+  var ts = timestamp ? String(timestamp).replace('T', ' ').slice(0, 16) : new Date().toISOString().slice(0, 16).replace('T', ' ');
   var entry = document.createElement('div');
   entry.className = 'audit-entry';
   entry.innerHTML = '<span class="audit-entry__time">' + ts + '</span>'
     + '<span class="audit-entry__action">' + action + '</span>'
     + '<span class="audit-entry__result ' + resultClass + '">' + result + '</span>';
+  if (reason) {
+    entry.innerHTML += '<span class="audit-entry__action">' + reason + '</span>';
+  }
   log.insertBefore(entry, log.firstChild);
   while (log.children.length > 20) log.removeChild(log.lastChild);
+}
+
+function renderAuditHistory(history) {
+  var log = document.getElementById('audit-log');
+  if (!log) return;
+  log.innerHTML = '';
+  (history || []).forEach(function (entry) {
+    var action = entry.action || entry.item_id || entry.event_type;
+    if (entry.target_role) action += ' → ' + entry.target_role;
+    addAuditEntry(action, entry.result || entry.event_type, entry.result_class || 'approved', entry.timestamp, entry.reason || '');
+  });
+}
+
+async function persistDecision(endpoint, itemId, title, rationale, item) {
+  if (item) item.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+  try {
+    var resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: itemId, title: title, rationale: rationale })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    console.log('[Human Override] Persisted decision:', itemId, endpoint);
+    renderAuditHistory(data.governance && data.governance.history);
+  } catch (e) {
+    if (item) item.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
+    alert('Failed to persist governance action: ' + e.message);
+  }
+}
+
+async function persistRouting(endpoint, itemId, title, targetRole, reason) {
+  try {
+    var resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: itemId, title: title, target_role: targetRole, reason: reason })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    console.log('[Human Override] Persisted routing action:', itemId, endpoint, targetRole);
+    renderAuditHistory(data.governance && data.governance.history);
+  } catch (e) {
+    alert('Failed to persist routing action: ' + e.message);
+  }
 }
 </script>
 
 <script>
 (function() {
-  var ROLE = 'cfo';
+  window.ROLE = 'cfo';
+  var ROLE = window.ROLE;
   async function loadData() {
     try {
-      var [status, kpis] = await Promise.all([
+      var [status, kpis, history] = await Promise.all([
         fetch('/twin/api/status/' + ROLE).then(r => r.json()),
-        fetch('/twin/api/kpis/' + ROLE).then(r => r.json())
+        fetch('/twin/api/kpis/' + ROLE).then(r => r.json()),
+        fetch('/twin/api/history/' + ROLE).then(r => r.json())
       ]);
       if (status && status.cycle_count !== undefined) {
         var el = document.getElementById('cycle-count');
         if (el) el.textContent = status.cycle_count;
       }
+      renderAuditHistory(history && history.governance && history.governance.history);
     } catch(e) { console.error(e); }
   }
   window.askCFO = async function() {

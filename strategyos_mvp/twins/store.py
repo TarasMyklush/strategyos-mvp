@@ -7,6 +7,7 @@ import json
 import os
 import tempfile
 from dataclasses import asdict, dataclass, is_dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -222,12 +223,147 @@ class TwinStateRepository(_JsonRepository):
             path.unlink()
 
 
+class GovernanceRepository(_JsonRepository):
+    def __init__(self, base_path: Path) -> None:
+        super().__init__(Path(base_path) / "governance")
+        self._decisions_path = self.base_path / "decisions.json"
+        self._routing_path = self.base_path / "routing.json"
+
+    def _append_record(self, path: Path, record: dict[str, Any]) -> dict[str, Any]:
+        records = self._read_file(path, [])
+        records.append(copy.deepcopy(record))
+        self._write_file(path, records)
+        return copy.deepcopy(record)
+
+    def save_decision(self, record: dict[str, Any]) -> dict[str, Any]:
+        return self._append_record(self._decisions_path, record)
+
+    def save_routing_event(self, record: dict[str, Any]) -> dict[str, Any]:
+        return self._append_record(self._routing_path, record)
+
+    def list_decisions(
+        self, role: str | None = None, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        records = self._read_file(self._decisions_path, [])
+        filtered = [
+            copy.deepcopy(record)
+            for record in records
+            if role is None or record.get("role") == role
+        ]
+        filtered.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
+        if limit is not None:
+            return filtered[:limit]
+        return filtered
+
+    def list_routing_events(
+        self, role: str | None = None, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        records = self._read_file(self._routing_path, [])
+        filtered = [
+            copy.deepcopy(record)
+            for record in records
+            if role is None or record.get("source_role") == role
+        ]
+        filtered.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
+        if limit is not None:
+            return filtered[:limit]
+        return filtered
+
+    def history(self, role: str, limit: int = 20) -> list[dict[str, Any]]:
+        combined: list[dict[str, Any]] = []
+        for record in self.list_decisions(role):
+            status = str(record.get("status") or "").lower()
+            combined.append({
+                "event_id": record.get("event_id"),
+                "timestamp": record.get("timestamp"),
+                "role": record.get("role"),
+                "actor_role": record.get("actor_role"),
+                "actor_subject": record.get("actor_subject"),
+                "event_type": record.get("event_type", "decision"),
+                "result": status.upper(),
+                "result_class": "approved" if status == "approved" else "rejected",
+                "action": record.get("title") or record.get("item_id") or "Decision",
+                "reason": record.get("rationale") or "",
+                "item_id": record.get("item_id"),
+            })
+        for record in self.list_routing_events(role):
+            event_type = str(record.get("event_type") or "routing").lower()
+            combined.append({
+                "event_id": record.get("event_id"),
+                "timestamp": record.get("timestamp"),
+                "role": record.get("source_role"),
+                "actor_role": record.get("actor_role"),
+                "actor_subject": record.get("actor_subject"),
+                "event_type": event_type,
+                "result": "ESCALATED" if event_type == "escalation" else "REDIRECTED",
+                "result_class": "escalated",
+                "action": record.get("title") or record.get("item_id") or "Routing event",
+                "reason": record.get("reason") or "",
+                "item_id": record.get("item_id"),
+                "target_role": record.get("target_role"),
+            })
+        combined.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
+        return combined[:limit]
+
+    def seed_demo_history(self, role: str) -> None:
+        if self.list_decisions(role, limit=1) or self.list_routing_events(role, limit=1):
+            return
+        timestamp = datetime.now(UTC).isoformat()
+        if role == "ceo":
+            self.save_decision({
+                "event_id": "seed-ceo-approval",
+                "event_type": "approval",
+                "role": "ceo",
+                "item_id": "dec-001",
+                "title": "Q3 budget reallocation — North America",
+                "status": "approved",
+                "rationale": "Seeded demo approval trail.",
+                "reviewer_notes": "Seeded demo approval trail.",
+                "actor_role": "executive",
+                "actor_subject": "seed:executive",
+                "timestamp": timestamp,
+            })
+        elif role == "cfo":
+            self.save_decision({
+                "event_id": "seed-cfo-approval",
+                "event_type": "approval",
+                "role": "cfo",
+                "item_id": "bud-001",
+                "title": "Approve Q3 digital campaign budget",
+                "status": "approved",
+                "rationale": "Seeded demo finance approval trail.",
+                "reviewer_notes": "Seeded demo finance approval trail.",
+                "actor_role": "operator",
+                "actor_subject": "seed:operator",
+                "timestamp": timestamp,
+            })
+        elif role == "group_manager":
+            self.save_routing_event({
+                "event_id": "seed-gm-routing",
+                "event_type": "escalation",
+                "source_role": "group_manager",
+                "target_role": "cfo",
+                "item_id": "inv-001",
+                "title": "Plant capacity expansion request",
+                "reason": "Seeded demo escalation trail.",
+                "actor_role": "bu",
+                "actor_subject": "seed:bu",
+                "timestamp": timestamp,
+            })
+
+    def clear(self) -> None:
+        for path in (self._decisions_path, self._routing_path):
+            if path.exists():
+                path.unlink()
+
+
 @dataclass(frozen=True)
 class TwinRepositories:
     kpis: KpiRepository
     inboxes: TwinInboxRepository
     investigations: InvestigationRepository
     states: TwinStateRepository
+    governance: GovernanceRepository
 
 
 def build_repositories(base_path: Path | str) -> TwinRepositories:
@@ -237,6 +373,7 @@ def build_repositories(base_path: Path | str) -> TwinRepositories:
         inboxes=TwinInboxRepository(root),
         investigations=InvestigationRepository(root),
         states=TwinStateRepository(root),
+        governance=GovernanceRepository(root),
     )
 
 
