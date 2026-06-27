@@ -24,6 +24,7 @@ from strategyos_mvp.twins.protocol import (
     get_escalation_timeout,
 )
 from strategyos_mvp.twins.resolution import KPIResolutionEngine, KPI_TREE
+from strategyos_mvp.twins.store import TwinRepositories, build_runtime_repositories
 from strategyos_mvp.twins.tools import (
     escalate_to_human,
     query_kpi,
@@ -31,33 +32,56 @@ from strategyos_mvp.twins.tools import (
 )
 
 # ---------------------------------------------------------------------------
-# Global in-memory message store (Phase 1 — no database yet)
+# Repository-backed message store
 # ---------------------------------------------------------------------------
 
-_INBOX: dict[str, list[dict[str, Any]]] = {}
-"""Global message inbox keyed by recipient role.
 
-Each entry is a list of message dicts (deserialised InterTwinMessage or
-plain notification dicts). Twins read from their own inbox slot during
-the Observe phase.
-"""
+_DEFAULT_RUNTIME_REPOSITORIES = build_runtime_repositories()
+_DEFAULT_RUNTIME_REPOSITORIES.kpis.ensure_seeded(KPI_TREE)
 
 
-def _deliver_to_inbox(recipient_role: str, message: dict[str, Any]) -> None:
+class _InboxProxy:
+    """Compatibility wrapper for old tests that inspect `_INBOX.get(...)`."""
+
+    def __init__(self, repositories: TwinRepositories) -> None:
+        self._repositories = repositories
+
+    def get(self, recipient_role: str, default: Any = None) -> list[dict[str, Any]]:
+        messages = self._repositories.inboxes.load(recipient_role)
+        if messages:
+            return messages
+        return [] if default is None else default
+
+
+_INBOX = _InboxProxy(_DEFAULT_RUNTIME_REPOSITORIES)
+
+
+def _deliver_to_inbox(
+    recipient_role: str,
+    message: dict[str, Any],
+    repositories: TwinRepositories | None = None,
+) -> None:
     """Place a message dict into the recipient's inbox."""
-    if recipient_role not in _INBOX:
-        _INBOX[recipient_role] = []
-    _INBOX[recipient_role].append(message)
+    repo_set = repositories or _DEFAULT_RUNTIME_REPOSITORIES
+    repo_set.inboxes.append(recipient_role, message)
 
 
-def _read_inbox(recipient_role: str) -> list[dict[str, Any]]:
+def _read_inbox(
+    recipient_role: str,
+    repositories: TwinRepositories | None = None,
+) -> list[dict[str, Any]]:
     """Read and clear the inbox for a given role."""
-    return _INBOX.pop(recipient_role, [])
+    repo_set = repositories or _DEFAULT_RUNTIME_REPOSITORIES
+    return repo_set.inboxes.consume(recipient_role)
 
 
-def _peek_inbox(recipient_role: str) -> int:
+def _peek_inbox(
+    recipient_role: str,
+    repositories: TwinRepositories | None = None,
+) -> int:
     """Return the number of pending messages without consuming them."""
-    return len(_INBOX.get(recipient_role, []))
+    repo_set = repositories or _DEFAULT_RUNTIME_REPOSITORIES
+    return len(repo_set.inboxes.load(recipient_role))
 
 
 # ---------------------------------------------------------------------------
@@ -78,11 +102,26 @@ class TwinRuntime:
         state: The :class:`TwinState` for this twin instance.
     """
 
-    def __init__(self, persona: TwinPersona, state: TwinState) -> None:
+    def __init__(
+        self,
+        persona: TwinPersona,
+        state: TwinState,
+        repositories: TwinRepositories | None = None,
+    ) -> None:
         self.persona = persona
         self.state = state
-        self._resolver = KPIResolutionEngine()
+        self._repositories = repositories or _DEFAULT_RUNTIME_REPOSITORIES
+        self._repositories.kpis.ensure_seeded(KPI_TREE)
+        self._resolver = KPIResolutionEngine(repository=self._repositories.kpis)
         self._cycle_summary: dict[str, Any] = {}
+
+    def _persist_state(self) -> None:
+        self._repositories.states.save(self.state.role, self.state)
+
+    def _persist_investigation(self, inv_id: str) -> None:
+        record = self.state.active_investigations.get(inv_id)
+        if record is not None:
+            self._repositories.investigations.save(self.state.role, record)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -138,7 +177,7 @@ class TwinRuntime:
 
         # 1. Check owned KPIs
         for kpi_id in self.persona.kpis_owned:
-            node = KPI_TREE.get(kpi_id)
+            node = self._resolver.get_node(kpi_id)
             if node:
                 observations["kpis"].append({
                     "node_id": kpi_id,
@@ -155,7 +194,7 @@ class TwinRuntime:
                 })
 
         # 2. Read inbox
-        inbox_messages = _read_inbox(self.persona.role)
+        inbox_messages = _read_inbox(self.persona.role, self._repositories)
         observations["inbox"] = inbox_messages
 
         self._cycle_summary["observations"] = observations
@@ -221,6 +260,7 @@ class TwinRuntime:
             inv_id = f"{self.persona.role}_issue_{self.state.cycle_count}_{idx}"
             issue["investigation_id"] = inv_id
             add_investigation(self.state, inv_id, issue)
+            self._persist_investigation(inv_id)
 
         self._cycle_summary["issues"] = issues
         return issues
@@ -349,6 +389,7 @@ class TwinRuntime:
                                 "created_at": msg.created_at,
                                 "status": msg.status,
                             },
+                            self._repositories,
                         )
 
                 elif action_type == "send_escalation":
@@ -384,6 +425,7 @@ class TwinRuntime:
                                 "created_at": msg.created_at,
                                 "status": msg.status,
                             },
+                            self._repositories,
                         )
 
                 elif action_type == "respond_to_message":
@@ -417,6 +459,7 @@ class TwinRuntime:
                             "created_at": now_iso,
                             "status": "pending",
                         },
+                        self._repositories,
                     )
                     action_record["target"] = sender
                     action_record["response"] = response_body
@@ -442,6 +485,7 @@ class TwinRuntime:
                         inv_id,
                         {"action_taken": action_type, "status": "completed"},
                     )
+                    self._persist_investigation(inv_id)
 
             except Exception as exc:
                 action_record["error"] = str(exc)
@@ -469,7 +513,7 @@ class TwinRuntime:
         escalated: list[InterTwinMessage] = []
         now_iso = datetime.now(timezone.utc).isoformat()
 
-        inbox = _INBOX.get(self.persona.role, [])
+        inbox = self._repositories.inboxes.load(self.persona.role)
         expired_indices: list[int] = []
 
         for idx, msg_dict in enumerate(inbox):
@@ -496,6 +540,8 @@ class TwinRuntime:
         # Remove expired messages (reverse order to preserve indices)
         for idx in reversed(expired_indices):
             inbox.pop(idx)
+
+        self._repositories.inboxes.save(self.persona.role, inbox)
 
         return escalated
 
@@ -539,5 +585,6 @@ class TwinRuntime:
             self._cycle_summary["errors"].append(str(exc))
         finally:
             self.sleep()
+            self._persist_state()
 
         return dict(self._cycle_summary)

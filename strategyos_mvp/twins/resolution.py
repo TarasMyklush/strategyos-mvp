@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from strategyos_mvp.twins.protocol import InterTwinMessage, check_escalation
+from strategyos_mvp.twins.store import KpiRepository
 
 # ---------------------------------------------------------------------------
 # Hardcoded KPI tree (Phase 1 — no live Neo4j yet)
@@ -59,6 +60,26 @@ class KPIResolutionEngine:
     state so it is safe to share across twin cycles.
     """
 
+    def __init__(
+        self,
+        repository: KpiRepository | None = None,
+        fallback_tree: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
+        self.repository = repository
+        self.fallback_tree = fallback_tree or KPI_TREE
+        if self.repository is not None:
+            self.repository.ensure_seeded(self.fallback_tree)
+
+    def get_tree(self) -> dict[str, dict[str, Any]]:
+        if self.repository is None:
+            return KPI_TREE
+        tree = self.repository.load()
+        return tree or self.fallback_tree
+
+    def get_node(self, kpi_node_id: str) -> dict[str, Any] | None:
+        node = self.get_tree().get(kpi_node_id)
+        return dict(node) if node else None
+
     # ------------------------------------------------------------------
     # Tree traversal
     # ------------------------------------------------------------------
@@ -77,11 +98,12 @@ class KPIResolutionEngine:
               as a component
             - ``downstream``: recursively resolved component tree
         """
-        node = KPI_TREE.get(kpi_node_id)
+        tree = self.get_tree()
+        node = tree.get(kpi_node_id)
 
         # Upstream: which nodes list this one as a component
         upstream: list[str] = []
-        for nid, ndata in KPI_TREE.items():
+        for nid, ndata in tree.items():
             components = ndata.get("components", [])
             if kpi_node_id in components:
                 upstream.append(nid)
@@ -90,7 +112,7 @@ class KPIResolutionEngine:
         downstream: list[dict[str, Any]] = []
         if node and "components" in node:
             for comp_id in node["components"]:
-                child = KPI_TREE.get(comp_id)
+                child = tree.get(comp_id)
                 if child:
                     downstream.append({
                         "node_id": comp_id,
@@ -123,13 +145,14 @@ class KPIResolutionEngine:
             return []
         visited.add(node_id)
 
-        node = KPI_TREE.get(node_id)
+        tree = self.get_tree()
+        node = tree.get(node_id)
         if not node or "components" not in node:
             return []
 
         children: list[dict[str, Any]] = []
         for comp_id in node["components"]:
-            child = KPI_TREE.get(comp_id)
+            child = tree.get(comp_id)
             if child:
                 children.append({
                     "node_id": comp_id,
@@ -152,7 +175,7 @@ class KPIResolutionEngine:
             The owning role string (e.g. ``"cfo"``) or *None* if the
             node is unknown.
         """
-        node = KPI_TREE.get(kpi_node_id)
+        node = self.get_tree().get(kpi_node_id)
         if node is None:
             return None
         return node.get("owner")
@@ -178,7 +201,8 @@ class KPIResolutionEngine:
             A list of gap dicts, each with ``kpi_node_id``, ``type``,
             ``detail``, and ``owner`` keys. Empty list if no gaps found.
         """
-        node = KPI_TREE.get(kpi_node_id)
+        tree = self.get_tree()
+        node = tree.get(kpi_node_id)
         if node is None:
             return [{
                 "kpi_node_id": kpi_node_id,
@@ -242,7 +266,8 @@ class KPIResolutionEngine:
             A flat list of descendant node IDs (excluding the root).
         """
         chain: list[str] = []
-        node = KPI_TREE.get(kpi_node_id)
+        tree = self.get_tree()
+        node = tree.get(kpi_node_id)
         if not node or "components" not in node:
             return chain
 
@@ -258,7 +283,8 @@ class KPIResolutionEngine:
             return
         visited.add(node_id)
 
-        node = KPI_TREE.get(node_id)
+        tree = self.get_tree()
+        node = tree.get(node_id)
         if not node or "components" not in node:
             return
 
@@ -296,7 +322,7 @@ class KPIResolutionEngine:
 
         # If target not found via tree, search KPI_TREE directly
         if target_node_id is None:
-            for nid in KPI_TREE:
+            for nid in self.get_tree():
                 if target_data.lower() in nid.lower():
                     target_node_id = nid
                     break
@@ -330,7 +356,8 @@ class KPIResolutionEngine:
             result.append(node_id)
             return
 
-        node = KPI_TREE.get(node_id)
+        tree = self.get_tree()
+        node = tree.get(node_id)
         if node and "components" in node:
             for comp_id in node["components"]:
                 self._find_target_in_tree(comp_id, target_data, visited, result)
@@ -359,7 +386,8 @@ class KPIResolutionEngine:
         if from_node == to_node:
             return True
 
-        node = KPI_TREE.get(from_node)
+        tree = self.get_tree()
+        node = tree.get(from_node)
         if node and "components" in node:
             for comp_id in node["components"]:
                 if self._build_owner_chain(comp_id, to_node, chain, visited):

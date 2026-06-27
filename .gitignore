@@ -22,3 +22,4 @@ outputs/
 playwright_*_snapshot.md
 strategyos-live-*.png
 strategyos-*.png
+.strategyos_mvp_data/
