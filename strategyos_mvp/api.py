@@ -127,7 +127,7 @@ class QaRequest(BaseModel):
     mode: str | None = "deterministic"
 
 
-from .twins.api import router as twin_router
+from .twins.api import require_twin_dashboard_access, router as twin_router
 
 app = FastAPI(title="StrategyOS MVP API", version="0.1.0")
 STATIC_DIR = Path(__file__).with_name("static")
@@ -6255,19 +6255,25 @@ def plan_page() -> HTMLResponse:
 
 
 @app.get("/twin/ceo", response_class=HTMLResponse)
-def twin_ceo_dashboard() -> HTMLResponse:
+def twin_ceo_dashboard(
+    principal: dict[str, Any] = require_twin_dashboard_access("ceo"),
+) -> HTMLResponse:
     """Serve the CEO twin dashboard."""
     return HTMLResponse((TWINS_STATIC_DIR / "ceo.html").read_text(encoding="utf-8"))
 
 
 @app.get("/twin/cfo", response_class=HTMLResponse)
-def twin_cfo_dashboard() -> HTMLResponse:
+def twin_cfo_dashboard(
+    principal: dict[str, Any] = require_twin_dashboard_access("cfo"),
+) -> HTMLResponse:
     """Serve the CFO twin dashboard."""
     return HTMLResponse((TWINS_STATIC_DIR / "cfo.html").read_text(encoding="utf-8"))
 
 
 @app.get("/twin/gm", response_class=HTMLResponse)
-def twin_gm_dashboard() -> HTMLResponse:
+def twin_gm_dashboard(
+    principal: dict[str, Any] = require_twin_dashboard_access("gm"),
+) -> HTMLResponse:
     """Serve the Group Manager twin dashboard."""
     return HTMLResponse((TWINS_STATIC_DIR / "gm.html").read_text(encoding="utf-8"))
 

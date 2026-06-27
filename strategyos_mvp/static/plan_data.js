@@ -118,13 +118,13 @@
         title: "Identity and governance integration",
         subtitle: "Enforce real auth, role gating, approval trails, and escalation audit across twin actions",
         weeks: "1–2",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "7.1", title: "Require authenticated access for twin dashboards and APIs", description: "Bind twin routes to real user identity so every read and action is tied to a persisted principal", status: "not_started", files: [] },
-          { id: "7.2", title: "Gate actions by role and authority", description: "Enforce persona-specific permissions for approve, redirect, escalate, investigate, and publish actions", status: "not_started", files: [] },
-          { id: "7.3", title: "Persist approval decisions and reviewer rationale", description: "Store who approved what, when, and why so governance decisions stop living only in transient UI state", status: "not_started", files: [] },
-          { id: "7.4", title: "Audit escalation and redirect flows", description: "Capture redirect, reassignment, escalation, and deadline override history as durable workflow events", status: "not_started", files: [] },
-          { id: "7.5", title: "Expose governance history in product surfaces", description: "Show approval trail and routing history inside dashboards so operators can inspect the full control path", status: "not_started", files: [] }
+          { id: "7.1", title: "Require authenticated access for twin dashboards and APIs", description: "Bind twin routes to real user identity so every read and action is tied to a persisted principal", status: "completed", files: [] },
+          { id: "7.2", title: "Gate actions by role and authority", description: "Enforce persona-specific permissions for approve, redirect, escalate, investigate, and publish actions", status: "completed", files: [] },
+          { id: "7.3", title: "Persist approval decisions and reviewer rationale", description: "Store who approved what, when, and why so governance decisions stop living only in transient UI state", status: "completed", files: [] },
+          { id: "7.4", title: "Audit escalation and redirect flows", description: "Capture redirect, reassignment, escalation, and deadline override history as durable workflow events", status: "completed", files: [] },
+          { id: "7.5", title: "Expose governance history in product surfaces", description: "Show approval trail and routing history inside dashboards so operators can inspect the full control path", status: "completed", files: [] }
         ]
       },
       {

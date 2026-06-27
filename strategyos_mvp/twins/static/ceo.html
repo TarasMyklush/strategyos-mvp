@@ -1094,21 +1094,17 @@ function toggleThread(msgId) {
 function approveDecision(decId) {
   var item = document.querySelector('[data-decision-id="' + decId + '"]');
   if (!item) return;
-  var btns = item.querySelectorAll('button');
-  btns.forEach(function (b) { b.disabled = true; });
   var title = item.querySelector('.decision-item__title').textContent;
-  addAuditEntry('Approved ' + title, 'APPROVED', 'approved');
-  console.log('[Human Override] Approved decision:', decId, title);
+  var rationale = window.prompt('Approval note (optional):', '') || '';
+  persistDecision('/twin/api/approve/' + ROLE, decId, title, rationale, item);
 }
 
 function rejectDecision(decId) {
   var item = document.querySelector('[data-decision-id="' + decId + '"]');
   if (!item) return;
-  var btns = item.querySelectorAll('button');
-  btns.forEach(function (b) { b.disabled = true; });
   var title = item.querySelector('.decision-item__title').textContent;
-  addAuditEntry('Rejected ' + title, 'REJECTED', 'rejected');
-  console.log('[Human Override] Rejected decision:', decId, title);
+  var rationale = window.prompt('Rejection rationale:', '') || '';
+  persistDecision('/twin/api/reject/' + ROLE, decId, title, rationale, item);
 }
 
 // Redirect investigation
@@ -1119,8 +1115,8 @@ function redirectInvestigation() {
     alert('Please enter both investigation ID and target twin.');
     return;
   }
-  addAuditEntry('Redirected investigation ' + invId + ' to ' + target, 'REDIRECTED', 'escalated');
-  console.log('[Human Override] Redirected investigation:', invId, '->', target);
+  var reason = window.prompt('Redirect reason:', '') || '';
+  persistRouting('/twin/api/redirect/' + ROLE, invId, 'Investigation ' + invId, target, reason);
   document.getElementById('redirect-input').value = '';
   document.getElementById('redirect-target-input').value = '';
 }
@@ -1132,25 +1128,70 @@ function escalateDecision() {
     alert('Please enter a decision ID.');
     return;
   }
-  addAuditEntry('Escalated decision ' + decId + ' to next role', 'ESCALATED', 'escalated');
-  console.log('[Human Override] Escalated decision:', decId);
+  var reason = window.prompt('Escalation reason:', '') || '';
+  persistRouting('/twin/api/escalate/' + ROLE, decId, 'Decision ' + decId, null, reason);
   document.getElementById('escalate-input').value = '';
 }
 
-// Audit trail
-function addAuditEntry(action, result, resultClass) {
+function addAuditEntry(action, result, resultClass, timestamp, reason) {
   var auditLog = document.getElementById('audit-log');
-  var now = new Date();
-  var timeStr = now.toISOString().slice(0, 16).replace('T', ' ');
+  var timeStr = timestamp ? String(timestamp).replace('T', ' ').slice(0, 16) : new Date().toISOString().slice(0, 16).replace('T', ' ');
   var entry = document.createElement('div');
   entry.className = 'audit-entry';
   entry.innerHTML = '<span class="audit-entry__time">' + timeStr + '</span>'
     + '<span class="audit-entry__action">' + action + '</span>'
     + '<span class="audit-entry__result ' + resultClass + '">' + result + '</span>';
+  if (reason) {
+    entry.innerHTML += '<span class="audit-entry__action">' + reason + '</span>';
+  }
   auditLog.insertBefore(entry, auditLog.firstChild);
-  // Keep max 20 entries
   while (auditLog.children.length > 20) {
     auditLog.removeChild(auditLog.lastChild);
+  }
+}
+
+function renderAuditHistory(history) {
+  var auditLog = document.getElementById('audit-log');
+  if (!auditLog) return;
+  auditLog.innerHTML = '';
+  (history || []).forEach(function (entry) {
+    var action = entry.action || entry.item_id || entry.event_type;
+    if (entry.target_role) action += ' → ' + entry.target_role;
+    addAuditEntry(action, entry.result || entry.event_type, entry.result_class || 'approved', entry.timestamp, entry.reason || '');
+  });
+}
+
+async function persistDecision(endpoint, itemId, title, rationale, item) {
+  if (item) item.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+  try {
+    var resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: itemId, title: title, rationale: rationale })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    console.log('[Human Override] Persisted decision:', itemId, endpoint);
+    renderAuditHistory(data.governance && data.governance.history);
+  } catch (e) {
+    if (item) item.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
+    alert('Failed to persist governance action: ' + e.message);
+  }
+}
+
+async function persistRouting(endpoint, itemId, title, targetRole, reason) {
+  try {
+    var resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: itemId, title: title, target_role: targetRole, reason: reason })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    console.log('[Human Override] Persisted routing action:', itemId, endpoint, targetRole);
+    renderAuditHistory(data.governance && data.governance.history);
+  } catch (e) {
+    alert('Failed to persist routing action: ' + e.message);
   }
 }
 </script>
@@ -1158,14 +1199,16 @@ function addAuditEntry(action, result, resultClass) {
 <script>
 // Live twin data fetching
 (function() {
-  var ROLE = 'ceo';
+  window.ROLE = 'ceo';
+  var ROLE = window.ROLE;
 
   async function loadTwinData() {
     try {
-      var [status, kpis, inbox] = await Promise.all([
+      var [status, kpis, inbox, history] = await Promise.all([
         fetch('/twin/api/status/' + ROLE).then(function(r) { return r.json(); }),
         fetch('/twin/api/kpis/' + ROLE).then(function(r) { return r.json(); }),
-        fetch('/twin/api/inbox/' + ROLE).then(function(r) { return r.json(); })
+        fetch('/twin/api/inbox/' + ROLE).then(function(r) { return r.json(); }),
+        fetch('/twin/api/history/' + ROLE).then(function(r) { return r.json(); })
       ]);
       if (status && status.cycle_count !== undefined) {
         document.getElementById('cycle-count').textContent = status.cycle_count;
@@ -1173,6 +1216,7 @@ function addAuditEntry(action, result, resultClass) {
       if (status && status.active_investigations) {
         document.getElementById('active-inv-count').textContent = status.active_investigations.length;
       }
+      renderAuditHistory(history && history.governance && history.governance.history);
     } catch(e) {
       console.error('Twin data load:', e);
     }
