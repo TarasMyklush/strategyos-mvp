@@ -452,6 +452,39 @@ def test_public_evidence_preview_sanitizes_payload(monkeypatch):
         _restore_env(original)
 
 
+def test_public_evidence_preview_without_selector_returns_boundary_note(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+
+        client = TestClient(api_module.app)
+        response = client.get("/public/data/evidence-preview")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload == {
+            "status": "ok",
+            "run_id": "latest-public",
+            "title": "Governed evidence preview",
+            "pattern_label": "Governed Signal",
+            "confidence": None,
+            "source_path": None,
+            "source_hash": None,
+            "preview_kind": "text",
+            "excerpt": api_module.PUBLIC_EVIDENCE_BOUNDARY_NOTE,
+            "resolved_payload": {},
+            "public_safe": True,
+        }
+    finally:
+        _restore_env(original)
+
+
 def test_public_report_preview_returns_board_safe_summary(monkeypatch):
     original = _apply_env(
         {

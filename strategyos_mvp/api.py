@@ -7559,6 +7559,20 @@ def _public_evidence_preview_payload(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Only the latest public demo run is available on the anonymous surface.",
         )
+    if not any([finding_id, source_hash, locator]):
+        return {
+            "status": "ok",
+            "run_id": ANONYMOUS_PUBLIC_RUN_ID,
+            "title": "Governed evidence preview",
+            "pattern_label": "Governed Signal",
+            "confidence": None,
+            "source_path": None,
+            "source_hash": None,
+            "preview_kind": "text",
+            "excerpt": PUBLIC_EVIDENCE_BOUNDARY_NOTE,
+            "resolved_payload": {},
+            "public_safe": True,
+        }
     payload = state_store.evidence_preview_for_run(
         latest_run_id,
         finding_id=finding_id,
