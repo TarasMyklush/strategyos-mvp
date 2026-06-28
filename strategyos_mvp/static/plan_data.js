@@ -24,7 +24,7 @@
         title: "First Two Twins",
         subtitle: "CEO + CFO twins, single KPI resolution flow, minimal dashboard",
         weeks: "2–3",
-        status: "in_progress",
+        status: "completed",
         stories: [
           { id: "1.1", title: "Twin runtime — agent loop", description: "Observe → Orient → Decide → Act loop, wake/sleep cycle, state machine", status: "completed", files: ["twins/runtime.py"] },
           { id: "1.2", title: "KPI resolution engine", description: "Tree traversal, gap detection, ownership routing for single-hop resolution", status: "completed", files: ["twins/resolution.py"] },

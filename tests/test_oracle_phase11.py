@@ -309,6 +309,8 @@ def test_plan_data_marks_phase11_complete_without_starting_phase12():
         / "plan_data.js"
     )
     text = plan_file.read_text(encoding="utf-8")
+    phase1_block = text.split('id: "phase-1"', 1)[1].split('id: "phase-2"', 1)[0]
+    assert 'status: "completed"' in phase1_block
     assert 'id: "phase-11"' in text
     assert 'status: "completed"' in text
     assert 'id: "12.1"' in text
