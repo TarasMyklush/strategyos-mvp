@@ -163,7 +163,6 @@
         title: "Production hardening",
         subtitle: "Lock down E2E reliability, observability, idempotency, security, and rollout safety before broad release",
         weeks: "1–2",
-<<<<<<< HEAD
         status: "completed",
         stories: [
           { id: "10.1", title: "Ship end-to-end regression coverage for twin workflows", description: "Exercise persisted KPI, inbox, investigation, approval, and publication flows through browser and API tests", status: "completed", files: [] },
