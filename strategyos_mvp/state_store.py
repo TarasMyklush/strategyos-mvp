@@ -13,6 +13,7 @@ from .config import CONFIG
 from .evidence import row_locator, sha256_file
 from .ingestion import DataBundle
 from .models import AuditEvent, Finding
+from .oracle_finance import OracleCanonicalSnapshot
 
 
 def create_run(
@@ -1347,6 +1348,195 @@ def persist_finance_records(
         cur, tenant_id, batch_id, evidence_ids, bundle
     )
     return counts
+
+
+def persist_oracle_canonical_snapshot(
+    snapshot: OracleCanonicalSnapshot,
+    *,
+    tenant_id: str,
+    batch_id: str | None = None,
+    source_system_id: str | None = None,
+) -> dict[str, Any]:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return {
+            **skipped,
+            "connector_mappings": len(snapshot.connector_mappings),
+            "periods": len(snapshot.periods),
+            "facts": len(snapshot.facts),
+            "fx_rates": len(snapshot.fx_rates),
+            "manual_inputs": len(snapshot.manual_inputs),
+        }
+
+    counts = {
+        "connector_mappings": 0,
+        "periods": 0,
+        "facts": 0,
+        "fx_rates": 0,
+        "manual_inputs": 0,
+    }
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            for mapping in snapshot.connector_mappings:
+                cur.execute(
+                    """
+                    insert into strategyos_oracle_connector_mappings
+                        (tenant_id, source_system_id, module, mapping_type, source_table, source_field,
+                         target_field, required, notes, attributes)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    on conflict (tenant_id, module, mapping_type, source_table, source_field, target_field)
+                    do update set
+                        required = excluded.required,
+                        notes = excluded.notes,
+                        attributes = excluded.attributes
+                    """,
+                    (
+                        tenant_id,
+                        source_system_id,
+                        mapping.get("module"),
+                        mapping.get("mapping_type"),
+                        mapping.get("source_table") or "",
+                        mapping.get("source_field") or "",
+                        mapping.get("target_field"),
+                        bool(mapping.get("required", False)),
+                        mapping.get("notes"),
+                        json_blob(mapping.get("attributes", {})),
+                    ),
+                )
+                counts["connector_mappings"] += 1
+
+            for period in snapshot.periods:
+                cur.execute(
+                    """
+                    insert into strategyos_finance_periods
+                        (tenant_id, period_key, period_label, cadence, period_start, period_end,
+                         source_period_name, attributes)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    on conflict (tenant_id, period_key, cadence) do update set
+                        period_label = excluded.period_label,
+                        period_start = excluded.period_start,
+                        period_end = excluded.period_end,
+                        source_period_name = excluded.source_period_name,
+                        attributes = excluded.attributes
+                    """,
+                    (
+                        tenant_id,
+                        period.period_key,
+                        period.label,
+                        period.cadence,
+                        period.period_start,
+                        period.period_end,
+                        period.source_period_name,
+                        json_blob(period.attributes),
+                    ),
+                )
+                counts["periods"] += 1
+
+            for fact in snapshot.facts:
+                cur.execute(
+                    """
+                    insert into strategyos_finance_facts
+                        (tenant_id, batch_id, source_system_id, module, fact_type, natural_key, period_key,
+                         cadence, bu_code, cost_centre, account_code, amount_value, currency,
+                         reporting_currency, source_locator, attributes)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    on conflict (tenant_id, module, fact_type, natural_key) do update set
+                        period_key = excluded.period_key,
+                        cadence = excluded.cadence,
+                        bu_code = excluded.bu_code,
+                        cost_centre = excluded.cost_centre,
+                        account_code = excluded.account_code,
+                        amount_value = excluded.amount_value,
+                        currency = excluded.currency,
+                        reporting_currency = excluded.reporting_currency,
+                        source_locator = excluded.source_locator,
+                        attributes = excluded.attributes
+                    """,
+                    (
+                        tenant_id,
+                        batch_id,
+                        source_system_id,
+                        fact.module,
+                        fact.fact_type,
+                        fact.natural_key,
+                        fact.period_key,
+                        fact.cadence,
+                        fact.bu_code,
+                        fact.cost_centre,
+                        fact.account_code,
+                        money_value(fact.amount_value),
+                        fact.currency,
+                        fact.reporting_currency,
+                        fact.source_reference,
+                        json_blob(fact.attributes),
+                    ),
+                )
+                counts["facts"] += 1
+
+            for rate in snapshot.fx_rates:
+                cur.execute(
+                    """
+                    insert into strategyos_fx_rates
+                        (tenant_id, source_currency, reporting_currency, rate_source, rate_date,
+                         rate_value, fallback_allowed, attributes)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    on conflict (tenant_id, source_currency, reporting_currency, rate_source, rate_date)
+                    do update set
+                        rate_value = excluded.rate_value,
+                        fallback_allowed = excluded.fallback_allowed,
+                        attributes = excluded.attributes
+                    """,
+                    (
+                        tenant_id,
+                        rate.source_currency,
+                        rate.reporting_currency,
+                        rate.rate_source,
+                        rate.rate_date,
+                        rate.rate_value,
+                        rate.fallback_allowed,
+                        json_blob(rate.attributes),
+                    ),
+                )
+                counts["fx_rates"] += 1
+
+            for record in snapshot.manual_inputs:
+                cur.execute(
+                    """
+                    insert into strategyos_finance_manual_inputs
+                        (tenant_id, batch_id, input_key, input_type, input_name, storage_kind,
+                         cadence, period_key, owner_role, source_uri, status, attributes)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    on conflict (tenant_id, input_key) do update set
+                        input_type = excluded.input_type,
+                        input_name = excluded.input_name,
+                        storage_kind = excluded.storage_kind,
+                        cadence = excluded.cadence,
+                        period_key = excluded.period_key,
+                        owner_role = excluded.owner_role,
+                        source_uri = excluded.source_uri,
+                        status = excluded.status,
+                        attributes = excluded.attributes
+                    """,
+                    (
+                        tenant_id,
+                        batch_id,
+                        record.input_key,
+                        record.input_type,
+                        record.input_name,
+                        record.storage_kind,
+                        record.cadence,
+                        record.period_key,
+                        record.owner_role,
+                        record.source_uri,
+                        record.status,
+                        json_blob(record.attributes),
+                    ),
+                )
+                counts["manual_inputs"] += 1
+        conn.commit()
+    return {"status": "ok", **counts}
 
 
 def persist_entities(

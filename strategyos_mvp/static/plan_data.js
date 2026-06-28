@@ -179,13 +179,13 @@
         title: "Oracle finance ingestion foundation",
         subtitle: "Stand up the Oracle EBS pilot ingestion layer and manual evidence inputs needed for deterministic finance analysis",
         weeks: "1–2",
-        status: "in_progress",
+        status: "completed",
         stories: [
-          { id: "11.1", title: "Map Oracle EBS module extracts into a canonical finance intake", description: "Define the ingestion contract for GL, AR, AP, CE, FA, PO, and INV so Oracle pilot data lands in one deterministic shape", status: "in_progress", files: [] },
-          { id: "11.2", title: "Implement BU and cost-centre flexfield mapping", description: "Resolve Oracle flexfields into StrategyOS business unit and reporting mappings with auditable transformation rules", status: "not_started", files: [] },
-          { id: "11.3", title: "Handle reporting cadence and period alignment", description: "Support daily, weekly, monthly, and close-cycle cadence handling so extracts and finance outputs stay period-correct", status: "not_started", files: [] },
-          { id: "11.4", title: "Ingest required manual and file-based pilot inputs", description: "Accept budget files, hedge register updates, contracts, covenant terms, board floor assumptions, and management commentary alongside Oracle data", status: "not_started", files: [] },
-          { id: "11.5", title: "Prove source coverage and traceability", description: "Show every pilot number can be traced back to Oracle EBS modules or approved manual/file inputs before downstream KPI computation starts", status: "not_started", files: [] }
+          { id: "11.1", title: "Map Oracle EBS module extracts into a canonical finance intake", description: "Define the ingestion contract for GL, AR, AP, CE, FA, PO, and INV so Oracle pilot data lands in one deterministic shape", status: "completed", files: [] },
+          { id: "11.2", title: "Implement BU and cost-centre flexfield mapping", description: "Resolve Oracle flexfields into StrategyOS business unit and reporting mappings with auditable transformation rules", status: "completed", files: [] },
+          { id: "11.3", title: "Handle reporting cadence and period alignment", description: "Support daily, weekly, monthly, and close-cycle cadence handling so extracts and finance outputs stay period-correct", status: "completed", files: [] },
+          { id: "11.4", title: "Ingest required manual and file-based pilot inputs", description: "Accept budget files, hedge register updates, contracts, covenant terms, board floor assumptions, and management commentary alongside Oracle data", status: "completed", files: [] },
+          { id: "11.5", title: "Prove source coverage and traceability", description: "Show every pilot number can be traced back to Oracle EBS modules or approved manual/file inputs before downstream KPI computation starts", status: "completed", files: [] }
         ]
       },
       {

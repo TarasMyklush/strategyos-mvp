@@ -295,6 +295,77 @@ create table if not exists strategyos_fx_rates (
     unique (tenant_id, source_currency, reporting_currency, rate_source, rate_date)
 );
 
+create table if not exists strategyos_oracle_connector_mappings (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    source_system_id uuid references strategyos_source_systems(id) on delete set null,
+    module text not null,
+    mapping_type text not null,
+    source_table text not null default '',
+    source_field text not null default '',
+    target_field text not null,
+    required boolean not null default false,
+    notes text,
+    attributes jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    unique (tenant_id, module, mapping_type, source_table, source_field, target_field)
+);
+
+create table if not exists strategyos_finance_periods (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    period_key text not null,
+    period_label text not null,
+    cadence text not null check (cadence in ('daily', 'weekly', 'monthly', 'quarterly')),
+    period_start date,
+    period_end date,
+    source_period_name text,
+    attributes jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    unique (tenant_id, period_key, cadence)
+);
+
+create table if not exists strategyos_finance_facts (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    batch_id uuid references strategyos_ingestion_batches(id) on delete set null,
+    source_system_id uuid references strategyos_source_systems(id) on delete set null,
+    module text not null,
+    fact_type text not null,
+    natural_key text not null,
+    period_key text not null,
+    cadence text not null check (cadence in ('daily', 'weekly', 'monthly', 'quarterly')),
+    bu_code text,
+    cost_centre text,
+    account_code text,
+    amount_value numeric(20, 4),
+    currency text,
+    reporting_currency text,
+    source_document_id uuid references strategyos_evidence_documents(id) on delete set null,
+    source_locator text,
+    attributes jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    unique (tenant_id, module, fact_type, natural_key)
+);
+
+create table if not exists strategyos_finance_manual_inputs (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    batch_id uuid references strategyos_ingestion_batches(id) on delete set null,
+    input_key text not null,
+    input_type text not null check (input_type in ('budget_plan', 'hedge_register', 'contract_registry', 'covenant_terms', 'board_floor', 'commentary')),
+    input_name text not null,
+    storage_kind text not null check (storage_kind in ('file', 'manual')),
+    cadence text not null check (cadence in ('daily', 'weekly', 'monthly', 'quarterly')),
+    period_key text,
+    owner_role text,
+    source_uri text,
+    status text not null default 'active',
+    attributes jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    unique (tenant_id, input_key)
+);
+
 create table if not exists strategyos_backfill_runs (
     id uuid primary key default gen_random_uuid(),
     tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
@@ -401,6 +472,10 @@ create index if not exists idx_strategyos_tenant_profile_versions_profile_status
 create index if not exists idx_strategyos_canonical_finance_entities_tenant_type on strategyos_canonical_finance_entities(tenant_id, entity_type);
 create index if not exists idx_strategyos_canonical_finance_entity_links_parent on strategyos_canonical_finance_entity_links(parent_entity_id);
 create index if not exists idx_strategyos_fx_rates_pair_date on strategyos_fx_rates(tenant_id, source_currency, reporting_currency, rate_date desc);
+create index if not exists idx_strategyos_oracle_connector_mappings_module on strategyos_oracle_connector_mappings(tenant_id, module);
+create index if not exists idx_strategyos_finance_periods_key on strategyos_finance_periods(tenant_id, period_key);
+create index if not exists idx_strategyos_finance_facts_period on strategyos_finance_facts(tenant_id, period_key, module);
+create index if not exists idx_strategyos_finance_manual_inputs_type on strategyos_finance_manual_inputs(tenant_id, input_type);
 create index if not exists idx_strategyos_backfill_runs_tenant_status on strategyos_backfill_runs(tenant_id, status);
 create index if not exists idx_strategyos_cutover_metrics_tenant_metric on strategyos_cutover_metrics(tenant_id, metric_key, measured_at desc);
 create index if not exists idx_strategyos_finding_citations_run on strategyos_finding_citations(run_id);
