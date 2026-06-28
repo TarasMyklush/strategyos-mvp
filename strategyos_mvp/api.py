@@ -127,7 +127,11 @@ class QaRequest(BaseModel):
     mode: str | None = "deterministic"
 
 
-from .twins.api import require_twin_dashboard_access, router as twin_router
+from .twins.api import (
+    require_twin_dashboard_access,
+    router as twin_router,
+    twin_operational_health_payload,
+)
 
 app = FastAPI(title="StrategyOS MVP API", version="0.1.0")
 STATIC_DIR = Path(__file__).with_name("static")
@@ -5388,6 +5392,15 @@ def _check_run_execution() -> dict[str, Any]:
     return status_payload
 
 
+def _check_twins() -> dict[str, Any]:
+    payload = twin_operational_health_payload()
+    status_value = "ok" if payload.get("status") == "healthy" else "failed"
+    return {
+        "status": status_value,
+        **payload,
+    }
+
+
 def _check_auth_boundary() -> dict[str, Any]:
     if not CONFIG.api_auth_enabled:
         return _health_check("skipped", reason="API auth is disabled.")
@@ -6020,6 +6033,7 @@ def readiness_payload() -> dict[str, Any]:
         "run_execution": _check_run_execution(),
         "auth": _check_auth_boundary(),
         "governance": _check_governance_boundary(),
+        "twins": _check_twins(),
     }
     statuses = [result.get("status") for result in checks.values()]
     if any(status == "failed" for status in statuses):
@@ -6418,6 +6432,7 @@ def health_config(
         "auth_mode": CONFIG.auth_mode,
         "api_auth_enabled": CONFIG.api_auth_enabled,
         "require_human_review": CONFIG.require_human_review,
+        "twins": twin_operational_health_payload(),
         "llm_chat": llm_qa.chat_status(CONFIG),
         "run_execution": _check_run_execution(),
     }

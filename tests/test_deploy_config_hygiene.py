@@ -258,6 +258,22 @@ def test_deploy_workflow_renders_runtime_and_hatchet_flags() -> None:
     )
 
 
+def test_deploy_workflow_renders_twin_rollout_flags() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+    compose = (REPO_ROOT / "deploy/docker-compose.yml").read_text(encoding="utf-8")
+    assert "STRATEGYOS_TWINS_ENABLED" in workflow
+    assert "STRATEGYOS_TWINS_MUTATIONS_ENABLED" in workflow
+    assert "STRATEGYOS_TWINS_SCHEDULER_ENABLED" in workflow
+    assert '"STRATEGYOS_TWINS_ENABLED": os.environ["STRATEGYOS_TWINS_ENABLED"]' in workflow
+    assert '"STRATEGYOS_TWINS_MUTATIONS_ENABLED": os.environ["STRATEGYOS_TWINS_MUTATIONS_ENABLED"]' in workflow
+    assert '"STRATEGYOS_TWINS_SCHEDULER_ENABLED": os.environ["STRATEGYOS_TWINS_SCHEDULER_ENABLED"]' in workflow
+    assert "STRATEGYOS_TWINS_ENABLED: ${STRATEGYOS_TWINS_ENABLED:-true}" in compose
+    assert "STRATEGYOS_TWINS_MUTATIONS_ENABLED: ${STRATEGYOS_TWINS_MUTATIONS_ENABLED:-true}" in compose
+    assert "STRATEGYOS_TWINS_SCHEDULER_ENABLED: ${STRATEGYOS_TWINS_SCHEDULER_ENABLED:-true}" in compose
+
+
 def test_deploy_workflow_renders_llm_chat_config_without_committed_secret() -> None:
     workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
         encoding="utf-8"
