@@ -24,7 +24,7 @@
         title: "First Two Twins",
         subtitle: "CEO + CFO twins, single KPI resolution flow, minimal dashboard",
         weeks: "2–3",
-        status: "completed",
+        status: "in_progress",
         stories: [
           { id: "1.1", title: "Twin runtime — agent loop", description: "Observe → Orient → Decide → Act loop, wake/sleep cycle, state machine", status: "completed", files: ["twins/runtime.py"] },
           { id: "1.2", title: "KPI resolution engine", description: "Tree traversal, gap detection, ownership routing for single-hop resolution", status: "completed", files: ["twins/resolution.py"] },
@@ -170,7 +170,7 @@
           { id: "10.3", title: "Enforce idempotency and retry safety", description: "Protect scheduled jobs, action endpoints, and approval mutations from duplicate execution during retries or restarts", status: "completed", files: [] },
           { id: "10.4", title: "Close security and access-control gaps", description: "Review route protection, sensitive data exposure, audit integrity, and privileged actions before rollout", status: "completed", files: [] },
           { id: "10.5", title: "Prepare staged rollout and rollback controls", description: "Add feature flags, deployment checks, operator runbooks, and fallback steps so production rollout can be controlled safely", status: "completed", files: [] },
-          { id: "10.6", title: "Contain and redesign anonymous public findings exposure", description: "Remove vendor-identifying data from anonymous /public findings, evidence, and detail flows; verify containment; ship an allowlist-only anonymous publication contract; then re-verify and correct boundary docs before closure", status: "completed", files: [] }
+          { id: "10.6", title: "Contain and redesign anonymous public findings exposure", description: "Remove vendor-identifying data from anonymous /public findings, evidence, and detail flows; verify containment; ship an allowlist-only anonymous publication contract; then re-verify and correct boundary docs before closure", status: "in_progress", files: [] }
         ]
       },
       {
