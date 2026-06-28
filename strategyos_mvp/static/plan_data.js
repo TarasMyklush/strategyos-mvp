@@ -1,7 +1,7 @@
 (function () {
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-28",
-    overallStatus: "completed",
+    overallStatus: "in_progress",
     phases: [
       {
         id: "phase-0",
@@ -169,7 +169,83 @@
           { id: "10.2", title: "Add observability across twin execution paths", description: "Instrument dashboards, APIs, jobs, and reasoning steps with logs, traces, and health signals fit for production debugging", status: "completed", files: [] },
           { id: "10.3", title: "Enforce idempotency and retry safety", description: "Protect scheduled jobs, action endpoints, and approval mutations from duplicate execution during retries or restarts", status: "completed", files: [] },
           { id: "10.4", title: "Close security and access-control gaps", description: "Review route protection, sensitive data exposure, audit integrity, and privileged actions before rollout", status: "completed", files: [] },
-          { id: "10.5", title: "Prepare staged rollout and rollback controls", description: "Add feature flags, deployment checks, operator runbooks, and fallback steps so production rollout can be controlled safely", status: "completed", files: [] }
+          { id: "10.5", title: "Prepare staged rollout and rollback controls", description: "Add feature flags, deployment checks, operator runbooks, and fallback steps so production rollout can be controlled safely", status: "completed", files: [] },
+          { id: "10.6", title: "Contain and redesign anonymous public findings exposure", description: "Remove vendor-identifying data from anonymous /public findings, evidence, and detail flows; verify containment; ship an allowlist-only anonymous publication contract; then re-verify and correct boundary docs before closure", status: "completed", files: [] }
+        ]
+      },
+      {
+        id: "phase-11",
+        num: 11,
+        title: "Oracle finance ingestion foundation",
+        subtitle: "Stand up the Oracle EBS pilot ingestion layer and manual evidence inputs needed for deterministic finance analysis",
+        weeks: "1–2",
+        status: "in_progress",
+        stories: [
+          { id: "11.1", title: "Map Oracle EBS module extracts into a canonical finance intake", description: "Define the ingestion contract for GL, AR, AP, CE, FA, PO, and INV so Oracle pilot data lands in one deterministic shape", status: "in_progress", files: [] },
+          { id: "11.2", title: "Implement BU and cost-centre flexfield mapping", description: "Resolve Oracle flexfields into StrategyOS business unit and reporting mappings with auditable transformation rules", status: "not_started", files: [] },
+          { id: "11.3", title: "Handle reporting cadence and period alignment", description: "Support daily, weekly, monthly, and close-cycle cadence handling so extracts and finance outputs stay period-correct", status: "not_started", files: [] },
+          { id: "11.4", title: "Ingest required manual and file-based pilot inputs", description: "Accept budget files, hedge register updates, contracts, covenant terms, board floor assumptions, and management commentary alongside Oracle data", status: "not_started", files: [] },
+          { id: "11.5", title: "Prove source coverage and traceability", description: "Show every pilot number can be traced back to Oracle EBS modules or approved manual/file inputs before downstream KPI computation starts", status: "not_started", files: [] }
+        ]
+      },
+      {
+        id: "phase-12",
+        num: 12,
+        title: "Deterministic KPI calculation engine",
+        subtitle: "Compute pilot finance metrics from fixed formulas, with narration layered on only after the numbers are settled",
+        weeks: "1–2",
+        status: "not_started",
+        stories: [
+          { id: "12.1", title: "Lock deterministic formulas for core profit metrics", description: "Calculate revenue, EBITDA, OpEx, and EBITDA bridge values from approved Oracle-backed sources with no model discretion in the math", status: "not_started", files: [] },
+          { id: "12.2", title: "Compute liquidity against the board floor", description: "Measure cash vs floor using CE balances, treasury inputs, and board floor rules so breach status is explicit and reproducible", status: "not_started", files: [] },
+          { id: "12.3", title: "Ship working-capital cycle metrics", description: "Derive DSO, DPO, DIO, and CCC directly from AR, AP, and inventory-aligned sources with period-consistent denominators", status: "not_started", files: [] },
+          { id: "12.4", title: "Calculate leverage and covenant capacity", description: "Produce net debt / EBITDA and covenant headroom outputs from debt, cash, and covenant-term inputs with visible assumptions", status: "not_started", files: [] },
+          { id: "12.5", title: "Separate computation from narration", description: "Keep the engine deterministic for numbers while any LLM-generated explanation stays strictly downstream and evidence-backed", status: "not_started", files: [] }
+        ]
+      },
+      {
+        id: "phase-13",
+        num: 13,
+        title: "Cash leakage engine",
+        subtitle: "Detect the pilot’s defined leakage patterns with deterministic rules, evidence, and reviewable findings",
+        weeks: "1–2",
+        status: "not_started",
+        stories: [
+          { id: "13.1", title: "Detect duplicate-payment patterns", description: "Implement the duplicate payment and entity-resolution duplicate rules so the same vendor paid twice or across multiple IDs is caught deterministically", status: "not_started", files: [] },
+          { id: "13.2", title: "Stop contract and pricing leakage", description: "Detect off-contract spend and price variance by comparing AP invoices and PO lines against approved contract scope, terms, and unit prices", status: "not_started", files: [] },
+          { id: "13.3", title: "Recover missed discount and renewal leakage", description: "Flag missed early-pay discounts and auto-renewal escalation when payment timing or contract renewal behavior burns avoidable cash", status: "not_started", files: [] },
+          { id: "13.4", title: "Catch treasury and credit-balance leakage", description: "Detect FX hedge not applied and dormant credit balance patterns so treasury slippage and unused credits surface as recoverable value", status: "not_started", files: [] },
+          { id: "13.5", title: "Publish evidence-backed leakage reviews", description: "Rank recoverable value and attach deterministic evidence, corroboration, and reviewer workflow for all 8 pilot leakage patterns: duplicate payment, entity-resolution duplicate, off-contract spend, price variance, missed early-pay discount, auto-renewal escalation, FX hedge not applied, and dormant credit balance", status: "not_started", files: [] }
+        ]
+      },
+      {
+        id: "phase-14",
+        num: 14,
+        title: "CEO/CFO pilot surface alignment",
+        subtitle: "Refit the product surfaces so the CFO pilot is Oracle-first and the CEO sees Oracle-backed financial rings without pretending operations are automated yet",
+        weeks: "1",
+        status: "not_started",
+        stories: [
+          { id: "14.1", title: "Make the CFO surface Oracle-first", description: "Prioritize Oracle-sourced finance ingestion, KPI outputs, and reconciliation context in the CFO pilot experience", status: "not_started", files: [] },
+          { id: "14.2", title: "Render CEO financial rings from Oracle-backed data", description: "Drive CEO financial rings and board-level finance views from deterministic Oracle-backed outputs rather than generic twin-era placeholders", status: "not_started", files: [] },
+          { id: "14.3", title: "Mark operational movers as manual or deferred", description: "Keep non-finance operational movers visible, but explicitly label them manual/deferred until Oracle-first finance conformance is proven", status: "not_started", files: [] },
+          { id: "14.4", title: "Align plan, copy, and UI language to the pilot", description: "Update product messaging so every public and pilot-facing surface reflects the Oracle EBS conformance scope instead of a generic digital twin roadmap", status: "not_started", files: [] },
+          { id: "14.5", title: "Preserve history while clarifying the pivot", description: "Keep completed digital-twin phases available as delivery history while clearly showing that active execution now starts at Oracle conformance", status: "not_started", files: [] }
+        ]
+      },
+      {
+        id: "phase-15",
+        num: 15,
+        title: "Production validation for Oracle pilot",
+        subtitle: "Validate the Oracle pilot end to end before rollout, with reconciliation, auditability, and controlled release gates",
+        weeks: "1–2",
+        status: "not_started",
+        stories: [
+          { id: "15.1", title: "Reconcile Oracle extracts to computed outputs", description: "Verify ingestion totals, KPI calculations, and leakage findings reconcile cleanly back to Oracle source periods and approved manual inputs", status: "not_started", files: [] },
+          { id: "15.2", title: "Prove auditability of every pilot number", description: "Expose lineage, assumptions, evidence references, and reviewer actions so finance users can audit every board-facing output", status: "not_started", files: [] },
+          { id: "15.3", title: "Run end-to-end Oracle pilot tests", description: "Exercise the CFO and CEO pilot flows from Oracle/file ingestion through KPI calculation, leakage review, and surface rendering", status: "not_started", files: [] },
+          { id: "15.4", title: "Install rollout controls and failure gates", description: "Require feature flags, release criteria, rollback paths, and operator sign-offs before widening beyond the Oracle pilot cohort", status: "not_started", files: [] },
+          { id: "15.5", title: "Sign off pilot readiness", description: "Close the phase only after reconciliation, auditability, and rollout-control checks all pass for the Oracle EBS pilot scope", status: "not_started", files: [] }
         ]
       }
     ]
