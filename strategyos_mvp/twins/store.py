@@ -357,6 +357,116 @@ class GovernanceRepository(_JsonRepository):
                 path.unlink()
 
 
+class ReasoningTraceRepository(_JsonRepository):
+    def __init__(self, base_path: Path) -> None:
+        super().__init__(Path(base_path) / "reasoning")
+        self._path = self.base_path / "traces.json"
+
+    def save(self, record: dict[str, Any]) -> dict[str, Any]:
+        records = self._read_file(self._path, [])
+        trace_id = str(record.get("trace_id") or "")
+        for index, existing in enumerate(records):
+            if str(existing.get("trace_id") or "") == trace_id:
+                records[index] = copy.deepcopy(record)
+                self._write_file(self._path, records)
+                return copy.deepcopy(record)
+        records.append(copy.deepcopy(record))
+        self._write_file(self._path, records)
+        return copy.deepcopy(record)
+
+    def load(self, trace_id: str) -> dict[str, Any] | None:
+        records = self._read_file(self._path, [])
+        for record in records:
+            if str(record.get("trace_id") or "") == trace_id:
+                return copy.deepcopy(record)
+        return None
+
+    def update(self, trace_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        current = self.load(trace_id)
+        if current is None:
+            return None
+        updated = copy.deepcopy(current)
+        updated.update(copy.deepcopy(payload))
+        return self.save(updated)
+
+    def list(
+        self,
+        role: str | None = None,
+        cycle_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        records = self._read_file(self._path, [])
+        filtered = [
+            copy.deepcopy(record)
+            for record in records
+            if (role is None or record.get("role") == role)
+            and (cycle_id is None or record.get("cycle_id") == cycle_id)
+        ]
+        filtered.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
+        if limit is not None:
+            return filtered[:limit]
+        return filtered
+
+    def clear(self) -> None:
+        if self._path.exists():
+            self._path.unlink()
+
+
+class ExecutionLogRepository(_JsonRepository):
+    def __init__(self, base_path: Path) -> None:
+        super().__init__(Path(base_path) / "execution")
+        self._path = self.base_path / "logs.json"
+
+    def save(self, record: dict[str, Any]) -> dict[str, Any]:
+        records = self._read_file(self._path, [])
+        execution_id = str(record.get("execution_id") or "")
+        for index, existing in enumerate(records):
+            if str(existing.get("execution_id") or "") == execution_id:
+                records[index] = copy.deepcopy(record)
+                self._write_file(self._path, records)
+                return copy.deepcopy(record)
+        records.append(copy.deepcopy(record))
+        self._write_file(self._path, records)
+        return copy.deepcopy(record)
+
+    def load(self, execution_id: str) -> dict[str, Any] | None:
+        records = self._read_file(self._path, [])
+        for record in records:
+            if str(record.get("execution_id") or "") == execution_id:
+                return copy.deepcopy(record)
+        return None
+
+    def update(self, execution_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        current = self.load(execution_id)
+        if current is None:
+            return None
+        updated = copy.deepcopy(current)
+        updated.update(copy.deepcopy(payload))
+        return self.save(updated)
+
+    def list(
+        self,
+        execution_type: str | None = None,
+        status: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        records = self._read_file(self._path, [])
+        filtered = [
+            copy.deepcopy(record)
+            for record in records
+            if (execution_type is None or record.get("execution_type") == execution_type)
+            and (status is None or record.get("status") == status)
+        ]
+        filtered.sort(key=lambda item: str(item.get("started_at") or item.get("timestamp") or ""), reverse=True)
+        if limit is not None:
+            return filtered[:limit]
+        return filtered
+
+    def clear(self) -> None:
+        if self._path.exists():
+            self._path.unlink()
+
+
 @dataclass(frozen=True)
 class TwinRepositories:
     kpis: KpiRepository
@@ -364,6 +474,8 @@ class TwinRepositories:
     investigations: InvestigationRepository
     states: TwinStateRepository
     governance: GovernanceRepository
+    reasoning: ReasoningTraceRepository
+    execution: ExecutionLogRepository
 
 
 def build_repositories(base_path: Path | str) -> TwinRepositories:
@@ -374,6 +486,8 @@ def build_repositories(base_path: Path | str) -> TwinRepositories:
         investigations=InvestigationRepository(root),
         states=TwinStateRepository(root),
         governance=GovernanceRepository(root),
+        reasoning=ReasoningTraceRepository(root),
+        execution=ExecutionLogRepository(root),
     )
 
 

@@ -1,6 +1,6 @@
 (function () {
   window.STRATEGYOS_PLAN = {
-    updated: "2026-06-27",
+    updated: "2026-06-28",
     overallStatus: "in_progress",
     phases: [
       {
@@ -148,13 +148,13 @@
         title: "LLM reasoning + scheduled execution",
         subtitle: "Add LiteLLM-backed reasoning and run twins on scheduled or triggered execution paths",
         weeks: "1–2",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "9.1", title: "Introduce LiteLLM-backed orient and decide steps", description: "Move twin reasoning from scripted-only behavior into model-backed analysis with bounded prompts and outputs", status: "not_started", files: [] },
-          { id: "9.2", title: "Persist reasoning inputs, outputs, and review state", description: "Store prompts, cited evidence, model responses, and review disposition so reasoning is reproducible and auditable", status: "not_started", files: [] },
-          { id: "9.3", title: "Run scheduled twin cycles through the real runtime stack", description: "Execute daily, weekly, and monthly review paths via the existing scheduler and job infrastructure", status: "not_started", files: [] },
-          { id: "9.4", title: "Trigger twin execution from live events", description: "Wake investigations and follow-up tasks from KPI breaches, stale evidence, and approval deadlines instead of manual refreshes", status: "not_started", files: [] },
-          { id: "9.5", title: "Add guardrails for model-driven actions", description: "Require approval thresholds, fallback handling, and action logging before reasoning outputs can change state or notify humans", status: "not_started", files: [] }
+          { id: "9.1", title: "Introduce LiteLLM-backed orient and decide steps", description: "Move twin reasoning from scripted-only behavior into model-backed analysis with bounded prompts and outputs", status: "completed", files: [] },
+          { id: "9.2", title: "Persist reasoning inputs, outputs, and review state", description: "Store prompts, cited evidence, model responses, and review disposition so reasoning is reproducible and auditable", status: "completed", files: [] },
+          { id: "9.3", title: "Run scheduled twin cycles through the real runtime stack", description: "Execute daily, weekly, and monthly review paths via the existing scheduler and job infrastructure", status: "completed", files: [] },
+          { id: "9.4", title: "Trigger twin execution from live events", description: "Wake investigations and follow-up tasks from KPI breaches, stale evidence, and approval deadlines instead of manual refreshes", status: "completed", files: [] },
+          { id: "9.5", title: "Add guardrails for model-driven actions", description: "Require approval thresholds, fallback handling, and action logging before reasoning outputs can change state or notify humans", status: "completed", files: [] }
         ]
       },
       {

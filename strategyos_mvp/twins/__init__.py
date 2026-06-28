@@ -65,6 +65,12 @@ from strategyos_mvp.twins.orchestration import (
     CycleHistory,
     generate_board_packet,
 )
+from strategyos_mvp.twins.execution import (
+    execute_event_execution_job,
+    execute_scheduled_cycle_job,
+    submit_event_execution,
+    submit_scheduled_cycle,
+)
 
 __all__ = [
     # Persona
@@ -125,4 +131,8 @@ __all__ = [
     "CycleRecord",
     "CycleHistory",
     "generate_board_packet",
+    "submit_scheduled_cycle",
+    "submit_event_execution",
+    "execute_scheduled_cycle_job",
+    "execute_event_execution_job",
 ]

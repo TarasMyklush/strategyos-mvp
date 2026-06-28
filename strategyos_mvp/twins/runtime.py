@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from strategyos_mvp.config import load_config
 from strategyos_mvp.twins.memory import (
     TwinState,
     add_investigation,
@@ -24,7 +25,12 @@ from strategyos_mvp.twins.protocol import (
     get_escalation_timeout,
 )
 from strategyos_mvp.twins.resolution import KPIResolutionEngine, KPI_TREE
+from strategyos_mvp.twins.reasoning import (
+    apply_model_guardrails,
+    run_structured_reasoning,
+)
 from strategyos_mvp.twins.store import TwinRepositories, build_runtime_repositories
+from strategyos_mvp.twins.strategyos_data import build_surface_payload, compose_investigation_payload
 from strategyos_mvp.twins.tools import (
     escalate_to_human,
     query_kpi,
@@ -139,12 +145,14 @@ class TwinRuntime:
         self._cycle_summary = {
             "role": self.persona.role,
             "cycle": self.state.cycle_count,
+            "cycle_id": self._cycle_id,
             "wake_at": self.state.last_wake_at,
             "observations": [],
             "issues": [],
             "decisions": [],
             "actions": [],
             "errors": [],
+            "reasoning_trace_ids": [],
         }
 
     def sleep(self) -> None:
@@ -218,6 +226,33 @@ class TwinRuntime:
             ``kpi_node_id`` (if applicable), ``detail``, and
             ``resolution`` hints.
         """
+        issues = self._build_deterministic_issues(observations)
+
+        reasoning_context = self._reasoning_context(observations=observations, issues=issues)
+        resolved_issues, trace = run_structured_reasoning(
+            stage="orient",
+            role=self.persona.role,
+            cycle_id=self._cycle_id,
+            input_context=reasoning_context,
+            deterministic_output=issues,
+            repositories=self._repositories,
+            config=load_config(),
+        )
+        self._cycle_summary["reasoning_trace_ids"].append(trace["trace_id"])
+
+        issues = resolved_issues
+
+        # Register open investigations in state
+        for idx, issue in enumerate(issues):
+            inv_id = issue.get("investigation_id") or f"{self.persona.role}_issue_{self.state.cycle_count}_{idx}"
+            issue["investigation_id"] = inv_id
+            add_investigation(self.state, inv_id, issue)
+            self._persist_investigation(inv_id)
+
+        self._cycle_summary["issues"] = issues
+        return issues
+
+    def _build_deterministic_issues(self, observations: dict[str, Any]) -> list[dict[str, Any]]:
         issues: list[dict[str, Any]] = []
 
         # KPI gaps
@@ -254,15 +289,6 @@ class TwinRuntime:
         # Sort by priority
         priority_order = {"critical": 0, "high": 1, "normal": 2, "low": 3}
         issues.sort(key=lambda i: priority_order.get(i.get("priority", "normal"), 5))
-
-        # Register open investigations in state
-        for idx, issue in enumerate(issues):
-            inv_id = f"{self.persona.role}_issue_{self.state.cycle_count}_{idx}"
-            issue["investigation_id"] = inv_id
-            add_investigation(self.state, inv_id, issue)
-            self._persist_investigation(inv_id)
-
-        self._cycle_summary["issues"] = issues
         return issues
 
     def decide(self, issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -280,6 +306,42 @@ class TwinRuntime:
             A list of decision dicts, each with ``issue`` reference,
             ``action`` type, and the action payload.
         """
+        decisions = self._build_deterministic_decisions(issues)
+
+        reasoning_context = self._reasoning_context(
+            observations=self._cycle_summary.get("observations", {}),
+            issues=issues,
+            deterministic_decisions=decisions,
+        )
+        decided, trace = run_structured_reasoning(
+            stage="decide",
+            role=self.persona.role,
+            cycle_id=self._cycle_id,
+            input_context=reasoning_context,
+            deterministic_output=decisions,
+            repositories=self._repositories,
+            config=load_config(),
+        )
+        self._cycle_summary["reasoning_trace_ids"].append(trace["trace_id"])
+
+        for decision in decided:
+            decision.setdefault("reasoning_trace_id", trace["trace_id"])
+            decision.setdefault(
+                "decision_source",
+                "model" if trace.get("source") == "litellm" else "deterministic",
+            )
+
+        decisions = apply_model_guardrails(
+            role=self.persona.role,
+            decisions=decided,
+            repositories=self._repositories,
+            require_human_review=load_config().require_human_review,
+        )
+
+        self._cycle_summary["decisions"] = decisions
+        return decisions
+
+    def _build_deterministic_decisions(self, issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
         decisions: list[dict[str, Any]] = []
 
         for issue in issues:
@@ -303,6 +365,7 @@ class TwinRuntime:
                     "action": "send_data_request",
                     "message": msg,
                     "target_role": msg.recipient_role,
+                    "decision_source": "deterministic",
                 })
 
             elif hint == "respond":
@@ -315,6 +378,7 @@ class TwinRuntime:
                         f"Acknowledging message {issue.get('message_id')}. "
                         f"Investigating the request."
                     ),
+                    "decision_source": "deterministic",
                 })
 
             else:
@@ -327,9 +391,8 @@ class TwinRuntime:
                         f"for {issue.get('kpi_node_id', 'N/A')}"
                     ),
                     "context": issue,
+                    "decision_source": "deterministic",
                 })
-
-        self._cycle_summary["decisions"] = decisions
         return decisions
 
     def act(self, decisions: list[dict[str, Any]]) -> None:
@@ -478,12 +541,25 @@ class TwinRuntime:
                     )
                     action_record["reason"] = reason
 
+                elif action_type == "request_human_review":
+                    action_record["status"] = "pending_human_review"
+                    action_record["review_record"] = dec.get("review_record")
+                    action_record["reason"] = ((dec.get("guardrail") or {}).get("reason") or "")
+
+                elif action_type == "noop":
+                    action_record["status"] = "no_op"
+
                 # Resolve the investigation
                 if inv_id and inv_id in self.state.active_investigations:
+                    resolution_status = "completed"
+                    if action_type == "request_human_review":
+                        resolution_status = "pending_human_review"
+                    elif action_type == "noop":
+                        resolution_status = "no_action"
                     resolve_investigation(
                         self.state,
                         inv_id,
-                        {"action_taken": action_type, "status": "completed"},
+                        {"action_taken": action_type, "status": resolution_status},
                     )
                     self._persist_investigation(inv_id)
 
@@ -588,3 +664,34 @@ class TwinRuntime:
             self._persist_state()
 
         return dict(self._cycle_summary)
+
+    @property
+    def _cycle_id(self) -> str:
+        return f"{self.persona.role}-cycle-{max(1, self.state.cycle_count)}"
+
+    def _reasoning_context(
+        self,
+        *,
+        observations: dict[str, Any],
+        issues: list[dict[str, Any]],
+        deterministic_decisions: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        query = str(self.state.working_memory.get("last_query") or "")
+        strategyos_payload = (
+            compose_investigation_payload(self.persona.role, query)
+            if query
+            else build_surface_payload(self.persona.role)
+        )
+        return {
+            "role": self.persona.role,
+            "cycle_id": self._cycle_id,
+            "query": query,
+            "observations": observations,
+            "issues": issues,
+            "deterministic_decisions": deterministic_decisions or [],
+            "run_context": strategyos_payload.get("run_context") or {},
+            "board": strategyos_payload.get("board") or {},
+            "evidence_refs": strategyos_payload.get("evidence") or [],
+            "bounded_fallback": bool(strategyos_payload.get("bounded_fallback", False)),
+            "data_source": strategyos_payload.get("data_source"),
+        }

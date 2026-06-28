@@ -11,6 +11,8 @@ from .run_poc import run_strategyos_workflow
 
 
 RUN_TASK_NAME = "strategyos.run.execute"
+TWIN_CYCLE_TASK_NAME = "strategyos.twins.cycle.execute"
+TWIN_EVENTS_TASK_NAME = "strategyos.twins.events.execute"
 _HATCHET_IMPORT_ERROR: Exception | None = None
 hatchet: Any | None = None
 
@@ -38,6 +40,26 @@ class StrategyOSRunOutput(BaseModel):
     status: str
     strategyos_run_id: str | None = None
     run_dir: str | None = None
+
+
+class TwinCycleInput(BaseModel):
+    cycle_type: str
+
+
+class TwinCycleOutput(BaseModel):
+    status: str
+    execution_id: str | None = None
+    cycle_type: str
+
+
+class TwinEventsInput(BaseModel):
+    max_stale_hours: int = 24
+
+
+class TwinEventsOutput(BaseModel):
+    status: str
+    execution_id: str | None = None
+    event_count: int = 0
 
 
 def hatchet_dependency_status(
@@ -79,6 +101,44 @@ def enqueue_strategyos_run(payload: dict[str, Any]) -> dict[str, Any]:
         )
     task_input = StrategyOSRunInput(**payload)
     ref = execute_strategyos_run.run(input=task_input, wait_for_result=False)  # type: ignore[attr-defined]
+    hatchet_run_id = (
+        getattr(ref, "run_id", None)
+        or getattr(ref, "RunId", None)
+        or getattr(ref, "workflow_run_id", None)
+        or getattr(ref, "id", None)
+    )
+    return {
+        "hatchet_run_id": str(hatchet_run_id) if hatchet_run_id is not None else None,
+        "ref_type": type(ref).__name__,
+    }
+
+
+def enqueue_twin_cycle(payload: dict[str, Any]) -> dict[str, Any]:
+    if hatchet is None or _HATCHET_IMPORT_ERROR is not None:
+        raise RuntimeError(
+            f"hatchet-sdk is required for Hatchet execution mode: {_HATCHET_IMPORT_ERROR}"
+        )
+    task_input = TwinCycleInput(**payload)
+    ref = execute_twin_cycle.run(input=task_input, wait_for_result=False)  # type: ignore[attr-defined]
+    hatchet_run_id = (
+        getattr(ref, "run_id", None)
+        or getattr(ref, "RunId", None)
+        or getattr(ref, "workflow_run_id", None)
+        or getattr(ref, "id", None)
+    )
+    return {
+        "hatchet_run_id": str(hatchet_run_id) if hatchet_run_id is not None else None,
+        "ref_type": type(ref).__name__,
+    }
+
+
+def enqueue_twin_events(payload: dict[str, Any]) -> dict[str, Any]:
+    if hatchet is None or _HATCHET_IMPORT_ERROR is not None:
+        raise RuntimeError(
+            f"hatchet-sdk is required for Hatchet execution mode: {_HATCHET_IMPORT_ERROR}"
+        )
+    task_input = TwinEventsInput(**payload)
+    ref = execute_twin_events.run(input=task_input, wait_for_result=False)  # type: ignore[attr-defined]
     hatchet_run_id = (
         getattr(ref, "run_id", None)
         or getattr(ref, "RunId", None)
@@ -141,6 +201,31 @@ def execute_strategyos_run_job(
         raise
 
 
+def execute_twin_cycle_job(task_input: TwinCycleInput, ctx: Any | None = None) -> TwinCycleOutput:
+    from .twins.execution import execute_scheduled_cycle_job
+
+    summary = execute_scheduled_cycle_job(cycle_type=task_input.cycle_type, config=CONFIG)
+    return TwinCycleOutput(
+        status=str(summary.get("status") or "completed"),
+        execution_id=str(summary.get("execution_id") or "") or None,
+        cycle_type=str(summary.get("cycle_type") or task_input.cycle_type),
+    )
+
+
+def execute_twin_events_job(task_input: TwinEventsInput, ctx: Any | None = None) -> TwinEventsOutput:
+    from .twins.execution import execute_event_execution_job
+
+    summary = execute_event_execution_job(
+        max_stale_hours=int(task_input.max_stale_hours),
+        config=CONFIG,
+    )
+    return TwinEventsOutput(
+        status=str(summary.get("status") or "completed"),
+        execution_id=str(summary.get("execution_id") or "") or None,
+        event_count=len(list(summary.get("events") or [])),
+    )
+
+
 if hatchet is not None:  # pragma: no cover - requires external Hatchet SDK/server.
 
     @hatchet.task(name=RUN_TASK_NAME, input_validator=StrategyOSRunInput)
@@ -149,11 +234,33 @@ if hatchet is not None:  # pragma: no cover - requires external Hatchet SDK/serv
     ) -> StrategyOSRunOutput:
         return execute_strategyos_run_job(input, ctx)
 
+    @hatchet.task(name=TWIN_CYCLE_TASK_NAME, input_validator=TwinCycleInput)
+    def execute_twin_cycle(input: TwinCycleInput, ctx: Context) -> TwinCycleOutput:
+        return execute_twin_cycle_job(input, ctx)
+
+    @hatchet.task(name=TWIN_EVENTS_TASK_NAME, input_validator=TwinEventsInput)
+    def execute_twin_events(input: TwinEventsInput, ctx: Context) -> TwinEventsOutput:
+        return execute_twin_events_job(input, ctx)
+
 else:
 
     def execute_strategyos_run(
         input: StrategyOSRunInput, ctx: Any | None = None
     ) -> StrategyOSRunOutput:
+        raise RuntimeError(
+            f"hatchet-sdk is required for Hatchet execution mode: {_HATCHET_IMPORT_ERROR}"
+        )
+
+    def execute_twin_cycle(
+        input: TwinCycleInput, ctx: Any | None = None
+    ) -> TwinCycleOutput:
+        raise RuntimeError(
+            f"hatchet-sdk is required for Hatchet execution mode: {_HATCHET_IMPORT_ERROR}"
+        )
+
+    def execute_twin_events(
+        input: TwinEventsInput, ctx: Any | None = None
+    ) -> TwinEventsOutput:
         raise RuntimeError(
             f"hatchet-sdk is required for Hatchet execution mode: {_HATCHET_IMPORT_ERROR}"
         )
@@ -167,6 +274,6 @@ def run_worker() -> None:
     worker = hatchet.worker(
         CONFIG.hatchet_worker_name,
         slots=max(1, int(CONFIG.hatchet_worker_slots)),
-        workflows=[execute_strategyos_run],
+        workflows=[execute_strategyos_run, execute_twin_cycle, execute_twin_events],
     )
     worker.start()
