@@ -133,13 +133,13 @@
         title: "StrategyOS data integration",
         subtitle: "Connect twins to real KPI, evidence, board, and runtime records instead of stubbed payloads",
         weeks: "1–2",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "8.1", title: "Bind KPI dashboards to real StrategyOS metrics", description: "Replace placeholder KPI values with live metric, threshold, and trend reads from the StrategyOS data layer", status: "not_started", files: [] },
-          { id: "8.2", title: "Attach investigations to real evidence records", description: "Load citations, source links, and evidence freshness directly from StrategyOS evidence storage", status: "not_started", files: [] },
-          { id: "8.3", title: "Wire board packet views to real board/report objects", description: "Render packet summaries and approvals from persisted StrategyOS board and publication records", status: "not_started", files: [] },
-          { id: "8.4", title: "Connect twin actions to runtime and execution records", description: "Persist asks, follow-ups, and resolution outcomes against real runs instead of standalone twin-only payloads", status: "not_started", files: [] },
-          { id: "8.5", title: "Validate end-to-end data consistency across surfaces", description: "Confirm KPI, evidence, board, and run views stay consistent when twins inspect and act on the same underlying records", status: "not_started", files: [] }
+          { id: "8.1", title: "Bind KPI dashboards to real StrategyOS metrics", description: "Replace placeholder KPI values with live metric, threshold, and trend reads from the StrategyOS data layer", status: "completed", files: [] },
+          { id: "8.2", title: "Attach investigations to real evidence records", description: "Load citations, source links, and evidence freshness directly from StrategyOS evidence storage", status: "completed", files: [] },
+          { id: "8.3", title: "Wire board packet views to real board/report objects", description: "Render packet summaries and approvals from persisted StrategyOS board and publication records", status: "completed", files: [] },
+          { id: "8.4", title: "Connect twin actions to runtime and execution records", description: "Persist asks, follow-ups, and resolution outcomes against real runs instead of standalone twin-only payloads", status: "completed", files: [] },
+          { id: "8.5", title: "Validate end-to-end data consistency across surfaces", description: "Confirm KPI, evidence, board, and run views stay consistent when twins inspect and act on the same underlying records", status: "completed", files: [] }
         ]
       },
       {
