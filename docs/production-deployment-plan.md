@@ -32,8 +32,8 @@ The full acceptance/regression suite still depends on the external synthetic dat
 
 Create these environments:
 
-- `hetzner-qa`: immediate test target.
-- `production`: real external production target; add required reviewers and branch/tag deployment rules before use.
+- `hetzner-qa`: current configured live deploy surface for `strategyos.live`.
+- `production`: keep disabled until it is actually populated with the same deploy contract plus reviewer protections.
 
 Environment variables:
 
@@ -85,8 +85,8 @@ Preflight rules now enforced in-repo:
 
 1. Merge only after `StrategyOS CI` is green.
 2. Open **Actions -> StrategyOS Deploy -> Run workflow**.
-3. Select `hetzner-qa` first; leave `run_smoke` off for config-only deploys.
+3. Select `hetzner-qa`; it is the current live deploy surface for `strategyos.live`. Leave `run_smoke` off for config-only deploys.
 4. Confirm readiness passed and the governed-surface verifier stayed green.
-5. For production, use the `production` environment and require reviewer approval.
+5. Do not dispatch to `production` until that environment is populated and reviewer-gated; otherwise the workflow cannot acquire the required Hetzner deploy contract.
 6. If the deployment fails after replacing the stack, verify the rollback job ran; otherwise run `deploy/scripts/rollback_stack.sh` with the same `TARGET_HOST` and `COMPOSE_FILES`.
 7. Record the image digest, run ID, and readiness output in the release notes.

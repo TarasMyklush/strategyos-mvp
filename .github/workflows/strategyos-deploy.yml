@@ -4,13 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       target_environment:
-        description: GitHub environment to deploy
+        description: GitHub environment to deploy (currently the live Hetzner surface)
         required: true
         type: choice
         default: hetzner-qa
         options:
           - hetzner-qa
-          - production
       run_smoke:
         description: Start one protected /runs smoke request after readiness passes
         required: false

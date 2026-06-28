@@ -162,6 +162,15 @@ def test_deploy_workflow_runs_boundary_validation() -> None:
     assert "bash deploy/scripts/validate_deploy_boundary.sh" in workflow
 
 
+def test_deploy_workflow_only_exposes_configured_live_environment() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "default: hetzner-qa" in workflow
+    assert "- hetzner-qa" in workflow
+    assert "- production" not in workflow
+
+
 def test_deploy_workflow_pins_hosted_governance_flags() -> None:
     workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
         encoding="utf-8"
