@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import calendar
-from dataclasses import asdict, dataclass, field
+from collections import defaultdict
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal, Mapping, Sequence
@@ -205,6 +206,47 @@ class OracleKpiComputation:
     authoritative: bool = True
     computation_boundary: str = (
         "Deterministic Oracle KPI computation only. Any narration is downstream and non-authoritative."
+    )
+
+
+@dataclass(frozen=True)
+class OracleLeakageEvidence:
+    source_kind: Literal["fact", "manual_input"]
+    source_key: str
+    locator: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class OracleLeakageFinding:
+    finding_id: str
+    title: str
+    pattern_type: str
+    vendor_id: str
+    vendor_name: str
+    leakage_sar: Decimal
+    recoverable_sar: Decimal
+    confidence: Literal["high", "medium", "low"]
+    rationale: str
+    calculation: dict[str, Any]
+    evidence: tuple[OracleLeakageEvidence, ...]
+    challenge_points: tuple[str, ...]
+    review_status: Literal["pending_review", "challenged", "approved", "rejected"] = "pending_review"
+    priority_rank: int = 0
+
+
+@dataclass(frozen=True)
+class OracleLeakageReview:
+    reporting_period_key: str
+    reporting_cadence: Cadence
+    period_start: date
+    period_end: date
+    findings: tuple[OracleLeakageFinding, ...]
+    ranking_basis: str
+    total_recoverable_sar: Decimal
+    authoritative: bool = True
+    computation_boundary: str = (
+        "Deterministic Oracle leakage rules compute findings and values. Narrative may explain later but must not decide the math or trigger logic."
     )
 
 
@@ -660,6 +702,807 @@ def build_oracle_kpi_narration_payload(
         ],
         "instructions": "Narrative must treat metric_values and component_values as fixed computed numbers.",
     }
+
+
+def compute_oracle_pilot_leakage(
+    snapshot: OracleCanonicalSnapshot,
+    *,
+    reporting_period_key: str,
+    reporting_cadence: Cadence | None = None,
+) -> OracleLeakageReview:
+    period_lookup = {period.period_key: period for period in snapshot.periods}
+    period = period_lookup.get(reporting_period_key)
+    resolved_cadence = reporting_cadence or (period.cadence if period else _infer_cadence_from_period_key(reporting_period_key))
+    period_start, period_end = _resolve_period_bounds(
+        reporting_period_key,
+        resolved_cadence,
+        period_start=period.period_start if period else None,
+        period_end=period.period_end if period else None,
+    )
+
+    contract_inputs = _matching_manual_inputs(
+        snapshot.manual_inputs,
+        input_type="contract_registry",
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    hedge_inputs = _matching_manual_inputs(
+        snapshot.manual_inputs,
+        input_type="hedge_register",
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    contract_entries = _manual_collection_entries(contract_inputs, ("contracts", "line_items", "registry", "renewals"))
+    hedge_entries = _manual_collection_entries(hedge_inputs, ("hedges", "line_items", "positions"))
+    scoped_facts = [
+        fact
+        for fact in snapshot.facts
+        if _window_overlaps(_fact_window(snapshot, fact), (period_start, period_end))
+    ]
+
+    findings = [
+        *_detect_duplicate_payments(scoped_facts),
+        *_detect_entity_resolution_duplicates(scoped_facts),
+        *_detect_off_contract_spend(scoped_facts, contract_entries, period_end),
+        *_detect_price_variance(scoped_facts, contract_entries),
+        *_detect_missed_early_pay_discount(scoped_facts),
+        *_detect_auto_renewal_escalation(contract_entries, period_start, period_end),
+        *_detect_fx_hedge_not_applied(scoped_facts, hedge_entries, snapshot.metadata.get("reporting_currency") or "SAR"),
+        *_detect_dormant_credit_balance(scoped_facts, period_end),
+    ]
+    findings.sort(
+        key=lambda finding: (
+            finding.recoverable_sar,
+            finding.leakage_sar,
+            finding.vendor_name.lower(),
+            finding.finding_id,
+        ),
+        reverse=True,
+    )
+    ranked = tuple(
+        replace(finding, priority_rank=index)
+        for index, finding in enumerate(findings, start=1)
+    )
+    total_recoverable = sum((finding.recoverable_sar for finding in ranked), Decimal("0"))
+    return OracleLeakageReview(
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        findings=ranked,
+        ranking_basis="recoverable_sar_desc",
+        total_recoverable_sar=total_recoverable,
+    )
+
+
+def build_oracle_leakage_review_payload(review: OracleLeakageReview) -> dict[str, Any]:
+    return {
+        "authoritative": review.authoritative,
+        "derived_from": "deterministic_oracle_leakage_engine",
+        "reporting_period_key": review.reporting_period_key,
+        "reporting_cadence": review.reporting_cadence,
+        "period_start": review.period_start.isoformat(),
+        "period_end": review.period_end.isoformat(),
+        "ranking_basis": review.ranking_basis,
+        "total_findings": len(review.findings),
+        "total_recoverable_sar": _stringify_decimal(review.total_recoverable_sar),
+        "computation_boundary": review.computation_boundary,
+        "reviewer_workflow": {
+            "order_by": "recoverable_sar_desc",
+            "required_checks": [
+                "Verify each evidence locator against the cited source row or manual input record.",
+                "Challenge the quantity, rate, and date assumptions before approving recoverable value.",
+                "Record approve or reject decision without changing deterministic calculation inputs silently.",
+            ],
+            "auditor_fields": [
+                "finding_id",
+                "pattern_type",
+                "vendor_id",
+                "recoverable_sar",
+                "calculation",
+                "evidence",
+                "challenge_points",
+            ],
+        },
+        "findings": [
+            {
+                "finding_id": finding.finding_id,
+                "priority_rank": finding.priority_rank,
+                "pattern_type": finding.pattern_type,
+                "title": finding.title,
+                "vendor_id": finding.vendor_id,
+                "vendor_name": finding.vendor_name,
+                "leakage_sar": _stringify_decimal(finding.leakage_sar),
+                "recoverable_sar": _stringify_decimal(finding.recoverable_sar),
+                "confidence": finding.confidence,
+                "rationale": finding.rationale,
+                "review_status": finding.review_status,
+                "calculation": _stringify_nested_decimals(finding.calculation),
+                "challenge_points": list(finding.challenge_points),
+                "evidence": [
+                    {
+                        "source_kind": item.source_kind,
+                        "source_key": item.source_key,
+                        "locator": item.locator,
+                        "details": _stringify_nested_decimals(item.details),
+                    }
+                    for item in finding.evidence
+                ],
+            }
+            for finding in review.findings
+        ],
+    }
+
+
+def _detect_duplicate_payments(facts: Sequence[CanonicalFinanceFact]) -> list[OracleLeakageFinding]:
+    groups: dict[tuple[str, str, Decimal, str], list[CanonicalFinanceFact]] = defaultdict(list)
+    for fact in facts:
+        if fact.module != "AP":
+            continue
+        record = _fact_record(fact)
+        invoice_number = _normalized_token(record.get("invoice_num") or record.get("invoice_reference"))
+        payment_date = _date(record.get("payment_date"))
+        payment_amount = _decimal(record.get("payment_amount") or record.get("amount_paid") or record.get("amount"))
+        currency = str(record.get("currency") or fact.currency or "SAR").upper()
+        if not invoice_number or payment_date is None or payment_amount in (None, Decimal("0")):
+            continue
+        vendor_id = _normalized_token(record.get("vendor_id")) or _normalized_token(record.get("vendor_name")) or "unknown"
+        groups[(vendor_id, invoice_number, payment_amount, currency)].append(fact)
+
+    findings: list[OracleLeakageFinding] = []
+    for _, matched_facts in groups.items():
+        if len(matched_facts) < 2:
+            continue
+        amounts = [_decimal(_fact_record(fact).get("payment_amount") or fact.amount_value) or Decimal("0") for fact in matched_facts]
+        duplicate_value = sum(amounts, Decimal("0")) - max(amounts)
+        if duplicate_value <= Decimal("0"):
+            continue
+        reference = _fact_record(matched_facts[0])
+        vendor_id = str(reference.get("vendor_id") or reference.get("supplier_key") or "unknown")
+        vendor_name = str(reference.get("vendor_name") or "Unknown vendor")
+        invoice_number = str(reference.get("invoice_num") or reference.get("invoice_reference") or matched_facts[0].natural_key)
+        findings.append(
+            _make_finding(
+                finding_id=f"duplicate-payment:{vendor_id}:{invoice_number}",
+                title=f"Duplicate payment detected for invoice {invoice_number}",
+                pattern_type="duplicate_payment",
+                vendor_id=vendor_id,
+                vendor_name=vendor_name,
+                leakage_sar=duplicate_value,
+                recoverable_sar=duplicate_value,
+                confidence="high",
+                rationale="Multiple AP payment legs share the same canonical vendor, invoice number, amount, and currency.",
+                calculation={
+                    "duplicate_count": len(matched_facts),
+                    "payment_amounts": amounts,
+                    "recoverable_formula": "sum(payment_amounts) - max(payment_amounts)",
+                },
+                evidence=[
+                    _fact_evidence(
+                        fact,
+                        fields=("invoice_num", "payment_reference", "payment_date", "payment_amount", "vendor_id", "vendor_name"),
+                    )
+                    for fact in matched_facts
+                ],
+                challenge_points=(
+                    "Confirm the duplicate legs are not a reversal and reissue pair.",
+                    "Confirm all cited payment references cleared cash independently.",
+                ),
+            )
+        )
+    return findings
+
+
+def _detect_entity_resolution_duplicates(facts: Sequence[CanonicalFinanceFact]) -> list[OracleLeakageFinding]:
+    groups: dict[tuple[str, str, Decimal, str], list[CanonicalFinanceFact]] = defaultdict(list)
+    for fact in facts:
+        if fact.module != "AP":
+            continue
+        record = _fact_record(fact)
+        invoice_number = _normalized_token(record.get("invoice_num") or record.get("invoice_reference"))
+        payment_amount = _decimal(record.get("payment_amount") or record.get("amount_paid") or record.get("amount"))
+        shared_key = _shared_entity_key(record)
+        currency = str(record.get("currency") or fact.currency or "SAR").upper()
+        if not invoice_number or payment_amount in (None, Decimal("0")) or shared_key is None:
+            continue
+        groups[(shared_key, invoice_number, payment_amount, currency)].append(fact)
+
+    findings: list[OracleLeakageFinding] = []
+    for (shared_key, _, _, _), matched_facts in groups.items():
+        vendor_ids = {str(_fact_record(fact).get("vendor_id") or "unknown") for fact in matched_facts}
+        if len(matched_facts) < 2 or len(vendor_ids) < 2:
+            continue
+        amounts = [_decimal(_fact_record(fact).get("payment_amount") or fact.amount_value) or Decimal("0") for fact in matched_facts]
+        duplicate_value = sum(amounts, Decimal("0")) - max(amounts)
+        if duplicate_value <= Decimal("0"):
+            continue
+        reference = _fact_record(matched_facts[0])
+        findings.append(
+            _make_finding(
+                finding_id=f"entity-duplicate:{shared_key}:{reference.get('invoice_num') or matched_facts[0].natural_key}",
+                title=f"Entity-resolution duplicate across vendor IDs for invoice {reference.get('invoice_num') or matched_facts[0].natural_key}",
+                pattern_type="entity_resolution_duplicate",
+                vendor_id="|".join(sorted(vendor_ids)),
+                vendor_name=str(reference.get("vendor_name") or "Resolved supplier entity"),
+                leakage_sar=duplicate_value,
+                recoverable_sar=duplicate_value,
+                confidence="high",
+                rationale="The same invoice amount was paid to multiple vendor IDs that share a strong deterministic entity identifier.",
+                calculation={
+                    "shared_identifier": shared_key,
+                    "vendor_ids": sorted(vendor_ids),
+                    "payment_amounts": amounts,
+                    "recoverable_formula": "sum(payment_amounts) - max(payment_amounts)",
+                },
+                evidence=[
+                    _fact_evidence(
+                        fact,
+                        fields=(
+                            "invoice_num",
+                            "payment_reference",
+                            "payment_amount",
+                            "vendor_id",
+                            "vendor_name",
+                            "vendor_tax_id",
+                            "iban",
+                            "bank_account_number",
+                        ),
+                    )
+                    for fact in matched_facts
+                ],
+                challenge_points=(
+                    "Verify the shared identifier truly belongs to the same supplier entity.",
+                    "Verify one leg is not an approved intercompany or legal-entity split payment.",
+                ),
+            )
+        )
+    return findings
+
+
+def _detect_off_contract_spend(
+    facts: Sequence[CanonicalFinanceFact],
+    contract_entries: Sequence[dict[str, Any]],
+    period_end: date,
+) -> list[OracleLeakageFinding]:
+    findings: list[OracleLeakageFinding] = []
+    for fact in facts:
+        if fact.module != "AP":
+            continue
+        record = _fact_record(fact)
+        invoice_amount = _decimal(record.get("invoice_amount") or record.get("amount") or fact.amount_value)
+        invoice_date = _date(record.get("invoice_date") or record.get("event_date")) or period_end
+        vendor_id = str(record.get("vendor_id") or record.get("supplier_key") or "unknown")
+        vendor_name = str(record.get("vendor_name") or "Unknown vendor")
+        category = _normalized_token(record.get("category") or record.get("spend_category") or record.get("commodity_code"))
+        invoice_number = _normalized_token(record.get("invoice_num") or record.get("invoice_reference"))
+        if invoice_amount in (None, Decimal("0")) or invoice_number is None:
+            continue
+        candidate_contracts = [
+            entry
+            for entry in contract_entries
+            if _contract_matches(entry, record, invoice_date)
+        ]
+        if not candidate_contracts and not bool(record.get("off_contract_flag")):
+            continue
+        if any(_normalized_token(entry.get("contract_id")) == _normalized_token(record.get("contract_id")) for entry in candidate_contracts if record.get("contract_id")):
+            continue
+        benchmark = _off_contract_benchmark(invoice_amount, record, candidate_contracts)
+        if benchmark is None or benchmark >= invoice_amount:
+            continue
+        recoverable = invoice_amount - benchmark
+        reference_contract = candidate_contracts[0] if candidate_contracts else None
+        evidence: list[OracleLeakageEvidence] = [
+            _fact_evidence(fact, fields=("invoice_num", "invoice_amount", "invoice_date", "category", "contract_id", "po_reference"))
+        ]
+        if reference_contract is not None:
+            evidence.append(_manual_evidence(reference_contract, fields=("contract_id", "vendor_id", "category", "unit_price", "off_contract_savings_pct")))
+        findings.append(
+            _make_finding(
+                finding_id=f"off-contract:{vendor_id}:{record.get('invoice_num') or fact.natural_key}",
+                title=f"Off-contract spend detected for {record.get('invoice_num') or fact.natural_key}",
+                pattern_type="off_contract_spend",
+                vendor_id=vendor_id,
+                vendor_name=vendor_name,
+                leakage_sar=invoice_amount,
+                recoverable_sar=recoverable,
+                confidence="high",
+                rationale="AP spend landed outside a matched active contract or approved contract reference.",
+                calculation={
+                    "invoice_amount": invoice_amount,
+                    "benchmark_amount": benchmark,
+                    "recoverable_formula": "invoice_amount - benchmark_amount",
+                    "category": category,
+                },
+                evidence=evidence,
+                challenge_points=(
+                    "Confirm the contract registry was complete for the invoice date and category.",
+                    "Confirm the invoice was not intentionally exempt from contract routing.",
+                ),
+            )
+        )
+    return findings
+
+
+def _detect_price_variance(
+    facts: Sequence[CanonicalFinanceFact],
+    contract_entries: Sequence[dict[str, Any]],
+) -> list[OracleLeakageFinding]:
+    po_lookup: dict[str, CanonicalFinanceFact] = {}
+    for fact in facts:
+        if fact.module != "PO":
+            continue
+        record = _fact_record(fact)
+        po_key = _normalized_token(record.get("po_reference") or record.get("po_line_id") or fact.source_reference or fact.natural_key)
+        if po_key:
+            po_lookup[po_key] = fact
+    findings: list[OracleLeakageFinding] = []
+    for fact in facts:
+        if fact.module != "AP":
+            continue
+        record = _fact_record(fact)
+        quantity = _decimal(record.get("quantity") or record.get("qty"))
+        invoice_unit_price = _decimal(record.get("invoice_unit_price") or record.get("unit_price"))
+        if quantity in (None, Decimal("0")) or invoice_unit_price is None:
+            continue
+        po_reference = _normalized_token(record.get("po_reference"))
+        po_fact = po_lookup.get(po_reference or "")
+        po_unit_price = _decimal(_fact_record(po_fact).get("po_unit_price") or _fact_record(po_fact).get("unit_price")) if po_fact else None
+        invoice_date = _date(record.get("invoice_date") or record.get("event_date"))
+        matching_contracts = [entry for entry in contract_entries if _contract_matches(entry, record, invoice_date)]
+        contract_unit_price = _first_decimal(matching_contracts, "unit_price", "contract_unit_price", "approved_unit_price")
+        baseline_unit_price = contract_unit_price if contract_unit_price is not None else po_unit_price
+        if baseline_unit_price is None or invoice_unit_price <= baseline_unit_price:
+            continue
+        recoverable = (invoice_unit_price - baseline_unit_price) * quantity
+        evidence: list[OracleLeakageEvidence] = [
+            _fact_evidence(fact, fields=("invoice_num", "po_reference", "quantity", "invoice_unit_price", "unit_price"))
+        ]
+        if po_fact is not None:
+            evidence.append(_fact_evidence(po_fact, fields=("po_reference", "po_unit_price", "unit_price", "quantity")))
+        if matching_contracts:
+            evidence.append(_manual_evidence(matching_contracts[0], fields=("contract_id", "unit_price", "approved_unit_price")))
+        findings.append(
+            _make_finding(
+                finding_id=f"price-variance:{record.get('vendor_id') or 'unknown'}:{record.get('invoice_num') or fact.natural_key}",
+                title=f"Price variance detected for {record.get('invoice_num') or fact.natural_key}",
+                pattern_type="price_variance",
+                vendor_id=str(record.get("vendor_id") or "unknown"),
+                vendor_name=str(record.get("vendor_name") or "Unknown vendor"),
+                leakage_sar=recoverable,
+                recoverable_sar=recoverable,
+                confidence="high",
+                rationale="The invoiced unit price exceeded the deterministic PO or contract baseline.",
+                calculation={
+                    "quantity": quantity,
+                    "invoice_unit_price": invoice_unit_price,
+                    "baseline_unit_price": baseline_unit_price,
+                    "recoverable_formula": "(invoice_unit_price - baseline_unit_price) * quantity",
+                },
+                evidence=evidence,
+                challenge_points=(
+                    "Confirm quantity matches the billed unit of measure.",
+                    "Confirm the cited PO or contract baseline was still valid on the invoice date.",
+                ),
+            )
+        )
+    return findings
+
+
+def _detect_missed_early_pay_discount(facts: Sequence[CanonicalFinanceFact]) -> list[OracleLeakageFinding]:
+    findings: list[OracleLeakageFinding] = []
+    for fact in facts:
+        if fact.module != "AP":
+            continue
+        record = _fact_record(fact)
+        invoice_amount = _decimal(record.get("invoice_amount") or record.get("amount") or fact.amount_value)
+        payment_date = _date(record.get("payment_date"))
+        discount_due_date = _date(record.get("discount_due_date"))
+        if invoice_amount is None or payment_date is None or discount_due_date is None or payment_date <= discount_due_date:
+            continue
+        discount_amount = _decimal(record.get("discount_amount"))
+        if discount_amount is None:
+            discount_pct = _decimal(record.get("discount_pct") or record.get("early_pay_discount_pct"))
+            if discount_pct is None:
+                continue
+            discount_amount = invoice_amount * (discount_pct / Decimal("100"))
+        if discount_amount <= Decimal("0"):
+            continue
+        findings.append(
+            _make_finding(
+                finding_id=f"missed-discount:{record.get('vendor_id') or 'unknown'}:{record.get('invoice_num') or fact.natural_key}",
+                title=f"Missed early-pay discount on {record.get('invoice_num') or fact.natural_key}",
+                pattern_type="missed_early_pay_discount",
+                vendor_id=str(record.get("vendor_id") or "unknown"),
+                vendor_name=str(record.get("vendor_name") or "Unknown vendor"),
+                leakage_sar=discount_amount,
+                recoverable_sar=discount_amount,
+                confidence="high",
+                rationale="Payment cleared after the deterministic discount window despite an available early-pay discount.",
+                calculation={
+                    "invoice_amount": invoice_amount,
+                    "payment_date": payment_date.isoformat(),
+                    "discount_due_date": discount_due_date.isoformat(),
+                    "discount_amount": discount_amount,
+                },
+                evidence=[
+                    _fact_evidence(
+                        fact,
+                        fields=("invoice_num", "invoice_amount", "payment_date", "discount_due_date", "discount_pct", "discount_amount"),
+                    )
+                ],
+                challenge_points=(
+                    "Confirm the supplier discount terms were active for this invoice.",
+                    "Confirm the payment timing was not contractually constrained by a dispute or hold.",
+                ),
+            )
+        )
+    return findings
+
+
+def _detect_auto_renewal_escalation(
+    contract_entries: Sequence[dict[str, Any]],
+    period_start: date,
+    period_end: date,
+) -> list[OracleLeakageFinding]:
+    findings: list[OracleLeakageFinding] = []
+    for entry in contract_entries:
+        if not bool(entry.get("auto_renewal")):
+            continue
+        renewal_date = _date(entry.get("renewal_date") or entry.get("renewed_start_date") or entry.get("effective_date"))
+        if renewal_date is None or not (period_start <= renewal_date <= period_end):
+            continue
+        previous_value = _decimal(entry.get("previous_annual_value") or entry.get("previous_value"))
+        renewed_value = _decimal(entry.get("renewed_annual_value") or entry.get("renewed_value"))
+        previous_unit_price = _decimal(entry.get("previous_unit_price"))
+        renewed_unit_price = _decimal(entry.get("renewed_unit_price") or entry.get("unit_price"))
+        renewal_quantity = _decimal(entry.get("renewal_quantity") or entry.get("quantity") or Decimal("1")) or Decimal("1")
+        recoverable: Decimal | None = None
+        calculation: dict[str, Any]
+        if previous_value is not None and renewed_value is not None and renewed_value > previous_value:
+            recoverable = renewed_value - previous_value
+            calculation = {
+                "previous_annual_value": previous_value,
+                "renewed_annual_value": renewed_value,
+                "recoverable_formula": "renewed_annual_value - previous_annual_value",
+            }
+        elif previous_unit_price is not None and renewed_unit_price is not None and renewed_unit_price > previous_unit_price:
+            recoverable = (renewed_unit_price - previous_unit_price) * renewal_quantity
+            calculation = {
+                "previous_unit_price": previous_unit_price,
+                "renewed_unit_price": renewed_unit_price,
+                "renewal_quantity": renewal_quantity,
+                "recoverable_formula": "(renewed_unit_price - previous_unit_price) * renewal_quantity",
+            }
+        else:
+            continue
+        findings.append(
+            _make_finding(
+                finding_id=f"auto-renewal:{entry.get('vendor_id') or entry.get('vendor_name') or 'unknown'}:{entry.get('contract_id') or entry.get('__item_index')}",
+                title=f"Auto-renewal escalation on contract {entry.get('contract_id') or 'unknown'}",
+                pattern_type="auto_renewal_escalation",
+                vendor_id=str(entry.get("vendor_id") or "unknown"),
+                vendor_name=str(entry.get("vendor_name") or "Unknown vendor"),
+                leakage_sar=recoverable,
+                recoverable_sar=recoverable,
+                confidence="high",
+                rationale="The contract auto-renewed in-period at a higher deterministic rate or annual value.",
+                calculation=calculation | {"renewal_date": renewal_date.isoformat()},
+                evidence=[_manual_evidence(entry, fields=("contract_id", "renewal_date", "previous_annual_value", "renewed_annual_value", "previous_unit_price", "renewed_unit_price"))],
+                challenge_points=(
+                    "Confirm the renewal increase was not explicitly approved outside the registry baseline.",
+                    "Confirm the previous commercial baseline is the last negotiated value, not a temporary discount.",
+                ),
+            )
+        )
+    return findings
+
+
+def _detect_fx_hedge_not_applied(
+    facts: Sequence[CanonicalFinanceFact],
+    hedge_entries: Sequence[dict[str, Any]],
+    reporting_currency: str,
+) -> list[OracleLeakageFinding]:
+    findings: list[OracleLeakageFinding] = []
+    normalized_reporting = str(reporting_currency or "SAR").upper()
+    for fact in facts:
+        record = _fact_record(fact)
+        currency = str(record.get("currency") or fact.currency or normalized_reporting).upper()
+        if currency == normalized_reporting:
+            continue
+        foreign_amount = _decimal(record.get("foreign_amount") or record.get("amount_foreign") or record.get("quantity_foreign"))
+        applied_fx_rate = _decimal(record.get("applied_fx_rate") or record.get("spot_rate") or record.get("fx_rate"))
+        if foreign_amount in (None, Decimal("0")) or applied_fx_rate is None:
+            continue
+        matching_hedges = [entry for entry in hedge_entries if _hedge_matches(entry, record, currency)]
+        hedge_rate = _first_decimal(matching_hedges, "hedged_rate", "contracted_rate", "rate")
+        if hedge_rate is None or applied_fx_rate <= hedge_rate:
+            continue
+        recoverable = (applied_fx_rate - hedge_rate) * foreign_amount
+        evidence: list[OracleLeakageEvidence] = [
+            _fact_evidence(fact, fields=("invoice_num", "vendor_id", "currency", "foreign_amount", "applied_fx_rate", "spot_rate"))
+        ]
+        if matching_hedges:
+            evidence.append(_manual_evidence(matching_hedges[0], fields=("hedge_id", "currency", "hedged_rate", "vendor_id", "invoice_num")))
+        findings.append(
+            _make_finding(
+                finding_id=f"fx-hedge:{record.get('vendor_id') or 'unknown'}:{record.get('invoice_num') or fact.natural_key}",
+                title=f"FX hedge not applied for {record.get('invoice_num') or fact.natural_key}",
+                pattern_type="fx_hedge_not_applied",
+                vendor_id=str(record.get("vendor_id") or "unknown"),
+                vendor_name=str(record.get("vendor_name") or "Unknown vendor"),
+                leakage_sar=recoverable,
+                recoverable_sar=recoverable,
+                confidence="high",
+                rationale="A registered hedge rate existed, but the AP transaction settled at a worse deterministic FX rate.",
+                calculation={
+                    "foreign_amount": foreign_amount,
+                    "applied_fx_rate": applied_fx_rate,
+                    "hedged_rate": hedge_rate,
+                    "recoverable_formula": "(applied_fx_rate - hedged_rate) * foreign_amount",
+                },
+                evidence=evidence,
+                challenge_points=(
+                    "Confirm the hedge covered this invoice, currency, and settlement window.",
+                    "Confirm the applied rate already includes no approved fees or taxes outside hedge scope.",
+                ),
+            )
+        )
+    return findings
+
+
+def _detect_dormant_credit_balance(
+    facts: Sequence[CanonicalFinanceFact],
+    period_end: date,
+) -> list[OracleLeakageFinding]:
+    findings: list[OracleLeakageFinding] = []
+    for fact in facts:
+        if fact.module != "AP":
+            continue
+        record = _fact_record(fact)
+        credit_balance = _decimal(record.get("credit_balance_amount") or record.get("credit_amount"))
+        if credit_balance is None and fact.fact_type.lower() in {"credit_balance", "credit_note", "vendor_credit"}:
+            base_amount = _decimal(record.get("amount") or fact.amount_value)
+            if base_amount is not None:
+                credit_balance = abs(base_amount)
+        if credit_balance is None or credit_balance <= Decimal("0"):
+            continue
+        last_activity = _date(record.get("last_activity_date") or record.get("credit_date") or record.get("invoice_date"))
+        dormant_days = int(record.get("dormant_threshold_days") or 90)
+        if last_activity is None or (period_end - last_activity).days < dormant_days:
+            continue
+        if str(record.get("credit_status") or "open").lower() not in {"open", "unapplied", "available", "dormant"}:
+            continue
+        findings.append(
+            _make_finding(
+                finding_id=f"dormant-credit:{record.get('vendor_id') or 'unknown'}:{record.get('credit_reference') or fact.natural_key}",
+                title=f"Dormant credit balance for {record.get('credit_reference') or fact.natural_key}",
+                pattern_type="dormant_credit_balance",
+                vendor_id=str(record.get("vendor_id") or "unknown"),
+                vendor_name=str(record.get("vendor_name") or "Unknown vendor"),
+                leakage_sar=credit_balance,
+                recoverable_sar=credit_balance,
+                confidence="high",
+                rationale="Supplier credit remained unapplied beyond the deterministic dormancy threshold.",
+                calculation={
+                    "credit_balance_amount": credit_balance,
+                    "last_activity_date": last_activity.isoformat(),
+                    "dormant_days": (period_end - last_activity).days,
+                    "dormant_threshold_days": dormant_days,
+                },
+                evidence=[_fact_evidence(fact, fields=("credit_reference", "credit_balance_amount", "last_activity_date", "credit_status"))],
+                challenge_points=(
+                    "Confirm the credit has not already been earmarked against a future invoice.",
+                    "Confirm the vendor statement still shows the credit as open and collectible.",
+                ),
+            )
+        )
+    return findings
+
+
+def _fact_record(fact: CanonicalFinanceFact | None) -> dict[str, Any]:
+    if fact is None:
+        return {}
+    record = dict(fact.attributes)
+    record.setdefault("natural_key", fact.natural_key)
+    record.setdefault("module", fact.module)
+    record.setdefault("fact_type", fact.fact_type)
+    record.setdefault("amount", fact.amount_value)
+    record.setdefault("currency", fact.currency)
+    record.setdefault("period_key", fact.period_key)
+    record.setdefault("source_reference", fact.source_reference)
+    return record
+
+
+def _manual_collection_entries(
+    records: Sequence[ManualInputRecord],
+    collection_keys: Sequence[str],
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for record in records:
+        containers: list[Sequence[Any]] = []
+        for key in collection_keys:
+            candidate = record.attributes.get(key)
+            if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+                containers.append(candidate)
+        if not containers and isinstance(record.attributes.get("line_items"), Sequence) and not isinstance(record.attributes.get("line_items"), (str, bytes)):
+            containers.append(record.attributes["line_items"])
+        if not containers:
+            containers.append((record.attributes,))
+        for collection in containers:
+            for index, item in enumerate(collection, start=1):
+                if not isinstance(item, Mapping):
+                    continue
+                entry = dict(item)
+                entry.setdefault("__input_key", record.input_key)
+                entry.setdefault("__input_name", record.input_name)
+                entry.setdefault("__item_index", index)
+                entries.append(entry)
+    return entries
+
+
+def _contract_matches(entry: Mapping[str, Any], record: Mapping[str, Any], invoice_date: date | None) -> bool:
+    entry_vendor = _normalized_token(entry.get("vendor_id") or entry.get("canonical_vendor_key") or entry.get("vendor_tax_id") or entry.get("vendor_name"))
+    record_vendor = _normalized_token(record.get("vendor_id") or record.get("vendor_tax_id") or record.get("vendor_name"))
+    entry_category = _normalized_token(entry.get("category") or entry.get("spend_category") or entry.get("commodity_code"))
+    record_category = _normalized_token(record.get("category") or record.get("spend_category") or record.get("commodity_code"))
+    if entry_vendor and record_vendor and entry_vendor != record_vendor:
+        return False
+    if entry_category and record_category and entry_category != record_category:
+        return False
+    start = _date(entry.get("start_date") or entry.get("effective_date"))
+    end = _date(entry.get("end_date") or entry.get("expiry_date"))
+    if invoice_date is not None and start is not None and invoice_date < start:
+        return False
+    if invoice_date is not None and end is not None and invoice_date > end:
+        return False
+    return True
+
+
+def _off_contract_benchmark(
+    invoice_amount: Decimal,
+    record: Mapping[str, Any],
+    contracts: Sequence[Mapping[str, Any]],
+) -> Decimal | None:
+    quantity = _decimal(record.get("quantity") or record.get("qty"))
+    contract_unit_price = _first_decimal(contracts, "unit_price", "contract_unit_price", "approved_unit_price")
+    if quantity not in (None, Decimal("0")) and contract_unit_price is not None:
+        return contract_unit_price * quantity
+    savings_pct = _first_decimal(contracts, "off_contract_savings_pct", "negotiated_discount_pct")
+    if savings_pct is None:
+        return None
+    return invoice_amount * (Decimal("1") - (savings_pct / Decimal("100")))
+
+
+def _hedge_matches(entry: Mapping[str, Any], record: Mapping[str, Any], currency: str) -> bool:
+    if str(entry.get("currency") or "").upper() not in {"", currency.upper()}:
+        return False
+    entry_vendor = _normalized_token(entry.get("vendor_id") or entry.get("vendor_name"))
+    record_vendor = _normalized_token(record.get("vendor_id") or record.get("vendor_name"))
+    if entry_vendor and record_vendor and entry_vendor != record_vendor:
+        return False
+    entry_invoice = _normalized_token(entry.get("invoice_num") or entry.get("invoice_reference"))
+    record_invoice = _normalized_token(record.get("invoice_num") or record.get("invoice_reference"))
+    if entry_invoice and record_invoice and entry_invoice != record_invoice:
+        return False
+    return True
+
+
+def _vendor_canonical_key(record: Mapping[str, Any]) -> str:
+    return (
+        _shared_entity_key(record)
+        or _normalized_token(record.get("vendor_id"))
+        or _normalized_token(record.get("vendor_name"))
+        or "unknown"
+    )
+
+
+def _shared_entity_key(record: Mapping[str, Any]) -> str | None:
+    for key in ("vendor_tax_id", "tax_id", "vat_number", "iban", "bank_account_number", "bank_account", "swift_code"):
+        normalized = _normalized_token(record.get(key))
+        if normalized:
+            return f"{key}:{normalized}"
+    return None
+
+
+def _normalized_token(value: Any) -> str | None:
+    text = _text(value)
+    if text is None:
+        return None
+    compact = "".join(character for character in text.upper() if character.isalnum())
+    return compact or None
+
+
+def _first_decimal(records: Sequence[Mapping[str, Any]], *keys: str) -> Decimal | None:
+    for record in records:
+        for key in keys:
+            value = _decimal(record.get(key))
+            if value is not None:
+                return value
+    return None
+
+
+def _fact_evidence(fact: CanonicalFinanceFact, *, fields: Sequence[str]) -> OracleLeakageEvidence:
+    record = _fact_record(fact)
+    return OracleLeakageEvidence(
+        source_kind="fact",
+        source_key=fact.natural_key,
+        locator=f"{fact.module}:{fact.fact_type}",
+        details={field: record.get(field) for field in fields if field in record},
+    )
+
+
+def _manual_evidence(entry: Mapping[str, Any], *, fields: Sequence[str]) -> OracleLeakageEvidence:
+    source_key = str(entry.get("__input_key") or "manual-input")
+    item_index = entry.get("__item_index")
+    locator = f"{source_key}#{item_index}" if item_index is not None else source_key
+    return OracleLeakageEvidence(
+        source_kind="manual_input",
+        source_key=source_key,
+        locator=locator,
+        details={field: entry.get(field) for field in fields if field in entry},
+    )
+
+
+def _make_finding(
+    *,
+    finding_id: str,
+    title: str,
+    pattern_type: str,
+    vendor_id: str,
+    vendor_name: str,
+    leakage_sar: Decimal,
+    recoverable_sar: Decimal,
+    confidence: Literal["high", "medium", "low"],
+    rationale: str,
+    calculation: dict[str, Any],
+    evidence: Sequence[OracleLeakageEvidence],
+    challenge_points: Sequence[str],
+) -> OracleLeakageFinding:
+    return OracleLeakageFinding(
+        finding_id=finding_id,
+        title=title,
+        pattern_type=pattern_type,
+        vendor_id=vendor_id,
+        vendor_name=vendor_name,
+        leakage_sar=leakage_sar,
+        recoverable_sar=recoverable_sar,
+        confidence=confidence,
+        rationale=rationale,
+        calculation=calculation,
+        evidence=tuple(_unique_evidence(evidence)),
+        challenge_points=tuple(challenge_points),
+    )
+
+
+def _unique_evidence(evidence: Sequence[OracleLeakageEvidence]) -> list[OracleLeakageEvidence]:
+    unique: list[OracleLeakageEvidence] = []
+    seen: set[tuple[str, str, str, tuple[tuple[str, str], ...]]] = set()
+    for item in evidence:
+        key = (
+            item.source_kind,
+            item.source_key,
+            item.locator,
+            tuple(sorted((str(name), str(value)) for name, value in item.details.items())),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique
+
+
+def _stringify_nested_decimals(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return _stringify_decimal(value)
+    if isinstance(value, dict):
+        return {key: _stringify_nested_decimals(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_stringify_nested_decimals(item) for item in value]
+    return value
 
 
 def _map_fact(

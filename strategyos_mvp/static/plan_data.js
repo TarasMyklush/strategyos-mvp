@@ -1,6 +1,6 @@
 (function () {
   window.STRATEGYOS_PLAN = {
-    updated: "2026-06-28",
+    updated: "2026-06-29",
     overallStatus: "in_progress",
     phases: [
       {
@@ -209,13 +209,13 @@
         title: "Cash leakage engine",
         subtitle: "Detect the pilot’s defined leakage patterns with deterministic rules, evidence, and reviewable findings",
         weeks: "1–2",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "13.1", title: "Detect duplicate-payment patterns", description: "Implement the duplicate payment and entity-resolution duplicate rules so the same vendor paid twice or across multiple IDs is caught deterministically", status: "not_started", files: [] },
-          { id: "13.2", title: "Stop contract and pricing leakage", description: "Detect off-contract spend and price variance by comparing AP invoices and PO lines against approved contract scope, terms, and unit prices", status: "not_started", files: [] },
-          { id: "13.3", title: "Recover missed discount and renewal leakage", description: "Flag missed early-pay discounts and auto-renewal escalation when payment timing or contract renewal behavior burns avoidable cash", status: "not_started", files: [] },
-          { id: "13.4", title: "Catch treasury and credit-balance leakage", description: "Detect FX hedge not applied and dormant credit balance patterns so treasury slippage and unused credits surface as recoverable value", status: "not_started", files: [] },
-          { id: "13.5", title: "Publish evidence-backed leakage reviews", description: "Rank recoverable value and attach deterministic evidence, corroboration, and reviewer workflow for all 8 pilot leakage patterns: duplicate payment, entity-resolution duplicate, off-contract spend, price variance, missed early-pay discount, auto-renewal escalation, FX hedge not applied, and dormant credit balance", status: "not_started", files: [] }
+          { id: "13.1", title: "Detect duplicate-payment patterns", description: "Implement the duplicate payment and entity-resolution duplicate rules so the same vendor paid twice or across multiple IDs is caught deterministically", status: "completed", files: [] },
+          { id: "13.2", title: "Stop contract and pricing leakage", description: "Detect off-contract spend and price variance by comparing AP invoices and PO lines against approved contract scope, terms, and unit prices", status: "completed", files: [] },
+          { id: "13.3", title: "Recover missed discount and renewal leakage", description: "Flag missed early-pay discounts and auto-renewal escalation when payment timing or contract renewal behavior burns avoidable cash", status: "completed", files: [] },
+          { id: "13.4", title: "Catch treasury and credit-balance leakage", description: "Detect FX hedge not applied and dormant credit balance patterns so treasury slippage and unused credits surface as recoverable value", status: "completed", files: [] },
+          { id: "13.5", title: "Publish evidence-backed leakage reviews", description: "Rank recoverable value and attach deterministic evidence, corroboration, and reviewer workflow for all 8 pilot leakage patterns: duplicate payment, entity-resolution duplicate, off-contract spend, price variance, missed early-pay discount, auto-renewal escalation, FX hedge not applied, and dormant credit balance", status: "completed", files: [] }
         ]
       },
       {
