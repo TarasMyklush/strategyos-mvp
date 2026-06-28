@@ -194,13 +194,13 @@
         title: "Deterministic KPI calculation engine",
         subtitle: "Compute pilot finance metrics from fixed formulas, with narration layered on only after the numbers are settled",
         weeks: "1–2",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "12.1", title: "Lock deterministic formulas for core profit metrics", description: "Calculate revenue, EBITDA, OpEx, and EBITDA bridge values from approved Oracle-backed sources with no model discretion in the math", status: "not_started", files: [] },
-          { id: "12.2", title: "Compute liquidity against the board floor", description: "Measure cash vs floor using CE balances, treasury inputs, and board floor rules so breach status is explicit and reproducible", status: "not_started", files: [] },
-          { id: "12.3", title: "Ship working-capital cycle metrics", description: "Derive DSO, DPO, DIO, and CCC directly from AR, AP, and inventory-aligned sources with period-consistent denominators", status: "not_started", files: [] },
-          { id: "12.4", title: "Calculate leverage and covenant capacity", description: "Produce net debt / EBITDA and covenant headroom outputs from debt, cash, and covenant-term inputs with visible assumptions", status: "not_started", files: [] },
-          { id: "12.5", title: "Separate computation from narration", description: "Keep the engine deterministic for numbers while any LLM-generated explanation stays strictly downstream and evidence-backed", status: "not_started", files: [] }
+          { id: "12.1", title: "Lock deterministic formulas for core profit metrics", description: "Calculate revenue, EBITDA, OpEx, and EBITDA bridge values from approved Oracle-backed sources with no model discretion in the math", status: "completed", files: [] },
+          { id: "12.2", title: "Compute liquidity against the board floor", description: "Measure cash vs floor using CE balances, treasury inputs, and board floor rules so breach status is explicit and reproducible", status: "completed", files: [] },
+          { id: "12.3", title: "Ship working-capital cycle metrics", description: "Derive DSO, DPO, DIO, and CCC directly from AR, AP, and inventory-aligned sources with period-consistent denominators", status: "completed", files: [] },
+          { id: "12.4", title: "Calculate leverage and covenant capacity", description: "Produce net debt / EBITDA and covenant headroom outputs from debt, cash, and covenant-term inputs with visible assumptions", status: "completed", files: [] },
+          { id: "12.5", title: "Separate computation from narration", description: "Keep the engine deterministic for numbers while any LLM-generated explanation stays strictly downstream and evidence-backed", status: "completed", files: [] }
         ]
       },
       {

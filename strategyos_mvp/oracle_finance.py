@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -188,6 +189,43 @@ class OracleCanonicalSnapshot:
     fx_rates: tuple[FXRateRecord, ...]
     manual_inputs: tuple[ManualInputRecord, ...]
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class OracleKpiComputation:
+    reporting_period_key: str
+    reporting_cadence: Cadence
+    period_start: date
+    period_end: date
+    period_days: int
+    metrics: dict[str, Decimal | None]
+    components: dict[str, Decimal | None]
+    source_fact_types: dict[str, tuple[str, ...]]
+    manual_input_keys: tuple[str, ...]
+    authoritative: bool = True
+    computation_boundary: str = (
+        "Deterministic Oracle KPI computation only. Any narration is downstream and non-authoritative."
+    )
+
+
+def snapshot_summary(snapshot: OracleCanonicalSnapshot) -> dict[str, Any]:
+    facts_by_module: dict[str, int] = {module: 0 for module in ORACLE_MODULES}
+    for fact in snapshot.facts:
+        facts_by_module[fact.module] = facts_by_module.get(fact.module, 0) + 1
+    manual_inputs_by_type: dict[str, int] = {input_type: 0 for input_type in MANUAL_INPUT_TYPES}
+    for record in snapshot.manual_inputs:
+        manual_inputs_by_type[record.input_type] = manual_inputs_by_type.get(record.input_type, 0) + 1
+    return {
+        "connector_mappings": len(snapshot.connector_mappings),
+        "periods": len(snapshot.periods),
+        "facts": len(snapshot.facts),
+        "facts_by_module": facts_by_module,
+        "fx_rates": len(snapshot.fx_rates),
+        "manual_inputs": len(snapshot.manual_inputs),
+        "manual_inputs_by_type": manual_inputs_by_type,
+        "modules_loaded": dict(snapshot.metadata.get("modules_loaded", {})),
+        "reporting_currency": snapshot.metadata.get("reporting_currency"),
+    }
 
 
 def default_oracle_connector_definitions() -> tuple[OracleConnectorDefinition, ...]:
@@ -397,6 +435,233 @@ def snapshot_payload(snapshot: OracleCanonicalSnapshot) -> dict[str, Any]:
     }
 
 
+def compute_oracle_pilot_kpis(
+    snapshot: OracleCanonicalSnapshot,
+    *,
+    reporting_period_key: str,
+    reporting_cadence: Cadence | None = None,
+) -> OracleKpiComputation:
+    period_lookup = {period.period_key: period for period in snapshot.periods}
+    period = period_lookup.get(reporting_period_key)
+    resolved_cadence = reporting_cadence or (period.cadence if period else _infer_cadence_from_period_key(reporting_period_key))
+    period_start, period_end = _resolve_period_bounds(
+        reporting_period_key,
+        resolved_cadence,
+        period_start=period.period_start if period else None,
+        period_end=period.period_end if period else None,
+    )
+    period_days = (period_end - period_start).days + 1
+
+    revenue = _sum_metric_facts(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=("revenue",),
+    )
+    ebitda = _sum_metric_facts(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=("ebitda",),
+    )
+    operating_cost = _sum_metric_facts(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=("operating_cost", "opex", "operating_expense"),
+    )
+    cash_balance = _latest_metric_fact(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=("cash_balance",),
+    )
+    receivables = _latest_metric_fact(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=("accounts_receivable_balance", "ar_open_balance", "receivables_balance"),
+    )
+    payables = _latest_metric_fact(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=("accounts_payable_balance", "ap_open_balance", "payables_balance"),
+    )
+    inventory = _latest_metric_fact(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=("inventory_balance", "working_capital_inventory", "inventory_on_hand"),
+    )
+    debt_balance = _latest_metric_fact(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=("debt_balance", "borrowings", "loan_balance"),
+    )
+
+    budget_inputs = _matching_manual_inputs(
+        snapshot.manual_inputs,
+        input_type="budget_plan",
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    board_floor_inputs = _matching_manual_inputs(
+        snapshot.manual_inputs,
+        input_type="board_floor",
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    covenant_inputs = _matching_manual_inputs(
+        snapshot.manual_inputs,
+        input_type="covenant_terms",
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+    revenue_plan = _manual_decimal(
+        budget_inputs,
+        aliases=("revenue", "revenue_plan", "planned_revenue"),
+    )
+    ebitda_plan = _manual_decimal(
+        budget_inputs,
+        aliases=("ebitda", "ebitda_plan", "planned_ebitda"),
+    )
+    operating_cost_plan = _manual_decimal(
+        budget_inputs,
+        aliases=("operating_cost", "operating_cost_plan", "planned_operating_cost", "opex", "opex_plan"),
+    )
+    board_floor = _manual_decimal(
+        board_floor_inputs,
+        aliases=("board_floor", "cash_floor", "minimum_cash"),
+    )
+    covenant_limit = _manual_decimal(
+        covenant_inputs,
+        aliases=("max_net_debt_to_ebitda", "net_debt_to_ebitda_limit", "leverage_limit"),
+    )
+
+    net_debt = None
+    if debt_balance is not None and cash_balance is not None:
+        net_debt = debt_balance - cash_balance
+
+    used_manual_keys = tuple(
+        dict.fromkeys(
+            [
+                *(record.input_key for record in budget_inputs if revenue_plan is not None or ebitda_plan is not None or operating_cost_plan is not None),
+                *(record.input_key for record in board_floor_inputs if board_floor is not None),
+                *(record.input_key for record in covenant_inputs if covenant_limit is not None),
+            ]
+        )
+    )
+
+    return OracleKpiComputation(
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        period_days=period_days,
+        metrics={
+            "revenue_attainment_pct": _safe_percent(revenue, revenue_plan),
+            "ebitda_margin_pct": _safe_percent(ebitda, revenue),
+            "ebitda_attainment_pct": _safe_percent(ebitda, ebitda_plan),
+            "operating_cost_pct_of_plan": _safe_percent(operating_cost, operating_cost_plan),
+            "cash_vs_board_floor_pct": _safe_percent(cash_balance, board_floor),
+            "cash_floor_headroom": _safe_difference(cash_balance, board_floor),
+            "dso_days": _days_metric(receivables, revenue, period_days),
+            "dpo_days": _days_metric(payables, operating_cost, period_days),
+            "dio_days": _days_metric(inventory, operating_cost, period_days),
+            "ccc_days": _cash_conversion_cycle(
+                _days_metric(receivables, revenue, period_days),
+                _days_metric(inventory, operating_cost, period_days),
+                _days_metric(payables, operating_cost, period_days),
+            ),
+            "net_debt_to_ebitda": _safe_ratio(net_debt, ebitda),
+            "covenant_headroom": _safe_difference(covenant_limit, _safe_ratio(net_debt, ebitda)),
+        },
+        components={
+            "revenue_actual": revenue,
+            "revenue_plan": revenue_plan,
+            "ebitda_actual": ebitda,
+            "ebitda_plan": ebitda_plan,
+            "operating_cost_actual": operating_cost,
+            "operating_cost_plan": operating_cost_plan,
+            "cash_balance": cash_balance,
+            "board_floor": board_floor,
+            "accounts_receivable_balance": receivables,
+            "accounts_payable_balance": payables,
+            "inventory_balance": inventory,
+            "debt_balance": debt_balance,
+            "net_debt": net_debt,
+            "covenant_max_leverage": covenant_limit,
+        },
+        source_fact_types={
+            "revenue": ("revenue",),
+            "ebitda": ("ebitda",),
+            "operating_cost": ("operating_cost", "opex", "operating_expense"),
+            "cash_balance": ("cash_balance",),
+            "accounts_receivable": ("accounts_receivable_balance", "ar_open_balance", "receivables_balance"),
+            "accounts_payable": ("accounts_payable_balance", "ap_open_balance", "payables_balance"),
+            "inventory": ("inventory_balance", "working_capital_inventory", "inventory_on_hand"),
+            "debt": ("debt_balance", "borrowings", "loan_balance"),
+        },
+        manual_input_keys=used_manual_keys,
+    )
+
+
+def build_oracle_kpi_narration_payload(
+    computation: OracleKpiComputation,
+    *,
+    commentary_inputs: Sequence[ManualInputRecord] | None = None,
+) -> dict[str, Any]:
+    return {
+        "authoritative": False,
+        "derived_from": "deterministic_oracle_kpi_engine",
+        "reporting_period_key": computation.reporting_period_key,
+        "reporting_cadence": computation.reporting_cadence,
+        "period_days": computation.period_days,
+        "metric_values": {
+            key: _stringify_decimal(value) for key, value in computation.metrics.items()
+        },
+        "component_values": {
+            key: _stringify_decimal(value) for key, value in computation.components.items()
+        },
+        "manual_input_keys": list(computation.manual_input_keys),
+        "commentary_inputs": [
+            {
+                "input_key": record.input_key,
+                "input_name": record.input_name,
+                "period_key": record.period_key,
+                "attributes": dict(record.attributes),
+            }
+            for record in (commentary_inputs or ())
+        ],
+        "instructions": "Narrative must treat metric_values and component_values as fixed computed numbers.",
+    }
+
+
 def _map_fact(
     module: OracleModule,
     row: Mapping[str, Any],
@@ -461,17 +726,9 @@ def _period_from_row(
     period_key: str,
     cadence: Cadence,
 ) -> PeriodMetadata:
-    start = _date(row.get("period_start")) or _date(row.get("event_date")) or _date(row.get("as_of_date"))
-    end = _date(row.get("period_end"))
-    if start and end is None:
-        if cadence == "daily":
-            end = start
-        elif cadence == "weekly":
-            end = start + timedelta(days=6)
-        elif cadence == "monthly":
-            end = start
-        elif cadence == "quarterly":
-            end = start
+    raw_start = _date(row.get("period_start")) or _date(row.get("event_date")) or _date(row.get("as_of_date"))
+    raw_end = _date(row.get("period_end"))
+    start, end = _resolve_period_bounds(period_key, cadence, period_start=raw_start, period_end=raw_end)
     label = _text(row.get("period_name")) or period_key
     return PeriodMetadata(
         period_key=period_key,
@@ -555,3 +812,259 @@ def _text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _sum_metric_facts(
+    snapshot: OracleCanonicalSnapshot,
+    *,
+    reporting_period_key: str,
+    reporting_cadence: Cadence,
+    period_start: date,
+    period_end: date,
+    fact_types: Sequence[str],
+) -> Decimal | None:
+    facts = _matching_facts(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=reporting_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=fact_types,
+        prefer_exact_cadence=True,
+    )
+    amounts = [fact.amount_value for fact in facts if fact.amount_value is not None]
+    if not amounts:
+        return None
+    return sum(amounts, Decimal("0"))
+
+
+def _latest_metric_fact(
+    snapshot: OracleCanonicalSnapshot,
+    *,
+    reporting_period_key: str,
+    reporting_cadence: Cadence,
+    period_start: date,
+    period_end: date,
+    fact_types: Sequence[str],
+) -> Decimal | None:
+    facts = _matching_facts(
+        snapshot,
+        reporting_period_key=reporting_period_key,
+        reporting_cadence=reporting_cadence,
+        period_start=period_start,
+        period_end=period_end,
+        fact_types=fact_types,
+        prefer_exact_cadence=False,
+    )
+    if not facts:
+        return None
+    latest = max(
+        facts,
+        key=lambda fact: _fact_window(snapshot, fact)[1],
+    )
+    return latest.amount_value
+
+
+def _matching_facts(
+    snapshot: OracleCanonicalSnapshot,
+    *,
+    reporting_period_key: str,
+    reporting_cadence: Cadence,
+    period_start: date,
+    period_end: date,
+    fact_types: Sequence[str],
+    prefer_exact_cadence: bool,
+) -> list[CanonicalFinanceFact]:
+    aliases = {alias.lower() for alias in fact_types}
+    exact = [
+        fact
+        for fact in snapshot.facts
+        if fact.fact_type.lower() in aliases
+        and fact.period_key == reporting_period_key
+        and fact.cadence == reporting_cadence
+    ]
+    if exact:
+        return exact
+    nested = [
+        fact
+        for fact in snapshot.facts
+        if fact.fact_type.lower() in aliases
+        and _window_within(_fact_window(snapshot, fact), (period_start, period_end))
+    ]
+    if prefer_exact_cadence:
+        exact_cadence = [fact for fact in nested if fact.cadence == reporting_cadence]
+        if exact_cadence:
+            return exact_cadence
+    return nested
+
+
+def _fact_window(snapshot: OracleCanonicalSnapshot, fact: CanonicalFinanceFact) -> tuple[date, date]:
+    period = next((item for item in snapshot.periods if item.period_key == fact.period_key and item.cadence == fact.cadence), None)
+    return _resolve_period_bounds(
+        fact.period_key,
+        fact.cadence,
+        period_start=period.period_start if period else None,
+        period_end=period.period_end if period else None,
+    )
+
+
+def _matching_manual_inputs(
+    manual_inputs: Sequence[ManualInputRecord],
+    *,
+    input_type: ManualInputType,
+    reporting_period_key: str,
+    reporting_cadence: Cadence,
+    period_start: date,
+    period_end: date,
+) -> list[ManualInputRecord]:
+    exact = [
+        record
+        for record in manual_inputs
+        if record.input_type == input_type
+        and record.period_key == reporting_period_key
+        and record.cadence == reporting_cadence
+    ]
+    if exact:
+        return exact
+    return [
+        record
+        for record in manual_inputs
+        if record.input_type == input_type
+        and _window_overlaps(_manual_input_window(record), (period_start, period_end))
+    ]
+
+
+def _manual_input_window(record: ManualInputRecord) -> tuple[date, date]:
+    if record.period_key:
+        return _resolve_period_bounds(record.period_key, record.cadence)
+    today = date.today()
+    return today, today
+
+
+def _manual_decimal(records: Sequence[ManualInputRecord], *, aliases: Sequence[str]) -> Decimal | None:
+    normalized_aliases = {alias.lower() for alias in aliases}
+    for record in records:
+        containers = [record.attributes]
+        for key in ("metrics", "values", "kpis", "terms"):
+            candidate = record.attributes.get(key)
+            if isinstance(candidate, Mapping):
+                containers.append(candidate)
+        for container in containers:
+            for alias in normalized_aliases:
+                for key, value in container.items():
+                    if str(key).strip().lower() == alias:
+                        decimal_value = _decimal(value)
+                        if decimal_value is not None:
+                            return decimal_value
+        line_items = record.attributes.get("line_items")
+        if isinstance(line_items, Sequence) and not isinstance(line_items, (str, bytes)):
+            for item in line_items:
+                if not isinstance(item, Mapping):
+                    continue
+                item_key = _text(item.get("metric") or item.get("key") or item.get("fact_type"))
+                if item_key and item_key.lower() in normalized_aliases:
+                    decimal_value = _decimal(item.get("value") or item.get("amount") or item.get("limit"))
+                    if decimal_value is not None:
+                        return decimal_value
+    return None
+
+
+def _safe_percent(numerator: Decimal | None, denominator: Decimal | None) -> Decimal | None:
+    ratio = _safe_ratio(numerator, denominator)
+    if ratio is None:
+        return None
+    return ratio * Decimal("100")
+
+
+def _safe_ratio(numerator: Decimal | None, denominator: Decimal | None) -> Decimal | None:
+    if numerator is None or denominator in (None, Decimal("0")):
+        return None
+    return numerator / denominator
+
+
+def _safe_difference(left: Decimal | None, right: Decimal | None) -> Decimal | None:
+    if left is None or right is None:
+        return None
+    return left - right
+
+
+def _days_metric(balance: Decimal | None, denominator: Decimal | None, period_days: int) -> Decimal | None:
+    ratio = _safe_ratio(balance, denominator)
+    if ratio is None:
+        return None
+    return ratio * Decimal(period_days)
+
+
+def _cash_conversion_cycle(
+    dso_days: Decimal | None,
+    dio_days: Decimal | None,
+    dpo_days: Decimal | None,
+) -> Decimal | None:
+    if dso_days is None or dio_days is None or dpo_days is None:
+        return None
+    return dso_days + dio_days - dpo_days
+
+
+def _window_within(candidate: tuple[date, date], target: tuple[date, date]) -> bool:
+    return candidate[0] >= target[0] and candidate[1] <= target[1]
+
+
+def _window_overlaps(candidate: tuple[date, date], target: tuple[date, date]) -> bool:
+    return candidate[0] <= target[1] and candidate[1] >= target[0]
+
+
+def _resolve_period_bounds(
+    period_key: str,
+    cadence: Cadence,
+    *,
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> tuple[date, date]:
+    if period_start and period_end:
+        return period_start, period_end
+    if cadence == "daily":
+        resolved = period_start or _date(period_key) or date.today()
+        return resolved, period_end or resolved
+    if cadence == "weekly":
+        year_str, week_str = period_key.split("-W", 1) if "-W" in period_key else (None, None)
+        if year_str and week_str:
+            start = date.fromisocalendar(int(year_str), int(week_str), 1)
+        else:
+            start = period_start or date.today()
+        return start, period_end or (start + timedelta(days=6))
+    if cadence == "monthly":
+        if period_key and len(period_key) >= 7 and period_key[4] == "-":
+            year = int(period_key[:4])
+            month = int(period_key[5:7])
+            start = period_start or date(year, month, 1)
+            last_day = calendar.monthrange(year, month)[1]
+            return start, period_end or date(year, month, last_day)
+    if cadence == "quarterly" and "-Q" in period_key:
+        year = int(period_key[:4])
+        quarter = int(period_key.split("-Q", 1)[1])
+        month = ((quarter - 1) * 3) + 1
+        start = period_start or date(year, month, 1)
+        end_month = month + 2
+        last_day = calendar.monthrange(year, end_month)[1]
+        return start, period_end or date(year, end_month, last_day)
+    resolved = period_start or _date(period_key) or date.today()
+    return resolved, period_end or resolved
+
+
+def _infer_cadence_from_period_key(period_key: str) -> Cadence:
+    if "-W" in period_key:
+        return "weekly"
+    if "-Q" in period_key:
+        return "quarterly"
+    if len(period_key) == 10 and period_key.count("-") == 2:
+        return "daily"
+    return "monthly"
+
+
+def _stringify_decimal(value: Decimal | None) -> str | None:
+    if value is None:
+        return None
+    normalized = format(value.normalize(), "f")
+    if "." in normalized:
+        normalized = normalized.rstrip("0").rstrip(".")
+    return normalized or "0"

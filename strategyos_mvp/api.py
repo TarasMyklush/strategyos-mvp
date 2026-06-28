@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
+from uuid import UUID
 
 try:
     from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
@@ -70,6 +71,12 @@ from .run_registry import (
 from .run_poc import run_strategyos_workflow
 from .run_executor import RunExecutionUnavailable, submit_run
 from .runtime_governance import annotate_governance_state, local_run_id_for_dir
+from .oracle_finance import (
+    BUFlexfieldMappingConfig,
+    ingest_oracle_pilot_extracts,
+    load_pilot_extract_batch,
+    snapshot_summary,
+)
 from . import state_store
 from .state_store import data_management_status, database_connection
 from .storage import ObjectStoreUnavailable, S3CompatibleStore, object_store_status
@@ -140,6 +147,23 @@ class SourcePackMappingConfirmRequest(BaseModel):
 class IngestionConnectorsResponse(BaseModel):
     tenant_context: dict[str, str]
     connectors: list[dict[str, Any]]
+
+
+class OracleBUFlexfieldMappingRequest(BaseModel):
+    segment_name: str
+    segment_index: int
+    value_to_bu: dict[str, str]
+    default_bu: str | None = None
+
+
+class OracleFinanceIngestionRequest(BaseModel):
+    extracts: dict[str, list[dict[str, Any]]]
+    bu_mapping: OracleBUFlexfieldMappingRequest
+    manual_inputs: list[dict[str, Any]] | None = None
+    reporting_currency: str | None = "SAR"
+    tenant_id: UUID
+    batch_id: UUID | None = None
+    source_system_id: UUID | None = None
 
 
 class QaRequest(BaseModel):
@@ -7044,6 +7068,46 @@ def list_ingestion_connectors(
         "connectors": build_ingestion_connector_catalog(
             principal_role=str(principal.get("role") or "anonymous")
         ),
+    }
+
+
+@app.post("/finance/oracle/ingest")
+def ingest_oracle_finance_snapshot(
+    request: OracleFinanceIngestionRequest,
+    principal: dict[str, Any] = require_role(
+        "operator", "tenant_operator", "tenant_admin", "system"
+    ),
+) -> dict[str, Any]:
+    tenant_id = str(request.tenant_id)
+    batch_id = str(request.batch_id) if request.batch_id else None
+    source_system_id = str(request.source_system_id) if request.source_system_id else None
+
+    bu_mapping = BUFlexfieldMappingConfig(
+        segment_name=request.bu_mapping.segment_name,
+        segment_index=request.bu_mapping.segment_index,
+        value_to_bu=dict(request.bu_mapping.value_to_bu),
+        default_bu=request.bu_mapping.default_bu,
+    )
+    snapshot = ingest_oracle_pilot_extracts(
+        load_pilot_extract_batch(request.extracts),
+        bu_mapping=bu_mapping,
+        manual_inputs=request.manual_inputs,
+        reporting_currency=request.reporting_currency or "SAR",
+    )
+    persisted = state_store.persist_oracle_canonical_snapshot(
+        snapshot,
+        tenant_id=tenant_id,
+        batch_id=batch_id,
+        source_system_id=source_system_id,
+    )
+    return {
+        "status": str(persisted.get("status") or "ok"),
+        "tenant_id": tenant_id,
+        "batch_id": batch_id,
+        "source_system_id": source_system_id,
+        "submitted_by": str(principal.get("subject") or principal.get("role") or "operator"),
+        "snapshot": snapshot_summary(snapshot),
+        "persistence": persisted,
     }
 
 

@@ -1361,6 +1361,9 @@ def persist_oracle_canonical_snapshot(
     if skipped is not None:
         return {
             **skipped,
+            "tenant_id": tenant_id,
+            "batch_id": batch_id,
+            "source_system_id": source_system_id,
             "connector_mappings": len(snapshot.connector_mappings),
             "periods": len(snapshot.periods),
             "facts": len(snapshot.facts),
@@ -1536,7 +1539,13 @@ def persist_oracle_canonical_snapshot(
                 )
                 counts["manual_inputs"] += 1
         conn.commit()
-    return {"status": "ok", **counts}
+    return {
+        "status": "ok",
+        "tenant_id": tenant_id,
+        "batch_id": batch_id,
+        "source_system_id": source_system_id,
+        **counts,
+    }
 
 
 def persist_entities(
