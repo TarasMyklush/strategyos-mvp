@@ -76,6 +76,10 @@ def test_load_config_parses_runtime_auth_and_governance_flags(monkeypatch):
     monkeypatch.setenv("STRATEGYOS_LLM_TIMEOUT_SECONDS", "7")
     monkeypatch.setenv("STRATEGYOS_BATCH_APIS_ENABLED", "true")
     monkeypatch.setenv("STRATEGYOS_HOSTED_OCR_VISION_ENABLED", "true")
+    monkeypatch.setenv("STRATEGYOS_TWINS_ENABLED", "true")
+    monkeypatch.setenv("STRATEGYOS_TWINS_MUTATIONS_ENABLED", "false")
+    monkeypatch.setenv("STRATEGYOS_TWINS_SCHEDULER_ENABLED", "true")
+    monkeypatch.setenv("STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS", "false")
 
     config = load_config()
 
@@ -102,6 +106,10 @@ def test_load_config_parses_runtime_auth_and_governance_flags(monkeypatch):
     assert config.llm_timeout_seconds == 7
     assert config.batch_apis_enabled is True
     assert config.hosted_ocr_vision_enabled is True
+    assert config.twins_enabled is True
+    assert config.twins_mutations_enabled is False
+    assert config.twins_scheduler_enabled is True
+    assert config.twins_expose_reasoning_diagnostics is False
 
 
 def test_load_config_parses_proxy_oidc_boundary(monkeypatch):

@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from strategyos_mvp.config import load_config
+from strategyos_mvp.twins.store import TwinRepositories, build_app_repositories
 from strategyos_mvp.twins.protocol import InterTwinMessage
 
 logger = logging.getLogger(__name__)
@@ -141,7 +143,11 @@ def escalate_to_human(reason: str, context: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def check_health() -> dict[str, Any]:
+def check_health(
+    *,
+    repositories: TwinRepositories | None = None,
+    config: Any | None = None,
+) -> dict[str, Any]:
     """Check system readiness for twin operations.
 
     Returns a dict with health status for key subsystems.
@@ -150,6 +156,7 @@ def check_health() -> dict[str, Any]:
         A dict with ``status`` (``"healthy"`` or ``"degraded"``) and
         per-subsystem status entries.
     """
+    active_config = config or load_config()
     health: dict[str, Any] = {
         "status": "healthy",
         "subsystems": {},
@@ -173,6 +180,50 @@ def check_health() -> dict[str, Any]:
         health["subsystems"]["twin_catalog"] = f"available ({len(TWIN_CATALOG)} roles)"
     except ImportError:
         health["subsystems"]["twin_catalog"] = "unavailable"
+        health["status"] = "degraded"
+
+    repo_set = repositories or build_app_repositories()
+    try:
+        recent_executions = repo_set.execution.list(limit=10)
+        recent_reasoning = repo_set.reasoning.list(limit=200)
+        recent_decisions = repo_set.governance.list_decisions(limit=50)
+        recent_routing = repo_set.governance.list_routing_events(limit=50)
+        pending_review_count = sum(
+            1
+            for trace in recent_reasoning
+            if str(trace.get("review_state") or "") == "pending_human_review"
+        )
+        health["subsystems"]["twin_runtime"] = (
+            "enabled" if active_config.twins_enabled else "disabled"
+        )
+        health["subsystems"]["twin_scheduler"] = (
+            "enabled"
+            if active_config.twins_enabled and active_config.twins_scheduler_enabled
+            else "disabled"
+        )
+        health["subsystems"]["reasoning"] = (
+            "healthy" if active_config.twins_enabled else "disabled"
+        )
+        health["subsystems"]["governance"] = (
+            "healthy" if active_config.twins_enabled else "disabled"
+        )
+        health["feature_flags"] = {
+            "twins_enabled": active_config.twins_enabled,
+            "twins_mutations_enabled": active_config.twins_mutations_enabled,
+            "twins_scheduler_enabled": active_config.twins_scheduler_enabled,
+            "twins_expose_reasoning_diagnostics": active_config.twins_expose_reasoning_diagnostics,
+        }
+        health["diagnostics"] = {
+            "pending_reasoning_reviews": pending_review_count,
+            "recent_execution_count": len(recent_executions),
+            "recent_governance_decisions": len(recent_decisions),
+            "recent_governance_routing_events": len(recent_routing),
+            "latest_execution": recent_executions[0] if recent_executions else None,
+        }
+    except Exception as exc:
+        logger.exception("check_health: repository diagnostics failed")
+        health["subsystems"]["repository_diagnostics"] = "unavailable"
+        health["diagnostics"] = {"error": str(exc)}
         health["status"] = "degraded"
 
     return health

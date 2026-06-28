@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 
 def _workspace_root() -> Path:
@@ -54,10 +55,12 @@ class _JsonRepository:
 
     def _write_file(self, path: Path, data: Any) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
+        tmp_path = path.parent / f".{path.name}.{uuid4().hex}.tmp"
+        tmp_path.write_text(
             json.dumps(_jsonable(data), indent=2, ensure_ascii=False, sort_keys=True),
             encoding="utf-8",
         )
+        tmp_path.replace(path)
 
 
 class KpiRepository(_JsonRepository):
@@ -178,6 +181,12 @@ class InvestigationRepository(_JsonRepository):
             all_records[path.stem] = self._read_file(path, [])
         return all_records
 
+    def find_by_request_key(self, role: str, request_key: str) -> dict[str, Any] | None:
+        for record in self.load(role):
+            if str(record.get("request_key") or "") == request_key:
+                return copy.deepcopy(record)
+        return None
+
     def update(self, role: str, investigation_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
         record = self.load(role, investigation_id)
         if record is None:
@@ -240,6 +249,42 @@ class GovernanceRepository(_JsonRepository):
 
     def save_routing_event(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._append_record(self._routing_path, record)
+
+    def find_decision(
+        self,
+        *,
+        role: str,
+        item_id: str,
+        status: str,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        for record in self._read_file(self._decisions_path, []):
+            if (
+                str(record.get("role") or "") == role
+                and str(record.get("item_id") or "") == item_id
+                and str(record.get("status") or "") == status
+                and str(record.get("idempotency_key") or "") == idempotency_key
+            ):
+                return copy.deepcopy(record)
+        return None
+
+    def find_routing_event(
+        self,
+        *,
+        source_role: str,
+        item_id: str,
+        event_type: str,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        for record in self._read_file(self._routing_path, []):
+            if (
+                str(record.get("source_role") or "") == source_role
+                and str(record.get("item_id") or "") == item_id
+                and str(record.get("event_type") or "") == event_type
+                and str(record.get("idempotency_key") or "") == idempotency_key
+            ):
+                return copy.deepcopy(record)
+        return None
 
     def list_decisions(
         self, role: str | None = None, limit: int | None = None
@@ -443,6 +488,20 @@ class ExecutionLogRepository(_JsonRepository):
         updated = copy.deepcopy(current)
         updated.update(copy.deepcopy(payload))
         return self.save(updated)
+
+    def find_by_idempotency_key(
+        self,
+        execution_type: str,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        records = self._read_file(self._path, [])
+        for record in records:
+            if (
+                str(record.get("execution_type") or "") == execution_type
+                and str(record.get("idempotency_key") or "") == idempotency_key
+            ):
+                return copy.deepcopy(record)
+        return None
 
     def list(
         self,

@@ -161,6 +161,10 @@ class StrategyOSConfig:
     sensitive_identifier_hmac_keys: dict[str, str]
     public_health_enabled: bool
     require_human_review: bool
+    twins_enabled: bool
+    twins_mutations_enabled: bool
+    twins_scheduler_enabled: bool
+    twins_expose_reasoning_diagnostics: bool
     ocr_engine: str
     runtime_dep_ca_certificates_version: str
     runtime_dep_curl_version: str
@@ -422,6 +426,12 @@ def load_config() -> StrategyOSConfig:
         sensitive_identifier_hmac_keys=sensitive_identifier_hmac_keys,
         public_health_enabled=env_bool("STRATEGYOS_PUBLIC_HEALTH_ENABLED", False),
         require_human_review=env_bool("STRATEGYOS_REQUIRE_HUMAN_REVIEW", True),
+        twins_enabled=env_bool("STRATEGYOS_TWINS_ENABLED", True),
+        twins_mutations_enabled=env_bool("STRATEGYOS_TWINS_MUTATIONS_ENABLED", True),
+        twins_scheduler_enabled=env_bool("STRATEGYOS_TWINS_SCHEDULER_ENABLED", True),
+        twins_expose_reasoning_diagnostics=env_bool(
+            "STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS", False
+        ),
         ocr_engine=(env("STRATEGYOS_OCR_ENGINE", "tesseract") or "tesseract").lower(),
         runtime_dep_ca_certificates_version=(
             env("STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION", "20250419")

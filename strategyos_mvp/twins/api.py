@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import logging
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 from pydantic import BaseModel
 
-from strategyos_mvp.auth import authenticate_request
+from strategyos_mvp.auth import authenticate_request, require_role
+from strategyos_mvp.config import load_config
 from strategyos_mvp.platform_foundation import principal_has_any_role
 from strategyos_mvp.twins import memory, persona, resolution, runtime as twin_runtime
 from strategyos_mvp.twins.store import TwinRepositories, build_app_repositories
@@ -17,8 +19,10 @@ from strategyos_mvp.twins.strategyos_data import (
     build_surface_payload,
     compose_investigation_payload,
 )
+from strategyos_mvp.twins.tools import check_health as check_twin_health
 
 router = APIRouter(prefix="/twin/api", tags=["twins"])
+logger = logging.getLogger(__name__)
 
 EXECUTIVE_TWIN_ROLES = ("executive", "tenant_admin", "system")
 FINANCE_TWIN_ROLES = ("operator", "reviewer", "tenant_admin", "system")
@@ -28,6 +32,7 @@ TWIN_SURFACE_ROLES: dict[str, tuple[str, ...]] = {
     "cfo": FINANCE_TWIN_ROLES,
     "group_manager": GM_TWIN_ROLES,
 }
+TWIN_DIAGNOSTIC_ROLES = ("tenant_admin", "system")
 
 
 class TwinDecisionRequest(BaseModel):
@@ -73,10 +78,34 @@ def _authorize_twin_access(
     return principal
 
 
+def _require_twins_enabled(action: str) -> None:
+    if load_config().twins_enabled:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=f"Twin features are disabled; cannot {action}.",
+    )
+
+
+def _require_twin_mutations_enabled(action: str) -> None:
+    _require_twins_enabled(action)
+    if load_config().twins_mutations_enabled:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=f"Twin mutations are disabled; cannot {action}.",
+    )
+
+
+def _can_view_sensitive_twin_diagnostics(principal: dict[str, Any]) -> bool:
+    return principal_has_any_role(str(principal.get("role") or ""), *TWIN_DIAGNOSTIC_ROLES)
+
+
 def require_twin_dashboard_access(role: str):
     def dependency(
         principal: dict[str, Any] = Depends(authenticate_request),
     ) -> dict[str, Any]:
+        _require_twins_enabled("access twin dashboards")
         return _authorize_twin_access(role, principal, action="access this dashboard")
 
     return Depends(dependency)
@@ -110,11 +139,33 @@ def _load_or_create_state(role: str, repositories: TwinRepositories) -> memory.T
     )
 
 
-def _governance_payload(role: str, repositories: TwinRepositories) -> dict[str, Any]:
+def _sanitize_governance_record(record: dict[str, Any], *, include_sensitive: bool) -> dict[str, Any]:
+    payload = dict(record)
+    if not include_sensitive:
+        payload.pop("actor_subject", None)
+    return payload
+
+
+def _governance_payload(
+    role: str,
+    repositories: TwinRepositories,
+    *,
+    principal: dict[str, Any],
+) -> dict[str, Any]:
     canonical_role = _canonical_role(role)
-    approvals = repositories.governance.list_decisions(canonical_role, limit=20)
-    routing = repositories.governance.list_routing_events(canonical_role, limit=20)
-    history = repositories.governance.history(canonical_role, limit=20)
+    include_sensitive = _can_view_sensitive_twin_diagnostics(principal)
+    approvals = [
+        _sanitize_governance_record(item, include_sensitive=include_sensitive)
+        for item in repositories.governance.list_decisions(canonical_role, limit=20)
+    ]
+    routing = [
+        _sanitize_governance_record(item, include_sensitive=include_sensitive)
+        for item in repositories.governance.list_routing_events(canonical_role, limit=20)
+    ]
+    history = [
+        _sanitize_governance_record(item, include_sensitive=include_sensitive)
+        for item in repositories.governance.history(canonical_role, limit=20)
+    ]
     return {
         "approval_count": len(approvals),
         "routing_event_count": len(routing),
@@ -159,12 +210,68 @@ def _default_escalation_target(role: str) -> str:
     return twin_persona.escalation_path[0] if twin_persona.escalation_path else "human"
 
 
+def _replay_investigation_if_available(
+    *,
+    repositories: TwinRepositories,
+    role: str,
+    request_key: str | None,
+) -> dict[str, Any] | None:
+    if not request_key:
+        return None
+    record = repositories.investigations.find_by_request_key(role, request_key)
+    if record is None:
+        return None
+    payload = record.get("response_payload")
+    if not isinstance(payload, dict):
+        return None
+    return {**payload, "idempotent_replay": True}
+
+
+def _persist_investigation_response(
+    *,
+    repositories: TwinRepositories,
+    role: str,
+    query_id: str,
+    request_key: str | None,
+    response_payload: dict[str, Any],
+) -> None:
+    record = repositories.investigations.load(role, query_id) or {"id": query_id}
+    record.update({
+        "id": query_id,
+        "request_key": request_key,
+        "response_payload": response_payload,
+    })
+    repositories.investigations.save(role, record)
+
+
+def twin_operational_health_payload(
+    *,
+    repositories: TwinRepositories | None = None,
+    principal: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    repo_set = repositories or _get_repositories()
+    payload = check_twin_health(repositories=repo_set, config=load_config())
+    if principal is None or _can_view_sensitive_twin_diagnostics(principal):
+        return payload
+    diagnostics = dict(payload.get("diagnostics") or {})
+    diagnostics.pop("latest_execution", None)
+    return {**payload, "diagnostics": diagnostics}
+
+
+@router.get("/health")
+def twin_health(
+    principal: dict[str, Any] = require_role(*TWIN_DIAGNOSTIC_ROLES),
+) -> dict[str, Any]:
+    return twin_operational_health_payload(principal=principal)
+
+
 @router.get("/status/{role}")
 def twin_status(
     role: str,
     principal: dict[str, Any] = Depends(authenticate_request),
 ) -> dict[str, Any]:
     """Get twin status: active/sleeping, cycle count, last wake, investigations."""
+    _require_twins_enabled("view twin status")
     principal = _authorize_twin_access(role, principal, action="view status")
     canonical_role = _canonical_role(role)
     twin_persona = persona.lookup_persona(role)
@@ -184,7 +291,7 @@ def twin_status(
         "active_investigations": [item.get("id") for item in investigations],
         "active_investigation_details": investigations[-20:],
         "pending_requests": len(state.pending_requests),
-        "governance": _governance_payload(canonical_role, repositories),
+        "governance": _governance_payload(canonical_role, repositories, principal=principal),
         "strategyos": strategyos_surface,
         "viewer": {
             "role": str(principal.get("role") or "anonymous"),
@@ -199,6 +306,7 @@ def twin_kpis(
     principal: dict[str, Any] = Depends(authenticate_request),
 ) -> dict[str, Any]:
     """Get KPI health for a role — returns owned KPIs with values, gaps, status."""
+    _require_twins_enabled("view twin KPIs")
     _authorize_twin_access(role, principal, action="view KPIs")
     canonical_role = _canonical_role(role)
     twin_persona = persona.lookup_persona(role)
@@ -230,6 +338,7 @@ def twin_inbox(
     principal: dict[str, Any] = Depends(authenticate_request),
 ) -> dict[str, Any]:
     """Get inbox messages for a role twin."""
+    _require_twins_enabled("view twin inbox")
     _authorize_twin_access(role, principal, action="view inbox")
     canonical_role = _canonical_role(role)
     twin_persona = persona.lookup_persona(role)
@@ -262,14 +371,23 @@ def twin_investigate(
     role: str,
     query: str = "",
     principal: dict[str, Any] = Depends(authenticate_request),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     """Ask a twin a question. Runs a full OODA cycle and returns findings."""
+    _require_twin_mutations_enabled("run twin investigations")
     _authorize_twin_access(role, principal, action="investigate")
     canonical_role = _canonical_role(role)
     twin_persona = persona.lookup_persona(role)
     assert twin_persona is not None
 
     repositories = _get_repositories()
+    replay_payload = _replay_investigation_if_available(
+        repositories=repositories,
+        role=canonical_role,
+        request_key=idempotency_key,
+    )
+    if replay_payload is not None:
+        return replay_payload
     state = _load_or_create_state(canonical_role, repositories)
     tw = twin_runtime.TwinRuntime(twin_persona, state, repositories=repositories)
 
@@ -299,7 +417,7 @@ def twin_investigate(
         })
         repositories.investigations.save(canonical_role, persisted)
 
-    return {
+    response_payload = {
         "role": role,
         "canonical_role": canonical_role,
         "display_name": twin_persona.display_name,
@@ -317,8 +435,18 @@ def twin_investigate(
         "consistency": strategyos_payload["consistency"],
         "data_source": strategyos_payload["data_source"],
         "bounded_fallback": strategyos_payload["bounded_fallback"],
-        "governance": _governance_payload(canonical_role, repositories),
+        "governance": _governance_payload(canonical_role, repositories, principal=principal),
     }
+    if query:
+        _persist_investigation_response(
+            repositories=repositories,
+            role=canonical_role,
+            query_id=query_id,
+            request_key=idempotency_key,
+            response_payload=response_payload,
+        )
+    logger.info("Twin investigation role=%s query_present=%s replay=%s", canonical_role, bool(query), False)
+    return response_payload
 
 
 @router.get("/history/{role}")
@@ -326,13 +454,14 @@ def twin_governance_history(
     role: str,
     principal: dict[str, Any] = Depends(authenticate_request),
 ) -> dict[str, Any]:
+    _require_twins_enabled("view twin governance history")
     _authorize_twin_access(role, principal, action="view governance history")
     canonical_role = _canonical_role(role)
     repositories = _get_repositories()
     return {
         "role": role,
         "canonical_role": canonical_role,
-        "governance": _governance_payload(canonical_role, repositories),
+        "governance": _governance_payload(canonical_role, repositories, principal=principal),
     }
 
 
@@ -341,11 +470,27 @@ def approve_twin_item(
     role: str,
     request: TwinDecisionRequest,
     principal: dict[str, Any] = Depends(authenticate_request),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
+    _require_twin_mutations_enabled("approve twin items")
     _authorize_twin_access(role, principal, action="approve this item")
     canonical_role = _canonical_role(role)
     actor_role, actor_subject = _actor_identity(principal)
     repositories = _get_repositories()
+    if idempotency_key:
+        existing = repositories.governance.find_decision(
+            role=canonical_role,
+            item_id=request.item_id,
+            status="approved",
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            return {
+                "status": "ok",
+                "idempotent_replay": True,
+                "record": existing,
+                "governance": _governance_payload(canonical_role, repositories, principal=principal),
+            }
     record = repositories.governance.save_decision({
         "event_id": f"gov-{uuid4().hex[:12]}",
         "event_type": "approval",
@@ -357,12 +502,13 @@ def approve_twin_item(
         "reviewer_notes": (request.rationale or "").strip(),
         "actor_role": actor_role,
         "actor_subject": actor_subject,
+        "idempotency_key": idempotency_key,
         "timestamp": _timestamp(),
     })
     return {
         "status": "ok",
         "record": record,
-        "governance": _governance_payload(canonical_role, repositories),
+        "governance": _governance_payload(canonical_role, repositories, principal=principal),
     }
 
 
@@ -371,11 +517,27 @@ def reject_twin_item(
     role: str,
     request: TwinDecisionRequest,
     principal: dict[str, Any] = Depends(authenticate_request),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
+    _require_twin_mutations_enabled("reject twin items")
     _authorize_twin_access(role, principal, action="reject this item")
     canonical_role = _canonical_role(role)
     actor_role, actor_subject = _actor_identity(principal)
     repositories = _get_repositories()
+    if idempotency_key:
+        existing = repositories.governance.find_decision(
+            role=canonical_role,
+            item_id=request.item_id,
+            status="rejected",
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            return {
+                "status": "ok",
+                "idempotent_replay": True,
+                "record": existing,
+                "governance": _governance_payload(canonical_role, repositories, principal=principal),
+            }
     record = repositories.governance.save_decision({
         "event_id": f"gov-{uuid4().hex[:12]}",
         "event_type": "rejection",
@@ -387,12 +549,13 @@ def reject_twin_item(
         "reviewer_notes": (request.rationale or "").strip(),
         "actor_role": actor_role,
         "actor_subject": actor_subject,
+        "idempotency_key": idempotency_key,
         "timestamp": _timestamp(),
     })
     return {
         "status": "ok",
         "record": record,
-        "governance": _governance_payload(canonical_role, repositories),
+        "governance": _governance_payload(canonical_role, repositories, principal=principal),
     }
 
 
@@ -401,12 +564,28 @@ def redirect_twin_item(
     role: str,
     request: TwinRoutingRequest,
     principal: dict[str, Any] = Depends(authenticate_request),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
+    _require_twin_mutations_enabled("redirect twin items")
     _authorize_twin_access(role, principal, action="redirect this item")
     canonical_role = _canonical_role(role)
     target_role = _canonical_role(request.target_role or "")
     actor_role, actor_subject = _actor_identity(principal)
     repositories = _get_repositories()
+    if idempotency_key:
+        existing = repositories.governance.find_routing_event(
+            source_role=canonical_role,
+            item_id=request.item_id,
+            event_type="redirect",
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            return {
+                "status": "ok",
+                "idempotent_replay": True,
+                "record": existing,
+                "governance": _governance_payload(canonical_role, repositories, principal=principal),
+            }
     record = repositories.governance.save_routing_event({
         "event_id": f"route-{uuid4().hex[:12]}",
         "event_type": "redirect",
@@ -417,12 +596,13 @@ def redirect_twin_item(
         "reason": (request.reason or "").strip(),
         "actor_role": actor_role,
         "actor_subject": actor_subject,
+        "idempotency_key": idempotency_key,
         "timestamp": _timestamp(),
     })
     return {
         "status": "ok",
         "record": record,
-        "governance": _governance_payload(canonical_role, repositories),
+        "governance": _governance_payload(canonical_role, repositories, principal=principal),
     }
 
 
@@ -431,12 +611,28 @@ def escalate_twin_item(
     role: str,
     request: TwinRoutingRequest,
     principal: dict[str, Any] = Depends(authenticate_request),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
+    _require_twin_mutations_enabled("escalate twin items")
     _authorize_twin_access(role, principal, action="escalate this item")
     canonical_role = _canonical_role(role)
     target_role = _canonical_role(request.target_role or _default_escalation_target(canonical_role))
     actor_role, actor_subject = _actor_identity(principal)
     repositories = _get_repositories()
+    if idempotency_key:
+        existing = repositories.governance.find_routing_event(
+            source_role=canonical_role,
+            item_id=request.item_id,
+            event_type="escalation",
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            return {
+                "status": "ok",
+                "idempotent_replay": True,
+                "record": existing,
+                "governance": _governance_payload(canonical_role, repositories, principal=principal),
+            }
     record = repositories.governance.save_routing_event({
         "event_id": f"route-{uuid4().hex[:12]}",
         "event_type": "escalation",
@@ -447,10 +643,11 @@ def escalate_twin_item(
         "reason": (request.reason or "").strip(),
         "actor_role": actor_role,
         "actor_subject": actor_subject,
+        "idempotency_key": idempotency_key,
         "timestamp": _timestamp(),
     })
     return {
         "status": "ok",
         "record": record,
-        "governance": _governance_payload(canonical_role, repositories),
+        "governance": _governance_payload(canonical_role, repositories, principal=principal),
     }

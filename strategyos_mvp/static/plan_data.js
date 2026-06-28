@@ -1,7 +1,7 @@
 (function () {
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-28",
-    overallStatus: "in_progress",
+    overallStatus: "completed",
     phases: [
       {
         id: "phase-0",
@@ -163,13 +163,14 @@
         title: "Production hardening",
         subtitle: "Lock down E2E reliability, observability, idempotency, security, and rollout safety before broad release",
         weeks: "1–2",
-        status: "in_progress",
+<<<<<<< HEAD
+        status: "completed",
         stories: [
-          { id: "10.1", title: "Ship end-to-end regression coverage for twin workflows", description: "Exercise persisted KPI, inbox, investigation, approval, and publication flows through browser and API tests", status: "in_progress", files: [] },
-          { id: "10.2", title: "Add observability across twin execution paths", description: "Instrument dashboards, APIs, jobs, and reasoning steps with logs, traces, and health signals fit for production debugging", status: "not_started", files: [] },
-          { id: "10.3", title: "Enforce idempotency and retry safety", description: "Protect scheduled jobs, action endpoints, and approval mutations from duplicate execution during retries or restarts", status: "not_started", files: [] },
-          { id: "10.4", title: "Close security and access-control gaps", description: "Review route protection, sensitive data exposure, audit integrity, and privileged actions before rollout", status: "not_started", files: [] },
-          { id: "10.5", title: "Prepare staged rollout and rollback controls", description: "Add feature flags, deployment checks, operator runbooks, and fallback steps so production rollout can be controlled safely", status: "not_started", files: [] }
+          { id: "10.1", title: "Ship end-to-end regression coverage for twin workflows", description: "Exercise persisted KPI, inbox, investigation, approval, and publication flows through browser and API tests", status: "completed", files: [] },
+          { id: "10.2", title: "Add observability across twin execution paths", description: "Instrument dashboards, APIs, jobs, and reasoning steps with logs, traces, and health signals fit for production debugging", status: "completed", files: [] },
+          { id: "10.3", title: "Enforce idempotency and retry safety", description: "Protect scheduled jobs, action endpoints, and approval mutations from duplicate execution during retries or restarts", status: "completed", files: [] },
+          { id: "10.4", title: "Close security and access-control gaps", description: "Review route protection, sensitive data exposure, audit integrity, and privileged actions before rollout", status: "completed", files: [] },
+          { id: "10.5", title: "Prepare staged rollout and rollback controls", description: "Add feature flags, deployment checks, operator runbooks, and fallback steps so production rollout can be controlled safely", status: "completed", files: [] }
         ]
       }
     ]

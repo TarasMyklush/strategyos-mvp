@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import logging
 from typing import Any
 from uuid import uuid4
 
@@ -15,15 +16,30 @@ from .orchestration import CycleScheduler, TriggerEngine
 from .runtime import TwinRuntime
 from .store import TwinRepositories, build_app_repositories
 
+logger = logging.getLogger(__name__)
+
 
 def submit_scheduled_cycle(
     cycle_type: str,
     *,
     config: StrategyOSConfig | None = None,
     repositories: TwinRepositories | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
     normalized_cycle = _normalize_cycle_type(cycle_type)
+    if not active_config.twins_enabled:
+        return _disabled_execution_response(
+            execution_type="scheduled_cycle",
+            reason="Twin features are disabled.",
+            cycle_type=normalized_cycle,
+        )
+    if not active_config.twins_scheduler_enabled:
+        return _disabled_execution_response(
+            execution_type="scheduled_cycle",
+            reason="Twin scheduler is disabled.",
+            cycle_type=normalized_cycle,
+        )
     if active_config.run_execution_mode == "hatchet":
         from strategyos_mvp.hatchet_runtime import enqueue_twin_cycle
 
@@ -37,6 +53,7 @@ def submit_scheduled_cycle(
         cycle_type=normalized_cycle,
         repositories=repositories,
         config=active_config,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -45,8 +62,19 @@ def submit_event_execution(
     max_stale_hours: int = 24,
     config: StrategyOSConfig | None = None,
     repositories: TwinRepositories | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
+    if not active_config.twins_enabled:
+        return _disabled_execution_response(
+            execution_type="event_execution",
+            reason="Twin features are disabled.",
+        )
+    if not active_config.twins_scheduler_enabled:
+        return _disabled_execution_response(
+            execution_type="event_execution",
+            reason="Twin scheduler is disabled.",
+        )
     if active_config.run_execution_mode == "hatchet":
         from strategyos_mvp.hatchet_runtime import enqueue_twin_events
 
@@ -59,6 +87,7 @@ def submit_event_execution(
         max_stale_hours=max_stale_hours,
         repositories=repositories,
         config=active_config,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -67,14 +96,21 @@ def execute_scheduled_cycle_job(
     cycle_type: str,
     repositories: TwinRepositories | None = None,
     config: StrategyOSConfig | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
     repo_set = repositories or build_app_repositories()
+    if idempotency_key:
+        existing = repo_set.execution.find_by_idempotency_key("scheduled_cycle", idempotency_key)
+        if existing is not None:
+            return _execution_response(existing, idempotent_replay=True)
     execution_id = f"cycle-{uuid4().hex[:12]}"
-    record = repo_set.execution.save({
+    logger.info("Twin scheduled cycle start cycle_type=%s execution_id=%s", cycle_type, execution_id)
+    repo_set.execution.save({
         "execution_id": execution_id,
         "execution_type": "scheduled_cycle",
         "cycle_type": _normalize_cycle_type(cycle_type),
+        "idempotency_key": idempotency_key,
         "status": "running",
         "execution_mode": active_config.run_execution_mode,
         "started_at": datetime.now(UTC).isoformat(),
@@ -93,14 +129,10 @@ def execute_scheduled_cycle_job(
             "completed_at": datetime.now(UTC).isoformat(),
             "result": result,
         })
-        return {
-            "status": "completed",
-            "execution_mode": active_config.run_execution_mode,
-            "execution_id": execution_id,
-            "cycle_type": _normalize_cycle_type(cycle_type),
-            "result": result,
-        }
+        logger.info("Twin scheduled cycle complete cycle_type=%s execution_id=%s", cycle_type, execution_id)
+        return _execution_response(repo_set.execution.load(execution_id) or {}, idempotent_replay=False)
     except Exception as exc:
+        logger.exception("Twin scheduled cycle failed execution_id=%s", execution_id)
         repo_set.execution.update(execution_id, {
             "status": "failed",
             "completed_at": datetime.now(UTC).isoformat(),
@@ -114,13 +146,20 @@ def execute_event_execution_job(
     max_stale_hours: int = 24,
     repositories: TwinRepositories | None = None,
     config: StrategyOSConfig | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
     repo_set = repositories or build_app_repositories()
+    if idempotency_key:
+        existing = repo_set.execution.find_by_idempotency_key("event_execution", idempotency_key)
+        if existing is not None:
+            return _execution_response(existing, idempotent_replay=True)
     execution_id = f"event-{uuid4().hex[:12]}"
-    record = repo_set.execution.save({
+    logger.info("Twin event execution start execution_id=%s", execution_id)
+    repo_set.execution.save({
         "execution_id": execution_id,
         "execution_type": "event_execution",
+        "idempotency_key": idempotency_key,
         "status": "running",
         "execution_mode": active_config.run_execution_mode,
         "started_at": datetime.now(UTC).isoformat(),
@@ -195,16 +234,10 @@ def execute_event_execution_job(
                 "approval_deadline_count": len(approval_deadlines),
             },
         })
-        return {
-            "status": "completed",
-            "execution_mode": active_config.run_execution_mode,
-            "execution_id": execution_id,
-            "events": handled,
-            "threshold_count": len(threshold_events),
-            "stale_count": len(stale_events),
-            "approval_deadline_count": len(approval_deadlines),
-        }
+        logger.info("Twin event execution complete execution_id=%s events=%s", execution_id, len(handled))
+        return _execution_response(repo_set.execution.load(execution_id) or {}, idempotent_replay=False)
     except Exception as exc:
+        logger.exception("Twin event execution failed execution_id=%s", execution_id)
         repo_set.execution.update(execution_id, {
             "status": "failed",
             "completed_at": datetime.now(UTC).isoformat(),
@@ -280,3 +313,42 @@ def _normalize_cycle_type(value: str) -> str:
     if resolved is None:
         raise ValueError(f"Unsupported twin cycle type: {value}")
     return resolved
+
+
+def _disabled_execution_response(
+    *,
+    execution_type: str,
+    reason: str,
+    cycle_type: str | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "status": "disabled",
+        "execution_type": execution_type,
+        "reason": reason,
+    }
+    if cycle_type is not None:
+        payload["cycle_type"] = cycle_type
+    return payload
+
+
+def _execution_response(record: dict[str, Any], *, idempotent_replay: bool) -> dict[str, Any]:
+    result = record.get("result") if isinstance(record.get("result"), dict) else {}
+    payload = {
+        "status": str(record.get("status") or "unknown"),
+        "execution_mode": record.get("execution_mode"),
+        "execution_id": record.get("execution_id"),
+        "execution_type": record.get("execution_type"),
+        "idempotent_replay": idempotent_replay,
+    }
+    if record.get("cycle_type"):
+        payload["cycle_type"] = record.get("cycle_type")
+    if record.get("execution_type") == "scheduled_cycle":
+        payload["result"] = result
+    else:
+        payload.update({
+            "events": list(result.get("events") or []),
+            "threshold_count": int(result.get("threshold_count") or 0),
+            "stale_count": int(result.get("stale_count") or 0),
+            "approval_deadline_count": int(result.get("approval_deadline_count") or 0),
+        })
+    return payload
