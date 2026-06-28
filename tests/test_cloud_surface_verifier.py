@@ -109,7 +109,7 @@ def test_evaluate_surface_contract_accepts_hardened_external_surface() -> None:
     assert failures == []
 
 
-def test_evaluate_surface_contract_accepts_public_safe_only_validation() -> None:
+def test_evaluate_surface_contract_rejects_banned_anonymous_payload_content() -> None:
     failures = evaluate_surface_contract(
         anonymous_session={"authenticated": False, "role": "anonymous"},
         operator_session=None,
@@ -129,13 +129,106 @@ def test_evaluate_surface_contract_accepts_public_safe_only_validation() -> None
                 {"surface_id": "reports", "primary_route": "/public/runs/latest/report-preview"},
             ],
         },
-        public_latest_run={"status": "ok", "public_safe": True},
-        public_findings={"status": "ok", "public_safe": True},
+        public_latest_run={"status": "ok", "public_safe": True, "run_id": "latest-public"},
+        public_findings={
+            "status": "ok",
+            "public_safe": True,
+            "findings": [{"title": "Duplicate payment for invoice INV-1", "case_href": "/public/runs/latest/cases/F-001"}],
+        },
+        public_evidence_preview={
+            "status": "ok",
+            "public_safe": True,
+            "excerpt": "Protected artifact bodies remain behind reviewer/operator authentication.",
+        },
         public_report_preview={
             "status": "ok",
             "public_safe": True,
             "preview_text": "Protected artifact bodies remain behind reviewer/operator authentication; this public preview is a synthesized board-safe status note.",
         },
+        public_case_details=[HttpResult(status=200, payload={"status": "ok"})],
+    )
+
+    assert any("banned anonymous marker" in failure for failure in failures)
+
+
+def test_evaluate_surface_contract_rejects_banned_workspace_contract_payload_content() -> None:
+    failures = evaluate_surface_contract(
+        anonymous_session={"authenticated": False, "role": "anonymous"},
+        operator_session=None,
+        reviewer_session=None,
+        live_anon=HttpResult(status=401, payload={"detail": "A valid identity token is required."}),
+        live_operator=None,
+        ready_anon=HttpResult(status=401, payload={"detail": "A valid identity token is required."}),
+        ready_reviewer=None,
+        public_contract={
+            "status": "ok",
+            "public_safe": True,
+            "principal": {"authenticated": False, "role": "anonymous"},
+            "surfaces": [
+                {"surface_id": "overview", "primary_route": "/public/runs/latest"},
+                {"surface_id": "cases", "primary_route": "/public/runs/latest/findings"},
+                {"surface_id": "evidence", "primary_route": "/public/data/evidence-preview"},
+                {"surface_id": "reports", "primary_route": "/public/runs/latest/report-preview"},
+            ],
+            "workspace": {
+                "summary": "Duplicate payment for invoice INV-1",
+            },
+        },
+        public_latest_run={"status": "ok", "public_safe": True, "run_id": "latest-public"},
+        public_findings={"status": "ok", "public_safe": True, "findings": []},
+        public_evidence_preview={
+            "status": "ok",
+            "public_safe": True,
+            "excerpt": "Protected artifact bodies remain behind reviewer/operator authentication.",
+        },
+        public_report_preview={
+            "status": "ok",
+            "public_safe": True,
+            "preview_text": "Protected artifact bodies remain behind reviewer/operator authentication; this public preview is a synthesized board-safe status note.",
+        },
+        public_case_details=[],
+    )
+
+    assert any(failure.startswith("/ui/workspace-contract/latest:") for failure in failures)
+
+
+def test_evaluate_surface_contract_accepts_allowlist_only_anonymous_payloads() -> None:
+    failures = evaluate_surface_contract(
+        anonymous_session={"authenticated": False, "role": "anonymous"},
+        operator_session=None,
+        reviewer_session=None,
+        live_anon=HttpResult(status=401, payload={"detail": "A valid identity token is required."}),
+        live_operator=None,
+        ready_anon=HttpResult(status=401, payload={"detail": "A valid identity token is required."}),
+        ready_reviewer=None,
+        public_contract={
+            "status": "ok",
+            "public_safe": True,
+            "principal": {"authenticated": False, "role": "anonymous"},
+            "surfaces": [
+                {"surface_id": "overview", "primary_route": "/public/runs/latest"},
+                {"surface_id": "cases", "primary_route": "/public/runs/latest/findings"},
+                {"surface_id": "evidence", "primary_route": "/public/data/evidence-preview"},
+                {"surface_id": "reports", "primary_route": "/public/runs/latest/report-preview"},
+            ],
+        },
+        public_latest_run={"status": "ok", "public_safe": True, "run_id": "latest-public"},
+        public_findings={
+            "status": "ok",
+            "public_safe": True,
+            "findings": [{"title": "Duplicate payment signal", "case_href": None, "evidence_preview_href": None}],
+        },
+        public_evidence_preview={
+            "status": "ok",
+            "public_safe": True,
+            "excerpt": "Protected artifact bodies remain behind reviewer/operator authentication.",
+        },
+        public_report_preview={
+            "status": "ok",
+            "public_safe": True,
+            "preview_text": "Protected artifact bodies remain behind reviewer/operator authentication; this public preview is a synthesized board-safe status note.",
+        },
+        public_case_details=[],
     )
 
     assert failures == []

@@ -15,6 +15,30 @@ LOCAL_HOST_MARKERS = (
     "strategyos-idp:9000",
 )
 
+ANONYMOUS_BANNED_KEYS = {
+    "vendor_id",
+    "vendor_name",
+    "finding_id",
+    "case_id",
+    "citation_id",
+    "evidence_document_id",
+    "locator",
+    "resolved",
+    "resolved_payload",
+    "source_hash",
+    "source_path",
+    "node_id",
+    "owner",
+}
+
+ANONYMOUS_BANNED_VALUE_MARKERS = (
+    "invoice ",
+    "inv-",
+    "premier packaging",
+    "/public/runs/latest/cases/",
+    "/public/data/evidence-preview?",
+)
+
 
 @dataclass
 class HttpResult:
@@ -89,6 +113,38 @@ def _looks_local_identity(value: str | None) -> bool:
     return any(marker in normalized for marker in ("local", "localhost", ".local", "local poc"))
 
 
+def _find_banned_public_paths(payload: Any, *, path: str = "$") -> list[str]:
+    failures: list[str] = []
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            next_path = f"{path}.{key}"
+            if key in ANONYMOUS_BANNED_KEYS and value not in (None, {}, [], ""):
+                failures.append(f"{next_path} contains banned anonymous field {key!r}.")
+            failures.extend(_find_banned_public_paths(value, path=next_path))
+    elif isinstance(payload, list):
+        for index, item in enumerate(payload):
+            failures.extend(_find_banned_public_paths(item, path=f"{path}[{index}]"))
+    elif isinstance(payload, str):
+        lowered = payload.lower()
+        for marker in ANONYMOUS_BANNED_VALUE_MARKERS:
+            if marker in lowered:
+                failures.append(f"{path} contains banned anonymous marker {marker!r}.")
+    return failures
+
+
+def _collect_public_routes(payload: Any, *, prefix: str) -> list[str]:
+    routes: list[str] = []
+    if isinstance(payload, dict):
+        for value in payload.values():
+            routes.extend(_collect_public_routes(value, prefix=prefix))
+    elif isinstance(payload, list):
+        for item in payload:
+            routes.extend(_collect_public_routes(item, prefix=prefix))
+    elif isinstance(payload, str) and payload.startswith(prefix):
+        routes.append(payload)
+    return routes
+
+
 def evaluate_surface_contract(
     *,
     anonymous_session: dict[str, Any],
@@ -101,7 +157,9 @@ def evaluate_surface_contract(
     public_contract: dict[str, Any] | None = None,
     public_latest_run: dict[str, Any] | None = None,
     public_findings: dict[str, Any] | None = None,
+    public_evidence_preview: dict[str, Any] | None = None,
     public_report_preview: dict[str, Any] | None = None,
+    public_case_details: list[HttpResult] | None = None,
     expect_human_review: bool = True,
     expect_nonlocal_idp: bool = True,
     expect_no_demo_roles: bool = True,
@@ -135,12 +193,30 @@ def evaluate_surface_contract(
         failures.append("/public/runs/latest is not marked public_safe=true.")
     if public_findings is not None and public_findings.get("public_safe") is not True:
         failures.append("/public/runs/latest/findings is not marked public_safe=true.")
+    if public_evidence_preview is not None and public_evidence_preview.get("public_safe") is not True:
+        failures.append("/public/data/evidence-preview is not marked public_safe=true.")
     if public_report_preview is not None:
         if public_report_preview.get("public_safe") is not True:
             failures.append("/public/runs/latest/report-preview is not marked public_safe=true.")
         preview_text = str(public_report_preview.get("preview_text") or "")
         if preview_text and "Protected artifact bodies remain behind reviewer/operator authentication" not in preview_text:
             failures.append("Public report preview is missing the protected-artifact boundary note.")
+
+    for route_name, payload in (
+        ("/ui/workspace-contract/latest", public_contract),
+        ("/public/runs/latest", public_latest_run),
+        ("/public/runs/latest/findings", public_findings),
+        ("/public/data/evidence-preview", public_evidence_preview),
+        ("/public/runs/latest/report-preview", public_report_preview),
+    ):
+        if isinstance(payload, dict):
+            failures.extend(f"{route_name}: {issue}" for issue in _find_banned_public_paths(payload))
+
+    for result in public_case_details or []:
+        if result.status != 404:
+            failures.append(
+                f"Anonymous public case-detail route expected 404, got {result.status}."
+            )
 
     authenticated_surface_checked = any(
         [operator_session, reviewer_session, live_operator is not None, ready_reviewer is not None]
@@ -229,11 +305,21 @@ def verify_surface(
     public_contract = http_json("GET", f"{base}/ui/workspace-contract/latest").payload
     public_latest_run = http_json("GET", f"{base}/public/runs/latest").payload
     public_findings = http_json("GET", f"{base}/public/runs/latest/findings").payload
+    public_evidence_preview = http_json("GET", f"{base}/public/data/evidence-preview").payload
     public_report_preview = http_json("GET", f"{base}/public/runs/latest/report-preview").payload
     live_anon = http_json("GET", f"{base}/health/live")
     live_operator = http_json("GET", f"{base}/health/live", headers=operator_headers) if have_operator else None
     ready_anon = http_json("GET", f"{base}/health/ready")
     ready_reviewer = http_json("GET", f"{base}/health/ready", headers=reviewer_headers) if have_reviewer else None
+
+    public_case_details: list[HttpResult] = []
+    public_case_routes = []
+    for payload in (public_contract, public_latest_run, public_findings, public_report_preview):
+        public_case_routes.extend(
+            _collect_public_routes(payload, prefix="/public/runs/latest/cases/")
+        )
+    for route in sorted(set(public_case_routes)):
+        public_case_details.append(http_json("GET", f"{base}{route}"))
 
     failures = evaluate_surface_contract(
         anonymous_session=anonymous_session or {},
@@ -246,7 +332,9 @@ def verify_surface(
         public_contract=public_contract if isinstance(public_contract, dict) else None,
         public_latest_run=public_latest_run if isinstance(public_latest_run, dict) else None,
         public_findings=public_findings if isinstance(public_findings, dict) else None,
+        public_evidence_preview=public_evidence_preview if isinstance(public_evidence_preview, dict) else None,
         public_report_preview=public_report_preview if isinstance(public_report_preview, dict) else None,
+        public_case_details=public_case_details,
         expect_human_review=expect_human_review,
         expect_nonlocal_idp=expect_nonlocal_idp,
         expect_no_demo_roles=expect_no_demo_roles,
@@ -258,7 +346,11 @@ def verify_surface(
         "public_workspace_contract": public_contract,
         "public_latest_run": public_latest_run,
         "public_findings": public_findings,
+        "public_evidence_preview": public_evidence_preview,
         "public_report_preview": public_report_preview,
+        "public_case_details": [
+            {"status": result.status, "payload": result.payload} for result in public_case_details
+        ],
         "operator_session": operator_session,
         "reviewer_session": reviewer_session,
         "health_live_anonymous_status": live_anon.status,

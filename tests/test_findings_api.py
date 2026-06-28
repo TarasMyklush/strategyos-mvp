@@ -31,6 +31,36 @@ def _restore_env(original: dict[str, str | None]):
     auth_module.CONFIG = config
 
 
+def _collect_keys(payload):
+    if isinstance(payload, dict):
+        keys = set(payload.keys())
+        for value in payload.values():
+            keys.update(_collect_keys(value))
+        return keys
+    if isinstance(payload, list):
+        keys = set()
+        for item in payload:
+            keys.update(_collect_keys(item))
+        return keys
+    return set()
+
+
+def _collect_strings(payload):
+    if isinstance(payload, dict):
+        values = []
+        for item in payload.values():
+            values.extend(_collect_strings(item))
+        return values
+    if isinstance(payload, list):
+        values = []
+        for item in payload:
+            values.extend(_collect_strings(item))
+        return values
+    if isinstance(payload, str):
+        return [payload]
+    return []
+
+
 # A small but representative knowledge-graph artifact: two finding nodes, a
 # vendor node, evidence-support edges (citation count) and a vendor edge (owner).
 _FAKE_GRAPH = {
@@ -213,7 +243,14 @@ def test_findings_and_workspace_contract_accept_design_persona_aliases(monkeypat
         assert findings_payload["executive_modes"]["active_board_state"] == "live"
         assert findings_payload["drilldown"]["gravity"]["sandbox"]["persona_id"] == "bucfo"
         assert findings_payload["chat"]["assistant"]["persona_id"] == "bucfo"
-        assert findings_payload["chat"]["threads"][0]["thread_id"] == "system:run-test"
+        assert findings_payload["chat"]["threads"][0]["thread_id"] == "system:latest-public"
+        assert workspace_payload["run_id"] == "latest-public"
+        assert workspace_payload["cases"]["items"][0]["case_href"] is None
+        assert workspace_payload["drilldown"]["routes"]["case_detail"] is None
+        assert workspace_payload["drilldown"]["routes"]["sample_case_detail"] is None
+        assert workspace_payload["drilldown"]["routes"]["sample_evidence_preview"] == "/public/data/evidence-preview"
+        banned_keys = {"finding_id", "case_id", "owner", "node_id", "resolved"}
+        assert banned_keys.isdisjoint(_collect_keys(workspace_payload))
     finally:
         _restore_env(original)
 
@@ -235,7 +272,8 @@ def test_public_latest_run_includes_agents_and_chat_contracts(monkeypatch):
         assert payload["agents"]["running"][0]["id"] == "boardpack"
         assert payload["chat"]["assistant"]["persona_id"] == "cfo"
         assert payload["chat"]["assistant"]["name"] == "Atlas"
-        assert payload["chat"]["threads"][0]["thread_id"] == "system:run-test"
+        assert payload["run_id"] == "latest-public"
+        assert payload["chat"]["threads"][0]["thread_id"] == "system:latest-public"
         assert payload["chat"]["store"]["server_memory"] is False
     finally:
         _restore_env(original)
@@ -303,13 +341,35 @@ def test_public_findings_endpoint_is_anonymous_safe_when_auth_enabled(monkeypatc
         payload = response.json()
         assert payload["status"] == "ok"
         assert payload["public_safe"] is True
-        assert payload["findings"][0]["finding_id"] == "F-001"
-        assert payload["findings"][0]["case_href"] == "/public/runs/latest/cases/F-001"
-        assert (
-            payload["findings"][0]["evidence_preview_href"]
-            == "/public/data/evidence-preview?run_id=run-test&finding_id=F-001"
-        )
+        assert payload["run_id"] == "latest-public"
+        assert payload["findings"][0]["title"] == "Duplicate payment signal"
+        assert payload["findings"][0]["case_href"] is None
+        assert payload["findings"][0]["evidence_preview_href"] is None
+        assert payload["findings"][0]["contracts"]["case"]["href"] is None
+        assert payload["findings"][0]["contracts"]["evidence"]["preview_href"] is None
+        assert "finding_id" not in payload["findings"][0]
+        assert "owner" not in payload["findings"][0]
         assert "run_dir" not in payload
+        assert "node_id" not in _collect_keys(payload)
+        assert all("/public/runs/latest/cases/" not in value for value in _collect_strings(payload))
+    finally:
+        _restore_env(original)
+
+
+def test_public_case_detail_is_unavailable_on_anonymous_surface(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module, "_load_knowledge_graph_artifact", lambda summary: (None, _FAKE_GRAPH)
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        response = client.get("/public/runs/latest/cases/F-001")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Anonymous case detail is unavailable on the public surface."
     finally:
         _restore_env(original)
 
@@ -379,10 +439,15 @@ def test_public_evidence_preview_sanitizes_payload(monkeypatch):
         payload = response.json()
         assert payload["status"] == "ok"
         assert payload["public_safe"] is True
-        assert payload["source_path"] == "ap_ledger.csv"
+        assert payload["run_id"] == "latest-public"
+        assert payload["title"] == "Governed evidence preview"
+        assert payload["pattern_label"] == "Duplicate Payment"
+        assert payload["source_path"] is None
         assert payload["source_hash"] is None
         assert payload["resolved_payload"] == {}
-        assert payload["excerpt"] == "Invoice INV-2026-0341 was paid twice."
+        assert payload["excerpt"] == api_module.PUBLIC_EVIDENCE_BOUNDARY_NOTE
+        assert "finding_id" not in payload
+        assert "vendor_name" not in payload
     finally:
         _restore_env(original)
 
@@ -411,9 +476,12 @@ def test_public_report_preview_returns_board_safe_summary(monkeypatch):
         assert payload["public_safe"] is True
         assert payload["artifact_key"] == "executive_summary"
         assert "Recoverable value identified" in payload["preview_text"]
-        assert "Top case: Duplicate payment for invoice INV-1" in payload["preview_text"]
+        assert "Top case: Duplicate payment signal" in payload["preview_text"]
+        assert "INV-1" not in payload["preview_text"]
         assert payload["publication"]["publish_state"] == "approved_for_release"
         assert payload["board_portal"]["state"] == "live"
+        assert "node_id" not in _collect_keys(payload)
+        assert all("/public/runs/latest/cases/" not in value for value in _collect_strings(payload))
     finally:
         _restore_env(original)
 
@@ -707,6 +775,7 @@ def test_executive_latest_run_uses_public_safe_summary(monkeypatch):
         assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "Atlas"
         assert payload["executive_diagnostics"]["hero"]["persona_id"] == "cfo"
         assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
+        assert payload["run_id"] == "latest-public"
         assert "run_dir" not in payload
     finally:
         _restore_env(original)
@@ -735,7 +804,7 @@ def test_executive_findings_route_stays_public_safe(monkeypatch):
         payload = response.json()
         assert payload["public_safe"] is True
         assert "run_dir" not in payload
-        assert payload["findings"][0]["case_href"] == "/public/runs/latest/cases/F-001"
-        assert payload["findings"][0]["evidence_preview_href"] == "/public/data/evidence-preview?run_id=run-test&finding_id=F-001"
+        assert payload["findings"][0]["case_href"] is None
+        assert payload["findings"][0]["evidence_preview_href"] is None
     finally:
         _restore_env(original)

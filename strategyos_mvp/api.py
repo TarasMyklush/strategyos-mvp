@@ -87,6 +87,27 @@ from .vector_store import (
 )
 
 
+ANONYMOUS_PUBLIC_RUN_ID = "latest-public"
+PUBLIC_EVIDENCE_BOUNDARY_NOTE = (
+    "Evidence preview is available only on the protected reviewer/operator surface."
+)
+ANONYMOUS_PUBLIC_BANNED_KEYS = {
+    "vendor_id",
+    "vendor_name",
+    "finding_id",
+    "case_id",
+    "citation_id",
+    "evidence_document_id",
+    "locator",
+    "resolved",
+    "resolved_payload",
+    "source_hash",
+    "source_path",
+    "node_id",
+    "owner",
+}
+
+
 class RunRequest(BaseModel):
     dataset: str | None = None
     source_pack_id: str | None = None
@@ -391,8 +412,10 @@ def _latest_run_public_payload(
     view_state: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
     if summary is None:
-        return {"status": "missing"}
-    rows = _finding_rows_from_summary(summary)
+        return {"status": "missing", "public_safe": True, "run_id": ANONYMOUS_PUBLIC_RUN_ID}
+    summary = _anonymous_public_summary(summary)
+    assert summary is not None
+    rows = _anonymous_public_finding_payloads(_finding_rows_from_summary(summary))
     audit_summary = _latest_run_audit_summary_payload(summary)
     metrics = _governed_metrics_payload(summary, rows, audit_summary)
     publication = _summary_publication_payload(
@@ -435,7 +458,7 @@ def _latest_run_public_payload(
         board_portal=board_portal,
         publication=publication,
     )
-    return {
+    return _sanitize_anonymous_public_payload({
         "status": "ok",
         "run_id": summary.get("run_id"),
         "current_stage": summary.get("current_stage"),
@@ -471,7 +494,102 @@ def _latest_run_public_payload(
             finding_rows=rows,
         ),
         "public_safe": True,
-    }
+    })
+
+
+def _anonymous_public_summary(summary: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(summary, dict):
+        return None
+    payload = dict(summary)
+    payload["run_id"] = ANONYMOUS_PUBLIC_RUN_ID
+    payload.pop("run_dir", None)
+    return payload
+
+
+def _anonymous_public_case_title(row: dict[str, Any], *, index: int) -> str:
+    label = str(row.get("pattern_label") or row.get("pattern_type") or "Governed case").strip()
+    if not label:
+        return f"Governed case {index}"
+    return f"{label} signal"
+
+
+def _anonymous_public_finding_payloads(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    report_preview_href = _finding_report_preview_href(public_safe=True)
+    for index, row in enumerate(rows, start=1):
+        payloads.append(
+            {
+                "title": _anonymous_public_case_title(row, index=index),
+                "pattern_label": row.get("pattern_label") or "Governed signal",
+                "classification": row.get("classification"),
+                "confidence": row.get("confidence"),
+                "recoverable_sar": row.get("recoverable_sar"),
+                "citation_count": row.get("citation_count"),
+                "challenged": bool(row.get("challenged")),
+                "status": row.get("status"),
+                "case_href": None,
+                "evidence_preview_href": None,
+                "report_preview_href": report_preview_href,
+                "contracts": {
+                    "case": {"href": None},
+                    "evidence": {"preview_href": None, "evidence_qa_href": None},
+                    "report": {"preview_href": report_preview_href},
+                },
+            }
+        )
+    return payloads
+
+
+def _sanitize_anonymous_public_route(key: str, value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    lowered = value.lower()
+    if "/public/runs/latest/cases/" in lowered:
+        return None
+    if "/public/data/evidence-preview?" in lowered:
+        return "/public/data/evidence-preview"
+    if key in {"case_href", "case_detail", "sample_case_detail", "detail_route"}:
+        return None
+    return value
+
+
+def _sanitize_anonymous_public_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = str(key)
+            if normalized_key in ANONYMOUS_PUBLIC_BANNED_KEYS or any(
+                token in normalized_key
+                for token in ("node_id", "finding_id", "case_id", "vendor_id", "vendor_name")
+            ):
+                continue
+            if normalized_key in {
+                "case_href",
+                "evidence_preview_href",
+                "preview_href",
+                "case_detail",
+                "sample_case_detail",
+                "sample_evidence_preview",
+                "evidence_preview",
+                "detail_route",
+                "route",
+            }:
+                item = _sanitize_anonymous_public_route(normalized_key, item)
+            sanitized[normalized_key] = _sanitize_anonymous_public_payload(item)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_anonymous_public_payload(item) for item in value]
+    if isinstance(value, str):
+        lowered = value.lower()
+        if "/public/runs/latest/cases/" in lowered:
+            return None
+        if "/public/data/evidence-preview?" in lowered:
+            return "/public/data/evidence-preview"
+        if "premier packaging" in lowered:
+            return "Governed signal"
+        if "invoice " in lowered or "inv-" in lowered:
+            return "Governed signal"
+    return value
 
 
 def _summary_with_reconciled_metrics(
@@ -627,6 +745,11 @@ def _latest_case_payload(
     *,
     public_safe: bool,
 ) -> dict[str, Any]:
+    if public_safe:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Anonymous case detail is unavailable on the public surface.",
+        )
     run_payload = _latest_run_findings_payload(
         summary,
         include_run_dir=not public_safe,
@@ -4586,14 +4709,16 @@ def _workspace_surface_contract_payload(
     authenticated = bool(principal.get("authenticated"))
     role = str(principal.get("role") or "anonymous")
     public_safe = _principal_prefers_public_safe_surface(principal)
-    tenant_context = _summary_tenant_context(summary, principal)
+    effective_summary = _anonymous_public_summary(summary) if public_safe else summary
+    tenant_context = _summary_tenant_context(effective_summary, principal)
     finding_rows = _finding_rows_from_summary(summary) if isinstance(summary, dict) else []
-    findings = build_case_summary_contracts(finding_rows) if isinstance(summary, dict) else []
-    report_contracts = _summary_report_contracts(summary)
-    audit_summary = _latest_run_audit_summary_payload(summary) if isinstance(summary, dict) else None
+    public_finding_rows = _anonymous_public_finding_payloads(finding_rows) if public_safe else finding_rows
+    findings = build_case_summary_contracts(public_finding_rows) if isinstance(effective_summary, dict) else []
+    report_contracts = _summary_report_contracts(effective_summary)
+    audit_summary = _latest_run_audit_summary_payload(effective_summary) if isinstance(effective_summary, dict) else None
     metrics = (
-        _governed_metrics_payload(summary, finding_rows, audit_summary)
-        if isinstance(summary, dict)
+        _governed_metrics_payload(effective_summary, public_finding_rows, audit_summary)
+        if isinstance(effective_summary, dict)
         else _governed_metrics_payload(None, [], None)
     )
     can_investigate = principal_has_any_role(role, *INVESTIGATION_ROLES)
@@ -4703,63 +4828,63 @@ def _workspace_surface_contract_payload(
         finding_rows,
         run_id=str(summary.get("run_id") or "") if isinstance(summary, dict) else None,
         public_safe=public_safe,
-    )
+    ) if not public_safe else _anonymous_public_finding_payloads(finding_rows)
     domain_filters = [
         artifact_contracts_payload(item)
         for item in build_domain_filter_contracts(
-            finding_rows,
+            public_finding_rows,
             active_filter_id="finance_integrity",
             base_route=(
                 "/public/runs/latest/findings" if public_safe else "/runs/latest/findings"
             ),
         )
     ]
-    plan_health = _bounded_plan_health_payload(summary, finding_rows, audit_summary)
-    domain_tree = _multi_domain_tree_payload(summary, finding_rows, audit_summary, principal)
-    strategy_substrate = _strategy_substrate_payload(summary, finding_rows, audit_summary, principal)
-    trend = _trend_card_payload(summary, finding_rows, audit_summary)
+    plan_health = _bounded_plan_health_payload(effective_summary, public_finding_rows, audit_summary)
+    domain_tree = _multi_domain_tree_payload(effective_summary, public_finding_rows, audit_summary, principal)
+    strategy_substrate = _strategy_substrate_payload(effective_summary, public_finding_rows, audit_summary, principal)
+    trend = _trend_card_payload(effective_summary, public_finding_rows, audit_summary)
     board_portal = _board_portal_payload(
-        summary,
+        effective_summary,
         principal_role=role,
         public_safe=public_safe,
         requested_state=view_state.get("board"),
     )
     publication = _summary_publication_payload(
-        summary,
+        effective_summary,
         principal_role=role,
         public_safe=public_safe,
     )
     executive_modes = _executive_modes_payload(
-        summary,
+        effective_summary,
         principal,
         strategy_substrate=strategy_substrate,
         board_portal=board_portal,
         publication=publication,
         view_state=view_state,
     )
-    agent_modules = _agent_modules_payload(summary, finding_rows, audit_summary, principal)
+    agent_modules = _agent_modules_payload(effective_summary, public_finding_rows, audit_summary, principal)
     chat = _chat_threads_payload(
-        summary,
+        effective_summary,
         principal,
         executive_modes=executive_modes,
         board_portal=board_portal,
         publication=publication,
     )
-    role_actions = _role_actions_payload(summary, finding_rows, audit_summary, principal)
+    role_actions = _role_actions_payload(effective_summary, public_finding_rows, audit_summary, principal)
     drilldown = _drilldown_contract_payload(
-        summary,
+        effective_summary,
         principal,
         public_safe=public_safe,
-        finding_rows=finding_rows,
+        finding_rows=public_finding_rows,
         domain_filters=domain_filters,
         report_artifacts=filtered_reports,
         board_portal=board_portal,
         executive_modes=executive_modes,
     )
-    return {
+    payload = {
         "status": "ok" if summary else "missing",
         "public_safe": public_safe,
-        "run_id": summary.get("run_id") if isinstance(summary, dict) else None,
+        "run_id": effective_summary.get("run_id") if isinstance(effective_summary, dict) else None,
         "tenant_context": tenant_context,
         "principal": {
             "authenticated": authenticated,
@@ -4777,7 +4902,7 @@ def _workspace_surface_contract_payload(
         "plan_health": plan_health,
         "domain_tree": domain_tree,
         "strategy_substrate": strategy_substrate,
-        "kpi_cards": _kpi_card_payloads(summary, finding_rows, audit_summary),
+        "kpi_cards": _kpi_card_payloads(effective_summary, public_finding_rows, audit_summary),
         "trend": trend,
         "lanes": _role_lane_contracts(principal),
         "board_portal": board_portal,
@@ -4791,7 +4916,7 @@ def _workspace_surface_contract_payload(
         ),
         "chat": chat,
         "executive_diagnostics": _executive_diagnostics_payload(
-            summary,
+            effective_summary,
             principal=principal,
             board_portal=board_portal,
             executive_modes=executive_modes,
@@ -4799,10 +4924,10 @@ def _workspace_surface_contract_payload(
             strategy_substrate=strategy_substrate,
             agent_modules=agent_modules,
             audit_summary=audit_summary,
-            finding_rows=finding_rows,
+            finding_rows=public_finding_rows,
         ),
-        "agents": _agents_surface_payload(summary, principal),
-        "tenant_admin_system": _tenant_admin_system_payload(summary, principal),
+        "agents": _agents_surface_payload(effective_summary, principal),
+        "tenant_admin_system": _tenant_admin_system_payload(effective_summary, principal),
         "cases": {
             "count": len(findings_payload),
             "items": findings_payload,
@@ -4830,6 +4955,7 @@ def _workspace_surface_contract_payload(
             "workflow_route": "/reviewer/pending-reviews",
         },
     }
+    return _sanitize_anonymous_public_payload(payload) if public_safe else payload
 
 
 def _latest_run_audit_summary_payload(summary: dict[str, Any] | None) -> dict[str, Any]:
@@ -7098,6 +7224,12 @@ def _latest_run_findings_payload(
     domain_filter: str | None = None,
     view_state: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
+    if public_safe:
+        return _anonymous_public_findings_payload(
+            summary,
+            domain_filter=domain_filter,
+            view_state=view_state,
+        )
     principal = {
         "role": "executive" if public_safe else "operator",
         "authenticated": not public_safe,
@@ -7255,32 +7387,149 @@ def _latest_run_findings_payload(
     return payload
 
 
-def _sanitize_public_evidence_preview(payload: dict[str, Any]) -> dict[str, Any]:
-    source_path = str(payload.get("source_path") or "").strip()
-    source_name = Path(source_path).name if source_path else None
-    excerpt = state_store.preview_text(
-        str(payload.get("excerpt") or ""), limit=PUBLIC_EVIDENCE_EXCERPT_LIMIT
+def _anonymous_public_findings_payload(
+    summary: dict[str, Any] | None,
+    *,
+    domain_filter: str | None = None,
+    view_state: dict[str, str | None] | None = None,
+) -> dict[str, Any]:
+    principal = {"role": "executive", "authenticated": False}
+    if summary is None:
+        return {
+            "status": "missing",
+            "run_id": ANONYMOUS_PUBLIC_RUN_ID,
+            "findings": [],
+            "finding_count": 0,
+            "total_recoverable_sar": None,
+            "filtered_total_recoverable_sar": None,
+            "requires_human_review": False,
+            "approval_status": None,
+            "public_safe": True,
+            "agent_modules": _agent_modules_payload(None, [], None, principal),
+            "role_actions": _role_actions_payload(None, [], None, principal),
+        }
+    safe_summary = _anonymous_public_summary(summary)
+    assert safe_summary is not None
+    rows = _finding_rows_from_summary(summary)
+    filtered_rows = _filter_finding_rows(rows, domain_filter)
+    public_rows = _anonymous_public_finding_payloads(rows)
+    filtered_public_rows = _anonymous_public_finding_payloads(filtered_rows)
+    audit_summary = _latest_run_audit_summary_payload(safe_summary)
+    metrics = _governed_metrics_payload(
+        safe_summary,
+        public_rows,
+        audit_summary,
+        filtered_rows=filtered_public_rows,
     )
-    if not excerpt:
-        excerpt = "Stored citation evidence is available for this finding on the protected review surface."
+    publication = _summary_publication_payload(
+        safe_summary,
+        principal_role="executive",
+        public_safe=True,
+    )
+    board_portal = _board_portal_payload(
+        safe_summary,
+        principal_role="executive",
+        public_safe=True,
+        requested_state=(view_state or {}).get("board"),
+    )
+    strategy_substrate = _strategy_substrate_payload(
+        safe_summary,
+        filtered_public_rows,
+        audit_summary,
+        principal,
+    )
+    executive_modes = _executive_modes_payload(
+        safe_summary,
+        principal,
+        strategy_substrate=strategy_substrate,
+        board_portal=board_portal,
+        publication=publication,
+        view_state=view_state,
+    )
+    domain_filters = [
+        artifact_contracts_payload(item)
+        for item in build_domain_filter_contracts(
+            rows,
+            active_filter_id=str(domain_filter or "finance_integrity"),
+            base_route="/public/runs/latest/findings",
+        )
+    ]
+    drilldown = _drilldown_contract_payload(
+        safe_summary,
+        principal,
+        public_safe=True,
+        finding_rows=filtered_public_rows,
+        domain_filters=domain_filters,
+        report_artifacts=list((_summary_report_contracts(safe_summary).get("reports") or [])),
+        board_portal=board_portal,
+        executive_modes=executive_modes,
+    )
+    agent_modules = _agent_modules_payload(
+        safe_summary,
+        filtered_public_rows,
+        audit_summary,
+        principal,
+    )
+    agents = _agents_surface_payload(safe_summary, principal)
+    chat = _chat_threads_payload(
+        safe_summary,
+        principal,
+        executive_modes=executive_modes,
+        board_portal=board_portal,
+        publication=publication,
+    )
+    return _sanitize_anonymous_public_payload({
+        "status": "ok",
+        "run_id": safe_summary.get("run_id"),
+        "findings": filtered_public_rows,
+        "finding_count": metrics["filtered_finding_count"],
+        "domain_filter": str(domain_filter or "finance_integrity"),
+        "domain_filters": domain_filters,
+        "locked_findings": metrics["locked_findings"],
+        "total_recoverable_sar": metrics["total_recoverable_sar"],
+        "filtered_total_recoverable_sar": metrics["filtered_total_recoverable_sar"],
+        "requires_human_review": bool(summary.get("requires_human_review")),
+        "approval_status": summary.get("approval_status"),
+        "public_safe": True,
+        "metrics": metrics,
+        "kpi_cards": _kpi_card_payloads(safe_summary, filtered_public_rows, audit_summary),
+        "trend": _trend_card_payload(safe_summary, filtered_public_rows, audit_summary),
+        "plan_health": _bounded_plan_health_payload(safe_summary, filtered_public_rows, audit_summary),
+        "publication": publication,
+        "strategy_substrate": strategy_substrate,
+        "drilldown": drilldown,
+        "board_portal": board_portal,
+        "executive_modes": executive_modes,
+        "interaction_contracts": _interaction_contracts_payload(principal, public_safe=True),
+        "agents": agents,
+        "agent_modules": agent_modules,
+        "chat": chat,
+        "role_actions": _role_actions_payload(safe_summary, filtered_public_rows, audit_summary, principal),
+        "executive_diagnostics": _executive_diagnostics_payload(
+            safe_summary,
+            principal=principal,
+            board_portal=board_portal,
+            executive_modes=executive_modes,
+            drilldown=drilldown,
+            strategy_substrate=strategy_substrate,
+            agent_modules=agent_modules,
+            audit_summary=audit_summary,
+            finding_rows=filtered_public_rows,
+        ),
+    })
+
+
+def _sanitize_public_evidence_preview(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "ok",
-        "run_id": payload.get("run_id"),
-        "finding_id": payload.get("finding_id"),
-        "citation_id": payload.get("citation_id"),
-        "evidence_document_id": payload.get("evidence_document_id"),
-        "title": payload.get("title"),
-        "pattern_type": payload.get("pattern_type"),
-        "vendor_id": payload.get("vendor_id"),
-        "vendor_name": payload.get("vendor_name"),
+        "run_id": ANONYMOUS_PUBLIC_RUN_ID,
+        "title": "Governed evidence preview",
+        "pattern_label": str(payload.get("pattern_type") or "Governed signal").replace("_", " ").title(),
         "confidence": payload.get("confidence"),
-        "source_path": source_name,
+        "source_path": None,
         "source_hash": None,
-        "locator": payload.get("locator"),
-        "resolved": payload.get("resolved"),
-        "hash_match": payload.get("hash_match"),
-        "preview_kind": payload.get("preview_kind") or "text",
-        "excerpt": excerpt,
+        "preview_kind": "text",
+        "excerpt": PUBLIC_EVIDENCE_BOUNDARY_NOTE,
         "resolved_payload": {},
         "public_safe": True,
     }
@@ -7305,7 +7554,7 @@ def _public_evidence_preview_payload(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The latest run does not have a public demo identity.",
         )
-    if run_id and str(run_id) != latest_run_id:
+    if run_id and str(run_id) not in {latest_run_id, ANONYMOUS_PUBLIC_RUN_ID}:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Only the latest public demo run is available on the anonymous surface.",
@@ -7344,7 +7593,7 @@ def _public_report_preview_payload(
     principal = {"role": "executive", "authenticated": False}
     summary = _latest_summary()
     if summary is None:
-        return {
+        return _sanitize_anonymous_public_payload({
             "status": "missing",
             "artifact_key": "executive_summary",
             "title": "Executive summary",
@@ -7366,9 +7615,11 @@ def _public_report_preview_payload(
             "trend": _trend_card_payload(),
             "plan_health": _bounded_plan_health_payload(None, [], None),
             "public_safe": True,
-        }
+        })
+    summary = _anonymous_public_summary(summary)
+    assert summary is not None
     audit = _latest_run_audit_summary_payload(summary)
-    findings = _finding_rows_from_summary(summary)
+    findings = _anonymous_public_finding_payloads(_finding_rows_from_summary(summary))
     challenged = len(audit.get("challenged_finding_ids") or [])
     publication = _summary_publication_payload(
         summary,
@@ -7392,7 +7643,7 @@ def _public_report_preview_payload(
     ]
     if top_finding:
         preview_lines.append(
-            f"Top case: {top_finding.get('title') or top_finding.get('finding_id')} ({top_finding.get('finding_id')}) worth {top_finding.get('recoverable_sar') or 0:,.2f} SAR."
+            f"Top case: {top_finding.get('title') or 'Governed signal'} worth {top_finding.get('recoverable_sar') or 0:,.2f} SAR."
         )
     citation_count = audit.get("citation_count")
     resolved_count = audit.get("resolved_count")
@@ -7429,7 +7680,7 @@ def _public_report_preview_payload(
         executive_modes=executive_modes,
     )
     agent_modules = _agent_modules_payload(summary, findings, audit, principal)
-    return {
+    return _sanitize_anonymous_public_payload({
         "status": "ok",
         "run_id": summary.get("run_id"),
         "artifact_key": selected_key,
@@ -7459,7 +7710,7 @@ def _public_report_preview_payload(
             finding_rows=findings,
         ),
         "public_safe": True,
-    }
+    })
 
 
 @app.get("/runs/latest/findings")

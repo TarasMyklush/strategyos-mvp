@@ -16,7 +16,7 @@ Production-shaped MVP scaffold for the StrategyOS finance-analysis POC, now cent
 - True-skip partial runs (`allow_partial_source_pack`): absent roles load as empty canonical frames, dependent detectors are skipped and reported in `run_summary.json`; no synthetic baseline is ever injected.
 - Extension registries for new stages, tasks, data roles, and detectors: `agents/pipeline.py`, `tasks.py`, `data_roles.py`, and `skills/finance_controls.py` are the current in-code extension points.
 - Optional in-process plugin module loading via `STRATEGYOS_PLUGIN_MODULES`, with strict/permissive failure modes through `STRATEGYOS_PLUGIN_FAILURE_MODE`.
-- Untrusted-input guarding (`prompt_injection.py`) and sensitive-ID pseudonymization (`sensitive_ids.py`).
+- Untrusted-input guarding (`prompt_injection.py`) and sensitive-ID pseudonymization helpers (`sensitive_ids.py`) for protected/internal handling; anonymous-public safety must come from the dedicated publication boundary, not pseudonymization semantics alone.
 - PDF/text evidence extraction with citation IDs.
 - Deterministic finance skills for planted leakage classes.
 - Deterministic finance analysis and challenge-review stages.
@@ -74,6 +74,7 @@ Traceability source: `docs/flexible-invoice-architecture-plan.md`.
 - **Current finance controls, reviewer flow, and workflow orchestration stay unchanged in the first invoice tranche.** Consumer migration to canonical invoices is deferred until intake plus additive normalization are stable.
 - **Quality/reporting constraints are explicit.** Unknown or unsupported files must be reported, not dropped; missing task-critical source roles must be surfaced as clear task-readiness limits instead of silent failure.
 - **Provider boundary stays local-first by default.** Source hashing, OCR, parsing, citation resolution, finance controls, and quantitative validation remain inside the app; any external LLM mode is optional, disabled by default, and outside the primary evidence path.
+- **Anonymous-public exposure is now a separate hardened publication boundary.** The locally verified story `10.6` closure does **not** rely on `public_safe` as a redaction guarantee. Anonymous/public payloads must be produced from the dedicated allowlist-style publication path, with vendor names, invoice/credit identifiers, case/evidence linkage, and other protected detail excluded from that public surface.
 
 ## Supported Inputs and OCR Reality
 

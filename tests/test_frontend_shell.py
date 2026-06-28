@@ -474,7 +474,7 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert payload["board_portal"]["meeting"]["design_title"] == "Q2 Board Meeting"
         assert payload["board_portal"]["kpis"][0]["key"] == "revenue"
         assert payload["board_portal"]["decks"][0]["status"] == "approved"
-        assert payload["drilldown"]["default_case_id"] is None
+        assert "default_case_id" not in payload["drilldown"]
         assert payload["drilldown"]["cash_pulse"]["basis"] == "governed_findings"
         assert payload["drilldown"]["gravity"]["prompts"]
         assert payload["drilldown"]["gravity"]["assistant"] == "Minerva"
@@ -486,14 +486,13 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert payload["chat"]["assistant"]["persona_id"] == "board"
         assert payload["chat"]["assistant"]["board_state"] == "closed"
         assert payload["chat"]["store"]["mode"] == "client_session"
-        assert payload["chat"]["threads"][0]["thread_id"] == "system:run-42"
+        assert payload["chat"]["threads"][0]["thread_id"] == "system:latest-public"
         assert payload["agents"]["running"][0]["id"] == "boardpack"
         assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
         assert payload["tenant_admin_system"]["managed_data"]["reports"]["report_count"] == 2
         assert payload["tenant_admin_system"]["trend"]["truth_basis"] == "reconciled_governed_metrics"
         assert payload["role_actions"]["viewer_role"] == "executive"
-        assert payload["strategy_substrate"]["kpi_tree"]["nodes"][0]["node_id"] == "value_capture"
-        assert any(node["node_id"] == "publication_boundary" for node in payload["strategy_substrate"]["kpi_tree"]["nodes"])
+        assert "node_id" not in str(payload["strategy_substrate"])
         assert payload["strategy_substrate"]["value_drivers"][0]["driver_id"] == "cash_recovery"
         assert any(driver["driver_id"] == "board_pack_readiness_driver" for driver in payload["strategy_substrate"]["value_drivers"])
         assert any(item["portfolio_id"] == "release-readiness" for item in payload["strategy_substrate"]["portfolio_views"])

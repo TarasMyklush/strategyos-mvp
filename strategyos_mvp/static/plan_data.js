@@ -170,7 +170,7 @@
           { id: "10.3", title: "Enforce idempotency and retry safety", description: "Protect scheduled jobs, action endpoints, and approval mutations from duplicate execution during retries or restarts", status: "completed", files: [] },
           { id: "10.4", title: "Close security and access-control gaps", description: "Review route protection, sensitive data exposure, audit integrity, and privileged actions before rollout", status: "completed", files: [] },
           { id: "10.5", title: "Prepare staged rollout and rollback controls", description: "Add feature flags, deployment checks, operator runbooks, and fallback steps so production rollout can be controlled safely", status: "completed", files: [] },
-          { id: "10.6", title: "Contain and redesign anonymous public findings exposure", description: "Remove vendor-identifying data from anonymous /public findings, evidence, and detail flows; verify containment; ship an allowlist-only anonymous publication contract; then re-verify and correct boundary docs before closure", status: "in_progress", files: [] }
+          { id: "10.6", title: "Contain and redesign anonymous public findings exposure", description: "Close the reviewed flaw where `public_safe` behaved as routing semantics instead of a redaction guarantee by separating and hardening the anonymous-public publication boundary, re-verifying the local route matrix, and correcting README/plan wording truthfully", status: "completed", files: [] }
         ]
       },
       {

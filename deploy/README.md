@@ -215,10 +215,10 @@ OAUTH2_PROXY_COOKIE_SECRET=<oauth2-proxy-cookie-secret>
 
 ## Controlled Pilot Readiness Contract
 
-### Public-safe proof path
+### Anonymous-public proof path
 
 - `python deploy/scripts/verify_cloud_surface.py --base-url https://strategyos.example.com`
-- With no credentials, this now verifies the anonymous/public-safe contract only: `/ui/session`, `/ui/workspace-contract/latest`, `/public/runs/latest`, `/public/runs/latest/findings`, `/public/runs/latest/report-preview`, and fail-closed anonymous health behavior.
+- With no credentials, this now verifies the locally approved anonymous-public contract only: `/ui/session`, `/ui/workspace-contract/latest`, `/public/runs/latest`, `/public/runs/latest/findings`, `/public/runs/latest/report-preview`, and fail-closed anonymous health behavior. This boundary is enforced by the dedicated anonymous-public publication path, not by treating `public_safe` as a standalone redaction guarantee.
 - Add both operator and reviewer credentials only when you intend to validate the authenticated governed surface too.
 
 ### Liveness
