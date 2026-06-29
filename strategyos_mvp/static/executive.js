@@ -140,6 +140,10 @@
     return (state.latestPacket && state.latestPacket.board_portal) || {};
   }
 
+  function getBoardDesign() {
+    return DESIGN_GLOBAL.board || {};
+  }
+
   function getChatContract() {
     return (state.latestPacket && state.latestPacket.chat) || {};
   }
@@ -209,9 +213,11 @@
         status: item.vsPlan,
         detail: item.story,
         pct: item.pct,
+        tone: item.tone,
         sub: item.sub,
         chips: safeArray(item.chips),
         movers: item.movers || {},
+        trend: item.trend || {},
         trendLabel: item.trendLabel,
         unit: item.unit
       };
@@ -603,7 +609,7 @@
     var driverHeading = $("driver-heading");
     var lowerHeading = $("lower-rail-heading");
     if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
-    if (lowerHeading) lowerHeading.textContent = "What matters now";
+    if (lowerHeading) lowerHeading.textContent = "Mid / lower rail";
     var footer = $("composed-footer");
     if (footer) footer.hidden = false;
   }
@@ -740,11 +746,19 @@
 
   function renderHero() {
     var diagnostics = getExecutiveDiagnostics();
+    var blueprint = getPersonaBlueprint(state.activePersona);
     var hero = diagnostics.hero || {};
     var publication = getPublication();
     var boardPortal = getBoardPortal();
     var agents = getAgentsModule();
+    var networkEntry = getAssistantNetwork().find(function (item) { return item && item.persona === state.activePersona; }) || {};
+    var fullName = String(firstDefined(networkEntry.who, state.activePersona === "ceo" ? "Khalid Al-Rashed" : "")).trim();
+    var firstName = fullName ? fullName.split(/\s+/)[0] : getPersonaLabel(state.activePersona);
+    var preferredHero = blueprint.health || {};
     var score = Number(firstDefined(hero.score, 0));
+    if (preferredHero && preferredHero.score !== undefined && preferredHero.score !== null && preferredHero.score !== "") {
+      score = Number(preferredHero.score);
+    }
     var clampedScore = Math.max(0, Math.min(100, score));
     var circumference = 2 * Math.PI * 48;
     var dash = circumference * (clampedScore / 100);
@@ -756,18 +770,26 @@
       { label: "Next move", value: humanizeToken(firstDefined(getPlanHealth().next_action, (boardPortal.state_detail || {}).title, "review")) }
     ];
 
-    $("hero-eyebrow").textContent = getPersonaLabel(state.activePersona) + " diagnostics";
-    $("hero-head").textContent = firstDefined(hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
-    $("hero-body").textContent = firstDefined(hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
+    $("hero-eyebrow").textContent = state.activePersona === "board"
+      ? "Board portal · governed packet posture"
+      : "Good morning, " + firstName + " · the week so far";
+    $("hero-head").textContent = firstDefined(preferredHero.headline, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
+    $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
     $("hero-score").textContent = String(clampedScore || 0);
-    $("hero-cap").textContent = firstDefined(hero.score_note, getPlanHealth().badge, "plan health");
-    $("hero-byline").textContent = firstDefined(hero.quoted_by, "Governed packet only");
+    $("hero-cap").textContent = firstDefined(preferredHero.scoreNote, hero.score_note, getPlanHealth().badge, "plan health");
+    var byline = $("hero-byline");
+    if (byline) {
+      var bylineText = firstDefined(blueprint.by, "");
+      byline.textContent = bylineText;
+      byline.hidden = !bylineText;
+    }
 
     var quote = $("hero-quote");
     if (quote) {
-      if (hero.quote) {
+      var quoteText = firstDefined(blueprint.quote, hero.quote, "");
+      if (quoteText && state.activePersona !== "ceo") {
         quote.hidden = false;
-        quote.textContent = hero.quote;
+        quote.textContent = quoteText;
       } else {
         quote.hidden = true;
         quote.textContent = "";
@@ -872,24 +894,25 @@
     var driver = getActiveDriver() || {};
     var drillCard = $("driver-drill");
     var gravityPanel = $("gravity-panel");
+    var board = getBoardPortal();
     var publication = getPublication();
     var gravity = getDrilldown().gravity || {};
     var movers = driver.movers || {};
     var lifting = safeArray(movers.lifting);
     var dragging = safeArray(movers.dragging);
     if (drillCard) {
-      var trendSeries = driverTrendSeries(driver);
+      var trendSeries = driver.trend || driverTrendSeries(driver);
       var actualSeries = safeArray(trendSeries.actual).length ? safeArray(trendSeries.actual) : [92, 96, 99, 101, 100, 102];
       var planSeries = safeArray(trendSeries.plan).length ? safeArray(trendSeries.plan) : actualSeries.map(function (value) { return value * 0.98; });
       var minSeries = Math.min.apply(null, actualSeries.concat(planSeries));
       var maxSeries = Math.max.apply(null, actualSeries.concat(planSeries));
       var spanSeries = Math.max(1, maxSeries - minSeries);
-      var chartWidth = 220;
-      var chartHeight = 70;
+      var chartWidth = 320;
+      var chartHeight = 156;
       var chartPoints = function (series) {
         return series.map(function (value, idx) {
           var x = series.length === 1 ? chartWidth / 2 : (idx * chartWidth) / (series.length - 1);
-          var y = chartHeight - (((value - minSeries) / spanSeries) * 54 + 8);
+          var y = chartHeight - (((value - minSeries) / spanSeries) * 120 + 18);
           return [x, y];
         });
       };
@@ -899,50 +922,91 @@
       var planPath = chartPoints(planSeries).map(function (pair, idx) {
         return (idx ? "L" : "M") + pair[0].toFixed(1) + "," + pair[1].toFixed(1);
       }).join(" ");
+      var groupMarkup = function (label, tone, rows) {
+        return '<div class="drill-ledger"><div class="drill-ledger__head"><span class="pill-inline ' + (tone === 'up' ? 'ok' : 'warn') + '">' + escapeHtml(label) + '</span><span>' + escapeHtml(tone === 'up' ? 'what is helping the number' : 'what is still dragging it') + '</span></div>' + (rows.length ? rows.map(function (item) {
+          var noteKey = firstDefined(driver.driver_key, driver.key, '') + ':' + firstDefined(item.name, 'mover');
+          var noteOpen = state.openDriverNoteKey === noteKey;
+          var gm = item.gm || null;
+          return '<div class="drill-mover ' + (noteOpen ? 'is-open' : '') + '"><div class="drill-mover__main"><span class="drill-mover__dot ' + escapeHtml(tone) + '"></span><strong>' + escapeHtml(firstDefined(item.name, 'Signal')) + '</strong><span class="drill-mover__delta">' + escapeHtml(firstDefined(item.delta, '')) + '</span>' + (gm ? '<button type="button" class="gm-chip' + (noteOpen ? ' is-open' : '') + '" data-driver-note="' + escapeHtml(noteKey) + '">“ GM note</button>' : '<span class="gm-none">—</span>') + '</div>' + (gm && noteOpen ? '<blockquote class="gm-note"><span class="gm-note-who">' + escapeHtml(firstDefined(gm.who, 'GM')) + '</span>' + escapeHtml(firstDefined(gm.note, '')) + '<span class="gm-note-tail">↑ travels up with this number</span></blockquote>' : '') + '</div>';
+        }).join('') : '<div class="discovery-empty">No movement is attached yet.</div>') + '</div>';
+      };
       drillCard.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">Cases</p><h3 class="detail-title">' + escapeHtml(firstDefined(driver.label, "Driver drill")) + '</h3></div><span class="pill-inline ' + toneClass(firstDefined(driver.status, publication.publish_state, "governed")) + '">' + escapeHtml(firstDefined(driver.status, publication.publish_state, "governed")) + '</span></div>',
-        '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, "Awaiting drill detail.")) + '</p>',
-        '<div class="detail-stat-row">',
-        '<div class="detail-stat-block"><strong class="detail-stat">' + escapeHtml(firstDefined(driver.metric, "—")) + '</strong><span>' + escapeHtml(firstDefined(driver.sub, "Current measure")) + '</span></div>',
-        '<div class="detail-stat-block"><strong class="detail-stat">' + escapeHtml(firstDefined(driver.pct, "—")) + '</strong><span>% of plan</span></div>',
-        '<div class="detail-stat-block"><strong class="detail-stat">' + escapeHtml(firstDefined(driver.trendLabel, "Governed trend")) + '</strong><span>' + escapeHtml(firstDefined(driver.unit, "packet basis")) + '</span></div>',
-        '</div>',
-        '<div class="trend-chain"><article class="trend-chain__card"><div class="trend-chain__head"><strong>Trend + evidence chain</strong><span>why this driver moved</span></div><svg class="trend-chain__chart" viewBox="0 0 220 70" aria-hidden="true"><path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path></svg><div class="trend-chain__meta"><div><strong>' + escapeHtml(firstDefined(driver.metric, "—")) + '</strong><span>' + escapeHtml(firstDefined(driver.trendLabel, "Governed trend")) + '</span></div><div><strong>' + escapeHtml(firstDefined(publication.publish_state, 'draft')) + '</strong><span>Release posture</span></div></div></article><article class="trend-chain__card"><div class="trend-chain__head"><strong>Signal read</strong><span>bounded by current packet truth</span></div><div class="trend-chain__stack"><div><strong>' + escapeHtml(firstDefined(driver.label, 'Driver story')) + '</strong><span>' + escapeHtml(firstDefined(driver.detail, 'Awaiting driver story.')) + '</span></div><div><strong>' + escapeHtml(String(firstDefined((getDrilldown().owed_upward || {}).challenge_count, publication.challenged_cases, 0))) + ' challenged</strong><span>Questions still attached to evidence</span></div></div></article></div>',
-        '<p class="detail-subtitle">What is lifting</p>',
-        '<div class="mini-list">' + (lifting.length ? lifting.map(function (item) {
-          return '<div class="mover-card"><div class="mover-card__head"><strong>' + escapeHtml(firstDefined(item.name, "Lift")) + '</strong><span class="pill-inline ok">lifting</span></div>' + moverSourceBadge(item) + '<p class="list-copy">' + escapeHtml(firstDefined(item.note, item.delta, "Momentum visible in the packet.")) + '</p><div class="mover-card__foot"><span>' + escapeHtml(firstDefined(item.delta, 'up')) + '</span><strong>' + escapeHtml(String(firstDefined(item.contribution, ''))) + ' contribution pts</strong></div></div>';
-        }).join("") : '<div class="discovery-empty">No lifting signal is attached to this driver yet.</div>') + '</div>',
-        '<p class="detail-subtitle">What still drags</p>',
-        '<div class="mini-list">' + (dragging.length ? dragging.map(function (item) {
-          return '<div class="mover-card mover-card--warn"><div class="mover-card__head"><strong>' + escapeHtml(firstDefined(item.name, "Constraint")) + '</strong><span class="pill-inline warn">dragging</span></div>' + moverSourceBadge(item) + '<p class="list-copy">' + escapeHtml(firstDefined(item.note, item.delta, "Constraint still needs closure.")) + '</p><div class="mover-card__foot"><span>' + escapeHtml(firstDefined(item.delta, 'watch')) + '</span><strong>' + escapeHtml(String(firstDefined(item.contribution, ''))) + ' contribution pts</strong></div></div>';
-        }).join("") : '<div class="discovery-empty">No dragging signal is attached to this driver yet.</div>') + '</div>',
-        '<p class="detail-subtitle">Tornado view</p>',
-        '<div class="detail-tornado">' + lifting.concat(dragging).slice(0, 5).map(function (item, idx) {
-          var tone = idx < lifting.length ? '' : ' warn';
-          var contribution = Math.abs(Number(firstDefined(item.contribution, 0)) || 0);
-          var width = Math.max(14, Math.min(100, contribution * 3.2 || 20));
-          return '<div class="mover-bar"><span class="mover-bar__label">' + escapeHtml(firstDefined(item.name, 'Signal')) + '</span><span class="mover-bar__track"><i class="mover-bar__fill' + tone + '" style="width:' + width + '%"></i></span><span class="mover-bar__value">' + escapeHtml(firstDefined(item.delta, item.contribution, 'trend')) + '</span></div>';
-        }).join("") + '</div>'
-      ].join("");
+        '<div class="drill-surface">',
+        '<div class="drill-headline"><div><h3 class="detail-title">' + escapeHtml(firstDefined(driver.label, 'Driver drill')) + '</h3><p class="section-note">' + escapeHtml(String(firstDefined(driver.pct, '—')) + '% of plan · ' + firstDefined(driver.metric, '—') + ' · ' + firstDefined(driver.sub, 'current measure')) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work ⌕</button></div>',
+        '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, 'Awaiting drill detail.')) + '</p>',
+        '<div class="drill-grid-v2"><div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual <span class="lg plan"></span> plan</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" aria-hidden="true"><path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path></svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div><div class="drill-movers-panel"><div class="mini-head">What moved it <span class="mini-hint">tap a note — the GM’s commentary rides up with the number</span></div>' + groupMarkup('Lifting', 'up', lifting) + groupMarkup('Dragging', 'down', dragging) + '</div></div>',
+        '<div class="chips"><span class="chips-label">Ask on:</span>' + safeArray(driver.chips).map(function (chip) { return '<button class="chip" type="button" data-driver-chip="' + escapeHtml(chip) + '">' + escapeHtml(chip) + '</button>'; }).join('') + '</div>',
+        '<form class="chips-own" id="driver-composer"><label class="sr-only" for="driver-input">Ask about driver</label><input id="driver-input" class="driver-input" type="text" placeholder="Ask your own about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '…" /><button type="submit">Send</button></form>',
+        '<div class="drill-evidence" hidden><span class="evidence-label">Evidence chain</span><span class="evidence-step">Board-approved plan v4</span><span class="evidence-arrow">→</span><span class="evidence-step">Knowledge graph · 8 BU ledgers</span><span class="evidence-arrow">→</span><span class="evidence-step">S/4HANA + BI connectors</span><span class="evidence-arrow">→</span><span class="evidence-step">computed today 06:14</span></div>',
+        '</div>'
+      ].join('');
+      safeArray(drillCard.querySelectorAll('[data-driver-note]')).forEach(function (button) {
+        button.onclick = function () {
+          var key = button.getAttribute('data-driver-note') || '';
+          state.openDriverNoteKey = state.openDriverNoteKey === key ? '' : key;
+          renderDriverDrillFidelity();
+        };
+      });
+      safeArray(drillCard.querySelectorAll('[data-driver-chip]')).forEach(function (button) {
+        button.onclick = function () {
+          var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '—') + '% of plan): ' + (button.getAttribute('data-driver-chip') || '');
+          pushThreadMessage('user', prompt);
+          pushThreadMessage('assistant', buildAssistantReply(prompt));
+          state.drawerOpen = true;
+          renderTopbar();
+          renderAssistantStudio();
+        };
+      });
+      var showWork = drillCard.querySelector('[data-driver-show-work]');
+      var evidence = drillCard.querySelector('.drill-evidence');
+      if (showWork && evidence) {
+        showWork.onclick = function () {
+          evidence.hidden = !evidence.hidden;
+        };
+      }
+      var composer = drillCard.querySelector('#driver-composer');
+      var input = drillCard.querySelector('#driver-input');
+      if (composer && input) {
+        composer.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var message = String(input.value || '').trim();
+          if (!message) return;
+          var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '—') + '% of plan): ' + message;
+          pushThreadMessage('user', prompt);
+          pushThreadMessage('assistant', buildAssistantReply(prompt));
+          input.value = '';
+          state.drawerOpen = true;
+          renderTopbar();
+          renderAssistantStudio();
+        });
+      }
     }
     if (gravityPanel) {
+      var vlogs = [
+        { topic: 'Reading margin pressure before the board', who: 'Dr. Amal Faris', role: 'former Group CFO, regional pharma', dur: '4:12' },
+        { topic: 'When to hedge — and when to wait', who: 'Tariq Bensalem', role: 'treasury advisor', dur: '6:38' },
+        { topic: 'Recognising GMs without distorting incentives', who: 'Huda Karim', role: 'leadership coach', dur: '3:55' }
+      ];
       gravityPanel.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">Evidence</p><h3 class="detail-title">Gravity and guardrails</h3></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, "draft")) + '">' + escapeHtml(firstDefined(publication.publish_state, "draft")) + '</span></div>',
-        '<p class="detail-copy">' + escapeHtml(firstDefined(gravity.quote, "Keep the room inside governed packet truth.")) + '</p>',
-        '<p class="panel-note">' + escapeHtml(firstDefined(gravity.by, "StrategyOS")) + '</p>',
-        '<div class="pill-row">' + safeArray(gravity.rails).map(function (item) {
-          return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(item) + '</span>';
-        }).join("") + '</div>',
-        '<p class="detail-subtitle">Suggested questions</p>',
-        '<div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) {
-          return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>';
-        }).join("") + '</div>'
+        '<div class="detail-head"><div><p class="detail-eyebrow">Gravity and guardrails</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan’s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '">' + escapeHtml(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '</span></div>',
+        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(item) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-list">' + vlogs.map(function (item) { return '<button class="leader-row" type="button" data-vlog-topic="' + escapeHtml(item.topic) + '"><span class="leader-row__play">▶</span><span class="leader-row__copy"><strong>' + escapeHtml(item.topic) + '</strong><span>' + escapeHtml(item.who + ' · ' + item.role) + '</span></span><span class="leader-row__dur">' + escapeHtml(item.dur) + '</span></button>'; }).join('') + '</div></section></div>'
       ].join("");
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
           var prompt = button.getAttribute("data-chat-prompt") || "";
           pushThreadMessage("user", prompt);
           pushThreadMessage("assistant", buildAssistantReply(prompt));
+          renderAssistantStudio();
+        };
+      });
+      safeArray(gravityPanel.querySelectorAll('[data-vlog-topic]')).forEach(function (button) {
+        button.onclick = function () {
+          var topic = button.getAttribute('data-vlog-topic') || '';
+          var prompt = 'From the Leaders’ Corner reel “' + topic + '” — how does this apply to Mizan right now?';
+          pushThreadMessage('user', prompt);
+          pushThreadMessage('assistant', buildAssistantReply(prompt));
+          state.drawerOpen = true;
+          renderTopbar();
           renderAssistantStudio();
         };
       });
@@ -1063,9 +1127,17 @@
     }
 
     if (weekPanel) {
-      weekPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Week ahead</p><h3 class="detail-title">Upcoming decision moments</h3></div><span class="pill-inline warn">time-bound</span></div><div class="mini-list">' + weekAhead.map(function (item) {
-        return '<button class="timeline-chip' + (item.urgent ? ' is-urgent' : '') + '" type="button" data-chat-prompt="' + escapeHtml(firstDefined(item.prompt, item.label, item.title)) + '"><span><strong>' + escapeHtml(firstDefined(item.title, item.label, "Event")) + '</strong><span>' + escapeHtml(firstDefined(item.prep, item.foot, "")) + '</span></span><span>' + escapeHtml(firstDefined(item.when, item.detail, "soon")) + '</span></button>';
-      }).join("") + '</div>';
+      var openIndex = Math.min(state.openWeekIndex || 0, Math.max(weekAhead.length - 1, 0));
+      var activeEvent = weekAhead[openIndex] || null;
+      weekPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Week ahead</p><h3 class="detail-title">Upcoming decision moments</h3></div><span class="pill-inline warn">time-bound</span></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
+        return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
+      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”: model the options and what I should walk in having decided."><strong>◇ Open in thinking mode</strong><span>no side effects</span></button><button class="timeline-chip" type="button" data-chat-prompt="For “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”, what data am I missing and who should I request it from?"><strong>⤓ Request missing data</strong><span>ask StrategyOS</span></button></div></div>' : '');
+      safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {
+        button.onclick = function () {
+          state.openWeekIndex = Number(button.getAttribute('data-week-index') || 0) || 0;
+          renderLowerRailFidelity();
+        };
+      });
       safeArray(weekPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
           var prompt = button.getAttribute("data-chat-prompt") || "";
@@ -1123,9 +1195,14 @@
       var filtered = discoverable.filter(function (item) {
         return state.discoveryFilter === 'all' || !item.lane || item.lane === state.discoveryFilter;
       });
-      discoveryCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Discover agents</p><h3 class="detail-title">Deploy on your data</h3></div><span class="pill-inline warn">expandable</span></div><div class="discovery-search">⌕ Search the agent universe…</div><div class="discovery-list discovery-list--cards">' + filtered.map(function (item) {
-        return '<div class="discovery-card"><span class="discovery-card__glyph">' + escapeHtml(firstDefined(item.glyph, '◇')) + '</span><div class="discovery-card__meta"><div class="discovery-card__head"><strong>' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</strong><span>' + escapeHtml(firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</p><small>' + escapeHtml(firstDefined(item.connector, item.route, 'connector')) + '</small></div><button type="button" class="discovery-card__action">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
-      }).join('') + '</div><button type="button" class="browse-agents">Browse all agents →</button>';
+      var nativeAgents = filtered.filter(function (item) { return item.source === 'native'; });
+      var marketAgents = filtered.filter(function (item) { return item.source !== 'native'; });
+      var renderDiscoveryGroup = function (title, items) {
+        return '<div class="discovery-group"><div class="discovery-group__label">' + escapeHtml(title) + '</div><div class="discovery-list discovery-list--cards">' + items.map(function (item) {
+          return '<div class="discovery-card"><span class="discovery-card__glyph">' + escapeHtml(firstDefined(item.glyph, '◇')) + '</span><div class="discovery-card__meta"><div class="discovery-card__head"><strong>' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</strong><span>' + escapeHtml(firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</p><small>' + escapeHtml(firstDefined(item.connector, item.route, 'connector')) + '</small></div><button type="button" class="discovery-card__action">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
+        }).join('') + '</div></div>';
+      };
+      discoveryCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Discover agents</p><h3 class="detail-title">Deploy on your data</h3></div><span class="pill-inline warn">expandable</span></div><div class="discovery-search">⌕ Search the agent universe…</div>' + renderDiscoveryGroup('Native on StrategyOS', nativeAgents) + renderDiscoveryGroup('From the marketplace', marketAgents) + '<button type="button" class="browse-agents">Browse all agents →</button>';
     }
 
     if (subtoolsCard) {
@@ -1134,6 +1211,47 @@
       }).join('') + '</div><div class="approval-list">' + approvals.map(function (item) {
         return '<div class="approval-row"><strong>' + escapeHtml(firstDefined(item.label, item.approval_id, 'Approval')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'waiting')) + '</span><p class="list-copy">Next action: ' + escapeHtml(firstDefined(item.next_action, 'continue')) + '</p></div>';
       }).join('') + '</div>';
+    }
+  }
+
+  function renderOperatingModelPanel() {
+    var row = $('operating-board-state-row');
+    var panel = $('operating-model-panel');
+    var board = getBoardPortal();
+    var modes = safeArray(board.lifecycle_flow).length ? safeArray(board.lifecycle_flow) : (((state.latestPacket || {}).executive_modes || {}).board_states || []);
+    var personaEntries = safeArray(state.personas).length ? safeArray(state.personas) : ['ceo', 'cfo', 'gm', 'bucfo', 'logistics', 'board'].map(function (id) { return { persona_id: id, label: humanizeToken(id), active: id === state.activePersona }; });
+    if (row) {
+      row.innerHTML = modes.map(function (mode) {
+        var isActive = mode.state_id === state.activeBoard;
+        return '<button type="button" class="state-tab' + (isActive ? ' is-active' : '') + '" data-operating-board="' + escapeHtml(firstDefined(mode.state_id, 'pre')) + '"><span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id, 'State')) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, '')) + '</span></span></button>';
+      }).join('');
+      safeArray(row.querySelectorAll('[data-operating-board]')).forEach(function (button) {
+        button.onclick = function () {
+          state.activeBoard = button.getAttribute('data-operating-board') || state.activeBoard;
+          renderBoardStateTabs();
+          renderBoardPortal();
+          renderOperatingModelPanel();
+          updateHistory();
+        };
+      });
+    }
+    if (panel) {
+      panel.innerHTML = '<div class="operating-model"><div class="operating-model__lane"><p class="detail-eyebrow">Persona lanes</p><div class="persona-pill-row">' + personaEntries.map(function (persona) {
+        return '<button type="button" class="persona-pill' + (persona.persona_id === state.activePersona ? ' is-active' : '') + '" data-operating-persona="' + escapeHtml(firstDefined(persona.persona_id, 'ceo')) + '">' + escapeHtml(firstDefined(persona.label, humanizeToken(persona.persona_id), 'Persona')) + '</button>';
+      }).join('') + '</div><p class="list-copy">Switch between operating personas without losing the board-safe packet frame.</p></div><div class="operating-model__lane"><p class="detail-eyebrow">Board lifecycle</p><div class="lifecycle-inline">' + modes.map(function (mode) {
+        return '<div class="lifecycle-step' + (mode.state_id === state.activeBoard ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(mode.summary, mode.detail, '')) + '</p></div></div>';
+      }).join('') + '</div><p class="list-copy">Explicit pre / live / closed handling stays visible from the executive surface.</p></div></div>';
+      safeArray(panel.querySelectorAll('[data-operating-persona]')).forEach(function (button) {
+        button.onclick = function () {
+          var personaId = button.getAttribute('data-operating-persona') || 'ceo';
+          if (personaId === state.activePersona) return;
+          state.activePersona = personaId;
+          state.activeView = personaId === 'board' ? 'knowledge' : 'home';
+          state.activeDriverKey = '';
+          state.activeThreadKey = '';
+          refresh(true);
+        };
+      });
     }
   }
 
@@ -1288,6 +1406,7 @@
     renderBoardStateTabs();
     renderBoardPortal();
     renderLowerRailFidelity();
+    renderOperatingModelPanel();
     renderAgentsDiscovery();
     renderAssistantNetwork();
     renderA2APanel();
@@ -1373,7 +1492,9 @@
       discoveryFilter: "all",
       selectedAgentModuleKey: "",
       knowledgeQuestionIndex: 0,
-      personaOutsideListenerBound: false
+      personaOutsideListenerBound: false,
+      openDriverNoteKey: "",
+      openWeekIndex: 0
     };
 
   bindAssistantForm();
