@@ -446,6 +446,6 @@
         ["leak", "ar_a"], ["leak", "ar_b"], ["dist", "tamween"], ["cash", "nupco"], ["cash", "jv"],
         ["jv", "epharm"], ["nupco", "dist"], ["epharm", "cust"], ["plan", "epharm"], ["cash", "epharm"]
       ]
-    ]
+    }
   };
 })();
