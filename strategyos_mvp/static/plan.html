@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Execution Plan · StrategyOS Oracle EBS Pilot + Post-Backlog Deliverables</title>
+  <title>Execution Tracker · StrategyOS Oracle EBS Pilot</title>
 <style>
 :root {
   --bg: #f4f2ed;
@@ -160,18 +160,17 @@ p:last-child { margin-bottom: 0; }
 /* ─── Hero ─── */
 .hero {
   text-align: center;
-  padding: 80px 0 60px;
+  padding: 56px 0 34px;
 }
 .hero h1 { margin-bottom: 16px; }
 .hero p {
-  font-size: 17px;
-  max-width: 600px;
-  margin: 0 auto 32px;
+  font-size: 15px;
+  max-width: 540px;
+  margin: 0 auto 20px;
 }
 .hero__caption {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--soft);
-  font-style: italic;
 }
 .hero__badge-row {
   display: flex;
@@ -184,12 +183,66 @@ p:last-child { margin-bottom: 0; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--border);
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.section-head p {
+  margin: 0;
+  max-width: 620px;
+  font-size: 14px;
+}
+
+.tracker-shell {
+  display: grid;
+  gap: 28px;
+}
+
+.tracker-section {
+  display: grid;
+  gap: 18px;
+}
+
+.tracker-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.tracker-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.tracker-stat__label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--soft);
+  margin-bottom: 6px;
+}
+
+.tracker-stat__value {
+  font-family: var(--serif);
+  font-size: 24px;
+  color: var(--accent);
 }
 
 /* ─── Status Note ─── */
@@ -431,6 +484,7 @@ p:last-child { margin-bottom: 0; }
 
 .truth-grid,
 .tranche-grid,
+.backlog-grid,
 .verify-grid,
 .history-grid {
   display: grid;
@@ -443,12 +497,14 @@ p:last-child { margin-bottom: 0; }
 }
 
 .tranche-grid,
+.backlog-grid,
 .history-grid {
   grid-template-columns: 1fr;
 }
 
 .truth-card,
 .tranche-card,
+.backlog-card,
 .verify-card,
 .history-card,
 .boundary-card,
@@ -469,9 +525,136 @@ p:last-child { margin-bottom: 0; }
 .boundary-card h3,
 .truth-card h3,
 .tranche-card h3,
+.backlog-card h3,
 .verify-card h3,
 .history-card h3 {
   margin-bottom: 8px;
+}
+
+.backlog-card {
+  overflow: hidden;
+}
+
+.backlog-card h2,
+.history-card h3 {
+  margin-bottom: 6px;
+}
+
+.backlog-table-wrap {
+  margin-top: 18px;
+  overflow-x: auto;
+}
+
+.backlog-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.backlog-table th,
+.backlog-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.backlog-table thead th {
+  border-top: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--soft);
+  font-weight: 700;
+  background: var(--surface-alt);
+}
+
+.backlog-table tbody tr:first-child td {
+  border-top: 1px solid var(--border);
+}
+
+.backlog-table tbody tr:hover {
+  background: rgba(37, 51, 92, 0.03);
+}
+
+.backlog-table tbody tr.pinned-row {
+  background: rgba(37, 51, 92, 0.035);
+}
+
+.backlog-table tbody tr.priority-high td:first-child {
+  border-left: 3px solid var(--amber);
+}
+
+.backlog-table tbody tr.priority-medium td:first-child {
+  border-left: 3px solid rgba(37, 51, 92, 0.28);
+}
+
+.backlog-code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.backlog-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--warn-soft);
+  color: var(--amber);
+}
+
+.backlog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.table-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--muted);
+}
+
+.table-pill.pinned {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(37, 51, 92, 0.14);
+}
+
+.row-title {
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.row-detail {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.row-detail ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.row-detail li + li {
+  margin-top: 4px;
 }
 
 .boundary-list,
@@ -529,6 +712,28 @@ p:last-child { margin-bottom: 0; }
   gap: 18px;
 }
 
+.history-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.history-card {
+  display: grid;
+  gap: 12px;
+}
+
+.history-card p {
+  font-size: 14px;
+  margin: 0;
+}
+
+.history-list {
+  margin-top: 0;
+}
+
+.history-list li + li {
+  margin-top: 6px;
+}
+
 .history-toggle {
   cursor: pointer;
   list-style: none;
@@ -559,10 +764,11 @@ p:last-child { margin-bottom: 0; }
   section { padding: 40px 0; }
   .card, .phase-card { padding: 20px 16px; }
   .topbar__nav a { font-size: 12px; padding: 4px 10px; }
-  .hero { padding: 48px 0 36px; }
+  .hero { padding: 42px 0 24px; }
   .overall-progress { padding: 20px 16px; }
   .phase-card__header { flex-direction: column; gap: 12px; }
   .truth-card, .tranche-card, .verify-card, .history-card, .boundary-card, .blocker-list { padding: 18px 16px; }
+  .section-head { align-items: flex-start; }
 }
 
 /* ─── Utility ─── */
@@ -588,23 +794,21 @@ p:last-child { margin-bottom: 0; }
 <!-- ═══════════ Hero ═══════════ -->
 <section class="hero container">
   <div class="hero__badge-row">
-    <span class="hero__badge">Hosted truth only</span>
-    <span class="hero__badge">Short-scroll corrective tranche</span>
-    <span class="hero__badge">Plan truth + CEO surface fixes</span>
+    <span class="hero__badge">Live tracker</span>
+    <span class="hero__badge">Backlog first</span>
+    <span class="hero__badge">Completed history below</span>
   </div>
-  <h1>Execution Plan</h1>
-  <p>The page now prioritises hosted truth instead of backlog theatre: what the hosted surface currently proves, what still blocks acceptance, what is being corrected right now, what must be verified on strategyos.live, and which hardening items stay below the fold.</p>
-  <div class="hero__caption">strategyos.live/plan · hosted-only acceptance boundary</div>
+  <h1>Execution Tracker</h1>
+  <p>Remaining work is listed first. Shipped work stays in a compact history underneath so the live page reads like a usable tracker, not commentary.</p>
+  <div class="hero__caption">strategyos.live/plan</div>
 </section>
 
 <!-- ═══════════ Content ═══════════ -->
 <section class="container">
-
-  <div id="plan-truth"></div>
-  <div id="plan-blockers"></div>
-  <div id="plan-tranches"></div>
-  <div id="plan-verification"></div>
-  <div id="plan-history"></div>
+  <div class="tracker-shell">
+    <div id="plan-backlog"></div>
+    <div id="plan-history"></div>
+  </div>
 
 </section>
 
@@ -622,64 +826,107 @@ p:last-child { margin-bottom: 0; }
     completed: "Completed"
   };
 
-  function toneClass(tone) {
-    if (tone === "ok") return "ok";
-    if (tone === "warn") return "warn";
-    return "neutral";
-  }
-
-  function statusColor(status) {
-    if (status === "completed") return "var(--green)";
-    if (status === "in_progress") return "var(--amber)";
-    return "var(--gray)";
-  }
-
-  function renderTruthBoundary() {
-    var truth = PLAN.truthBoundary || {};
-    var hostedTruth = PLAN.hostedTruth || [];
-    var el = document.getElementById("plan-truth");
-    el.innerHTML = '<div class="section-stack">'
-      + '<div class="boundary-card"><div class="section-eyebrow">Hosted truth</div><h2>' + escapeHtml(truth.title || 'Hosted-only acceptance') + '</h2><p class="mb-0">' + escapeHtml(truth.summary || '') + '</p><ul class="boundary-list">' + (truth.notes || []).map(function (note) { return '<li>' + escapeHtml(note) + '</li>'; }).join('') + '</ul></div>'
-      + '<div class="truth-grid">' + hostedTruth.map(function (item) {
-        return '<article class="truth-card"><span class="eyebrow-pill ' + toneClass(item.tone) + '">' + escapeHtml(item.label || 'Truth') + '</span><div class="truth-value">' + escapeHtml(item.value || '—') + '</div><p class="mb-0">' + escapeHtml(item.detail || '') + '</p></article>';
-      }).join('') + '</div>'
-      + '</div>';
-  }
-
-  function renderBlockers() {
-    var blockers = PLAN.blockers || [];
-    var el = document.getElementById("plan-blockers");
-    el.innerHTML = '<div class="blocker-list"><div class="section-eyebrow">Critical blockers first</div><h2>What still blocks acceptance</h2><ul class="blocker-items">' + blockers.map(function (item) {
-      return '<li class="blocker-item"><span class="eyebrow-pill ' + toneClass(item.tone) + '">' + escapeHtml(item.id || 'BLOCKER') + '</span><h3>' + escapeHtml(item.title || 'Blocker') + '</h3><p class="mb-0">' + escapeHtml(item.detail || '') + '</p></li>';
-    }).join('') + '</ul></div>';
-  }
-
-  function renderTranches() {
-    var tranches = PLAN.activeTranches || [];
-    var el = document.getElementById("plan-tranches");
-    el.innerHTML = '<div class="section-stack"><div><div class="section-eyebrow">Active action items grouped by tranche</div><h2>Now / next</h2><p class="section-sub">The active tranche stays short and operational: fix the truth surface, fix the CEO interactions, then verify on hosted.</p></div><div class="tranche-grid">' + tranches.map(function (tranche) {
-      return '<article class="tranche-card"><div class="phase-card__meta"><span>Owner · ' + escapeHtml(tranche.owner || 'StrategyOS') + '</span><span>State · ' + escapeHtml(statusLabels[tranche.status] || tranche.status || 'In progress') + '</span></div><h3>' + escapeHtml(tranche.title || 'Tranche') + '</h3><ul class="tranche-list">' + (tranche.items || []).map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul></article>';
-    }).join('') + '</div></div>';
-  }
-
-  function renderVerification() {
-    var verify = PLAN.verification || {};
-    var later = PLAN.laterHardening || [];
-    var el = document.getElementById("plan-verification");
-    el.innerHTML = '<div class="section-stack"><div><div class="section-eyebrow">Verification state</div><h2>What must be proven on hosted</h2></div><div class="verify-grid"><article class="verify-card"><span class="eyebrow-pill neutral">Hosted checks</span><h3>Must be true on strategyos.live</h3><ul class="verify-list">' + (verify.hosted || []).map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul></article><article class="verify-card"><span class="eyebrow-pill warn">Still pending</span><h3>Acceptance remains open until</h3><ul class="verify-list">' + (verify.pending || []).map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul></article></div><article class="verify-card"><div class="section-eyebrow">Later hardening</div><h3>Below the fold once this hosted tranche lands</h3><ul class="verify-list">' + later.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul></article></div>';
+  function renderBacklog() {
+    var el = document.getElementById("plan-backlog");
+    var rows = buildBacklogRows();
+    var pinned = rows.filter(function (row) { return row.pinned; }).length;
+    var high = rows.filter(function (row) { return row.priority === 'high'; }).length;
+    el.innerHTML = '<section class="tracker-section">'
+      + '<div class="section-head"><div><div class="section-eyebrow">Backlog</div><h2>Remaining work</h2></div><p>CEO interaction defects, the Oracle/security follow-up, and the post-deploy live check stay visible here until they clear.</p></div>'
+      + '<div class="tracker-summary">'
+      + '<article class="tracker-stat"><span class="tracker-stat__label">Open rows</span><span class="tracker-stat__value">' + escapeHtml(String(rows.length)) + '</span></article>'
+      + '<article class="tracker-stat"><span class="tracker-stat__label">Pinned rows</span><span class="tracker-stat__value">' + escapeHtml(String(pinned)) + '</span></article>'
+      + '<article class="tracker-stat"><span class="tracker-stat__label">High priority</span><span class="tracker-stat__value">' + escapeHtml(String(high)) + '</span></article>'
+      + '</div>'
+      + '<div class="backlog-card"><div class="backlog-table-wrap"><table class="backlog-table"><thead><tr><th scope="col">ID</th><th scope="col">Area</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Remaining work</th></tr></thead><tbody>' + rows.map(function (row) {
+        return '<tr class="' + escapeHtml(row.priorityClass) + ' ' + (row.pinned ? 'pinned-row' : '') + '"><td><span class="backlog-code">' + escapeHtml(row.id) + '</span></td><td>' + escapeHtml(row.area) + '</td><td><div class="backlog-meta"><span class="table-pill">' + escapeHtml(row.kind) + '</span>' + (row.pinned ? '<span class="table-pill pinned">Pinned</span>' : '') + '</div></td><td><span class="backlog-status">' + escapeHtml(row.status) + '</span></td><td><div class="row-title">' + escapeHtml(row.title) + '</div><div class="row-detail">' + renderDetail(row) + '</div></td></tr>';
+      }).join('') + '</tbody></table></div></div>'
+      + '</section>';
   }
 
   function renderHistory() {
-    var phases = (PLAN.phases || []).filter(function (phase) {
-      return Number(phase.num) >= 15;
+    var phases = PLAN.phases || [];
+    var recentCompleted = phases.filter(function (phase) {
+      return Number(phase.num) >= 15 && phase.status === 'completed';
     });
+    var activePhase = phases.find(function (phase) {
+      return Number(phase.num) === 17;
+    }) || { stories: [] };
+    var activeCompleted = (activePhase.stories || []).filter(function (story) {
+      return story.status === 'completed';
+    });
+    var earlierPhases = phases.filter(function (phase) {
+      return Number(phase.num) < 15 && phase.status === 'completed';
+    });
+    var earlierStoryCount = earlierPhases.reduce(function (sum, phase) {
+      return sum + ((phase.stories || []).filter(function (story) { return story.status === 'completed'; }).length);
+    }, 0);
     var el = document.getElementById("plan-history");
-    el.innerHTML = '<details class="history-details"><summary class="history-toggle">Delivery history below the fold</summary><div class="history-grid">' + phases.map(function (phase) {
-      var done = (phase.stories || []).filter(function (story) { return story.status === 'completed'; }).length;
-      return '<article class="history-card"><div class="phase-card__meta"><span>Phase ' + escapeHtml(String(phase.num)) + '</span><span>' + escapeHtml(statusLabels[phase.status] || phase.status || 'In progress') + '</span><span>' + escapeHtml(String(done)) + ' / ' + escapeHtml(String((phase.stories || []).length)) + ' stories complete</span></div><h3>' + escapeHtml(phase.title || 'Phase') + '</h3><p>' + escapeHtml(phase.subtitle || '') + '</p><ul class="history-list">' + (phase.stories || []).map(function (story) {
-        return '<li><strong>' + escapeHtml(story.id || '') + '.</strong> ' + escapeHtml(story.title || '') + ' — ' + escapeHtml(story.description || '') + '</li>';
-      }).join('') + '</ul></article>';
-    }).join('') + '</div></details>';
+    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Completed history</div><h2>Shipped work</h2></div><p>Compact delivery record. Anything still open stays in the backlog above.</p></div><div class="history-grid">'
+      + recentCompleted.map(function (phase) {
+        var done = (phase.stories || []).filter(function (story) { return story.status === 'completed'; });
+        return '<article class="history-card"><div class="phase-card__meta"><span>Phase ' + escapeHtml(String(phase.num)) + '</span><span>' + escapeHtml(String(done.length)) + ' items shipped</span></div><h3>' + escapeHtml(phase.title || 'Phase') + '</h3><p>' + escapeHtml(phase.subtitle || '') + '</p><ul class="history-list">' + done.slice(0, 5).map(function (story) {
+          return '<li><strong>' + escapeHtml(story.id || '') + '</strong> — ' + escapeHtml(story.title || '') + '</li>';
+        }).join('') + '</ul></article>';
+      }).join('')
+      + '<article class="history-card"><div class="phase-card__meta"><span>Phase 17</span><span>' + escapeHtml(String(activeCompleted.length)) + ' items already shipped</span></div><h3>Hosted corrective tranche</h3><p>Completed pieces from the current tranche stay here while the open defects remain above.</p><ul class="history-list">' + activeCompleted.map(function (story) {
+        return '<li><strong>' + escapeHtml(story.id || '') + '</strong> — ' + escapeHtml(story.title || '') + '</li>';
+      }).join('') + '</ul></article>'
+      + '<article class="history-card"><div class="phase-card__meta"><span>Phases 0–14</span><span>' + escapeHtml(String(earlierStoryCount)) + ' items shipped</span></div><h3>Foundation through Oracle alignment</h3><p>The platform, Oracle intake, KPI engine, leakage review, and executive pilot surfaces shipped across the earlier phases.</p><ul class="history-list"><li>Core runtime, persistence, orchestration, and UI foundation.</li><li>Oracle EBS ingestion, deterministic KPI calculation, and leakage detection.</li><li>CEO/CFO pilot alignment before validation and handoff.</li></ul></article>'
+      + '</div></section>';
+  }
+
+  function buildBacklogRows() {
+    var rows = [];
+    (PLAN.blockers || []).forEach(function (item) {
+      rows.push({
+        id: item.id || 'ROW',
+        area: 'Tracker',
+        kind: 'Blocker',
+        status: 'open',
+        title: item.title || 'Open work',
+        detail: item.detail || '',
+        priority: 'high',
+        priorityClass: 'priority-high',
+        pinned: true
+      });
+    });
+    ((PLAN.masterBacklog || {}).items || []).forEach(function (item) {
+      rows.push({
+        id: item.id || 'ROW',
+        area: item.area || 'Executive surface',
+        kind: item.kind || 'Task',
+        status: item.status || 'open',
+        title: item.issue || 'Open work',
+        detail: item.detail || '',
+        detailList: item.detailList || [],
+        priority: item.priority || ((item.id || '').indexOf('BUG-') === 0 || (item.id || '').indexOf('SEC-') === 0 || (item.id || '').indexOf('ORACLE-') === 0 ? 'high' : 'medium'),
+        priorityClass: ((item.priority || ((item.id || '').indexOf('BUG-') === 0 || (item.id || '').indexOf('SEC-') === 0 || (item.id || '').indexOf('ORACLE-') === 0 ? 'high' : 'medium')) === 'high') ? 'priority-high' : 'priority-medium',
+        pinned: item.pinned !== false
+      });
+    });
+    if ((PLAN.verification || {}).pending && PLAN.verification.pending.length) {
+      rows.push({
+        id: 'LIVE-VERIFY',
+        area: 'Live site',
+        kind: 'Verification',
+        status: 'pending',
+        title: 'Run the post-deploy live check',
+        detailList: PLAN.verification.pending,
+        priority: 'medium',
+        priorityClass: 'priority-medium',
+        pinned: false
+      });
+    }
+    return rows;
+  }
+
+  function renderDetail(row) {
+    var detail = row.detail ? escapeHtml(row.detail) : '';
+    var list = (row.detailList || []).length
+      ? '<ul>' + row.detailList.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>'
+      : '';
+    return detail + list;
   }
 
   function escapeHtml(str) {
@@ -689,10 +936,7 @@ p:last-child { margin-bottom: 0; }
   }
 
   /* ─── Init ─── */
-  renderTruthBoundary();
-  renderBlockers();
-  renderTranches();
-  renderVerification();
+  renderBacklog();
   renderHistory();
 
 })();
@@ -700,8 +944,8 @@ p:last-child { margin-bottom: 0; }
 
 <!-- ═══════════ FOOTER ═══════════ -->
 <footer class="footer container">
-  <p>StrategyOS · Oracle EBS Pilot Execution Plan · <a href="https://strategyos.live">strategyos.live</a></p>
-  <p style="font-size:11px;">Hosted-only truth boundary · delivery history preserved below the fold · acceptance remains open until hosted verification passes</p>
+  <p>StrategyOS · Oracle EBS Pilot Execution Tracker · <a href="https://strategyos.live">strategyos.live</a></p>
+  <p style="font-size:11px;">Remaining work first. Completed delivery retained underneath.</p>
 </footer>
 
 </body>

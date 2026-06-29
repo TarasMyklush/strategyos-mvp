@@ -35,22 +35,48 @@
       {
         id: "PLAN-001",
         tone: "warn",
-        title: "Hosted /plan truth structure missing",
-        detail: "Hosted /plan must show current live status, blockers first, active tranche items, verification state, and later hardening before delivery history."
+        title: "Live /plan still needs the backlog-first tracker layout",
+        detail: "Keep the live page focused on remaining work first and concise completed history second."
       },
       {
         id: "CEO-INT-001",
         tone: "warn",
-        title: "Executive surface still behaves like a partial mock in key flows",
-        detail: "Tabs, Hermes interactions, findings/developments actions, visible response affordances, scroll behaviour, and feedback escape hatches must all work on the hosted surface."
+        title: "Executive interaction defects remain open",
+        detail: "Tabs, Hermes interactions, findings/developments actions, visible responses, scroll behaviour, and feedback escape hatches still need a live fix."
       },
       {
         id: "REPORT-001",
         tone: "warn",
-        title: "Reporting must remain explicit about hosted truth",
-        detail: "No local-only green status should appear as progress. Hosted verification remains mandatory after deploy."
+        title: "Post-deploy live check still pending",
+        detail: "Recheck the live site after deployment and keep any remaining failures in backlog."
       }
     ],
+    masterBacklog: {
+      title: "Pinned defect backlog",
+      summary: "Keep the CEO bug list and Oracle/security follow-up visible until the live site is clean.",
+      items: [
+        { id: "BUG-001", kind: "Bug", area: "Navigation", status: "open", priority: "high", issue: "Assistants/Knowledge nav tabs broken" },
+        { id: "BUG-002", kind: "Bug", area: "Hermes panel", status: "open", priority: "high", issue: "Hermes conversation panel overflow/layout broken" },
+        { id: "BUG-003", kind: "Bug", area: "Hermes panel", status: "open", priority: "high", issue: "New conversation button broken" },
+        { id: "BUG-004", kind: "Bug", area: "Hermes prompts", status: "open", priority: "high", issue: "Suggested question chips broken" },
+        { id: "BUG-005", kind: "Bug", area: "Findings", status: "open", priority: "high", issue: "Findings expand buttons broken" },
+        { id: "BUG-006", kind: "Bug", area: "Developments", status: "open", priority: "high", issue: "Developments projection rows broken" },
+        { id: "BUG-007", kind: "Bug", area: "Evidence", status: "open", priority: "high", issue: "Show the work button broken" },
+        { id: "BUG-008", kind: "Bug", area: "Inline ask", status: "open", priority: "high", issue: "Inline Ask send clears without visible response" },
+        { id: "UX-001", kind: "UX", area: "Hermes launcher", status: "open", priority: "medium", issue: "Floating Hermes button obscures KPI data" },
+        { id: "UX-002", kind: "UX", area: "Charts", status: "open", priority: "medium", issue: "Charts need axes/markers/tooltips" },
+        { id: "UX-003", kind: "UX", area: "Hermes panel", status: "open", priority: "medium", issue: "Hermes panel needs usable scroll affordance" },
+        { id: "UX-004", kind: "UX", area: "GM note", status: "open", priority: "medium", issue: "GM note availability needs explicit state" },
+        { id: "UX-005", kind: "UX", area: "Ask flow", status: "open", priority: "medium", issue: "`send and receive` affordance must be real or removed" },
+        { id: "UX-006", kind: "UX", area: "Theme toggle", status: "open", priority: "medium", issue: "Theme toggle needs visible tooltip/label" },
+        { id: "UX-007", kind: "UX", area: "Hermes messages", status: "open", priority: "medium", issue: "Orphaned Hermes sender labels / empty bubbles" },
+        { id: "UX-008", kind: "UX", area: "Feedback", status: "open", priority: "medium", issue: "Add feedback/report-bug escape hatch" },
+        { id: "ORACLE-001", kind: "Backend", area: "Oracle / public routes", status: "open", priority: "high", issue: "Redeploy and recheck the reviewed Oracle defect sweep", detailList: ["Oracle month-name period resolution fix", "Tenant scope on /finance/oracle/ingest", "Anonymous-safe audit summary payload", "Leverage/covenant guardrails", "Duplicate-payment fallback and FX quote direction", "Negative-quantity inflation guard, payload bounds, and pilot flag enforcement"] },
+        { id: "SEC-001", kind: "Security", area: "Auth", status: "open", priority: "high", issue: "Use constant-time proxy secret comparison in auth.py" },
+        { id: "SEC-002", kind: "Security", area: "Public scrub", status: "open", priority: "high", issue: "Remove the hardcoded public scrub literal and rely on allow-listing" },
+        { id: "COPY-001", kind: "Copy", area: "Plan / landing", status: "open", priority: "medium", issue: "Tighten oversized headline and adjacent copy treatment already in scope" }
+      ]
+    },
     activeTranches: [
       {
         title: "Tranche A — /plan restructure",
@@ -82,6 +108,31 @@
           "Tighten adjacent supporting copy so hierarchy, tone, and typography rhythm read as one surface rather than a patch.",
           "Keep the change bounded to copy rhythm and hosted verification readiness without redesign drift."
         ]
+      },
+      {
+        title: "Tranche D — reviewed backend defect sweep",
+        owner: "Backend defect hardening",
+        status: "completed",
+        items: [
+          "DONE — Fix Oracle month-name period resolution so real monthly names stop collapsing to one-day KPI windows.",
+          "DONE — Enforce tenant scope on /finance/oracle/ingest and reject cross-tenant writes.",
+          "DONE — Route /public/runs/latest/audit-summary through anonymous-safe payloads; stop leaking run_id and challenged_finding_ids.",
+          "DONE — Guard leverage / covenant math for negative or near-zero EBITDA.",
+          "DONE — Align duplicate-payment recoverable amount fallback with grouping math.",
+          "DONE — Infer FX-hedge quote direction instead of assuming one orientation.",
+          "DONE — Reject off-contract negative-quantity inflation in recoverable math.",
+          "DONE — Bound Oracle ingest extracts/manual_inputs payload size.",
+          "DONE — Enforce Oracle pilot flag on /finance/oracle/ingest before accepting writes."
+        ]
+      },
+      {
+        title: "Tranche E — open backend security follow-up",
+        owner: "Backend security hardening",
+        status: "in_progress",
+        items: [
+          "OPEN — Replace proxy-secret != check with hmac.compare_digest in auth.py.",
+          "OPEN — Remove hardcoded 'premier packaging' public scrub literal and rely on constructive allow-listing."
+        ]
       }
     ],
     verification: {
@@ -92,16 +143,15 @@
         "Hosted reports must state hosted truth explicitly and avoid local-completion wording."
       ],
       pending: [
-        "Run independent hosted verification after deployment of this tranche.",
-        "Capture residual hosted defects truthfully if any flow still fails.",
-        "Keep acceptance open until hosted checks pass."
+        "Run an independent live-site check after deployment.",
+        "Capture any remaining live defects as backlog rows.",
+        "Clear the tracker only after the live site passes the check."
       ]
     },
     laterHardening: [
-      "Oracle period-resolution correctness for real monthly period names.",
-      "Tenant-handling and IDOR hardening around Oracle ingest routes.",
-      "Anonymous publication sanitization and leverage/covenant edge-case safety.",
-      "Payload-size, FX quote-direction, duplicate-payment field-chain, and off-contract sign-handling hardening."
+      "OPEN — auth.py constant-time proxy secret comparison.",
+      "OPEN — remove reactive 'premier packaging' public scrub special-case.",
+      "Keep backend defect sweep visible until hosted code state is redeployed and rechecked."
     ],
     phases: [
       {
