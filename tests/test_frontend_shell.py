@@ -66,7 +66,7 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     html = _homepage_response()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS — Group CEO Diagnostics" in html
+    assert "StrategyOS — Group CEO Oracle Pilot" in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -109,7 +109,7 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     js = _static_executive_js()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS — Group CEO Diagnostics" in html
+    assert "StrategyOS — Group CEO Oracle Pilot" in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -143,8 +143,8 @@ def test_app_entry_routes_render_executive_shell():
 
     assert app_response.status_code == 200
     assert alias_response.status_code == 200
-    assert "StrategyOS — Group CEO Diagnostics" in app_response.text
-    assert "StrategyOS — Group CEO Diagnostics" in alias_response.text
+    assert "StrategyOS — Group CEO Oracle Pilot" in app_response.text
+    assert "StrategyOS — Group CEO Oracle Pilot" in alias_response.text
     assert '<script id="strategyos-executive-bootstrap"' in app_response.text
     assert '<script id="strategyos-executive-bootstrap"' in alias_response.text
     assert '<script id="strategyos-bootstrap"' not in app_response.text
@@ -157,7 +157,7 @@ def test_app_entry_uses_design_faithful_executive_surface():
     html = _app_entry_response()
     js = _static_executive_js()
 
-    assert "StrategyOS — Group CEO Diagnostics" in html
+    assert "StrategyOS — Group CEO Oracle Pilot" in html
     assert "StrategyOS" in html
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
