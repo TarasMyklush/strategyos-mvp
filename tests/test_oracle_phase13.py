@@ -315,7 +315,7 @@ def test_phase13_leakage_engine_does_not_regress_kpi_computation_boundary():
     assert computation.computation_boundary.startswith("Deterministic Oracle KPI computation only")
 
 
-def test_phase13_plan_data_marks_phase13_complete_and_phase14_not_started():
+def test_phase13_plan_data_keeps_phase13_complete_after_phase14_moves_forward():
     plan_file = (
         Path(__file__).resolve().parents[1]
         / "strategyos_mvp"
@@ -330,4 +330,4 @@ def test_phase13_plan_data_marks_phase13_complete_and_phase14_not_started():
     assert 'overallStatus: "in_progress"' in text
     assert 'status: "completed"' in phase13_block
     assert phase13_block.count('status: "completed"') >= 6
-    assert 'status: "not_started"' in phase14_block
+    assert 'status: "completed"' in phase14_block

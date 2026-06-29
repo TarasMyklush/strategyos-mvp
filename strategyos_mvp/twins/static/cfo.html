@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>CFO Twin · StrategyOS Digital Twin</title>
+<title>CFO Surface · StrategyOS Oracle Pilot</title>
 <style>
 :root {
   --bg: #f4f2ed;
@@ -564,7 +564,7 @@ body {
     <span class="brand-mark" aria-hidden="true"></span>
     <div>
       <div class="brand-name">StrategyOS</div>
-      <div class="brand-subtitle">CFO Twin Dashboard</div>
+      <div class="brand-subtitle">CFO surface · Oracle EBS pilot (twin history preserved)</div>
     </div>
   </div>
   <div class="topbar-status">
@@ -609,69 +609,84 @@ body {
     </div>
   </div>
 
-  <!-- Financial KPI Cards -->
+  <!-- Oracle-first Financial KPI Cards -->
   <section class="card" aria-label="Financial KPI cards">
-    <h2 class="card-title">Financial KPI Overview</h2>
-    <p class="card-subtitle">Key financial metrics monitored by CFO Twin</p>
+    <h2 class="card-title">Oracle-first finance cockpit</h2>
+    <p class="card-subtitle">Deterministic Oracle-backed pilot KPIs with approved manual inputs called out explicitly.</p>
     <div class="kpi-grid" id="kpi-grid">
       <div class="kpi-card">
         <span class="kpi-dot green"></span>
-        <div class="kpi-name">Revenue Q2</div>
-        <div class="kpi-value">2.1B</div>
-        <span class="kpi-status current">current</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-dot amber"></span>
-        <div class="kpi-name">Margin Q2</div>
-        <div class="kpi-value">&mdash;</div>
-        <span class="kpi-status stale">stale</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-dot green"></span>
-        <div class="kpi-name">Cash Flow Q2</div>
-        <div class="kpi-value">340M</div>
+        <div class="kpi-name">Revenue attainment</div>
+        <div class="kpi-value">125%</div>
         <span class="kpi-status current">current</span>
       </div>
       <div class="kpi-card">
         <span class="kpi-dot green"></span>
-        <div class="kpi-name">Working Capital</div>
-        <div class="kpi-value">1.8B</div>
+        <div class="kpi-name">EBITDA margin</div>
+        <div class="kpi-value">25.00%</div>
         <span class="kpi-status current">current</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-dot amber"></span>
-        <div class="kpi-name">Budget Variance</div>
-        <div class="kpi-value">-3.2%</div>
-        <span class="kpi-status stale">stale</span>
+        <span class="kpi-dot green"></span>
+        <div class="kpi-name">Cash vs board floor</div>
+        <div class="kpi-value">120%</div>
+        <span class="kpi-status current">current</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-dot green"></span>
+        <div class="kpi-name">Covenant headroom</div>
+        <div class="kpi-value">1.48x</div>
+        <span class="kpi-status current">current</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-dot green"></span>
+        <div class="kpi-name">Cash conversion cycle</div>
+        <div class="kpi-value">3.75 days</div>
+        <span class="kpi-status current">current</span>
       </div>
     </div>
   </section>
 
-  <!-- Cash Monitoring Widget -->
-  <section class="card" aria-label="Cash monitoring">
-    <h2 class="card-title">Cash Monitoring</h2>
-    <p class="card-subtitle">Actual vs Plan cash position</p>
+  <!-- Oracle ingestion and reconciliation -->
+  <section class="card" aria-label="Oracle ingestion and reconciliation context">
+    <h2 class="card-title">Oracle ingestion &amp; reconciliation context</h2>
+    <p class="card-subtitle">Finance surfaces are driven first by Oracle GL, AR, AP, and CE extracts, then reconciled to approved budget, board-floor, covenant, and leakage inputs.</p>
     <div class="cash-bar-container">
       <div class="cash-bar">
-        <div class="cash-bar-fill" id="cash-bar-fill" style="width:78%"></div>
-        <div class="cash-bar-target" id="cash-bar-target" style="left:85%"></div>
+        <div class="cash-bar-fill" id="cash-bar-fill" style="width:100%"></div>
+        <div class="cash-bar-target" id="cash-bar-target" style="left:83.33%"></div>
       </div>
       <div class="cash-bar-label">
-        <span>Actual: $1.56B</span>
-        <span>Target: $2.0B</span>
+        <span>Oracle cash vs floor: 120%</span>
+        <span>Board floor baseline: 100%</span>
       </div>
     </div>
+    <ul class="inv-list" style="margin-top:16px;">
+      <li class="inv-item"><div class="inv-item__info"><div class="inv-item__title">Oracle modules in scope</div><div class="inv-item__assignee">GL, AR, AP, and CE are authoritative for the pilot finance surface.</div></div><span class="inv-item__status resolved">live</span></li>
+      <li class="inv-item"><div class="inv-item__info"><div class="inv-item__title">Approved manual inputs</div><div class="inv-item__assignee">Budget plan, board floor, covenant terms, hedge register, and contract registry remain explicit support inputs.</div></div><span class="inv-item__status open">controlled</span></li>
+      <li class="inv-item"><div class="inv-item__info"><div class="inv-item__title">Leakage review</div><div class="inv-item__assignee">8 deterministic findings · SAR 3.57M recoverable · reviewer workflow attached.</div></div><span class="inv-item__status in-progress">review</span></li>
+    </ul>
+  </section>
+
+  <section class="card" aria-label="Operational context manual or deferred">
+    <h2 class="card-title">Operational context — manual / deferred</h2>
+    <p class="card-subtitle">Visible for leadership context only. These are not claimed as Oracle-finance automation in this pilot.</p>
+    <ul class="inv-list">
+      <li class="inv-item"><div class="inv-item__info"><div class="inv-item__title">Cold-chain resilience</div><div class="inv-item__assignee">Manual / deferred until a non-finance connector is proven and governed.</div></div><span class="inv-item__status open">manual</span></li>
+      <li class="inv-item"><div class="inv-item__info"><div class="inv-item__title">e-Rx fulfilment pulse</div><div class="inv-item__assignee">Manual / deferred context only; not sourced from Oracle finance extracts.</div></div><span class="inv-item__status open">deferred</span></li>
+      <li class="inv-item"><div class="inv-item__info"><div class="inv-item__title">Retail LfL and occupancy-style metrics</div><div class="inv-item__assignee">Manual / deferred until an operational evidence path is delivered separately from the Oracle CFO pilot.</div></div><span class="inv-item__status open">manual</span></li>
+    </ul>
   </section>
 
   <!-- Pending Approvals -->
   <section class="card" aria-label="Pending approvals">
     <h2 class="card-title">Pending Approvals</h2>
-    <p class="card-subtitle">Budget requests from GMs requiring CFO sign-off</p>
+    <p class="card-subtitle">Oracle-backed finance decisions and reviewer escalations requiring CFO sign-off</p>
     <ul class="decision-list" id="decision-list">
       <li class="decision-item" data-decision-id="bud-001">
         <div class="decision-item__info">
-          <div class="decision-item__title">Q3 Marketing Budget — North America BU</div>
-          <div class="decision-item__desc">GM North America requests $850K for Q3 digital campaign</div>
+          <div class="decision-item__title">Approve June Oracle revenue and EBITDA bridge</div>
+          <div class="decision-item__desc">Confirm deterministic Oracle GL output against the approved budget pack before board release.</div>
         </div>
         <div class="decision-item__actions">
           <button class="btn-approve" onclick="approveDecision('bud-001')">Approve</button>
@@ -680,8 +695,8 @@ body {
       </li>
       <li class="decision-item" data-decision-id="bud-002">
         <div class="decision-item__info">
-          <div class="decision-item__title">Q3 R&amp;D Equipment — Europe BU</div>
-          <div class="decision-item__desc">GM Europe requests $1.2M for lab equipment upgrade</div>
+          <div class="decision-item__title">Release leakage recovery sequence</div>
+          <div class="decision-item__desc">Reviewer asks CFO to release the SAR 3.57M Oracle-backed leakage recovery queue.</div>
         </div>
         <div class="decision-item__actions">
           <button class="btn-approve" onclick="approveDecision('bud-002')">Approve</button>
@@ -690,8 +705,8 @@ body {
       </li>
       <li class="decision-item" data-decision-id="bud-003">
         <div class="decision-item__info">
-          <div class="decision-item__title">Q3 Headcount — APAC BU</div>
-          <div class="decision-item__desc">GM APAC requests $2.1M for 15 new sales positions</div>
+          <div class="decision-item__title">Accept covenant headroom slide for CEO surface</div>
+          <div class="decision-item__desc">Promote the Oracle-derived 1.48x covenant headroom output to the CEO and board-safe surface.</div>
         </div>
         <div class="decision-item__actions">
           <button class="btn-approve" onclick="approveDecision('bud-003')">Approve</button>
@@ -704,36 +719,36 @@ body {
   <!-- Active Investigations -->
   <section class="card" aria-label="Active investigations">
     <h2 class="card-title">Active Investigations</h2>
-    <p class="card-subtitle" id="inv-count">4 active investigations</p>
+    <p class="card-subtitle" id="inv-count">4 active Oracle finance investigations</p>
     <ul class="inv-list" id="inv-list">
       <li class="inv-item">
         <div class="inv-item__info">
-          <div class="inv-item__title">COGS data reconciliation</div>
-          <div class="inv-item__assignee">Assignee: Group Manager Twin</div>
+          <div class="inv-item__title">Oracle GL to budget reconciliation</div>
+          <div class="inv-item__assignee">Assignee: CFO surface</div>
           <div class="progress-bar"><div class="progress-fill active" style="width:60%"></div></div>
         </div>
         <span class="inv-item__status in-progress">in progress</span>
       </li>
       <li class="inv-item">
         <div class="inv-item__info">
-          <div class="inv-item__title">Margin Q2 calculation</div>
-          <div class="inv-item__assignee">Assignee: CFO Twin</div>
+          <div class="inv-item__title">Deterministic EBITDA margin verification</div>
+          <div class="inv-item__assignee">Assignee: Oracle KPI engine</div>
           <div class="progress-bar"><div class="progress-fill active" style="width:45%"></div></div>
         </div>
         <span class="inv-item__status in-progress">in progress</span>
       </li>
       <li class="inv-item">
         <div class="inv-item__info">
-          <div class="inv-item__title">Budget variance analysis</div>
-          <div class="inv-item__assignee">Assignee: Analyst Twin</div>
+          <div class="inv-item__title">Leakage evidence challenge review</div>
+          <div class="inv-item__assignee">Assignee: Reviewer lane</div>
           <div class="progress-bar"><div class="progress-fill open" style="width:20%"></div></div>
         </div>
         <span class="inv-item__status open">open</span>
       </li>
       <li class="inv-item">
         <div class="inv-item__info">
-          <div class="inv-item__title">Working capital optimization</div>
-          <div class="inv-item__assignee">Assignee: Strategy Twin</div>
+          <div class="inv-item__title">Manual input conformance check</div>
+          <div class="inv-item__assignee">Assignee: Finance controls</div>
           <div class="progress-bar"><div class="progress-fill resolved" style="width:100%"></div></div>
         </div>
         <span class="inv-item__status resolved">resolved</span>
@@ -744,13 +759,13 @@ body {
   <!-- Inbox -->
   <section class="card" aria-label="Inbox">
     <h2 class="card-title">Inbox</h2>
-    <p class="card-subtitle">Recent twin-to-twin messages</p>
+    <p class="card-subtitle">Recent Oracle pilot finance threads</p>
     <ul class="inbox-list" id="inbox-list">
       <li class="inbox-item" data-msg-id="msg-001" onclick="toggleThread('msg-001')">
         <div class="inbox-item__icon">C</div>
         <div class="inbox-item__body">
-          <div class="inbox-item__sender">CEO Twin</div>
-          <div class="inbox-item__subject">Q3 budget reallocation — please confirm ROI projections</div>
+          <div class="inbox-item__sender">CEO surface</div>
+          <div class="inbox-item__subject">Confirm Oracle-backed finance rings before board-safe publish</div>
           <div class="inbox-item__meta">
             <span>1 hour ago</span>
             <span class="priority-badge high">high</span>
@@ -760,8 +775,8 @@ body {
       <li class="inbox-item" data-msg-id="msg-002" onclick="toggleThread('msg-002')">
         <div class="inbox-item__icon">G</div>
         <div class="inbox-item__body">
-          <div class="inbox-item__sender">Group Manager Twin</div>
-          <div class="inbox-item__subject">Q3 budget request — North America digital campaign</div>
+          <div class="inbox-item__sender">Reviewer lane</div>
+          <div class="inbox-item__subject">Leakage finding set challenged — validate Oracle evidence pack</div>
           <div class="inbox-item__meta">
             <span>3 hours ago</span>
             <span class="priority-badge normal">normal</span>
@@ -771,8 +786,8 @@ body {
       <li class="inbox-item" data-msg-id="msg-003" onclick="toggleThread('msg-003')">
         <div class="inbox-item__icon">A</div>
         <div class="inbox-item__body">
-          <div class="inbox-item__sender">Analyst Twin</div>
-          <div class="inbox-item__subject">Budget variance report — Q2 actuals vs plan</div>
+          <div class="inbox-item__sender">Finance controls</div>
+          <div class="inbox-item__subject">Board-floor and covenant manual inputs refreshed for June close</div>
           <div class="inbox-item__meta">
             <span>1 day ago</span>
             <span class="priority-badge normal">normal</span>
@@ -790,7 +805,7 @@ body {
           <span class="thread-message__status-badge responded">responded</span>
         </div>
         <div class="thread-message__body">
-          Reviewed your Q3 budget reallocation proposal. Please confirm the R&amp;D ROI projections support moving $2.5M from marketing to R&amp;D before I approve.
+          Before the CEO surface updates, confirm the Oracle-backed revenue attainment, EBITDA margin, and covenant outputs are the exact deterministic pilot numbers.
         </div>
       </div>
       <div class="thread-message">
@@ -800,7 +815,7 @@ body {
           <span class="thread-message__status-badge delivered">delivered</span>
         </div>
         <div class="thread-message__body">
-          R&amp;D ROI projection shows 32% IRR over 18 months. Full model is attached. The reallocation supports our margin improvement target of 24%.
+          Confirmed. CEO finance rings should render from Oracle pilot outputs: revenue attainment 125%, EBITDA margin 25.00%, cash vs board floor 120%, and covenant headroom 1.48x.
         </div>
         <div class="thread-message__citations">
           <a class="citation-link" href="#" onclick="return false;">Evidence: R&amp;D ROI Model Q3</a>
@@ -817,7 +832,7 @@ body {
           <span class="thread-message__status-badge pending">pending</span>
         </div>
         <div class="thread-message__body">
-          North America BU requests $850K for Q3 digital campaign. Expected ROI is 15% based on Q1-Q2 performance data. Please review and approve.
+          The reviewer lane challenged two leakage findings. Please confirm the Oracle evidence chain before we release the SAR 3.57M recovery sequence.
         </div>
         <div class="thread-message__citations">
           <a class="citation-link" href="#" onclick="return false;">KPI: revenue_q2</a>
@@ -834,7 +849,7 @@ body {
           <span class="thread-message__status-badge delivered">delivered</span>
         </div>
         <div class="thread-message__body">
-          Q2 budget variance report is complete. Overall variance is -3.2% (underspend). Main driver: delayed R&amp;D equipment procurement in Europe BU. Full breakdown attached.
+          June close manual inputs are refreshed. Board floor, covenant pack, hedge register, and contract registry are aligned to the Oracle finance snapshot.
         </div>
         <div class="thread-message__citations">
           <a class="citation-link" href="#" onclick="return false;">Evidence: Q2 Variance Report</a>
@@ -847,7 +862,7 @@ body {
   <!-- Human Override Interface -->
   <section class="card" aria-label="Human override controls">
     <h2 class="card-title">Human Override</h2>
-    <p class="card-subtitle">Direct intervention controls for governance and investigation routing</p>
+    <p class="card-subtitle">Direct intervention controls for Oracle pilot governance, reconciliation, and evidence routing</p>
 
     <div class="override-controls">
       <span class="text-sm" style="font-weight:600;color:var(--accent);">Redirect Investigation:</span>
@@ -887,23 +902,23 @@ body {
   <!-- Ask Your CFO -->
   <section class="card" aria-label="Ask your CFO">
     <h2 class="card-title">Ask Your CFO</h2>
-    <p class="card-subtitle">Query the CFO twin about financial performance, budget, or cash flow</p>
+    <p class="card-subtitle">Query the Oracle pilot CFO surface about deterministic finance outputs, reconciliation posture, or manual-input controls.</p>
     <div class="query-area">
       <div class="input-wrapper">
-        <input type="text" id="query-input" placeholder="e.g. What is our cash position?" autocomplete="off" />
+        <input type="text" id="query-input" placeholder="e.g. What does Oracle show for cash vs board floor?" autocomplete="off" />
         <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
       </div>
       <button id="query-btn">Ask</button>
     </div>
     <div class="prompt-suggestions">
-      <span class="prompt-chip" data-prompt="What is our cash position?">Cash position</span>
-      <span class="prompt-chip" data-prompt="Show me budget variance by BU">Budget variance</span>
-      <span class="prompt-chip" data-prompt="What is the Q2 revenue breakdown?">Revenue breakdown</span>
-      <span class="prompt-chip" data-prompt="Top 3 cost reduction opportunities">Cost reduction</span>
-      <span class="prompt-chip" data-prompt="Working capital trends">Working capital</span>
+      <span class="prompt-chip" data-prompt="What does Oracle show for cash vs board floor?">Cash vs floor</span>
+      <span class="prompt-chip" data-prompt="Show the Oracle EBITDA bridge">EBITDA bridge</span>
+      <span class="prompt-chip" data-prompt="What manual inputs are still in play?">Manual inputs</span>
+      <span class="prompt-chip" data-prompt="Show the leakage recovery queue">Leakage queue</span>
+      <span class="prompt-chip" data-prompt="Working capital cycle from Oracle">Working capital</span>
     </div>
     <div class="response-box" id="response-box">
-      <span class="text-muted">CFO Twin is ready. Ask a question above to start an investigation.</span>
+      <span class="text-muted">CFO surface is ready. Ask about Oracle-backed pilot numbers or controlled manual inputs.</span>
     </div>
   </section>
 
@@ -921,14 +936,14 @@ body {
   const autoDropdown = document.getElementById('autocomplete-dropdown');
 
   const AUTOCOMPLETE_SUGGESTIONS = [
-    'What is our cash position?',
-    'Show me budget variance by BU',
-    'What is the Q2 revenue breakdown?',
-    'Top 3 cost reduction opportunities',
-    'Working capital trends',
-    'How is margin tracking vs target?',
-    'What pending budget requests need my sign-off?',
-    'Cash flow forecast for Q3'
+    'What does Oracle show for cash vs board floor?',
+    'Show the Oracle EBITDA bridge',
+    'Which Oracle modules are feeding this surface?',
+    'What manual inputs are still in play?',
+    'Show the leakage recovery queue',
+    'Working capital cycle from Oracle',
+    'Which metrics are deterministic vs narrated?',
+    'What still needs reconciliation before board release?'
   ];
 
   function setStatus(state) {
@@ -940,85 +955,86 @@ body {
 
   function simulateInvestigation(query) {
     setStatus('investigating');
-    responseBox.textContent = 'CFO Twin is investigating\u2026';
+    responseBox.textContent = 'CFO surface is investigating\u2026';
 
     setTimeout(function () {
       var response;
       var q = query.toLowerCase();
 
-      if (q.indexOf('cash') !== -1) {
-        response = 'Cash position as of Q2:\n'
-          + '\u2022 Cash on hand: $1.56B (78% of $2.0B target)\n'
-          + '\u2022 Operating cash flow: $340M (current)\n'
-          + '\u2022 Working capital: $1.8B\n'
-          + '\u2022 Forecast Q3: $1.7\u2013$1.9B depending on budget approvals\n'
-          + 'Cash monitoring is active. No liquidity concerns at this time.';
-      } else if (q.indexOf('budget') !== -1 || q.indexOf('variance') !== -1) {
-        response = 'Q2 Budget Variance by BU:\n'
-          + '\u2022 North America: -2.1% (slightly under budget)\n'
-          + '\u2022 Europe: -5.8% (delayed R&D equipment)\n'
-          + '\u2022 APAC: +1.2% (slightly over on headcount)\n'
-          + 'Overall variance: -3.2% (favorable). 3 pending budget requests in queue.';
+      if (q.indexOf('cash') !== -1 || q.indexOf('floor') !== -1) {
+        response = 'Oracle pilot liquidity readout:\n'
+          + '\u2022 Cash vs board floor: 120%\n'
+          + '\u2022 Cash floor headroom: SAR 20\n'
+          + '\u2022 Net debt / EBITDA: 1.52x\n'
+          + '\u2022 Covenant headroom: 1.48x\n'
+          + 'These figures are deterministic Oracle-backed pilot outputs.';
+      } else if (q.indexOf('manual') !== -1 || q.indexOf('input') !== -1) {
+        response = 'Approved manual/file inputs still in play:\n'
+          + '\u2022 Budget plan\n'
+          + '\u2022 Board floor\n'
+          + '\u2022 Covenant terms\n'
+          + '\u2022 Hedge register\n'
+          + '\u2022 Contract registry\n'
+          + 'They remain explicit support inputs; they are not hidden as Oracle automation.';
       } else if (q.indexOf('revenue') !== -1) {
-        response = 'Q2 Revenue Breakdown:\n'
-          + '\u2022 North America: $980M (47% of total)\n'
-          + '\u2022 Europe: $650M (31%)\n'
-          + '\u2022 APAC: $470M (22%)\n'
-          + 'Total Q2 revenue: $2.1B (current, on track)';
-      } else if (q.indexOf('cost') !== -1) {
-        response = 'Top 3 cost reduction opportunities:\n'
-          + '1. Raw materials procurement \u2014 renegotiate 3 supplier contracts (est. savings $12M)\n'
-          + '2. Logistics optimization \u2014 consolidate regional distribution (est. savings $8M)\n'
-          + '3. Marketing efficiency \u2014 reallocate spend to high-ROI channels (est. savings $5M)';
+        response = 'Oracle revenue output:\n'
+          + '\u2022 Revenue attainment: 125%\n'
+          + '\u2022 Source basis: deterministic Oracle GL revenue facts versus approved budget plan\n'
+          + '\u2022 CEO finance ring should mirror this number exactly.';
+      } else if (q.indexOf('leakage') !== -1 || q.indexOf('recover') !== -1) {
+        response = 'Leakage queue summary:\n'
+          + '\u2022 8 deterministic findings\n'
+          + '\u2022 SAR 3.57M total recoverable\n'
+          + '\u2022 Reviewer workflow attached to each evidence pack\n'
+          + '\u2022 Release stays gated until finance review clears the queue.';
       } else if (q.indexOf('working capital') !== -1) {
-        response = 'Working capital trends:\n'
-          + '\u2022 Current: $1.8B (stable)\n'
-          + '\u2022 DSO: 38 days (within target of 40)\n'
-          + '\u2022 DPO: 52 days (improved from 48)\n'
-          + '\u2022 Inventory turnover: 6.2x (healthy)\n'
-          + 'Working capital optimization investigation is resolved.';
-      } else if (q.indexOf('margin') !== -1) {
-        response = 'Margin Q2 is currently stale (last updated 2026-05-15). '
-          + 'COGS data is missing, preventing calculation. '
-          + 'A data reconciliation investigation is in progress with the Group Manager Twin. '
-          + 'Target margin is 24%.';
+        response = 'Oracle working-capital cycle:\n'
+          + '\u2022 DSO: 4.50 days\n'
+          + '\u2022 DPO: 4.50 days\n'
+          + '\u2022 DIO: 3.75 days\n'
+          + '\u2022 CCC: 3.75 days\n'
+          + 'This is the deterministic Oracle-backed cycle now shown to the CEO surface.';
+      } else if (q.indexOf('ebitda') !== -1 || q.indexOf('bridge') !== -1 || q.indexOf('margin') !== -1) {
+        response = 'Oracle EBITDA bridge:\n'
+          + '\u2022 EBITDA margin: 25.00%\n'
+          + '\u2022 EBITDA attainment: 125%\n'
+          + '\u2022 Operating cost vs plan: 120%\n'
+          + 'Narrative may explain the bridge later, but these numbers stay fixed by deterministic pilot computation.';
       } else {
-        response = 'I analysed the question against available financial data. '
-          + 'The Q2 financial position is stable: revenue on track at $2.1B, '
-          + 'cash position healthy at $1.56B, working capital at $1.8B. '
-          + 'Main concern is the stale margin data pending COGS reconciliation.';
+        response = 'I analysed the question against the Oracle pilot finance surface. '
+          + 'This CFO surface is Oracle-first: finance metrics are deterministic, manual inputs are explicit, and operational signals remain manual / deferred until separately proven.';
       }
 
-      invCount.textContent = '4 active investigations';
+      invCount.textContent = '4 active Oracle finance investigations';
       invList.innerHTML = ''
         + '<li class="inv-item">'
         + '  <div class="inv-item__info">'
         + '    <div class="inv-item__title">Investigation: ' + query.slice(0, 40) + '</div>'
-        + '    <div class="inv-item__assignee">Assignee: CFO Twin</div>'
+        + '    <div class="inv-item__assignee">Assignee: CFO surface</div>'
         + '    <div class="progress-bar"><div class="progress-fill resolved" style="width:100%"></div></div>'
         + '  </div>'
         + '  <span class="inv-item__status resolved">resolved</span>'
         + '</li>'
         + '<li class="inv-item">'
         + '  <div class="inv-item__info">'
-        + '    <div class="inv-item__title">COGS data reconciliation</div>'
-        + '    <div class="inv-item__assignee">Assignee: Group Manager Twin</div>'
+        + '    <div class="inv-item__title">Oracle GL to budget reconciliation</div>'
+        + '    <div class="inv-item__assignee">Assignee: CFO surface</div>'
         + '    <div class="progress-bar"><div class="progress-fill active" style="width:60%"></div></div>'
         + '  </div>'
         + '  <span class="inv-item__status in-progress">in progress</span>'
         + '</li>'
         + '<li class="inv-item">'
         + '  <div class="inv-item__info">'
-        + '    <div class="inv-item__title">Margin Q2 calculation</div>'
-        + '    <div class="inv-item__assignee">Assignee: CFO Twin</div>'
+        + '    <div class="inv-item__title">Deterministic EBITDA margin verification</div>'
+        + '    <div class="inv-item__assignee">Assignee: Oracle KPI engine</div>'
         + '    <div class="progress-bar"><div class="progress-fill active" style="width:45%"></div></div>'
         + '  </div>'
         + '  <span class="inv-item__status in-progress">in progress</span>'
         + '</li>'
         + '<li class="inv-item">'
         + '  <div class="inv-item__info">'
-        + '    <div class="inv-item__title">Budget variance analysis</div>'
-        + '    <div class="inv-item__assignee">Assignee: Analyst Twin</div>'
+        + '    <div class="inv-item__title">Leakage evidence challenge review</div>'
+        + '    <div class="inv-item__assignee">Assignee: Reviewer lane</div>'
         + '    <div class="progress-bar"><div class="progress-fill open" style="width:20%"></div></div>'
         + '  </div>'
         + '  <span class="inv-item__status open">open</span>'

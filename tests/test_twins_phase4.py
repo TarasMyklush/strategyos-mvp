@@ -71,15 +71,16 @@ class TestCEODashboardSections:
         assert "Last Wake" in self.html
 
     def test_has_kpi_health(self):
-        assert "KPI Health Overview" in self.html
-        assert "Margin Q2" in self.html
-        assert "Revenue Q2" in self.html
-        assert "EBITDA" in self.html
+        assert "Oracle-backed financial rings" in self.html
+        assert "Revenue attainment ring" in self.html
+        assert "EBITDA margin ring" in self.html
+        assert "Cash vs board floor" in self.html
+        assert "Covenant headroom" in self.html
 
     def test_has_kpi_status_dots(self):
-        assert "kpi-dot green" in self.html
-        assert "kpi-dot amber" in self.html
-        assert "kpi-dot red" in self.html
+        assert self.html.count("kpi-dot green") >= 4
+        assert self.html.count("kpi-dot") >= 6
+        assert self.html.count("kpi-status current") >= 4
 
     def test_has_investigations(self):
         assert "Active Investigations" in self.html
@@ -107,7 +108,7 @@ class TestCEODashboardSections:
 
     def test_has_response_panel(self):
         assert "response-box" in self.html
-        assert "Twin is ready" in self.html
+        assert "CEO surface is ready" in self.html
 
     def test_has_conversation_view(self):
         assert "thread-view" in self.html
@@ -135,12 +136,12 @@ class TestCFODashboardSections:
         self.html = (TWINS_STATIC / "cfo.html").read_text(encoding="utf-8")
 
     def test_has_financial_kpi_cards(self):
-        assert "Financial KPI Overview" in self.html
-        assert "Revenue" in self.html
-        assert "Margin" in self.html
-        assert "Cash Flow" in self.html
-        assert "Working Capital" in self.html
-        assert "Budget Variance" in self.html
+        assert "Oracle-first finance cockpit" in self.html
+        assert "Revenue attainment" in self.html
+        assert "EBITDA margin" in self.html
+        assert "Cash vs board floor" in self.html
+        assert "Covenant headroom" in self.html
+        assert "Cash conversion cycle" in self.html
 
     def test_has_pending_approvals(self):
         assert "Pending Approvals" in self.html
@@ -149,10 +150,10 @@ class TestCFODashboardSections:
         assert "Reject" in self.html
 
     def test_has_cash_monitoring(self):
-        assert "Cash Monitoring" in self.html
+        assert "Oracle ingestion &amp; reconciliation context" in self.html
         assert "cash-bar" in self.html
-        assert "Actual:" in self.html
-        assert "Target:" in self.html
+        assert "Oracle cash vs floor:" in self.html
+        assert "Board floor baseline:" in self.html
 
     def test_has_investigations(self):
         assert "Active Investigations" in self.html
@@ -184,8 +185,9 @@ class TestCFODashboardSections:
         assert "Last Wake" in self.html
 
     def test_has_kpi_dots(self):
-        assert "kpi-dot green" in self.html
-        assert "kpi-dot amber" in self.html
+        assert self.html.count("kpi-dot green") >= 4
+        assert self.html.count("kpi-dot") >= 5
+        assert self.html.count("kpi-status current") >= 4
 
 
 # ===================================================================

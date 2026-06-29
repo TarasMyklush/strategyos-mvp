@@ -224,13 +224,13 @@
         title: "CEO/CFO pilot surface alignment",
         subtitle: "Refit the product surfaces so the CFO pilot is Oracle-first and the CEO sees Oracle-backed financial rings without pretending operations are automated yet",
         weeks: "1",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "14.1", title: "Make the CFO surface Oracle-first", description: "Prioritize Oracle-sourced finance ingestion, KPI outputs, and reconciliation context in the CFO pilot experience", status: "not_started", files: [] },
-          { id: "14.2", title: "Render CEO financial rings from Oracle-backed data", description: "Drive CEO financial rings and board-level finance views from deterministic Oracle-backed outputs rather than generic twin-era placeholders", status: "not_started", files: [] },
-          { id: "14.3", title: "Mark operational movers as manual or deferred", description: "Keep non-finance operational movers visible, but explicitly label them manual/deferred until Oracle-first finance conformance is proven", status: "not_started", files: [] },
-          { id: "14.4", title: "Align plan, copy, and UI language to the pilot", description: "Update product messaging so every public and pilot-facing surface reflects the Oracle EBS conformance scope instead of a generic digital twin roadmap", status: "not_started", files: [] },
-          { id: "14.5", title: "Preserve history while clarifying the pivot", description: "Keep completed digital-twin phases available as delivery history while clearly showing that active execution now starts at Oracle conformance", status: "not_started", files: [] }
+          { id: "14.1", title: "Make the CFO surface Oracle-first", description: "Prioritize Oracle-sourced finance ingestion, KPI outputs, and reconciliation context in the CFO pilot experience", status: "completed", files: [] },
+          { id: "14.2", title: "Render CEO financial rings from Oracle-backed data", description: "Drive CEO financial rings and board-level finance views from deterministic Oracle-backed outputs rather than generic twin-era placeholders", status: "completed", files: [] },
+          { id: "14.3", title: "Mark operational movers as manual or deferred", description: "Keep non-finance operational movers visible, but explicitly label them manual/deferred until Oracle-first finance conformance is proven", status: "completed", files: [] },
+          { id: "14.4", title: "Align plan, copy, and UI language to the pilot", description: "Update product messaging so every public and pilot-facing surface reflects the Oracle EBS conformance scope instead of a generic digital twin roadmap", status: "completed", files: [] },
+          { id: "14.5", title: "Preserve history while clarifying the pivot", description: "Keep completed digital-twin phases available as delivery history while clearly showing that active execution now starts at Oracle conformance", status: "completed", files: [] }
         ]
       },
       {
