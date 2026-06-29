@@ -44,6 +44,12 @@
     return "ok";
   }
 
+  function moverSourceBadge(item) {
+    var label = firstDefined(item && item.source_label, item && item.state_label, "");
+    if (!label) return "";
+    return '<span class="pill-inline ' + toneClass(label) + '">' + escapeHtml(label) + '</span>';
+  }
+
   function buildQuery(params) {
     var search = new URLSearchParams();
     Object.keys(params || {}).forEach(function (key) {
@@ -648,11 +654,11 @@
         '<div class="trend-chain"><article class="trend-chain__card"><div class="trend-chain__head"><strong>Trend + evidence chain</strong><span>why this driver moved</span></div><svg class="trend-chain__chart" viewBox="0 0 220 70" aria-hidden="true"><path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path></svg><div class="trend-chain__meta"><div><strong>' + escapeHtml(firstDefined(driver.metric, "—")) + '</strong><span>' + escapeHtml(firstDefined(driver.trendLabel, "Governed trend")) + '</span></div><div><strong>' + escapeHtml(firstDefined(publication.publish_state, 'draft')) + '</strong><span>Release posture</span></div></div></article><article class="trend-chain__card"><div class="trend-chain__head"><strong>Signal read</strong><span>bounded by current packet truth</span></div><div class="trend-chain__stack"><div><strong>' + escapeHtml(firstDefined(driver.label, 'Driver story')) + '</strong><span>' + escapeHtml(firstDefined(driver.detail, 'Awaiting driver story.')) + '</span></div><div><strong>' + escapeHtml(String(firstDefined((getDrilldown().owed_upward || {}).challenge_count, publication.challenged_cases, 0))) + ' challenged</strong><span>Questions still attached to evidence</span></div></div></article></div>',
         '<p class="detail-subtitle">What is lifting</p>',
         '<div class="mini-list">' + (lifting.length ? lifting.map(function (item) {
-          return '<div class="mover-card"><div class="mover-card__head"><strong>' + escapeHtml(firstDefined(item.name, "Lift")) + '</strong><span class="pill-inline ok">lifting</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.note, item.delta, "Momentum visible in the packet.")) + '</p><div class="mover-card__foot"><span>' + escapeHtml(firstDefined(item.delta, 'up')) + '</span><strong>' + escapeHtml(String(firstDefined(item.contribution, ''))) + ' contribution pts</strong></div></div>';
+          return '<div class="mover-card"><div class="mover-card__head"><strong>' + escapeHtml(firstDefined(item.name, "Lift")) + '</strong><span class="pill-inline ok">lifting</span></div>' + moverSourceBadge(item) + '<p class="list-copy">' + escapeHtml(firstDefined(item.note, item.delta, "Momentum visible in the packet.")) + '</p><div class="mover-card__foot"><span>' + escapeHtml(firstDefined(item.delta, 'up')) + '</span><strong>' + escapeHtml(String(firstDefined(item.contribution, ''))) + ' contribution pts</strong></div></div>';
         }).join("") : '<div class="discovery-empty">No lifting signal is attached to this driver yet.</div>') + '</div>',
         '<p class="detail-subtitle">What still drags</p>',
         '<div class="mini-list">' + (dragging.length ? dragging.map(function (item) {
-          return '<div class="mover-card mover-card--warn"><div class="mover-card__head"><strong>' + escapeHtml(firstDefined(item.name, "Constraint")) + '</strong><span class="pill-inline warn">dragging</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.note, item.delta, "Constraint still needs closure.")) + '</p><div class="mover-card__foot"><span>' + escapeHtml(firstDefined(item.delta, 'watch')) + '</span><strong>' + escapeHtml(String(firstDefined(item.contribution, ''))) + ' contribution pts</strong></div></div>';
+          return '<div class="mover-card mover-card--warn"><div class="mover-card__head"><strong>' + escapeHtml(firstDefined(item.name, "Constraint")) + '</strong><span class="pill-inline warn">dragging</span></div>' + moverSourceBadge(item) + '<p class="list-copy">' + escapeHtml(firstDefined(item.note, item.delta, "Constraint still needs closure.")) + '</p><div class="mover-card__foot"><span>' + escapeHtml(firstDefined(item.delta, 'watch')) + '</span><strong>' + escapeHtml(String(firstDefined(item.contribution, ''))) + ' contribution pts</strong></div></div>';
         }).join("") : '<div class="discovery-empty">No dragging signal is attached to this driver yet.</div>') + '</div>',
         '<p class="detail-subtitle">Tornado view</p>',
         '<div class="detail-tornado">' + lifting.concat(dragging).slice(0, 5).map(function (item, idx) {

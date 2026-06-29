@@ -4,15 +4,15 @@
       ceo: {
         health: {
           score: 78,
-          headline: "Broadly on track — margin needs attention.",
-          body: "Revenue is ahead of plan, but margin is leaking to FX and API cost, and two business units are dragging. Two decisions are due before Thursday's board.",
-          scoreNote: "plan health"
+          headline: "Oracle-backed finance rings are live.",
+          body: "The active CEO narrative is now the Oracle EBS pilot: deterministic finance metrics first, explicit manual inputs second, and operational context clearly marked manual / deferred.",
+          scoreNote: "oracle pilot posture"
         },
         indexLabel: "The group index",
         assistant: "Hermes",
         assistantRole: "chief of staff",
-        brief: "Broadly on track — margin needs attention. Revenue is ahead of plan, but margin is leaking to FX and API cost, and two business units are dragging.",
-        quote: "Revenue is carrying the story at 102, EBITDA is still shy at 99, and cash gives the room confidence at 123 — the call is hedge closure, not liquidity.",
+        brief: "Oracle-backed finance metrics now drive the CEO surface. Twin-platform history remains visible, but the active narrative is Oracle pilot conformance.",
+        quote: "Keep the CEO rings on deterministic Oracle finance outputs; everything else stays clearly labelled manual or deferred until it is truly sourced.",
         by: "Hermes · Group CEO chief of staff",
         secondaryMode: "hidden",
         threads: [
@@ -21,105 +21,102 @@
           { key: "recognition", title: "e-Pharmacy capacity pull-forward", preview: "Should we pull forward e-Pharmacy fulfilment capacity?" }
         ],
         prompts: [
-          "Am I on track for the board on Thursday?",
-          "What is the single biggest risk to plan?",
-          "Who deserves recognition this week?"
+          "What do the Oracle finance rings show?",
+          "What is the single biggest Oracle pilot risk?",
+          "Which context items are still manual / deferred?"
         ],
         drivers: [
           {
             key: "revenue",
             label: "Revenue",
-            pct: 102,
-            value: "SAR 2.09B",
-            sub: "quarter to date",
-            vsPlan: "+2.3% vs plan",
-            story: "102% of plan and climbing — the gap to plan has widened in your favour across the quarter. Lifted by e-Pharmacy and Retail; Healthcare is the only line below.",
+              pct: 125,
+              value: "125%",
+              sub: "deterministic Oracle KPI",
+              vsPlan: "Oracle-backed · deterministic",
+              story: "This CEO ring now renders the deterministic Oracle revenue-attainment output directly. Completed twin-platform work stays in history, but the active board-safe surface starts from Oracle pilot finance truth.",
             trendLabel: "Weekly run-rate · 13 weeks",
             unit: "SAR M / wk",
-            chips: ["Why is the gap widening?", "Show e-Pharmacy detail", "Risk to full-year plan?"],
-            movers: {
-              lifting: [
-                { name: "e-Pharmacy", delta: "+12% orders WoW", contribution: 38, note: "Orders +12% WoW on the GLP-1 refill cohort; fulfilment holding at a 2-day SLA. Pushing for the JV signature to lock supply ahead of demand." },
-                { name: "Pharmacy Retail", delta: "+8.3% like-for-like", contribution: 27 },
-                { name: "Digital Health", delta: "+36% revenue YoY", contribution: 15 }
-              ],
-              dragging: [
-                { name: "Healthcare Services", delta: "−3.8% occupancy", contribution: -18, note: "Cardiology occupancy is off plan; locum cover lands next week. Plan is to recover the gap by quarter-end." },
-                { name: "Tamween Distribution", delta: "+0.4% — flat vs plan", contribution: -6, note: "Recovering the SAR 1.2M leakage and cutting cost via the S/4HANA cutover; targeting 9.5% margin by year-end." }
-              ]
-            }
+              chips: ["Show Oracle source basis", "What manual inputs support this?", "Risk to publish posture?"],
+              movers: {
+                lifting: [
+                  { name: "Oracle GL revenue facts", delta: "actual vs approved budget", contribution: 38, note: "Revenue attainment is calculated directly from Oracle GL revenue facts against the approved budget plan.", source_label: "oracle-backed" },
+                  { name: "Budget plan baseline", delta: "approved manual input", contribution: 27, note: "Budget remains an explicit approved file input and is not disguised as Oracle automation.", source_label: "manual input" }
+                ],
+                dragging: [
+                  { name: "Retail LfL", delta: "manual / deferred", contribution: -6, note: "Retail LfL remains visible as leadership context only. It is not part of the Oracle finance ring computation yet.", source_label: "manual / deferred" },
+                  { name: "e-Rx demand pulse", delta: "manual / deferred", contribution: -4, note: "e-Rx demand remains a manual / deferred operating signal until a separate connector is delivered.", source_label: "manual / deferred" }
+                ]
+              }
           },
           {
             key: "ebitda",
             label: "EBITDA margin",
-            pct: 99,
-            value: "19.2%",
-            sub: "vs 19.4% plan",
-            vsPlan: "−20 bps vs plan",
-            story: "99% of plan — margin is the soft spot. FX and API input cost are the leak; two dragging BUs explain most of the rest. A hedge decision is on Thursday’s board agenda.",
+              pct: 125,
+              value: "25.00%",
+              sub: "deterministic Oracle KPI",
+              vsPlan: "Oracle-backed · deterministic",
+              story: "The CEO EBITDA ring is now the deterministic Oracle-backed output, not a generic twin-era margin placeholder. Narrative may follow, but the number is fixed first.",
             trendLabel: "Weekly EBITDA margin · 13 weeks",
             unit: "% margin",
-            chips: ["What would a 60% EUR hedge save?", "Show the FX bridge", "Which BUs can offset?"],
-            movers: {
-              lifting: [
-                { name: "Manufacturing", delta: "+60 bps on yield", contribution: 22 },
-                { name: "Pharmacy Retail", delta: "+30 bps mix", contribution: 12 }
-              ],
-              dragging: [
-                { name: "FX exposure", delta: "~SAR 9k / wk drag", contribution: -20 },
-                { name: "Tamween Distribution", delta: "leakage · SAR 1.2M", contribution: -16, note: "Recovering the SAR 1.2M leakage and cutting cost via the S/4HANA cutover; targeting 9.5% margin by year-end." },
-                { name: "API input cost", delta: "+4.1% vs plan", contribution: -11 }
-              ]
-            }
-          },
+              chips: ["Show the Oracle EBITDA bridge", "Which leakage findings matter?", "What remains manual?"],
+              movers: {
+                lifting: [
+                  { name: "Oracle EBITDA output", delta: "25.00%", contribution: 22, note: "Computed directly from deterministic Oracle pilot math.", source_label: "oracle-backed" },
+                  { name: "Leakage prioritisation", delta: "8 findings ranked", contribution: 12, note: "Leakage release sequence is attached to the finance evidence pack.", source_label: "oracle-backed" }
+                ],
+                dragging: [
+                  { name: "Cold-chain resilience", delta: "manual / deferred", contribution: -8, note: "Cold-chain context remains visible but is not part of the Oracle finance ring computation.", source_label: "manual / deferred" },
+                  { name: "Occupancy-style utilisation", delta: "manual / deferred", contribution: -6, note: "Occupancy-style operating signals remain manual / deferred until a separate operational source is shipped.", source_label: "manual / deferred" }
+                ]
+              }
+            },
           {
             key: "cost",
             label: "Operating cost",
-            pct: 101,
-            value: "SAR 1.69B",
-            sub: "quarter to date",
-            vsPlan: "+1.1% vs plan",
-            story: "101% of plan — running a touch hot, concentrated in logistics fuel and API. Within tolerance, but worth watching as the cutover lands.",
+              pct: 120,
+              value: "120%",
+              sub: "operating cost vs plan",
+              vsPlan: "Oracle-backed · deterministic",
+              story: "Operating cost now renders from the deterministic Oracle cost-vs-plan metric. This card is finance-first and does not imply operational automation beyond the approved Oracle pilot scope.",
             trendLabel: "Weekly operating cost · 13 weeks",
             unit: "SAR M / wk",
-            chips: ["Where is cost running hot?", "Cutover savings timeline", "Compare to last quarter"],
-            movers: {
-              lifting: [{ name: "Shared services", delta: "−2.0% vs plan", contribution: 14 }],
-              dragging: [
-                { name: "API input cost", delta: "+4.1% vs plan", contribution: -18 },
-                { name: "Logistics fuel", delta: "+2.6% vs plan", contribution: -9 }
-              ]
-            }
-          },
+              chips: ["Show Oracle cost basis", "Which inputs are manual?", "Compare to plan only"],
+              movers: {
+                lifting: [{ name: "Oracle operating-cost facts", delta: "deterministic basis", contribution: 14, source_label: "oracle-backed" }],
+                dragging: [
+                  { name: "Cold-chain fuel burn", delta: "manual / deferred", contribution: -6, note: "Operational logistics context is preserved, but manual / deferred until sourced outside the Oracle finance pilot.", source_label: "manual / deferred" }
+                ]
+              }
+            },
           {
             key: "cash",
             label: "Cash vs floor",
-            pct: 123,
-            value: "SAR 1.48B",
-            sub: "vs SAR 1.2B floor",
-            vsPlan: "+SAR 280M above floor",
-            story: "123% of the board floor — liquidity is strong and improved SAR 60M this week. Rates easing adds roughly SAR 5M/yr of interest relief; headroom for the GLP-1 JV is intact.",
+              pct: 120,
+              value: "120%",
+              sub: "cash vs board floor",
+              vsPlan: "Oracle-backed · deterministic",
+              story: "The liquidity ring now reflects the deterministic Oracle cash-vs-board-floor result. Manual board-floor input remains explicit and governed.",
             trendLabel: "Cash vs board floor · 13 weeks",
             unit: "SAR B",
-            chips: ["Can we fund the JV from cash?", "Show the covenant headroom", "Project rate relief"],
-            movers: {
-              lifting: [
-                { name: "NUPCO collections", delta: "+SAR 145M awarded", contribution: 34 },
-                { name: "DPO discipline", delta: "+4 days", contribution: 12 }
-              ],
-              dragging: [{ name: "Inventory build", delta: "GLP-1 pre-stock", contribution: -8 }]
-            }
+              chips: ["Show cash headroom", "Show covenant headroom", "Which inputs are manual?"],
+              movers: {
+                lifting: [
+                  { name: "Oracle CE balances", delta: "cash fact basis", contribution: 34, source_label: "oracle-backed" },
+                  { name: "Board-floor input", delta: "approved manual control", contribution: 12, source_label: "manual input" }
+                ],
+                dragging: [{ name: "Occupancy / footfall overlays", delta: "manual / deferred", contribution: -4, note: "These overlays stay out of the finance ring until an operational source exists.", source_label: "manual / deferred" }]
+              }
           }
         ],
         findings: [
-          { title: "FX is building a ~SAR 9k margin drag this week", tag: "Group KPI · EBITDA margin", detail: "EUR/SAR drift against an unhedged slice of API purchasing. A 60% hedge neutralises most of it; decision sits on Thursday’s board agenda.", tone: "flat" },
-          { title: "SAR 8.6M is recoverable across the group", tag: "Cross-BU finding", detail: "Tamween audit, duplicate-vendor spend, and aged AR concentrate the opportunity. The system has drafted the recovery sequence.", tone: "down" },
-          { title: "Operational resilience intact — cold-chain at a record", tag: "Group KPI · Resilience", detail: "Cold-chain integrity reached 99.4%, the best on record, through the summer peak. No excursions in the last 30 days.", tone: "up" }
+          { title: "Oracle-backed finance rings now drive the CEO surface", tag: "Oracle pilot · Finance", detail: "Revenue attainment, EBITDA margin, cash vs board floor, and covenant headroom now render from deterministic Oracle pilot outputs.", tone: "up" },
+          { title: "SAR 3.57M is recoverable across 8 deterministic leakage findings", tag: "Oracle pilot · Leakage", detail: "Leakage review stays board-safe because every amount is evidence-backed and reviewer-controlled.", tone: "down" },
+          { title: "Operational movers remain visible as manual / deferred", tag: "Oracle pilot · Scope boundary", detail: "Cold-chain, e-Rx, LfL, and occupancy-style items stay in context without implying Oracle-finance automation.", tone: "flat" }
         ],
         developments: [
-          { title: "Cold-chain hit a record 99.4% — best ever", meta: "Pharma Logistics · 2h ago", impact: "Reinforces the Resilience KPI and de-risks the NUPCO ramp.", kind: "win" },
-          { title: "NUPCO Q1 awards confirmed: +SAR 145M annual", meta: "Capital · 5h ago", impact: "Lifts the full-year revenue bridge and improves cash timing.", kind: "win" },
-          { title: "Tamween audit: SAR 1.2M recoverable", meta: "Tamween Distribution · yesterday", impact: "Folds into the SAR 8.6M group recovery. Net margin uplift follows collection.", kind: "watch" }
+          { title: "Plan history preserved through the twin-platform buildout", meta: "Product narrative · today", impact: "Completed delivery history remains visible while Oracle pilot conformance becomes the active execution story.", kind: "win" },
+          { title: "Manual inputs remain explicit on CEO and CFO surfaces", meta: "Finance controls · today", impact: "Budget, board-floor, covenant, hedge, and contract inputs are visible as controlled supports rather than hidden automation.", kind: "watch" },
+          { title: "Operational movers labelled manual / deferred", meta: "Scope truthfulness · today", impact: "Leadership keeps the context, but no one can mistake it for Oracle-finance sourcing.", kind: "watch" }
         ],
         week: [
           { key: "board_prep", day: "Thu", title: "Board meeting", when: "in 3 days", prep: "Two decisions stay open: the FX hedge and the GLP-1 JV. The pack is 80% composed — margin narrative needs your line.", urgent: true, prompt: "Am I on track for the board on Thursday?" },
@@ -130,15 +127,15 @@
       cfo: {
         health: {
           score: 74,
-          headline: "Liquidity strong — margin quality is the watch.",
-          body: "Cash sits well above floor and covenant headroom is comfortable, but revenue quality and the EBITDA bridge are leaking to FX and input cost. SAR 8.6M is recoverable.",
-          scoreNote: "plan health"
+          headline: "Oracle-first CFO surface is live.",
+          body: "The CFO story now starts with Oracle finance ingestion, deterministic KPI outputs, leakage review, and explicit manual-input controls. Generic twin framing is demoted to delivery history.",
+          scoreNote: "oracle pilot posture"
         },
         indexLabel: "The financial index",
         assistant: "Atlas",
         assistantRole: "finance chief of staff",
-        brief: "Liquidity is strong, but margin quality and the EBITDA bridge still need discipline before the board room feels effortless.",
-        quote: "Cash stays above the floor and the hedge is the real board question — not whether the business can fund the move.",
+        brief: "This is now an Oracle-first CFO surface: deterministic pilot math first, explicit reconciliation and leakage context second, and no fake automation beyond finance scope.",
+        quote: "If a number cannot be traced to Oracle finance or an approved manual input, it does not belong in the CFO pilot surface as automation.",
         by: "Atlas · Group CFO chief of staff",
         secondaryMode: "visible",
         threads: [
