@@ -429,6 +429,121 @@ p:last-child { margin-bottom: 0; }
   color: var(--green);
 }
 
+.truth-grid,
+.tranche-grid,
+.verify-grid,
+.history-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.truth-grid,
+.verify-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.tranche-grid,
+.history-grid {
+  grid-template-columns: 1fr;
+}
+
+.truth-card,
+.tranche-card,
+.verify-card,
+.history-card,
+.boundary-card,
+.blocker-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.boundary-card {
+  margin-bottom: 20px;
+  border-color: rgba(169, 110, 32, 0.24);
+  background: linear-gradient(180deg, rgba(169,110,32,0.06), rgba(255,255,255,0.96));
+}
+
+.boundary-card h3,
+.truth-card h3,
+.tranche-card h3,
+.verify-card h3,
+.history-card h3 {
+  margin-bottom: 8px;
+}
+
+.boundary-list,
+.tranche-list,
+.verify-list,
+.history-list,
+.blocker-items {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.blocker-items {
+  list-style: none;
+  padding-left: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.blocker-item {
+  padding: 14px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.blocker-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.eyebrow-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.eyebrow-pill.warn { background: var(--warn-soft); color: var(--amber); }
+.eyebrow-pill.ok { background: var(--ok-soft); color: var(--green); }
+.eyebrow-pill.neutral { background: var(--accent-soft); color: var(--accent); }
+
+.truth-value {
+  font-family: var(--serif);
+  font-size: 22px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.section-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.history-toggle {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.history-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.history-details[open] .history-toggle {
+  margin-bottom: 18px;
+}
+
 /* ─── Footer ─── */
 .footer {
   text-align: center;
@@ -447,6 +562,7 @@ p:last-child { margin-bottom: 0; }
   .hero { padding: 48px 0 36px; }
   .overall-progress { padding: 20px 16px; }
   .phase-card__header { flex-direction: column; gap: 12px; }
+  .truth-card, .tranche-card, .verify-card, .history-card, .boundary-card, .blocker-list { padding: 18px 16px; }
 }
 
 /* ─── Utility ─── */
@@ -472,27 +588,23 @@ p:last-child { margin-bottom: 0; }
 <!-- ═══════════ Hero ═══════════ -->
 <section class="hero container">
   <div class="hero__badge-row">
-    <span class="hero__badge">🏗️ Oracle EBS Conformance Roadmap</span>
-    <span class="hero__badge">📋 18 Phases · 89 Stories</span>
-    <span class="hero__badge">Phases 0–15 complete locally · Oracle roadmap complete</span>
+    <span class="hero__badge">Hosted truth only</span>
+    <span class="hero__badge">Short-scroll corrective tranche</span>
+    <span class="hero__badge">Plan truth + CEO surface fixes</span>
   </div>
   <h1>Execution Plan</h1>
-  <p>Oracle pilot narrative now reflects the full roadmap closed truthfully. The completed twin-platform build remains visible as delivery history, the Oracle pilot roadmap remains closed through Phase 15, and Phases 16–17 remain captured — but the executive surface is back in active corrective work until the rendered UI is re-aligned truthfully to the 22.06.2026 baseline.</p>
-  <div class="hero__caption">strategyos.live/plan · Oracle pilot roadmap + post-backlog closure</div>
+  <p>The page now prioritises hosted truth instead of backlog theatre: what the hosted surface currently proves, what still blocks acceptance, what is being corrected right now, what must be verified on strategyos.live, and which hardening items stay below the fold.</p>
+  <div class="hero__caption">strategyos.live/plan · hosted-only acceptance boundary</div>
 </section>
 
 <!-- ═══════════ Content ═══════════ -->
 <section class="container">
 
-  <div class="status-note">
-    <strong>🛠️ Living corrective plan.</strong> Phases 0–15 remain visible as completed Oracle delivery history. Phase 15 production validation is complete. Phase 16 is complete because the audit / cleanup / handoff pack exists at <code>docs/oracle-pilot-post-backlog-audit-handoff-2026-06-29.md</code>. The CEO demo artifact remains captured under Phase 17, and the overall plan is intentionally re-opened while the current UI corrective pass fixes typography, spacing, control sizing, and form/card composition against the 22.06.2026 reference.
-  </div>
-
-  <!-- overall progress rendered here by JS -->
-  <div id="overall-progress"></div>
-
-  <!-- phases rendered here by JS -->
-  <div id="phase-list"></div>
+  <div id="plan-truth"></div>
+  <div id="plan-blockers"></div>
+  <div id="plan-tranches"></div>
+  <div id="plan-verification"></div>
+  <div id="plan-history"></div>
 
 </section>
 
@@ -510,115 +622,64 @@ p:last-child { margin-bottom: 0; }
     completed: "Completed"
   };
 
+  function toneClass(tone) {
+    if (tone === "ok") return "ok";
+    if (tone === "warn") return "warn";
+    return "neutral";
+  }
+
   function statusColor(status) {
     if (status === "completed") return "var(--green)";
     if (status === "in_progress") return "var(--amber)";
     return "var(--gray)";
   }
 
-  function statusBg(status) {
-    if (status === "completed") return "var(--ok-soft)";
-    if (status === "in_progress") return "var(--warn-soft)";
-    return "var(--gray-light)";
+  function renderTruthBoundary() {
+    var truth = PLAN.truthBoundary || {};
+    var hostedTruth = PLAN.hostedTruth || [];
+    var el = document.getElementById("plan-truth");
+    el.innerHTML = '<div class="section-stack">'
+      + '<div class="boundary-card"><div class="section-eyebrow">Hosted truth</div><h2>' + escapeHtml(truth.title || 'Hosted-only acceptance') + '</h2><p class="mb-0">' + escapeHtml(truth.summary || '') + '</p><ul class="boundary-list">' + (truth.notes || []).map(function (note) { return '<li>' + escapeHtml(note) + '</li>'; }).join('') + '</ul></div>'
+      + '<div class="truth-grid">' + hostedTruth.map(function (item) {
+        return '<article class="truth-card"><span class="eyebrow-pill ' + toneClass(item.tone) + '">' + escapeHtml(item.label || 'Truth') + '</span><div class="truth-value">' + escapeHtml(item.value || '—') + '</div><p class="mb-0">' + escapeHtml(item.detail || '') + '</p></article>';
+      }).join('') + '</div>'
+      + '</div>';
   }
 
-  /* ─── Build overall progress ─── */
-  function renderOverallProgress() {
-    var phases = PLAN.phases;
-    var total = phases.length;
-    var completed = phases.filter(function (p) { return p.status === "completed"; }).length;
-    var inProgress = phases.filter(function (p) { return p.status === "in_progress"; }).length;
-    var pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-    var el = document.getElementById("overall-progress");
-    el.innerHTML =
-      '<div class="overall-progress">' +
-        '<div class="overall-progress__header">' +
-          '<h2 class="overall-progress__title">Overall Progress</h2>' +
-          '<div class="overall-progress__stats">' +
-            '<span><span style="color:var(--green);font-weight:700;">' + completed + '</span> completed</span>' +
-            '<span><span style="color:var(--amber);font-weight:700;">' + inProgress + '</span> in progress</span>' +
-            '<span><span style="color:var(--gray);font-weight:700;">' + (total - completed - inProgress) + '</span> remaining</span>' +
-            '<span style="font-weight:600;">' + pct + '%</span>' +
-          '</div>' +
-        '</div>' +
-        '<div class="overall-progress__bar">' +
-          '<div class="overall-progress__fill" style="width:' + pct + '%;background:' + statusColor(PLAN.overallStatus) + ';"></div>' +
-        '</div>' +
-        '<div style="margin-top:12px;font-size:12px;color:var(--soft);">Last updated: ' + PLAN.updated + '</div>' +
-      '</div>';
+  function renderBlockers() {
+    var blockers = PLAN.blockers || [];
+    var el = document.getElementById("plan-blockers");
+    el.innerHTML = '<div class="blocker-list"><div class="section-eyebrow">Critical blockers first</div><h2>What still blocks acceptance</h2><ul class="blocker-items">' + blockers.map(function (item) {
+      return '<li class="blocker-item"><span class="eyebrow-pill ' + toneClass(item.tone) + '">' + escapeHtml(item.id || 'BLOCKER') + '</span><h3>' + escapeHtml(item.title || 'Blocker') + '</h3><p class="mb-0">' + escapeHtml(item.detail || '') + '</p></li>';
+    }).join('') + '</ul></div>';
   }
 
-  /* ─── Build phase cards ─── */
-  function renderPhases() {
-    var container = document.getElementById("phase-list");
-    var html = "";
+  function renderTranches() {
+    var tranches = PLAN.activeTranches || [];
+    var el = document.getElementById("plan-tranches");
+    el.innerHTML = '<div class="section-stack"><div><div class="section-eyebrow">Active action items grouped by tranche</div><h2>Now / next</h2><p class="section-sub">The active tranche stays short and operational: fix the truth surface, fix the CEO interactions, then verify on hosted.</p></div><div class="tranche-grid">' + tranches.map(function (tranche) {
+      return '<article class="tranche-card"><div class="phase-card__meta"><span>Owner · ' + escapeHtml(tranche.owner || 'StrategyOS') + '</span><span>State · ' + escapeHtml(statusLabels[tranche.status] || tranche.status || 'In progress') + '</span></div><h3>' + escapeHtml(tranche.title || 'Tranche') + '</h3><ul class="tranche-list">' + (tranche.items || []).map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul></article>';
+    }).join('') + '</div></div>';
+  }
 
-    PLAN.phases.forEach(function (phase) {
-      var stories = phase.stories;
-      var total = stories.length;
-      var done = stories.filter(function (s) { return s.status === "completed"; }).length;
-      var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  function renderVerification() {
+    var verify = PLAN.verification || {};
+    var later = PLAN.laterHardening || [];
+    var el = document.getElementById("plan-verification");
+    el.innerHTML = '<div class="section-stack"><div><div class="section-eyebrow">Verification state</div><h2>What must be proven on hosted</h2></div><div class="verify-grid"><article class="verify-card"><span class="eyebrow-pill neutral">Hosted checks</span><h3>Must be true on strategyos.live</h3><ul class="verify-list">' + (verify.hosted || []).map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul></article><article class="verify-card"><span class="eyebrow-pill warn">Still pending</span><h3>Acceptance remains open until</h3><ul class="verify-list">' + (verify.pending || []).map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul></article></div><article class="verify-card"><div class="section-eyebrow">Later hardening</div><h3>Below the fold once this hosted tranche lands</h3><ul class="verify-list">' + later.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul></article></div>';
+  }
 
-      html +=
-        '<div class="phase-card">' +
-          '<div class="phase-card__header">' +
-            '<div class="phase-card__badge badge-' + phase.status + '">' + phase.num + '</div>' +
-            '<div class="phase-card__info">' +
-              '<h3>' + phase.title + '</h3>' +
-              '<div class="phase-card__subtitle">' + phase.subtitle + '</div>' +
-              '<div class="phase-card__meta">' +
-                '<span>\u23f1 ' + phase.weeks + ' weeks</span>' +
-                '<span>\u2726 ' + statusLabels[phase.status] + '</span>' +
-                '<span>' + done + ' / ' + total + ' stories</span>' +
-              '</div>' +
-            '</div>' +
-          '</div>' +
-
-          '<div class="phase-progress">' +
-            '<div class="phase-progress__bar">' +
-              '<div class="phase-progress__fill" style="width:' + pct + '%;background:' + statusColor(phase.status) + ';"></div>' +
-            '</div>' +
-            '<div class="phase-progress__label">' +
-              '<span>' + pct + '%</span>' +
-              '<span>' + done + ' of ' + total + ' stories</span>' +
-            '</div>' +
-          '</div>' +
-
-          '<div class="story-list">' + buildStories(stories) + '</div>' +
-        '</div>';
+  function renderHistory() {
+    var phases = (PLAN.phases || []).filter(function (phase) {
+      return Number(phase.num) >= 15;
     });
-
-    container.innerHTML = html;
-  }
-
-  function buildStories(stories) {
-    var html = "";
-    stories.forEach(function (story) {
-      var checked = story.status === "completed" ? "checked" : "";
-      var tagLabel = statusLabels[story.status] || "Not started";
-
-      html +=
-        '<div class="story-item">' +
-          '<div class="story-item__checkbox"><input type="checkbox" ' + checked + ' onclick="return false;"></div>' +
-          '<div class="story-item__body">' +
-            '<div class="story-item__title">' + story.id + '. ' + story.title + '</div>' +
-            '<div class="story-item__desc">' + story.description + '</div>' +
-            (story.files ? buildFileTags(story.files) : "") +
-          '</div>' +
-          '<div class="story-item__status-tag tag-' + story.status + '">' + tagLabel + '</div>' +
-        '</div>';
-    });
-    return html;
-  }
-
-  function buildFileTags(files) {
-    var html = '<div class="story-item__files">';
-    files.forEach(function (f) {
-      html += '<span class="story-item__file">' + escapeHtml(f) + '</span>';
-    });
-    html += '</div>';
-    return html;
+    var el = document.getElementById("plan-history");
+    el.innerHTML = '<details class="history-details"><summary class="history-toggle">Delivery history below the fold</summary><div class="history-grid">' + phases.map(function (phase) {
+      var done = (phase.stories || []).filter(function (story) { return story.status === 'completed'; }).length;
+      return '<article class="history-card"><div class="phase-card__meta"><span>Phase ' + escapeHtml(String(phase.num)) + '</span><span>' + escapeHtml(statusLabels[phase.status] || phase.status || 'In progress') + '</span><span>' + escapeHtml(String(done)) + ' / ' + escapeHtml(String((phase.stories || []).length)) + ' stories complete</span></div><h3>' + escapeHtml(phase.title || 'Phase') + '</h3><p>' + escapeHtml(phase.subtitle || '') + '</p><ul class="history-list">' + (phase.stories || []).map(function (story) {
+        return '<li><strong>' + escapeHtml(story.id || '') + '.</strong> ' + escapeHtml(story.title || '') + ' — ' + escapeHtml(story.description || '') + '</li>';
+      }).join('') + '</ul></article>';
+    }).join('') + '</div></details>';
   }
 
   function escapeHtml(str) {
@@ -628,8 +689,11 @@ p:last-child { margin-bottom: 0; }
   }
 
   /* ─── Init ─── */
-  renderOverallProgress();
-  renderPhases();
+  renderTruthBoundary();
+  renderBlockers();
+  renderTranches();
+  renderVerification();
+  renderHistory();
 
 })();
 </script>
@@ -637,7 +701,7 @@ p:last-child { margin-bottom: 0; }
 <!-- ═══════════ FOOTER ═══════════ -->
 <footer class="footer container">
   <p>StrategyOS · Oracle EBS Pilot Execution Plan · <a href="https://strategyos.live">strategyos.live</a></p>
-  <p style="font-size:11px;">Data-driven roadmap · Keep Oracle closure history visible while reflecting completed post-backlog deliverables truthfully</p>
+  <p style="font-size:11px;">Hosted-only truth boundary · delivery history preserved below the fold · acceptance remains open until hosted verification passes</p>
 </footer>
 
 </body>

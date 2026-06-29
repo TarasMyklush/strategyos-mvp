@@ -2,6 +2,107 @@
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-29",
     overallStatus: "in_progress",
+    truthBoundary: {
+      title: "Hosted-only acceptance",
+      summary: "Hosted truth is the only acceptance boundary. Local repo state is preparatory work only and is not to be reported as completion.",
+      notes: [
+        "The current hosted /plan fact-check proved the requested short-scroll structure was absent on strategyos.live.",
+        "This corrective tranche must make the hosted page show live status, critical blockers, active tranche items, verification state, and later hardening without long scrolling.",
+        "CEO interaction fixes are part of the same hosted tranche and remain open until strategyos.live reflects them."
+      ]
+    },
+    hostedTruth: [
+      {
+        label: "Hosted fact now",
+        tone: "warn",
+        value: "Requested /plan structure absent on strategyos.live",
+        detail: "The last independent hosted check found that the page still did not expose the requested short-scroll truth structure."
+      },
+      {
+        label: "Acceptance boundary",
+        tone: "warn",
+        value: "Hosted-only",
+        detail: "Status counts only when strategyos.live renders the corrected structure and the executive interactions behave there."
+      },
+      {
+        label: "Current tranche",
+        tone: "warn",
+        value: "Plan truth + CEO surface corrections",
+        detail: "The active tranche updates plan sources and fixes BUG-001..BUG-008 plus UX-001..UX-008 while preserving the good CEO framing."
+      }
+    ],
+    blockers: [
+      {
+        id: "PLAN-001",
+        tone: "warn",
+        title: "Hosted /plan truth structure missing",
+        detail: "Hosted /plan must show current live status, blockers first, active tranche items, verification state, and later hardening before delivery history."
+      },
+      {
+        id: "CEO-INT-001",
+        tone: "warn",
+        title: "Executive surface still behaves like a partial mock in key flows",
+        detail: "Tabs, Hermes interactions, findings/developments actions, visible response affordances, scroll behaviour, and feedback escape hatches must all work on the hosted surface."
+      },
+      {
+        id: "REPORT-001",
+        tone: "warn",
+        title: "Reporting must remain explicit about hosted truth",
+        detail: "No local-only green status should appear as progress. Hosted verification remains mandatory after deploy."
+      }
+    ],
+    activeTranches: [
+      {
+        title: "Tranche A — /plan restructure",
+        owner: "Hosted corrective tranche",
+        status: "in_progress",
+        items: [
+          "Expose hosted-only acceptance language above the fold.",
+          "Render explicit hosted-truth cards and blocker-first status.",
+          "Group active work into now / next / later sections.",
+          "Push historical phase detail below the fold as delivery history, not as the primary truth surface."
+        ]
+      },
+      {
+        title: "Tranche B — CEO interaction fixes",
+        owner: "Executive surface corrective pass",
+        status: "in_progress",
+        items: [
+          "Close BUG-001..BUG-008 so the hosted executive view stops acting read-only.",
+          "Close UX-001..UX-008 so charts, Hermes, GM note affordances, theme controls, and feedback paths behave clearly.",
+          "Preserve the concise CEO framing, driver switching, evidence chain posture, persona switching, and multi-agent concept already validated as good."
+        ]
+      },
+      {
+        title: "Tranche C — landing copy refinement",
+        owner: "Hosted landing polish pass",
+        status: "in_progress",
+        items: [
+          "Replace the oversized hosted landing headline with a calmer, more organic framing.",
+          "Tighten adjacent supporting copy so hierarchy, tone, and typography rhythm read as one surface rather than a patch.",
+          "Keep the change bounded to copy rhythm and hosted verification readiness without redesign drift."
+        ]
+      }
+    ],
+    verification: {
+      hosted: [
+        "Hosted /plan must visibly reflect this structure after deploy.",
+        "Hosted landing headline and adjacent copy must render with the calmer framing on strategyos.live.",
+        "Hosted executive tabs, Hermes drawer, suggested prompts, findings, developments, show-the-work, and inline ask flows must all produce visible state changes.",
+        "Hosted reports must state hosted truth explicitly and avoid local-completion wording."
+      ],
+      pending: [
+        "Run independent hosted verification after deployment of this tranche.",
+        "Capture residual hosted defects truthfully if any flow still fails.",
+        "Keep acceptance open until hosted checks pass."
+      ]
+    },
+    laterHardening: [
+      "Oracle period-resolution correctness for real monthly period names.",
+      "Tenant-handling and IDOR hardening around Oracle ingest routes.",
+      "Anonymous publication sanitization and leverage/covenant edge-case safety.",
+      "Payload-size, FX quote-direction, duplicate-payment field-chain, and off-contract sign-handling hardening."
+    ],
     phases: [
       {
         id: "phase-0",
@@ -263,14 +364,14 @@
       {
         id: "phase-17",
         num: 17,
-        title: "CEO end-to-end demo artifact",
-        subtitle: "Ship the CEO demo package as a truthful post-backlog deliverable with motion capture, screenshots, and explicit auth disclosure",
+        title: "Hosted corrective tranche",
+        subtitle: "Keep the CEO demo package in history while reopening active execution for hosted /plan truth and CEO-surface interaction fixes",
         weeks: "0.5",
         status: "in_progress",
         stories: [
           { id: "17.1", title: "Assemble the final CEO demo package", description: "Publish the reviewable package under artifacts/ceo-demo, including the real StrategyOS walkthrough video, supporting screenshots, and package notes", status: "completed", files: ["artifacts/ceo-demo/CEO_WORKFLOW_DEMO_PACKAGE.md", "artifacts/ceo-demo/strategyos-live-ceo-workflow-demo-2026-06-29.webm", "artifacts/ceo-demo/01-ceo-overview.png", "artifacts/ceo-demo/05-report-preview.png"] },
           { id: "17.2", title: "Disclose demo boundary conditions truthfully", description: "Mark the package complete while stating clearly that the delivered artifact is a real live-app demo package and that the captured session was not an authenticated executive/system-user recording", status: "completed", files: ["artifacts/ceo-demo/CEO_WORKFLOW_DEMO_PACKAGE.md", "artifacts/ceo-demo/06-ui-session-auth-state.png"] },
-          { id: "17.3", title: "Correct executive UI parity against the 22.06.2026 baseline", description: "Re-open post-backlog execution until the rendered executive shell matches the governing 22.06.2026 reference for typography scale, spacing rhythm, control sizing, and form/card composition", status: "in_progress", files: ["strategyos_mvp/static/executive.html", "strategyos_mvp/static/executive.css", "strategyos_mvp/static/plan.html", "strategyos_mvp/static/plan_data.js"] }
+          { id: "17.3", title: "Correct hosted /plan and executive interaction truth", description: "Keep active corrective work open until strategyos.live shows the short-scroll /plan truth structure and the CEO-surface interaction defects are fixed with hosted-only acceptance language", status: "in_progress", files: ["strategyos_mvp/static/executive.html", "strategyos_mvp/static/executive.css", "strategyos_mvp/static/executive.js", "strategyos_mvp/static/plan.html", "strategyos_mvp/static/plan_data.js"] }
         ]
       }
     ]
