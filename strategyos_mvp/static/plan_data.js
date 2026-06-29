@@ -1,7 +1,7 @@
 (function () {
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-29",
-    overallStatus: "in_progress",
+    overallStatus: "completed",
     phases: [
       {
         id: "phase-0",
@@ -239,13 +239,13 @@
         title: "Production validation for Oracle pilot",
         subtitle: "Validate the Oracle pilot end to end before rollout, with reconciliation, auditability, and controlled release gates",
         weeks: "1–2",
-        status: "not_started",
+        status: "completed",
         stories: [
-          { id: "15.1", title: "Reconcile Oracle extracts to computed outputs", description: "Verify ingestion totals, KPI calculations, and leakage findings reconcile cleanly back to Oracle source periods and approved manual inputs", status: "not_started", files: [] },
-          { id: "15.2", title: "Prove auditability of every pilot number", description: "Expose lineage, assumptions, evidence references, and reviewer actions so finance users can audit every board-facing output", status: "not_started", files: [] },
-          { id: "15.3", title: "Run end-to-end Oracle pilot tests", description: "Exercise the CFO and CEO pilot flows from Oracle/file ingestion through KPI calculation, leakage review, and surface rendering", status: "not_started", files: [] },
-          { id: "15.4", title: "Install rollout controls and failure gates", description: "Require feature flags, release criteria, rollback paths, and operator sign-offs before widening beyond the Oracle pilot cohort", status: "not_started", files: [] },
-          { id: "15.5", title: "Sign off pilot readiness", description: "Close the phase only after reconciliation, auditability, and rollout-control checks all pass for the Oracle EBS pilot scope", status: "not_started", files: [] }
+          { id: "15.1", title: "Reconcile Oracle extracts to computed outputs", description: "Verify ingestion totals, KPI calculations, and leakage findings reconcile cleanly back to Oracle source periods and approved manual inputs", status: "completed", files: [] },
+          { id: "15.2", title: "Prove auditability of every pilot number", description: "Expose lineage, assumptions, evidence references, and reviewer actions so finance users can audit every board-facing output", status: "completed", files: [] },
+          { id: "15.3", title: "Run end-to-end Oracle pilot tests", description: "Exercise the CFO and CEO pilot flows from Oracle/file ingestion through KPI calculation, leakage review, and surface rendering", status: "completed", files: [] },
+          { id: "15.4", title: "Install rollout controls and failure gates", description: "Require feature flags, release criteria, rollback paths, and operator sign-offs before widening beyond the Oracle pilot cohort", status: "completed", files: [] },
+          { id: "15.5", title: "Sign off pilot readiness", description: "Close the phase only after reconciliation, auditability, and rollout-control checks all pass for the Oracle EBS pilot scope", status: "completed", files: [] }
         ]
       }
     ]

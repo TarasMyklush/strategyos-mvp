@@ -529,7 +529,7 @@ def test_oracle_ingestion_endpoint_requires_operator_and_returns_auditable_count
         _restore_env(original)
 
 
-def test_plan_data_marks_phase14_complete_with_phase15_not_started():
+def test_plan_data_marks_phase15_complete_with_overall_status_closed():
     plan_file = (
         Path(__file__).resolve().parents[1]
         / "strategyos_mvp"
@@ -551,8 +551,8 @@ def test_plan_data_marks_phase14_complete_with_phase15_not_started():
     phase14_block = text.split('id: "phase-14"', 1)[1].split('id: "phase-15"', 1)[0]
     assert 'status: "completed"' in phase14_block
     phase15_block = text.split('id: "phase-15"', 1)[1]
-    assert 'status: "not_started"' in phase15_block
-    assert 'overallStatus: "in_progress"' in text
+    assert 'status: "completed"' in phase15_block
+    assert 'overallStatus: "completed"' in text
 
 
 def test_phase0_to_phase10_regression_paths_still_hold(tmp_path):

@@ -50,26 +50,26 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     executive_html = _read("strategyos_mvp", "static", "executive.html")
     executive_data = _read("strategyos_mvp", "static", "executive_design_data.js")
 
-    assert "Oracle pilot narrative now reflects Phase 14 complete" in plan_html
-    assert "Phases 0–14 complete locally · Phase 15 next" in plan_html
+    assert "Oracle pilot narrative now reflects the full roadmap closed truthfully" in plan_html
+    assert "Phases 0–15 complete locally · Oracle roadmap complete" in plan_html
     assert "Group CEO Oracle pilot" in executive_html
     assert "twin-platform build remains visible as delivery history" in plan_html
     assert "Twin-platform history remains visible" in executive_data
 
 
-def test_phase14_plan_data_marks_phase14_complete_without_starting_phase15() -> None:
+def test_phase14_plan_data_marks_phase14_complete_after_phase15_closes() -> None:
     text = _read("strategyos_mvp", "static", "plan_data.js")
 
     phase14_block = text.split('id: "phase-14"', 1)[1].split('id: "phase-15"', 1)[0]
     phase15_block = text.split('id: "phase-15"', 1)[1]
 
     assert 'updated: "2026-06-29"' in text
-    assert 'overallStatus: "in_progress"' in text
+    assert 'overallStatus: "completed"' in text
     assert 'status: "completed"' in phase14_block
     for story_id in ["14.1", "14.2", "14.3", "14.4", "14.5"]:
         assert f'id: "{story_id}"' in phase14_block
     assert phase14_block.count('status: "completed"') >= 6
-    assert 'status: "not_started"' in phase15_block
+    assert 'status: "completed"' in phase15_block
 
 
 def test_phase14_no_regressions_on_prior_oracle_phases() -> None:

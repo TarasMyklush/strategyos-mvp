@@ -304,7 +304,7 @@ def test_phase12_narration_payload_is_explicitly_downstream_and_non_authoritativ
     assert "fixed computed numbers" in narration["instructions"]
 
 
-def test_phase12_plan_data_keeps_phase12_complete_and_execution_in_progress():
+def test_phase12_plan_data_keeps_phase12_complete_after_final_oracle_closeout():
     plan_file = (
         Path(__file__).resolve().parents[1]
         / "strategyos_mvp"
@@ -317,7 +317,7 @@ def test_phase12_plan_data_keeps_phase12_complete_and_execution_in_progress():
     phase13_block = text.split('id: "phase-13"', 1)[1].split('id: "phase-14"', 1)[0]
 
     assert 'updated: "2026-06-29"' in text
-    assert 'overallStatus: "in_progress"' in text
+    assert 'overallStatus: "completed"' in text
     assert 'status: "completed"' in phase11_block
     assert 'status: "completed"' in phase12_block
     assert phase12_block.count('status: "completed"') >= 6

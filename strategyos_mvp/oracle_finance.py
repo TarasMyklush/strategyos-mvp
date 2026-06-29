@@ -838,6 +838,320 @@ def build_oracle_leakage_review_payload(review: OracleLeakageReview) -> dict[str
     }
 
 
+def build_oracle_pilot_kpi_payload(computation: OracleKpiComputation) -> dict[str, Any]:
+    return {
+        "authoritative": computation.authoritative,
+        "derived_from": "deterministic_oracle_kpi_engine",
+        "reporting_period_key": computation.reporting_period_key,
+        "reporting_cadence": computation.reporting_cadence,
+        "period_start": computation.period_start.isoformat(),
+        "period_end": computation.period_end.isoformat(),
+        "period_days": computation.period_days,
+        "metrics": {
+            key: _stringify_decimal(value) for key, value in computation.metrics.items()
+        },
+        "components": {
+            key: _stringify_decimal(value)
+            for key, value in computation.components.items()
+        },
+        "source_fact_types": {
+            key: list(value) for key, value in computation.source_fact_types.items()
+        },
+        "manual_input_keys": list(computation.manual_input_keys),
+        "computation_boundary": computation.computation_boundary,
+    }
+
+
+def build_oracle_pilot_reconciliation_report(
+    snapshot: OracleCanonicalSnapshot,
+    computation: OracleKpiComputation,
+    review: OracleLeakageReview,
+) -> dict[str, Any]:
+    checks = [
+        _reconciliation_check(
+            "revenue_actual",
+            computation.components.get("revenue_actual"),
+            _sum_metric_facts_for_computation(snapshot, computation, fact_types=("revenue",)),
+            "Revenue KPI must equal the sum of scoped Oracle revenue facts.",
+        ),
+        _reconciliation_check(
+            "ebitda_actual",
+            computation.components.get("ebitda_actual"),
+            _sum_metric_facts_for_computation(snapshot, computation, fact_types=("ebitda",)),
+            "EBITDA KPI must equal the sum of scoped Oracle EBITDA facts.",
+        ),
+        _reconciliation_check(
+            "operating_cost_actual",
+            computation.components.get("operating_cost_actual"),
+            _sum_metric_facts_for_computation(
+                snapshot,
+                computation,
+                fact_types=("operating_cost", "opex", "operating_expense"),
+            ),
+            "Operating cost KPI must equal the sum of scoped Oracle operating-cost facts.",
+        ),
+        _reconciliation_check(
+            "cash_balance",
+            computation.components.get("cash_balance"),
+            _latest_metric_fact_for_computation(snapshot, computation, fact_types=("cash_balance",)),
+            "Cash KPI must equal the latest scoped Oracle cash-balance fact.",
+        ),
+        _reconciliation_check(
+            "accounts_receivable_balance",
+            computation.components.get("accounts_receivable_balance"),
+            _latest_metric_fact_for_computation(
+                snapshot,
+                computation,
+                fact_types=("accounts_receivable_balance", "ar_open_balance", "receivables_balance"),
+            ),
+            "Receivables KPI must equal the latest scoped Oracle AR balance fact.",
+        ),
+        _reconciliation_check(
+            "accounts_payable_balance",
+            computation.components.get("accounts_payable_balance"),
+            _latest_metric_fact_for_computation(
+                snapshot,
+                computation,
+                fact_types=("accounts_payable_balance", "ap_open_balance", "payables_balance"),
+            ),
+            "Payables KPI must equal the latest scoped Oracle AP balance fact.",
+        ),
+        _reconciliation_check(
+            "inventory_balance",
+            computation.components.get("inventory_balance"),
+            _latest_metric_fact_for_computation(
+                snapshot,
+                computation,
+                fact_types=("inventory_balance", "working_capital_inventory", "inventory_on_hand"),
+            ),
+            "Inventory KPI must equal the latest scoped Oracle inventory fact.",
+        ),
+        _reconciliation_check(
+            "debt_balance",
+            computation.components.get("debt_balance"),
+            _latest_metric_fact_for_computation(
+                snapshot,
+                computation,
+                fact_types=("debt_balance", "borrowings", "loan_balance"),
+            ),
+            "Debt KPI must equal the latest scoped Oracle debt fact.",
+        ),
+        _reconciliation_check(
+            "leakage_total_recoverable_sar",
+            review.total_recoverable_sar,
+            sum((finding.recoverable_sar for finding in review.findings), Decimal("0")),
+            "Leakage total must equal the sum of finding-level recoverable values.",
+        ),
+    ]
+    amount_by_fact_type: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    for fact in snapshot.facts:
+        if fact.amount_value is not None:
+            amount_by_fact_type[fact.fact_type] += fact.amount_value
+    passed = all(bool(item["passed"]) for item in checks)
+    return {
+        "reporting_period_key": computation.reporting_period_key,
+        "reporting_cadence": computation.reporting_cadence,
+        "passed": passed,
+        "failed_checks": [item["check"] for item in checks if not item["passed"]],
+        "snapshot_totals": {
+            "facts": len(snapshot.facts),
+            "facts_by_module": snapshot_summary(snapshot)["facts_by_module"],
+            "amount_by_fact_type": {
+                key: _stringify_decimal(value)
+                for key, value in sorted(amount_by_fact_type.items())
+            },
+            "manual_inputs": len(snapshot.manual_inputs),
+        },
+        "kpi_totals": {
+            key: _stringify_decimal(value)
+            for key, value in computation.components.items()
+        },
+        "leakage_totals": {
+            "total_findings": len(review.findings),
+            "total_recoverable_sar": _stringify_decimal(review.total_recoverable_sar),
+        },
+        "checks": checks,
+    }
+
+
+def build_oracle_pilot_lineage_payload(
+    snapshot: OracleCanonicalSnapshot,
+    computation: OracleKpiComputation,
+    review: OracleLeakageReview,
+    *,
+    reviewer_actions: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    normalized_actions = [dict(action) for action in (reviewer_actions or ())]
+    metrics: list[dict[str, Any]] = []
+    for metric_key in computation.metrics:
+        facts = _metric_source_facts(snapshot, computation, metric_key)
+        manual_inputs = _metric_manual_inputs(snapshot, computation, metric_key)
+        metrics.append(
+            {
+                "metric_key": metric_key,
+                "value": _stringify_decimal(computation.metrics.get(metric_key)),
+                "component_values": {
+                    key: _stringify_decimal(value)
+                    for key, value in _metric_component_values(computation, metric_key).items()
+                },
+                "source_facts": [_fact_trace_payload(fact) for fact in facts],
+                "manual_inputs": [_manual_input_trace_payload(record) for record in manual_inputs],
+                "assumptions": _metric_assumptions(computation, metric_key),
+            }
+        )
+    findings = [
+        {
+            "finding_id": finding.finding_id,
+            "pattern_type": finding.pattern_type,
+            "review_status": finding.review_status,
+            "recoverable_sar": _stringify_decimal(finding.recoverable_sar),
+            "leakage_sar": _stringify_decimal(finding.leakage_sar),
+            "evidence": [
+                {
+                    "source_kind": item.source_kind,
+                    "source_key": item.source_key,
+                    "locator": item.locator,
+                    "details": _stringify_nested_decimals(item.details),
+                }
+                for item in finding.evidence
+            ],
+            "challenge_points": list(finding.challenge_points),
+            "reviewer_actions": _reviewer_actions_for_finding(
+                normalized_actions,
+                finding.finding_id,
+            ),
+        }
+        for finding in review.findings
+    ]
+    all_manual_inputs = [_manual_input_trace_payload(record) for record in snapshot.manual_inputs]
+    audit_checks = [
+        {
+            "check": "metric_lineage_complete",
+            "passed": all(
+                bool(item["source_facts"] or item["manual_inputs"]) for item in metrics
+            ),
+            "detail": "Every KPI metric exposes source facts and/or approved manual inputs.",
+        },
+        {
+            "check": "finding_lineage_complete",
+            "passed": all(bool(item["evidence"]) for item in findings),
+            "detail": "Every leakage finding retains deterministic evidence locators.",
+        },
+        {
+            "check": "manual_input_provenance_complete",
+            "passed": all(_manual_input_has_provenance(record) for record in snapshot.manual_inputs),
+            "detail": "Every referenced manual input names its owner or source location.",
+        },
+        {
+            "check": "reviewer_actions_recorded",
+            "passed": _reviewer_actions_support_signoff(normalized_actions, review),
+            "detail": "Reviewer activity must either cover the findings or record an explicit pilot sign-off action.",
+        },
+    ]
+    auditability = {
+        "passed": all(bool(item["passed"]) for item in audit_checks),
+        "failed_checks": [item["check"] for item in audit_checks if not item["passed"]],
+        "checks": audit_checks,
+    }
+    return {
+        "reporting_period_key": computation.reporting_period_key,
+        "reporting_cadence": computation.reporting_cadence,
+        "metrics": metrics,
+        "findings": findings,
+        "manual_inputs": all_manual_inputs,
+        "reviewer_actions": normalized_actions,
+        "auditability": auditability,
+    }
+
+
+def build_oracle_pilot_rollout_report(
+    *,
+    rollout_flags: Mapping[str, Any],
+    require_human_review: bool,
+) -> dict[str, Any]:
+    checks = [
+        {
+            "check": "pilot_feature_flag_enabled",
+            "passed": bool(rollout_flags.get("pilot_enabled")),
+            "detail": "The Oracle pilot feature flag must be enabled before rollout.",
+        },
+        {
+            "check": "ceo_surface_flag_enabled",
+            "passed": bool(rollout_flags.get("ceo_surface_enabled")),
+            "detail": "The CEO Oracle pilot surface flag must be enabled before rollout.",
+        },
+        {
+            "check": "cfo_surface_flag_enabled",
+            "passed": bool(rollout_flags.get("cfo_surface_enabled")),
+            "detail": "The CFO Oracle pilot surface flag must be enabled before rollout.",
+        },
+        {
+            "check": "rollback_ready",
+            "passed": bool(rollout_flags.get("rollback_ready")),
+            "detail": "Rollback readiness must be explicitly confirmed before widening the pilot.",
+        },
+        {
+            "check": "release_gate_enabled",
+            "passed": bool(require_human_review),
+            "detail": "Human review must stay enabled as the release gate for the Oracle pilot.",
+        },
+    ]
+    return {
+        "flags": {key: bool(value) for key, value in dict(rollout_flags).items()},
+        "passed": all(bool(item["passed"]) for item in checks),
+        "failed_checks": [item["check"] for item in checks if not item["passed"]],
+        "checks": checks,
+    }
+
+
+def build_oracle_pilot_readiness_report(
+    *,
+    reconciliation: Mapping[str, Any],
+    auditability: Mapping[str, Any],
+    rollout_controls: Mapping[str, Any],
+    review: OracleLeakageReview,
+    reviewer_actions: Sequence[Mapping[str, Any]] | None = None,
+    approval_status: str,
+    require_human_review: bool,
+) -> dict[str, Any]:
+    normalized_approval = (approval_status or "pending").strip().lower()
+    checks = [
+        {
+            "check": "reconciliation",
+            "passed": bool(reconciliation.get("passed")),
+            "detail": "Oracle extracts, KPI outputs, and leakage totals reconcile cleanly.",
+        },
+        {
+            "check": "auditability",
+            "passed": bool(auditability.get("passed")),
+            "detail": "Every pilot number retains lineage to extracts/manual inputs and reviewer actions.",
+        },
+        {
+            "check": "rollout_controls",
+            "passed": bool(rollout_controls.get("passed")),
+            "detail": "Feature flags, release gate, and rollback controls are ready.",
+        },
+        {
+            "check": "reviewer_approval",
+            "passed": (not require_human_review) or normalized_approval == "approved",
+            "detail": "Pilot readiness sign-off requires an approved reviewer decision.",
+        },
+        {
+            "check": "reviewer_trace",
+            "passed": _reviewer_actions_support_signoff(reviewer_actions or (), review),
+            "detail": "Pilot readiness sign-off must be reflected in reviewer actions.",
+        },
+    ]
+    passed = all(bool(item["passed"]) for item in checks)
+    return {
+        "status": "signed_off" if passed else "blocked",
+        "approval_status": normalized_approval,
+        "passed": passed,
+        "failed_checks": [item["check"] for item in checks if not item["passed"]],
+        "checks": checks,
+    }
+
+
 def _detect_duplicate_payments(facts: Sequence[CanonicalFinanceFact]) -> list[OracleLeakageFinding]:
     groups: dict[tuple[str, str, Decimal, str], list[CanonicalFinanceFact]] = defaultdict(list)
     for fact in facts:
@@ -1911,3 +2225,237 @@ def _stringify_decimal(value: Decimal | None) -> str | None:
     if "." in normalized:
         normalized = normalized.rstrip("0").rstrip(".")
     return normalized or "0"
+
+
+def _reconciliation_check(
+    check: str,
+    reported_value: Decimal | None,
+    source_value: Decimal | None,
+    detail: str,
+) -> dict[str, Any]:
+    return {
+        "check": check,
+        "passed": reported_value == source_value,
+        "reported_value": _stringify_decimal(reported_value),
+        "source_value": _stringify_decimal(source_value),
+        "detail": detail,
+    }
+
+
+def _sum_metric_facts_for_computation(
+    snapshot: OracleCanonicalSnapshot,
+    computation: OracleKpiComputation,
+    *,
+    fact_types: Sequence[str],
+) -> Decimal | None:
+    return _sum_metric_facts(
+        snapshot,
+        reporting_period_key=computation.reporting_period_key,
+        reporting_cadence=computation.reporting_cadence,
+        period_start=computation.period_start,
+        period_end=computation.period_end,
+        fact_types=fact_types,
+    )
+
+
+def _latest_metric_fact_for_computation(
+    snapshot: OracleCanonicalSnapshot,
+    computation: OracleKpiComputation,
+    *,
+    fact_types: Sequence[str],
+) -> Decimal | None:
+    return _latest_metric_fact(
+        snapshot,
+        reporting_period_key=computation.reporting_period_key,
+        reporting_cadence=computation.reporting_cadence,
+        period_start=computation.period_start,
+        period_end=computation.period_end,
+        fact_types=fact_types,
+    )
+
+
+def _fact_trace_payload(fact: CanonicalFinanceFact) -> dict[str, Any]:
+    return {
+        "natural_key": fact.natural_key,
+        "module": fact.module,
+        "fact_type": fact.fact_type,
+        "period_key": fact.period_key,
+        "cadence": fact.cadence,
+        "amount": _stringify_decimal(fact.amount_value),
+        "currency": fact.currency,
+        "reporting_currency": fact.reporting_currency,
+        "source_reference": fact.source_reference,
+        "locator": f"{fact.module}:{fact.fact_type}:{fact.natural_key}",
+    }
+
+
+def _manual_input_trace_payload(record: ManualInputRecord) -> dict[str, Any]:
+    return {
+        "input_key": record.input_key,
+        "input_type": record.input_type,
+        "input_name": record.input_name,
+        "storage_kind": record.storage_kind,
+        "cadence": record.cadence,
+        "period_key": record.period_key,
+        "owner_role": record.owner_role,
+        "source_uri": record.source_uri,
+        "status": record.status,
+    }
+
+
+def _metric_component_values(
+    computation: OracleKpiComputation,
+    metric_key: str,
+) -> dict[str, Decimal | None]:
+    return {
+        key: computation.components.get(key)
+        for key in _metric_component_aliases(metric_key)
+        if key in computation.components
+    }
+
+
+def _metric_component_aliases(metric_key: str) -> tuple[str, ...]:
+    return {
+        "revenue_attainment_pct": ("revenue_actual", "revenue_plan"),
+        "ebitda_margin_pct": ("ebitda_actual", "revenue_actual"),
+        "ebitda_attainment_pct": ("ebitda_actual", "ebitda_plan"),
+        "operating_cost_pct_of_plan": ("operating_cost_actual", "operating_cost_plan"),
+        "cash_vs_board_floor_pct": ("cash_balance", "board_floor"),
+        "cash_floor_headroom": ("cash_balance", "board_floor"),
+        "dso_days": ("accounts_receivable_balance", "revenue_actual"),
+        "dpo_days": ("accounts_payable_balance", "operating_cost_actual"),
+        "dio_days": ("inventory_balance", "operating_cost_actual"),
+        "ccc_days": (
+            "accounts_receivable_balance",
+            "inventory_balance",
+            "accounts_payable_balance",
+            "revenue_actual",
+            "operating_cost_actual",
+        ),
+        "net_debt_to_ebitda": ("debt_balance", "cash_balance", "net_debt", "ebitda_actual"),
+        "covenant_headroom": (
+            "covenant_max_leverage",
+            "debt_balance",
+            "cash_balance",
+            "net_debt",
+            "ebitda_actual",
+        ),
+    }.get(metric_key, tuple())
+
+
+def _metric_source_facts(
+    snapshot: OracleCanonicalSnapshot,
+    computation: OracleKpiComputation,
+    metric_key: str,
+) -> list[CanonicalFinanceFact]:
+    aliases_by_component = {
+        "revenue_actual": computation.source_fact_types.get("revenue", tuple()),
+        "ebitda_actual": computation.source_fact_types.get("ebitda", tuple()),
+        "operating_cost_actual": computation.source_fact_types.get("operating_cost", tuple()),
+        "cash_balance": computation.source_fact_types.get("cash_balance", tuple()),
+        "accounts_receivable_balance": computation.source_fact_types.get("accounts_receivable", tuple()),
+        "accounts_payable_balance": computation.source_fact_types.get("accounts_payable", tuple()),
+        "inventory_balance": computation.source_fact_types.get("inventory", tuple()),
+        "debt_balance": computation.source_fact_types.get("debt", tuple()),
+    }
+    facts: list[CanonicalFinanceFact] = []
+    seen: set[str] = set()
+    for component in _metric_component_aliases(metric_key):
+        for fact in _matching_facts(
+            snapshot,
+            reporting_period_key=computation.reporting_period_key,
+            reporting_cadence=computation.reporting_cadence,
+            period_start=computation.period_start,
+            period_end=computation.period_end,
+            fact_types=aliases_by_component.get(component, tuple()),
+            prefer_exact_cadence=False,
+        ):
+            if fact.natural_key in seen:
+                continue
+            seen.add(fact.natural_key)
+            facts.append(fact)
+    return facts
+
+
+def _metric_manual_inputs(
+    snapshot: OracleCanonicalSnapshot,
+    computation: OracleKpiComputation,
+    metric_key: str,
+) -> list[ManualInputRecord]:
+    manual_types = {
+        "revenue_attainment_pct": ("budget_plan",),
+        "ebitda_attainment_pct": ("budget_plan",),
+        "operating_cost_pct_of_plan": ("budget_plan",),
+        "cash_vs_board_floor_pct": ("board_floor",),
+        "cash_floor_headroom": ("board_floor",),
+        "covenant_headroom": ("covenant_terms",),
+    }.get(metric_key, tuple())
+    records: list[ManualInputRecord] = []
+    seen: set[str] = set()
+    for input_type in manual_types:
+        for record in _matching_manual_inputs(
+            snapshot.manual_inputs,
+            input_type=input_type,
+            reporting_period_key=computation.reporting_period_key,
+            reporting_cadence=computation.reporting_cadence,
+            period_start=computation.period_start,
+            period_end=computation.period_end,
+        ):
+            if record.input_key in seen:
+                continue
+            seen.add(record.input_key)
+            records.append(record)
+    return records
+
+
+def _metric_assumptions(
+    computation: OracleKpiComputation,
+    metric_key: str,
+) -> list[str]:
+    assumptions = [
+        f"reporting_period_key={computation.reporting_period_key}",
+        f"reporting_cadence={computation.reporting_cadence}",
+    ]
+    if metric_key in {"dso_days", "dpo_days", "dio_days", "ccc_days"}:
+        assumptions.append(f"period_days={computation.period_days}")
+    if metric_key == "net_debt_to_ebitda":
+        assumptions.append("net_debt = debt_balance - cash_balance")
+    if metric_key == "covenant_headroom":
+        assumptions.append("covenant_headroom = covenant_max_leverage - net_debt_to_ebitda")
+    return assumptions
+
+
+def _reviewer_actions_for_finding(
+    reviewer_actions: Sequence[Mapping[str, Any]],
+    finding_id: str,
+) -> list[dict[str, Any]]:
+    matched: list[dict[str, Any]] = []
+    for action in reviewer_actions:
+        if str(action.get("finding_id") or "") != finding_id:
+            continue
+        matched.append(dict(action))
+    return matched
+
+
+def _manual_input_has_provenance(record: ManualInputRecord) -> bool:
+    return bool(record.source_uri or record.owner_role)
+
+
+def _reviewer_actions_support_signoff(
+    reviewer_actions: Sequence[Mapping[str, Any]],
+    review: OracleLeakageReview,
+) -> bool:
+    if not reviewer_actions:
+        return False
+    signoff_actions = {
+        str(action.get("action") or "").strip().lower()
+        for action in reviewer_actions
+    }
+    if signoff_actions & {"pilot_ready", "pilot_signoff", "phase15_signoff", "sign_off"}:
+        return True
+    covered = {
+        str(action.get("finding_id") or "")
+        for action in reviewer_actions
+        if action.get("finding_id")
+    }
+    return {finding.finding_id for finding in review.findings}.issubset(covered)

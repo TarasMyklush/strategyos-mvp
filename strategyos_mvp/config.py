@@ -161,6 +161,10 @@ class StrategyOSConfig:
     sensitive_identifier_hmac_keys: dict[str, str]
     public_health_enabled: bool
     require_human_review: bool
+    oracle_pilot_enabled: bool
+    oracle_pilot_ceo_surface_enabled: bool
+    oracle_pilot_cfo_surface_enabled: bool
+    oracle_pilot_rollback_ready: bool
     twins_enabled: bool
     twins_mutations_enabled: bool
     twins_scheduler_enabled: bool
@@ -426,6 +430,16 @@ def load_config() -> StrategyOSConfig:
         sensitive_identifier_hmac_keys=sensitive_identifier_hmac_keys,
         public_health_enabled=env_bool("STRATEGYOS_PUBLIC_HEALTH_ENABLED", False),
         require_human_review=env_bool("STRATEGYOS_REQUIRE_HUMAN_REVIEW", True),
+        oracle_pilot_enabled=env_bool("STRATEGYOS_ORACLE_PILOT_ENABLED", False),
+        oracle_pilot_ceo_surface_enabled=env_bool(
+            "STRATEGYOS_ORACLE_PILOT_CEO_SURFACE_ENABLED", False
+        ),
+        oracle_pilot_cfo_surface_enabled=env_bool(
+            "STRATEGYOS_ORACLE_PILOT_CFO_SURFACE_ENABLED", False
+        ),
+        oracle_pilot_rollback_ready=env_bool(
+            "STRATEGYOS_ORACLE_PILOT_ROLLBACK_READY", False
+        ),
         twins_enabled=env_bool("STRATEGYOS_TWINS_ENABLED", True),
         twins_mutations_enabled=env_bool("STRATEGYOS_TWINS_MUTATIONS_ENABLED", True),
         twins_scheduler_enabled=env_bool("STRATEGYOS_TWINS_SCHEDULER_ENABLED", True),

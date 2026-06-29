@@ -73,6 +73,14 @@ from .run_executor import RunExecutionUnavailable, submit_run
 from .runtime_governance import annotate_governance_state, local_run_id_for_dir
 from .oracle_finance import (
     BUFlexfieldMappingConfig,
+    build_oracle_leakage_review_payload,
+    build_oracle_pilot_kpi_payload,
+    build_oracle_pilot_lineage_payload,
+    build_oracle_pilot_readiness_report,
+    build_oracle_pilot_reconciliation_report,
+    build_oracle_pilot_rollout_report,
+    compute_oracle_pilot_kpis,
+    compute_oracle_pilot_leakage,
     ingest_oracle_pilot_extracts,
     load_pilot_extract_batch,
     snapshot_summary,
@@ -164,6 +172,17 @@ class OracleFinanceIngestionRequest(BaseModel):
     tenant_id: UUID
     batch_id: UUID | None = None
     source_system_id: UUID | None = None
+
+
+class OraclePilotValidationRequest(BaseModel):
+    extracts: dict[str, list[dict[str, Any]]]
+    bu_mapping: OracleBUFlexfieldMappingRequest
+    manual_inputs: list[dict[str, Any]] | None = None
+    reporting_currency: str | None = "SAR"
+    reporting_period_key: str
+    reporting_cadence: str | None = None
+    approval_status: str | None = "pending"
+    reviewer_actions: list[dict[str, Any]] | None = None
 
 
 class QaRequest(BaseModel):
@@ -7109,6 +7128,83 @@ def ingest_oracle_finance_snapshot(
         "snapshot": snapshot_summary(snapshot),
         "persistence": persisted,
     }
+
+
+def _oracle_pilot_rollout_flags() -> dict[str, bool]:
+    return {
+        "pilot_enabled": bool(CONFIG.oracle_pilot_enabled),
+        "ceo_surface_enabled": bool(CONFIG.oracle_pilot_ceo_surface_enabled),
+        "cfo_surface_enabled": bool(CONFIG.oracle_pilot_cfo_surface_enabled),
+        "rollback_ready": bool(CONFIG.oracle_pilot_rollback_ready),
+    }
+
+
+@app.post("/finance/oracle/validate")
+def validate_oracle_pilot(
+    request: OraclePilotValidationRequest,
+    _: dict[str, Any] = require_role(
+        "operator", "reviewer", "tenant_operator", "tenant_admin", "system"
+    ),
+) -> Any:
+    bu_mapping = BUFlexfieldMappingConfig(
+        segment_name=request.bu_mapping.segment_name,
+        segment_index=request.bu_mapping.segment_index,
+        value_to_bu=dict(request.bu_mapping.value_to_bu),
+        default_bu=request.bu_mapping.default_bu,
+    )
+    snapshot = ingest_oracle_pilot_extracts(
+        load_pilot_extract_batch(request.extracts),
+        bu_mapping=bu_mapping,
+        manual_inputs=request.manual_inputs,
+        reporting_currency=request.reporting_currency or "SAR",
+    )
+    computation = compute_oracle_pilot_kpis(
+        snapshot,
+        reporting_period_key=request.reporting_period_key,
+        reporting_cadence=request.reporting_cadence,
+    )
+    review = compute_oracle_pilot_leakage(
+        snapshot,
+        reporting_period_key=request.reporting_period_key,
+        reporting_cadence=request.reporting_cadence,
+    )
+    reconciliation = build_oracle_pilot_reconciliation_report(
+        snapshot,
+        computation,
+        review,
+    )
+    lineage = build_oracle_pilot_lineage_payload(
+        snapshot,
+        computation,
+        review,
+        reviewer_actions=request.reviewer_actions,
+    )
+    rollout_controls = build_oracle_pilot_rollout_report(
+        rollout_flags=_oracle_pilot_rollout_flags(),
+        require_human_review=CONFIG.require_human_review,
+    )
+    readiness = build_oracle_pilot_readiness_report(
+        reconciliation=reconciliation,
+        auditability=lineage["auditability"],
+        rollout_controls=rollout_controls,
+        review=review,
+        reviewer_actions=request.reviewer_actions,
+        approval_status=str(request.approval_status or "pending"),
+        require_human_review=CONFIG.require_human_review,
+    )
+    payload = {
+        "status": "ready" if readiness["passed"] else "blocked",
+        "snapshot": snapshot_summary(snapshot),
+        "kpi": build_oracle_pilot_kpi_payload(computation),
+        "leakage_review": build_oracle_leakage_review_payload(review),
+        "reconciliation": reconciliation,
+        "lineage": lineage,
+        "rollout_controls": rollout_controls,
+        "readiness": readiness,
+    }
+    if readiness["passed"]:
+        return payload
+    return JSONResponse(content=payload, status_code=status.HTTP_409_CONFLICT)
 
 
 @app.post("/runs")
