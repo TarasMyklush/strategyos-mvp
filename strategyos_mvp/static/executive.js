@@ -37,6 +37,15 @@
       .join(" ");
   }
 
+  function initialsFromName(value) {
+    return String(firstDefined(value, ""))
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(function (part) { return part.charAt(0).toUpperCase(); })
+      .join("") || "GM";
+  }
+
   function toneClass(value) {
     var text = String(value || "").toLowerCase();
     if (/(published|approved|clear|ready|ok|strong|win|up|live|authored)/.test(text)) return "ok";
@@ -607,9 +616,11 @@
   function renderHomeComposition() {
     var blueprint = getPersonaBlueprint(state.activePersona);
     var driverHeading = $("driver-heading");
+    var driverHint = $("driver-hint");
     var lowerHeading = $("lower-rail-heading");
     if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
-    if (lowerHeading) lowerHeading.textContent = "Mid / lower rail";
+    if (driverHint) driverHint.textContent = "Percent of plan is the headline — the figure is the footnote. Tap a driver for the story.";
+    if (lowerHeading) lowerHeading.textContent = "What matters now";
     var footer = $("composed-footer");
     if (footer) footer.hidden = false;
   }
@@ -781,7 +792,7 @@
     if (byline) {
       var bylineText = firstDefined(blueprint.by, "");
       byline.textContent = bylineText;
-      byline.hidden = !bylineText;
+      byline.hidden = true;
     }
 
     var quote = $("hero-quote");
@@ -830,25 +841,19 @@
     var drivers = getVisibleDrivers();
     var activeDriver = getActiveDriver();
     grid.innerHTML = "";
-    drivers.forEach(function (driver, index) {
+    drivers.forEach(function (driver) {
       var key = String(driver.driver_key || driver.key || "");
-      var spark = buildDriverSparkline(driver, index);
       var tile = document.createElement("button");
       tile.type = "button";
       tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
       tile.innerHTML = [
-        '<div class="driver-topline"><span class="driver-overline">' + escapeHtml(firstDefined(driver.status, driver.sub, "status")) + '</span>' + driverRingMarkup(driver) + '</div>',
-        '<span class="driver-metric">' + escapeHtml(firstDefined(driver.metric, "—")) + '</span>',
-        '<strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong>',
-        '<p class="driver-detail">' + escapeHtml(firstDefined(driver.detail, "")) + '</p>',
-        '<div class="sparkline-wrap"><svg class="driver-sparkline" viewBox="0 0 124 30" aria-hidden="true"><polygon class="driver-sparkline__fill" points="' + escapeHtml(spark.area) + '"></polygon><polyline class="driver-sparkline__line" points="' + escapeHtml(spark.line) + '"></polyline></svg></div>',
-        '<div class="driver-footer"><span>' + escapeHtml(firstDefined(driver.trendLabel, "Governed trend")) + '</span><strong>' + escapeHtml(firstDefined(driver.pct, "—")) + '%</strong></div>'
+        '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy"><div class="driver-pct">' + escapeHtml(firstDefined(driver.pct, '—')) + '<span class="pct-sign">%</span></div><div class="driver-ofplan">of plan</div></div></div>',
+        '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(firstDefined(driver.sub, "current measure")) + '</span></div></div>'
       ].join("");
       tile.onclick = function () {
         state.activeDriverKey = key;
         updateHistory();
         renderDriverGrid();
-        renderMetrics();
         renderDriverDrillFidelity();
         renderSummary();
       };
@@ -922,19 +927,19 @@
       var planPath = chartPoints(planSeries).map(function (pair, idx) {
         return (idx ? "L" : "M") + pair[0].toFixed(1) + "," + pair[1].toFixed(1);
       }).join(" ");
-      var groupMarkup = function (label, tone, rows) {
-        return '<div class="drill-ledger"><div class="drill-ledger__head"><span class="pill-inline ' + (tone === 'up' ? 'ok' : 'warn') + '">' + escapeHtml(label) + '</span><span>' + escapeHtml(tone === 'up' ? 'what is helping the number' : 'what is still dragging it') + '</span></div>' + (rows.length ? rows.map(function (item) {
-          var noteKey = firstDefined(driver.driver_key, driver.key, '') + ':' + firstDefined(item.name, 'mover');
-          var noteOpen = state.openDriverNoteKey === noteKey;
-          var gm = item.gm || null;
-          return '<div class="drill-mover ' + (noteOpen ? 'is-open' : '') + '"><div class="drill-mover__main"><span class="drill-mover__dot ' + escapeHtml(tone) + '"></span><strong>' + escapeHtml(firstDefined(item.name, 'Signal')) + '</strong><span class="drill-mover__delta">' + escapeHtml(firstDefined(item.delta, '')) + '</span>' + (gm ? '<button type="button" class="gm-chip' + (noteOpen ? ' is-open' : '') + '" data-driver-note="' + escapeHtml(noteKey) + '">“ GM note</button>' : '<span class="gm-none">—</span>') + '</div>' + (gm && noteOpen ? '<blockquote class="gm-note"><span class="gm-note-who">' + escapeHtml(firstDefined(gm.who, 'GM')) + '</span>' + escapeHtml(firstDefined(gm.note, '')) + '<span class="gm-note-tail">↑ travels up with this number</span></blockquote>' : '') + '</div>';
-        }).join('') : '<div class="discovery-empty">No movement is attached yet.</div>') + '</div>';
-      };
+      var moverRows = lifting.map(function (item) { return { tone: 'up', glyph: '↗', item: item }; })
+        .concat(dragging.map(function (item) { return { tone: 'down', glyph: '↘', item: item }; }));
       drillCard.innerHTML = [
         '<div class="drill-surface">',
         '<div class="drill-headline"><div><h3 class="detail-title">' + escapeHtml(firstDefined(driver.label, 'Driver drill')) + '</h3><p class="section-note">' + escapeHtml(String(firstDefined(driver.pct, '—')) + '% of plan · ' + firstDefined(driver.metric, '—') + ' · ' + firstDefined(driver.sub, 'current measure')) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work ⌕</button></div>',
         '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, 'Awaiting drill detail.')) + '</p>',
-        '<div class="drill-grid-v2"><div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual <span class="lg plan"></span> plan</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" aria-hidden="true"><path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path></svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div><div class="drill-movers-panel"><div class="mini-head">What moved it <span class="mini-hint">tap a note — the GM’s commentary rides up with the number</span></div>' + groupMarkup('Lifting', 'up', lifting) + groupMarkup('Dragging', 'down', dragging) + '</div></div>',
+        '<div class="drill-grid-v2"><div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual <span class="lg plan"></span> plan</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" aria-hidden="true"><path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path></svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div><div class="drill-movers-panel"><div class="mini-head">What moved it <span class="mini-hint">tap a note — the GM’s commentary rides up with the number</span></div><div class="movers-flat">' + (moverRows.length ? moverRows.map(function (entry) {
+          var item = entry.item || {};
+          var noteKey = firstDefined(driver.driver_key, driver.key, '') + ':' + firstDefined(item.name, 'mover');
+          var noteOpen = state.openDriverNoteKey === noteKey;
+          var gm = item.gm || null;
+          return '<div class="mover-flat ' + (noteOpen ? 'is-open' : '') + '"><div class="mover-flat__row"><span class="mover-flat__dir tone-' + escapeHtml(entry.tone) + '">' + escapeHtml(entry.glyph) + '</span><span class="mover-flat__name">' + escapeHtml(firstDefined(item.name, 'Signal')) + '</span><span class="mover-flat__delta">' + escapeHtml(firstDefined(item.delta, '')) + '</span>' + (gm ? '<button type="button" class="gm-chip gm-chip--avatar' + (noteOpen ? ' is-open' : '') + '" data-driver-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>GM note</span></button>' : '<span class="gm-none">—</span>') + '</div>' + (gm && noteOpen ? '<blockquote class="gm-note"><span class="gm-note-who">' + escapeHtml(firstDefined(gm.who, 'GM')) + '</span>' + escapeHtml(firstDefined(gm.note, '')) + '<span class="gm-note-tail">↑ travels up with this number</span></blockquote>' : '') + '</div>';
+        }).join('') : '<div class="discovery-empty">No movement is attached yet.</div>') + '</div></div></div>',
         '<div class="chips"><span class="chips-label">Ask on:</span>' + safeArray(driver.chips).map(function (chip) { return '<button class="chip" type="button" data-driver-chip="' + escapeHtml(chip) + '">' + escapeHtml(chip) + '</button>'; }).join('') + '</div>',
         '<form class="chips-own" id="driver-composer"><label class="sr-only" for="driver-input">Ask about driver</label><input id="driver-input" class="driver-input" type="text" placeholder="Ask your own about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '…" /><button type="submit">Send</button></form>',
         '<div class="drill-evidence" hidden><span class="evidence-label">Evidence chain</span><span class="evidence-step">Board-approved plan v4</span><span class="evidence-arrow">→</span><span class="evidence-step">Knowledge graph · 8 BU ledgers</span><span class="evidence-arrow">→</span><span class="evidence-step">S/4HANA + BI connectors</span><span class="evidence-arrow">→</span><span class="evidence-step">computed today 06:14</span></div>',
@@ -1113,25 +1118,37 @@
     var findings = safeArray(blueprint.findings).slice(0, 3);
     var developments = safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3);
     var weekAhead = safeArray(blueprint.week).length ? safeArray(blueprint.week).slice(0, 3) : safeArray(lowerRail.week_ahead).slice(0, 3);
+    var renderToggleList = function (items, kind) {
+      return items.map(function (item, index) {
+        var key = kind + ':' + index;
+        var open = state.openDriverNoteKey === key;
+        return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span><span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + '</div>' : '');
+      }).join('');
+    };
 
     if (findingsPanel) {
-      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Findings &amp; concerns</p><h3 class="detail-title">What the room should notice</h3></div><span class="pill-inline warn">board-safe</span></div><div class="mini-list">' + findings.map(function (item) {
-        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, "Finding")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, "Awaiting detail.")) + '</p></div><span class="pill-inline ' + toneClass(item.tone) + '">' + escapeHtml(firstDefined(item.tag, humanizeToken(item.tone), "signal")) + '</span></div>';
-      }).join("") + '</div>';
+      findingsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Findings &amp; concerns</h3><p class="section-note">The system’s read — positive or negative, with its classification.</p></div></div><div class="rail-toggle-list">' + renderToggleList(findings, 'finding') + '</div>';
     }
 
     if (developmentsPanel) {
-      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Developments since you were here</p><h3 class="detail-title">Fresh movement across the group</h3></div><span class="pill-inline ok">live signal</span></div><div class="mini-list">' + developments.map(function (item) {
-        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, "Development")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.impact, item.detail, "Awaiting detail.")) + '</p></div><span class="pill-inline ' + toneClass(firstDefined(item.kind, (item.chips || [])[0])) + '">' + escapeHtml(firstDefined(item.meta, item.kind, "update")) + '</span></div>';
-      }).join("") + '</div>';
+      developmentsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Developments since you were here</h3><p class="section-note">Wins &amp; watch-outs — tap to project the impact on plan.</p></div></div><div class="rail-toggle-list">' + renderToggleList(developments, 'development') + '</div>';
     }
 
     if (weekPanel) {
       var openIndex = Math.min(state.openWeekIndex || 0, Math.max(weekAhead.length - 1, 0));
       var activeEvent = weekAhead[openIndex] || null;
-      weekPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Week ahead</p><h3 class="detail-title">Upcoming decision moments</h3></div><span class="pill-inline warn">time-bound</span></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
+      weekPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Week ahead</h3><p class="section-note">Your calendar, AI-triaged — a launchpad, not a list.</p></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”: model the options and what I should walk in having decided."><strong>◇ Open in thinking mode</strong><span>no side effects</span></button><button class="timeline-chip" type="button" data-chat-prompt="For “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”, what data am I missing and who should I request it from?"><strong>⤓ Request missing data</strong><span>ask StrategyOS</span></button></div></div>' : '');
+      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”: model the options and what I should walk in having decided."><strong>◇ Open in thinking mode</strong><span>no side effects</span></button><button class="timeline-chip" type="button" data-chat-prompt="For “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”, what data am I missing and who should I request it from?"><strong>⤓ Request missing data</strong><span>ask StrategyOS</span></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line…" /><button type="submit">Send</button></form></div>' : '');
+      safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
+        safeArray(panel && panel.querySelectorAll('[data-rail-toggle]')).forEach(function (button) {
+          button.onclick = function () {
+            var key = button.getAttribute('data-rail-toggle') || '';
+            state.openDriverNoteKey = state.openDriverNoteKey === key ? '' : key;
+            renderLowerRailFidelity();
+          };
+        });
+      });
       safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {
         button.onclick = function () {
           state.openWeekIndex = Number(button.getAttribute('data-week-index') || 0) || 0;
@@ -1146,113 +1163,116 @@
           renderAssistantStudio();
         };
       });
+      var weekComposer = weekPanel.querySelector('#week-composer');
+      var weekInput = weekPanel.querySelector('#week-input');
+      if (weekComposer && weekInput && activeEvent) {
+        weekComposer.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var message = String(weekInput.value || '').trim();
+          if (!message) return;
+          pushThreadMessage('user', 'For “' + firstDefined(activeEvent.title, 'this event') + '”: ' + message);
+          pushThreadMessage('assistant', buildAssistantReply(message));
+          weekInput.value = '';
+          state.drawerOpen = true;
+          renderTopbar();
+          renderAssistantStudio();
+        });
+      }
     }
 
   }
 
   function renderAgentsDiscovery() {
-    var modules = getAgentsModule();
     var activityCard = $("agents-activity");
     var runningCard = $("running-agents");
     var discoveryCard = $("discovery-panel");
     var subtoolsCard = $("subtools-panel");
-    var filterRow = $("discovery-filter-row");
     var activity = getAgentActivitySummary();
     var discoverable = getDiscoverableAgents();
     var running = getRunningAgents();
     var approvals = getApprovalAgents();
     var subtools = getSubtools();
+    var combined = approvals.concat(running).sort(function (left, right) {
+      var order = { approval: 0, running: 1, standing: 2, queued: 3, done: 4 };
+      return Number(firstDefined(order[left && left.status], 9)) - Number(firstDefined(order[right && right.status], 9));
+    });
+    var nativeAgents = discoverable.filter(function (item) { return item.source === 'native'; });
+    var marketAgents = discoverable.filter(function (item) { return item.source !== 'native'; });
 
-    if (filterRow) {
-      filterRow.innerHTML = ["all", "executive", "review", "operate", "system"].map(function (lane) {
-        var isActive = state.discoveryFilter === lane;
-        return '<button type="button" class="filter-chip' + (isActive ? ' is-active' : '') + '" data-discovery-filter="' + lane + '">' + escapeHtml(lane === 'all' ? 'All surfaces' : humanizeToken(lane)) + '</button>';
-      }).join("");
-      safeArray(filterRow.querySelectorAll("[data-discovery-filter]")).forEach(function (button) {
+    function statusLabel(item, approved) {
+      var status = String(firstDefined(item && item.status, 'running'));
+      if (status === 'approval' && approved) return 'approved';
+      if (status === 'approval') return 'needs your approval';
+      if (status === 'standing') return 'standing watch';
+      return humanizeToken(status);
+    }
+
+    if (activityCard) {
+      activityCard.innerHTML = '<div class="agent-activity' + (state.agentSummaryOpen ? ' is-open' : '') + '"><button type="button" class="agent-activity-line" data-agent-summary-toggle="true"><span class="aa-spark">✦</span><span class="aa-text">' + escapeHtml(firstDefined(activity.line, 'What is working on your data right now — and a universe more to deploy.')) + '</span><span class="aa-toggle">' + (state.agentSummaryOpen ? 'hide detail' : 'view detail') + '</span></button>' + (state.agentSummaryOpen ? '<div class="aa-detail"><div class="aa-metrics">' + safeArray(activity.metrics).map(function (item) {
+        return '<div class="aa-metric"><span class="aa-metric-v">' + escapeHtml(firstDefined(item.v, item.value, '0')) + '</span><span class="aa-metric-k">' + escapeHtml(firstDefined(item.k, item.label, 'metric')) + '</span></div>';
+      }).join('') + '</div><ol class="aa-trail">' + safeArray(activity.log).map(function (item) { return '<li class="aa-trail-item"><span class="trail-time">' + escapeHtml(firstDefined(item.t, 'now')) + '</span><span class="aa-who">' + escapeHtml(firstDefined(item.who, 'agent')) + '</span><span class="aa-act">' + escapeHtml(firstDefined(item.a, 'activity')) + '</span></li>'; }).join('') + '</ol></div>' : '') + '</div>';
+      var summaryToggle = activityCard.querySelector('[data-agent-summary-toggle]');
+      if (summaryToggle) {
+        summaryToggle.onclick = function () {
+          state.agentSummaryOpen = !state.agentSummaryOpen;
+          renderAgentsDiscovery();
+        };
+      }
+    }
+
+    if (runningCard) {
+      var runningCount = combined.filter(function (item) {
+        return ['running', 'standing'].indexOf(String(firstDefined(item.status, ''))) !== -1;
+      }).length;
+      var needsApproval = approvals.filter(function (item) {
+        return !state.approvedAgentIds[firstDefined(item.id, item.module_id, item.name, '')];
+      }).length;
+      runningCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Running now</span><span class="ach-stats"><span class="agent-pulse running"></span> ' + escapeHtml(String(runningCount)) + ' running' + (needsApproval ? '<span class="ach-needs"> · ' + escapeHtml(String(needsApproval)) + ' needs you</span>' : '') + '</span></div><div class="agents-clist">' + combined.map(function (item) {
+        var id = firstDefined(item.id, item.module_id, item.name, 'agent');
+        var isOpen = state.openAgentId === id;
+        var logOpen = state.openAgentLogId === id;
+        var approved = !!state.approvedAgentIds[id];
+        var showBar = ['running', 'approval'].indexOf(String(firstDefined(item.status, ''))) !== -1;
+        return '<div class="agent-c' + (isOpen ? ' is-open' : '') + '"><button type="button" class="agent-c-head" data-agent-toggle="' + escapeHtml(id) + '"><span class="agent-pulse ' + escapeHtml(String(firstDefined(item.status, 'running'))) + '"></span><span class="agent-name">' + escapeHtml(firstDefined(item.name, item.label, id)) + '</span><span class="agent-status s-' + escapeHtml(String(firstDefined(item.status, 'running'))) + '">' + escapeHtml(statusLabel(item, approved)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (showBar ? '<div class="agent-prog"><span class="agent-prog-bar tone-' + escapeHtml(toneClass(firstDefined(item.status, 'running'))) + '" style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></span></div>' : '') + (isOpen ? '<div class="agent-c-body"><span class="tag agent-tag">' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span><p class="agent-doing">' + escapeHtml(approved && item.status === 'approval' ? 'Approved — executing now. Audit entry written.' : firstDefined(item.doing, item.summary, 'Governed activity in progress.')) + '</p><div class="agent-c-foot"><span class="agent-by">deployed by ' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><button type="button" class="agent-log-btn' + (logOpen ? ' is-open' : '') + '" data-agent-log="' + escapeHtml(id) + '">◷ audit log <span class="agent-log-count">' + escapeHtml(String(safeArray(item.log).length)) + '</span></button></div>' + (item.status === 'approval' && !approved ? '<div class="agent-approve"><span class="agent-approve-note">⚠ This agent will <strong>act</strong> — held until you approve.</span><button type="button" class="agent-approve-btn" data-agent-approve="' + escapeHtml(id) + '">Approve &amp; let it execute</button></div>' : '') + (logOpen ? '<ol class="agent-trail">' + safeArray(item.log).map(function (entry) { return '<li class="trail-item"><span class="trail-time">' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><span class="trail-dot"></span><span class="trail-text">' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</span></li>'; }).join('') + '<li class="trail-foot">every action is logged in-tenant · tap any entry to see its evidence</li></ol>' : '') + '</div>' : '') + '</div>';
+      }).join('') + '</div><div class="agents-sovereign"><span class="sov-dot"></span> sovereign · runs in-tenant · every action logged</div>' + (subtools.length ? '<div class="subtools"><div class="subtools-label">Sub-agents your chiefs call as tools</div><div class="subtools-grid">' + subtools.map(function (item) { return '<div class="subtool"><span class="subtool-glyph">' + escapeHtml(firstDefined(item.glyph, '▦')) + '</span><div class="subtool-meta"><span class="subtool-name">' + escapeHtml(firstDefined(item.name, 'Tool')) + '</span><span class="subtool-desc">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</span></div></div>'; }).join('') + '</div></div>' : '');
+      safeArray(runningCard.querySelectorAll('[data-agent-toggle]')).forEach(function (button) {
         button.onclick = function () {
-          state.discoveryFilter = button.getAttribute("data-discovery-filter") || "all";
+          var id = button.getAttribute('data-agent-toggle') || '';
+          state.openAgentId = state.openAgentId === id ? '' : id;
+          if (state.openAgentId !== id) state.openAgentLogId = '';
+          renderAgentsDiscovery();
+        };
+      });
+      safeArray(runningCard.querySelectorAll('[data-agent-log]')).forEach(function (button) {
+        button.onclick = function (event) {
+          event.stopPropagation();
+          var id = button.getAttribute('data-agent-log') || '';
+          state.openAgentLogId = state.openAgentLogId === id ? '' : id;
+          state.openAgentId = id;
+          renderAgentsDiscovery();
+        };
+      });
+      safeArray(runningCard.querySelectorAll('[data-agent-approve]')).forEach(function (button) {
+        button.onclick = function (event) {
+          event.stopPropagation();
+          var id = button.getAttribute('data-agent-approve') || '';
+          state.approvedAgentIds[id] = true;
+          state.openAgentId = id;
           renderAgentsDiscovery();
         };
       });
     }
 
-    if (activityCard) {
-      activityCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Agents</p><h3 class="detail-title">Runtime activity</h3><p class="detail-copy">' + escapeHtml(firstDefined(activity.line, 'What is working on your data right now — and a universe more to deploy.')) + '</p></div><span class="pill-inline ok">sovereign</span></div><div class="activity-metrics">' + safeArray(activity.metrics).map(function (item) {
-        return '<div class="mini-stat"><strong>' + escapeHtml(firstDefined(item.v, item.value, '0')) + '</strong><span>' + escapeHtml(firstDefined(item.k, item.label, 'metric')) + '</span></div>';
-      }).join('') + '</div><ol class="activity-log">' + safeArray(activity.log).map(function (item) { return '<li><span>' + escapeHtml(firstDefined(item.t, 'now')) + '</span><strong>' + escapeHtml(firstDefined(item.who, 'agent')) + '</strong><p>' + escapeHtml(firstDefined(item.a, 'activity')) + '</p></li>'; }).join('') + '</ol>';
-    }
-
-    if (runningCard) {
-      var runningFiltered = running.filter(function (item) {
-        return state.discoveryFilter === 'all' || !item.lane || item.lane === state.discoveryFilter;
-      });
-      runningCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Running now</p><h3 class="detail-title">What is actively working</h3></div><span class="pill-inline ok">' + escapeHtml(String(runningFiltered.length)) + ' visible</span></div><div class="agent-card-list">' + runningFiltered.map(function (item) {
-        return '<div class="agent-card"><div class="agent-card__head"><strong>' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'running')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.doing, item.summary, 'Governed activity in progress.')) + '</p><div class="agent-card__meta"><span>' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><span>' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span></div><div class="agent-progress"><i style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></i></div><ol class="agent-card__trail">' + safeArray(item.log).slice(0, 3).map(function (entry) { return '<li><span>' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><p>' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</p></li>'; }).join('') + '</ol></div>';
-      }).join('') + '</div><div class="agents-sovereign"><span class="sov-dot"></span> sovereign · runs in-tenant · every action logged</div>';
-    }
-
     if (discoveryCard) {
-      var filtered = discoverable.filter(function (item) {
-        return state.discoveryFilter === 'all' || !item.lane || item.lane === state.discoveryFilter;
-      });
-      var nativeAgents = filtered.filter(function (item) { return item.source === 'native'; });
-      var marketAgents = filtered.filter(function (item) { return item.source !== 'native'; });
       var renderDiscoveryGroup = function (title, items) {
-        return '<div class="discovery-group"><div class="discovery-group__label">' + escapeHtml(title) + '</div><div class="discovery-list discovery-list--cards">' + items.map(function (item) {
-          return '<div class="discovery-card"><span class="discovery-card__glyph">' + escapeHtml(firstDefined(item.glyph, '◇')) + '</span><div class="discovery-card__meta"><div class="discovery-card__head"><strong>' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</strong><span>' + escapeHtml(firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</p><small>' + escapeHtml(firstDefined(item.connector, item.route, 'connector')) + '</small></div><button type="button" class="discovery-card__action">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
-        }).join('') + '</div></div>';
+        return '<div class="disco-group-label">' + escapeHtml(title) + '</div><div class="disco-list">' + items.map(function (item) {
+          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '◇')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</span><span class="disco-src ' + escapeHtml(firstDefined(item.source, 'native')) + '">' + escapeHtml(firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">⚡</span> ' + escapeHtml(firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
+        }).join('') + '</div>';
       };
-      discoveryCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Discover agents</p><h3 class="detail-title">Deploy on your data</h3></div><span class="pill-inline warn">expandable</span></div><div class="discovery-search">⌕ Search the agent universe…</div>' + renderDiscoveryGroup('Native on StrategyOS', nativeAgents) + renderDiscoveryGroup('From the marketplace', marketAgents) + '<button type="button" class="browse-agents">Browse all agents →</button>';
+      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">deploy on your data via platform connectors</span></div><div class="disco-search"><span class="disco-search-icon">⌕</span> Search the agent universe…</div>' + renderDiscoveryGroup('Native on StrategyOS', nativeAgents) + renderDiscoveryGroup('From the marketplace', marketAgents) + '<button type="button" class="disco-browse">Browse all agents →</button>';
     }
 
-    if (subtoolsCard) {
-      subtoolsCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Sub-agents and approvals</p><h3 class="detail-title">What the chiefs call as tools</h3></div><span class="pill-inline ok">traceable</span></div><div class="subtools-list">' + subtools.map(function (item) {
-        return '<div class="subtool-card"><span class="subtool-card__glyph">' + escapeHtml(firstDefined(item.glyph, '▦')) + '</span><div><strong>' + escapeHtml(firstDefined(item.name, 'Tool')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</p></div></div>';
-      }).join('') + '</div><div class="approval-list">' + approvals.map(function (item) {
-        return '<div class="approval-row"><strong>' + escapeHtml(firstDefined(item.label, item.approval_id, 'Approval')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'waiting')) + '</span><p class="list-copy">Next action: ' + escapeHtml(firstDefined(item.next_action, 'continue')) + '</p></div>';
-      }).join('') + '</div>';
-    }
-  }
-
-  function renderOperatingModelPanel() {
-    var row = $('operating-board-state-row');
-    var panel = $('operating-model-panel');
-    var board = getBoardPortal();
-    var modes = safeArray(board.lifecycle_flow).length ? safeArray(board.lifecycle_flow) : (((state.latestPacket || {}).executive_modes || {}).board_states || []);
-    var personaEntries = safeArray(state.personas).length ? safeArray(state.personas) : ['ceo', 'cfo', 'gm', 'bucfo', 'logistics', 'board'].map(function (id) { return { persona_id: id, label: humanizeToken(id), active: id === state.activePersona }; });
-    if (row) {
-      row.innerHTML = modes.map(function (mode) {
-        var isActive = mode.state_id === state.activeBoard;
-        return '<button type="button" class="state-tab' + (isActive ? ' is-active' : '') + '" data-operating-board="' + escapeHtml(firstDefined(mode.state_id, 'pre')) + '"><span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id, 'State')) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, '')) + '</span></span></button>';
-      }).join('');
-      safeArray(row.querySelectorAll('[data-operating-board]')).forEach(function (button) {
-        button.onclick = function () {
-          state.activeBoard = button.getAttribute('data-operating-board') || state.activeBoard;
-          renderBoardStateTabs();
-          renderBoardPortal();
-          renderOperatingModelPanel();
-          updateHistory();
-        };
-      });
-    }
-    if (panel) {
-      panel.innerHTML = '<div class="operating-model"><div class="operating-model__lane"><p class="detail-eyebrow">Persona lanes</p><div class="persona-pill-row">' + personaEntries.map(function (persona) {
-        return '<button type="button" class="persona-pill' + (persona.persona_id === state.activePersona ? ' is-active' : '') + '" data-operating-persona="' + escapeHtml(firstDefined(persona.persona_id, 'ceo')) + '">' + escapeHtml(firstDefined(persona.label, humanizeToken(persona.persona_id), 'Persona')) + '</button>';
-      }).join('') + '</div><p class="list-copy">Switch between operating personas without losing the board-safe packet frame.</p></div><div class="operating-model__lane"><p class="detail-eyebrow">Board lifecycle</p><div class="lifecycle-inline">' + modes.map(function (mode) {
-        return '<div class="lifecycle-step' + (mode.state_id === state.activeBoard ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(mode.summary, mode.detail, '')) + '</p></div></div>';
-      }).join('') + '</div><p class="list-copy">Explicit pre / live / closed handling stays visible from the executive surface.</p></div></div>';
-      safeArray(panel.querySelectorAll('[data-operating-persona]')).forEach(function (button) {
-        button.onclick = function () {
-          var personaId = button.getAttribute('data-operating-persona') || 'ceo';
-          if (personaId === state.activePersona) return;
-          state.activePersona = personaId;
-          state.activeView = personaId === 'board' ? 'knowledge' : 'home';
-          state.activeDriverKey = '';
-          state.activeThreadKey = '';
-          refresh(true);
-        };
-      });
-    }
+    if (subtoolsCard) subtoolsCard.hidden = true;
   }
 
   function renderAssistantStudio() {
@@ -1406,7 +1426,6 @@
     renderBoardStateTabs();
     renderBoardPortal();
     renderLowerRailFidelity();
-    renderOperatingModelPanel();
     renderAgentsDiscovery();
     renderAssistantNetwork();
     renderA2APanel();
@@ -1494,7 +1513,11 @@
       knowledgeQuestionIndex: 0,
       personaOutsideListenerBound: false,
       openDriverNoteKey: "",
-      openWeekIndex: 0
+      openWeekIndex: 0,
+      agentSummaryOpen: false,
+      openAgentId: "",
+      openAgentLogId: "",
+      approvedAgentIds: {}
     };
 
   bindAssistantForm();
