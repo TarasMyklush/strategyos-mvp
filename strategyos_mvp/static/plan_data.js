@@ -247,6 +247,30 @@
           { id: "15.4", title: "Install rollout controls and failure gates", description: "Require feature flags, release criteria, rollback paths, and operator sign-offs before widening beyond the Oracle pilot cohort", status: "completed", files: [] },
           { id: "15.5", title: "Sign off pilot readiness", description: "Close the phase only after reconciliation, auditability, and rollout-control checks all pass for the Oracle EBS pilot scope", status: "completed", files: [] }
         ]
+      },
+      {
+        id: "phase-16",
+        num: 16,
+        title: "Audit / cleanup / handoff pack",
+        subtitle: "Capture the closed Oracle pilot truth, cleanup recommendations, and operator handoff guidance as a post-backlog package",
+        weeks: "0.5",
+        status: "completed",
+        stories: [
+          { id: "16.1", title: "Publish the post-backlog audit and handoff pack", description: "Document what shipped, what is live, the closure commit, and the current repo-state caveats so the Oracle roadmap stays auditable after backlog closure", status: "completed", files: ["docs/oracle-pilot-post-backlog-audit-handoff-2026-06-29.md"] },
+          { id: "16.2", title: "Record cleanup recommendations and operator next steps", description: "Preserve the branch/merge/deploy history, cleanup guidance, and explicit post-backlog separation advice so handoff remains truthful and operationally useful", status: "completed", files: ["docs/oracle-pilot-post-backlog-audit-handoff-2026-06-29.md"] }
+        ]
+      },
+      {
+        id: "phase-17",
+        num: 17,
+        title: "CEO end-to-end demo artifact",
+        subtitle: "Ship the CEO demo package as a truthful post-backlog deliverable with motion capture, screenshots, and explicit auth disclosure",
+        weeks: "0.5",
+        status: "completed",
+        stories: [
+          { id: "17.1", title: "Assemble the final CEO demo package", description: "Publish the reviewable package under artifacts/ceo-demo, including the real StrategyOS walkthrough video, supporting screenshots, and package notes", status: "completed", files: ["artifacts/ceo-demo/CEO_WORKFLOW_DEMO_PACKAGE.md", "artifacts/ceo-demo/strategyos-live-ceo-workflow-demo-2026-06-29.webm", "artifacts/ceo-demo/01-ceo-overview.png", "artifacts/ceo-demo/05-report-preview.png"] },
+          { id: "17.2", title: "Disclose demo boundary conditions truthfully", description: "Mark the package complete while stating clearly that the delivered artifact is a real live-app demo package and that the captured session was not an authenticated executive/system-user recording", status: "completed", files: ["artifacts/ceo-demo/CEO_WORKFLOW_DEMO_PACKAGE.md", "artifacts/ceo-demo/06-ui-session-auth-state.png"] }
+        ]
       }
     ]
   };
