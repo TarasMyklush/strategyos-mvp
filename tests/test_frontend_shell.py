@@ -66,7 +66,7 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     html = _homepage_response()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS — Group CEO Oracle Pilot" in html
+    assert "StrategyOS — Group CEO Diagnostics" in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -79,8 +79,15 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'class="brand-mark"' in html
     # Persona switcher
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
-    # Minimal top bar
-    assert "Governed executive view" in html
+    # 22.06 top bar / nav parity
+    assert 'id="view-nav"' in html
+    assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
+    assert 'id="ask-toggle"' in html
+    assert "Mizan Group" in html
+    assert "Viewing as" not in html
+    assert "◆ Hermes" in html
+    assert ">KA<" in html
+    assert 'id="theme-toggle"' in html
     # Hero banner
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="hero-head"' in html or 'class="hero-title"' in html
@@ -88,17 +95,23 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="hero-score"' in html or 'class="hero-score__value"' in html
     # Driver grid
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
-    # Key metrics and richer fidelity sections
-    assert 'id="metrics-grid"' in html or 'class="metrics-grid"' in html
-    assert 'id="summary-card"' in html or 'class="summary"' in html
-    assert 'id="drill"' in html or 'class="drill-layout"' in html
+    # Home composition parity
+    assert "The group index" in html
+    assert 'id="driver-drill"' in html
+    assert 'id="findings-panel"' in html
+    assert 'id="developments-panel"' in html
+    assert 'id="week-panel"' in html
+    assert "Think and model on your data" in html
     assert 'id="board-portal"' in html
-    assert 'id="lower-rail-fidelity"' in html
     assert 'id="agents-activity"' in html
-    assert 'id="workspace-nav"' in html
-    assert "Overview" in html and "Cases" in html and "Evidence" in html and "Reports" in html
+    assert 'id="assistant-network-card"' in html
+    assert 'id="a2a-fab"' in html
+    assert 'id="a2a-panel"' in html
     assert 'id="assistant-studio"' in html
     assert 'id="assistant-form"' in html
+    assert 'id="assistant-drawer"' in html
+    assert 'id="chat-launcher"' in html
+    assert 'id="knowledge-graph-card"' in html
 
 
 def test_executive_route_renders_minimal_live_diagnostics_shell():
@@ -109,7 +122,7 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     js = _static_executive_js()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS — Group CEO Oracle Pilot" in html
+    assert "StrategyOS — Group CEO Diagnostics" in html
     assert marker in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
@@ -117,20 +130,34 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     # Design-faithful UI elements
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
-    assert "Governed executive view" in html
+    assert 'id="view-nav"' in html
+    assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
+    assert 'id="ask-toggle"' in html
+    assert "Mizan Group" in html
+    assert "Viewing as" not in html
+    assert "◆ Hermes" in html
+    assert ">KA<" in html
+    assert 'id="theme-toggle"' in html
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="hero-score"' in html or 'class="hero-score__value"' in html
     assert 'id="hero-head"' in html or 'class="hero-title"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
-    assert 'id="metrics-grid"' in html or 'class="metrics-grid"' in html
+    assert "The group index" in html
     assert 'id="summary-card"' in html or 'class="summary"' in html
-    assert 'id="drill"' in html or 'class="drill-layout"' in html
+    assert 'id="driver-drill"' in html
+    assert 'id="findings-panel"' in html
+    assert 'id="developments-panel"' in html
+    assert 'id="week-panel"' in html
     assert 'id="board-portal"' in html
-    assert 'id="lower-rail-fidelity"' in html
     assert 'id="agents-activity"' in html
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
-    assert 'id="workspace-nav"' in html
+    assert 'id="assistant-network-card"' in html
+    assert 'id="a2a-fab"' in html
+    assert 'id="a2a-panel"' in html
+    assert 'id="knowledge-graph-card"' in html
     assert 'id="assistant-studio"' in html
+    assert 'id="assistant-drawer"' in html
+    assert 'id="chat-launcher"' in html
     assert "strategyos.ui.token" in js
     assert '<script id="strategyos-bootstrap"' not in html
 
@@ -143,8 +170,8 @@ def test_app_entry_routes_render_executive_shell():
 
     assert app_response.status_code == 200
     assert alias_response.status_code == 200
-    assert "StrategyOS — Group CEO Oracle Pilot" in app_response.text
-    assert "StrategyOS — Group CEO Oracle Pilot" in alias_response.text
+    assert "StrategyOS — Group CEO Diagnostics" in app_response.text
+    assert "StrategyOS — Group CEO Diagnostics" in alias_response.text
     assert '<script id="strategyos-executive-bootstrap"' in app_response.text
     assert '<script id="strategyos-executive-bootstrap"' in alias_response.text
     assert '<script id="strategyos-bootstrap"' not in app_response.text
@@ -157,28 +184,43 @@ def test_app_entry_uses_design_faithful_executive_surface():
     html = _app_entry_response()
     js = _static_executive_js()
 
-    assert "StrategyOS — Group CEO Oracle Pilot" in html
+    assert "StrategyOS — Group CEO Diagnostics" in html
     assert "StrategyOS" in html
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
-    assert "Governed executive view" in html
+    assert 'id="view-nav"' in html
+    assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
+    assert "Mizan Group" in html
+    assert "Viewing as" not in html
+    assert "◆ Hermes" in html
+    assert ">KA<" in html
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
-    assert 'id="metrics-grid"' in html or 'class="metrics-grid"' in html
+    assert "The group index" in html
     assert 'id="summary-card"' in html or 'class="summary"' in html
-    assert 'id="drill"' in html or 'class="drill-layout"' in html
+    assert 'id="driver-drill"' in html
+    assert 'id="findings-panel"' in html
+    assert 'id="developments-panel"' in html
+    assert 'id="week-panel"' in html
     assert 'id="board-portal"' in html
-    assert 'id="lower-rail-fidelity"' in html
     assert 'id="agents-activity"' in html
-    assert 'id="workspace-nav"' in html
+    assert 'id="assistant-network-card"' in html
+    assert 'id="a2a-fab"' in html
+    assert 'id="a2a-panel"' in html
+    assert 'id="knowledge-graph-card"' in html
     assert 'id="assistant-studio"' in html
+    assert 'id="assistant-drawer"' in html
+    assert 'id="chat-launcher"' in html
     assert "StrategyOS.live Governed Diagnostics Workspace" not in html
     assert 'strategyos.ui.token' in js
-    assert 'renderWorkspaceNav' in js
+    assert 'renderViewNav' in js
+    assert 'renderViewPanels' in js
     assert 'renderDriverDrillFidelity' in js
     assert 'renderLowerRailFidelity' in js
     assert 'renderBoardPortal' in js
     assert 'renderAgentsDiscovery' in js
+    assert 'renderAssistantNetwork' in js
+    assert 'renderKnowledgeGraph' in js
     assert 'renderAssistantStudio' in js
 
 

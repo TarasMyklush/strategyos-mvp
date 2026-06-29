@@ -8,6 +8,7 @@
   if (bootstrap.api_auth_enabled) {}
   var _tokenKey = "strategyos.ui.token";
   var DESIGN = (window.STRATEGYOS_EXECUTIVE_DESIGN && window.STRATEGYOS_EXECUTIVE_DESIGN.personas) || {};
+  var DESIGN_GLOBAL = window.STRATEGYOS_EXECUTIVE_DESIGN || {};
 
   function safeArray(value) { return Array.isArray(value) ? value : []; }
 
@@ -107,6 +108,30 @@
     return firstDefined(contract.label, humanizeToken(personaId), "Group CEO");
   }
 
+  function executiveIdentityInitials(personaId) {
+    var networkEntry = getAssistantNetwork().find(function (item) {
+      return item && item.persona === personaId;
+    }) || {};
+    var fullName = String(firstDefined(networkEntry.who, "")).trim();
+    var initials = fullName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(function (part) { return part.charAt(0).toUpperCase(); })
+      .join("");
+    if (initials) return initials;
+
+    var fallbackInitials = String(firstDefined(getPersonaLabel(personaId), "Group CEO"))
+      .split(" ")
+      .filter(Boolean)
+      .map(function (part) { return part.charAt(0).toUpperCase(); })
+      .slice(0, 2)
+      .join("");
+
+    if (personaId === "ceo") return "KA";
+    return fallbackInitials || "GC";
+  }
+
   function getExecutiveDiagnostics() {
     return (state.latestPacket && state.latestPacket.executive_diagnostics) || {};
   }
@@ -123,6 +148,22 @@
     return (state.latestPacket && state.latestPacket.publication) || {};
   }
 
+  function getAssistantNetworkMeta() {
+    return DESIGN_GLOBAL.networkMeta || {};
+  }
+
+  function getAssistantNetwork() {
+    return safeArray(DESIGN_GLOBAL.network);
+  }
+
+  function getAssistantExchanges() {
+    return safeArray(DESIGN_GLOBAL.a2a);
+  }
+
+  function getKnowledgeGraph() {
+    return DESIGN_GLOBAL.graph || { questions: [], nodes: [], edges: [] };
+  }
+
   function getPlanHealth() {
     return (state.latestPacket && state.latestPacket.plan_health) || {};
   }
@@ -133,6 +174,29 @@
 
   function getAgentsModule() {
     return (state.latestPacket && state.latestPacket.agent_modules) || {};
+  }
+
+  function getAgentActivitySummary() {
+    return DESIGN_GLOBAL.activity || {};
+  }
+
+  function getRunningAgents() {
+    var modules = getAgentsModule();
+    return safeArray(modules.running).length ? safeArray(modules.running) : safeArray(DESIGN_GLOBAL.runningAgents);
+  }
+
+  function getDiscoverableAgents() {
+    var modules = getAgentsModule();
+    return safeArray(modules.discoverable).length ? safeArray(modules.discoverable) : safeArray(DESIGN_GLOBAL.discoverAgents);
+  }
+
+  function getApprovalAgents() {
+    var modules = getAgentsModule();
+    return safeArray(modules.approvals);
+  }
+
+  function getSubtools() {
+    return safeArray(DESIGN_GLOBAL.subtools);
   }
 
   function getVisibleDrivers() {
@@ -425,18 +489,57 @@
   }
 
   function renderTopbar() {
-    var session = state.session || {};
-    var packet = state.latestPacket || {};
     var activePersona = getPersonaContract(state.activePersona);
+    var blueprint = getPersonaBlueprint(state.activePersona);
     var org = $("brand-org");
-    var badge = $("state-badge");
     var personaLabel = $("persona-label");
     var list = $("pm-list");
     var btn = $("persona-btn");
+    var askToggle = $("ask-toggle");
+    var viewNav = $("view-nav");
+    var launcher = $("chat-launcher-cta");
+    var launcherPrompt = document.querySelector("#chat-launcher .chat-launcher__prompt");
+    var themeToggle = $("theme-toggle");
+    var userName = $("topbar-user-name");
+    var userRole = $("topbar-user-role");
+    var avatar = $("topbar-avatar");
+    var userMeta = document.querySelector("#topbar-user .tb-user-meta");
+    var assistantName = firstDefined(activePersona.assistant, blueprint.assistant, "Hermes");
+    var assistantGlyph = firstDefined(activePersona.assistant_glyph, blueprint.assistantGlyph, "◆");
+    var initials = executiveIdentityInitials(state.activePersona);
 
-    if (org) org.textContent = firstDefined(session.tenant_context && session.tenant_context.tenant_name, bootstrap.product_name, "StrategyOS");
-    if (badge) badge.textContent = firstDefined((packet.plan_health || {}).badge, "Governed executive view");
+    if (org) org.textContent = "Mizan Group";
     if (personaLabel) personaLabel.textContent = firstDefined(activePersona.label, "Group CEO");
+    if (askToggle) {
+      askToggle.innerHTML = '<span class="assistant-glyph" aria-hidden="true">' + escapeHtml(assistantGlyph) + '</span><span>' + escapeHtml(assistantName) + '</span>';
+      askToggle.classList.toggle("is-on", state.drawerOpen);
+      askToggle.onclick = function () {
+        state.drawerOpen = !state.drawerOpen;
+        renderTopbar();
+        renderAssistantStudio();
+      };
+    }
+    if (launcher) {
+      if (state.activePersona === "board") {
+        launcher.textContent = "Ask " + assistantName;
+      } else {
+        launcher.innerHTML = '<span class="asst-avatar sm">' + escapeHtml(firstDefined(activePersona.assistant_glyph, blueprint.assistantGlyph, '◆')) + '</span> Ask ' + escapeHtml(assistantName);
+      }
+    }
+    if (launcherPrompt) launcherPrompt.hidden = state.activePersona !== "board";
+    if (themeToggle) {
+      themeToggle.textContent = state.theme === "dark" ? "☾" : "☀";
+      themeToggle.onclick = function () {
+        state.theme = state.theme === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", state.theme);
+        renderTopbar();
+      };
+    }
+    if (userName) userName.textContent = "";
+    if (userRole) userRole.textContent = "";
+    if (avatar) avatar.textContent = initials;
+    if (userMeta) userMeta.hidden = true;
+    if (viewNav) viewNav.hidden = state.activePersona === "board";
     if (!list || !btn) return;
 
     list.innerHTML = "";
@@ -450,6 +553,7 @@
       item.onclick = function () {
         if (persona.persona_id === state.activePersona) return;
         state.activePersona = persona.persona_id;
+        state.activeView = "home";
         state.activeDriverKey = "";
         state.activeThreadKey = "";
         list.hidden = true;
@@ -476,9 +580,161 @@
     }
   }
 
-  function renderWorkspaceNav() {
-    safeArray(document.querySelectorAll("[data-nav-target]")).forEach(function (link) {
-      link.classList.toggle("is-active", link.getAttribute("data-nav-target") === state.activeNav);
+  function renderViewNav() {
+    var nav = $("view-nav");
+    if (nav) nav.hidden = state.activePersona === "board";
+    safeArray(document.querySelectorAll("[data-view-target]")).forEach(function (link) {
+      var target = link.getAttribute("data-view-target") || "home";
+      if (target === "home") link.textContent = state.activePersona === "board" ? "Portal" : "Diagnostics";
+      link.classList.toggle("is-active", target === state.activeView);
+    });
+  }
+
+  function renderViewPanels() {
+    safeArray(document.querySelectorAll("[data-view-panel]")).forEach(function (panel) {
+      var isActive = panel.getAttribute("data-view-panel") === state.activeView;
+      panel.hidden = !isActive;
+      panel.classList.toggle("is-active", isActive);
+    });
+  }
+
+  function renderHomeComposition() {
+    var blueprint = getPersonaBlueprint(state.activePersona);
+    var driverHeading = $("driver-heading");
+    var lowerHeading = $("lower-rail-heading");
+    if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
+    if (lowerHeading) lowerHeading.textContent = "What matters now";
+    var footer = $("composed-footer");
+    if (footer) footer.hidden = false;
+  }
+
+  function renderAssistantNetwork() {
+    var card = $("assistant-network-card");
+    var meta = getAssistantNetworkMeta();
+    var network = getAssistantNetwork().slice().sort(function (left, right) {
+      return Number(right.score || 0) - Number(left.score || 0);
+    });
+    if (card) {
+      var avg = network.length ? Math.round(network.reduce(function (sum, item) { return sum + Number(item.score || 0); }, 0) / network.length) : 0;
+      var stale = network.filter(function (item) { return Number(item.score || 0) < 70; }).length;
+      card.innerHTML = [
+        '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'A read on current usage, freshness, and context depth across Mizan.')) + '</p></div><span class="pill-inline ok">target ' + escapeHtml(String(firstDefined(meta.target, 80))) + '+</span></div>',
+        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(avg)) + '</strong><span>company AI adoption</span></div><div class="network-meta"><span class="pill-inline ok">up to date &amp; deep</span><span class="pill-inline warn">needs attention</span><span class="pill-inline danger">stale · ' + escapeHtml(String(stale)) + ' leader(s)</span></div></div>',
+        '<div class="network-list">' + network.map(function (item) {
+          return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Mizan Group')) + '</p></div><div class="network-stats"><span><small>freshness</small>' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span><span><small>used</small>' + escapeHtml(firstDefined(item.usage, 'active')) + '</span><span><small>context</small>' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></div></div>';
+        }).join('') + '</div>'
+      ].join('');
+    }
+  }
+
+  function renderA2APanel() {
+    var fab = $("a2a-fab");
+    var fabText = $("a2a-fab-text");
+    var fabBadge = $("a2a-fab-badge");
+    var panel = $("a2a-panel");
+    var title = $("a2a-panel-title");
+    var subtitle = $("a2a-panel-subtitle");
+    var tabs = $("a2a-tabs");
+    var topic = $("a2a-topic");
+    var scroll = $("a2a-scroll");
+    var footNote = $("a2a-foot-note");
+    var followup = $("a2a-followup");
+    var min = $("a2a-min");
+    var exchanges = getAssistantExchanges();
+    var assistantName = assistantNameForState();
+    var active = exchanges.find(function (item) { return item.id === state.activeA2AExchange; }) || exchanges[0] || null;
+    var liveCount = exchanges.filter(function (item) { return String(firstDefined(item.status, "active")).toLowerCase() !== "done"; }).length;
+
+    if (fabText) fabText.textContent = assistantName + " ↔ assistants";
+    if (title) title.textContent = assistantName + " ↔ assistant network";
+    if (subtitle) subtitle.textContent = "Your chief of staff, gathering for you · live";
+    if (fabBadge) {
+      fabBadge.hidden = !liveCount;
+      fabBadge.textContent = String(liveCount || 0);
+    }
+    if (fab) {
+      fab.setAttribute("aria-expanded", state.a2aOpen ? "true" : "false");
+      fab.onclick = function () {
+        state.a2aOpen = !state.a2aOpen;
+        renderA2APanel();
+      };
+    }
+    if (min) {
+      min.onclick = function () {
+        state.a2aOpen = false;
+        renderA2APanel();
+      };
+    }
+    if (panel) panel.hidden = !state.a2aOpen;
+    if (!tabs || !topic || !scroll || !active) return;
+
+    tabs.innerHTML = exchanges.map(function (exchange) {
+      var status = String(firstDefined(exchange.status, "active"));
+      return '<button type="button" class="a2a-tab' + (exchange.id === active.id ? ' is-active' : '') + '" data-a2a-id="' + escapeHtml(exchange.id) + '"><span class="a2a-dot ' + escapeHtml(status.toLowerCase()) + '"></span>' + escapeHtml(firstDefined(exchange.with, 'Assistant')) + '<span class="a2a-tab-unit"> · ' + escapeHtml(firstDefined(exchange.unit, 'Mizan lane')) + '</span></button>';
+    }).join('');
+    safeArray(tabs.querySelectorAll("[data-a2a-id]")).forEach(function (button) {
+      button.onclick = function () {
+        state.activeA2AExchange = button.getAttribute("data-a2a-id") || "";
+        renderA2APanel();
+      };
+    });
+
+    topic.innerHTML = '<span class="a2a-topic-label">re:</span> ' + escapeHtml(firstDefined(active.topic, 'coordination')) + ' <span class="a2a-status ' + escapeHtml(String(firstDefined(active.status, 'active')).toLowerCase()) + '">' + escapeHtml(firstDefined(active.status, 'active')) + '</span>';
+    scroll.innerHTML = safeArray(active.messages).map(function (message) {
+      var mine = firstDefined(message.from, '') === assistantName;
+      return '<div class="a2a-msg' + (mine ? ' mine' : '') + '"><span class="a2a-from">' + escapeHtml(firstDefined(message.from, 'Assistant')) + '</span><div class="a2a-bubble">' + escapeHtml(firstDefined(message.text, '')) + '</div></div>';
+    }).join('');
+    scroll.scrollTop = scroll.scrollHeight;
+    if (footNote) footNote.textContent = '⇄ ' + assistantName + ' is following up automatically';
+    if (followup) {
+      followup.onclick = function () {
+        var prompt = 'Set a follow-up task for ' + firstDefined(active.with, 'the assistant') + ' on ' + firstDefined(active.topic, 'the active coordination thread') + '.';
+        pushThreadMessage('user', prompt);
+        pushThreadMessage('assistant', buildAssistantReply(prompt));
+        state.drawerOpen = true;
+        renderTopbar();
+        renderAssistantStudio();
+      };
+    }
+  }
+
+  function renderKnowledgeGraph() {
+    var card = $("knowledge-graph-card");
+    var graph = getKnowledgeGraph();
+    if (!card) return;
+    var focusQuestion = graph.questions[state.knowledgeQuestionIndex || 0] || null;
+    var focused = focusQuestion ? new Set(safeArray(focusQuestion.focus)) : null;
+    var nodes = safeArray(graph.nodes);
+    var nodeMap = {};
+    nodes.forEach(function (node) { nodeMap[node.id] = node; });
+    card.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">How your data relates</h3><p class="section-note">Shaped by the questions you ask — proof the system reasons across everything.</p></div><span class="pill-inline ok">under the hood</span></div>'
+      + '<div class="kg-questions">' + safeArray(graph.questions).map(function (question, index) {
+        return '<button type="button" class="kg-question' + (focusQuestion && focusQuestion.id === question.id ? ' is-active' : '') + '" data-kg-question="' + index + '">' + escapeHtml(firstDefined(question.label, 'Question')) + '</button>';
+      }).join('') + '</div>'
+      + '<div class="kg-stage"><svg viewBox="0 0 100 88" class="kg-svg" aria-hidden="true">'
+      + safeArray(graph.edges).map(function (edge) {
+        var from = nodeMap[edge[0]];
+        var to = nodeMap[edge[1]];
+        if (!from || !to) return '';
+        var mx = ((Number(from.x || 0) + Number(to.x || 0)) / 2).toFixed(1);
+        var my = (((Number(from.y || 0) + Number(to.y || 0)) / 2) - 4).toFixed(1);
+        var active = !focused || (focused.has(edge[0]) && focused.has(edge[1]));
+        return '<path class="kg-edge' + (active ? ' on' : '') + '" d="M' + escapeHtml(String(from.x)) + ',' + escapeHtml(String(from.y)) + ' Q' + escapeHtml(mx) + ',' + escapeHtml(my) + ' ' + escapeHtml(String(to.x)) + ',' + escapeHtml(String(to.y)) + '"></path>';
+      }).join('')
+      + nodes.map(function (node) {
+        var active = !focused || focused.has(node.id);
+        return '<g class="kg-node' + (active ? ' on' : ' off') + '"><circle class="kg-node-dot" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(Math.max(2.4, Number(node.r || 8) / 2.4))) + '"></circle></g>';
+      }).join('')
+      + '</svg><div class="kg-labels">' + nodes.map(function (node) {
+        var active = !focused || focused.has(node.id);
+        return '<span class="kg-label' + (active ? ' on' : ' off') + '" style="left:' + escapeHtml(String(node.x)) + '%;top:' + escapeHtml(String(node.y)) + '%">' + escapeHtml(firstDefined(node.label, 'Node')) + '</span>';
+      }).join('') + '</div></div>'
+      + '<div class="kg-legend"><span>plan</span><span>KPI</span><span>business unit</span><span>finding</span><span>document</span><span>vendor</span><span>invoice</span><span>contract</span></div>';
+    safeArray(card.querySelectorAll('[data-kg-question]')).forEach(function (button) {
+      button.onclick = function () {
+        state.knowledgeQuestionIndex = Number(button.getAttribute('data-kg-question') || 0) || 0;
+        renderKnowledgeGraph();
+      };
     });
   }
 
@@ -785,23 +1041,30 @@
   }
 
   function renderLowerRailFidelity() {
+    var blueprint = getPersonaBlueprint(state.activePersona);
     var lowerRail = (getExecutiveDiagnostics().composition || {}).lower_rail || getDrilldown().lower_rail || {};
+    var findingsPanel = $("findings-panel");
     var developmentsPanel = $("developments-panel");
     var weekPanel = $("week-panel");
-    var fidelityPanel = $("lower-rail-fidelity");
-    var developments = safeArray(lowerRail.developments).slice(0, 3);
-    var weekAhead = safeArray(lowerRail.week_ahead).slice(0, 3);
-    var owed = (lowerRail.owed_upward || {}).items || [];
+    var findings = safeArray(blueprint.findings).slice(0, 3);
+    var developments = safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3);
+    var weekAhead = safeArray(blueprint.week).length ? safeArray(blueprint.week).slice(0, 3) : safeArray(lowerRail.week_ahead).slice(0, 3);
+
+    if (findingsPanel) {
+      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Findings &amp; concerns</p><h3 class="detail-title">What the room should notice</h3></div><span class="pill-inline warn">board-safe</span></div><div class="mini-list">' + findings.map(function (item) {
+        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, "Finding")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, "Awaiting detail.")) + '</p></div><span class="pill-inline ' + toneClass(item.tone) + '">' + escapeHtml(firstDefined(item.tag, humanizeToken(item.tone), "signal")) + '</span></div>';
+      }).join("") + '</div>';
+    }
 
     if (developmentsPanel) {
-      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Evidence</p><h3 class="detail-title">Developments in focus</h3></div><span class="pill-inline ok">live signal</span></div><div class="mini-list">' + developments.map(function (item) {
-        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, "Development")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, "Awaiting detail.")) + '</p></div><span class="pill-inline ' + toneClass((item.chips || [])[0]) + '">' + escapeHtml(firstDefined((item.chips || [])[0], "update")) + '</span></div>';
+      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Developments since you were here</p><h3 class="detail-title">Fresh movement across the group</h3></div><span class="pill-inline ok">live signal</span></div><div class="mini-list">' + developments.map(function (item) {
+        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, "Development")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.impact, item.detail, "Awaiting detail.")) + '</p></div><span class="pill-inline ' + toneClass(firstDefined(item.kind, (item.chips || [])[0])) + '">' + escapeHtml(firstDefined(item.meta, item.kind, "update")) + '</span></div>';
       }).join("") + '</div>';
     }
 
     if (weekPanel) {
       weekPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Week ahead</p><h3 class="detail-title">Upcoming decision moments</h3></div><span class="pill-inline warn">time-bound</span></div><div class="mini-list">' + weekAhead.map(function (item) {
-        return '<button class="timeline-chip' + (item.urgent ? ' is-urgent' : '') + '" type="button" data-chat-prompt="' + escapeHtml(firstDefined(item.prompt, item.label)) + '"><span><strong>' + escapeHtml(firstDefined(item.label, "Event")) + '</strong><span>' + escapeHtml(firstDefined(item.foot, item.detail, "")) + '</span></span><span>' + escapeHtml(firstDefined(item.detail, "soon")) + '</span></button>';
+        return '<button class="timeline-chip' + (item.urgent ? ' is-urgent' : '') + '" type="button" data-chat-prompt="' + escapeHtml(firstDefined(item.prompt, item.label, item.title)) + '"><span><strong>' + escapeHtml(firstDefined(item.title, item.label, "Event")) + '</strong><span>' + escapeHtml(firstDefined(item.prep, item.foot, "")) + '</span></span><span>' + escapeHtml(firstDefined(item.when, item.detail, "soon")) + '</span></button>';
       }).join("") + '</div>';
       safeArray(weekPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
@@ -813,11 +1076,6 @@
       });
     }
 
-    if (fidelityPanel) {
-      fidelityPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Evidence closure</p><h3 class="detail-title">What is still owed upward</h3></div><span class="pill-inline warn">governed</span></div><div class="mini-list">' + safeArray(owed).slice(0, 3).map(function (item) {
-        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.on, item.to, "Obligation")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.note, "Awaiting authored line.")) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, "pending")) + '</span></div>';
-      }).join("") + '</div>';
-    }
   }
 
   function renderAgentsDiscovery() {
@@ -827,10 +1085,11 @@
     var discoveryCard = $("discovery-panel");
     var subtoolsCard = $("subtools-panel");
     var filterRow = $("discovery-filter-row");
-    var discoverable = safeArray(modules.discoverable);
-    var running = safeArray(modules.running);
-    var approvals = safeArray(modules.approvals);
-    var selected = state.selectedAgentModuleKey;
+    var activity = getAgentActivitySummary();
+    var discoverable = getDiscoverableAgents();
+    var running = getRunningAgents();
+    var approvals = getApprovalAgents();
+    var subtools = getSubtools();
 
     if (filterRow) {
       filterRow.innerHTML = ["all", "executive", "review", "operate", "system"].map(function (lane) {
@@ -846,58 +1105,36 @@
     }
 
     if (activityCard) {
-      activityCard.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">Agents</p><h3 class="detail-title">Runtime activity</h3></div><span class="pill-inline ok">active</span></div>',
-        '<p class="detail-copy">' + escapeHtml(firstDefined((modules.audit_log || [])[0] && (modules.audit_log || [])[0].detail, "Governed agent activity appears here as visible operating posture.")) + '</p>',
-        '<div class="activity-metrics">' + [
-          { label: 'Running', value: firstDefined((modules.summary || {}).running_count, running.length, 0) },
-          { label: 'Discoverable', value: firstDefined((modules.summary || {}).discoverable_count, discoverable.length, 0) },
-          { label: 'Approvals', value: firstDefined((modules.summary || {}).approval_count, approvals.length, 0) },
-          { label: 'Boundary', value: 'tenant scoped' }
-        ].map(function (item) {
-          return '<div class="mini-stat"><strong>' + escapeHtml(item.value) + '</strong><span>' + escapeHtml(item.label) + '</span></div>';
-        }).join("") + '</div>'
-      ].join("");
+      activityCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Agents</p><h3 class="detail-title">Runtime activity</h3><p class="detail-copy">' + escapeHtml(firstDefined(activity.line, 'What is working on your data right now — and a universe more to deploy.')) + '</p></div><span class="pill-inline ok">sovereign</span></div><div class="activity-metrics">' + safeArray(activity.metrics).map(function (item) {
+        return '<div class="mini-stat"><strong>' + escapeHtml(firstDefined(item.v, item.value, '0')) + '</strong><span>' + escapeHtml(firstDefined(item.k, item.label, 'metric')) + '</span></div>';
+      }).join('') + '</div><ol class="activity-log">' + safeArray(activity.log).map(function (item) { return '<li><span>' + escapeHtml(firstDefined(item.t, 'now')) + '</span><strong>' + escapeHtml(firstDefined(item.who, 'agent')) + '</strong><p>' + escapeHtml(firstDefined(item.a, 'activity')) + '</p></li>'; }).join('') + '</ol>';
     }
 
     if (runningCard) {
       var runningFiltered = running.filter(function (item) {
-        return state.discoveryFilter === 'all' || item.lane === state.discoveryFilter;
+        return state.discoveryFilter === 'all' || !item.lane || item.lane === state.discoveryFilter;
       });
-      runningCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Running</p><h3 class="detail-title">Running agents list</h3></div><span class="pill-inline ok">' + escapeHtml(String(runningFiltered.length)) + ' visible</span></div><div class="running-list">' + runningFiltered.map(function (item) {
-        var key = firstDefined(item.module_id, item.label, 'agent');
-        return '<button type="button" class="agent-select' + (selected === key ? ' is-active' : '') + '" data-agent-select="' + escapeHtml(key) + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.module_id, 'Agent')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.summary, 'Awaiting agent summary.')) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'idle')) + '</span></button>';
-      }).join("") + '</div>';
+      runningCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Running now</p><h3 class="detail-title">What is actively working</h3></div><span class="pill-inline ok">' + escapeHtml(String(runningFiltered.length)) + ' visible</span></div><div class="agent-card-list">' + runningFiltered.map(function (item) {
+        return '<div class="agent-card"><div class="agent-card__head"><strong>' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'running')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.doing, item.summary, 'Governed activity in progress.')) + '</p><div class="agent-card__meta"><span>' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><span>' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span></div><div class="agent-progress"><i style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></i></div><ol class="agent-card__trail">' + safeArray(item.log).slice(0, 3).map(function (entry) { return '<li><span>' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><p>' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</p></li>'; }).join('') + '</ol></div>';
+      }).join('') + '</div><div class="agents-sovereign"><span class="sov-dot"></span> sovereign · runs in-tenant · every action logged</div>';
     }
 
     if (discoveryCard) {
       var filtered = discoverable.filter(function (item) {
-        return state.discoveryFilter === 'all' || item.lane === state.discoveryFilter;
+        return state.discoveryFilter === 'all' || !item.lane || item.lane === state.discoveryFilter;
       });
-      discoveryCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Discover</p><h3 class="detail-title">Discoverable agents</h3></div><span class="pill-inline warn">expandable</span></div><div class="discovery-list">' + filtered.map(function (item) {
-        var key = firstDefined(item.module_id, item.label, 'module');
-        return '<button type="button" class="agent-select' + (selected === key ? ' is-active' : '') + '" data-agent-select="' + escapeHtml(key) + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.module_id, 'Module')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.summary, 'Discoverable module surface.')) + '</p></div><span class="pill-inline ' + (item.permitted ? 'ok' : 'warn') + '">' + escapeHtml(item.permitted ? 'permitted' : 'role-bound') + '</span></button>';
-      }).join("") + '</div>';
+      discoveryCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Discover agents</p><h3 class="detail-title">Deploy on your data</h3></div><span class="pill-inline warn">expandable</span></div><div class="discovery-search">⌕ Search the agent universe…</div><div class="discovery-list discovery-list--cards">' + filtered.map(function (item) {
+        return '<div class="discovery-card"><span class="discovery-card__glyph">' + escapeHtml(firstDefined(item.glyph, '◇')) + '</span><div class="discovery-card__meta"><div class="discovery-card__head"><strong>' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</strong><span>' + escapeHtml(firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</p><small>' + escapeHtml(firstDefined(item.connector, item.route, 'connector')) + '</small></div><button type="button" class="discovery-card__action">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
+      }).join('') + '</div><button type="button" class="browse-agents">Browse all agents →</button>';
     }
 
     if (subtoolsCard) {
-      var selectedItem = running.concat(discoverable).find(function (item) {
-        return firstDefined(item.module_id, item.label, '') === selected;
-      }) || running[0] || discoverable[0] || null;
-      if (!selected && selectedItem) state.selectedAgentModuleKey = firstDefined(selectedItem.module_id, selectedItem.label, '');
-      subtoolsCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Governance</p><h3 class="detail-title">Approvals and audit trail</h3></div><span class="pill-inline ok">traceable</span></div>'
-        + (selectedItem ? '<div class="agent-detail-grid"><div class="agent-detail-card"><strong>' + escapeHtml(firstDefined(selectedItem.label, selectedItem.module_id, 'Selected agent')) + '</strong><span>' + escapeHtml(firstDefined(selectedItem.summary, 'Governed module surface.')) + '</span><span class="panel-note">' + escapeHtml(firstDefined(selectedItem.route, selectedItem.output_metric, 'Route pending')) + '</span></div><div class="agent-detail-card"><strong>Filter</strong><span>' + escapeHtml(humanizeToken(state.discoveryFilter)) + '</span><span class="panel-note">Running and discover lists now reconcile against the same surface filter.</span></div></div>' : '')
-        + '<div class="subtools-list">' + approvals.map(function (item) {
-        return '<div class="agent-row"><div class="subtool-head"><strong>' + escapeHtml(firstDefined(item.label, item.approval_id, 'Approval')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'waiting')) + '</span></div><p class="list-copy">Next action: ' + escapeHtml(firstDefined(item.next_action, 'continue')) + '</p><span class="panel-note">' + escapeHtml(firstDefined(item.route, 'no route')) + '</span></div>';
-      }).join("") + '</div>';
+      subtoolsCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Sub-agents and approvals</p><h3 class="detail-title">What the chiefs call as tools</h3></div><span class="pill-inline ok">traceable</span></div><div class="subtools-list">' + subtools.map(function (item) {
+        return '<div class="subtool-card"><span class="subtool-card__glyph">' + escapeHtml(firstDefined(item.glyph, '▦')) + '</span><div><strong>' + escapeHtml(firstDefined(item.name, 'Tool')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</p></div></div>';
+      }).join('') + '</div><div class="approval-list">' + approvals.map(function (item) {
+        return '<div class="approval-row"><strong>' + escapeHtml(firstDefined(item.label, item.approval_id, 'Approval')) + '</strong><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'waiting')) + '</span><p class="list-copy">Next action: ' + escapeHtml(firstDefined(item.next_action, 'continue')) + '</p></div>';
+      }).join('') + '</div>';
     }
-
-    safeArray(document.querySelectorAll('[data-agent-select]')).forEach(function (button) {
-      button.onclick = function () {
-        state.selectedAgentModuleKey = button.getAttribute('data-agent-select') || '';
-        renderAgentsDiscovery();
-      };
-    });
   }
 
   function renderAssistantStudio() {
@@ -915,11 +1152,44 @@
     var assistantHeading = $("assistant-heading");
     var assistantSubtitle = $("assistant-subtitle");
     var assistantState = $("assistant-state");
+    var drawer = $("assistant-drawer");
+    var scrim = $("assistant-scrim");
+    var launcher = $("chat-launcher");
+    var closeButton = $("assistant-close");
     var threads = personaThreadRecords();
     var current = threadStore()[currentThreadKey()];
 
+    if (drawer) {
+      drawer.hidden = !state.drawerOpen;
+      drawer.classList.toggle("is-open", state.drawerOpen);
+    }
+    if (scrim) {
+      scrim.hidden = !state.drawerOpen;
+      scrim.classList.toggle("is-open", state.drawerOpen);
+      scrim.onclick = function () {
+        state.drawerOpen = false;
+        renderTopbar();
+        renderAssistantStudio();
+      };
+    }
+    if (launcher) {
+      launcher.hidden = state.drawerOpen || state.activeView === "assistants";
+      launcher.onclick = function () {
+        state.drawerOpen = true;
+        renderTopbar();
+        renderAssistantStudio();
+      };
+    }
+    if (closeButton) {
+      closeButton.onclick = function () {
+        state.drawerOpen = false;
+        renderTopbar();
+        renderAssistantStudio();
+      };
+    }
+
     if (assistantHeading) assistantHeading.textContent = assistantName;
-    if (assistantSubtitle) assistantSubtitle.textContent = getPersonaLabel(state.activePersona) + " · " + assistantRole + " · simple local thread memory";
+    if (assistantSubtitle) assistantSubtitle.textContent = getPersonaLabel(state.activePersona) + " · " + assistantRole + " · named, threaded chief-of-staff follow-up";
     if (assistantState) assistantState.textContent = humanizeToken(firstDefined(state.activeBoard, "ready"));
 
     if (threadList) {
@@ -1008,7 +1278,9 @@
 
   function renderPersonaView() {
     renderTopbar();
-    renderWorkspaceNav();
+    renderViewNav();
+    renderViewPanels();
+    renderHomeComposition();
     renderHero();
     renderDriverGrid();
     renderMetrics();
@@ -1017,6 +1289,9 @@
     renderBoardPortal();
     renderLowerRailFidelity();
     renderAgentsDiscovery();
+    renderAssistantNetwork();
+    renderA2APanel();
+    renderKnowledgeGraph();
     renderAssistantStudio();
     renderReportSurface();
     renderSummary();
@@ -1039,6 +1314,7 @@
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
       state.token = firstDefined((state.session || {}).token, state.token, window.localStorage.getItem(_tokenKey));
       state.activePersona = firstDefined((state.latestPacket.executive_modes || {}).active_persona_id, state.activePersona, "ceo");
+      if (state.activePersona === "board") state.activeView = "home";
       state.activeBoard = firstDefined((state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, state.activeBoard, "pre");
       state.activeDriverKey = firstDefined((state.latestPacket.executive_modes || {}).active_driver_key, state.activeDriverKey, "board_packet");
       state.activeCompany = firstDefined((state.latestPacket.executive_modes || {}).company_id, state.activeCompany);
@@ -1066,11 +1342,13 @@
     });
   }
 
-  function bindWorkspaceNav() {
-    safeArray(document.querySelectorAll("[data-nav-target]")).forEach(function (link) {
+  function bindViewNav() {
+    safeArray(document.querySelectorAll("[data-view-target]")).forEach(function (link) {
       link.addEventListener("click", function () {
-        state.activeNav = link.getAttribute("data-nav-target") || "overview";
-        renderWorkspaceNav();
+        state.activeView = link.getAttribute("data-view-target") || "home";
+        renderTopbar();
+        renderViewNav();
+        renderViewPanels();
       });
     });
   }
@@ -1084,17 +1362,22 @@
     activePersona: firstDefined(requested.persona, "ceo"),
     activeDriverKey: firstDefined(requested.driver, "board_packet"),
     activeBoard: firstDefined(requested.board, "pre"),
-    activeCompany: firstDefined(requested.company, ""),
-    activePortfolio: firstDefined(requested.portfolio, ""),
+      activeCompany: firstDefined(requested.company, ""),
+      activePortfolio: firstDefined(requested.portfolio, ""),
       activeThreadKey: "",
-      activeNav: "overview",
+      activeView: "home",
+      a2aOpen: false,
+      activeA2AExchange: "",
+      drawerOpen: false,
+      theme: document.documentElement.getAttribute("data-theme") || "light",
       discoveryFilter: "all",
       selectedAgentModuleKey: "",
+      knowledgeQuestionIndex: 0,
       personaOutsideListenerBound: false
     };
 
   bindAssistantForm();
-  bindWorkspaceNav();
+  bindViewNav();
   refresh(false);
   window.setInterval(function () { refresh(false); }, 60000);
 })();

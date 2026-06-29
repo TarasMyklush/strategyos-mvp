@@ -3,94 +3,143 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>StrategyOS — Group CEO Oracle Pilot</title>
-  <link rel="stylesheet" href="/static/executive.css?v=ux-20260624a" />
+  <title>StrategyOS — Group CEO Diagnostics</title>
+  <link rel="stylesheet" href="/static/executive.css?v=ux-20260629b" />
 </head>
 <body>
   <header class="topbar" id="topbar">
-    <div class="topbar__brand">
+    <div class="tb-left">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
-        <div>
-          <div class="brand-name">StrategyOS</div>
-          <div class="brand-subtitle" id="brand-org">Mizan Group</div>
-        </div>
+        <span class="brand-lockup">
+          <span class="brand-name">StrategyOS</span>
+          <span class="brand-subtitle" id="brand-org">Mizan Group</span>
+        </span>
       </div>
+      <span class="tb-div" aria-hidden="true"></span>
+      <nav class="view-nav" id="view-nav" aria-label="Executive views">
+        <button class="view-tile is-active" type="button" data-view-target="home">Diagnostics</button>
+        <button class="view-tile" type="button" data-view-target="assistants">Assistants</button>
+        <button class="view-tile" type="button" data-view-target="knowledge">Knowledge</button>
+      </nav>
     </div>
 
-    <div class="topbar__meta">
-      <span class="topbar__badge" id="state-badge">Governed executive view</span>
-      <div class="persona-menu" id="persona-menu">
-        <button class="persona-btn" id="persona-btn" type="button" aria-haspopup="menu" aria-expanded="false">
-          <span class="persona-btn__label">Viewing as</span>
+    <div class="tb-right">
+        <div class="persona-menu" id="persona-menu">
+          <button class="persona-btn" id="persona-btn" type="button" aria-haspopup="menu" aria-expanded="false">
           <span class="persona-btn__value" id="persona-label">Group CEO</span>
-        </button>
-        <div class="persona-list" id="pm-list" role="menu" hidden></div>
+          <span class="persona-btn__caret" aria-hidden="true">▾</span>
+          </button>
+          <div class="persona-list" id="pm-list" role="menu" hidden></div>
+        </div>
+        <button class="ask-toggle" id="ask-toggle" type="button">◆ Hermes</button>
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle light and dark theme">☀</button>
+      <div class="tb-user" id="topbar-user">
+        <span class="avatar avatar-nav" id="topbar-avatar">KA</span>
+        <div class="tb-user-meta" hidden>
+          <span class="tb-user-name" id="topbar-user-name"></span>
+          <span class="tb-user-role" id="topbar-user-role"></span>
+        </div>
       </div>
     </div>
   </header>
 
   <main class="page fidelity-shell" id="sheet">
-    <section class="workspace-nav-card card" aria-label="Workspace navigation">
-      <nav class="workspace-nav" id="workspace-nav">
-        <a class="workspace-nav__link is-active" href="#overview" data-nav-target="overview">Overview</a>
-        <a class="workspace-nav__link" href="#cases" data-nav-target="cases">Cases</a>
-        <a class="workspace-nav__link" href="#evidence" data-nav-target="evidence">Evidence</a>
-        <a class="workspace-nav__link" href="#reports" data-nav-target="reports">Reports</a>
-      </nav>
-    </section>
-
-    <span id="overview" class="section-anchor" aria-hidden="true"></span>
-    <section class="hero card" id="hero" aria-labelledby="hero-head">
-      <div class="hero-copy">
-        <p class="eyebrow" id="hero-eyebrow">Group CEO Oracle pilot</p>
-        <h1 class="hero-title" id="hero-head">Oracle-backed finance overview</h1>
-        <p class="hero-body" id="hero-body">Loading Oracle-backed executive diagnostics from the latest governed run…</p>
-        <blockquote class="hero-quote" id="hero-quote" hidden></blockquote>
-        <p class="hero-byline" id="hero-byline"></p>
-        <div class="hero-prompts" id="hero-prompts"></div>
-      </div>
-
-      <div class="hero-score-wrap">
-        <div class="hero-score" aria-label="Plan health score">
-          <svg class="score-ring" viewBox="0 0 120 120" aria-hidden="true">
-            <circle cx="60" cy="60" r="48" class="score-ring__track"></circle>
-            <circle cx="60" cy="60" r="48" class="score-ring__value" id="hero-arc"></circle>
-          </svg>
-          <div class="hero-score__label">
-            <span class="hero-score__value" id="hero-score">--</span>
-            <span class="hero-score__caption" id="hero-cap">loading</span>
-          </div>
+    <section class="view-panel view-panel--home" data-view-panel="home">
+      <section class="hero card" id="hero" aria-labelledby="hero-head">
+        <div class="hero-copy">
+          <p class="eyebrow" id="hero-eyebrow">Group CEO diagnostics</p>
+          <h1 class="hero-title" id="hero-head">Oracle-backed finance overview</h1>
+          <p class="hero-body" id="hero-body">Loading Oracle-backed executive diagnostics from the latest governed run…</p>
+          <blockquote class="hero-quote" id="hero-quote" hidden></blockquote>
+          <p class="hero-byline" id="hero-byline"></p>
+          <div class="hero-prompts" id="hero-prompts"></div>
         </div>
-        <div class="hero-mini-stats" id="hero-mini-stats"></div>
-      </div>
-    </section>
 
-    <section class="section" aria-labelledby="driver-heading">
-      <div class="section-head">
-        <h2 class="section-title" id="driver-heading">Driver index</h2>
-      </div>
-      <div class="driver-grid" id="driver-row"></div>
-    </section>
+        <div class="hero-score-wrap">
+          <div class="hero-score" aria-label="Plan health score">
+            <svg class="score-ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle cx="60" cy="60" r="48" class="score-ring__track"></circle>
+              <circle cx="60" cy="60" r="48" class="score-ring__value" id="hero-arc"></circle>
+            </svg>
+            <div class="hero-score__label">
+              <span class="hero-score__value" id="hero-score">--</span>
+              <span class="hero-score__caption" id="hero-cap">loading</span>
+            </div>
+          </div>
+          <div class="hero-mini-stats" id="hero-mini-stats"></div>
+        </div>
+      </section>
 
-    <section class="section" aria-labelledby="metrics-heading">
-      <div class="section-head">
-        <h2 class="section-title" id="metrics-heading">Key metrics</h2>
-      </div>
-      <div class="metrics-grid" id="metrics-grid"></div>
-    </section>
+      <section class="section" aria-labelledby="driver-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="driver-heading">The group index</h2>
+        </div>
+        <div class="driver-grid" id="driver-row"></div>
+      </section>
 
-    <section class="section" id="cases" aria-labelledby="drill-heading">
-      <div class="section-head">
-        <h2 class="section-title" id="drill-heading">Driver drill and gravity</h2>
-      </div>
-      <div class="drill-layout" id="drill">
+      <section class="section" aria-labelledby="drill-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="drill-heading">Driver drill</h2>
+        </div>
         <article class="card detail-card" id="driver-drill"></article>
+      </section>
+
+      <section class="section" aria-labelledby="lower-rail-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="lower-rail-heading">What matters now</h2>
+        </div>
+        <div class="lower-rail-grid lower-rail-grid--triple">
+          <article class="card detail-card" id="findings-panel"></article>
+          <article class="card detail-card" id="developments-panel"></article>
+          <article class="card detail-card" id="week-panel"></article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="gravity-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="gravity-heading">Think and model on your data</h2>
+        </div>
         <article class="card detail-card" id="gravity-panel"></article>
-      </div>
+      </section>
+
+      <section class="section" aria-labelledby="agents-heading">
+        <div class="section-head section-head--split">
+          <div>
+            <h2 class="section-title" id="agents-heading">Agents</h2>
+            <p class="section-note">Running activity and discoverable operating support, kept visible without pretending extra product scope.</p>
+          </div>
+          <div class="filter-row" id="discovery-filter-row" role="tablist" aria-label="Discovery source filters"></div>
+        </div>
+        <div class="agents-layout">
+          <article class="card detail-card" id="agents-activity"></article>
+          <article class="card detail-card" id="running-agents"></article>
+          <article class="card detail-card" id="discovery-panel"></article>
+          <article class="card detail-card" id="subtools-panel"></article>
+        </div>
+      </section>
     </section>
 
-    <section class="section" id="reports" aria-labelledby="board-heading">
+    <section class="view-panel" data-view-panel="assistants" hidden>
+      <section class="section" aria-labelledby="assistant-view-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="assistant-view-heading">Assistants</h2>
+          <p class="section-note">Every leader’s chief of staff — how current and deeply-used each one is. Your read on data quality and AI adoption across Mizan.</p>
+        </div>
+        <article class="card assistant-network-card" id="assistant-network-card"></article>
+      </section>
+    </section>
+
+    <section class="view-panel" data-view-panel="knowledge" hidden>
+      <section class="section" aria-labelledby="knowledge-view-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="knowledge-view-heading">Knowledge graph</h2>
+          <p class="section-note">How Mizan’s data relates — shaped by the questions you’ve asked. The look under the hood.</p>
+        </div>
+        <article class="card knowledge-graph-card" id="knowledge-graph-card"></article>
+      </section>
+
+      <section class="section" aria-labelledby="board-heading">
       <div class="section-head section-head--split">
         <div>
           <h2 class="section-title" id="board-heading">Board portal</h2>
@@ -101,80 +150,97 @@
       </div>
       <article class="card board-portal" id="board-portal"></article>
       <div class="reports-secondary">
-        <article class="card assistant-studio" id="assistant-studio" aria-labelledby="assistant-heading">
-          <div class="assistant-head">
-            <div>
-              <p class="eyebrow">Named assistant</p>
-              <h3 class="detail-title" id="assistant-heading">Executive assistant</h3>
-              <p class="section-note" id="assistant-subtitle">Simple thread memory for board-safe follow-up and role-aware prompts.</p>
-            </div>
-            <span class="pill-inline ok" id="assistant-state">ready</span>
-          </div>
-          <div class="assistant-layout">
-            <aside class="assistant-threads">
-              <div class="assistant-thread-list" id="assistant-thread-list"></div>
-            </aside>
-            <div class="assistant-conversation">
-              <div class="assistant-conversation__head">
-                <strong id="assistant-thread-title">Thread</strong>
-                <span class="section-note" id="assistant-thread-meta">Select a thread to continue.</span>
-              </div>
-              <div class="assistant-thread-tools" id="assistant-thread-tools"></div>
-              <div class="assistant-messages" id="assistant-messages" aria-live="polite"></div>
-              <div class="assistant-prompts" id="assistant-prompt-row"></div>
-              <form class="assistant-form" id="assistant-form">
-                <label class="sr-only" for="assistant-input">Ask assistant</label>
-                <input id="assistant-input" name="assistant-input" type="text" placeholder="Ask the assistant for the next board-safe move…" autocomplete="off" />
-                <button type="submit">Send</button>
-              </form>
-            </div>
-          </div>
-        </article>
-
         <article class="card report-surface-card" id="report-surface-card"></article>
       </div>
-    </section>
 
-    <section class="section" id="evidence" aria-labelledby="lower-rail-heading">
-      <div class="section-head">
-        <h2 class="section-title" id="lower-rail-heading">Lower rail</h2>
-      </div>
-      <div class="lower-rail-grid">
-        <article class="card detail-card" id="developments-panel"></article>
-        <article class="card detail-card" id="week-panel"></article>
-        <article class="card detail-card" id="lower-rail-fidelity"></article>
-      </div>
-    </section>
-
-    <section class="section" aria-labelledby="agents-heading">
-      <div class="section-head section-head--split">
-        <div>
-          <h2 class="section-title" id="agents-heading">Agents and discovery</h2>
-          <p class="section-note">Governed runtime activity, approval posture, and expandable discovery.</p>
+      <section class="section" aria-labelledby="summary-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="summary-heading">Summary</h2>
         </div>
-        <div class="filter-row" id="discovery-filter-row" role="tablist" aria-label="Discovery source filters"></div>
-      </div>
-      <div class="agents-layout">
-        <article class="card detail-card" id="agents-activity"></article>
-        <article class="card detail-card" id="running-agents"></article>
-        <article class="card detail-card" id="discovery-panel"></article>
-        <article class="card detail-card" id="subtools-panel"></article>
-      </div>
-    </section>
-
-    <section class="section" aria-labelledby="summary-heading">
-      <div class="section-head">
-        <h2 class="section-title" id="summary-heading">Summary</h2>
-      </div>
-      <article class="summary card" id="summary-card">
-        <p class="summary-kicker" id="summary-kicker">Current readout</p>
-        <h3 class="summary-title" id="summary-title">Executive signal</h3>
-        <p class="summary-body" id="summary-body">Loading summary…</p>
-        <p class="summary-note" id="summary-note"></p>
-        <a class="summary-link" id="summary-link" href="/executive">Open governed view</a>
-      </article>
+        <article class="summary card" id="summary-card">
+          <p class="summary-kicker" id="summary-kicker">Current readout</p>
+          <h3 class="summary-title" id="summary-title">Executive signal</h3>
+          <p class="summary-body" id="summary-body">Loading summary…</p>
+          <p class="summary-note" id="summary-note"></p>
+          <a class="summary-link" id="summary-link" href="/executive">Open governed view</a>
+        </article>
+      </section>
     </section>
   </main>
+
+  <footer class="composed-footer" id="composed-footer">
+    <span class="composed-mark" aria-hidden="true"></span>
+    <span class="composed-copy">Composed by StrategyOS from Mizan Group’s board-approved strategy &amp; knowledge graph — a System of Intent above the systems of record.</span>
+    <span class="composed-time">refreshed today · 06:14 · Riyadh</span>
+  </footer>
+
+  <button class="chat-launcher" id="chat-launcher" type="button">
+    <span class="chat-launcher__prompt">Ask anything or run any scenario on your actual data</span>
+    <span class="chat-launcher__cta" id="chat-launcher-cta">Ask Hermes</span>
+  </button>
+
+  <div class="a2a-shell" id="a2a-shell">
+    <button class="a2a-fab" id="a2a-fab" type="button" aria-expanded="false" aria-controls="a2a-panel">
+      <span class="a2a-fab-mark" aria-hidden="true">⇄</span>
+      <span class="a2a-fab-text" id="a2a-fab-text">Hermes ↔ assistants</span>
+      <span class="a2a-fab-badge" id="a2a-fab-badge" hidden>0</span>
+    </button>
+    <aside class="a2a-panel" id="a2a-panel" hidden aria-labelledby="a2a-panel-title">
+      <header class="a2a-head">
+        <div class="a2a-h-id">
+          <span class="a2a-h-mark" aria-hidden="true">⇄</span>
+          <div>
+            <strong class="a2a-h-title" id="a2a-panel-title">Hermes ↔ assistant network</strong>
+            <p class="a2a-h-sub" id="a2a-panel-subtitle">Your chief of staff, gathering for you · live</p>
+          </div>
+        </div>
+        <button class="a2a-min" id="a2a-min" type="button" aria-label="Minimise assistant network">▾</button>
+      </header>
+      <div class="a2a-tabs" id="a2a-tabs" role="tablist" aria-label="Assistant exchanges"></div>
+      <div class="a2a-topic" id="a2a-topic"></div>
+      <div class="a2a-scroll" id="a2a-scroll"></div>
+      <div class="a2a-foot">
+        <span class="a2a-foot-note" id="a2a-foot-note">Hermes is following up automatically</span>
+        <button class="a2a-foot-btn" id="a2a-followup" type="button">Set a follow-up task</button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="assistant-scrim" id="assistant-scrim" hidden></div>
+  <aside class="assistant-drawer" id="assistant-drawer" hidden aria-labelledby="assistant-heading">
+    <article class="assistant-studio" id="assistant-studio" aria-labelledby="assistant-heading">
+      <div class="assistant-head">
+        <div>
+          <p class="eyebrow">Named assistant</p>
+          <h3 class="detail-title" id="assistant-heading">Executive assistant</h3>
+          <p class="section-note" id="assistant-subtitle">Named, threaded chief-of-staff follow-up for the current persona.</p>
+        </div>
+        <div class="assistant-head__actions">
+          <span class="pill-inline ok" id="assistant-state">ready</span>
+          <button class="assistant-close" id="assistant-close" type="button" aria-label="Close assistant">✕</button>
+        </div>
+      </div>
+      <div class="assistant-layout">
+        <aside class="assistant-threads">
+          <div class="assistant-thread-list" id="assistant-thread-list"></div>
+        </aside>
+        <div class="assistant-conversation">
+          <div class="assistant-conversation__head">
+            <strong id="assistant-thread-title">Thread</strong>
+            <span class="section-note" id="assistant-thread-meta">Select a thread to continue.</span>
+          </div>
+          <div class="assistant-thread-tools" id="assistant-thread-tools"></div>
+          <div class="assistant-messages" id="assistant-messages" aria-live="polite"></div>
+          <div class="assistant-prompts" id="assistant-prompt-row"></div>
+          <form class="assistant-form" id="assistant-form">
+            <label class="sr-only" for="assistant-input">Ask assistant</label>
+            <input id="assistant-input" name="assistant-input" type="text" placeholder="Ask the assistant for the next board-safe move…" autocomplete="off" />
+            <button type="submit">Send</button>
+          </form>
+        </div>
+      </div>
+    </article>
+  </aside>
 
   <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
   <script>window.MIZAN=window.MIZAN||{};window.MIZAN_X=window.MIZAN_X||{threads:{},assistants:{}};</script>

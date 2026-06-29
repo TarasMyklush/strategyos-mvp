@@ -381,6 +381,63 @@
       { name: "Document & PDF", glyph: "▤", desc: "Reads decks and contracts; drafts the board pack." },
       { name: "Calls at scale", glyph: "☏", desc: "Runs structured outreach — collections and supplier check-ins." },
       { name: "Marketing content", glyph: "✎", desc: "Drafts announcements and recognition notes on-brand." }
+    ],
+    networkMeta: {
+      label: "Assistant Network",
+      hint: "How current and deeply-used each leader’s assistant is — your read on data quality and AI adoption across Mizan.",
+      target: 80
+    },
+    network: [
+      { persona: "ceo", assistant: "Hermes", who: "Khalid Al-Rashed", unit: "Group · CEO", score: 92, freshness: "live · 6 min ago", usage: "daily", depth: "deep", tone: "up" },
+      { persona: "cfo", assistant: "Atlas", who: "Sara Al-Mahmoud", unit: "Group · CFO", score: 89, freshness: "live · 12 min ago", usage: "daily", depth: "deep", tone: "up" },
+      { persona: "gm", assistant: "Iris", who: "Lina Haddad", unit: "e-Pharmacy · GM", score: 84, freshness: "today · 2h ago", usage: "daily", depth: "good", tone: "up" },
+      { persona: "logistics", assistant: "Vega", who: "Hassan Tarek", unit: "Pharma Logistics · GM", score: 96, freshness: "live · 4 min ago", usage: "hourly", depth: "deep", tone: "up" },
+      { persona: "bucfo", assistant: "Argus", who: "Yusuf Rahman", unit: "Tamween · BU CFO", score: 78, freshness: "today · 5h ago", usage: "weekly", depth: "good", tone: "flat" },
+      { persona: "mfg", assistant: "Orion", who: "Dana Saleh", unit: "Manufacturing · GM", score: 71, freshness: "yesterday", usage: "weekly", depth: "partial", tone: "flat" },
+      { persona: "hc", assistant: "Juno", who: "Omar Said", unit: "Healthcare Svcs · GM", score: 61, freshness: "4 days ago", usage: "rare", depth: "thin", tone: "down" },
+      { persona: "cap", assistant: "Nova", who: "Rami Khoury", unit: "Capital · GM", score: 88, freshness: "today · 3h ago", usage: "daily", depth: "good", tone: "up" }
+    ],
+    a2a: [
+      { id: "x1", with: "Iris", unit: "e-Pharmacy", status: "active", topic: "fulfilment capacity", messages: [
+        { from: "Hermes", text: "Khalid meets Lina tomorrow. Confirm the Eastern hub timeline and the automation payback." },
+        { from: "Iris", text: "Crosses 100% utilisation in ~12 days. Automation line payback is 7 months; I’ll attach the curve." },
+        { from: "Hermes", text: "Good. I’ll set it as a decision item for the call and flag cash headroom to Atlas." }
+      ] },
+      { id: "x2", with: "Argus", unit: "Tamween", status: "awaiting", topic: "SAR 1.2M recovery", messages: [
+        { from: "Hermes", text: "The board pack needs the leakage recovery confirmed. Is the SAR 1.2M collectable this quarter?" },
+        { from: "Argus", text: "Confirming with two institutional accounts — answer by end of day. Collections sequence drafted." }
+      ] }
+    ],
+    graph: {
+      questions: [
+        { id: "q_fx", label: "Why is margin missing plan?", focus: ["fx", "api", "ebitda", "mfg", "dist"] },
+        { id: "q_leak", label: "Where is the SAR 8.6M?", focus: ["leak", "tamween", "vendorx", "ar_a", "ar_b"] },
+        { id: "q_jv", label: "Can we fund the GLP-1 JV?", focus: ["cash", "jv", "epharm", "nupco"] }
+      ],
+      nodes: [
+        { id: "plan", label: "Board plan v4", x: 50, y: 50, r: 13 },
+        { id: "ebitda", label: "EBITDA margin", x: 50, y: 24, r: 11 },
+        { id: "cash", label: "Cash vs floor", x: 74, y: 32, r: 11 },
+        { id: "fx", label: "FX exposure", x: 30, y: 12, r: 8 },
+        { id: "api", label: "API input cost", x: 44, y: 8, r: 8 },
+        { id: "mfg", label: "Manufacturing", x: 22, y: 30, r: 9 },
+        { id: "dist", label: "Tamween Distribution", x: 30, y: 46, r: 9 },
+        { id: "epharm", label: "e-Pharmacy", x: 70, y: 60, r: 9 },
+        { id: "leak", label: "Leakage finding", x: 18, y: 60, r: 8 },
+        { id: "tamween", label: "Tamween audit", x: 12, y: 46, r: 7 },
+        { id: "vendorx", label: "Vendor X", x: 10, y: 72, r: 7 },
+        { id: "ar_a", label: "Institutional A · AR", x: 26, y: 76, r: 7 },
+        { id: "ar_b", label: "Institutional B · AR", x: 40, y: 80, r: 7 },
+        { id: "nupco", label: "NUPCO contract", x: 86, y: 48, r: 8 },
+        { id: "jv", label: "GLP-1 JV", x: 84, y: 70, r: 8 },
+        { id: "cust", label: "Pharmacy Retail", x: 60, y: 78, r: 8 }
+      ],
+      edges: [
+        ["plan", "ebitda"], ["plan", "cash"], ["ebitda", "fx"], ["ebitda", "api"], ["ebitda", "mfg"],
+        ["ebitda", "dist"], ["fx", "api"], ["dist", "leak"], ["leak", "tamween"], ["leak", "vendorx"],
+        ["leak", "ar_a"], ["leak", "ar_b"], ["dist", "tamween"], ["cash", "nupco"], ["cash", "jv"],
+        ["jv", "epharm"], ["nupco", "dist"], ["epharm", "cust"], ["plan", "epharm"], ["cash", "epharm"]
+      ]
     ]
   };
 })();

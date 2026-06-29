@@ -1,7 +1,7 @@
 (function () {
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-29",
-    overallStatus: "completed",
+    overallStatus: "in_progress",
     phases: [
       {
         id: "phase-0",
@@ -266,10 +266,11 @@
         title: "CEO end-to-end demo artifact",
         subtitle: "Ship the CEO demo package as a truthful post-backlog deliverable with motion capture, screenshots, and explicit auth disclosure",
         weeks: "0.5",
-        status: "completed",
+        status: "in_progress",
         stories: [
           { id: "17.1", title: "Assemble the final CEO demo package", description: "Publish the reviewable package under artifacts/ceo-demo, including the real StrategyOS walkthrough video, supporting screenshots, and package notes", status: "completed", files: ["artifacts/ceo-demo/CEO_WORKFLOW_DEMO_PACKAGE.md", "artifacts/ceo-demo/strategyos-live-ceo-workflow-demo-2026-06-29.webm", "artifacts/ceo-demo/01-ceo-overview.png", "artifacts/ceo-demo/05-report-preview.png"] },
-          { id: "17.2", title: "Disclose demo boundary conditions truthfully", description: "Mark the package complete while stating clearly that the delivered artifact is a real live-app demo package and that the captured session was not an authenticated executive/system-user recording", status: "completed", files: ["artifacts/ceo-demo/CEO_WORKFLOW_DEMO_PACKAGE.md", "artifacts/ceo-demo/06-ui-session-auth-state.png"] }
+          { id: "17.2", title: "Disclose demo boundary conditions truthfully", description: "Mark the package complete while stating clearly that the delivered artifact is a real live-app demo package and that the captured session was not an authenticated executive/system-user recording", status: "completed", files: ["artifacts/ceo-demo/CEO_WORKFLOW_DEMO_PACKAGE.md", "artifacts/ceo-demo/06-ui-session-auth-state.png"] },
+          { id: "17.3", title: "Correct executive UI parity against the 22.06.2026 baseline", description: "Re-open post-backlog execution until the rendered executive shell matches the governing 22.06.2026 reference for typography scale, spacing rhythm, control sizing, and form/card composition", status: "in_progress", files: ["strategyos_mvp/static/executive.html", "strategyos_mvp/static/executive.css", "strategyos_mvp/static/plan.html", "strategyos_mvp/static/plan_data.js"] }
         ]
       }
     ]
