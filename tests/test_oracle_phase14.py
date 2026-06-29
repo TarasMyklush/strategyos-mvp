@@ -50,8 +50,8 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     executive_html = _read("strategyos_mvp", "static", "executive.html")
     executive_data = _read("strategyos_mvp", "static", "executive_design_data.js")
 
-    assert "active product narrative is now Oracle pilot conformance" in plan_html
-    assert "Phases 0–13 complete locally · Phase 14 active focus" in plan_html
+    assert "Oracle pilot narrative now reflects Phase 14 complete" in plan_html
+    assert "Phases 0–14 complete locally · Phase 15 next" in plan_html
     assert "Group CEO Oracle pilot" in executive_html
     assert "twin-platform build remains visible as delivery history" in plan_html
     assert "Twin-platform history remains visible" in executive_data
