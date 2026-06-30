@@ -795,11 +795,11 @@ p:last-child { margin-bottom: 0; }
 <section class="hero container">
   <div class="hero__badge-row">
     <span class="hero__badge">Live tracker</span>
-    <span class="hero__badge">Backlog first</span>
-    <span class="hero__badge">Completed history below</span>
+    <span class="hero__badge">Current backlog</span>
+    <span class="hero__badge">Shipped history</span>
   </div>
   <h1>Execution Tracker</h1>
-  <p>Remaining work is listed first. Shipped work stays in a compact history underneath so the live page reads like a usable tracker, not commentary.</p>
+  <p>The page shows only real remaining work and concise shipped history. Nothing open is hidden in summary language, and nothing unfinished is shown as done.</p>
   <div class="hero__caption">strategyos.live/plan</div>
 </section>
 
@@ -820,105 +820,35 @@ p:last-child { margin-bottom: 0; }
   const PLAN = window.STRATEGYOS_PLAN;
   if (!PLAN) { console.error("STRATEGYOS_PLAN not found"); return; }
 
-  const statusLabels = {
-    not_started: "Not started",
-    in_progress: "In progress",
-    completed: "Completed"
-  };
-
   function renderBacklog() {
     var el = document.getElementById("plan-backlog");
-    var rows = buildBacklogRows();
-    var pinned = rows.filter(function (row) { return row.pinned; }).length;
+    var rows = (((PLAN || {}).backlog || {}).rows || []);
     var high = rows.filter(function (row) { return row.priority === 'high'; }).length;
+    var medium = rows.filter(function (row) { return row.priority === 'medium'; }).length;
     el.innerHTML = '<section class="tracker-section">'
-      + '<div class="section-head"><div><div class="section-eyebrow">Backlog</div><h2>Remaining work</h2></div><p>CEO interaction defects, the Oracle/security follow-up, and the post-deploy live check stay visible here until they clear.</p></div>'
+      + '<div class="section-head"><div><div class="section-eyebrow">Backlog</div><h2>Remaining work</h2></div><p>' + escapeHtml((PLAN.backlog && PLAN.backlog.summary) || 'Only actionable open work appears here.') + '</p></div>'
       + '<div class="tracker-summary">'
       + '<article class="tracker-stat"><span class="tracker-stat__label">Open rows</span><span class="tracker-stat__value">' + escapeHtml(String(rows.length)) + '</span></article>'
-      + '<article class="tracker-stat"><span class="tracker-stat__label">Pinned rows</span><span class="tracker-stat__value">' + escapeHtml(String(pinned)) + '</span></article>'
       + '<article class="tracker-stat"><span class="tracker-stat__label">High priority</span><span class="tracker-stat__value">' + escapeHtml(String(high)) + '</span></article>'
+      + '<article class="tracker-stat"><span class="tracker-stat__label">Medium priority</span><span class="tracker-stat__value">' + escapeHtml(String(medium)) + '</span></article>'
       + '</div>'
       + '<div class="backlog-card"><div class="backlog-table-wrap"><table class="backlog-table"><thead><tr><th scope="col">ID</th><th scope="col">Area</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Remaining work</th></tr></thead><tbody>' + rows.map(function (row) {
-        return '<tr class="' + escapeHtml(row.priorityClass) + ' ' + (row.pinned ? 'pinned-row' : '') + '"><td><span class="backlog-code">' + escapeHtml(row.id) + '</span></td><td>' + escapeHtml(row.area) + '</td><td><div class="backlog-meta"><span class="table-pill">' + escapeHtml(row.kind) + '</span>' + (row.pinned ? '<span class="table-pill pinned">Pinned</span>' : '') + '</div></td><td><span class="backlog-status">' + escapeHtml(row.status) + '</span></td><td><div class="row-title">' + escapeHtml(row.title) + '</div><div class="row-detail">' + renderDetail(row) + '</div></td></tr>';
+        return '<tr class="' + escapeHtml(priorityClass(row.priority)) + '"><td><span class="backlog-code">' + escapeHtml(row.id) + '</span></td><td>' + escapeHtml(row.area || '') + '</td><td><div class="backlog-meta"><span class="table-pill">' + escapeHtml(row.kind || 'Task') + '</span></div></td><td><span class="backlog-status">' + escapeHtml(row.status || 'open') + '</span></td><td><div class="row-title">' + escapeHtml(row.title || 'Open work') + '</div><div class="row-detail">' + renderDetail(row) + '</div></td></tr>';
       }).join('') + '</tbody></table></div></div>'
       + '</section>';
   }
 
   function renderHistory() {
-    var phases = PLAN.phases || [];
-    var recentCompleted = phases.filter(function (phase) {
-      return Number(phase.num) >= 15 && phase.status === 'completed';
-    });
-    var activePhase = phases.find(function (phase) {
-      return Number(phase.num) === 17;
-    }) || { stories: [] };
-    var activeCompleted = (activePhase.stories || []).filter(function (story) {
-      return story.status === 'completed';
-    });
-    var earlierPhases = phases.filter(function (phase) {
-      return Number(phase.num) < 15 && phase.status === 'completed';
-    });
-    var earlierStoryCount = earlierPhases.reduce(function (sum, phase) {
-      return sum + ((phase.stories || []).filter(function (story) { return story.status === 'completed'; }).length);
-    }, 0);
+    var history = PLAN.completedHistory || [];
     var el = document.getElementById("plan-history");
-    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Completed history</div><h2>Shipped work</h2></div><p>Compact delivery record. Anything still open stays in the backlog above.</p></div><div class="history-grid">'
-      + recentCompleted.map(function (phase) {
-        var done = (phase.stories || []).filter(function (story) { return story.status === 'completed'; });
-        return '<article class="history-card"><div class="phase-card__meta"><span>Phase ' + escapeHtml(String(phase.num)) + '</span><span>' + escapeHtml(String(done.length)) + ' items shipped</span></div><h3>' + escapeHtml(phase.title || 'Phase') + '</h3><p>' + escapeHtml(phase.subtitle || '') + '</p><ul class="history-list">' + done.slice(0, 5).map(function (story) {
-          return '<li><strong>' + escapeHtml(story.id || '') + '</strong> — ' + escapeHtml(story.title || '') + '</li>';
+    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Completed history</div><h2>Shipped work</h2></div><p>Only completed work belongs here. If it is still actionable, it stays in the backlog above.</p></div><div class="history-grid">'
+      + history.map(function (entry) {
+        var items = entry.items || [];
+        return '<article class="history-card"><div class="phase-card__meta"><span>' + escapeHtml(entry.id || 'DONE') + '</span><span>' + escapeHtml(String(items.length)) + ' shipped items</span></div><h3>' + escapeHtml(entry.label || 'Completed work') + '</h3><p>' + escapeHtml(entry.summary || '') + '</p><ul class="history-list">' + items.map(function (item) {
+          return '<li>' + escapeHtml(item) + '</li>';
         }).join('') + '</ul></article>';
       }).join('')
-      + '<article class="history-card"><div class="phase-card__meta"><span>Phase 17</span><span>' + escapeHtml(String(activeCompleted.length)) + ' items already shipped</span></div><h3>Hosted corrective tranche</h3><p>Completed pieces from the current tranche stay here while the open defects remain above.</p><ul class="history-list">' + activeCompleted.map(function (story) {
-        return '<li><strong>' + escapeHtml(story.id || '') + '</strong> — ' + escapeHtml(story.title || '') + '</li>';
-      }).join('') + '</ul></article>'
-      + '<article class="history-card"><div class="phase-card__meta"><span>Phases 0–14</span><span>' + escapeHtml(String(earlierStoryCount)) + ' items shipped</span></div><h3>Foundation through Oracle alignment</h3><p>The platform, Oracle intake, KPI engine, leakage review, and executive pilot surfaces shipped across the earlier phases.</p><ul class="history-list"><li>Core runtime, persistence, orchestration, and UI foundation.</li><li>Oracle EBS ingestion, deterministic KPI calculation, and leakage detection.</li><li>CEO/CFO pilot alignment before validation and handoff.</li></ul></article>'
       + '</div></section>';
-  }
-
-  function buildBacklogRows() {
-    var rows = [];
-    (PLAN.blockers || []).forEach(function (item) {
-      rows.push({
-        id: item.id || 'ROW',
-        area: 'Tracker',
-        kind: 'Blocker',
-        status: 'open',
-        title: item.title || 'Open work',
-        detail: item.detail || '',
-        priority: 'high',
-        priorityClass: 'priority-high',
-        pinned: true
-      });
-    });
-    ((PLAN.masterBacklog || {}).items || []).forEach(function (item) {
-      rows.push({
-        id: item.id || 'ROW',
-        area: item.area || 'Executive surface',
-        kind: item.kind || 'Task',
-        status: item.status || 'open',
-        title: item.issue || 'Open work',
-        detail: item.detail || '',
-        detailList: item.detailList || [],
-        priority: item.priority || ((item.id || '').indexOf('BUG-') === 0 || (item.id || '').indexOf('SEC-') === 0 || (item.id || '').indexOf('ORACLE-') === 0 ? 'high' : 'medium'),
-        priorityClass: ((item.priority || ((item.id || '').indexOf('BUG-') === 0 || (item.id || '').indexOf('SEC-') === 0 || (item.id || '').indexOf('ORACLE-') === 0 ? 'high' : 'medium')) === 'high') ? 'priority-high' : 'priority-medium',
-        pinned: item.pinned !== false
-      });
-    });
-    if ((PLAN.verification || {}).pending && PLAN.verification.pending.length) {
-      rows.push({
-        id: 'LIVE-VERIFY',
-        area: 'Live site',
-        kind: 'Verification',
-        status: 'pending',
-        title: 'Run the post-deploy live check',
-        detailList: PLAN.verification.pending,
-        priority: 'medium',
-        priorityClass: 'priority-medium',
-        pinned: false
-      });
-    }
-    return rows;
   }
 
   function renderDetail(row) {
@@ -927,6 +857,10 @@ p:last-child { margin-bottom: 0; }
       ? '<ul>' + row.detailList.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>'
       : '';
     return detail + list;
+  }
+
+  function priorityClass(priority) {
+    return priority === 'high' ? 'priority-high' : 'priority-medium';
   }
 
   function escapeHtml(str) {
@@ -945,7 +879,7 @@ p:last-child { margin-bottom: 0; }
 <!-- ═══════════ FOOTER ═══════════ -->
 <footer class="footer container">
   <p>StrategyOS · Oracle EBS Pilot Execution Tracker · <a href="https://strategyos.live">strategyos.live</a></p>
-  <p style="font-size:11px;">Remaining work first. Completed delivery retained underneath.</p>
+  <p style="font-size:11px;">Backlog first. Shipped history below. No process narration.</p>
 </footer>
 
 </body>
