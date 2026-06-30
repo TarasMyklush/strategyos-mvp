@@ -2,28 +2,28 @@
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-30",
     liveStatus: {
-      state: "The current deploy lane is still rolling; the next UI tranche is prepared locally so hosted deploy can roll straight into it.",
+      state: "Overall live truth: 37% done / 63% remaining. The CEO/UI backlog is still materially open, with a 12-row tranche in progress and no row eligible for completion until hosted proof lands.",
       lastVerified: "2026-06-30",
-      note: "11 active UI rows are staged for the next deployable tranche, 1 later backlog row is parked below, and 7 shipped history entries remain visible below."
+      note: "12 active UI rows are now held in the live tranche, 0 UI rows are parked outside it, and 7 shipped history entries remain visible below."
     },
     criticalBlockers: [
       {
         id: "BLK-001",
-        title: "The next deployable UI tranche centers on BUG-005, BUG-006, and BUG-007",
+        title: "The live CEO/UI tranche still centers on BUG-005, BUG-006, BUG-007, and the remaining UX backlog",
         status: "open",
-        detail: "The source tranche already carries the findings expand, developments projection, and evidence-toggle fixes; hosted proof must wait for the current deploy lane to clear."
+        detail: "The source tranche already carries the findings expand, developments projection, and evidence-toggle fixes; hosted proof must wait for the current deploy lane to clear and serve the new executive assets live."
       },
       {
         id: "BLK-002",
         title: "The remaining UX backlog is active in source but not yet proved on the hosted surface",
         status: "open",
-        detail: "The next tranche keeps UX-001 through UX-008 explicit and active while deploy sequencing catches up with the already-prepared local fixes."
+        detail: "The current tranche keeps UX-001 through UX-008 explicit and in progress while deploy sequencing catches up with the already-prepared local fixes."
       },
       {
         id: "BLK-003",
-        title: "Tracker copy cleanup stays later backlog until this tranche ships cleanly",
-        status: "open",
-        detail: "COPY-001 remains visible, but it is intentionally parked outside the active UI tranche so the next deploy stays clean and bounded."
+        title: "COPY-001 is now part of the active UI tranche and must ship with the rest of the CEO backlog",
+        status: "in_progress",
+        detail: "The copy-polish row is no longer parked; it is active work inside the 12-row tranche so /plan matches the live backlog truth."
       }
     ],
     activeActionItems: [
@@ -37,19 +37,20 @@
       { id: "UX-006", description: "Add a visible label or tooltip to the theme toggle", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
       { id: "UX-007", description: "Remove orphaned Hermes sender labels and empty message bubbles", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
       { id: "UX-008", description: "Add a feedback or report-bug escape hatch", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "UX-001", description: "Move or restyle the floating Hermes button so it stops obscuring KPI data", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" }
+      { id: "UX-001", description: "Move or restyle the floating Hermes button so it stops obscuring KPI data", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
+      { id: "COPY-001", description: "Tighten the oversized headline and adjacent copy already in scope", status: "in_progress", percentDone: 20, assignee: "Salvador / UI lane" }
     ],
     hostedVerificationState: {
-      summary: "Pending — the next UI tranche is prepared locally, but strategyos.live is still serving the earlier hosted lane until deploy sequencing reaches this source set.",
+      summary: "Pending — the 12-row CEO/UI tranche is prepared in source, but strategyos.live is still serving the earlier hosted lane until deploy sequencing reaches this asset set.",
       lastChecked: "2026-06-30",
       checks: [
         {
-          label: "This source revision keeps /plan on the exact six-section tracker while splitting active rows from later backlog truthfully.",
+          label: "This source revision keeps /plan on the exact six-section tracker while making the full 12-row UI tranche explicit.",
           result: "pending",
-          note: "Local source now carries an 11-row active UI tranche with COPY-001 parked below as later backlog; hosted proof still waits on the next deploy handoff."
+          note: "Local source now carries a 12-row active UI tranche with COPY-001 moved into live execution; hosted proof still waits on the next deploy handoff."
         },
         {
-          label: "Hosted active tranche must prove BUG-005, BUG-006, BUG-007, and the UX follow-ons rather than only the earlier core interactivity lane.",
+          label: "Hosted active tranche must prove BUG-005, BUG-006, BUG-007, UX-001..UX-008, and COPY-001 rather than only the earlier core interactivity lane.",
           result: "pending",
           note: "The current hosted assets still lag this next tranche, so these rows stay active and not historical until the deploy lane lands them."
         },
@@ -62,16 +63,8 @@
     },
     backlog: {
       title: "Later hardening / backlog",
-      summary: "COPY-001 stays visible as later backlog while the next deployable UI tranche remains bounded to BUG-005/006/007 and UX-001..008.",
-      rows: [
-        {
-          id: "COPY-001",
-          priority: "medium",
-          status: "pending",
-          title: "Tighten the oversized headline and adjacent copy already in scope",
-          detail: "Do the copy-polish pass only after the active UI tranche ships and hosted proof is back in sync."
-        }
-      ]
+      summary: "No UI rows are intentionally parked outside the active tranche right now. Leave this section empty rather than pretending hidden backlog does not exist.",
+      rows: []
     },
     completedHistory: [
       {

@@ -608,8 +608,8 @@ def test_plan_data_keeps_oracle_roadmap_complete_while_hosted_corrective_tranche
     assert 'id: "DONE-001"' in text
     assert 'Reviewed backend correctness sweep shipped' in text
     assert 'id: "DONE-007"' in text
-    assert 'Combined live deploy tranche landed and was re-verified' in text
-    assert 'ORACLE-VERIFY, SEC-001, and SEC-002 can move out of open execution state after hosted proof.' in text
+    assert 'Earlier live deploy tranche landed and was re-verified' in text
+    assert 'ORACLE-VERIFY, SEC-001, and SEC-002 are backed by hosted proof from that deploy and are closed out of active execution state.' in text
 
 
 def test_phase0_to_phase10_regression_paths_still_hold(tmp_path):
