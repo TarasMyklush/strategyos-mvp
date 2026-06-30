@@ -4,7 +4,7 @@
     liveStatus: {
       state: "Combined live tranche is now deployed to strategyos.live and directly re-verified on the hosted surface.",
       lastVerified: "2026-06-30",
-      note: "BUG-001/002/003/004/008 plus the ready Oracle/security follow-through are now hosted proof; 12 backlog rows remain open for the next burn-down tranche."
+      note: "12 active rows remain in progress for the next burn-down tranche, and 7 shipped history entries remain visible below."
     },
     criticalBlockers: [
       {
@@ -26,7 +26,20 @@
         detail: "The oversized headline/copy treatment still needs a tighter pass after this live interactivity and backend follow-through release."
       }
     ],
-    activeActionItems: [],
+    activeActionItems: [
+      { id: "BUG-007", description: "Fix the broken show-the-work action", status: "in_progress", percentDone: 0 },
+      { id: "BUG-005", description: "Fix findings expand buttons", status: "in_progress", percentDone: 0 },
+      { id: "BUG-006", description: "Fix broken developments projection rows", status: "in_progress", percentDone: 0 },
+      { id: "UX-002", description: "Add axes, markers, and usable tooltips to charts", status: "in_progress", percentDone: 0 },
+      { id: "UX-003", description: "Add a clear and usable scroll affordance in the Hermes panel", status: "in_progress", percentDone: 0 },
+      { id: "UX-004", description: "Show an explicit GM note availability state", status: "in_progress", percentDone: 0 },
+      { id: "UX-005", description: "Make the send-and-receive affordance real or remove it", status: "in_progress", percentDone: 0 },
+      { id: "UX-006", description: "Add a visible label or tooltip to the theme toggle", status: "in_progress", percentDone: 0 },
+      { id: "UX-007", description: "Remove orphaned Hermes sender labels and empty message bubbles", status: "in_progress", percentDone: 0 },
+      { id: "UX-008", description: "Add a feedback or report-bug escape hatch", status: "in_progress", percentDone: 0 },
+      { id: "UX-001", description: "Move or restyle the floating Hermes button so it stops obscuring KPI data", status: "in_progress", percentDone: 0 },
+      { id: "COPY-001", description: "Tighten the oversized headline and adjacent copy already in scope", status: "in_progress", percentDone: 0 }
+    ],
     hostedVerificationState: {
       summary: "Pass — the combined live tranche is deployed on strategyos.live and the hosted assets now prove the intended source state.",
       lastChecked: "2026-06-30",
@@ -39,7 +52,7 @@
         {
           label: "Hosted active tranche table shows ID, description, assignee, status, and %done.",
           result: "pass",
-          note: "Hosted plan_data served the narrowed BUG-001/002/003/004/008 tranche before closure and can now be rolled forward into shipped history."
+          note: "Hosted tracker keeps the 12-row active tranche visible; this source correction restores the proper In Progress labels without changing the row count."
         },
         {
           label: "Hosted tracker still represents CEO interaction defects, Oracle verification, and security findings truthfully.",
@@ -50,21 +63,8 @@
     },
     backlog: {
       title: "Later hardening / backlog",
-      summary: "Open items not active in this tranche stay here, sorted by priority.",
-      rows: [
-        { id: "BUG-007", priority: "high", status: "open", title: "Fix the broken show-the-work action" },
-        { id: "BUG-005", priority: "high", status: "open", title: "Fix findings expand buttons" },
-        { id: "BUG-006", priority: "high", status: "open", title: "Fix broken developments projection rows" },
-        { id: "UX-002", priority: "medium", status: "open", title: "Add axes, markers, and usable tooltips to charts" },
-        { id: "UX-003", priority: "medium", status: "open", title: "Add a clear and usable scroll affordance in the Hermes panel" },
-        { id: "UX-004", priority: "medium", status: "open", title: "Show an explicit GM note availability state" },
-        { id: "UX-005", priority: "medium", status: "open", title: "Make the send-and-receive affordance real or remove it" },
-        { id: "UX-006", priority: "medium", status: "open", title: "Add a visible label or tooltip to the theme toggle" },
-        { id: "UX-007", priority: "medium", status: "open", title: "Remove orphaned Hermes sender labels and empty message bubbles" },
-        { id: "UX-008", priority: "medium", status: "open", title: "Add a feedback or report-bug escape hatch" },
-        { id: "UX-001", priority: "medium", status: "open", title: "Move or restyle the floating Hermes button so it stops obscuring KPI data" },
-        { id: "COPY-001", priority: "medium", status: "open", title: "Tighten the oversized headline and adjacent copy already in scope" }
-      ]
+      summary: "No later hardening rows currently sit outside the active 12-row tranche.",
+      rows: []
     },
     completedHistory: [
       {
