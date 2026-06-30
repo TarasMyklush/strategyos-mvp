@@ -2,62 +2,45 @@
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-30",
     liveStatus: {
-      state: "Overall live truth: 37% done / 63% remaining. The CEO/UI backlog is still materially open, with a 12-row tranche in progress and no row eligible for completion until hosted proof lands.",
+      state: "Overall live truth: hosted proof now covers BUG-005, BUG-006, BUG-007, and UX-001 through UX-008 on strategyos.live. The CEO/UI backlog is down to one remaining active copy-polish row.",
       lastVerified: "2026-06-30",
-      note: "12 active UI rows are now held in the live tranche, 0 UI rows are parked outside it, and 7 shipped history entries remain visible below."
+      note: "1 active UI row remains in the live tranche, 0 UI rows are parked outside it, and 8 shipped history entries remain visible below."
     },
     criticalBlockers: [
       {
         id: "BLK-001",
-        title: "The live CEO/UI tranche still centers on BUG-005, BUG-006, BUG-007, and the remaining UX backlog",
-        status: "open",
-        detail: "The source tranche already carries the findings expand, developments projection, and evidence-toggle fixes; hosted proof must wait for the current deploy lane to clear and serve the new executive assets live."
+        title: "COPY-001 is the only remaining active CEO/UI row",
+        status: "in_progress",
+        detail: "Hosted proof now covers the 11-row executive-behaviour tranche; the remaining work is to tighten the oversized headline/copy polish without overstating completion before the final visual pass."
       },
       {
         id: "BLK-002",
-        title: "The remaining UX backlog is active in source but not yet proved on the hosted surface",
+        title: "Backlog exhaustion now depends only on the final copy pass",
         status: "open",
-        detail: "The current tranche keeps UX-001 through UX-008 explicit and in progress while deploy sequencing catches up with the already-prepared local fixes."
-      },
-      {
-        id: "BLK-003",
-        title: "COPY-001 is now part of the active UI tranche and must ship with the rest of the CEO backlog",
-        status: "in_progress",
-        detail: "The copy-polish row is no longer parked; it is active work inside the 12-row tranche so /plan matches the live backlog truth."
+        detail: "BUG-005, BUG-006, BUG-007, and UX-001..UX-008 are hosted and verified; do not keep them in the active table now that live executive assets hash-match the local tranche."
       }
     ],
     activeActionItems: [
-      { id: "BUG-007", description: "Fix the broken show-the-work action", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "BUG-005", description: "Fix findings expand buttons", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "BUG-006", description: "Fix broken developments projection rows", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "UX-002", description: "Add axes, markers, and usable tooltips to charts", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "UX-003", description: "Add a clear and usable scroll affordance in the Hermes panel", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "UX-004", description: "Show an explicit GM note availability state", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "UX-005", description: "Make the send-and-receive affordance real or remove it", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "UX-006", description: "Add a visible label or tooltip to the theme toggle", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "UX-007", description: "Remove orphaned Hermes sender labels and empty message bubbles", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "UX-008", description: "Add a feedback or report-bug escape hatch", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
-      { id: "UX-001", description: "Move or restyle the floating Hermes button so it stops obscuring KPI data", status: "in_progress", percentDone: 85, assignee: "Salvador / UI lane" },
       { id: "COPY-001", description: "Tighten the oversized headline and adjacent copy already in scope", status: "in_progress", percentDone: 20, assignee: "Salvador / UI lane" }
     ],
     hostedVerificationState: {
-      summary: "Pending — the 12-row CEO/UI tranche is prepared in source, but strategyos.live is still serving the earlier hosted lane until deploy sequencing reaches this asset set.",
+      summary: "Pass — strategyos.live now serves the same executive and tracker assets as the local tranche, and hosted proof covers BUG-005, BUG-006, BUG-007, and UX-001 through UX-008.",
       lastChecked: "2026-06-30",
       checks: [
         {
-          label: "This source revision keeps /plan on the exact six-section tracker while making the full 12-row UI tranche explicit.",
-          result: "pending",
-          note: "Local source now carries a 12-row active UI tranche with COPY-001 moved into live execution; hosted proof still waits on the next deploy handoff."
+          label: "Hosted /static/executive.js, /static/executive.css, and /static/plan_data.js now hash-match the local source tranche.",
+          result: "pass",
+          note: "Direct asset comparison confirmed the hosted executive and plan assets are byte-for-byte identical to the local release candidate."
         },
         {
-          label: "Hosted active tranche must prove BUG-005, BUG-006, BUG-007, UX-001..UX-008, and COPY-001 rather than only the earlier core interactivity lane.",
-          result: "pending",
-          note: "The current hosted assets still lag this next tranche, so these rows stay active and not historical until the deploy lane lands them."
+          label: "Hosted executive assets expose the expected UI fixes: findings/developments expansion, show-the-work toggle, chart axes/tooltips, GM-note empty state, theme label, feedback path, and Hermes scroll affordances.",
+          result: "pass",
+          note: "Direct hosted inspection found the live executive HTML/JS/CSS markers for the 11-row behaviour tranche, so those rows no longer belong in active execution."
         },
         {
-          label: "Hosted verification remains open until the current deploy tranche clears and this prepared UI lane is actually served live.",
-          result: "pending",
-          note: "This source tranche is deployable and locally prepared, but it is not yet honest to claim hosted proof for the new UI fixes."
+          label: "Only COPY-001 remains active after hosted verification of the executive tranche.",
+          result: "pass",
+          note: "The backlog is now down to the final copy-polish row; keep /plan focused on that residual truth instead of repeating already-hosted UI fixes."
         }
       ]
     },
@@ -67,6 +50,19 @@
       rows: []
     },
     completedHistory: [
+      {
+        id: "DONE-008",
+        date: "2026-06-30",
+        label: "Hosted executive tranche verified for BUG-005/006/007 and UX-001..UX-008",
+        summary: "The live executive surface now proves the queued 11-row UI behaviour tranche; only COPY-001 remains active above.",
+        items: [
+          "Hosted /static/executive.js, /static/executive.css, and /static/plan_data.js were re-checked and hash-match the local source tranche byte-for-byte.",
+          "Hosted executive HTML shows the live Theme and Report bug controls plus the expected ux-20260630 cache marker.",
+          "Hosted executive JS proves findings/developments expansion, show-the-work toggle wiring, chart axes/tooltips, explicit No GM note state, real send-and-receive flow, and the Hermes feedback/report-bug paths.",
+          "Hosted executive CSS proves the widened Hermes drawer, added bottom page clearance, and scroll-gradient affordances that were part of the UX tranche.",
+          "BUG-005, BUG-006, BUG-007, and UX-001 through UX-008 are therefore closed out of active execution state on the live surface."
+        ]
+      },
       {
         id: "DONE-007",
         date: "2026-06-30",
