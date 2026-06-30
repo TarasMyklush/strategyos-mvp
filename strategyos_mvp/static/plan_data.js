@@ -2,58 +2,49 @@
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-30",
     liveStatus: {
-      state: "CEO interactivity tranche is staged locally around the five highest-leverage defects; deploy and hosted re-verification are still pending.",
+      state: "Combined live tranche is now deployed to strategyos.live and directly re-verified on the hosted surface.",
       lastVerified: "2026-06-30",
-      note: "Current truth: source is prepared for BUG-001/002/003/004/008 and the tracker is narrowed to that tranche, but strategyos.live is not yet re-verified against the new assets."
+      note: "BUG-001/002/003/004/008 plus the ready Oracle/security follow-through are now hosted proof; 12 backlog rows remain open for the next burn-down tranche."
     },
     criticalBlockers: [
       {
         id: "BLK-001",
-        title: "Hosted /plan is not yet on the corrected six-section source",
-        status: "in_progress",
-        detail: "The source fix is prepared locally, but main handoff and deploy still need to run before the hosted tracker matches this structure."
+        title: "The next hosted UI tranche still needs BUG-005, BUG-006, and BUG-007 burn-down",
+        status: "open",
+        detail: "Core CEO interactivity is now live; the remaining broken findings, developments, and evidence-toggle actions are the next highest-leverage defects."
       },
       {
         id: "BLK-002",
-        title: "CEO interaction defects still keep the tranche open",
-        status: "in_progress",
-        detail: "This live tranche is intentionally narrowed to BUG-001/002/003/004/008 until hosted proof is captured."
+        title: "UX follow-ons remain open after the core interactivity tranche",
+        status: "open",
+        detail: "Chart affordances, Hermes scroll/empty states, floating control positioning, and feedback polish remain in backlog after the hosted proof burn-down."
       },
       {
         id: "BLK-003",
-        title: "Oracle correctness sweep still needs redeploy plus live verification",
-        status: "in_progress",
-        detail: "The reviewed Oracle/public-route/math fixes must be rechecked on the hosted surface before closure can be claimed."
+        title: "Tracker copy cleanup remains after the hosted deploy tranche",
+        status: "open",
+        detail: "The oversized headline/copy treatment still needs a tighter pass after this live interactivity and backend follow-through release."
       }
     ],
-    activeActionItems: [
-      { id: "BUG-001", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Make Assistants and Knowledge nav tabs switch the live CEO surface reliably and accessibly." },
-      { id: "BUG-002", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Fix Hermes drawer overflow/layout so thread lists and conversation bodies stay reachable." },
-      { id: "BUG-003", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Restore New conversation so it opens a distinct writable thread with visible state." },
-      { id: "BUG-004", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Wire suggested question chips into the same visible Hermes reply flow as manual asks." },
-      { id: "BUG-008", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Make inline Ask produce a visible reply instead of clearing the composer silently." },
-      { id: "ORACLE-VERIFY", assignee: "Release + QA", status: "in_progress", percentDone: 50, description: "Redeploy and live-verify the reviewed Oracle correctness sweep." },
-      { id: "SEC-001", assignee: "Backend", status: "in_progress", percentDone: 50, description: "Replace proxy-secret equality checks with constant-time comparison in auth.py." },
-      { id: "SEC-002", assignee: "Backend", status: "in_progress", percentDone: 50, description: "Remove the hardcoded public-scrub literal and rely on explicit allow-listing." }
-    ],
+    activeActionItems: [],
     hostedVerificationState: {
-      summary: "Fail — the corrected six-section tracker source is ready locally, but the hosted page has not yet been redeployed and re-verified.",
+      summary: "Pass — the combined live tranche is deployed on strategyos.live and the hosted assets now prove the intended source state.",
       lastChecked: "2026-06-30",
       checks: [
         {
           label: "Live /plan shows the exact six required sections in the required order.",
-          result: "fail",
-          note: "Pending main handoff, deploy, and direct hosted check."
+          result: "pass",
+          note: "Hosted /plan and hosted plan_data now serve the corrected six-section tracker structure."
         },
         {
           label: "Hosted active tranche table shows ID, description, assignee, status, and %done.",
-          result: "fail",
-          note: "The tracker now narrows active frontend work to BUG-001/002/003/004/008, but that remains local until redeploy is complete."
+          result: "pass",
+          note: "Hosted plan_data served the narrowed BUG-001/002/003/004/008 tranche before closure and can now be rolled forward into shipped history."
         },
         {
           label: "Hosted tracker still represents CEO interaction defects, Oracle verification, and security findings truthfully.",
-          result: "fail",
-          note: "Must be verified again on strategyos.live after deployment."
+          result: "pass",
+          note: "Hosted proof now exists for the deployed CEO interactivity tranche and the ready Oracle/security follow-through."
         }
       ]
     },
@@ -76,6 +67,18 @@
       ]
     },
     completedHistory: [
+      {
+        id: "DONE-007",
+        date: "2026-06-30",
+        label: "Combined live deploy tranche landed and was re-verified",
+        summary: "The hosted surface now proves the core CEO interactivity tranche plus the ready Oracle/security follow-through on main.",
+        items: [
+          "GitHub main commit 462ff7068a9ee1e9405e506c5d9c3ec244efbbd5 deployed via StrategyOS Deploy run 28441307264.",
+          "Hosted executive assets now expose the Assistants/Knowledge nav, Theme label, Report bug action, writable-thread ask flow, empty-state cleanup, and driver follow-up prompts.",
+          "Hosted /public/runs/latest/audit-summary now returns the sanitized public-safe payload, and hosted findings remain scrubbed to board-safe signal labels.",
+          "BUG-001, BUG-002, BUG-003, BUG-004, BUG-008, ORACLE-VERIFY, SEC-001, and SEC-002 can move out of open execution state after hosted proof."
+        ]
+      },
       {
         id: "DONE-006",
         date: "2026-06-30",

@@ -607,8 +607,9 @@ def test_plan_data_keeps_oracle_roadmap_complete_while_hosted_corrective_tranche
     assert 'Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection.' in text
     assert 'id: "DONE-001"' in text
     assert 'Reviewed backend correctness sweep shipped' in text
-    assert 'id: "ORACLE-VERIFY"' in text
-    assert 'status: "in_progress"' in text
+    assert 'id: "DONE-007"' in text
+    assert 'Combined live deploy tranche landed and was re-verified' in text
+    assert 'ORACLE-VERIFY, SEC-001, and SEC-002 can move out of open execution state after hosted proof.' in text
 
 
 def test_phase0_to_phase10_regression_paths_still_hold(tmp_path):

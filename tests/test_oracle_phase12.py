@@ -427,6 +427,6 @@ def test_phase12_plan_data_keeps_completed_oracle_phases_truthful_during_hosted_
     assert 'updated: "2026-06-30"' in text
     assert 'Foundation through Oracle pilot delivery shipped' in text
     assert 'Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection.' in text
-    assert 'id: "ORACLE-VERIFY"' in text
-    assert 'Redeploy and live-verify the reviewed Oracle correctness sweep.' in text
-    assert 'status: "in_progress"' in text
+    assert 'id: "DONE-007"' in text
+    assert 'Combined live deploy tranche landed and was re-verified' in text
+    assert 'Hosted /public/runs/latest/audit-summary now returns the sanitized public-safe payload' in text

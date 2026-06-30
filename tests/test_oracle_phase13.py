@@ -408,5 +408,6 @@ def test_phase13_plan_data_keeps_closed_leakage_phase_truthful_while_hosted_fixu
     assert 'Reviewed backend correctness sweep shipped' in text
     assert 'FX hedge quote direction inferred instead of assumed.' in text
     assert 'Negative-quantity inflation blocked in recoverable math.' in text
-    assert 'id: "ORACLE-VERIFY"' in text
-    assert 'status: "in_progress"' in text
+    assert 'id: "DONE-007"' in text
+    assert 'Hosted /public/runs/latest/audit-summary now returns the sanitized public-safe payload' in text
+    assert 'hosted findings remain scrubbed to board-safe signal labels.' in text
