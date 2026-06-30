@@ -4,7 +4,7 @@
     overallStatus: "in_progress",
     backlog: {
       title: "Remaining work",
-      summary: "Only still-open work lives here: CEO interaction defects, UX defects, Oracle redeploy verification, open security fixes, and the deploy/verify steps for this tracker update.",
+      summary: "Only still-open work lives here: CEO interaction defects, UX defects, Oracle redeploy verification, open security fixes, and copy cleanup still in scope.",
       rows: [
         { id: "BUG-001", area: "Navigation", kind: "Bug", status: "open", priority: "high", title: "Fix broken Assistants and Knowledge nav tabs" },
         { id: "BUG-002", area: "Hermes panel", kind: "Bug", status: "open", priority: "high", title: "Fix Hermes conversation panel overflow and broken layout" },
@@ -40,22 +40,7 @@
         },
         { id: "SEC-001", area: "Auth", kind: "Security", status: "open", priority: "high", title: "Replace proxy-secret equality checks with constant-time comparison in auth.py" },
         { id: "SEC-002", area: "Public scrub", kind: "Security", status: "open", priority: "high", title: "Remove the hardcoded public-scrub literal and rely on explicit allow-listing" },
-        { id: "COPY-001", area: "Plan / landing", kind: "Copy", status: "open", priority: "medium", title: "Tighten the oversized headline and adjacent copy already in scope" },
-        { id: "DEPLOY-PLAN", area: "Deployment", kind: "Release", status: "open", priority: "high", title: "Deploy the updated /plan source so strategyos.live shows the full current backlog and concise completed history" },
-        {
-          id: "LIVE-VERIFY",
-          area: "Live site",
-          kind: "Verification",
-          status: "open",
-          priority: "medium",
-          title: "Run an independent hosted check after deploy and keep any surviving defects open",
-          detailList: [
-            "Verify the live /plan page shows backlog first and shipped history below it.",
-            "Verify CEO interaction bugs and UX bugs are still listed until actually fixed.",
-            "Verify Oracle correctness and open security items are represented truthfully.",
-            "If any hosted defect survives, leave it in backlog instead of moving it into history."
-          ]
-        }
+        { id: "COPY-001", area: "Plan / landing", kind: "Copy", status: "open", priority: "medium", title: "Tighten the oversized headline and adjacent copy already in scope" }
       ]
     },
     completedHistory: [
@@ -111,6 +96,16 @@
           "Core runtime, persistence, orchestration, governance, and UI foundations.",
           "Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection.",
           "CEO/CFO pilot alignment, production validation, and pilot readiness work."
+        ]
+      },
+      {
+        id: "DONE-006",
+        label: "Live /plan backlog-history sync deployed and verified",
+        summary: "The approved tracker rewrite is now live on strategyos.live and independently verified against the hosted surface.",
+        items: [
+          "Approved GitHub Actions lane deployed commit 503f8c66c7d9e55694f3fc0ae4db1881398af565 to strategyos.live.",
+          "Live /plan now shows current backlog first and shipped history below it.",
+          "Hosted plan_data payload now exposes the CEO bug list, UX bug list, Oracle verification row, and open security rows as active backlog truth."
         ]
       }
     ]
