@@ -610,6 +610,35 @@ p:last-child { margin-bottom: 0; }
   color: var(--amber);
 }
 
+.backlog-status.is-open,
+.backlog-status.is-in_progress,
+.backlog-status.is-pending,
+.backlog-status.is-fail {
+  background: var(--warn-soft);
+  color: var(--amber);
+}
+
+.backlog-status.is-pass,
+.backlog-status.is-completed {
+  background: var(--ok-soft);
+  color: var(--green);
+}
+
+.status-line {
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.status-line strong {
+  color: var(--accent);
+}
+
+.verify-card p,
+.truth-card p,
+.blocker-item p {
+  font-size: 14px;
+}
+
 .backlog-meta {
   display: flex;
   flex-wrap: wrap;
@@ -795,17 +824,21 @@ p:last-child { margin-bottom: 0; }
 <section class="hero container">
   <div class="hero__badge-row">
     <span class="hero__badge">Live tracker</span>
-    <span class="hero__badge">Current backlog</span>
-    <span class="hero__badge">Shipped history</span>
+    <span class="hero__badge">Six required sections</span>
+    <span class="hero__badge">Immediate main handoff</span>
   </div>
   <h1>Execution Tracker</h1>
-  <p>The page shows only real remaining work and concise shipped history. Nothing open is hidden in summary language, and nothing unfinished is shown as done.</p>
+  <p>Strict six-section live tracker only: current truth, active tranche, hosted verification state, later backlog, and dated shipped history without wording drift.</p>
   <div class="hero__caption">strategyos.live/plan</div>
 </section>
 
 <!-- ═══════════ Content ═══════════ -->
 <section class="container">
   <div class="tracker-shell">
+    <div id="plan-live-status"></div>
+    <div id="plan-blockers"></div>
+    <div id="plan-active"></div>
+    <div id="plan-verify"></div>
     <div id="plan-backlog"></div>
     <div id="plan-history"></div>
   </div>
@@ -820,20 +853,44 @@ p:last-child { margin-bottom: 0; }
   const PLAN = window.STRATEGYOS_PLAN;
   if (!PLAN) { console.error("STRATEGYOS_PLAN not found"); return; }
 
+  function renderLiveStatus() {
+    var el = document.getElementById("plan-live-status");
+    var liveStatus = PLAN.liveStatus || {};
+    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 1</div><h2>LIVE STATUS NOW</h2></div><p>Single-line deployment truth with the latest recorded verification date.</p></div><div class="truth-card"><p class="status-line"><strong>' + escapeHtml(liveStatus.state || 'Status not recorded.') + '</strong> Last verified: ' + escapeHtml(liveStatus.lastVerified || 'Not recorded') + '.</p><p>' + escapeHtml(liveStatus.note || '') + '</p></div></section>';
+  }
+
+  function renderCriticalBlockers() {
+    var el = document.getElementById("plan-blockers");
+    var blockers = (PLAN.criticalBlockers || []).slice(0, 3);
+    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 2</div><h2>CRITICAL BLOCKERS</h2></div><p>Maximum three blockers that currently prevent hosted closure.</p></div><div class="blocker-list"><div class="blocker-items">' + blockers.map(function (blocker) {
+      return '<article class="blocker-item"><div class="phase-card__meta"><span>' + escapeHtml(blocker.id || 'BLK') + '</span><span class="backlog-status ' + escapeHtml(statusClass(blocker.status)) + '">' + escapeHtml(statusLabel(blocker.status)) + '</span></div><h3>' + escapeHtml(blocker.title || 'Critical blocker') + '</h3><p>' + escapeHtml(blocker.detail || '') + '</p></article>';
+    }).join('') + '</div></div></section>';
+  }
+
+  function renderActiveActionItems() {
+    var el = document.getElementById("plan-active");
+    var rows = PLAN.activeActionItems || [];
+    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 3</div><h2>ACTIVE ACTION ITEMS THIS TRANCHE</h2></div><p>Every currently active bug or finding stays visible here with owner, active status, and %done.</p></div><div class="backlog-card"><div class="backlog-table-wrap"><table class="backlog-table"><thead><tr><th scope="col">ID</th><th scope="col">Description</th><th scope="col">Assignee</th><th scope="col">Status</th><th scope="col">%done</th></tr></thead><tbody>' + rows.map(function (row) {
+      return '<tr><td><span class="backlog-code">' + escapeHtml(row.id || '') + '</span></td><td><div class="row-title">' + escapeHtml(row.description || 'Active work') + '</div></td><td>' + escapeHtml(row.assignee || 'Unassigned') + '</td><td><span class="backlog-status ' + escapeHtml(statusClass(row.status)) + '">' + escapeHtml(statusLabel(row.status)) + '</span></td><td>' + escapeHtml(percentLabel(row.percentDone)) + '</td></tr>';
+    }).join('') + '</tbody></table></div></div></section>';
+  }
+
+  function renderVerificationState() {
+    var el = document.getElementById("plan-verify");
+    var verify = PLAN.hostedVerificationState || {};
+    var checks = verify.checks || [];
+    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 4</div><h2>HOSTED VERIFICATION STATE</h2></div><p>Latest pass/fail truth only. No source completion is treated as hosted acceptance.</p></div><div class="section-stack"><article class="verify-card"><div class="phase-card__meta"><span>Last checked</span><span>' + escapeHtml(verify.lastChecked || 'Not recorded') + '</span></div><h3>' + escapeHtml(verify.summary || 'Verification state not recorded.') + '</h3></article><div class="verify-grid">' + checks.map(function (check) {
+      return '<article class="verify-card"><div class="phase-card__meta"><span class="backlog-status ' + escapeHtml(statusClass(check.result)) + '">' + escapeHtml(resultLabel(check.result)) + '</span></div><h3>' + escapeHtml(check.label || 'Verification check') + '</h3><p>' + escapeHtml(check.note || '') + '</p></article>';
+    }).join('') + '</div></div></section>';
+  }
+
   function renderBacklog() {
     var el = document.getElementById("plan-backlog");
     var rows = (((PLAN || {}).backlog || {}).rows || []);
-    var high = rows.filter(function (row) { return row.priority === 'high'; }).length;
-    var medium = rows.filter(function (row) { return row.priority === 'medium'; }).length;
     el.innerHTML = '<section class="tracker-section">'
-      + '<div class="section-head"><div><div class="section-eyebrow">Backlog</div><h2>Remaining work</h2></div><p>' + escapeHtml((PLAN.backlog && PLAN.backlog.summary) || 'Only actionable open work appears here.') + '</p></div>'
-      + '<div class="tracker-summary">'
-      + '<article class="tracker-stat"><span class="tracker-stat__label">Open rows</span><span class="tracker-stat__value">' + escapeHtml(String(rows.length)) + '</span></article>'
-      + '<article class="tracker-stat"><span class="tracker-stat__label">High priority</span><span class="tracker-stat__value">' + escapeHtml(String(high)) + '</span></article>'
-      + '<article class="tracker-stat"><span class="tracker-stat__label">Medium priority</span><span class="tracker-stat__value">' + escapeHtml(String(medium)) + '</span></article>'
-      + '</div>'
-      + '<div class="backlog-card"><div class="backlog-table-wrap"><table class="backlog-table"><thead><tr><th scope="col">ID</th><th scope="col">Area</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Remaining work</th></tr></thead><tbody>' + rows.map(function (row) {
-        return '<tr class="' + escapeHtml(priorityClass(row.priority)) + '"><td><span class="backlog-code">' + escapeHtml(row.id) + '</span></td><td>' + escapeHtml(row.area || '') + '</td><td><div class="backlog-meta"><span class="table-pill">' + escapeHtml(row.kind || 'Task') + '</span></div></td><td><span class="backlog-status">' + escapeHtml(row.status || 'open') + '</span></td><td><div class="row-title">' + escapeHtml(row.title || 'Open work') + '</div><div class="row-detail">' + renderDetail(row) + '</div></td></tr>';
+      + '<div class="section-head"><div><div class="section-eyebrow">Section 5</div><h2>LATER HARDENING / BACKLOG</h2></div><p>' + escapeHtml((PLAN.backlog && PLAN.backlog.summary) || 'Open items not active in this tranche stay here.') + '</p></div>'
+      + '<div class="backlog-card"><div class="backlog-table-wrap"><table class="backlog-table"><thead><tr><th scope="col">ID</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Remaining work</th></tr></thead><tbody>' + rows.map(function (row) {
+        return '<tr class="' + escapeHtml(priorityClass(row.priority)) + '"><td><span class="backlog-code">' + escapeHtml(row.id) + '</span></td><td>' + escapeHtml(priorityLabel(row.priority)) + '</td><td><span class="backlog-status ' + escapeHtml(statusClass(row.status)) + '">' + escapeHtml(statusLabel(row.status)) + '</span></td><td><div class="row-title">' + escapeHtml(row.title || 'Open work') + '</div><div class="row-detail">' + renderDetail(row) + '</div></td></tr>';
       }).join('') + '</tbody></table></div></div>'
       + '</section>';
   }
@@ -841,10 +898,10 @@ p:last-child { margin-bottom: 0; }
   function renderHistory() {
     var history = PLAN.completedHistory || [];
     var el = document.getElementById("plan-history");
-    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Completed history</div><h2>Shipped work</h2></div><p>Only completed work belongs here. If it is still actionable, it stays in the backlog above.</p></div><div class="history-grid">'
+    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 6</div><h2>HISTORY OF WHAT WAS DONE</h2></div><p>Reverse-chronological completed history with dates only. Open work never belongs here.</p></div><div class="history-grid">'
       + history.map(function (entry) {
         var items = entry.items || [];
-        return '<article class="history-card"><div class="phase-card__meta"><span>' + escapeHtml(entry.id || 'DONE') + '</span><span>' + escapeHtml(String(items.length)) + ' shipped items</span></div><h3>' + escapeHtml(entry.label || 'Completed work') + '</h3><p>' + escapeHtml(entry.summary || '') + '</p><ul class="history-list">' + items.map(function (item) {
+        return '<article class="history-card"><div class="phase-card__meta"><span>' + escapeHtml(entry.date || 'Date not recorded') + '</span><span>' + escapeHtml(entry.id || 'DONE') + '</span></div><h3>' + escapeHtml(entry.label || 'Completed work') + '</h3><p>' + escapeHtml(entry.summary || '') + '</p><ul class="history-list">' + items.map(function (item) {
           return '<li>' + escapeHtml(item) + '</li>';
         }).join('') + '</ul></article>';
       }).join('')
@@ -863,6 +920,40 @@ p:last-child { margin-bottom: 0; }
     return priority === 'high' ? 'priority-high' : 'priority-medium';
   }
 
+  function priorityLabel(priority) {
+    return priority === 'high' ? 'High' : 'Medium';
+  }
+
+  function normalizeStatus(status) {
+    return String(status || 'open').trim().toLowerCase().replace(/\s+/g, '_');
+  }
+
+  function statusClass(status) {
+    return 'is-' + normalizeStatus(status);
+  }
+
+  function statusLabel(status) {
+    var normalized = normalizeStatus(status);
+    if (normalized === 'in_progress') return 'In Progress';
+    if (normalized === 'completed') return 'Completed';
+    if (normalized === 'pending') return 'Pending';
+    if (normalized === 'pass') return 'Pass';
+    if (normalized === 'fail') return 'Fail';
+    return 'Open';
+  }
+
+  function resultLabel(result) {
+    var normalized = normalizeStatus(result);
+    if (normalized === 'pass') return 'Pass';
+    if (normalized === 'fail') return 'Fail';
+    return 'Pending';
+  }
+
+  function percentLabel(percent) {
+    if (typeof percent !== 'number' || !isFinite(percent)) return '0%';
+    return Math.max(0, Math.min(100, percent)) + '%';
+  }
+
   function escapeHtml(str) {
     var div = document.createElement("div");
     div.appendChild(document.createTextNode(str));
@@ -870,6 +961,10 @@ p:last-child { margin-bottom: 0; }
   }
 
   /* ─── Init ─── */
+  renderLiveStatus();
+  renderCriticalBlockers();
+  renderActiveActionItems();
+  renderVerificationState();
   renderBacklog();
   renderHistory();
 
@@ -879,7 +974,7 @@ p:last-child { margin-bottom: 0; }
 <!-- ═══════════ FOOTER ═══════════ -->
 <footer class="footer container">
   <p>StrategyOS · Oracle EBS Pilot Execution Tracker · <a href="https://strategyos.live">strategyos.live</a></p>
-  <p style="font-size:11px;">Backlog first. Shipped history below. No process narration.</p>
+  <p style="font-size:11px;">Six sections only. Source corrected for immediate main handoff and hosted verification.</p>
 </footer>
 
 </body>
