@@ -75,6 +75,44 @@
     });
   }
 
+  function focusAssistantInput() {
+    window.setTimeout(function () {
+      var input = $("assistant-input");
+      if (input && !input.disabled) input.focus();
+    }, 0);
+  }
+
+  function openAssistantDrawer() {
+    state.drawerOpen = true;
+    renderTopbar();
+    renderAssistantStudio();
+    focusAssistantInput();
+  }
+
+  function threadTitleFromPrompt(prompt) {
+    var cleanPrompt = String(prompt || "").trim();
+    if (!cleanPrompt) return "New conversation · " + nowStamp();
+    var title = cleanPrompt.replace(/\s+/g, " ").slice(0, 42);
+    if (cleanPrompt.length > 42) title += "…";
+    return title;
+  }
+
+  function askAssistant(prompt) {
+    var cleanPrompt = String(prompt || "").trim();
+    if (!cleanPrompt) return;
+    ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt);
+    pushThreadMessage("user", cleanPrompt);
+    pushThreadMessage("assistant", buildAssistantReply(cleanPrompt));
+    openAssistantDrawer();
+  }
+
+  function switchView(view) {
+    state.activeView = view || "home";
+    updateHistory();
+    renderPersonaView();
+    if (state.activeView === "assistants") focusAssistantInput();
+  }
+
   function animateCard(id) {
     var node = $(id);
     if (!node) return;
@@ -453,22 +491,23 @@
     saveStoredThreads();
   }
 
-  function ensureWritableThread() {
+  function ensureWritableThread(seedTitle, seedPreview) {
     ensureThreads();
     var current = threadStore()[currentThreadKey()];
     if (current && !current.readOnly) return current;
-    return createWritableThread();
+    return createWritableThread(seedTitle, seedPreview);
   }
 
-  function createWritableThread(seedTitle) {
+  function createWritableThread(seedTitle, seedPreview) {
     var blueprint = getPersonaBlueprint(state.activePersona);
     var persona = getPersonaContract(state.activePersona);
     var assistantName = firstDefined((getChatContract().assistant || {}).name, persona.assistant, blueprint.assistant, "Hermes");
     var key = state.activePersona + ":followup-" + Date.now();
+    var preview = String(firstDefined(seedPreview, "Writable board-safe thread.")).trim();
     threadStore()[key] = {
       key: key,
-      title: seedTitle || (getPersonaLabel(state.activePersona) + " follow-up"),
-      preview: "Writable board-safe thread.",
+      title: seedTitle || ("New conversation · " + nowStamp()),
+      preview: preview || "Writable board-safe thread.",
       route: firstDefined(getPublication().preview_route, "/public/runs/latest/report-preview"),
       readOnly: false,
       kind: "followup",
@@ -515,6 +554,7 @@
     var launcher = $("chat-launcher-cta");
     var launcherPrompt = document.querySelector("#chat-launcher .chat-launcher__prompt");
     var themeToggle = $("theme-toggle");
+    var feedbackButton = $("feedback-btn");
     var userName = $("topbar-user-name");
     var userRole = $("topbar-user-role");
     var avatar = $("topbar-avatar");
@@ -543,11 +583,17 @@
     }
     if (launcherPrompt) launcherPrompt.hidden = state.activePersona !== "board";
     if (themeToggle) {
-      themeToggle.textContent = state.theme === "dark" ? "☾" : "☀";
+      themeToggle.innerHTML = '<span aria-hidden="true">' + (state.theme === "dark" ? "☾" : "☀") + '</span><span>' + (state.theme === "dark" ? "Dark" : "Light") + '</span>';
+      themeToggle.title = 'Theme: ' + (state.theme === 'dark' ? 'dark' : 'light') + '. Toggle theme';
       themeToggle.onclick = function () {
         state.theme = state.theme === "dark" ? "light" : "dark";
         document.documentElement.setAttribute("data-theme", state.theme);
         renderTopbar();
+      };
+    }
+    if (feedbackButton) {
+      feedbackButton.onclick = function () {
+        askAssistant('Report a bug on the executive surface: capture the broken behaviour, expected behaviour, current persona, and what blocked the decision flow.');
       };
     }
     if (userName) userName.textContent = "";
@@ -602,6 +648,7 @@
       var target = link.getAttribute("data-view-target") || "home";
       if (target === "home") link.textContent = state.activePersona === "board" ? "Portal" : "Diagnostics";
       link.classList.toggle("is-active", target === state.activeView);
+      link.setAttribute("aria-selected", target === state.activeView ? "true" : "false");
     });
   }
 
@@ -610,6 +657,7 @@
       var isActive = panel.getAttribute("data-view-panel") === state.activeView;
       panel.hidden = !isActive;
       panel.classList.toggle("is-active", isActive);
+      panel.setAttribute("aria-hidden", isActive ? "false" : "true");
     });
   }
 
@@ -697,20 +745,24 @@
     });
 
     topic.innerHTML = '<span class="a2a-topic-label">re:</span> ' + escapeHtml(firstDefined(active.topic, 'coordination')) + ' <span class="a2a-status ' + escapeHtml(String(firstDefined(active.status, 'active')).toLowerCase()) + '">' + escapeHtml(firstDefined(active.status, 'active')) + '</span>';
-    scroll.innerHTML = safeArray(active.messages).map(function (message) {
+    var exchangeMessages = safeArray(active.messages).filter(function (message) {
+      return String(firstDefined(message && message.text, '')).trim().length > 0;
+    });
+    scroll.innerHTML = exchangeMessages.length ? exchangeMessages.map(function (message) {
       var mine = firstDefined(message.from, '') === assistantName;
       return '<div class="a2a-msg' + (mine ? ' mine' : '') + '"><span class="a2a-from">' + escapeHtml(firstDefined(message.from, 'Assistant')) + '</span><div class="a2a-bubble">' + escapeHtml(firstDefined(message.text, '')) + '</div></div>';
-    }).join('');
+    }).join('') : '<div class="a2a-msg"><span class="a2a-from">StrategyOS</span><div class="a2a-bubble">No assistant exchange is visible yet. Ask for a follow-up and the routed replies will appear here.</div></div>';
     scroll.scrollTop = scroll.scrollHeight;
     if (footNote) footNote.textContent = '⇄ ' + assistantName + ' is following up automatically';
     if (followup) {
       followup.onclick = function () {
-        var prompt = 'Set a follow-up task for ' + firstDefined(active.with, 'the assistant') + ' on ' + firstDefined(active.topic, 'the active coordination thread') + '.';
-        pushThreadMessage('user', prompt);
-        pushThreadMessage('assistant', buildAssistantReply(prompt));
-        state.drawerOpen = true;
-        renderTopbar();
-        renderAssistantStudio();
+        askAssistant('Set a follow-up task for ' + firstDefined(active.with, 'the assistant') + ' on ' + firstDefined(active.topic, 'the active coordination thread') + '.');
+      };
+    }
+    var reportBug = $("a2a-report-bug");
+    if (reportBug) {
+      reportBug.onclick = function () {
+        askAssistant('Report a bug in the Hermes ↔ assistants panel: include the exchange, the expected response, and the missing feedback.');
       };
     }
   }
@@ -819,9 +871,7 @@
         button.className = "prompt-chip";
         button.textContent = prompt;
         button.onclick = function () {
-          pushThreadMessage("user", prompt);
-          pushThreadMessage("assistant", buildAssistantReply(prompt));
-          renderAssistantStudio();
+          askAssistant(prompt);
         };
         promptRow.appendChild(button);
       });
@@ -921,24 +971,30 @@
           return [x, y];
         });
       };
-      var actualPath = chartPoints(actualSeries).map(function (pair, idx) {
+      var actualPoints = chartPoints(actualSeries);
+      var planPoints = chartPoints(planSeries);
+      var actualPath = actualPoints.map(function (pair, idx) {
         return (idx ? "L" : "M") + pair[0].toFixed(1) + "," + pair[1].toFixed(1);
       }).join(" ");
-      var planPath = chartPoints(planSeries).map(function (pair, idx) {
+      var planPath = planPoints.map(function (pair, idx) {
         return (idx ? "L" : "M") + pair[0].toFixed(1) + "," + pair[1].toFixed(1);
       }).join(" ");
+      var yTicks = [maxSeries, (maxSeries + minSeries) / 2, minSeries];
+      var xLabels = actualSeries.map(function (_value, idx) {
+        return 'W' + String(actualSeries.length - idx);
+      });
       var moverRows = lifting.map(function (item) { return { tone: 'up', glyph: '↗', item: item }; })
         .concat(dragging.map(function (item) { return { tone: 'down', glyph: '↘', item: item }; }));
       drillCard.innerHTML = [
         '<div class="drill-surface">',
         '<div class="drill-headline"><div><h3 class="detail-title">' + escapeHtml(firstDefined(driver.label, 'Driver drill')) + '</h3><p class="section-note">' + escapeHtml(String(firstDefined(driver.pct, '—')) + '% of plan · ' + firstDefined(driver.metric, '—') + ' · ' + firstDefined(driver.sub, 'current measure')) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work ⌕</button></div>',
         '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, 'Awaiting drill detail.')) + '</p>',
-        '<div class="drill-grid-v2"><div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual <span class="lg plan"></span> plan</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" aria-hidden="true"><path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path></svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div><div class="drill-movers-panel"><div class="mini-head">What moved it <span class="mini-hint">tap a note — the GM’s commentary rides up with the number</span></div><div class="movers-flat">' + (moverRows.length ? moverRows.map(function (entry) {
+        '<div class="drill-grid-v2"><div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual <span class="lg plan"></span> plan</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" role="img" aria-label="' + escapeHtml(firstDefined(driver.label, 'Driver')) + ' trend: actual versus plan over the last ' + String(actualSeries.length) + ' weeks">' + yTicks.map(function (tick) { var y = chartHeight - (((tick - minSeries) / spanSeries) * 120 + 18); return '<line class="trend-gridline" x1="0" x2="320" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"></line><text class="trend-axis" x="4" y="' + Math.max(10, y - 4).toFixed(1) + '">' + escapeHtml(String(Math.round(tick * 10) / 10)) + '</text>'; }).join('') + '<path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path>' + actualPoints.map(function (pair, idx) { return '<circle class="trend-point actual" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="3"><title>Actual ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(actualSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + planPoints.map(function (pair, idx) { return '<circle class="trend-point plan" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="2.5"><title>Plan ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(planSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + xLabels.map(function (label, idx) { var point = actualPoints[idx]; return '<text class="trend-axis" x="' + point[0].toFixed(1) + '" y="150" text-anchor="middle">' + escapeHtml(label) + '</text>'; }).join('') + '</svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div><div class="drill-movers-panel"><div class="mini-head">What moved it <span class="mini-hint">tap a note — the GM’s commentary rides up with the number</span></div><div class="movers-flat">' + (moverRows.length ? moverRows.map(function (entry) {
           var item = entry.item || {};
           var noteKey = firstDefined(driver.driver_key, driver.key, '') + ':' + firstDefined(item.name, 'mover');
           var noteOpen = state.openDriverNoteKey === noteKey;
           var gm = item.gm || null;
-          return '<div class="mover-flat ' + (noteOpen ? 'is-open' : '') + '"><div class="mover-flat__row"><span class="mover-flat__dir tone-' + escapeHtml(entry.tone) + '">' + escapeHtml(entry.glyph) + '</span><span class="mover-flat__name">' + escapeHtml(firstDefined(item.name, 'Signal')) + '</span><span class="mover-flat__delta">' + escapeHtml(firstDefined(item.delta, '')) + '</span>' + (gm ? '<button type="button" class="gm-chip gm-chip--avatar' + (noteOpen ? ' is-open' : '') + '" data-driver-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>GM note</span></button>' : '<span class="gm-none">—</span>') + '</div>' + (gm && noteOpen ? '<blockquote class="gm-note"><span class="gm-note-who">' + escapeHtml(firstDefined(gm.who, 'GM')) + '</span>' + escapeHtml(firstDefined(gm.note, '')) + '<span class="gm-note-tail">↑ travels up with this number</span></blockquote>' : '') + '</div>';
+          return '<div class="mover-flat ' + (noteOpen ? 'is-open' : '') + '"><div class="mover-flat__row"><span class="mover-flat__dir tone-' + escapeHtml(entry.tone) + '">' + escapeHtml(entry.glyph) + '</span><span class="mover-flat__name">' + escapeHtml(firstDefined(item.name, 'Signal')) + '</span><span class="mover-flat__delta">' + escapeHtml(firstDefined(item.delta, '')) + '</span>' + (gm ? '<button type="button" class="gm-chip gm-chip--avatar' + (noteOpen ? ' is-open' : '') + '" data-driver-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>GM note</span></button>' : '<span class="gm-none" title="No GM note is attached to this mover yet.">No GM note</span>') + '</div>' + (gm && noteOpen ? '<blockquote class="gm-note"><span class="gm-note-who">' + escapeHtml(firstDefined(gm.who, 'GM')) + '</span>' + escapeHtml(firstDefined(gm.note, '')) + '<span class="gm-note-tail">↑ travels up with this number</span></blockquote>' : '') + '</div>';
         }).join('') : '<div class="discovery-empty">No movement is attached yet.</div>') + '</div></div></div>',
         '<div class="chips"><span class="chips-label">Ask on:</span>' + safeArray(driver.chips).map(function (chip) { return '<button class="chip" type="button" data-driver-chip="' + escapeHtml(chip) + '">' + escapeHtml(chip) + '</button>'; }).join('') + '</div>',
         '<form class="chips-own" id="driver-composer"><label class="sr-only" for="driver-input">Ask about driver</label><input id="driver-input" class="driver-input" type="text" placeholder="Ask your own about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '…" /><button type="submit">Send</button></form>',
@@ -967,6 +1023,8 @@
       if (showWork && evidence) {
         showWork.onclick = function () {
           evidence.hidden = !evidence.hidden;
+          showWork.textContent = evidence.hidden ? 'Show the work ⌕' : 'Hide the work ⌕';
+          if (!evidence.hidden) evidence.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         };
       }
       var composer = drillCard.querySelector('#driver-composer');
@@ -977,12 +1035,8 @@
           var message = String(input.value || '').trim();
           if (!message) return;
           var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '—') + '% of plan): ' + message;
-          pushThreadMessage('user', prompt);
-          pushThreadMessage('assistant', buildAssistantReply(prompt));
+          askAssistant(prompt);
           input.value = '';
-          state.drawerOpen = true;
-          renderTopbar();
-          renderAssistantStudio();
         });
       }
     }
@@ -998,21 +1052,13 @@
       ].join("");
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
-          var prompt = button.getAttribute("data-chat-prompt") || "";
-          pushThreadMessage("user", prompt);
-          pushThreadMessage("assistant", buildAssistantReply(prompt));
-          renderAssistantStudio();
+          askAssistant(button.getAttribute("data-chat-prompt") || "");
         };
       });
       safeArray(gravityPanel.querySelectorAll('[data-vlog-topic]')).forEach(function (button) {
         button.onclick = function () {
           var topic = button.getAttribute('data-vlog-topic') || '';
-          var prompt = 'From the Leaders’ Corner reel “' + topic + '” — how does this apply to Mizan right now?';
-          pushThreadMessage('user', prompt);
-          pushThreadMessage('assistant', buildAssistantReply(prompt));
-          state.drawerOpen = true;
-          renderTopbar();
-          renderAssistantStudio();
+          askAssistant('From the Leaders’ Corner reel “' + topic + '” — how does this apply to Mizan right now?');
         };
       });
     }
@@ -1122,7 +1168,11 @@
       return items.map(function (item, index) {
         var key = kind + ':' + index;
         var open = state.openDriverNoteKey === key;
-        return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span><span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + '</div>' : '');
+        var actionPrompt = kind === 'development'
+          ? 'Project the impact on plan for “' + firstDefined(item.title, 'this development') + '”.'
+          : 'Explain the evidence behind “' + firstDefined(item.title, 'this finding') + '”.';
+        var actionLabel = kind === 'development' ? 'Project impact on plan' : 'Ask why this matters';
+        return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span><span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + '<div class="rail-toggle__actions"><button type="button" class="rail-inline-action" data-rail-prompt="' + escapeHtml(actionPrompt) + '">' + escapeHtml(actionLabel) + '</button></div></div>' : '');
       }).join('');
     };
 
@@ -1148,6 +1198,12 @@
             renderLowerRailFidelity();
           };
         });
+        safeArray(panel && panel.querySelectorAll('[data-rail-prompt]')).forEach(function (button) {
+          button.onclick = function (event) {
+            event.stopPropagation();
+            askAssistant(button.getAttribute('data-rail-prompt') || '');
+          };
+        });
       });
       safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {
         button.onclick = function () {
@@ -1157,10 +1213,7 @@
       });
       safeArray(weekPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
-          var prompt = button.getAttribute("data-chat-prompt") || "";
-          pushThreadMessage("user", prompt);
-          pushThreadMessage("assistant", buildAssistantReply(prompt));
-          renderAssistantStudio();
+          askAssistant(button.getAttribute("data-chat-prompt") || "");
         };
       });
       var weekComposer = weekPanel.querySelector('#week-composer');
@@ -1170,12 +1223,8 @@
           event.preventDefault();
           var message = String(weekInput.value || '').trim();
           if (!message) return;
-          pushThreadMessage('user', 'For “' + firstDefined(activeEvent.title, 'this event') + '”: ' + message);
-          pushThreadMessage('assistant', buildAssistantReply(message));
+          askAssistant('For “' + firstDefined(activeEvent.title, 'this event') + '”: ' + message);
           weekInput.value = '';
-          state.drawerOpen = true;
-          renderTopbar();
-          renderAssistantStudio();
         });
       }
     }
@@ -1338,7 +1387,7 @@
       safeArray(threadList.querySelectorAll("[data-thread-new]")) .forEach(function (button) {
         button.onclick = function () {
           createWritableThread();
-          renderAssistantStudio();
+          openAssistantDrawer();
         };
       });
       safeArray(threadList.querySelectorAll("[data-thread-key]")).forEach(function (button) {
@@ -1362,15 +1411,20 @@
       safeArray(threadTools.querySelectorAll('[data-thread-new-inline]')).forEach(function (button) {
         button.onclick = function () {
           createWritableThread();
-          renderAssistantStudio();
+          openAssistantDrawer();
         };
       });
     }
 
     if (messages) {
-      messages.innerHTML = safeArray(current && current.messages).map(function (message) {
-        return '<div class="assistant-message assistant-message--' + escapeHtml(firstDefined(message.role, 'assistant')) + '"><span class="assistant-message__role">' + escapeHtml(firstDefined(message.role, 'assistant')) + ' · ' + escapeHtml(friendlyThreadTime(firstDefined(message.timestamp, 'now'))) + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p></div>';
-      }).join("");
+      var visibleMessages = safeArray(current && current.messages).filter(function (message) {
+        return String(firstDefined(message && message.text, '')).trim().length > 0;
+      });
+      messages.innerHTML = visibleMessages.length ? visibleMessages.map(function (message) {
+        var role = firstDefined(message.role, 'assistant');
+        var roleLabel = role === 'user' ? 'You' : assistantName;
+        return '<div class="assistant-message assistant-message--' + escapeHtml(role) + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + ' · ' + escapeHtml(friendlyThreadTime(firstDefined(message.timestamp, 'now'))) + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p></div>';
+      }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No visible messages yet</span><p>Start a writable thread and the reply will appear here immediately.</p></div>';
       messages.scrollTop = messages.scrollHeight;
     }
 
@@ -1380,10 +1434,7 @@
       }).join("");
       safeArray(promptRow.querySelectorAll("[data-assistant-prompt]")).forEach(function (button) {
         button.onclick = function () {
-          var prompt = button.getAttribute("data-assistant-prompt") || "";
-          pushThreadMessage("user", prompt);
-          pushThreadMessage("assistant", buildAssistantReply(prompt));
-          renderAssistantStudio();
+          askAssistant(button.getAttribute("data-assistant-prompt") || "");
         };
       });
     }
@@ -1473,20 +1524,16 @@
       event.preventDefault();
       var message = String(input.value || "").trim();
       if (!message) return;
-      pushThreadMessage("user", message);
-      pushThreadMessage("assistant", buildAssistantReply(message));
+      askAssistant(message);
       input.value = "";
-      renderAssistantStudio();
     });
   }
 
   function bindViewNav() {
     safeArray(document.querySelectorAll("[data-view-target]")).forEach(function (link) {
-      link.addEventListener("click", function () {
-        state.activeView = link.getAttribute("data-view-target") || "home";
-        renderTopbar();
-        renderViewNav();
-        renderViewPanels();
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+        switchView(link.getAttribute("data-view-target") || "home");
       });
     });
   }

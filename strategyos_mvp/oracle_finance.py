@@ -5,6 +5,7 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+import re
 from typing import Any, Literal, Mapping, Sequence
 
 
@@ -21,6 +22,24 @@ ManualInputType = Literal[
 StorageKind = Literal["file", "manual"]
 
 ORACLE_MODULES: tuple[OracleModule, ...] = ("GL", "AR", "AP", "CE", "FA", "PO", "INV")
+ORACLE_MONTH_ABBREVIATIONS: dict[str, int] = {
+    "JAN": 1,
+    "FEB": 2,
+    "MAR": 3,
+    "APR": 4,
+    "MAY": 5,
+    "JUN": 6,
+    "JUL": 7,
+    "AUG": 8,
+    "SEP": 9,
+    "OCT": 10,
+    "NOV": 11,
+    "DEC": 12,
+}
+ORACLE_MONTH_NAME_PATTERN = re.compile(
+    r"(?i)\b(JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:T(?:EMBER)?)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?)\b[\s\-_]*(\d{2,4})\b"
+)
+MIN_MEANINGFUL_EBITDA = Decimal("0.01")
 MANUAL_INPUT_TYPES: tuple[ManualInputType, ...] = (
     "budget_plan",
     "hedge_register",
@@ -375,7 +394,7 @@ def register_manual_inputs(
             input_name=input_name,
             storage_kind=str(entry.get("storage_kind") or "file"),
             cadence=cadence,
-            period_key=_text(entry.get("period_key")),
+            period_key=_normalize_period_key(_text(entry.get("period_key")), cadence),
             owner_role=_text(entry.get("owner_role")),
             source_uri=_text(entry.get("source_uri")),
             status=str(entry.get("status") or "active"),
@@ -619,6 +638,8 @@ def compute_oracle_pilot_kpis(
         )
     )
 
+    leverage_ratio = _safe_leverage_ratio(net_debt, ebitda)
+
     return OracleKpiComputation(
         reporting_period_key=reporting_period_key,
         reporting_cadence=resolved_cadence,
@@ -640,8 +661,8 @@ def compute_oracle_pilot_kpis(
                 _days_metric(inventory, operating_cost, period_days),
                 _days_metric(payables, operating_cost, period_days),
             ),
-            "net_debt_to_ebitda": _safe_ratio(net_debt, ebitda),
-            "covenant_headroom": _safe_difference(covenant_limit, _safe_ratio(net_debt, ebitda)),
+            "net_debt_to_ebitda": leverage_ratio,
+            "covenant_headroom": _safe_difference(covenant_limit, leverage_ratio),
         },
         components={
             "revenue_actual": revenue,
@@ -1160,7 +1181,7 @@ def _detect_duplicate_payments(facts: Sequence[CanonicalFinanceFact]) -> list[Or
         record = _fact_record(fact)
         invoice_number = _normalized_token(record.get("invoice_num") or record.get("invoice_reference"))
         payment_date = _date(record.get("payment_date"))
-        payment_amount = _decimal(record.get("payment_amount") or record.get("amount_paid") or record.get("amount"))
+        payment_amount = _payment_amount(record, fact)
         currency = str(record.get("currency") or fact.currency or "SAR").upper()
         if not invoice_number or payment_date is None or payment_amount in (None, Decimal("0")):
             continue
@@ -1171,7 +1192,7 @@ def _detect_duplicate_payments(facts: Sequence[CanonicalFinanceFact]) -> list[Or
     for _, matched_facts in groups.items():
         if len(matched_facts) < 2:
             continue
-        amounts = [_decimal(_fact_record(fact).get("payment_amount") or fact.amount_value) or Decimal("0") for fact in matched_facts]
+        amounts = [_payment_amount(_fact_record(fact), fact) or Decimal("0") for fact in matched_facts]
         duplicate_value = sum(amounts, Decimal("0")) - max(amounts)
         if duplicate_value <= Decimal("0"):
             continue
@@ -1218,7 +1239,7 @@ def _detect_entity_resolution_duplicates(facts: Sequence[CanonicalFinanceFact]) 
             continue
         record = _fact_record(fact)
         invoice_number = _normalized_token(record.get("invoice_num") or record.get("invoice_reference"))
-        payment_amount = _decimal(record.get("payment_amount") or record.get("amount_paid") or record.get("amount"))
+        payment_amount = _payment_amount(record, fact)
         shared_key = _shared_entity_key(record)
         currency = str(record.get("currency") or fact.currency or "SAR").upper()
         if not invoice_number or payment_amount in (None, Decimal("0")) or shared_key is None:
@@ -1230,7 +1251,7 @@ def _detect_entity_resolution_duplicates(facts: Sequence[CanonicalFinanceFact]) 
         vendor_ids = {str(_fact_record(fact).get("vendor_id") or "unknown") for fact in matched_facts}
         if len(matched_facts) < 2 or len(vendor_ids) < 2:
             continue
-        amounts = [_decimal(_fact_record(fact).get("payment_amount") or fact.amount_value) or Decimal("0") for fact in matched_facts]
+        amounts = [_payment_amount(_fact_record(fact), fact) or Decimal("0") for fact in matched_facts]
         duplicate_value = sum(amounts, Decimal("0")) - max(amounts)
         if duplicate_value <= Decimal("0"):
             continue
@@ -1533,9 +1554,12 @@ def _detect_fx_hedge_not_applied(
             continue
         matching_hedges = [entry for entry in hedge_entries if _hedge_matches(entry, record, currency)]
         hedge_rate = _first_decimal(matching_hedges, "hedged_rate", "contracted_rate", "rate")
-        if hedge_rate is None or applied_fx_rate <= hedge_rate:
+        if hedge_rate is None:
             continue
-        recoverable = (applied_fx_rate - hedge_rate) * foreign_amount
+        fx_impact = _fx_hedge_impact(record, foreign_amount, applied_fx_rate, hedge_rate)
+        if fx_impact is None:
+            continue
+        recoverable = fx_impact["recoverable"]
         evidence: list[OracleLeakageEvidence] = [
             _fact_evidence(fact, fields=("invoice_num", "vendor_id", "currency", "foreign_amount", "applied_fx_rate", "spot_rate"))
         ]
@@ -1556,7 +1580,8 @@ def _detect_fx_hedge_not_applied(
                     "foreign_amount": foreign_amount,
                     "applied_fx_rate": applied_fx_rate,
                     "hedged_rate": hedge_rate,
-                    "recoverable_formula": "(applied_fx_rate - hedged_rate) * foreign_amount",
+                    "quote_direction": fx_impact["quote_direction"],
+                    "recoverable_formula": fx_impact["recoverable_formula"],
                 },
                 evidence=evidence,
                 challenge_points=(
@@ -1631,6 +1656,15 @@ def _fact_record(fact: CanonicalFinanceFact | None) -> dict[str, Any]:
     return record
 
 
+def _payment_amount(record: Mapping[str, Any], fact: CanonicalFinanceFact | None = None) -> Decimal | None:
+    return _decimal(
+        record.get("payment_amount")
+        or record.get("amount_paid")
+        or record.get("amount")
+        or (fact.amount_value if fact is not None else None)
+    )
+
+
 def _manual_collection_entries(
     records: Sequence[ManualInputRecord],
     collection_keys: Sequence[str],
@@ -1683,12 +1717,41 @@ def _off_contract_benchmark(
 ) -> Decimal | None:
     quantity = _decimal(record.get("quantity") or record.get("qty"))
     contract_unit_price = _first_decimal(contracts, "unit_price", "contract_unit_price", "approved_unit_price")
-    if quantity not in (None, Decimal("0")) and contract_unit_price is not None:
+    if quantity is not None and quantity > Decimal("0") and contract_unit_price is not None:
         return contract_unit_price * quantity
     savings_pct = _first_decimal(contracts, "off_contract_savings_pct", "negotiated_discount_pct")
     if savings_pct is None:
         return None
     return invoice_amount * (Decimal("1") - (savings_pct / Decimal("100")))
+
+
+def _fx_hedge_impact(
+    record: Mapping[str, Any],
+    foreign_amount: Decimal,
+    applied_fx_rate: Decimal,
+    hedge_rate: Decimal,
+) -> dict[str, Any] | None:
+    invoice_amount = _decimal(record.get("invoice_amount") or record.get("amount"))
+    if invoice_amount is not None and invoice_amount > Decimal("0") and applied_fx_rate != Decimal("0") and hedge_rate != Decimal("0"):
+        divisor_amount = foreign_amount / applied_fx_rate
+        multiplier_amount = foreign_amount * applied_fx_rate
+        if abs(divisor_amount - invoice_amount) < abs(multiplier_amount - invoice_amount):
+            recoverable = (foreign_amount / applied_fx_rate) - (foreign_amount / hedge_rate)
+            if recoverable <= Decimal("0"):
+                return None
+            return {
+                "quote_direction": "foreign_per_reporting_divisor",
+                "recoverable": recoverable,
+                "recoverable_formula": "(foreign_amount / applied_fx_rate) - (foreign_amount / hedged_rate)",
+            }
+    recoverable = (applied_fx_rate - hedge_rate) * foreign_amount
+    if recoverable <= Decimal("0"):
+        return None
+    return {
+        "quote_direction": "reporting_per_foreign_multiplier",
+        "recoverable": recoverable,
+        "recoverable_formula": "(applied_fx_rate - hedged_rate) * foreign_amount",
+    }
 
 
 def _hedge_matches(entry: Mapping[str, Any], record: Mapping[str, Any], currency: str) -> bool:
@@ -1899,7 +1962,7 @@ def _period_from_row(
 
 
 def _derive_period_key(row: Mapping[str, Any], cadence: Cadence) -> str:
-    explicit = _text(row.get("period_key")) or _text(row.get("period_name"))
+    explicit = _normalize_period_key(_text(row.get("period_key")) or _text(row.get("period_name"),), cadence)
     if explicit:
         return explicit
     value = _date(row.get("event_date")) or _date(row.get("as_of_date")) or _date(row.get("period_start"))
@@ -2139,6 +2202,14 @@ def _safe_ratio(numerator: Decimal | None, denominator: Decimal | None) -> Decim
     return numerator / denominator
 
 
+def _safe_leverage_ratio(numerator: Decimal | None, denominator: Decimal | None) -> Decimal | None:
+    if numerator is None or denominator is None:
+        return None
+    if denominator <= Decimal("0") or abs(denominator) < MIN_MEANINGFUL_EBITDA:
+        return None
+    return numerator / denominator
+
+
 def _safe_difference(left: Decimal | None, right: Decimal | None) -> Decimal | None:
     if left is None or right is None:
         return None
@@ -2190,12 +2261,11 @@ def _resolve_period_bounds(
             start = period_start or date.today()
         return start, period_end or (start + timedelta(days=6))
     if cadence == "monthly":
-        if period_key and len(period_key) >= 7 and period_key[4] == "-":
-            year = int(period_key[:4])
-            month = int(period_key[5:7])
-            start = period_start or date(year, month, 1)
-            last_day = calendar.monthrange(year, month)[1]
-            return start, period_end or date(year, month, last_day)
+        monthly_start = _monthly_period_start(period_key)
+        if monthly_start is not None:
+            start = period_start or monthly_start
+            last_day = calendar.monthrange(monthly_start.year, monthly_start.month)[1]
+            return start, period_end or date(monthly_start.year, monthly_start.month, last_day)
     if cadence == "quarterly" and "-Q" in period_key:
         year = int(period_key[:4])
         quarter = int(period_key.split("-Q", 1)[1])
@@ -2206,6 +2276,50 @@ def _resolve_period_bounds(
         return start, period_end or date(year, end_month, last_day)
     resolved = period_start or _date(period_key) or date.today()
     return resolved, period_end or resolved
+
+
+def _monthly_period_start(period_key: str) -> date | None:
+    if not period_key:
+        return None
+    normalized = period_key.strip()
+    if len(normalized) >= 7 and normalized[4] == "-":
+        try:
+            return date(int(normalized[:4]), int(normalized[5:7]), 1)
+        except ValueError:
+            pass
+    month_token, _, year_token = normalized.upper().partition("-")
+    if month_token in ORACLE_MONTH_ABBREVIATIONS and year_token:
+        year_value = _oracle_two_or_four_digit_year(year_token)
+        if year_value is not None:
+            return date(year_value, ORACLE_MONTH_ABBREVIATIONS[month_token], 1)
+    match = ORACLE_MONTH_NAME_PATTERN.search(normalized)
+    if match:
+        month_value = ORACLE_MONTH_ABBREVIATIONS.get(match.group(1)[:3].upper())
+        year_value = _oracle_two_or_four_digit_year(match.group(2))
+        if month_value is not None and year_value is not None:
+            return date(year_value, month_value, 1)
+    return None
+
+
+def _normalize_period_key(period_key: str | None, cadence: Cadence) -> str | None:
+    if not period_key:
+        return None
+    normalized = period_key.strip()
+    if cadence == "monthly":
+        monthly_start = _monthly_period_start(normalized)
+        if monthly_start is not None:
+            return f"{monthly_start.year}-{monthly_start.month:02d}"
+    return normalized
+
+
+def _oracle_two_or_four_digit_year(value: str) -> int | None:
+    if not value.isdigit():
+        return None
+    if len(value) == 4:
+        return int(value)
+    if len(value) == 2:
+        return 2000 + int(value)
+    return None
 
 
 def _infer_cadence_from_period_key(period_key: str) -> Cadence:

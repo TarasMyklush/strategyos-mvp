@@ -8,7 +8,7 @@ import tempfile
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import quote, urlparse
 from uuid import UUID
 
@@ -241,6 +241,8 @@ RESTRICTED_ARTIFACT_PATH_MARKERS = (
 )
 PUBLIC_REPORT_ARTIFACT_KEYS = ("working_capital", "summary")
 PUBLIC_EVIDENCE_EXCERPT_LIMIT = 600
+ORACLE_INGEST_MAX_EXTRACT_BYTES = 2_000_000
+ORACLE_INGEST_MAX_MANUAL_INPUT_BYTES = 250_000
 UI_LIFECYCLE_STAGES: list[tuple[str, str]] = [
     ("created", "Created"),
     ("ingest", "Ingest"),
@@ -549,6 +551,20 @@ def _anonymous_public_summary(summary: dict[str, Any] | None) -> dict[str, Any] 
     return payload
 
 
+def _public_latest_run_audit_summary_payload(
+    summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {"status": "missing", "public_safe": True}
+    return {
+        "status": "ok",
+        "run_id": ANONYMOUS_PUBLIC_RUN_ID,
+        "citation_count": None,
+        "resolved_count": None,
+        "public_safe": True,
+    }
+
+
 def _anonymous_public_case_title(row: dict[str, Any], *, index: int) -> str:
     label = str(row.get("pattern_label") or row.get("pattern_type") or "Governed case").strip()
     if not label:
@@ -628,8 +644,6 @@ def _sanitize_anonymous_public_payload(value: Any) -> Any:
             return None
         if "/public/data/evidence-preview?" in lowered:
             return "/public/data/evidence-preview"
-        if "premier packaging" in lowered:
-            return "Governed signal"
         if "invoice " in lowered or "inv-" in lowered:
             return "Governed signal"
     return value
@@ -6548,10 +6562,7 @@ def public_latest_run(
 
 @app.get("/public/runs/latest/audit-summary")
 def public_latest_run_audit_summary() -> dict[str, Any]:
-    payload = _latest_run_audit_summary_payload(_latest_summary())
-    payload.pop("run_dir", None)
-    payload["public_safe"] = True
-    return payload
+    return _public_latest_run_audit_summary_payload(_latest_summary())
 
 
 @app.get("/health")
@@ -7097,7 +7108,13 @@ def ingest_oracle_finance_snapshot(
         "operator", "tenant_operator", "tenant_admin", "system"
     ),
 ) -> dict[str, Any]:
-    tenant_id = str(request.tenant_id)
+    if not CONFIG.oracle_pilot_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Oracle pilot ingest is disabled by rollout flag.",
+        )
+    _enforce_oracle_ingest_limits(request)
+    tenant_id = _authorized_oracle_ingest_tenant_id(request, principal)
     batch_id = str(request.batch_id) if request.batch_id else None
     source_system_id = str(request.source_system_id) if request.source_system_id else None
 
@@ -7130,6 +7147,46 @@ def ingest_oracle_finance_snapshot(
     }
 
 
+def _authorized_oracle_ingest_tenant_id(
+    request: OracleFinanceIngestionRequest,
+    principal: Mapping[str, Any],
+) -> str:
+    requested_tenant_id = str(request.tenant_id)
+    principal_tenant_id = str(principal.get("tenant_id") or "").strip()
+    principal_role = str(principal.get("role") or "")
+    if principal_role == "system":
+        return requested_tenant_id
+    if not principal_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="An authenticated tenant scope is required for Oracle ingest.",
+        )
+    if not _is_uuid_like(principal_tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Oracle ingest requires a UUID-scoped authenticated tenant identity; "
+                "slug-scoped tenant identities cannot safely authorize this write path."
+            ),
+        )
+    if principal_tenant_id != requested_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The requested tenant_id does not match the authenticated tenant scope.",
+        )
+    return principal_tenant_id
+
+
+def _is_uuid_like(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        UUID(str(value))
+    except (TypeError, ValueError, AttributeError):
+        return False
+    return True
+
+
 def _oracle_pilot_rollout_flags() -> dict[str, bool]:
     return {
         "pilot_enabled": bool(CONFIG.oracle_pilot_enabled),
@@ -7137,6 +7194,26 @@ def _oracle_pilot_rollout_flags() -> dict[str, bool]:
         "cfo_surface_enabled": bool(CONFIG.oracle_pilot_cfo_surface_enabled),
         "rollback_ready": bool(CONFIG.oracle_pilot_rollback_ready),
     }
+
+
+def _oracle_ingest_payload_bytes(payload: Any) -> int:
+    return len(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+
+
+def _enforce_oracle_ingest_limits(request: OracleFinanceIngestionRequest) -> None:
+    extract_bytes = _oracle_ingest_payload_bytes(request.extracts)
+    if extract_bytes > ORACLE_INGEST_MAX_EXTRACT_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Oracle ingest extracts exceed {ORACLE_INGEST_MAX_EXTRACT_BYTES} bytes.",
+        )
+    manual_inputs = request.manual_inputs or []
+    manual_input_bytes = _oracle_ingest_payload_bytes(manual_inputs)
+    if manual_input_bytes > ORACLE_INGEST_MAX_MANUAL_INPUT_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Oracle ingest manual_inputs exceed {ORACLE_INGEST_MAX_MANUAL_INPUT_BYTES} bytes.",
+        )
 
 
 @app.post("/finance/oracle/validate")

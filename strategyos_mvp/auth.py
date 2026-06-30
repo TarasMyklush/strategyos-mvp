@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 from urllib import error, parse, request
 from typing import Any
@@ -172,7 +173,7 @@ def _proxy_principal_from_headers(request_headers: dict[str, str]) -> dict[str, 
     if not expected_secret:
         return None
     received_secret = _extract_proxy_header(request_headers, TRUSTED_PROXY_HEADER_NAME)
-    if received_secret != expected_secret:
+    if not received_secret or not hmac.compare_digest(received_secret, expected_secret):
         return None
     email = _extract_proxy_header(request_headers, *PROXY_EMAIL_HEADERS)
     role = _role_for_proxy_email(email)

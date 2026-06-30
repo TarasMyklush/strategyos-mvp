@@ -315,7 +315,88 @@ def test_phase13_leakage_engine_does_not_regress_kpi_computation_boundary():
     assert computation.computation_boundary.startswith("Deterministic Oracle KPI computation only")
 
 
-def test_phase13_plan_data_keeps_phase13_complete_after_final_oracle_closeout():
+def test_phase13_duplicate_payment_uses_same_amount_chain_for_grouping_and_recovery_math():
+    snapshot = ingest_oracle_pilot_extracts(
+        load_pilot_extract_batch(
+            {
+                "AP": [
+                    {"natural_key": "dup-a", "fact_type": "payment", "amount_paid": "500", "currency": "SAR", "invoice_num": "DUP-AMOUNT", "payment_date": "2026-06-10", "vendor_id": "V100"},
+                    {"natural_key": "dup-b", "fact_type": "payment", "amount_paid": "500", "currency": "SAR", "invoice_num": "DUP-AMOUNT", "payment_date": "2026-06-11", "vendor_id": "V100"},
+                ]
+            }
+        ),
+        bu_mapping=_mapping(),
+    )
+
+    review = compute_oracle_pilot_leakage(snapshot, reporting_period_key="2026-06")
+
+    duplicate = next(finding for finding in review.findings if finding.pattern_type == "duplicate_payment")
+    assert duplicate.recoverable_sar == Decimal("500")
+
+
+def test_phase13_fx_hedge_detector_handles_divisor_quote_direction():
+    snapshot = ingest_oracle_pilot_extracts(
+        load_pilot_extract_batch(
+            {
+                "AP": [
+                    {
+                        "natural_key": "fx-divisor",
+                        "fact_type": "invoice",
+                        "amount": "200",
+                        "invoice_amount": "200",
+                        "currency": "JPY",
+                        "invoice_num": "FX-DIV-001",
+                        "invoice_date": "2026-06-16",
+                        "vendor_id": "V700",
+                        "foreign_amount": "1000",
+                        "applied_fx_rate": "5",
+                    }
+                ]
+            }
+        ),
+        bu_mapping=_mapping(),
+        manual_inputs=[{"input_key": "hedges-june", "input_type": "hedge_register", "input_name": "June hedge register", "storage_kind": "file", "period_key": "2026-06", "hedges": [{"hedge_id": "H-700", "invoice_num": "FX-DIV-001", "vendor_id": "V700", "currency": "JPY", "hedged_rate": "10"}]}],
+        reporting_currency="USD",
+    )
+
+    review = compute_oracle_pilot_leakage(snapshot, reporting_period_key="2026-06")
+
+    fx_finding = next(finding for finding in review.findings if finding.pattern_type == "fx_hedge_not_applied")
+    assert fx_finding.recoverable_sar == Decimal("100")
+    assert fx_finding.calculation["quote_direction"] == "foreign_per_reporting_divisor"
+
+
+def test_phase13_off_contract_detector_does_not_inflate_negative_quantities():
+    snapshot = ingest_oracle_pilot_extracts(
+        load_pilot_extract_batch(
+            {
+                "AP": [
+                    {
+                        "natural_key": "off-negative-qty",
+                        "fact_type": "invoice",
+                        "amount": "1000",
+                        "invoice_amount": "1000",
+                        "currency": "SAR",
+                        "invoice_num": "OFF-NEG-001",
+                        "invoice_date": "2026-06-09",
+                        "vendor_id": "V300",
+                        "vendor_name": "Gamma Tech",
+                        "category": "IT",
+                        "quantity": "-10",
+                    }
+                ]
+            }
+        ),
+        bu_mapping=_mapping(),
+        manual_inputs=[{"input_key": "contracts-june", "input_type": "contract_registry", "input_name": "June contract registry", "storage_kind": "file", "period_key": "2026-06", "contracts": [{"contract_id": "C-300", "vendor_id": "V300", "vendor_name": "Gamma Tech", "category": "IT", "start_date": "2026-01-01", "end_date": "2026-12-31", "unit_price": "100"}]}],
+    )
+
+    review = compute_oracle_pilot_leakage(snapshot, reporting_period_key="2026-06")
+
+    assert all(finding.pattern_type != "off_contract_spend" for finding in review.findings)
+
+
+def test_phase13_plan_data_keeps_closed_leakage_phase_truthful_while_hosted_fixup_stays_open():
     plan_file = (
         Path(__file__).resolve().parents[1]
         / "strategyos_mvp"
@@ -323,11 +404,9 @@ def test_phase13_plan_data_keeps_phase13_complete_after_final_oracle_closeout():
         / "plan_data.js"
     )
     text = plan_file.read_text(encoding="utf-8")
-    phase13_block = text.split('id: "phase-13"', 1)[1].split('id: "phase-14"', 1)[0]
-    phase14_block = text.split('id: "phase-14"', 1)[1].split('id: "phase-15"', 1)[0]
-
-    assert 'updated: "2026-06-29"' in text
-    assert 'overallStatus: "completed"' in text
-    assert 'status: "completed"' in phase13_block
-    assert phase13_block.count('status: "completed"') >= 6
-    assert 'status: "completed"' in phase14_block
+    assert 'updated: "2026-06-30"' in text
+    assert 'Reviewed backend correctness sweep shipped' in text
+    assert 'FX hedge quote direction inferred instead of assumed.' in text
+    assert 'Negative-quantity inflation blocked in recoverable math.' in text
+    assert 'id: "ORACLE-VERIFY"' in text
+    assert 'status: "in_progress"' in text

@@ -2,9 +2,9 @@
   window.STRATEGYOS_PLAN = {
     updated: "2026-06-30",
     liveStatus: {
-      state: "Source corrected to the exact six-section tracker structure; main handoff, deploy, and hosted re-verification are still pending.",
+      state: "CEO interactivity tranche is staged locally around the five highest-leverage defects; deploy and hosted re-verification are still pending.",
       lastVerified: "2026-06-30",
-      note: "Current truth: this local source now matches the required tracker shape, but strategyos.live is not yet re-verified against it."
+      note: "Current truth: source is prepared for BUG-001/002/003/004/008 and the tracker is narrowed to that tranche, but strategyos.live is not yet re-verified against the new assets."
     },
     criticalBlockers: [
       {
@@ -17,7 +17,7 @@
         id: "BLK-002",
         title: "CEO interaction defects still keep the tranche open",
         status: "in_progress",
-        detail: "Navigation, Hermes panel, prompt, evidence, inline ask, chart, and feedback defects remain active execution work."
+        detail: "This live tranche is intentionally narrowed to BUG-001/002/003/004/008 until hosted proof is captured."
       },
       {
         id: "BLK-003",
@@ -27,19 +27,11 @@
       }
     ],
     activeActionItems: [
-      { id: "BUG-001", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Fix broken Assistants and Knowledge nav tabs." },
-      { id: "BUG-002", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Fix Hermes conversation panel overflow and broken layout." },
-      { id: "BUG-003", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Fix the broken new conversation button." },
-      { id: "BUG-004", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Fix suggested question chips so they trigger usable prompts." },
-      { id: "BUG-007", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Fix the broken show-the-work action." },
-      { id: "BUG-008", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Fix inline Ask so send produces a visible response instead of clearing silently." },
-      { id: "UX-002", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Add axes, markers, and usable tooltips to charts." },
-      { id: "UX-003", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Add a clear and usable scroll affordance in the Hermes panel." },
-      { id: "UX-004", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Show an explicit GM note availability state." },
-      { id: "UX-005", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Make the send-and-receive affordance real or remove it." },
-      { id: "UX-006", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Add a visible label or tooltip to the theme toggle." },
-      { id: "UX-007", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Remove orphaned Hermes sender labels and empty message bubbles." },
-      { id: "UX-008", assignee: "Frontend", status: "in_progress", percentDone: 50, description: "Add a feedback or report-bug escape hatch." },
+      { id: "BUG-001", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Make Assistants and Knowledge nav tabs switch the live CEO surface reliably and accessibly." },
+      { id: "BUG-002", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Fix Hermes drawer overflow/layout so thread lists and conversation bodies stay reachable." },
+      { id: "BUG-003", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Restore New conversation so it opens a distinct writable thread with visible state." },
+      { id: "BUG-004", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Wire suggested question chips into the same visible Hermes reply flow as manual asks." },
+      { id: "BUG-008", assignee: "Frontend", status: "in_progress", percentDone: 85, description: "Make inline Ask produce a visible reply instead of clearing the composer silently." },
       { id: "ORACLE-VERIFY", assignee: "Release + QA", status: "in_progress", percentDone: 50, description: "Redeploy and live-verify the reviewed Oracle correctness sweep." },
       { id: "SEC-001", assignee: "Backend", status: "in_progress", percentDone: 50, description: "Replace proxy-secret equality checks with constant-time comparison in auth.py." },
       { id: "SEC-002", assignee: "Backend", status: "in_progress", percentDone: 50, description: "Remove the hardcoded public-scrub literal and rely on explicit allow-listing." }
@@ -56,7 +48,7 @@
         {
           label: "Hosted active tranche table shows ID, description, assignee, status, and %done.",
           result: "fail",
-          note: "Corrected in local source only until redeploy is complete."
+          note: "The tracker now narrows active frontend work to BUG-001/002/003/004/008, but that remains local until redeploy is complete."
         },
         {
           label: "Hosted tracker still represents CEO interaction defects, Oracle verification, and security findings truthfully.",
@@ -69,8 +61,16 @@
       title: "Later hardening / backlog",
       summary: "Open items not active in this tranche stay here, sorted by priority.",
       rows: [
+        { id: "BUG-007", priority: "high", status: "open", title: "Fix the broken show-the-work action" },
         { id: "BUG-005", priority: "high", status: "open", title: "Fix findings expand buttons" },
         { id: "BUG-006", priority: "high", status: "open", title: "Fix broken developments projection rows" },
+        { id: "UX-002", priority: "medium", status: "open", title: "Add axes, markers, and usable tooltips to charts" },
+        { id: "UX-003", priority: "medium", status: "open", title: "Add a clear and usable scroll affordance in the Hermes panel" },
+        { id: "UX-004", priority: "medium", status: "open", title: "Show an explicit GM note availability state" },
+        { id: "UX-005", priority: "medium", status: "open", title: "Make the send-and-receive affordance real or remove it" },
+        { id: "UX-006", priority: "medium", status: "open", title: "Add a visible label or tooltip to the theme toggle" },
+        { id: "UX-007", priority: "medium", status: "open", title: "Remove orphaned Hermes sender labels and empty message bubbles" },
+        { id: "UX-008", priority: "medium", status: "open", title: "Add a feedback or report-bug escape hatch" },
         { id: "UX-001", priority: "medium", status: "open", title: "Move or restyle the floating Hermes button so it stops obscuring KPI data" },
         { id: "COPY-001", priority: "medium", status: "open", title: "Tighten the oversized headline and adjacent copy already in scope" }
       ]

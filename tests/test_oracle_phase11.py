@@ -70,6 +70,8 @@ def _oracle_ingestion_env(tmp_path) -> dict[str, str]:
         **_phase10_env(tmp_path),
         "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
         "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        "STRATEGYOS_SYSTEM_API_KEYS": "system-secret",
+        "STRATEGYOS_ORACLE_PILOT_ENABLED": "true",
     }
 
 
@@ -439,7 +441,12 @@ def test_persist_oracle_snapshot_returns_auditable_metadata_and_upsert_counts(mo
 
 
 def test_oracle_ingestion_endpoint_requires_operator_and_returns_auditable_counts(tmp_path, monkeypatch):
-    original = _apply_env(_oracle_ingestion_env(tmp_path))
+    original = _apply_env(
+        {
+            **_oracle_ingestion_env(tmp_path),
+            "STRATEGYOS_TENANT_SLUG": "11111111-1111-1111-1111-111111111111",
+        }
+    )
     captured: dict[str, object] = {}
     payload = {
         "tenant_id": "11111111-1111-1111-1111-111111111111",
@@ -529,7 +536,64 @@ def test_oracle_ingestion_endpoint_requires_operator_and_returns_auditable_count
         _restore_env(original)
 
 
-def test_plan_data_marks_phase15_complete_with_overall_status_closed():
+def test_oracle_ingestion_endpoint_rejects_when_pilot_flag_is_disabled(tmp_path):
+    original = _apply_env(
+        {**_oracle_ingestion_env(tmp_path), "STRATEGYOS_ORACLE_PILOT_ENABLED": "false"}
+    )
+    payload = {
+        "tenant_id": "11111111-1111-1111-1111-111111111111",
+        "bu_mapping": {
+            "segment_name": "segment2",
+            "segment_index": 1,
+            "value_to_bu": {"BU01": "Consumer"},
+        },
+        "extracts": {"GL": [{"natural_key": "gl-1", "amount": "10", "period_name": "2026-06"}]},
+    }
+    try:
+        response = client.post(
+            "/finance/oracle/ingest",
+            headers=_auth("operator-secret"),
+            json=payload,
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"] == "Oracle pilot ingest is disabled by rollout flag."
+    finally:
+        _restore_env(original)
+
+
+def test_oracle_ingestion_endpoint_rejects_oversized_manual_inputs(tmp_path):
+    original = _apply_env(_oracle_ingestion_env(tmp_path))
+    payload = {
+        "tenant_id": "11111111-1111-1111-1111-111111111111",
+        "bu_mapping": {
+            "segment_name": "segment2",
+            "segment_index": 1,
+            "value_to_bu": {"BU01": "Consumer"},
+        },
+        "extracts": {"GL": [{"natural_key": "gl-1", "amount": "10", "period_name": "2026-06"}]},
+        "manual_inputs": [
+            {
+                "input_type": "budget_plan",
+                "input_name": "Budget",
+                "storage_kind": "file",
+                "source_uri": "s3://pilot/budget.xlsx",
+                "note": "X" * 300000,
+            }
+        ],
+    }
+    try:
+        response = client.post(
+            "/finance/oracle/ingest",
+            headers=_auth("operator-secret"),
+            json=payload,
+        )
+        assert response.status_code == 413
+        assert response.json()["detail"] == "Oracle ingest manual_inputs exceed 250000 bytes."
+    finally:
+        _restore_env(original)
+
+
+def test_plan_data_keeps_oracle_roadmap_complete_while_hosted_corrective_tranche_stays_open():
     plan_file = (
         Path(__file__).resolve().parents[1]
         / "strategyos_mvp"
@@ -537,22 +601,14 @@ def test_plan_data_marks_phase15_complete_with_overall_status_closed():
         / "plan_data.js"
     )
     text = plan_file.read_text(encoding="utf-8")
-    phase1_block = text.split('id: "phase-1"', 1)[1].split('id: "phase-2"', 1)[0]
-    assert 'status: "completed"' in phase1_block
-    phase11_block = text.split('id: "phase-11"', 1)[1].split('id: "phase-12"', 1)[0]
-    assert 'id: "phase-11"' in text
-    assert 'status: "completed"' in phase11_block
-    assert 'id: "12.1"' in text
-    assert 'title: "Deterministic KPI calculation engine"' in text
-    phase12_block = text.split('id: "phase-12"', 1)[1].split('id: "phase-13"', 1)[0]
-    assert 'status: "completed"' in phase12_block
-    phase13_block = text.split('id: "phase-13"', 1)[1].split('id: "phase-14"', 1)[0]
-    assert 'status: "completed"' in phase13_block
-    phase14_block = text.split('id: "phase-14"', 1)[1].split('id: "phase-15"', 1)[0]
-    assert 'status: "completed"' in phase14_block
-    phase15_block = text.split('id: "phase-15"', 1)[1]
-    assert 'status: "completed"' in phase15_block
-    assert 'overallStatus: "completed"' in text
+    assert 'updated: "2026-06-30"' in text
+    assert 'id: "DONE-005"' in text
+    assert 'Foundation through Oracle pilot delivery shipped' in text
+    assert 'Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection.' in text
+    assert 'id: "DONE-001"' in text
+    assert 'Reviewed backend correctness sweep shipped' in text
+    assert 'id: "ORACLE-VERIFY"' in text
+    assert 'status: "in_progress"' in text
 
 
 def test_phase0_to_phase10_regression_paths_still_hold(tmp_path):
@@ -572,5 +628,124 @@ def test_phase0_to_phase10_regression_paths_still_hold(tmp_path):
         assert dashboard.status_code == 200
         assert "governance" in status.json()
         assert "reasoning_trace_ids" in investigate.json()["summary"]
+    finally:
+        _restore_env(original)
+
+
+def test_oracle_ingest_rejects_cross_tenant_request_body_for_uuid_scoped_principal(tmp_path, monkeypatch):
+    original = _apply_env(
+        {
+            **_oracle_ingestion_env(tmp_path),
+            "STRATEGYOS_TENANT_SLUG": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        }
+    )
+    captured: dict[str, object] = {}
+    payload = {
+        "tenant_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "extracts": {"GL": []},
+        "bu_mapping": {
+            "segment_name": "Business Unit",
+            "segment_index": 1,
+            "value_to_bu": {},
+        },
+        "manual_inputs": [],
+    }
+
+    def _unexpected_persist(snapshot, *, tenant_id, batch_id=None, source_system_id=None):
+        captured["tenant_id"] = tenant_id
+        return {"status": "ok"}
+
+    monkeypatch.setattr(api_module.state_store, "persist_oracle_canonical_snapshot", _unexpected_persist)
+    try:
+        response = client.post(
+            "/finance/oracle/ingest",
+            headers=_auth("operator-secret"),
+            json=payload,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == (
+            "The requested tenant_id does not match the authenticated tenant scope."
+        )
+        assert captured == {}
+    finally:
+        _restore_env(original)
+
+
+def test_oracle_ingest_rejects_slug_scoped_principal_without_uuid_tenant_binding(tmp_path, monkeypatch):
+    original = _apply_env(
+        {
+            **_oracle_ingestion_env(tmp_path),
+            "STRATEGYOS_TENANT_SLUG": "tenant-alpha",
+        }
+    )
+    captured: dict[str, object] = {}
+    payload = {
+        "tenant_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "extracts": {"GL": []},
+        "bu_mapping": {
+            "segment_name": "Business Unit",
+            "segment_index": 1,
+            "value_to_bu": {},
+        },
+        "manual_inputs": [],
+    }
+
+    def _unexpected_persist(snapshot, *, tenant_id, batch_id=None, source_system_id=None):
+        captured["tenant_id"] = tenant_id
+        return {"status": "ok"}
+
+    monkeypatch.setattr(api_module.state_store, "persist_oracle_canonical_snapshot", _unexpected_persist)
+    try:
+        response = client.post(
+            "/finance/oracle/ingest",
+            headers=_auth("operator-secret"),
+            json=payload,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == (
+            "Oracle ingest requires a UUID-scoped authenticated tenant identity; "
+            "slug-scoped tenant identities cannot safely authorize this write path."
+        )
+        assert captured == {}
+    finally:
+        _restore_env(original)
+
+
+def test_oracle_ingest_allows_system_principal_to_target_explicit_tenant_uuid(tmp_path, monkeypatch):
+    original = _apply_env(
+        {
+            **_oracle_ingestion_env(tmp_path),
+            "STRATEGYOS_TENANT_SLUG": "tenant-alpha",
+        }
+    )
+    captured: dict[str, object] = {}
+    payload = {
+        "tenant_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "extracts": {"GL": []},
+        "bu_mapping": {
+            "segment_name": "Business Unit",
+            "segment_index": 1,
+            "value_to_bu": {},
+        },
+        "manual_inputs": [],
+    }
+
+    def _fake_persist(snapshot, *, tenant_id, batch_id=None, source_system_id=None):
+        captured["tenant_id"] = tenant_id
+        return {"status": "ok", "tenant_id": tenant_id}
+
+    monkeypatch.setattr(api_module.state_store, "persist_oracle_canonical_snapshot", _fake_persist)
+    try:
+        response = client.post(
+            "/finance/oracle/ingest",
+            headers=_auth("system-secret"),
+            json=payload,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["tenant_id"] == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        assert captured["tenant_id"] == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
     finally:
         _restore_env(original)

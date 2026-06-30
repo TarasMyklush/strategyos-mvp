@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 from strategyos_mvp.oracle_finance import (
+    _resolve_period_bounds,
     BUFlexfieldMappingConfig,
     build_oracle_kpi_narration_payload,
     compute_oracle_pilot_kpis,
@@ -244,6 +246,116 @@ def test_phase12_working_capital_respects_weekly_cadence_and_period_days():
     assert computation.metrics["ccc_days"] == Decimal("0.7")
 
 
+def test_phase12_oracle_month_names_resolve_full_month_and_match_iso_reporting_period():
+    assert _resolve_period_bounds("JUN-26", "monthly") == (date(2026, 6, 1), date(2026, 6, 30))
+    assert _resolve_period_bounds("June-26", "monthly") == (date(2026, 6, 1), date(2026, 6, 30))
+    assert _resolve_period_bounds("Jun-26 Adj", "monthly") == (date(2026, 6, 1), date(2026, 6, 30))
+
+    snapshot = ingest_oracle_pilot_extracts(
+        load_pilot_extract_batch(
+            {
+                "GL": [
+                    {"natural_key": "gl-revenue-june-26", "fact_type": "revenue", "amount": "3000", "period_name": "June-26"},
+                    {"natural_key": "gl-ebitda-jun-adj", "fact_type": "ebitda", "amount": "600", "period_name": "Jun-26 Adj"},
+                    {"natural_key": "gl-opex-jun-26", "fact_type": "operating_cost", "amount": "1500", "period_name": "JUN-26"},
+                ],
+                "AR": [{"natural_key": "ar-jun-26", "fact_type": "accounts_receivable_balance", "amount": "300", "event_date": "2026-06-30"}],
+                "AP": [
+                    {"natural_key": "ap-balance-jun-26", "fact_type": "accounts_payable_balance", "amount": "450", "event_date": "2026-06-30"},
+                    {"natural_key": "ap-debt-jun-26", "fact_type": "debt_balance", "amount": "400", "event_date": "2026-06-30"},
+                ],
+                "INV": [{"natural_key": "inv-jun-26", "fact_type": "inventory_balance", "amount": "150", "event_date": "2026-06-30", "cadence": "daily"}],
+                "CE": [{"natural_key": "ce-jun-26", "fact_type": "cash_balance", "amount": "100", "as_of_date": "2026-06-30"}],
+            }
+        ),
+        bu_mapping=_mapping(),
+        reporting_currency="SAR",
+    )
+
+    computation = compute_oracle_pilot_kpis(snapshot, reporting_period_key="2026-06")
+
+    assert computation.period_days == 30
+    assert computation.components["revenue_actual"] == Decimal("3000")
+    assert computation.components["ebitda_actual"] == Decimal("600")
+    assert computation.metrics["dso_days"] == Decimal("3.0")
+    assert computation.metrics["dpo_days"] == Decimal("9.0")
+    assert computation.metrics["dio_days"] == Decimal("3.0")
+    assert computation.metrics["ccc_days"] == Decimal("-3.0")
+
+
+def test_phase12_negative_or_near_zero_ebitda_does_not_emit_leverage_or_covenant_headroom():
+    covenant_input = {
+        "input_key": "covenant-q2",
+        "input_type": "covenant_terms",
+        "input_name": "Q2 covenant",
+        "storage_kind": "file",
+        "period_key": "2026-Q2",
+        "terms": {"max_net_debt_to_ebitda": "3.0"},
+    }
+    negative_snapshot = ingest_oracle_pilot_extracts(
+        load_pilot_extract_batch(
+            {
+                "GL": [{"natural_key": "gl-ebitda-negative", "fact_type": "ebitda", "amount": "-10", "period_name": "2026-06"}],
+                "AP": [{"natural_key": "ap-debt-negative", "fact_type": "debt_balance", "amount": "500", "event_date": "2026-06-30"}],
+                "CE": [{"natural_key": "ce-cash-negative", "fact_type": "cash_balance", "amount": "100", "as_of_date": "2026-06-30"}],
+            }
+        ),
+        bu_mapping=_mapping(),
+        manual_inputs=[covenant_input],
+    )
+    near_zero_snapshot = ingest_oracle_pilot_extracts(
+        load_pilot_extract_batch(
+            {
+                "GL": [{"natural_key": "gl-ebitda-near-zero", "fact_type": "ebitda", "amount": "0.001", "period_name": "2026-06"}],
+                "AP": [{"natural_key": "ap-debt-near-zero", "fact_type": "debt_balance", "amount": "500", "event_date": "2026-06-30"}],
+                "CE": [{"natural_key": "ce-cash-near-zero", "fact_type": "cash_balance", "amount": "100", "as_of_date": "2026-06-30"}],
+            }
+        ),
+        bu_mapping=_mapping(),
+        manual_inputs=[covenant_input],
+    )
+
+    negative = compute_oracle_pilot_kpis(negative_snapshot, reporting_period_key="2026-06")
+    near_zero = compute_oracle_pilot_kpis(near_zero_snapshot, reporting_period_key="2026-06")
+
+    assert negative.metrics["net_debt_to_ebitda"] is None
+    assert negative.metrics["covenant_headroom"] is None
+    assert near_zero.metrics["net_debt_to_ebitda"] is None
+    assert near_zero.metrics["covenant_headroom"] is None
+
+
+def test_phase12_manual_month_inputs_with_oracle_period_names_match_iso_reporting_period():
+    snapshot = ingest_oracle_pilot_extracts(
+        load_pilot_extract_batch(
+            {
+                "GL": [
+                    {"natural_key": "gl-revenue-jun-26", "fact_type": "revenue", "amount": "300", "period_name": "JUN-26"},
+                    {"natural_key": "gl-ebitda-jun-26", "fact_type": "ebitda", "amount": "60", "period_name": "JUN-26"},
+                ]
+            }
+        ),
+        bu_mapping=_mapping(),
+        manual_inputs=[
+            {
+                "input_key": "budget-june",
+                "input_type": "budget_plan",
+                "input_name": "June budget",
+                "storage_kind": "file",
+                "period_key": "June-26",
+                "revenue": "250",
+                "ebitda": "50",
+            }
+        ],
+    )
+
+    computation = compute_oracle_pilot_kpis(snapshot, reporting_period_key="2026-06")
+
+    assert computation.components["revenue_plan"] == Decimal("250")
+    assert computation.components["ebitda_plan"] == Decimal("50")
+    assert computation.metrics["revenue_attainment_pct"] == Decimal("120")
+    assert computation.metrics["ebitda_attainment_pct"] == Decimal("120")
+
+
 def test_phase12_narration_payload_is_explicitly_downstream_and_non_authoritative():
     snapshot = ingest_oracle_pilot_extracts(
         load_pilot_extract_batch(
@@ -304,7 +416,7 @@ def test_phase12_narration_payload_is_explicitly_downstream_and_non_authoritativ
     assert "fixed computed numbers" in narration["instructions"]
 
 
-def test_phase12_plan_data_keeps_phase12_complete_after_final_oracle_closeout():
+def test_phase12_plan_data_keeps_completed_oracle_phases_truthful_during_hosted_follow_through():
     plan_file = (
         Path(__file__).resolve().parents[1]
         / "strategyos_mvp"
@@ -312,13 +424,9 @@ def test_phase12_plan_data_keeps_phase12_complete_after_final_oracle_closeout():
         / "plan_data.js"
     )
     text = plan_file.read_text(encoding="utf-8")
-    phase11_block = text.split('id: "phase-11"', 1)[1].split('id: "phase-12"', 1)[0]
-    phase12_block = text.split('id: "phase-12"', 1)[1].split('id: "phase-13"', 1)[0]
-    phase13_block = text.split('id: "phase-13"', 1)[1].split('id: "phase-14"', 1)[0]
-
-    assert 'updated: "2026-06-29"' in text
-    assert 'overallStatus: "completed"' in text
-    assert 'status: "completed"' in phase11_block
-    assert 'status: "completed"' in phase12_block
-    assert phase12_block.count('status: "completed"') >= 6
-    assert 'status: "completed"' in phase13_block
+    assert 'updated: "2026-06-30"' in text
+    assert 'Foundation through Oracle pilot delivery shipped' in text
+    assert 'Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection.' in text
+    assert 'id: "ORACLE-VERIFY"' in text
+    assert 'Redeploy and live-verify the reviewed Oracle correctness sweep.' in text
+    assert 'status: "in_progress"' in text

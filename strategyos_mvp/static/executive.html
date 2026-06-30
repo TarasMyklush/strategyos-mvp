@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StrategyOS — Group CEO Diagnostics</title>
-  <link rel="stylesheet" href="/static/executive.css?v=ux-20260629c" />
+  <link rel="stylesheet" href="/static/executive.css?v=ux-20260630d" />
 </head>
 <body>
   <header class="topbar" id="topbar">
@@ -17,10 +17,10 @@
         </span>
       </div>
       <span class="tb-div" aria-hidden="true"></span>
-      <nav class="view-nav" id="view-nav" aria-label="Executive views">
-        <button class="view-tile is-active" type="button" data-view-target="home">Diagnostics</button>
-        <button class="view-tile" type="button" data-view-target="assistants">Assistants</button>
-        <button class="view-tile" type="button" data-view-target="knowledge">Knowledge</button>
+      <nav class="view-nav" id="view-nav" aria-label="Executive views" role="tablist">
+        <button class="view-tile is-active" type="button" role="tab" data-view-target="home" aria-controls="view-home" aria-selected="true">Diagnostics</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="assistants" aria-controls="view-assistants" aria-selected="false">Assistants</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="knowledge" aria-controls="view-knowledge" aria-selected="false">Knowledge</button>
       </nav>
     </div>
 
@@ -33,7 +33,8 @@
           <div class="persona-list" id="pm-list" role="menu" hidden></div>
         </div>
         <button class="ask-toggle" id="ask-toggle" type="button">◆ Hermes</button>
-      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle light and dark theme">☀</button>
+      <button class="icon-btn icon-btn--label" id="theme-toggle" type="button" aria-label="Toggle light and dark theme" title="Toggle theme"><span aria-hidden="true">☀</span><span>Theme</span></button>
+      <button class="icon-btn icon-btn--label" id="feedback-btn" type="button" aria-label="Report a bug or send feedback" title="Report a bug or send feedback"><span aria-hidden="true">⚑</span><span>Report bug</span></button>
       <div class="tb-user" id="topbar-user">
         <span class="avatar avatar-nav" id="topbar-avatar">KA</span>
         <div class="tb-user-meta" hidden>
@@ -45,7 +46,7 @@
   </header>
 
   <main class="page fidelity-shell" id="sheet">
-    <section class="view-panel view-panel--home" data-view-panel="home">
+    <section class="view-panel view-panel--home" data-view-panel="home" id="view-home" role="tabpanel" aria-hidden="false">
       <section class="hero card" id="hero" aria-labelledby="hero-head">
         <div class="hero-copy">
           <p class="eyebrow" id="hero-eyebrow">Group CEO diagnostics</p>
@@ -120,7 +121,7 @@
       </section>
     </section>
 
-    <section class="view-panel" data-view-panel="assistants" hidden>
+    <section class="view-panel" data-view-panel="assistants" id="view-assistants" role="tabpanel" aria-hidden="true" hidden>
       <section class="section" aria-labelledby="assistant-view-heading">
         <div class="section-head">
           <h2 class="section-title" id="assistant-view-heading">Assistants</h2>
@@ -130,7 +131,7 @@
       </section>
     </section>
 
-    <section class="view-panel" data-view-panel="knowledge" hidden>
+    <section class="view-panel" data-view-panel="knowledge" id="view-knowledge" role="tabpanel" aria-hidden="true" hidden>
       <section class="section" aria-labelledby="knowledge-view-heading">
         <div class="section-head">
           <h2 class="section-title" id="knowledge-view-heading">Knowledge graph</h2>
@@ -199,10 +200,13 @@
       <div class="a2a-tabs" id="a2a-tabs" role="tablist" aria-label="Assistant exchanges"></div>
       <div class="a2a-topic" id="a2a-topic"></div>
       <div class="a2a-scroll" id="a2a-scroll"></div>
-      <div class="a2a-foot">
-        <span class="a2a-foot-note" id="a2a-foot-note">Hermes is following up automatically</span>
-        <button class="a2a-foot-btn" id="a2a-followup" type="button">Set a follow-up task</button>
-      </div>
+        <div class="a2a-foot">
+          <span class="a2a-foot-note" id="a2a-foot-note">Hermes is following up automatically</span>
+          <div class="a2a-foot-actions">
+            <button class="a2a-foot-btn" id="a2a-followup" type="button">Set a follow-up task</button>
+            <button class="a2a-foot-btn a2a-foot-btn--ghost" id="a2a-report-bug" type="button">Report a bug</button>
+          </div>
+        </div>
     </aside>
   </div>
 
@@ -244,7 +248,7 @@
 
   <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
   <script>window.MIZAN=window.MIZAN||{};window.MIZAN_X=window.MIZAN_X||{threads:{},assistants:{}};</script>
-  <script src="/static/executive_design_data.js?v=ux-20260629c"></script>
-  <script src="/static/executive.js?v=ux-20260629c"></script>
+  <script src="/static/executive_design_data.js?v=ux-20260630d"></script>
+  <script src="/static/executive.js?v=ux-20260630d"></script>
 </body>
 </html>

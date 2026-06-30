@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -310,6 +311,31 @@ def test_proxy_oidc_optional_session_uses_forwarded_identity_headers() -> None:
         assert payload["authenticated"] is True
         assert payload["role"] == "reviewer"
         assert payload["subject"] == "oidc:reviewer@example.com"
+    finally:
+        _restore_env(original)
+
+
+def test_proxy_oidc_secret_check_uses_compare_digest() -> None:
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_AUTH_MODE": "proxy_oidc",
+            "STRATEGYOS_TRUST_PROXY_AUTH": "true",
+            "STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET": "proxy-secret",
+            "STRATEGYOS_REVIEWER_EMAILS": "reviewer@example.com",
+            "OAUTH2_PROXY_OIDC_ISSUER_URL": "https://accounts.google.com",
+            "OAUTH2_PROXY_CLIENT_ID": "client-id",
+            "OAUTH2_PROXY_REDIRECT_URL": "https://strategyos.example.com/oauth2/callback",
+        }
+    )
+    try:
+        headers = _proxy_auth_headers("reviewer@example.com")
+        with patch.object(auth_module.hmac, "compare_digest", return_value=True) as compare_digest:
+            principal = auth_module._proxy_principal_from_headers(headers)
+
+        assert principal is not None
+        assert principal["role"] == "reviewer"
+        compare_digest.assert_called_once_with("proxy-secret", "proxy-secret")
     finally:
         _restore_env(original)
 

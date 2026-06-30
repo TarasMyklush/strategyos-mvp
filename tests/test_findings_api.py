@@ -279,6 +279,64 @@ def test_public_latest_run_includes_agents_and_chat_contracts(monkeypatch):
         _restore_env(original)
 
 
+def test_public_findings_do_not_depend_on_vendor_name_blacklists(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: _FAKE_SUMMARY)
+        monkeypatch.setattr(
+            api_module,
+            "_load_knowledge_graph_artifact",
+            lambda summary: (
+                None,
+                {
+                    "nodes": [
+                        {
+                            "id": "Finding:F-001",
+                            "label": "Finding",
+                            "properties": {
+                                "finding_id": "F-001",
+                                "title": "Acme Industrial Holdings duplicate payment for invoice INV-1",
+                                "pattern_type": "duplicate_payment",
+                                "confidence": "HIGH",
+                                "status": "locked",
+                                "recoverable_sar": 177188,
+                                "leakage_sar": 177188,
+                                "classification": "CASH (recoverable now)",
+                            },
+                        },
+                        {
+                            "id": "Vendor:V-1",
+                            "label": "Vendor",
+                            "properties": {
+                                "vendor_id": "V-1",
+                                "vendor_name": "Acme Industrial Holdings",
+                            },
+                        },
+                    ],
+                    "edges": [
+                        {
+                            "source": "Finding:F-001",
+                            "target": "Vendor:V-1",
+                            "label": "INVOLVES_VENDOR",
+                            "properties": {},
+                        }
+                    ],
+                },
+            ),
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        client = TestClient(api_module.app)
+        response = client.get("/public/runs/latest/findings")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["findings"][0]["title"] == "Duplicate payment signal"
+        assert all("Acme Industrial Holdings" not in value for value in _collect_strings(payload))
+    finally:
+        _restore_env(original)
+
+
 def test_findings_endpoint_handles_missing_run(monkeypatch):
     original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
     try:
@@ -515,6 +573,47 @@ def test_public_report_preview_returns_board_safe_summary(monkeypatch):
         assert payload["board_portal"]["state"] == "live"
         assert "node_id" not in _collect_keys(payload)
         assert all("/public/runs/latest/cases/" not in value for value in _collect_strings(payload))
+    finally:
+        _restore_env(original)
+
+
+def test_public_audit_summary_sanitizes_run_identity_and_challenged_ids(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {
+            **_FAKE_SUMMARY,
+            "acceptance": {
+                "citation_count": 9,
+                "resolved_citation_count": 4,
+            },
+            "audit_verification": {
+                "challenged_finding_ids": ["finding-1", "finding-2"],
+            },
+        })
+
+        def _artifact_loader_must_not_run(summary, key):
+            raise AssertionError(f"public audit-summary must not load protected artifact {key}")
+
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", _artifact_loader_must_not_run)
+
+        client = TestClient(api_module.app)
+        response = client.get("/public/runs/latest/audit-summary")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["public_safe"] is True
+        assert payload["run_id"] == "latest-public"
+        assert payload["citation_count"] is None
+        assert payload["resolved_count"] is None
+        assert "run_dir" not in payload
+        assert "challenged_finding_ids" not in payload
     finally:
         _restore_env(original)
 
