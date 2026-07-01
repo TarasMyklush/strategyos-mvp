@@ -23,7 +23,8 @@ jobs:
     env:
       OWNER_REPO: ${{ github.repository }}
       TARGET_WORKFLOW: strategyos-deploy.yml
-      TARGET_REF: 206ddd38157ab0884915768faa81baeb7dabeb12
+      TARGET_REF: main
+      TARGET_HEAD_SHA: ${{ github.sha }}
       TARGET_ENVIRONMENT: hetzner-qa
       RUN_SMOKE: "false"
       GH_TOKEN: ${{ github.token }}
@@ -52,7 +53,7 @@ jobs:
 
           owner_repo = os.environ["OWNER_REPO"]
           workflow = os.environ["TARGET_WORKFLOW"]
-          target_ref = os.environ["TARGET_REF"]
+          target_head_sha = os.environ["TARGET_HEAD_SHA"]
           token = os.environ["GH_TOKEN"]
           headers = {
               "Authorization": f"Bearer {token}",
@@ -66,7 +67,7 @@ jobs:
               with urllib.request.urlopen(req, timeout=30) as response:
                   payload = json.load(response)
               for run in payload.get("workflow_runs", []):
-                  if run.get("head_sha") == target_ref:
+                  if run.get("head_sha") == target_head_sha:
                       run_id = str(run["id"])
                       run_url = run["html_url"]
                       with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
