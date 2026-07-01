@@ -1,5 +1,7 @@
 name: StrategyOS Actions Dispatch
 
+# Trigger: one-shot StrategyOS deploy dispatch
+
 on:
   push:
     branches:
