@@ -1,0 +1,124 @@
+name: StrategyOS Actions Dispatch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/strategyos-actions-dispatch.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: strategyos-actions-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch-approved-deploy:
+    name: Dispatch approved StrategyOS deploy
+    runs-on: ubuntu-24.04
+    if: contains(github.event.head_commit.message, 'one-shot StrategyOS deploy dispatch')
+    env:
+      OWNER_REPO: ${{ github.repository }}
+      TARGET_WORKFLOW: strategyos-deploy.yml
+      TARGET_REF: 206ddd38157ab0884915768faa81baeb7dabeb12
+      TARGET_ENVIRONMENT: hetzner-qa
+      RUN_SMOKE: "false"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Dispatch existing deploy workflow
+        run: |
+          set -euo pipefail
+          echo "Dispatching ${TARGET_WORKFLOW} at ${TARGET_REF} for ${TARGET_ENVIRONMENT}"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${OWNER_REPO}/actions/workflows/${TARGET_WORKFLOW}/dispatches" \
+            -d "{\"ref\":\"${TARGET_REF}\",\"inputs\":{\"target_environment\":\"${TARGET_ENVIRONMENT}\",\"run_smoke\":\"${RUN_SMOKE}\"}}"
+
+      - name: Locate dispatched deploy run
+        id: locate
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.request
+
+          owner_repo = os.environ["OWNER_REPO"]
+          workflow = os.environ["TARGET_WORKFLOW"]
+          target_ref = os.environ["TARGET_REF"]
+          token = os.environ["GH_TOKEN"]
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          url = f"https://api.github.com/repos/{owner_repo}/actions/workflows/{workflow}/runs?event=workflow_dispatch&branch=main&per_page=20"
+          deadline = time.time() + 180
+          while time.time() < deadline:
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  payload = json.load(response)
+              for run in payload.get("workflow_runs", []):
+                  if run.get("head_sha") == target_ref:
+                      run_id = str(run["id"])
+                      run_url = run["html_url"]
+                      with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                          fh.write(f"run_id={run_id}\n")
+                          fh.write(f"run_url={run_url}\n")
+                      print(f"Located deploy run {run_id}: {run_url}")
+                      sys.exit(0)
+              print("Deploy run not visible yet; waiting...")
+              time.sleep(10)
+          raise SystemExit("Timed out locating dispatched StrategyOS Deploy run")
+          PY
+
+      - name: Monitor dispatched deploy run
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.request
+
+          owner_repo = os.environ["OWNER_REPO"]
+          run_id = os.environ["RUN_ID"]
+          token = os.environ["GH_TOKEN"]
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          url = f"https://api.github.com/repos/{owner_repo}/actions/runs/{run_id}"
+          deadline = time.time() + 3600
+          while time.time() < deadline:
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  run = json.load(response)
+              status = run.get("status")
+              conclusion = run.get("conclusion")
+              html_url = run.get("html_url")
+              print(f"Deploy run {run_id}: status={status} conclusion={conclusion} url={html_url}")
+              if status == "completed":
+                  if conclusion == "success":
+                      print("StrategyOS Deploy completed successfully")
+                      raise SystemExit(0)
+                  raise SystemExit(f"StrategyOS Deploy failed with conclusion={conclusion}: {html_url}")
+              if status in {"waiting", "pending", "action_required"}:
+                  raise SystemExit(f"StrategyOS Deploy is gated/action-required: status={status} url={html_url}")
+              time.sleep(20)
+          raise SystemExit(f"Timed out waiting for StrategyOS Deploy run {run_id}")
+          PY
+        env:
+          RUN_ID: ${{ steps.locate.outputs.run_id }}
+
+      - name: Print deploy run URL
+        run: |
+          echo "Dispatched StrategyOS Deploy run: ${{ steps.locate.outputs.run_url }}"
