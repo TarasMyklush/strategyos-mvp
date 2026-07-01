@@ -122,8 +122,8 @@ h1, h2, h3, h4 {
   margin: 0 0 12px;
 }
 h1 {
-  font-size: clamp(32px, 5vw, 48px);
-  letter-spacing: -0.02em;
+  font-size: clamp(30px, 4vw, 40px);
+  letter-spacing: -0.018em;
 }
 h2 {
   font-size: clamp(24px, 3.5vw, 34px);
@@ -160,13 +160,13 @@ p:last-child { margin-bottom: 0; }
 /* ─── Hero ─── */
 .hero {
   text-align: center;
-  padding: 56px 0 34px;
+  padding: 44px 0 26px;
 }
-.hero h1 { margin-bottom: 16px; }
+.hero h1 { margin-bottom: 12px; }
 .hero p {
-  font-size: 15px;
-  max-width: 540px;
-  margin: 0 auto 20px;
+  font-size: 14px;
+  max-width: 500px;
+  margin: 0 auto 16px;
 }
 .hero__caption {
   font-size: 12px;
@@ -826,8 +826,8 @@ p:last-child { margin-bottom: 0; }
     <span class="hero__badge">Live tracker</span>
     <span class="hero__badge">Six required sections</span>
   </div>
-  <h1>Execution Tracker</h1>
-  <p>Strict six-section live tracker only: current truth, active tranche, hosted verification state, later backlog, and dated shipped history without wording drift.</p>
+  <h1>Execution tracker</h1>
+  <p>No active scope remains. The final copy pass is closed, and verified behavior work stays in shipped history.</p>
   <div class="hero__caption">strategyos.live/plan</div>
 </section>
 
@@ -861,17 +861,23 @@ p:last-child { margin-bottom: 0; }
   function renderCriticalBlockers() {
     var el = document.getElementById("plan-blockers");
     var blockers = (PLAN.criticalBlockers || []).slice(0, 3);
-    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 2</div><h2>CRITICAL BLOCKERS</h2></div><p>Maximum three blockers that currently prevent hosted closure.</p></div><div class="blocker-list"><div class="blocker-items">' + blockers.map(function (blocker) {
-      return '<article class="blocker-item"><div class="phase-card__meta"><span>' + escapeHtml(blocker.id || 'BLK') + '</span><span class="backlog-status ' + escapeHtml(statusClass(blocker.status)) + '">' + escapeHtml(statusLabel(blocker.status)) + '</span></div><h3>' + escapeHtml(blocker.title || 'Critical blocker') + '</h3><p>' + escapeHtml(blocker.detail || '') + '</p></article>';
-    }).join('') + '</div></div></section>';
+    var content = blockers.length
+      ? blockers.map(function (blocker) {
+        return '<article class="blocker-item"><div class="phase-card__meta"><span>' + escapeHtml(blocker.id || 'BLK') + '</span><span class="backlog-status ' + escapeHtml(statusClass(blocker.status)) + '">' + escapeHtml(statusLabel(blocker.status)) + '</span></div><h3>' + escapeHtml(blocker.title || 'Critical blocker') + '</h3><p>' + escapeHtml(blocker.detail || '') + '</p></article>';
+      }).join('')
+      : '<article class="blocker-item"><div class="phase-card__meta"><span>CLEAR</span><span class="backlog-status is-completed">Closed</span></div><h3>No critical blockers remain</h3><p>The final copy-polish row is closed; hosted closure is no longer blocked by the plan scope.</p></article>';
+    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 2</div><h2>CRITICAL BLOCKERS</h2></div><p>Blockers that currently prevent hosted closure.</p></div><div class="blocker-list"><div class="blocker-items">' + content + '</div></div></section>';
   }
 
   function renderActiveActionItems() {
     var el = document.getElementById("plan-active");
     var rows = PLAN.activeActionItems || [];
-    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 3</div><h2>ACTIVE ACTION ITEMS THIS TRANCHE</h2></div><p>Every currently active bug or finding stays visible here with owner, active status, and %done.</p></div><div class="backlog-card"><div class="backlog-table-wrap"><table class="backlog-table"><thead><tr><th scope="col">ID</th><th scope="col">Description</th><th scope="col">Assignee</th><th scope="col">Status</th><th scope="col">%done</th></tr></thead><tbody>' + rows.map(function (row) {
-      return '<tr><td><span class="backlog-code">' + escapeHtml(row.id || '') + '</span></td><td><div class="row-title">' + escapeHtml(row.description || 'Active work') + '</div></td><td>' + escapeHtml(row.assignee || 'Unassigned') + '</td><td><span class="backlog-status ' + escapeHtml(statusClass(row.status)) + '">' + escapeHtml(statusLabel(row.status)) + '</span></td><td>' + escapeHtml(percentLabel(row.percentDone)) + '</td></tr>';
-    }).join('') + '</tbody></table></div></div></section>';
+    var body = rows.length
+      ? '<div class="backlog-card"><div class="backlog-table-wrap"><table class="backlog-table"><thead><tr><th scope="col">ID</th><th scope="col">Description</th><th scope="col">Assignee</th><th scope="col">Status</th><th scope="col">%done</th></tr></thead><tbody>' + rows.map(function (row) {
+        return '<tr><td><span class="backlog-code">' + escapeHtml(row.id || '') + '</span></td><td><div class="row-title">' + escapeHtml(row.description || 'Active work') + '</div></td><td>' + escapeHtml(row.assignee || 'Unassigned') + '</td><td><span class="backlog-status ' + escapeHtml(statusClass(row.status)) + '">' + escapeHtml(statusLabel(row.status)) + '</span></td><td>' + escapeHtml(percentLabel(row.percentDone)) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>'
+      : '<div class="backlog-card"><p><strong>No active action items remain.</strong> COPY-001 is complete and has moved to shipped history.</p></div>';
+    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 3</div><h2>ACTIVE ACTION ITEMS THIS TRANCHE</h2></div><p>Every currently active bug or finding stays visible here with owner, active status, and %done.</p></div>' + body + '</section>';
   }
 
   function renderVerificationState() {

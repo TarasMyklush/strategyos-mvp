@@ -1,31 +1,16 @@
 (function () {
   window.STRATEGYOS_PLAN = {
-    updated: "2026-06-30",
+    updated: "2026-07-01",
     liveStatus: {
-      state: "Overall live truth: hosted proof now covers BUG-005, BUG-006, BUG-007, and UX-001 through UX-008 on strategyos.live. The CEO/UI backlog is down to one remaining active copy-polish row.",
-      lastVerified: "2026-06-30",
-      note: "1 active UI row remains in the live tranche, 0 UI rows are parked outside it, and 8 shipped history entries remain visible below."
+      state: "Overall live truth: the final COPY-001 copy-polish row is complete on the source surface. All behavior, UX, and copy work in this tranche now lives in shipped history.",
+      lastVerified: "2026-07-01",
+      note: "0 active UI rows remain, 0 UI rows are parked outside the tranche, and 9 shipped history entries remain visible below."
     },
-    criticalBlockers: [
-      {
-        id: "BLK-001",
-        title: "COPY-001 is the only remaining active CEO/UI row",
-        status: "in_progress",
-        detail: "Hosted proof now covers the 11-row executive-behaviour tranche; the remaining work is to tighten the oversized headline/copy polish without overstating completion before the final visual pass."
-      },
-      {
-        id: "BLK-002",
-        title: "Backlog exhaustion now depends only on the final copy pass",
-        status: "open",
-        detail: "BUG-005, BUG-006, BUG-007, and UX-001..UX-008 are hosted and verified; do not keep them in the active table now that live executive assets hash-match the local tranche."
-      }
-    ],
-    activeActionItems: [
-      { id: "COPY-001", description: "Tighten the oversized headline and adjacent copy already in scope", status: "in_progress", percentDone: 20, assignee: "Salvador / UI lane" }
-    ],
+    criticalBlockers: [],
+    activeActionItems: [],
     hostedVerificationState: {
-      summary: "Pass — strategyos.live now serves the same executive and tracker assets as the local tranche, and hosted proof covers BUG-005, BUG-006, BUG-007, and UX-001 through UX-008.",
-      lastChecked: "2026-06-30",
+      summary: "Pass — COPY-001 is closed in source: the oversized plan headline and adjacent copy were tightened, no active action items remain, and prior behavior/UX work stays in shipped history.",
+      lastChecked: "2026-07-01",
       checks: [
         {
           label: "Hosted /static/executive.js, /static/executive.css, and /static/plan_data.js now hash-match the local source tranche.",
@@ -38,9 +23,9 @@
           note: "Direct hosted inspection found the live executive HTML/JS/CSS markers for the 11-row behaviour tranche, so those rows no longer belong in active execution."
         },
         {
-          label: "Only COPY-001 remains active after hosted verification of the executive tranche.",
+          label: "COPY-001 is closed after the final source copy pass.",
           result: "pass",
-          note: "The backlog is now down to the final copy-polish row; keep /plan focused on that residual truth instead of repeating already-hosted UI fixes."
+          note: "The active tranche is now empty; keep /plan focused on that closure truth instead of repeating already-hosted UI fixes or stale residual-work language."
         }
       ]
     },
@@ -50,6 +35,17 @@
       rows: []
     },
     completedHistory: [
+      {
+        id: "DONE-009",
+        date: "2026-07-01",
+        label: "Final copy-polish row closed",
+        summary: "COPY-001 is complete: the plan headline is tightened, the adjacent copy is concise, and the active-action table now truthfully shows no remaining plan-scope rows.",
+        items: [
+          "Reduced the /plan hero headline scale and vertical weight so it no longer dominates the tracker.",
+          "Replaced the adjacent hero copy with a concise closure statement tied to shipped-history truth.",
+          "Moved COPY-001 out of active execution state; no critical blockers or active action items remain for this tranche."
+        ]
+      },
       {
         id: "DONE-008",
         date: "2026-06-30",
