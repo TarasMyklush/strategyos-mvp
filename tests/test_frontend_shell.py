@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -60,6 +61,27 @@ def _static_executive_js() -> str:
     response = client.get("/static/executive.js")
     assert response.status_code == 200
     return response.text
+
+
+def test_executive_assistant_uses_governed_qa_not_fake_captured_reply():
+    js = _static_executive_js()
+
+    assert 'mode: "auto"' in js
+    assert 'postJson("/qa"' in js
+    assert "Answered by AI fallback because deterministic Q&A did not cover that question." in js
+    assert "still the active lens" not in js
+    assert "Follow-up captured" not in js
+    assert "Prompt captured" not in js
+
+
+def test_workspace_chat_defaults_to_auto_qa_mode():
+    workspace_html = (Path(api_module.STATIC_DIR) / "index.html").read_text(encoding="utf-8")
+    js = TestClient(api_module.app).get("/static/app.js").text
+
+    assert 'data-qa-mode="auto"' in workspace_html
+    assert 'qaMode: window.sessionStorage.getItem(QA_MODE_KEY) || "auto"' in js
+    assert 'mode: state.qaMode' in js
+    assert "Auto: deterministic first, AI if needed" in js
 
 
 def test_guide_route_renders_plain_english_public_guide():
@@ -315,6 +337,8 @@ def test_app_entry_embeds_parseable_executive_bootstrap_json():
     assert bootstrap["route_contracts"]["dashboard"] == "/dashboard"
     assert bootstrap["route_contracts"]["executive"] == "/executive"
     assert bootstrap["route_contracts"]["workspace_contract"] == "/ui/workspace-contract/latest"
+    assert bootstrap["qa_modes"]["auto"]["enabled"] is True
+    assert bootstrap["qa_modes"]["auto"]["description"].startswith("Deterministic Q&A first")
     assert bootstrap["qa_modes"]["deterministic"]["enabled"] is True
     assert "enabled" in bootstrap["qa_modes"]["llm"]
 

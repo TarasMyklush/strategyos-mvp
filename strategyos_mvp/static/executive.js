@@ -83,6 +83,32 @@
     });
   }
 
+  function postJson(path, body) {
+    var headers = authHeaders();
+    headers["Content-Type"] = "application/json";
+    return fetch(path, {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify(body || {})
+    }).then(function (response) {
+      return response.ok ? response.json() : null;
+    });
+  }
+
+  function activeRunId() {
+    return firstDefined(
+      state.latestPacket && state.latestPacket.run_id,
+      getChatContract().run_id,
+      ""
+    );
+  }
+
+  function formatSar(value) {
+    var number = Number(value || 0);
+    if (!Number.isFinite(number)) return "SAR 0";
+    return "SAR " + number.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+
   function focusAssistantInput() {
     window.setTimeout(function () {
       var input = $("assistant-input");
@@ -105,13 +131,25 @@
     return title;
   }
 
-  function askAssistant(prompt) {
+  async function askAssistant(prompt) {
     var cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) return;
     ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt);
     pushThreadMessage("user", cleanPrompt);
-    pushThreadMessage("assistant", buildAssistantReply(cleanPrompt));
+    var pending = pushThreadMessage("assistant", "Checking the governed run data…");
     openAssistantDrawer();
+    var answer = await buildAssistantReply(cleanPrompt);
+    if (pending) {
+      pending.text = answer;
+      pending.timestamp = new Date().toISOString();
+      var thread = threadStore()[currentThreadKey()];
+      if (thread) {
+        thread.preview = String(answer || thread.preview || "").slice(0, 84);
+        thread.lastUpdated = new Date().toISOString();
+      }
+      saveStoredThreads();
+      renderAssistantStudio();
+    }
   }
 
   function switchView(view) {
@@ -418,27 +456,49 @@
     return '<svg class="driver-ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="driver-ring__track" cx="18" cy="18" r="15"></circle><circle class="driver-ring__value" cx="18" cy="18" r="15" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 18 18)"></circle><polygon class="driver-ring__tick" points="' + ax + ',' + ay + ' ' + b1x + ',' + b1y + ' ' + b2x + ',' + b2y + '"></polygon></svg>';
   }
 
-  function buildAssistantReply(message) {
-    var cleanMessage = String(message || "").trim();
-    var driver = getActiveDriver() || {};
+  function qaAnswerText(payload) {
+    if (!payload) return "I could not reach the governed Q&A service. Try again from an authenticated operator or reviewer session.";
+    var answer = String(firstDefined(payload.answer, "")).trim();
+    var mode = payload.mode === "llm" ? "AI fallback" : payload.mode === "deterministic" ? "Deterministic" : "Q&A";
+    var parts = [];
+    if (answer) parts.push(answer);
+    if (payload.mode === "llm") parts.push("Answered by AI fallback because deterministic Q&A did not cover that question.");
+    if (payload.matched === false && payload.llm_status && payload.llm_status.reason) {
+      parts.push("AI fallback is not available: " + payload.llm_status.reason);
+    }
+    if (payload.basis) parts.push("Basis: " + payload.basis);
+    if (payload.run_id) parts.push("Run: " + payload.run_id + " · " + mode + ".");
+    return parts.join(" ") || "No answer returned from governed Q&A.";
+  }
+
+  function boardSafeStatusReply(message) {
     var publication = getPublication();
-    var boardPortal = getBoardPortal();
     var planHealth = getPlanHealth();
-    var persona = getPersonaContract(state.activePersona);
-    var blueprint = getPersonaBlueprint(state.activePersona);
-    var assistantName = firstDefined(persona.assistant, blueprint.assistant, "Hermes");
-    var assistantRole = firstDefined(persona.assistant_role, blueprint.assistantRole, "chief of staff");
-    var challenged = firstDefined(publication.challenged_cases, (getDrilldown().owed_upward || {}).challenge_count, 0);
-    var mood = firstDefined(blueprint.quote, blueprint.brief, planHealth.summary, "The governed packet is the only room we answer from.");
-    var thread = threadStore()[currentThreadKey()] || {};
-    var messageCount = safeArray(thread.messages).length;
+    var boardPortal = getBoardPortal();
+    var runId = activeRunId() || "latest-public";
+    var recoverable = firstDefined(state.latestPacket && state.latestPacket.total_recoverable_sar, publication.total_recoverable_sar, 0);
+    var findings = firstDefined(state.latestPacket && state.latestPacket.locked_findings, publication.finding_count, "—");
+    var challenged = firstDefined(publication.challenged_cases, state.latestPacket && state.latestPacket.challenged_cases, 0);
     return [
-      assistantName + " speaking as " + assistantRole + " for " + getPersonaLabel(state.activePersona) + ": " + firstDefined(driver.label, planHealth.label, "current posture") + " is still the active lens.",
-      firstDefined(driver.detail, planHealth.summary, blueprint.brief, mood),
-      "Board state is " + humanizeToken(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) + ", publication is " + humanizeToken(firstDefined(publication.publish_state, "draft")) + ", and " + challenged + " challenged item(s) still shape the room.",
-      "This thread now carries " + messageCount + " message(s) of bounded context for this persona.",
-      cleanMessage ? "Follow-up captured: “" + cleanMessage + "”." : "Prompt captured for the current lane."
-    ].join(" ");
+      "I could not compute a protected data answer in this executive surface.",
+      "Current governed run " + runId + " is " + humanizeToken(firstDefined(state.latestPacket && state.latestPacket.current_stage, state.latestPacket && state.latestPacket.status, "governed")) + ".",
+      "Recoverable value is " + formatSar(recoverable) + ", findings: " + findings + ", challenged items: " + challenged + ".",
+      firstDefined(planHealth.summary, boardPortal.governance_note, "Use /app as operator/reviewer for protected evidence Q&A and simulations."),
+      message ? "Question asked: “" + message + "”." : ""
+    ].filter(Boolean).join(" ");
+  }
+
+  async function buildAssistantReply(message) {
+    var cleanMessage = String(message || "").trim();
+    if (!cleanMessage) return boardSafeStatusReply("");
+    var body = { question: cleanMessage, mode: "auto" };
+    var runId = activeRunId();
+    if (runId && runId !== "latest-public") body.run_id = runId;
+    try {
+      var payload = await postJson("/qa", body);
+      if (payload && payload.status === "ok") return qaAnswerText(payload);
+    } catch (_error) {}
+    return boardSafeStatusReply(cleanMessage);
   }
 
   function threadStore() {
@@ -536,11 +596,13 @@
 
   function pushThreadMessage(role, text) {
     var thread = role === "user" ? ensureWritableThread() : threadStore()[currentThreadKey()] || ensureWritableThread();
-    if (!thread) return;
-    thread.messages.push({ role: role, text: text, timestamp: new Date().toISOString() });
+    if (!thread) return null;
+    var message = { role: role, text: text, timestamp: new Date().toISOString() };
+    thread.messages.push(message);
     thread.preview = String(text || thread.preview || "").slice(0, 84);
     thread.lastUpdated = new Date().toISOString();
     saveStoredThreads();
+    return message;
   }
 
   function friendlyThreadTime(value) {
@@ -1019,11 +1081,9 @@
       safeArray(drillCard.querySelectorAll('[data-driver-chip]')).forEach(function (button) {
         button.onclick = function () {
           var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '—') + '% of plan): ' + (button.getAttribute('data-driver-chip') || '');
-          pushThreadMessage('user', prompt);
-          pushThreadMessage('assistant', buildAssistantReply(prompt));
+          askAssistant(prompt);
           state.drawerOpen = true;
           renderTopbar();
-          renderAssistantStudio();
         };
       });
       var showWork = drillCard.querySelector('[data-driver-show-work]');
@@ -1150,9 +1210,7 @@
     safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
       button.onclick = function () {
         var prompt = button.getAttribute('data-board-prompt') || '';
-        pushThreadMessage('user', prompt);
-        pushThreadMessage('assistant', buildAssistantReply(prompt));
-        renderAssistantStudio();
+        askAssistant(prompt);
       };
     });
   }

@@ -145,7 +145,7 @@
     workspaceContract: null,
     chatRunKey: "",
     chatThread: [],
-    qaMode: window.sessionStorage.getItem(QA_MODE_KEY) || "deterministic",
+    qaMode: window.sessionStorage.getItem(QA_MODE_KEY) || "auto",
     qaLoading: false,
     activeSuggestions: STARTER_SUGGESTIONS.slice(0, 3),
     openCitationKey: "",
@@ -484,8 +484,8 @@
   }
 
   function setQaMode(mode) {
-    const normalized = mode === "llm" ? "llm" : "deterministic";
-    state.qaMode = normalized === "llm" && !llmChatEnabled() ? "deterministic" : normalized;
+    const normalized = mode === "llm" ? "llm" : mode === "deterministic" ? "deterministic" : "auto";
+    state.qaMode = normalized === "llm" && !llmChatEnabled() ? "auto" : normalized;
     window.sessionStorage.setItem(QA_MODE_KEY, state.qaMode);
     renderQaMode();
   }
@@ -508,7 +508,9 @@
     if (els.qaModeStatus) {
       els.qaModeStatus.textContent = state.qaMode === "llm"
         ? `LLM: ${llmStatus.model || "configured"}`
-        : "Cited deterministic answers";
+        : state.qaMode === "deterministic"
+          ? "Cited deterministic answers"
+          : "Auto: deterministic first, AI if needed";
     }
   }
 
@@ -2414,7 +2416,7 @@
   function renderChat() {
     loadChatForRun();
     if (state.qaMode === "llm" && !llmChatEnabled()) {
-      setQaMode("deterministic");
+      setQaMode("auto");
     }
     if (bootstrap.api_auth_enabled && !state.session?.authenticated) {
       els.chatInput.disabled = true;
@@ -2432,7 +2434,9 @@
       : `<div class="sysmsg"><span>No command history for this run.</span></div>`;
     els.chatInput.placeholder = state.qaMode === "llm"
       ? "Ask grounded LLM questions about the latest analysis"
-      : "Ask deterministic finance questions about invoices, vendors, findings, or working capital";
+      : state.qaMode === "deterministic"
+        ? "Ask deterministic finance questions about invoices, vendors, findings, or working capital"
+        : "Ask anything about the run — deterministic first, AI fallback if needed";
     renderQaMode();
     renderSuggestions();
     renderReviewMessage();
@@ -4066,7 +4070,7 @@
     els.qaModeSwitch.addEventListener("click", (event) => {
       const button = event.target.closest("[data-qa-mode]");
       if (!button || button.disabled) return;
-      setQaMode(button.getAttribute("data-qa-mode") || "deterministic");
+      setQaMode(button.getAttribute("data-qa-mode") || "auto");
       renderChat();
     });
     els.chatThread.addEventListener("click", (event) => {

@@ -188,7 +188,7 @@ class OraclePilotValidationRequest(BaseModel):
 class QaRequest(BaseModel):
     question: str
     run_id: str | None = None
-    mode: str | None = "deterministic"
+    mode: str | None = "auto"
 
 
 from .twins.api import (
@@ -5727,6 +5727,12 @@ def _ui_bootstrap(
         "public_health_enabled": CONFIG.public_health_enabled,
         "run_execution_mode": CONFIG.run_execution_mode,
         "qa_modes": {
+            "auto": {
+                "enabled": True,
+                "label": "Auto",
+                "description": "Deterministic Q&A first; AI fallback when deterministic cannot answer.",
+                "llm_fallback": llm_status,
+            },
             "deterministic": {"enabled": True},
             "llm": llm_status,
         },
@@ -8449,7 +8455,7 @@ def _resolve_qa_context(run_id: str | None) -> dict[str, Any]:
 @app.post("/qa")
 def data_qa(
     request: QaRequest,
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    _: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
     question = (request.question or "").strip()
     if not question:
@@ -8457,44 +8463,84 @@ def data_qa(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ask a question, e.g. 'What is the total amount of invoices?'.",
         )
-    mode = (request.mode or "deterministic").strip().lower()
-    if mode not in {"deterministic", "llm"}:
+    mode = (request.mode or "auto").strip().lower()
+    if mode not in {"auto", "deterministic", "llm"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Q&A mode must be 'deterministic' or 'llm'.",
+            detail="Q&A mode must be 'auto', 'deterministic', or 'llm'.",
         )
-    if mode == "llm":
-        llm_status = llm_qa.chat_status(CONFIG)
-        if not llm_status["enabled"]:
+    context = _resolve_qa_context(request.run_id)
+
+    deterministic_result = None
+    if mode in {"auto", "deterministic"}:
+        deterministic_result = qa_engine.answer_question(
+            question, bundle=context["bundle"], findings=context["findings"]
+        )
+        if mode == "deterministic" or deterministic_result.get("matched") is not False:
+            return {
+                "status": "ok",
+                "run_id": context["run_id"],
+                "run_mode": context["run_mode"],
+                "mode": "deterministic",
+                "requested_mode": mode,
+                "question": question,
+                **deterministic_result,
+            }
+
+    llm_status = llm_qa.chat_status(CONFIG)
+    if not llm_status["enabled"]:
+        if mode == "llm":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=llm_status["reason"],
             )
-    context = _resolve_qa_context(request.run_id)
-    if mode == "llm":
-        try:
-            result = llm_qa.answer_question(
-                question,
-                bundle=context["bundle"],
-                findings=context["findings"],
-                summary=context["summary"],
-                config=CONFIG,
-            )
-        except RuntimeError as exc:
+        assert deterministic_result is not None
+        return {
+            "status": "ok",
+            "run_id": context["run_id"],
+            "run_mode": context["run_mode"],
+            "mode": "deterministic",
+            "requested_mode": mode,
+            "question": question,
+            "llm_fallback_attempted": False,
+            "llm_status": llm_status,
+            **deterministic_result,
+        }
+
+    try:
+        result = llm_qa.answer_question(
+            question,
+            bundle=context["bundle"],
+            findings=context["findings"],
+            summary=context["summary"],
+            config=CONFIG,
+        )
+    except RuntimeError as exc:
+        if mode == "llm":
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=str(exc),
             ) from exc
-    else:
-        result = qa_engine.answer_question(
-            question, bundle=context["bundle"], findings=context["findings"]
-        )
+        assert deterministic_result is not None
+        return {
+            "status": "ok",
+            "run_id": context["run_id"],
+            "run_mode": context["run_mode"],
+            "mode": "deterministic",
+            "requested_mode": mode,
+            "question": question,
+            "llm_fallback_attempted": True,
+            "llm_error": str(exc),
+            **deterministic_result,
+        }
     return {
         "status": "ok",
         "run_id": context["run_id"],
         "run_mode": context["run_mode"],
-        "mode": mode,
+        "mode": "llm",
+        "requested_mode": mode,
         "question": question,
+        "deterministic_matched": False if deterministic_result is not None else None,
         **result,
     }
 

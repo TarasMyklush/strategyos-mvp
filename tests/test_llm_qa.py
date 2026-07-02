@@ -9,6 +9,7 @@ import pandas as pd
 from strategyos_mvp.config import EXTERNAL_MODE_MODEL_PROVIDER, RunPolicyConfig
 from strategyos_mvp.ingestion import DataBundle
 from strategyos_mvp.models import Citation, Finding
+from strategyos_mvp import api as api_module
 from strategyos_mvp import llm_qa
 
 
@@ -144,3 +145,53 @@ def test_llm_answer_uses_openai_compatible_chat(monkeypatch):
     assert result["matched"] is True
     assert result["citations"][0]["source_path"] == "ap.xlsx"
     assert result["llm_status"]["enabled"] is True
+
+def test_data_qa_auto_invokes_llm_when_deterministic_misses(monkeypatch):
+    monkeypatch.setattr(
+        api_module,
+        "_resolve_qa_context",
+        lambda _run_id: {
+            "run_id": "run-auto",
+            "run_mode": "full",
+            "bundle": _bundle(),
+            "findings": [_finding()],
+            "summary": {"run_id": "run-auto", "total_recoverable_sar": 120.0},
+        },
+    )
+    monkeypatch.setattr(
+        api_module.qa_engine,
+        "answer_question",
+        lambda *_args, **_kwargs: {
+            "matched": False,
+            "answer": "No deterministic answer.",
+            "citations": [],
+            "suggestions": [],
+        },
+    )
+    monkeypatch.setattr(
+        api_module.llm_qa,
+        "chat_status",
+        lambda _config: {"enabled": True, "provider": "test", "model": "ai-test"},
+    )
+    monkeypatch.setattr(
+        api_module.llm_qa,
+        "answer_question",
+        lambda *_args, **_kwargs: {
+            "matched": True,
+            "answer": "AI fallback answered from supplied evidence.",
+            "basis": "supplied run evidence",
+            "citations": [],
+            "suggestions": [],
+        },
+    )
+
+    result = api_module.data_qa(
+        api_module.QaRequest(question="Explain this in plain English", mode="auto"),
+        _={"role": "executive"},
+    )
+
+    assert result["status"] == "ok"
+    assert result["mode"] == "llm"
+    assert result["requested_mode"] == "auto"
+    assert result["deterministic_matched"] is False
+    assert result["answer"] == "AI fallback answered from supplied evidence."
