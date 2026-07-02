@@ -135,12 +135,17 @@
     return title;
   }
 
-  async function askAssistant(prompt) {
+  async function askAssistant(prompt, sourceChip) {
     var cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) return;
+    if (sourceChip) {
+      var originalText = sourceChip.textContent;
+      sourceChip.textContent = 'loading\u2026';
+      sourceChip.disabled = true;
+    }
     ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt);
     pushThreadMessage("user", cleanPrompt);
-    var pending = pushThreadMessage("assistant", "Checking the governed run data…");
+    var pending = pushThreadMessage("assistant", "Checking the governed run data\u2026");
     openAssistantDrawer();
     var answer = await buildAssistantReply(cleanPrompt);
     if (pending) {
@@ -154,7 +159,12 @@
       saveStoredThreads();
       renderAssistantStudio();
     }
+    if (sourceChip) {
+      sourceChip.textContent = originalText;
+      sourceChip.disabled = false;
+    }
   }
+
 
   function switchView(view) {
     state.activeView = view || "home";
@@ -462,6 +472,10 @@
 
   function qaAnswerText(payload) {
     if (!payload) return "I could not reach the governed Q&A service. Try again from an authenticated operator or reviewer session.";
+    if (state.activePersona === "ceo") {
+      var ceoAnswer = String(firstDefined(payload.answer, "")).trim();
+      return ceoAnswer || "No answer returned from governed Q&A.";
+    }
     var answer = String(firstDefined(payload.answer, "")).trim();
     var mode = payload.mode === "llm" ? "AI fallback" : payload.mode === "deterministic" ? "Deterministic" : "Q&A";
     var parts = [];
@@ -476,6 +490,9 @@
   }
 
   function boardSafeStatusReply(message) {
+    if (state.activePersona === "ceo") {
+      return "Your board pack is currently under review. Hermes will answer from the approved pack once review clears.";
+    }
     var publication = getPublication();
     var planHealth = getPlanHealth();
     var boardPortal = getBoardPortal();
@@ -488,7 +505,7 @@
       "Current governed run " + runId + " is " + humanizeToken(firstDefined(state.latestPacket && state.latestPacket.current_stage, state.latestPacket && state.latestPacket.status, "governed")) + ".",
       "Recoverable value is " + formatSar(recoverable) + ", findings: " + findings + ", challenged items: " + challenged + ".",
       firstDefined(planHealth.summary, boardPortal.governance_note, "Use /app as operator/reviewer for protected evidence Q&A and simulations."),
-      message ? "Question asked: “" + message + "”." : ""
+      message ? "Question asked: \u201c" + message + "\u201d." : ""
     ].filter(Boolean).join(" ");
   }
 
@@ -580,7 +597,7 @@
       key: key,
       title: seedTitle || ("New conversation · " + nowStamp()),
       preview: preview || "Writable board-safe thread.",
-      route: firstDefined(getPublication().preview_route, "/public/runs/latest/report-preview"),
+      route: state.activePersona === "ceo" ? "" : firstDefined(getPublication().preview_route, "/public/runs/latest/report-preview"),
       readOnly: false,
       kind: "followup",
       assistant: firstDefined((getChatContract().assistant || {}).name, assistantName),
@@ -614,6 +631,73 @@
     var parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     return value;
+  }
+
+  function showToast(message) {
+    var existing = document.querySelector('.strategyos-toast');
+    if (existing) existing.remove();
+    var toast = document.createElement('div');
+    toast.className = 'strategyos-toast';
+    toast.textContent = message;
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    document.body.appendChild(toast);
+    window.setTimeout(function () { toast.remove(); }, 3500);
+  }
+
+  function showFeedbackForm() {
+    var existing = document.querySelector('.strategyos-feedback-modal');
+    if (existing) { existing.hidden = false; return; }
+    var modal = document.createElement('div');
+    modal.className = 'strategyos-feedback-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-label', 'Report a bug or send feedback');
+    modal.innerHTML = [
+      '<div class="strategyos-feedback-backdrop"></div>',
+      '<div class="strategyos-feedback-card">',
+      '<button class="strategyos-feedback-close" type="button" aria-label="Close feedback form">&times;</button>',
+      '<h3>Report a bug or send feedback</h3>',
+      '<form id="strategyos-feedback-form">',
+      '<label for="feedback-summary">Summary <span aria-hidden="true">*</span></label>',
+      '<input id="feedback-summary" type="text" required placeholder="What happened?" autocomplete="off" />',
+      '<label for="feedback-details">Details (optional)</label>',
+      '<textarea id="feedback-details" rows="3" placeholder="Any extra context…"></textarea>',
+      '<label for="feedback-severity">Severity</label>',
+      '<select id="feedback-severity"><option value="">--</option><option value="blocking">Blocking</option><option value="major">Major</option><option value="minor">Minor</option><option value="cosmetic">Cosmetic</option></select>',
+      '<button type="submit">Submit feedback</button>',
+      '</form>',
+      '</div>'
+    ].join('');
+    document.body.appendChild(modal);
+    var backdrop = modal.querySelector('.strategyos-feedback-backdrop');
+    var closeBtn = modal.querySelector('.strategyos-feedback-close');
+    var form = modal.querySelector('#strategyos-feedback-form');
+    var close = function () { modal.remove(); };
+    backdrop.onclick = close;
+    closeBtn.onclick = close;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var summary = (form.querySelector('#feedback-summary') || {}).value || '';
+      if (!summary.trim()) return;
+      var details = (form.querySelector('#feedback-details') || {}).value || '';
+      var severity = (form.querySelector('#feedback-severity') || {}).value || '';
+      try {
+        var stored = window.localStorage.getItem('strategyos.feedback') || '[]';
+        var feedback = JSON.parse(stored);
+        feedback.push({
+          summary: summary,
+          details: details,
+          severity: severity,
+          persona: state.activePersona,
+          timestamp: new Date().toISOString()
+        });
+        window.localStorage.setItem('strategyos.feedback', JSON.stringify(feedback));
+      } catch (_error) {}
+      showToast('Feedback recorded \u2014 thank you.');
+      close();
+    });
+    var summaryInput = form.querySelector('#feedback-summary');
+    if (summaryInput) window.setTimeout(function () { summaryInput.focus(); }, 0);
   }
 
   function renderTopbar() {
@@ -667,12 +751,30 @@
     }
     if (feedbackButton) {
       feedbackButton.onclick = function () {
-        askAssistant('Report a bug on the executive surface: capture the broken behaviour, expected behaviour, current persona, and what blocked the decision flow.');
+        showFeedbackForm();
       };
     }
     if (userName) userName.textContent = "";
     if (userRole) userRole.textContent = "";
-    if (avatar) avatar.textContent = initials;
+    if (avatar) {
+      avatar.textContent = initials;
+      avatar.title = firstDefined(activePersona.label, "Group CEO") + " \u00b7 " + assistantName;
+      avatar.setAttribute('role', 'button');
+      avatar.setAttribute('tabindex', '0');
+      avatar.onclick = function () {
+        var existing = document.querySelector('.strategyos-avatar-tooltip');
+        if (existing) { existing.remove(); return; }
+        var tip = document.createElement('div');
+        tip.className = 'strategyos-avatar-tooltip';
+        tip.innerHTML = '<strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' \u00b7 governed run</span>';
+        avatar.parentNode.appendChild(tip);
+        window.setTimeout(function () { tip.remove(); }, 4000);
+        var outsideClick = function (event) {
+          if (!event.target.closest('#topbar-user')) { tip.remove(); document.removeEventListener('click', outsideClick); }
+        };
+        window.setTimeout(function () { document.addEventListener('click', outsideClick); }, 0);
+      };
+    }
     if (userMeta) userMeta.hidden = true;
     if (viewNav) viewNav.hidden = state.activePersona === "board";
     if (!list || !btn) return;
@@ -684,7 +786,7 @@
       item.type = "button";
       item.className = "persona-item" + (isActive ? " is-active" : "");
       item.setAttribute("role", "menuitem");
-      item.innerHTML = "<span>" + escapeHtml(firstDefined(persona.label, persona.persona_id, "Persona")) + "</span><span class=\"persona-item__tag\">" + escapeHtml(persona.persona_id || "") + "</span>";
+      item.innerHTML = "<span>" + escapeHtml(firstDefined(persona.label, persona.persona_id, "Persona")) + "</span>";
       item.onclick = function () {
         if (persona.persona_id === state.activePersona) return;
         state.activePersona = persona.persona_id;
@@ -836,7 +938,7 @@
     var reportBug = $("a2a-report-bug");
     if (reportBug) {
       reportBug.onclick = function () {
-        askAssistant('Report a bug in the Hermes ↔ assistants panel: include the exchange, the expected response, and the missing feedback.');
+        showFeedbackForm();
       };
     }
   }
@@ -850,7 +952,7 @@
     var nodes = safeArray(graph.nodes);
     var nodeMap = {};
     nodes.forEach(function (node) { nodeMap[node.id] = node; });
-    card.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">How your data relates</h3><p class="section-note">Shaped by the questions you ask — proof the system reasons across everything.</p></div><span class="pill-inline ok">under the hood</span></div>'
+    card.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">How your data relates</h3><p class="section-note">Shaped by the questions you ask — proof the system reasons across everything.</p></div><span class="pill-inline ok">Data relationships</span></div>'
       + '<div class="kg-questions">' + safeArray(graph.questions).map(function (question, index) {
         return '<button type="button" class="kg-question' + (focusQuestion && focusQuestion.id === question.id ? ' is-active' : '') + '" data-kg-question="' + index + '">' + escapeHtml(firstDefined(question.label, 'Question')) + '</button>';
       }).join('') + '</div>'
@@ -902,9 +1004,9 @@
     var prompts = getHeroPrompts();
     var miniStats = [
       { label: "Board state", value: humanizeToken(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
-      { label: "Reports", value: String(firstDefined(publication.report_count, 0)) + " surfaced" },
-      { label: "Agents", value: String(firstDefined((agents.summary || {}).running_count, diagnostics.agents && diagnostics.agents.running_count, 0)) + " running" },
-      { label: "Next move", value: humanizeToken(firstDefined(getPlanHealth().next_action, (boardPortal.state_detail || {}).title, "review")) }
+      { label: "Reports", value: String(firstDefined(publication.report_count, 0)) + (state.activePersona === "ceo" ? " reports ready" : " surfaced") },
+      { label: "Agents", value: String(firstDefined((agents.summary || {}).running_count, diagnostics.agents && diagnostics.agents.running_count, 0)) + (state.activePersona === "ceo" ? " agents active" : " running") },
+      { label: state.activePersona === "ceo" ? "Needs review" : "Next move", value: state.activePersona === "ceo" ? String(firstDefined(publication.challenged_cases, safeArray((getDrilldown().owed_upward || {}).items).length, 0)) + " items need review" : humanizeToken(firstDefined(getPlanHealth().next_action, (boardPortal.state_detail || {}).title, "review")) }
     ];
 
     $("hero-eyebrow").textContent = state.activePersona === "board"
@@ -945,7 +1047,7 @@
         button.className = "prompt-chip";
         button.textContent = prompt;
         button.onclick = function () {
-          askAssistant(prompt);
+          askAssistant(prompt, button);
         };
         promptRow.appendChild(button);
       });
@@ -1084,8 +1186,8 @@
       });
       safeArray(drillCard.querySelectorAll('[data-driver-chip]')).forEach(function (button) {
         button.onclick = function () {
-          var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '—') + '% of plan): ' + (button.getAttribute('data-driver-chip') || '');
-          askAssistant(prompt);
+          var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '\u2014') + '% of plan): ' + (button.getAttribute('data-driver-chip') || '');
+          askAssistant(prompt, button);
           state.drawerOpen = true;
           renderTopbar();
         };
@@ -1120,12 +1222,12 @@
         { id: 't885M1WB1pg', title: 'Bridge Strategy and Execution with Decision-Ready Views', speaker: 'Strategy Execution Webinar', theme: 'strategy execution · decision-ready views', dur: '~35 min', summary: 'Creating decision-ready views that connect strategic plans to operational execution.', transcript: 'Building decision-ready dashboards, connecting plans to operations, and creating feedback loops that keep strategy alive.' }
       ];
       gravityPanel.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">Gravity and guardrails</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan’s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '">' + escapeHtml(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '</span></div>',
+        '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Thinking mode' : 'Gravity and guardrails') + '</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan’s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '">' + escapeHtml(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '</span></div>',
         '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(item) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="video-frame-wrapper"><iframe id="leaders-featured-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(vlogs[0].id) + '?rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen title="' + escapeHtml(vlogs[0].title) + '"></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div><div class="leaders-thumb-grid" id="leaders-thumb-grid">' + vlogs.map(function (item, idx) { return '<button class="leaders-thumb ' + (idx === 0 ? 'is-active' : '') + '" type="button" data-video-id="' + escapeHtml(item.id) + '" data-index="' + idx + '" aria-label="Watch: ' + escapeHtml(item.title) + '"><div class="leaders-thumb__img"><span class="leaders-thumb__play">▶</span></div><span class="leaders-thumb__speaker">' + escapeHtml(item.speaker) + '</span><span class="leaders-thumb__title">' + escapeHtml(item.title) + '</span></button>'; }).join('') + '</div></section></div>'
       ].join("");
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
-          askAssistant(button.getAttribute("data-chat-prompt") || "");
+          askAssistant(button.getAttribute("data-chat-prompt") || "", button);
         };
       });
       var leadersCard = gravityPanel.querySelector('.leaders-card');
@@ -1352,10 +1454,12 @@
         if (item.next_action) flags.push('<span class="pill-inline">' + escapeHtml(humanizeToken(item.next_action)) + '</span>');
         return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Governed board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
-      '<div class="snapshot-grid"><div class="snapshot-card"><strong>Deck release</strong><span>' + escapeHtml(humanizeToken(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s) · ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview')) + '</span></div><div class="snapshot-card"><strong>Frozen snapshot</strong><span>' + escapeHtml(humanizeToken(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
-      '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).concat(safeArray(stateDetail.secondary_actions).slice(0, 2)).map(function (item) {
+      '<div class="snapshot-grid"><div class="snapshot-card"><strong>Deck release</strong><span>' + escapeHtml(humanizeToken(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card"><strong>Frozen snapshot</strong><span>' + escapeHtml(humanizeToken(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
+      (state.activePersona === "ceo"
+        ? ''
+        : '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).concat(safeArray(stateDetail.secondary_actions).slice(0, 2)).map(function (item) {
         return '<span class="assistant-tool-chip">' + escapeHtml(humanizeToken(item)) + '</span>';
-      }).join("") + '</div>',
+      }).join("") + '</div>'),
       '<div class="board-detail-grid"><section class="board-panel"><p class="detail-eyebrow">Meeting posture</p><div class="mini-list"><div class="board-deck"><div><strong>' + escapeHtml(firstDefined((board.meeting || {}).design_title, (board.meeting || {}).title, "Board meeting")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined((board.meeting || {}).date, (board.meeting || {}).when, "Board timing pending")) + '</p></div><span class="pill-inline ok">' + escapeHtml(firstDefined((board.meeting || {}).room, "board-safe")) + '</span></div></div></section><section class="board-panel"><p class="detail-eyebrow">Lifecycle actions</p><div class="mini-list">' + (actions.length ? actions.map(function (item) {
         return '<div class="board-action"><div><strong>' + escapeHtml(firstDefined(item.item, "Action")) + '</strong><small>' + escapeHtml(firstDefined(item.owner, "Owner")) + '</small></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.due, "next")) + '</span></div>';
       }).join("") : '<div class="discovery-empty">No lifecycle actions are attached to this state.</div>') + '</div></section></div>',
@@ -1364,7 +1468,7 @@
     safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
       button.onclick = function () {
         var prompt = button.getAttribute('data-board-prompt') || '';
-        askAssistant(prompt);
+        askAssistant(prompt, button);
       };
     });
   }
@@ -1421,7 +1525,7 @@
         safeArray(panel && panel.querySelectorAll('[data-rail-prompt]')).forEach(function (button) {
           button.onclick = function (event) {
             event.stopPropagation();
-            askAssistant(button.getAttribute('data-rail-prompt') || '');
+            askAssistant(button.getAttribute('data-rail-prompt') || '', button);
           };
         });
       });
@@ -1433,7 +1537,7 @@
       });
       safeArray(weekPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
-          askAssistant(button.getAttribute("data-chat-prompt") || "");
+          askAssistant(button.getAttribute("data-chat-prompt") || "", button);
         };
       });
       var weekComposer = weekPanel.querySelector('#week-composer');
@@ -1503,7 +1607,7 @@
         var approved = !!state.approvedAgentIds[id];
         var showBar = ['running', 'approval'].indexOf(String(firstDefined(item.status, ''))) !== -1;
         return '<div class="agent-c' + (isOpen ? ' is-open' : '') + '"><button type="button" class="agent-c-head" data-agent-toggle="' + escapeHtml(id) + '"><span class="agent-pulse ' + escapeHtml(String(firstDefined(item.status, 'running'))) + '"></span><span class="agent-name">' + escapeHtml(firstDefined(item.name, item.label, id)) + '</span><span class="agent-status s-' + escapeHtml(String(firstDefined(item.status, 'running'))) + '">' + escapeHtml(statusLabel(item, approved)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (showBar ? '<div class="agent-prog"><span class="agent-prog-bar tone-' + escapeHtml(toneClass(firstDefined(item.status, 'running'))) + '" style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></span></div>' : '') + (isOpen ? '<div class="agent-c-body"><span class="tag agent-tag">' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span><p class="agent-doing">' + escapeHtml(approved && item.status === 'approval' ? 'Approved — executing now. Audit entry written.' : firstDefined(item.doing, item.summary, 'Governed activity in progress.')) + '</p><div class="agent-c-foot"><span class="agent-by">deployed by ' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><button type="button" class="agent-log-btn' + (logOpen ? ' is-open' : '') + '" data-agent-log="' + escapeHtml(id) + '">◷ audit log <span class="agent-log-count">' + escapeHtml(String(safeArray(item.log).length)) + '</span></button></div>' + (item.status === 'approval' && !approved ? '<div class="agent-approve"><span class="agent-approve-note">⚠ This agent will <strong>act</strong> — held until you approve.</span><button type="button" class="agent-approve-btn" data-agent-approve="' + escapeHtml(id) + '">Approve &amp; let it execute</button></div>' : '') + (logOpen ? '<ol class="agent-trail">' + safeArray(item.log).map(function (entry) { return '<li class="trail-item"><span class="trail-time">' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><span class="trail-dot"></span><span class="trail-text">' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</span></li>'; }).join('') + '<li class="trail-foot">every action is logged in-tenant · tap any entry to see its evidence</li></ol>' : '') + '</div>' : '') + '</div>';
-      }).join('') + '</div><div class="agents-sovereign"><span class="sov-dot"></span> sovereign · runs in-tenant · every action logged</div>' + (subtools.length ? '<div class="subtools"><div class="subtools-label">Sub-agents your chiefs call as tools</div><div class="subtools-grid">' + subtools.map(function (item) { return '<div class="subtool"><span class="subtool-glyph">' + escapeHtml(firstDefined(item.glyph, '▦')) + '</span><div class="subtool-meta"><span class="subtool-name">' + escapeHtml(firstDefined(item.name, 'Tool')) + '</span><span class="subtool-desc">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</span></div></div>'; }).join('') + '</div></div>' : '');
+      }).join('') + '</div><div class="agents-sovereign"><span class="sov-dot"></span> ' + (state.activePersona === "ceo" ? 'Runs on your infrastructure' : 'sovereign \u00b7 runs in-tenant \u00b7 every action logged') + '</div>' + (subtools.length ? '<div class="subtools"><div class="subtools-label">Sub-agents your chiefs call as tools</div><div class="subtools-grid">' + subtools.map(function (item) { return '<div class="subtool"><span class="subtool-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25a6')) + '</span><div class="subtool-meta"><span class="subtool-name">' + escapeHtml(firstDefined(item.name, 'Tool')) + '</span><span class="subtool-desc">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</span></div></div>'; }).join('') + '</div></div>' : '');
       safeArray(runningCard.querySelectorAll('[data-agent-toggle]')).forEach(function (button) {
         button.onclick = function () {
           var id = button.getAttribute('data-agent-toggle') || '';
@@ -1535,10 +1639,21 @@
     if (discoveryCard) {
       var renderDiscoveryGroup = function (title, items) {
         return '<div class="disco-group-label">' + escapeHtml(title) + '</div><div class="disco-list">' + items.map(function (item) {
-          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '◇')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</span><span class="disco-src ' + escapeHtml(firstDefined(item.source, 'native')) + '">' + escapeHtml(firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">⚡</span> ' + escapeHtml(firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
+          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</span><span class="disco-src ' + escapeHtml(firstDefined(item.source, 'native')) + '">' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
         }).join('') + '</div>';
       };
       discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">deploy on your data via platform connectors</span></div><div class="disco-search"><span class="disco-search-icon">⌕</span> Search the agent universe…</div>' + renderDiscoveryGroup('Native on StrategyOS', nativeAgents) + renderDiscoveryGroup('From the marketplace', marketAgents) + '<button type="button" class="disco-browse">Browse all agents →</button>';
+      var browseBtn = discoveryCard.querySelector('.disco-browse');
+      if (browseBtn) {
+        browseBtn.onclick = function () {
+          if (state.activePersona === "ceo") {
+            showToast('Agent discovery is available from the operator surface.');
+          } else {
+            state.discoveryFilter = state.discoveryFilter === 'all' ? 'native' : 'all';
+            renderAgentsDiscovery();
+          }
+        };
+      }
     }
 
     if (subtoolsCard) subtoolsCard.hidden = true;
@@ -1600,7 +1715,16 @@
     if (assistantState) assistantState.textContent = humanizeToken(firstDefined(state.activeBoard, "ready"));
 
     if (threadList) {
-      threadList.innerHTML = '<button type="button" class="assistant-thread assistant-thread--new" data-thread-new="true"><strong>＋ New conversation</strong><span>Open a writable, board-safe thread for this persona.</span></button>' + threads.map(function (record) {
+      var visibleThreads = threads;
+      if (state.activePersona === "ceo") {
+        visibleThreads = threads.filter(function (record) {
+          var title = String(firstDefined(record.title, '')).toLowerCase();
+          var isBug = title.indexOf('report a bug') !== -1 || title.indexOf('bug') !== -1;
+          var isSystem = record.kind === 'system';
+          return !isBug && !isSystem;
+        });
+      }
+      threadList.innerHTML = '<button type="button" class="assistant-thread assistant-thread--new" data-thread-new="true"><strong>＋ New conversation</strong><span>Open a writable, board-safe thread for this persona.</span></button>' + visibleThreads.map(function (record) {
         var active = record.key === currentThreadKey();
         return '<button type="button" class="assistant-thread' + (active ? ' is-active' : '') + '" data-thread-key="' + escapeHtml(record.key) + '"><div class="assistant-thread__top"><strong>' + escapeHtml(firstDefined(record.title, 'Thread')) + '</strong><span>' + escapeHtml(friendlyThreadTime(record.lastUpdated)) + '</span></div><span>' + escapeHtml(firstDefined(record.preview, 'Board-safe follow-up')) + '</span><small>' + escapeHtml(String(safeArray(record.messages).length)) + ' message(s) · ' + escapeHtml((record.readOnly ? 'read only' : 'send and receive')) + '</small></button>';
       }).join("");
@@ -1626,7 +1750,7 @@
       tools.push('<span class="assistant-tool-chip">' + escapeHtml(humanizeToken(firstDefined(state.activeBoard, (getChatContract().assistant || {}).board_state, 'pre'))) + '</span>');
       tools.push('<span class="assistant-tool-chip">' + escapeHtml((current && current.readOnly) ? 'read only thread' : 'send and receive') + '</span>');
       tools.push('<button type="button" class="assistant-tool-chip assistant-tool-chip--button" data-thread-new-inline="true">New conversation</button>');
-      if (current && current.route) tools.push('<span class="assistant-tool-chip">' + escapeHtml(current.route) + '</span>');
+      if (current && current.route && state.activePersona !== "ceo") tools.push('<span class="assistant-tool-chip">' + escapeHtml(current.route) + '</span>');
       threadTools.innerHTML = tools.join('');
       safeArray(threadTools.querySelectorAll('[data-thread-new-inline]')).forEach(function (button) {
         button.onclick = function () {
@@ -1665,12 +1789,15 @@
     var publication = getPublication();
     if (!reportCard) return;
     reportCard.innerHTML = [
-      '<div class="detail-head"><div><p class="detail-eyebrow">Report surface</p><h3 class="detail-title">Previewable report routes</h3></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, 'draft')) + '">' + escapeHtml(firstDefined(publication.publish_state, 'draft')) + '</span></div>',
+      '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Board reports' : 'Report surface') + '</p><h3 class="detail-title">' + (state.activePersona === "ceo" ? 'Board reports' : 'Previewable report routes') + '</h3></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, 'draft')) + '">' + escapeHtml(firstDefined(publication.publish_state, 'draft')) + '</span></div>',
       '<p class="detail-copy">Overview, cases, evidence, and reports now sing as one workspace. This rail keeps the board-safe output explicit.</p>',
       '<div class="mini-list">' + safeArray(publication.available_artifacts).slice(0, 5).map(function (item) {
-        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, item.artifact_key, 'Artifact')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.category, 'report')) + ' · ' + escapeHtml(firstDefined(item.format, 'file')) + '</p></div><span class="pill-inline ' + (item.restricted ? 'warn' : 'ok') + '">' + escapeHtml(item.restricted ? 'restricted' : 'board-safe') + '</span></div>';
+        var meta = state.activePersona === "ceo"
+          ? escapeHtml(firstDefined(item.category, 'report'))
+          : escapeHtml(firstDefined(item.category, 'report')) + ' \u00b7 ' + escapeHtml(firstDefined(item.format, 'file'));
+        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, item.artifact_key, 'Artifact')) + '</strong><p class="list-copy">' + meta + '</p></div><span class="pill-inline ' + (item.restricted ? 'warn' : 'ok') + '">' + escapeHtml(item.restricted ? 'restricted' : 'board-safe') + '</span></div>';
       }).join("") + '</div>',
-      '<a class="summary-link" href="' + escapeHtml(firstDefined(publication.preview_route, '/public/runs/latest/report-preview')) + '">Open report preview</a>'
+      state.activePersona === "ceo" ? '' : '<a class="summary-link" href="' + escapeHtml(firstDefined(publication.preview_route, '/public/runs/latest/report-preview')) + '">Open report preview</a>'
     ].join("");
   }
 
@@ -1682,7 +1809,15 @@
     $("summary-title").textContent = firstDefined(hero.summary, hero.label, getPlanHealth().label, "Executive signal");
     $("summary-body").textContent = firstDefined(driver.detail, hero.body, getPlanHealth().summary, "Awaiting summary.");
     $("summary-note").textContent = firstDefined(getBoardPortal().governance_note, hero.quote, "");
-    if (link) link.href = firstDefined(getPublication().preview_route, "/public/runs/latest/report-preview");
+    if (link) {
+      if (state.activePersona === "ceo") {
+        link.href = "#";
+        link.style.display = "none";
+      } else {
+        link.href = firstDefined(getPublication().preview_route, "/public/runs/latest/report-preview");
+        link.style.display = "";
+      }
+    }
   }
 
   function renderPersonaView() {
