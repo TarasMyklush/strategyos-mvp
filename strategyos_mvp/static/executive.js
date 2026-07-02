@@ -677,12 +677,12 @@
     var modal = document.createElement('div');
     modal.className = 'strategyos-feedback-modal';
     modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-label', 'Report a bug or send feedback');
+    modal.setAttribute('aria-label', 'Send feedback');
     modal.innerHTML = [
       '<div class="strategyos-feedback-backdrop"></div>',
       '<div class="strategyos-feedback-card">',
       '<button class="strategyos-feedback-close" type="button" aria-label="Close feedback form">&times;</button>',
-      '<h3>Report a bug or send feedback</h3>',
+      '<h3>Send feedback</h3>',
       '<form id="strategyos-feedback-form">',
       '<label for="feedback-summary">Summary <span aria-hidden="true">*</span></label>',
       '<input id="feedback-summary" type="text" required placeholder="What happened?" autocomplete="off" />',

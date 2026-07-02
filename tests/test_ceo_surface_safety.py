@@ -201,7 +201,11 @@ def test_ceo_jargon_replacements():
 
 
 def test_ceo_feedback_button_not_hermes():
-    """Feedback button must open inline form, not call askAssistant."""
+    """Feedback button must open inline form, not call askAssistant.
+    
+    Also verifies that no CEO-visible 'Report bug' or 'Report a bug'
+    text remains anywhere in the feedback path (buttons, modal, labels).
+    """
     js = _static_executive_js()
 
     # Feedback button must call showFeedbackForm
@@ -213,6 +217,33 @@ def test_ceo_feedback_button_not_hermes():
     # (the A2A report bug button should also call showFeedbackForm)
     assert "showFeedbackForm()" in js, (
         "Feedback button onclick must call showFeedbackForm"
+    )
+
+    # ── BUG WORDING MUST NOT APPEAR ANYWHERE IN FEEDBACK CODE PATH ──
+    # The showFeedbackForm function must NOT contain 'bug' in visible labels
+    fb_func_start = js.index("function showFeedbackForm")
+    # Find end of this function (next function declaration after it)
+    next_func_match = None
+    for keyword in ["function renderTopbar", "function renderA2APanel",
+                    "function renderHero", "function renderDriverGrid"]:
+        idx = js.find(keyword, fb_func_start + 10)
+        if idx != -1 and (next_func_match is None or idx < next_func_match):
+            next_func_match = idx
+    if next_func_match is None:
+        next_func_match = fb_func_start + 2000
+    show_feedback_code = js[fb_func_start:next_func_match]
+
+    # Visible bug wording must NOT appear in feedback modal
+    assert "Report a bug" not in show_feedback_code, (
+        "showFeedbackForm: 'Report a bug' must not appear in feedback modal text"
+    )
+    assert "report a bug" not in show_feedback_code, (
+        "showFeedbackForm: 'report a bug' must not appear in feedback modal text"
+    )
+
+    # The modal heading and aria-label must use neutral 'Send feedback' text
+    assert "'Send feedback'" in show_feedback_code, (
+        "showFeedbackForm: modal heading must use 'Send feedback' not bug wording"
     )
 
 
@@ -535,3 +566,82 @@ def test_kg_question_lenses_exist():
     )
     assert 'role="tab"' in js, "Question lenses must have proper ARIA role"
     assert "aria-selected" in js, "Question lenses must have aria-selected state"
+
+
+# ── CEO "Report bug" button removal ──
+
+def test_ceo_no_report_bug_visible_labels():
+    """CEO surface must NOT expose any visible 'Report bug' or 'Report a bug'
+    text in buttons, labels, modals, aria-labels, or titles.
+
+    This is the definitive test for the report-bug removal scope.
+    Internal variable names (reportBug, a2a-report-bug as DOM id) and
+    thread-filtering logic (title.indexOf('report a bug')) are acceptable
+    since they are NOT user-visible.
+    """
+    js = _static_executive_js()
+    html = _ceo_executive_html()
+
+    # ── HTML: static button labels must be clean ──
+    # Verify no 'bug' in button visible text (DOM IDs like a2a-report-bug are fine)
+    # The a2a-report-bug button lives inside the a2a-foot div, and the
+    # feedback-btn is in the topbar. Check each individually.
+    import re
+
+    # Extract feedback-btn inner text: find the button, get text between > and </button>
+    fb_match = re.search(r'<button[^>]*id="feedback-btn"[^>]*>(.*?)</button>', html)
+    if fb_match:
+        inner_text = fb_match.group(1)
+        assert "bug" not in inner_text.lower(), (
+            f"feedback-btn visible text must not contain 'bug'. Found: '{inner_text[:100]}'"
+        )
+
+    # a2a-report-bug: find the specific button
+    a2a_match = re.search(r'<button[^>]*id="a2a-report-bug"[^>]*>(.*?)</button>', html)
+    if a2a_match:
+        inner_text = a2a_match.group(1)
+        assert "bug" not in inner_text.lower(), (
+            f"a2a-report-bug visible text must not contain 'bug'. Found: '{inner_text[:100]}'"
+        )
+
+    # HTML must not contain 'Report bug' or 'Report a bug' as visible text
+    assert "Report bug" not in html, (
+        "CEO HTML must not contain 'Report bug' visible text"
+    )
+    assert "Report a bug" not in html, (
+        "CEO HTML must not contain 'Report a bug' visible text"
+    )
+
+    # ── JS: showFeedbackForm function must use neutral labels ──
+    assert "'Send feedback'" in js, (
+        "showFeedbackForm must use neutral 'Send feedback' heading"
+    )
+
+
+def test_ceo_html_feedback_buttons_clean():
+    """The served CEO HTML must have clean feedback button labels
+    without any 'bug' wording in visible text, aria-label, or title.
+    """
+    html = _ceo_executive_html()
+
+    # feedback-btn: aria-label, title, and visible text must not contain 'bug'
+    assert 'aria-label="Send feedback"' in html, (
+        "feedback-btn aria-label must say 'Send feedback', not 'Report a bug'"
+    )
+    assert 'title="Send feedback"' in html, (
+        "feedback-btn title must say 'Send feedback', not 'Report a bug'"
+    )
+    assert "<span>Report bug</span>" not in html, (
+        "feedback-btn visible text must not say 'Report bug'"
+    )
+    assert "<span>Feedback</span>" in html, (
+        "feedback-btn visible text must say 'Feedback'"
+    )
+
+    # a2a-report-bug: visible text must not contain 'bug'
+    assert "<button" in html and "Report a bug</button>" not in html, (
+        "a2a-report-bug visible text must not say 'Report a bug'"
+    )
+    assert "Feedback</button>" in html, (
+        "a2a-report-bug visible text must say 'Feedback'"
+    )
