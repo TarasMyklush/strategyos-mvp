@@ -5793,7 +5793,17 @@ def _executive_html(
     )
     template_path = STATIC_DIR / "executive.html"
     html_text = template_path.read_text(encoding="utf-8")
-    return html_text.replace("__STRATEGYOS_EXECUTIVE_BOOTSTRAP__", bootstrap_json)
+    html_text = html_text.replace("__STRATEGYOS_EXECUTIVE_BOOTSTRAP__", bootstrap_json)
+    if view_state and view_state.get("persona") == "ceo":
+        lines = html_text.split("\n")
+        lines = [
+            line
+            for line in lines
+            if 'id="feedback-btn"' not in line
+            and 'id="a2a-report-bug"' not in line
+        ]
+        html_text = "\n".join(lines)
+    return html_text
 
 
 def _default_surface_route(principal: dict[str, Any]) -> str:

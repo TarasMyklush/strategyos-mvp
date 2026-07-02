@@ -677,41 +677,48 @@ def test_kg_question_lenses_exist():
     assert "aria-selected" in js, "Question lenses must have aria-selected state"
 
 
-# ── CEO "Report bug" button removal ──
+# ── CEO feedback / report bug removal (server-side strip + client-side remove) ──
 
 def test_ceo_no_report_bug_visible_labels():
-    """CEO surface must NOT expose any visible 'Report bug' or 'Report a bug'
-    text in buttons, labels, modals, aria-labels, or titles.
+    """CEO surface must NOT expose any visible 'Report bug', 'Report a bug',
+    'Feedback', or 'Send feedback' text in buttons, labels, modals,
+    aria-labels, or titles.
 
-    This is the definitive test for the report-bug removal scope.
-    Internal variable names (reportBug, a2a-report-bug as DOM id) and
-    thread-filtering logic (title.indexOf('report a bug')) are acceptable
-    since they are NOT user-visible.
+    Server-side strips feedback/report nodes from CEO HTML; client-side
+    uses remove() (not hidden=true) as defense-in-depth. Internal variable
+    names (reportBug, a2a-report-bug as DOM id) and thread-filtering logic
+    are acceptable since they are NOT user-visible.
     """
     js = _static_executive_js()
     html = _ceo_executive_html()
 
-    # ── HTML: static button labels must be clean ──
-    # Verify no 'bug' in button visible text (DOM IDs like a2a-report-bug are fine)
-    # The a2a-report-bug button lives inside the a2a-foot div, and the
-    # feedback-btn is in the topbar. Check each individually.
+    # ── HTML: feedback/report buttons must be ABSENT from CEO HTML ──
     import re
 
-    # Extract feedback-btn inner text: find the button, get text between > and </button>
-    fb_match = re.search(r'<button[^>]*id="feedback-btn"[^>]*>(.*?)</button>', html)
-    if fb_match:
-        inner_text = fb_match.group(1)
-        assert "bug" not in inner_text.lower(), (
-            f"feedback-btn visible text must not contain 'bug'. Found: '{inner_text[:100]}'"
-        )
+    # feedback-btn must not appear in CEO HTML at all
+    fb_match = re.search(r'<button[^>]*id="feedback-btn"[^>]*>', html)
+    assert fb_match is None, (
+        "CEO HTML must not contain feedback-btn button element"
+    )
 
-    # a2a-report-bug: find the specific button
-    a2a_match = re.search(r'<button[^>]*id="a2a-report-bug"[^>]*>(.*?)</button>', html)
-    if a2a_match:
-        inner_text = a2a_match.group(1)
-        assert "bug" not in inner_text.lower(), (
-            f"a2a-report-bug visible text must not contain 'bug'. Found: '{inner_text[:100]}'"
-        )
+    # a2a-report-bug must not appear in CEO HTML at all
+    a2a_match = re.search(r'<button[^>]*id="a2a-report-bug"[^>]*>', html)
+    assert a2a_match is None, (
+        "CEO HTML must not contain a2a-report-bug button element"
+    )
+
+    # CEO HTML must not contain feedback-related aria/title attributes
+    assert 'aria-label="Send feedback"' not in html, (
+        "CEO HTML must not contain Send feedback aria-label"
+    )
+    assert 'title="Send feedback"' not in html, (
+        "CEO HTML must not contain Send feedback title"
+    )
+
+    # CEO HTML must not contain 'Feedback' as visible button text
+    assert "<span>Feedback</span>" not in html, (
+        "CEO HTML must not contain Feedback button text"
+    )
 
     # HTML must not contain 'Report bug' or 'Report a bug' as visible text
     assert "Report bug" not in html, (
@@ -728,55 +735,156 @@ def test_ceo_no_report_bug_visible_labels():
 
 
 def test_ceo_no_feedback_controls():
-    """CEO surface must hide ALL feedback buttons (topbar + A2A footer).
+    """CEO surface must REMOVE ALL feedback/report buttons (topbar + A2A footer)
+    from the DOM entirely — NOT just hide them.
 
-    Feedback controls exist in HTML for non-CEO personas but are hidden
-    via JS guards when the active persona is CEO:
-    - renderTopbar(): feedbackButton.hidden = true
-    - renderA2APanel(): a2a-report-bug hidden = true
+    Approach:
+    1. Server-side: strip feedback-btn / a2a-report-bug from CEO HTML
+       (nodes never reach the client for CEO persona)
+    2. Client-side: use remove() (not hidden=true) as defense-in-depth
 
     This test verifies:
-    1. The feedback buttons exist in HTML (for non-CEO personas)
-    2. The JS contains CEO guards that hide them
-    3. showFeedbackForm still exists (for non-CEO)
-    4. CEO guard appears in the feedbackButton/reportBug handling blocks
+    1. CEO HTML does NOT contain feedback/report button DOM nodes
+    2. CEO HTML does NOT contain feedback-related aria/title labels
+    3. CEO HTML does NOT contain 'Feedback' visible button text
+    4. JS uses remove() (not hidden=true) for CEO guards
+    5. showFeedbackForm still exists (for non-CEO personas)
+    6. CEO persona guard exists in the feedback handling blocks
     """
     html = _ceo_executive_html()
     js = _static_executive_js()
 
-    # feedback-btn: aria-label and title must exist in HTML (non-CEO personas need them)
-    assert 'aria-label="Send feedback"' in html, (
-        "feedback-btn aria-label must exist in HTML"
+    # ── CEO HTML must NOT contain feedback/report button DOM nodes ──
+    assert 'id="feedback-btn"' not in html, (
+        "CEO HTML must not contain feedback-btn node"
     )
-    assert 'title="Send feedback"' in html, (
-        "feedback-btn title must exist in HTML"
-    )
-
-    # feedback-btn visible text 'Feedback' exists in HTML (for non-CEO)
-    assert "<span>Feedback</span>" in html, (
-        "feedback-btn visible text 'Feedback' must exist in HTML"
+    assert 'id="a2a-report-bug"' not in html, (
+        "CEO HTML must not contain a2a-report-bug node"
     )
 
-    # JS must contain CEO guards to hide feedback buttons
-    assert "feedbackButton.hidden = true" in js, (
-        "renderTopbar must hide feedbackButton for CEO"
+    # ── CEO HTML must NOT contain feedback-related aria/title labels ──
+    assert 'aria-label="Send feedback"' not in html, (
+        "CEO HTML must not contain Send feedback aria-label"
     )
-    assert "reportBug.hidden = true" in js, (
-        "renderA2APanel must hide a2a-report-bug for CEO"
+    assert 'title="Send feedback"' not in html, (
+        "CEO HTML must not contain Send feedback title"
     )
 
-    # showFeedbackForm must still exist (for non-CEO personas)
+    # ── CEO HTML must NOT contain 'Feedback' in visible button text ──
+    assert "<span>Feedback</span>" not in html, (
+        "CEO HTML must not contain Feedback button text"
+    )
+
+    # ── JS must use remove() (not hidden=true) for CEO guards ──
+    assert "feedbackButton.remove()" in js, (
+        "renderTopbar must remove (not hide) feedbackButton for CEO"
+    )
+    assert "reportBug.remove()" in js, (
+        "renderA2APanel must remove (not hide) a2a-report-bug for CEO"
+    )
+
+    # ── JS must NOT contain hidden=true for CEO guard (deprecated pattern) ──
+    assert "feedbackButton.hidden = true" not in js, (
+        "CEO guard must NOT use hidden=true on feedbackButton (must use remove())"
+    )
+    assert "reportBug.hidden = true" not in js, (
+        "CEO guard must NOT use hidden=true on reportBug (must use remove())"
+    )
+
+    # ── showFeedbackForm must still exist (for non-CEO personas) ──
     assert "showFeedbackForm" in js, (
         "showFeedbackForm function must exist for non-CEO personas"
     )
 
-    # JS must have CEO guard near feedbackButton — the code block must
-    # contain state.activePersona === "ceo" guard
+    # ── JS must have CEO persona guard in feedbackButton handling block ──
     fb_start = js.index("if (feedbackButton)")
     fb_end = js.index("}", js.index("{", fb_start) + 200)
     fb_block = js[fb_start:fb_end + 30]
     assert 'state.activePersona === "ceo"' in fb_block, (
         "CEO guard must be in feedbackButton handling block"
+    )
+
+
+def test_ceo_html_feedback_absent_from_innertext():
+    """CEO HTML document.body.innerText must not contain 'Feedback' or
+    'Send feedback' or 'Report bug' or 'Report a bug'.
+
+    This is a direct test of the acceptance criteria: text that was
+    previously leaked via hidden=true on buttons must now be fully absent
+    from the served CEO HTML, ensuring that even before JS hydration,
+    document.body.innerText and accessibility snapshots are clean.
+    """
+    html = _ceo_executive_html()
+
+    # Strip HTML tags to simulate innerText
+    import re
+    inner_text = re.sub(r"<[^>]+>", " ", html)
+    inner_text = re.sub(r"\s+", " ", inner_text).strip()
+
+    # These terms must NOT appear in the text content
+    assert "Feedback" not in inner_text, (
+        "CEO innerText must not contain 'Feedback'"
+    )
+    assert "Send feedback" not in inner_text, (
+        "CEO innerText must not contain 'Send feedback'"
+    )
+    assert "Report bug" not in inner_text, (
+        "CEO innerText must not contain 'Report bug'"
+    )
+    assert "Report a bug" not in inner_text, (
+        "CEO innerText must not contain 'Report a bug'"
+    )
+
+
+def test_ceo_js_removes_nodes_not_hides():
+    """CEO hydration must use remove() (not hidden=true) to eliminate
+    feedback/report nodes from the DOM entirely.
+
+    The exact runtime guard must call .remove() on the DOM elements,
+    not merely set hidden=true, which leaves text in innerText and
+    accessibility snapshots.
+    """
+    js = _static_executive_js()
+
+    # ── Verify remove() calls in CEO code paths ──
+    assert "feedbackButton.remove()" in js, (
+        "renderTopbar CEO path must call feedbackButton.remove()"
+    )
+    assert "reportBug.remove()" in js, (
+        "renderA2APanel CEO path must call reportBug.remove()"
+    )
+
+    # ── Verify hidden=true is NOT the CEO mechanism ──
+    # The non-CEO path still uses hidden=false (to show) — that's fine.
+    # CEO path must not use hidden=true
+    assert "feedbackButton.hidden = true" not in js, (
+        "CEO guard must not use hidden=true on feedbackButton"
+    )
+    assert "reportBug.hidden = true" not in js, (
+        "CEO guard must not use hidden=true on reportBug"
+    )
+
+    # ── Verify CEO persona guard wraps the remove() call ──
+    fb_start = js.index("if (feedbackButton)")
+    fb_end = js.index("}", js.index("{", fb_start) + 200)
+    fb_block = js[fb_start:fb_end + 30]
+    assert 'state.activePersona === "ceo"' in fb_block, (
+        "CEO guard must wrap feedbackButton.remove()"
+    )
+    assert "feedbackButton.remove()" in fb_block, (
+        "feedbackButton.remove() must be inside CEO guard block"
+    )
+
+    # ── Verify reportBug remove() is also CEO-guarded ──
+    # Find the reportBug handling block
+    rb_start = js.index("if (reportBug)")
+    rb_end = js.index("}", js.index("{", rb_start) + 200)
+    rb_block = js[rb_start:rb_end + 30]
+    assert 'state.activePersona === "ceo"' in rb_block, (
+        "CEO guard must wrap reportBug.remove()"
+    )
+    assert "reportBug.remove()" in rb_block, (
+        "reportBug.remove() must be inside CEO guard block"
     )
 
 

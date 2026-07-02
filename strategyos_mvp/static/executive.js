@@ -815,7 +815,7 @@
     }
     if (feedbackButton) {
       if (state.activePersona === "ceo") {
-        feedbackButton.hidden = true;
+        feedbackButton.remove();
       } else {
         feedbackButton.hidden = false;
         feedbackButton.onclick = function () { showFeedbackForm(); };
@@ -1005,7 +1005,7 @@
     var reportBug = $("a2a-report-bug");
     if (reportBug) {
       if (state.activePersona === "ceo") {
-        reportBug.hidden = true;
+        reportBug.remove();
       } else {
         reportBug.hidden = false;
         reportBug.onclick = function () { showFeedbackForm(); };
