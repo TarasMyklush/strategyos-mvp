@@ -195,6 +195,9 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="assistant-drawer"' in html
     assert 'id="chat-launcher"' in html
     assert "strategyos.ui.token" in js
+    assert "function authHeaders()" in js
+    assert "Authorization: \"Bearer \" + token" in js
+    assert "fetch(path, { headers: authHeaders() })" in js
     assert '<script id="strategyos-bootstrap"' not in html
 
 

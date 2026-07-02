@@ -8,7 +8,7 @@
         Referrer-Policy "no-referrer"
         Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=(), payment=(), usb=()"
     }
-    @idp path /.well-known/openid-configuration /oauth/*
+    @idp path /.well-known/openid-configuration /oauth/* /login* /auth/login*
     reverse_proxy @idp strategyos-idp:9000 {
         header_down -Server
     }

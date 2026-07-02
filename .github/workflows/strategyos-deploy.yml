@@ -307,6 +307,7 @@ jobs:
         env:
           STRATEGYOS_ENV_SECRETS: ${{ secrets.STRATEGYOS_ENV_SECRETS }}
           STRATEGYOS_LLM_API_KEY: ${{ secrets.STRATEGYOS_LLM_API_KEY }}
+          STRATEGYOS_IDP_TEST_USERS: ${{ secrets.STRATEGYOS_IDP_TEST_USERS }}
           STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET: ${{ secrets.STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET }}
           OAUTH2_PROXY_CLIENT_SECRET: ${{ secrets.OAUTH2_PROXY_CLIENT_SECRET }}
           OAUTH2_PROXY_COOKIE_SECRET: ${{ secrets.OAUTH2_PROXY_COOKIE_SECRET }}
@@ -330,6 +331,7 @@ jobs:
           upsert("OAUTH2_PROXY_CLIENT_SECRET", os.environ.get("OAUTH2_PROXY_CLIENT_SECRET", ""))
           upsert("OAUTH2_PROXY_COOKIE_SECRET", os.environ.get("OAUTH2_PROXY_COOKIE_SECRET", ""))
           upsert("STRATEGYOS_LLM_API_KEY", os.environ.get("STRATEGYOS_LLM_API_KEY", ""))
+          upsert("STRATEGYOS_IDP_TEST_USERS", os.environ.get("STRATEGYOS_IDP_TEST_USERS", ""))
           path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
           if [ -n "${STRATEGYOS_LLM_API_KEY}" ]; then

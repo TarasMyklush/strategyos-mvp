@@ -139,6 +139,7 @@ class StrategyOSConfig:
     idp_operator_password: str | None
     idp_reviewer_username: str | None
     idp_reviewer_password: str | None
+    idp_test_users: dict[str, str]
     idp_token_ttl_seconds: int
     bu_api_keys: tuple[str, ...]
     tenant_operator_api_keys: tuple[str, ...]
@@ -408,6 +409,7 @@ def load_config() -> StrategyOSConfig:
         idp_operator_password=env("STRATEGYOS_IDP_OPERATOR_PASSWORD"),
         idp_reviewer_username=env("STRATEGYOS_IDP_REVIEWER_USERNAME"),
         idp_reviewer_password=env("STRATEGYOS_IDP_REVIEWER_PASSWORD"),
+        idp_test_users=env_key_value_map("STRATEGYOS_IDP_TEST_USERS"),
         idp_token_ttl_seconds=env_int("STRATEGYOS_IDP_TOKEN_TTL_SECONDS", 3600),
         bu_api_keys=env_csv("STRATEGYOS_BU_API_KEYS"),
         tenant_operator_api_keys=env_csv("STRATEGYOS_TENANT_OPERATOR_API_KEYS"),

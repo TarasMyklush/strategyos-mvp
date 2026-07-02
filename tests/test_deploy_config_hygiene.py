@@ -208,6 +208,8 @@ def test_deploy_workflow_pins_hosted_tenant_and_identity_labels() -> None:
     assert "STRATEGYOS_TENANT_NAME: ${{ vars.STRATEGYOS_TENANT_NAME || 'StrategyOS Live' }}" in workflow
     assert "STRATEGYOS_IDP_OPERATOR_USERNAME: ${{ vars.STRATEGYOS_IDP_OPERATOR_USERNAME || 'operator.hosted' }}" in workflow
     assert "STRATEGYOS_IDP_REVIEWER_USERNAME: ${{ vars.STRATEGYOS_IDP_REVIEWER_USERNAME || 'reviewer.hosted' }}" in workflow
+    assert "STRATEGYOS_IDP_TEST_USERS: ${{ secrets.STRATEGYOS_IDP_TEST_USERS }}" in workflow
+    assert 'upsert("STRATEGYOS_IDP_TEST_USERS", os.environ.get("STRATEGYOS_IDP_TEST_USERS", ""))' in workflow
     assert '"STRATEGYOS_TENANT_SLUG": os.environ["STRATEGYOS_TENANT_SLUG"]' in workflow
     assert '"STRATEGYOS_TENANT_NAME": os.environ["STRATEGYOS_TENANT_NAME"]' in workflow
     assert '"STRATEGYOS_IDP_OPERATOR_USERNAME": os.environ["STRATEGYOS_IDP_OPERATOR_USERNAME"]' in workflow

@@ -69,8 +69,16 @@
     return query ? "?" + query : "";
   }
 
+  function authHeaders() {
+    var token = "";
+    try { token = window.localStorage.getItem(_tokenKey) || ""; } catch (_error) { token = ""; }
+    if (!token) return {};
+    if (bootstrap.idp_enabled || token.indexOf(".") !== -1) return { Authorization: "Bearer " + token };
+    return { "X-API-Key": token };
+  }
+
   function fetchJson(path) {
-    return fetch(path).then(function (response) {
+    return fetch(path, { headers: authHeaders() }).then(function (response) {
       return response.ok ? response.json() : null;
     });
   }
