@@ -36,6 +36,8 @@ def test_plan_hero_copy_is_tightened_and_empty_states_are_explicit() -> None:
     html = _read(PLAN_HTML)
 
     assert '<h1>Execution tracker</h1>' in html
+    assert 'href="/guide"' in html
+    assert '>Guide</a>' in html
     assert (
         'No active scope remains. The final copy pass is closed, and verified behavior work stays in shipped history.'
         in html

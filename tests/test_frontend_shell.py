@@ -62,12 +62,47 @@ def _static_executive_js() -> str:
     return response.text
 
 
+def test_guide_route_renders_plain_english_public_guide():
+    client = TestClient(api_module.app)
+    response = client.get("/guide")
+
+    assert response.status_code == 200
+    html = response.text
+    html_lower = html.lower()
+
+    assert "How StrategyOS works" in html
+    assert "What StrategyOS does" in html
+    assert "How it works" in html
+    assert "What you can see right now" in html
+    assert "Try it yourself" in html
+    assert "What's next" in html
+    assert "No sign-up needed for the public preview" in html
+    assert "5–10 minutes" in html
+    assert "criticalBlockers" not in html
+    assert "activeActionItems" not in html
+
+    for unsafe_phrase in (
+        "ai agents",
+        "autonomous",
+        "fully automated",
+        "real-time",
+        "all-in-one platform",
+        "ceo cockpit",
+        "replace your existing tools",
+        "revolutionises",
+        "guarantees",
+    ):
+        assert unsafe_phrase not in html_lower
+
+
 def test_homepage_renders_minimal_executive_diagnostics_surface():
     html = _homepage_response()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
     assert "StrategyOS — Group CEO Diagnostics" in html
     assert marker in html
+    assert 'href="/guide"' in html
+    assert "How it works" in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
     assert bootstrap["product_name"] == "StrategyOS"
@@ -124,6 +159,7 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
     assert "StrategyOS — Group CEO Diagnostics" in html
     assert marker in html
+    assert 'href="/guide"' in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
     assert bootstrap["product_name"] == "StrategyOS"

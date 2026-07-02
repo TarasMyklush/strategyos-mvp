@@ -433,6 +433,17 @@ a { color: inherit; }
   margin-left: auto;
 }
 
+.composed-link {
+  color: var(--accent);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.composed-link:hover,
+.composed-link:focus-visible {
+  text-decoration: underline;
+}
+
 .assistant-scrim {
   position: fixed;
   inset: 0;

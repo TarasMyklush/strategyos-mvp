@@ -6444,6 +6444,13 @@ def architecture_page() -> HTMLResponse:
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
 
 
+@app.get("/guide", response_class=HTMLResponse)
+def guide_page() -> HTMLResponse:
+    """Serve the non-technical StrategyOS user guide."""
+    template_path = STATIC_DIR / "guide.html"
+    return HTMLResponse(template_path.read_text(encoding="utf-8"))
+
+
 @app.get("/plan", response_class=HTMLResponse)
 def plan_page() -> HTMLResponse:
     """Serve the Digital Twin execution plan page."""
