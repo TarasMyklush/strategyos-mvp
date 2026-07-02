@@ -149,7 +149,8 @@ class TestNoRegression:
     def test_plan_still_works(self):
         resp = client.get("/plan")
         assert resp.status_code == 200
-        assert "Execution Plan" in resp.text
+        assert "Execution Tracker" in resp.text
+        assert "No active scope remains" in resp.text
 
     def test_twin_api_router_is_registered(self):
         """Verify twin endpoints are reachable via the main app."""

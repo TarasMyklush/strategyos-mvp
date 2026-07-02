@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -8,6 +9,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _read(*parts: str) -> str:
     return (ROOT.joinpath(*parts)).read_text(encoding="utf-8")
+
+
+def _plan_data() -> str:
+    return _read("strategyos_mvp", "static", "plan_data.js")
+
+
+def _completed_history_block(text: str, done_id: str) -> str:
+    pattern = rf'id: "{re.escape(done_id)}"[\s\S]*?(?=\n\s*{{\n\s*id: "DONE-|\n\s*]\n\s*}};|$)'
+    match = re.search(pattern, text)
+    assert match is not None, f"Missing completed history block {done_id}"
+    return match.group(0)
 
 
 def test_phase14_cfo_surface_is_oracle_first() -> None:
@@ -50,10 +62,10 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     executive_html = _read("strategyos_mvp", "static", "executive.html")
     executive_data = _read("strategyos_mvp", "static", "executive_design_data.js")
 
-    assert "Oracle pilot narrative now reflects the full roadmap closed truthfully" in plan_html
-    assert "Phases 0–15 complete locally · Oracle roadmap complete" in plan_html
+    assert "Live tracker" in plan_html
+    assert "No active scope remains" in plan_html
     assert "Group CEO Diagnostics" in executive_html
-    assert "twin-platform build remains visible as delivery history" in plan_html
+    assert "Foundation through Oracle pilot delivery shipped" in _plan_data()
     assert "Twin-platform history remains visible" in executive_data
     assert "Diagnostics" in executive_html
     assert "Assistants" in executive_html
@@ -63,29 +75,21 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
 
 
 def test_phase14_plan_data_marks_phase14_complete_after_phase15_closes() -> None:
-    text = _read("strategyos_mvp", "static", "plan_data.js")
+    text = _plan_data()
+    foundation_block = _completed_history_block(text, "DONE-005")
 
-    phase14_block = text.split('id: "phase-14"', 1)[1].split('id: "phase-15"', 1)[0]
-    phase15_block = text.split('id: "phase-15"', 1)[1]
-    phase17_block = text.split('id: "phase-17"', 1)[1]
-
-    assert 'updated: "2026-06-29"' in text
-    assert 'overallStatus: "in_progress"' in text
-    assert 'status: "completed"' in phase14_block
-    for story_id in ["14.1", "14.2", "14.3", "14.4", "14.5"]:
-        assert f'id: "{story_id}"' in phase14_block
-    assert phase14_block.count('status: "completed"') >= 6
-    assert 'status: "completed"' in phase15_block
-    assert 'status: "in_progress"' in phase17_block
+    assert 'updated: "2026-07-01"' in text
+    assert "criticalBlockers: []" in text
+    assert "activeActionItems: []" in text
+    assert "Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection" in foundation_block
+    assert "CEO/CFO pilot alignment, production validation, and pilot readiness work" in foundation_block
 
 
 def test_phase14_no_regressions_on_prior_oracle_phases() -> None:
-    text = _read("strategyos_mvp", "static", "plan_data.js")
-    phase11_block = text.split('id: "phase-11"', 1)[1].split('id: "phase-12"', 1)[0]
-    phase12_block = text.split('id: "phase-12"', 1)[1].split('id: "phase-13"', 1)[0]
-    phase13_block = text.split('id: "phase-13"', 1)[1].split('id: "phase-14"', 1)[0]
+    text = _plan_data()
+    reviewed_backend_block = _completed_history_block(text, "DONE-001")
+    tracker_truth_block = _completed_history_block(text, "DONE-004")
 
-    assert 'status: "completed"' in phase11_block
-    assert 'status: "completed"' in phase12_block
-    assert 'status: "completed"' in phase13_block
-    assert 'title: "Cash leakage engine"' in phase13_block
+    assert "Oracle month-name period resolution fixed for real monthly Oracle labels" in reviewed_backend_block
+    assert "Oracle pilot flag enforced before write acceptance" in reviewed_backend_block
+    assert "Oracle roadmap closure retained in delivery history" in tracker_truth_block

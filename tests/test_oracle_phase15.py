@@ -509,17 +509,10 @@ def test_phase15_plan_and_public_copy_mark_final_oracle_completion() -> None:
     plan_data = (ROOT / "strategyos_mvp" / "static" / "plan_data.js").read_text(encoding="utf-8")
     plan_html = (ROOT / "strategyos_mvp" / "static" / "plan.html").read_text(encoding="utf-8")
 
-    phase14_block = plan_data.split('id: "phase-14"', 1)[1].split('id: "phase-15"', 1)[0]
-    phase15_block = plan_data.split('id: "phase-15"', 1)[1]
-    phase17_block = plan_data.split('id: "phase-17"', 1)[1]
-
-    assert 'updated: "2026-06-29"' in plan_data
-    assert 'overallStatus: "in_progress"' in plan_data
-    assert 'status: "completed"' in phase14_block
-    assert 'status: "completed"' in phase15_block
-    for story_id in ["15.1", "15.2", "15.3", "15.4", "15.5"]:
-        assert f'id: "{story_id}"' in phase15_block
-    assert phase15_block.count('status: "completed"') >= 6
-    assert 'status: "in_progress"' in phase17_block
-    assert "Phases 0–15 complete locally · Oracle roadmap complete" in plan_html
-    assert "Phase 15 production validation is complete" in plan_html
+    assert 'updated: "2026-07-01"' in plan_data
+    assert "criticalBlockers: []" in plan_data
+    assert "activeActionItems: []" in plan_data
+    assert "Foundation through Oracle pilot delivery shipped" in plan_data
+    assert "CEO/CFO pilot alignment, production validation, and pilot readiness work" in plan_data
+    assert "No active scope remains" in plan_html
+    assert "Hosted tracker reflects the active tranche and direct verification" in plan_html

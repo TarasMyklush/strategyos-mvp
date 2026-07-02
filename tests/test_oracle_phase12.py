@@ -250,6 +250,11 @@ def test_phase12_oracle_month_names_resolve_full_month_and_match_iso_reporting_p
     assert _resolve_period_bounds("JUN-26", "monthly") == (date(2026, 6, 1), date(2026, 6, 30))
     assert _resolve_period_bounds("June-26", "monthly") == (date(2026, 6, 1), date(2026, 6, 30))
     assert _resolve_period_bounds("Jun-26 Adj", "monthly") == (date(2026, 6, 1), date(2026, 6, 30))
+    assert _resolve_period_bounds(
+        "2026-06",
+        "monthly",
+        period_start=date(2026, 6, 15),
+    ) == (date(2026, 6, 1), date(2026, 6, 30))
 
     snapshot = ingest_oracle_pilot_extracts(
         load_pilot_extract_batch(
@@ -424,7 +429,7 @@ def test_phase12_plan_data_keeps_completed_oracle_phases_truthful_during_hosted_
         / "plan_data.js"
     )
     text = plan_file.read_text(encoding="utf-8")
-    assert 'updated: "2026-06-30"' in text
+    assert 'updated: "2026-07-01"' in text
     assert 'Foundation through Oracle pilot delivery shipped' in text
     assert 'Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection.' in text
     assert 'id: "DONE-007"' in text

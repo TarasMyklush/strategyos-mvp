@@ -504,7 +504,7 @@ def compute_oracle_pilot_kpis(
 ) -> OracleKpiComputation:
     period_lookup = {period.period_key: period for period in snapshot.periods}
     period = period_lookup.get(reporting_period_key)
-    resolved_cadence = reporting_cadence or (period.cadence if period else _infer_cadence_from_period_key(reporting_period_key))
+    resolved_cadence = reporting_cadence or _infer_cadence_from_period_key(reporting_period_key)
     period_start, period_end = _resolve_period_bounds(
         reporting_period_key,
         resolved_cadence,
@@ -733,7 +733,7 @@ def compute_oracle_pilot_leakage(
 ) -> OracleLeakageReview:
     period_lookup = {period.period_key: period for period in snapshot.periods}
     period = period_lookup.get(reporting_period_key)
-    resolved_cadence = reporting_cadence or (period.cadence if period else _infer_cadence_from_period_key(reporting_period_key))
+    resolved_cadence = reporting_cadence or _infer_cadence_from_period_key(reporting_period_key)
     period_start, period_end = _resolve_period_bounds(
         reporting_period_key,
         resolved_cadence,
@@ -763,6 +763,7 @@ def compute_oracle_pilot_leakage(
         fact
         for fact in snapshot.facts
         if _window_overlaps(_fact_window(snapshot, fact), (period_start, period_end))
+        or _is_open_credit_available_for_review(fact, period_end)
     ]
 
     findings = [
@@ -1642,6 +1643,16 @@ def _detect_dormant_credit_balance(
     return findings
 
 
+def _is_open_credit_available_for_review(fact: CanonicalFinanceFact, period_end: date) -> bool:
+    if fact.module != "AP" or fact.fact_type.lower() not in {"credit_balance", "credit_note", "vendor_credit"}:
+        return False
+    record = _fact_record(fact)
+    if str(record.get("credit_status") or "open").lower() not in {"open", "unapplied", "available", "dormant"}:
+        return False
+    last_activity = _date(record.get("last_activity_date") or record.get("credit_date") or record.get("invoice_date"))
+    return last_activity is not None and last_activity <= period_end
+
+
 def _fact_record(fact: CanonicalFinanceFact | None) -> dict[str, Any]:
     if fact is None:
         return {}
@@ -1946,7 +1957,14 @@ def _period_from_row(
     period_key: str,
     cadence: Cadence,
 ) -> PeriodMetadata:
-    raw_start = _date(row.get("period_start")) or _date(row.get("event_date")) or _date(row.get("as_of_date"))
+    raw_start = (
+        _date(row.get("period_start"))
+        or _date(row.get("event_date"))
+        or _date(row.get("as_of_date"))
+        or _date(row.get("payment_date"))
+        or _date(row.get("invoice_date"))
+        or _date(row.get("last_activity_date"))
+    )
     raw_end = _date(row.get("period_end"))
     start, end = _resolve_period_bounds(period_key, cadence, period_start=raw_start, period_end=raw_end)
     label = _text(row.get("period_name")) or period_key
@@ -1965,7 +1983,14 @@ def _derive_period_key(row: Mapping[str, Any], cadence: Cadence) -> str:
     explicit = _normalize_period_key(_text(row.get("period_key")) or _text(row.get("period_name"),), cadence)
     if explicit:
         return explicit
-    value = _date(row.get("event_date")) or _date(row.get("as_of_date")) or _date(row.get("period_start"))
+    value = (
+        _date(row.get("event_date"))
+        or _date(row.get("as_of_date"))
+        or _date(row.get("period_start"))
+        or _date(row.get("payment_date"))
+        or _date(row.get("invoice_date"))
+        or _date(row.get("last_activity_date"))
+    )
     if value is None:
         return f"unspecified:{cadence}"
     if cadence == "daily":
@@ -2156,7 +2181,7 @@ def _matching_manual_inputs(
 
 def _manual_input_window(record: ManualInputRecord) -> tuple[date, date]:
     if record.period_key:
-        return _resolve_period_bounds(record.period_key, record.cadence)
+        return _resolve_period_bounds(record.period_key, _infer_cadence_from_period_key(record.period_key))
     today = date.today()
     return today, today
 
@@ -2263,7 +2288,7 @@ def _resolve_period_bounds(
     if cadence == "monthly":
         monthly_start = _monthly_period_start(period_key)
         if monthly_start is not None:
-            start = period_start or monthly_start
+            start = monthly_start
             last_day = calendar.monthrange(monthly_start.year, monthly_start.month)[1]
             return start, period_end or date(monthly_start.year, monthly_start.month, last_day)
     if cadence == "quarterly" and "-Q" in period_key:
