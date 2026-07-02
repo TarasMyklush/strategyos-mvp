@@ -96,6 +96,11 @@ def test_deploy_release_image_path_does_not_build_on_server() -> None:
     assert "up -d --no-build" in script
 
 
+def test_deploy_reloads_caddy_after_bind_mounted_config_changes() -> None:
+    script = (REPO_ROOT / "deploy/scripts/deploy_stack.sh").read_text(encoding="utf-8")
+    assert "exec -T caddy caddy reload --config /etc/caddy/Caddyfile" in script
+
+
 def test_deploy_scripts_forward_compose_profiles() -> None:
     deploy_script = (REPO_ROOT / "deploy/scripts/deploy_stack.sh").read_text(
         encoding="utf-8"
