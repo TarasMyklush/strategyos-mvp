@@ -329,6 +329,8 @@ def test_ceo_status_tokens_humanized():
     banned_raw = [
         "AWAITING_REVIEW",
         "AWAITING REVIEW",
+        "PRE",
+        "CHALLENGED",
     ]
 
     for phrase in banned_raw:
@@ -370,4 +372,91 @@ def test_ceo_status_tokens_humanized():
     report_context = js[js.index("Board reports"):js.index("Board reports") + 400] if "Board reports" in js else ""
     assert "statusLabel" in report_context, (
         "'Board reports' card pill must call statusLabel() not raw publish_state"
+    )
+
+
+def test_gravity_play_card_no_raw_tokens():
+    """Gravity-play-card pill-row must use statusLabel() and never render
+    raw status tokens (AWAITING_REVIEW, PRE, N CHALLENGED) on the CEO surface.
+
+    This closes the blind spot where gravity.rails items bypassed statusLabel()
+    while 7 other pill sites were already guarded by commit 601a567.
+    """
+    js = _static_executive_js()
+    html = _ceo_executive_html()
+
+    # ---------------------------------------------------------------
+    # PART A: gravity-play-card template must call statusLabel
+    # ---------------------------------------------------------------
+    assert "gravity-play-card" in js, (
+        "gravity-play-card class must exist in executive.js"
+    )
+
+    # Extract the gravity-play-card template context (~600 chars after "gravity-play-card")
+    gravity_idx = js.index("gravity-play-card")
+    gravity_context = js[gravity_idx:gravity_idx + 800]
+
+    # The pill-row inside gravity-play-card must use statusLabel(item)
+    assert "statusLabel(item)" in gravity_context, (
+        "gravity-play-card .pill-row must call statusLabel(item) — "
+        "raw tokens were leaking through escapeHtml(item) without statusLabel"
+    )
+
+    # toneClass must still receive raw item for correct color mapping
+    assert "toneClass(item)" in gravity_context, (
+        "gravity-play-card .pill-row must preserve toneClass(item) with raw item for color"
+    )
+
+    # ---------------------------------------------------------------
+    # PART B: Raw token patterns must NOT appear near gravity-play-card
+    # ---------------------------------------------------------------
+    banned_near_gravity = [
+        "AWAITING_REVIEW",
+        "PRE",
+        "CHALLENGED",
+    ]
+    for phrase in banned_near_gravity:
+        assert phrase not in gravity_context, (
+            f"Raw status token '{phrase}' found near gravity-play-card in JS — "
+            f"must be humanized via statusLabel()"
+        )
+
+    # ---------------------------------------------------------------
+    # PART C: Served CEO HTML must NOT embed raw gravity.rails tokens
+    # in the boot data. Human labels are rendered client-side by JS,
+    # so we verify the JS source (Parts A/B/D) — here we verify the
+    # boot JSON does not contain un-humanized raw token patterns.
+    # ---------------------------------------------------------------
+    # The executive HTML embeds window.__STRATEGYOS_BOOT__ with gravity data.
+    # Raw token patterns must not appear in the boot payload.
+    for phrase in banned_near_gravity:
+        assert phrase not in html, (
+            f"Raw status token '{phrase}' found in served CEO HTML — "
+            f"must be humanized before rendering"
+        )
+
+    # Also check for lowercase raw patterns that could appear in JSON boot data
+    raw_patterns_lower = [
+        "awaiting_review",
+        "4 challenged",
+    ]
+    for phrase in raw_patterns_lower:
+        assert phrase not in html, (
+            f"Raw status token '{phrase}' found in served CEO HTML boot data — "
+            f"must be humanized via statusLabel() before client-side hydration"
+        )
+
+    # ---------------------------------------------------------------
+    # PART D (optional): Regex verification that pill-row template
+    # specifically uses statusLabel in the escapeHtml call
+    # ---------------------------------------------------------------
+    import re
+    # Match the pill-row template: escapeHtml(statusLabel(item))
+    pill_row_pattern = re.compile(
+        r'pill-row.*?escapeHtml\(\s*statusLabel\(\s*item\s*\)\s*\)',
+        re.DOTALL,
+    )
+    assert pill_row_pattern.search(js), (
+        "gravity-play-card .pill-row template must wrap item in "
+        "escapeHtml(statusLabel(item)) — raw item found instead"
     )
