@@ -41,6 +41,32 @@
       .join(" ");
   }
 
+  function statusLabel(token) {
+    if (!token) return "—";
+    var key = String(token).toLowerCase().replace(/[_-]/g, " ").trim();
+    var map = {
+      "awaiting review": "Under review",
+      "awaiting_review": "Under review",
+      "pre": "Pre-board",
+      "challenged": "Needs review",
+      "approved for release": "Approved",
+      "approved_for_release": "Approved",
+      "blocked": "Blocked",
+      "draft": "Draft",
+      "published": "Published",
+      "completed": "Completed",
+      "pending": "Pending",
+      "in review": "Under review",
+      "in_review": "Under review",
+      "live packet": "Live packet",
+      "live_packet": "Live packet"
+    };
+    if (map[key]) return map[key];
+    var challengedMatch = key.match(/^(\d+)\s+challenged$/);
+    if (challengedMatch) return challengedMatch[1] + " items need review";
+    return humanizeToken(token);
+  }
+
   function initialsFromName(value) {
     return String(firstDefined(value, ""))
       .split(/\s+/)
@@ -502,7 +528,7 @@
     var challenged = firstDefined(publication.challenged_cases, state.latestPacket && state.latestPacket.challenged_cases, 0);
     return [
       "I could not compute a protected data answer in this executive surface.",
-      "Current governed run " + runId + " is " + humanizeToken(firstDefined(state.latestPacket && state.latestPacket.current_stage, state.latestPacket && state.latestPacket.status, "governed")) + ".",
+      "Current governed run " + runId + " is " + statusLabel(firstDefined(state.latestPacket && state.latestPacket.current_stage, state.latestPacket && state.latestPacket.status, "governed")) + ".",
       "Recoverable value is " + formatSar(recoverable) + ", findings: " + findings + ", challenged items: " + challenged + ".",
       firstDefined(planHealth.summary, boardPortal.governance_note, "Use /app as operator/reviewer for protected evidence Q&A and simulations."),
       message ? "Question asked: \u201c" + message + "\u201d." : ""
@@ -1003,7 +1029,7 @@
     var dash = circumference * (clampedScore / 100);
     var prompts = getHeroPrompts();
     var miniStats = [
-      { label: "Board state", value: humanizeToken(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
+      { label: "Board state", value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
       { label: "Reports", value: String(firstDefined(publication.report_count, 0)) + (state.activePersona === "ceo" ? " reports ready" : " surfaced") },
       { label: "Agents", value: String(firstDefined((agents.summary || {}).running_count, diagnostics.agents && diagnostics.agents.running_count, 0)) + (state.activePersona === "ceo" ? " agents active" : " running") },
       { label: state.activePersona === "ceo" ? "Needs review" : "Next move", value: state.activePersona === "ceo" ? String(firstDefined(publication.challenged_cases, safeArray((getDrilldown().owed_upward || {}).items).length, 0)) + " items need review" : humanizeToken(firstDefined(getPlanHealth().next_action, (boardPortal.state_detail || {}).title, "review")) }
@@ -1102,7 +1128,7 @@
       },
       {
         label: "Board lifecycle",
-        value: humanizeToken(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")),
+        value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")),
         detail: firstDefined((boardPortal.state_detail || {}).summary, "Board-safe lifecycle stays explicit.")
       },
       {
@@ -1222,7 +1248,7 @@
         { id: 't885M1WB1pg', title: 'Bridge Strategy and Execution with Decision-Ready Views', speaker: 'Strategy Execution Webinar', theme: 'strategy execution · decision-ready views', dur: '~35 min', summary: 'Creating decision-ready views that connect strategic plans to operational execution.', transcript: 'Building decision-ready dashboards, connecting plans to operations, and creating feedback loops that keep strategy alive.' }
       ];
       gravityPanel.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Thinking mode' : 'Gravity and guardrails') + '</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan’s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '">' + escapeHtml(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '</span></div>',
+        '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Thinking mode' : 'Gravity and guardrails') + '</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan’s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '</span></div>',
         '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(item) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="video-frame-wrapper"><iframe id="leaders-featured-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(vlogs[0].id) + '?rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen title="' + escapeHtml(vlogs[0].title) + '"></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div><div class="leaders-thumb-grid" id="leaders-thumb-grid">' + vlogs.map(function (item, idx) { return '<button class="leaders-thumb ' + (idx === 0 ? 'is-active' : '') + '" type="button" data-video-id="' + escapeHtml(item.id) + '" data-index="' + idx + '" aria-label="Watch: ' + escapeHtml(item.title) + '"><div class="leaders-thumb__img"><span class="leaders-thumb__play">▶</span></div><span class="leaders-thumb__speaker">' + escapeHtml(item.speaker) + '</span><span class="leaders-thumb__title">' + escapeHtml(item.title) + '</span></button>'; }).join('') + '</div></section></div>'
       ].join("");
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
@@ -1443,7 +1469,7 @@
       }).join('') : '<div class="discovery-empty">No closed-state actions are attached yet.</div>') + '</div></section><section class="board-panel frozen-panel"><p class="detail-eyebrow">Frozen snapshot</p><strong>' + escapeHtml(humanizeToken(firstDefined(snapshot.status, 'live_packet'))) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(snapshot.summary, 'Between meetings, the board room only sees the frozen snapshot.')) + '</p><button class="timeline-chip" type="button" data-board-prompt="Model a what-if on the frozen board snapshot: if EUR strengthens 5%, what was the hedged outcome?"><strong>◇ What-if on the snapshot</strong><span>No live org data reaches the board</span></button></section></div>';
     }
     portal.innerHTML = [
-      '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined((board.state_detail || {}).title, board.state_label, "Governed board packet")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined((board.state_detail || {}).summary, board.board_summary, "Board posture stays bounded to the current packet.")) + '</p></div><span class="pill-inline ' + toneClass(firstDefined(board.presentation_state, board.state, "pre")) + '">' + escapeHtml(firstDefined(board.state_label, board.presentation_state, board.state, "pre")) + '</span></div>',
+      '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined((board.state_detail || {}).title, board.state_label, "Governed board packet")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined((board.state_detail || {}).summary, board.board_summary, "Board posture stays bounded to the current packet.")) + '</p></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(board.presentation_state, board.state, "pre"))) + '">' + escapeHtml(statusLabel(firstDefined(board.state_label, board.presentation_state, board.state, "pre"))) + '</span></div>',
       '<div class="board-kpis">' + safeArray(board.kpis).slice(0, 4).map(function (item) {
         return '<div class="board-kpi"><span class="board-kpi__label">' + escapeHtml(firstDefined(item.label, "Metric")) + '</span><strong class="board-kpi__value">' + escapeHtml(firstDefined(item.value, item.pct, "—")) + '</strong><span class="board-kpi__sub">' + escapeHtml(firstDefined(item.sub, item.pct ? String(item.pct) + "%" : "Governed packet")) + '</span></div>';
       }).join("") + '</div>',
@@ -1454,7 +1480,7 @@
         if (item.next_action) flags.push('<span class="pill-inline">' + escapeHtml(humanizeToken(item.next_action)) + '</span>');
         return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Governed board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
-      '<div class="snapshot-grid"><div class="snapshot-card"><strong>Deck release</strong><span>' + escapeHtml(humanizeToken(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card"><strong>Frozen snapshot</strong><span>' + escapeHtml(humanizeToken(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
+      '<div class="snapshot-grid"><div class="snapshot-card"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
       (state.activePersona === "ceo"
         ? ''
         : '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).concat(safeArray(stateDetail.secondary_actions).slice(0, 2)).map(function (item) {
@@ -1789,7 +1815,7 @@
     var publication = getPublication();
     if (!reportCard) return;
     reportCard.innerHTML = [
-      '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Board reports' : 'Report surface') + '</p><h3 class="detail-title">' + (state.activePersona === "ceo" ? 'Board reports' : 'Previewable report routes') + '</h3></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, 'draft')) + '">' + escapeHtml(firstDefined(publication.publish_state, 'draft')) + '</span></div>',
+      '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Board reports' : 'Report surface') + '</p><h3 class="detail-title">' + (state.activePersona === "ceo" ? 'Board reports' : 'Previewable report routes') + '</h3></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '</span></div>',
       '<p class="detail-copy">Overview, cases, evidence, and reports now sing as one workspace. This rail keeps the board-safe output explicit.</p>',
       '<div class="mini-list">' + safeArray(publication.available_artifacts).slice(0, 5).map(function (item) {
         var meta = state.activePersona === "ceo"

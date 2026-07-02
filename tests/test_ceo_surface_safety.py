@@ -316,3 +316,58 @@ def test_ceo_dead_controls_fixed():
     assert "avatar.title" in js or "topbar-avatar" in js, (
         "KA avatar must have tooltip or click handler"
     )
+
+
+def test_ceo_status_tokens_humanized():
+    """CEO-visible rendered/static content must NEVER contain raw all-caps
+    underscored status tokens. All status pills must use human-readable labels.
+    """
+    js = _static_executive_js()
+    html = _ceo_executive_html()
+
+    # Banned raw patterns — these must NEVER appear in CEO-visible content
+    banned_raw = [
+        "AWAITING_REVIEW",
+        "AWAITING REVIEW",
+    ]
+
+    for phrase in banned_raw:
+        # In JS: raw token must not appear in CEO-facing string literals
+        # Check all template literal strings (between single quotes)
+        assert phrase not in js, (
+            f"Raw status token '{phrase}' found in executive.js — "
+            f"must be humanized via statusLabel()"
+        )
+        assert phrase not in html, (
+            f"Raw status token '{phrase}' found in served CEO HTML — "
+            f"must be humanized before rendering"
+        )
+
+    # The statusLabel function must exist with the correct mappings
+    assert "statusLabel" in js, (
+        "statusLabel() function must exist in executive.js"
+    )
+
+    # Mapped labels must be present (proving humanization is active)
+    assert "Under review" in js, (
+        "statusLabel must map 'awaiting_review' → 'Under review'"
+    )
+    assert "Pre-board" in js, (
+        "statusLabel must map 'pre' → 'Pre-board'"
+    )
+    assert "items need review" in js, (
+        "statusLabel must map 'N challenged' → 'N items need review'"
+    )
+
+    # Verify the Think-and-model pill uses statusLabel (not raw publish_state)
+    # The pill at line ~1225 must call statusLabel
+    think_pill_context = js[js.index("Thinking mode"):js.index("Thinking mode") + 600] if "Thinking mode" in js else ""
+    assert "statusLabel" in think_pill_context, (
+        "'Think and model' card pill must call statusLabel() not raw publish_state"
+    )
+
+    # Report surface pill must also use statusLabel
+    report_context = js[js.index("Board reports"):js.index("Board reports") + 400] if "Board reports" in js else ""
+    assert "statusLabel" in report_context, (
+        "'Board reports' card pill must call statusLabel() not raw publish_state"
+    )
