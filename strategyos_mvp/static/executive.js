@@ -1114,24 +1114,122 @@
     }
     if (gravityPanel) {
       var vlogs = [
-        { topic: 'Reading margin pressure before the board', who: 'Dr. Amal Faris', role: 'former Group CFO, regional pharma', dur: '4:12' },
-        { topic: 'When to hedge — and when to wait', who: 'Tariq Bensalem', role: 'treasury advisor', dur: '6:38' },
-        { topic: 'Recognising GMs without distorting incentives', who: 'Huda Karim', role: 'leadership coach', dur: '3:55' }
+        { id: 'uTRKdCY4HdE', title: 'Enterprise AI Strategy and CEO Leadership', speaker: 'McKinsey & Company', theme: 'CEO leadership · enterprise AI strategy', dur: '~45 min', summary: 'CXOTalk #851: How CEOs should think about AI strategy, governance, and organizational alignment.', transcript: 'Full discussion on CEO-level AI strategy: moving from experimentation to enterprise-wide adoption, building AI governance frameworks, and aligning AI initiatives with business strategy.' },
+        { id: 'sFSzPE2AOE0', title: 'Aligning AI with Enterprise Strategy', speaker: 'Leon Gordon, CEO at Onyx Data', theme: 'AI & data strategy alignment', dur: '~40 min', summary: 'How organizations can bridge the gap between AI capabilities and strategic goals.', transcript: 'Leon Gordon shares frameworks for aligning AI initiatives with enterprise strategy: data maturity assessment, capability mapping, and building a data-driven culture.' },
+        { id: 'pQtdQ6AHn_Q', title: 'Agentic AI Governance and Enterprise-Scale Execution', speaker: 'Industry Panel', theme: 'governance · data quality · enterprise execution', dur: '~50 min', summary: 'Governance models for agentic AI systems, data quality requirements, and scaling patterns.', transcript: 'Panel discussion: agentic AI governance control frameworks, data quality pipelines, human-in-the-loop patterns, and scaling AI execution while maintaining compliance.' },
+        { id: 't885M1WB1pg', title: 'Bridge Strategy and Execution with Decision-Ready Views', speaker: 'Strategy Execution Webinar', theme: 'strategy execution · decision-ready views', dur: '~35 min', summary: 'Creating decision-ready views that connect strategic plans to operational execution.', transcript: 'Building decision-ready dashboards, connecting plans to operations, and creating feedback loops that keep strategy alive.' }
       ];
       gravityPanel.innerHTML = [
         '<div class="detail-head"><div><p class="detail-eyebrow">Gravity and guardrails</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan’s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '">' + escapeHtml(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '</span></div>',
-        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(item) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-list">' + vlogs.map(function (item) { return '<button class="leader-row" type="button" data-vlog-topic="' + escapeHtml(item.topic) + '"><span class="leader-row__play">▶</span><span class="leader-row__copy"><strong>' + escapeHtml(item.topic) + '</strong><span>' + escapeHtml(item.who + ' · ' + item.role) + '</span></span><span class="leader-row__dur">' + escapeHtml(item.dur) + '</span></button>'; }).join('') + '</div></section></div>'
+        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(item) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-list">' + vlogs.map(function (item) { return '<button class="leader-row" type="button" data-video-id="' + escapeHtml(item.id) + '"><span class="leader-row__play">▶</span><span class="leader-row__copy"><strong>' + escapeHtml(item.title) + '</strong><span>' + escapeHtml(item.speaker) + '</span></span><span class="leader-row__theme">' + escapeHtml(item.theme) + '</span></button>'; }).join('') + '</div></section></div>'
       ].join("");
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
           askAssistant(button.getAttribute("data-chat-prompt") || "");
         };
       });
-      safeArray(gravityPanel.querySelectorAll('[data-vlog-topic]')).forEach(function (button) {
+      safeArray(gravityPanel.querySelectorAll('[data-video-id]')).forEach(function (button) {
         button.onclick = function () {
-          var topic = button.getAttribute('data-vlog-topic') || '';
-          askAssistant('From the Leaders’ Corner reel “' + topic + '” — how does this apply to Mizan right now?');
+          var videoId = button.getAttribute('data-video-id') || '';
+          var item = null;
+          safeArray(vlogs).forEach(function (v) {
+            if (v.id === videoId) item = v;
+          });
+          if (item) openVideoModal(item);
         };
+      });
+    }
+  }
+
+  function buildVideoModalHtml(item) {
+    return [
+      '<div class="video-modal-scrim" id="video-modal-scrim">',
+      '<div class="video-modal" role="dialog" aria-modal="true" aria-label="Video: ' + escapeHtml(item.title) + '">',
+      '<button class="video-modal-close" aria-label="Close video">×</button>',
+      '<div class="video-frame-wrapper">',
+      '<iframe id="video-modal-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(item.id) + '?rel=0&modestbranding=1"',
+      'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"',
+      'allowfullscreen title="' + escapeHtml(item.title) + '"></iframe>',
+      '</div>',
+      '<div class="video-modal-body">',
+      '<h3>' + escapeHtml(item.title) + '</h3>',
+      '<p class="video-modal-speaker">' + escapeHtml(item.speaker) + '</p>',
+      '<span class="video-modal-theme">' + escapeHtml(item.theme) + '</span>',
+      '<p class="video-modal-summary">' + escapeHtml(item.summary) + '</p>',
+      '<details>',
+      '<summary>Transcript / Key points</summary>',
+      '<p>' + escapeHtml(item.transcript) + '</p>',
+      '</details>',
+      '<button class="video-modal-cta" id="video-hermes-cta">Ask Hermes about this topic</button>',
+      '<div class="video-fallback" id="video-fallback" hidden>',
+      '<p>Embed unavailable</p>',
+      '<a class="video-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a>',
+      '</div>',
+      '</div>',
+      '</div>',
+      '</div>'
+    ].join("");
+  }
+
+  function closeVideoModal() {
+    var scrim = $("video-modal-scrim");
+    if (scrim) scrim.remove();
+    state.videoModalOpen = false;
+    document.removeEventListener("keydown", _videoModalKeydown);
+  }
+
+  var _videoModalKeydown = null;
+
+  function openVideoModal(item) {
+    closeVideoModal();
+    state.videoModalOpen = true;
+    var html = buildVideoModalHtml(item);
+    var wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    var scrim = wrapper.firstChild;
+    document.body.appendChild(scrim);
+
+    var closeBtn = scrim.querySelector(".video-modal-close");
+    var hermesCta = scrim.querySelector("#video-hermes-cta");
+    var fallbackEl = scrim.querySelector("#video-fallback");
+    var iframe = scrim.querySelector("#video-modal-iframe");
+    var fallbackTimer = null;
+
+    scrim.onclick = function (event) {
+      if (event.target === scrim) closeVideoModal();
+    };
+
+    if (closeBtn) {
+      closeBtn.onclick = function () { closeVideoModal(); };
+      closeBtn.focus();
+    }
+
+    if (hermesCta) {
+      hermesCta.onclick = function () {
+        askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?');
+        closeVideoModal();
+      };
+    }
+
+    _videoModalKeydown = function (event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeVideoModal();
+      }
+    };
+    document.addEventListener("keydown", _videoModalKeydown);
+
+    if (iframe && fallbackEl) {
+      fallbackTimer = window.setTimeout(function () {
+        fallbackEl.hidden = false;
+      }, 10000);
+
+      iframe.addEventListener("load", function () {
+        if (fallbackTimer) {
+          window.clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
+        fallbackEl.hidden = true;
       });
     }
   }
@@ -1624,6 +1722,7 @@
       a2aOpen: false,
       activeA2AExchange: "",
       drawerOpen: false,
+      videoModalOpen: false,
       theme: document.documentElement.getAttribute("data-theme") || "light",
       discoveryFilter: "all",
       selectedAgentModuleKey: "",

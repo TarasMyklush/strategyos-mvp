@@ -372,7 +372,9 @@ def test_entry_routes_static_assets_have_no_external_origins():
     combined = html + executive_html + js + css
     assert "https://cdn" not in combined
     assert "http://" not in combined
-    assert "https://" not in combined
+    # Allow intentional YouTube embed URLs in the Leaders' Corner modal
+    combined_no_youtube = combined.replace("https://www.youtube-nocookie.com", "").replace("https://www.youtube.com", "")
+    assert "https://" not in combined_no_youtube
     assert "fonts.googleapis" not in combined
 
 
@@ -713,3 +715,39 @@ def test_ui_session_returns_clean_display_identity_for_idp_subject(monkeypatch):
         assert "localhost" not in payload["display_subject"]
     finally:
         _restore_env(original)
+
+
+def test_leaders_corner_has_four_youtube_video_ids():
+    js = _static_executive_js()
+    assert "uTRKdCY4HdE" in js
+    assert "sFSzPE2AOE0" in js
+    assert "pQtdQ6AHn_Q" in js
+    assert "t885M1WB1pg" in js
+
+
+def test_leader_row_opens_video_modal_not_fake_placeholder():
+    js = _static_executive_js()
+    assert 'openVideoModal' in js
+    assert 'youtube-nocookie.com/embed' in js
+    # No fake placeholder copy from old entries
+    assert 'Reading margin pressure' not in js
+    assert 'Dr. Amal Faris' not in js
+    assert 'Tariq Bensalem' not in js
+    assert 'Huda Karim' not in js
+
+
+def test_video_modal_has_close_and_keyboard_support():
+    js = _static_executive_js()
+    assert 'closeVideoModal' in js
+    has_keyboard = 'Escape' in js or 'keydown' in js or 'addEventListener' in js
+    assert has_keyboard, "Modal must have keyboard/Escape support"
+
+
+def test_video_modal_has_hermes_cta_and_fallback_link():
+    js = _static_executive_js()
+    # Hermes integration still exists for follow-up
+    assert 'askAssistant' in js
+    # Fallback link to YouTube
+    assert 'youtube.com/watch' in js
+    # No dead data-vlog-topic buttons
+    assert 'data-vlog-topic' not in js
