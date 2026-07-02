@@ -460,3 +460,78 @@ def test_gravity_play_card_no_raw_tokens():
         "gravity-play-card .pill-row template must wrap item in "
         "escapeHtml(statusLabel(item)) — raw item found instead"
     )
+
+
+# ── Knowledge Graph surface safety ──
+
+def test_kg_no_raw_developer_jargon():
+    """Inspector panel and graph must not expose raw developer labels or
+    internal data-structure jargon (e.g. 'node', 'edge', 'object Promise',
+    'graph data', 'vertices')."""
+    js = _static_executive_js()
+
+    banned = [
+        "Object",
+        "Promise",
+        "[object",
+        "graph data",
+        "vertices",
+        "vertex",
+    ]
+    # Extract the inspector-building section (openNodeInspector → innerHTML)
+    insp_start = js.index("function openNodeInspector")
+    insp_end = js.index("function closeNodeInspector")
+    inspector_code = js[insp_start:insp_end]
+
+    for phrase in banned:
+        assert phrase not in inspector_code, (
+            f"Banned developer jargon '{phrase}' found in inspector panel code — "
+            f"inspector must use CEO-safe labels only"
+        )
+
+    # Also check renderKnowledgeGraph for node/edge as standalone in template strings
+    kg_start = js.index("function renderKnowledgeGraph")
+    kg_end = js.index("function renderHero")
+    kg_code = js[kg_start:kg_end]
+
+    # 'edge' and 'node' are fine as variable names, but not as visible text
+    # Verify no label text containing raw graph jargon
+    assert "Node\">" not in kg_code, "Raw 'Node>' label fallback exposed in graph"
+    assert "Edge\">" not in kg_code, "Raw 'Edge>' label fallback exposed in graph"
+
+
+def test_kg_has_category_color_system():
+    """Knowledge graph must define category color assignments (KG_CATEGORY_COLORS)
+    with at least 8 category entries."""
+    js = _static_executive_js()
+
+    assert "KG_CATEGORY_COLORS" in js, (
+        "Knowledge graph must define KG_CATEGORY_COLORS map"
+    )
+    # Verify all 8 required categories are present
+    required_categories = [
+        "plan", "KPI", "business_unit", "finding",
+        "document", "vendor", "invoice", "contract"
+    ]
+    for cat in required_categories:
+        assert cat in js, (
+            f"Category '{cat}' not found in JS — must be defined in KG_CATEGORY_COLORS"
+        )
+
+    # Each category must have a color hex
+    assert "#25335c" in js, "plan category color navy missing"
+    assert "#1a6e54" in js, "KPI category color forest missing"
+    assert "#8c6a3d" in js, "business_unit category color gold missing"
+
+
+def test_kg_question_lenses_exist():
+    """Knowledge graph must render question lens buttons with proper structure."""
+    js = _static_executive_js()
+
+    assert "kg-question" in js, "Must render question lens chips"
+    assert "data-kg-question" in js, "Question lenses must have data-kg-question attribute"
+    assert "knowledgeQuestionIndex" in js, (
+        "Must manage active question lens via state.knowledgeQuestionIndex"
+    )
+    assert 'role="tab"' in js, "Question lenses must have proper ARIA role"
+    assert "aria-selected" in js, "Question lenses must have aria-selected state"

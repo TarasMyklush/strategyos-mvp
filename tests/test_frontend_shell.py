@@ -763,3 +763,36 @@ def test_leaders_corner_has_hermes_cta_and_fallback_link():
     assert 'youtube.com/watch' in js
     assert 'leaders-yt-link' in js
     assert 'Open on YouTube' in js
+
+
+# ── Knowledge Graph rendering ──
+
+def test_kg_render_includes_modern_elements():
+    """renderKnowledgeGraph() must produce modern graph stage, inspector,
+    and category-colored node classes."""
+    js = _static_executive_js()
+    assert "kg-stage" in js, "kg-stage CSS class must be used in rendering"
+    assert "kg-inspector" in js, "kg-inspector element must exist in rendering logic"
+    assert "kg-node-dot--" in js, "Category-colored node dot classes must exist"
+    assert "kg-node--major" in js, "Major node sizing class must exist"
+    assert "kg-node--minor" in js, "Minor node sizing class must exist"
+    assert "kg-legend__swatch" in js, "Legend color swatches must exist"
+    assert "is-selected" in js, "Selected node state class must exist"
+    assert 'role="application"' in js, "Graph stage must have application ARIA role"
+    assert "aria-label" in js, "Graph must have aria-labels"
+    assert "kg-dimmed" in js, "Dimmed state class for hover must exist"
+
+
+def test_kg_inspector_has_ask_hermes_cta():
+    """Inspector panel must include an 'Ask Hermes about this' CTA button."""
+    js = _static_executive_js()
+    # Check the inspector builder
+    insp_start = js.index("function openNodeInspector")
+    insp_end = js.index("function closeNodeInspector")
+    inspector_code = js[insp_start:insp_end]
+    assert "Ask Hermes" in inspector_code, "Inspector must have 'Ask Hermes' CTA text"
+    assert "kg-inspector__ask" in inspector_code, "Inspector must have Ask Hermes button class"
+    assert "hermes_prompt" in inspector_code, "Inspector must use hermes_prompt from node data"
+    assert "askAssistant" in inspector_code, (
+        "Ask Hermes CTA must call askAssistant() with the node's hermes_prompt"
+    )

@@ -969,8 +969,125 @@
     }
   }
 
+  /* ── Category color map ── */
+  var KG_CATEGORY_COLORS = {
+    plan: "#25335c", KPI: "#1a6e54", business_unit: "#8c6a3d", finding: "#9b3434",
+    document: "#6b4c9a", vendor: "#2d7d9a", invoice: "#b85c1e", contract: "#4a7c59"
+  };
+  var KG_CATEGORY_LABELS = {
+    plan: "Board Plan", KPI: "KPI", business_unit: "Business Unit", finding: "Finding",
+    document: "Document", vendor: "Vendor", invoice: "Invoice", contract: "Contract"
+  };
+
+  function getCategoryColor(node) {
+    var cat = (node && node.category) || "";
+    return KG_CATEGORY_COLORS[cat] || "var(--accent)";
+  }
+
+  function openNodeInspector(node) {
+    var panel = $("kg-inspector");
+    if (!panel || !node) return;
+    state._kgSelectedNodeId = node.id;
+    var graph = getKnowledgeGraph();
+    var nodes = safeArray(graph.nodes);
+    var nodeMap = {};
+    nodes.forEach(function (n) { nodeMap[n.id] = n; });
+    var edges = safeArray(graph.edges);
+    var connectedIds = [];
+    edges.forEach(function (e) {
+      if (e[0] === node.id && connectedIds.indexOf(e[1]) === -1) connectedIds.push(e[1]);
+      if (e[1] === node.id && connectedIds.indexOf(e[0]) === -1) connectedIds.push(e[0]);
+    });
+    var connectedLabels = connectedIds.map(function (cid) {
+      var cn = nodeMap[cid];
+      return cn ? escapeHtml(cn.label) : "";
+    }).filter(Boolean);
+    panel.innerHTML =
+      '<button type="button" class="kg-inspector__close" aria-label="Close inspector" id="kg-inspector-close">&times;</button>' +
+      '<span class="kg-inspector__badge" style="background:' + escapeHtml(getCategoryColor(node)) + ';color:#fff">' + escapeHtml(firstDefined(node.category, "Node")) + '</span>' +
+      '<h3 class="kg-inspector__title" id="kg-inspector-title">' + escapeHtml(firstDefined(node.label, "Node")) + '</h3>' +
+      '<p class="kg-inspector__meta">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + ' &middot; Connected to ' + connectedIds.length + ' nodes</p>' +
+      '<p class="kg-inspector__detail">' + escapeHtml(firstDefined(node.detail, "No additional detail available.")) + '</p>' +
+      (connectedLabels.length ? '<div class="kg-inspector__connections"><span class="kg-inspector__connections-label">Connected to</span>' + connectedLabels.map(function (l) { return '<span class="kg-inspector__conn-chip">' + l + '</span>'; }).join('') + '</div>' : '') +
+      '<button type="button" class="kg-inspector__ask" id="kg-inspector-ask">Ask Hermes about this &rarr;</button>';
+    panel.hidden = false;
+    panel.setAttribute("aria-hidden", "false");
+    // Wire close button
+    var closeBtn = $("kg-inspector-close");
+    if (closeBtn) closeBtn.onclick = closeNodeInspector;
+    // Wire Ask Hermes
+    var askBtn = $("kg-inspector-ask");
+    if (askBtn) askBtn.onclick = function () {
+      var prompt = firstDefined(node.hermes_prompt, "Tell me about " + firstDefined(node.label, "this node") + ".");
+      askAssistant(prompt, "kg");
+      closeNodeInspector();
+    };
+    // Highlight selected node in SVG
+    var stage = card.querySelector(".kg-stage");
+    if (stage) {
+      safeArray(stage.querySelectorAll(".kg-node")).forEach(function (g) {
+        g.classList.remove("is-selected");
+      });
+      var selG = stage.querySelector('.kg-node[data-kg-id="' + escapeHtml(node.id) + '"]');
+      if (selG) selG.classList.add("is-selected");
+    }
+  }
+
+  function closeNodeInspector() {
+    var panel = $("kg-inspector");
+    if (!panel) return;
+    panel.hidden = true;
+    panel.setAttribute("aria-hidden", "true");
+    state._kgSelectedNodeId = null;
+    // Remove all selected highlights
+    var stage = card.querySelector(".kg-stage");
+    if (stage) {
+      safeArray(stage.querySelectorAll(".kg-node.is-selected")).forEach(function (g) {
+        g.classList.remove("is-selected");
+      });
+    }
+  }
+
+  function highlightConnected(nodeId) {
+    var graph = getKnowledgeGraph();
+    var edges = safeArray(graph.edges);
+    var connected = new Set();
+    connected.add(nodeId);
+    edges.forEach(function (e) {
+      if (e[0] === nodeId) connected.add(e[1]);
+      if (e[1] === nodeId) connected.add(e[0]);
+    });
+    var stage = card.querySelector(".kg-stage");
+    if (!stage) return;
+    // Nodes: dim unconnected
+    safeArray(stage.querySelectorAll(".kg-node")).forEach(function (g) {
+      var nid = g.getAttribute("data-kg-id") || "";
+      g.classList.toggle("kg-dimmed", !connected.has(nid));
+    });
+    // Labels: dim unconnected
+    safeArray(stage.querySelectorAll(".kg-label")).forEach(function (l) {
+      var lid = l.getAttribute("data-kg-label-id") || "";
+      l.classList.toggle("kg-dimmed", !connected.has(lid));
+    });
+    // Edges: highlight connected
+    safeArray(stage.querySelectorAll(".kg-edge")).forEach(function (edge) {
+      var eFrom = edge.getAttribute("data-kg-from") || "";
+      var eTo = edge.getAttribute("data-kg-to") || "";
+      edge.classList.toggle("kg-dimmed", !(connected.has(eFrom) && connected.has(eTo)));
+    });
+  }
+
+  function clearHighlights() {
+    var stage = card.querySelector(".kg-stage");
+    if (!stage) return;
+    safeArray(stage.querySelectorAll(".kg-node.kg-dimmed, .kg-label.kg-dimmed, .kg-edge.kg-dimmed")).forEach(function (el) {
+      el.classList.remove("kg-dimmed");
+    });
+  }
+
+  /* ── Main render ── */
+  var card = $("knowledge-graph-card");
   function renderKnowledgeGraph() {
-    var card = $("knowledge-graph-card");
     var graph = getKnowledgeGraph();
     if (!card) return;
     var focusQuestion = graph.questions[state.knowledgeQuestionIndex || 0] || null;
@@ -978,11 +1095,25 @@
     var nodes = safeArray(graph.nodes);
     var nodeMap = {};
     nodes.forEach(function (node) { nodeMap[node.id] = node; });
-    card.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">How your data relates</h3><p class="section-note">Shaped by the questions you ask — proof the system reasons across everything.</p></div><span class="pill-inline ok">Data relationships</span></div>'
-      + '<div class="kg-questions">' + safeArray(graph.questions).map(function (question, index) {
-        return '<button type="button" class="kg-question' + (focusQuestion && focusQuestion.id === question.id ? ' is-active' : '') + '" data-kg-question="' + index + '">' + escapeHtml(firstDefined(question.label, 'Question')) + '</button>';
+
+    /* ── Build category color lookup ── */
+    var catColors = {};
+    nodes.forEach(function (n) {
+      if (n.category) catColors[n.category] = KG_CATEGORY_COLORS[n.category] || "var(--accent)";
+    });
+
+    var isSelected = state._kgSelectedNodeId || null;
+
+    card.innerHTML =
+      '<div class="detail-head"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">Board Intelligence Map</h3><p class="section-note">Shaped by the questions you ask — proof the system reasons across everything.</p></div><span class="pill-inline ok">Data relationships</span></div>'
+      + '<div class="kg-questions" role="tablist" aria-label="Question lenses">' + safeArray(graph.questions).map(function (question, index) {
+        var active = focusQuestion && focusQuestion.id === question.id;
+        var focusCount = safeArray(question.focus).length;
+        return '<button type="button" class="kg-question' + (active ? ' is-active' : '') + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" data-kg-question="' + index + '"><span class="kg-question__dot" aria-hidden="true"></span>' + escapeHtml(firstDefined(question.label, 'Question')) + '<span class="kg-question__count">' + focusCount + '</span></button>';
       }).join('') + '</div>'
-      + '<div class="kg-stage"><svg viewBox="0 0 100 88" class="kg-svg" aria-hidden="true">'
+      + '<div class="kg-stage" tabindex="0" role="application" aria-label="Board Intelligence Map — interactive knowledge graph. Use arrow keys to explore connected nodes, Enter to open details.">'
+      + '<svg viewBox="0 0 100 88" class="kg-svg" aria-hidden="true">'
+      /* Edges */
       + safeArray(graph.edges).map(function (edge) {
         var from = nodeMap[edge[0]];
         var to = nodeMap[edge[1]];
@@ -990,23 +1121,71 @@
         var mx = ((Number(from.x || 0) + Number(to.x || 0)) / 2).toFixed(1);
         var my = (((Number(from.y || 0) + Number(to.y || 0)) / 2) - 4).toFixed(1);
         var active = !focused || (focused.has(edge[0]) && focused.has(edge[1]));
-        return '<path class="kg-edge' + (active ? ' on' : '') + '" d="M' + escapeHtml(String(from.x)) + ',' + escapeHtml(String(from.y)) + ' Q' + escapeHtml(mx) + ',' + escapeHtml(my) + ' ' + escapeHtml(String(to.x)) + ',' + escapeHtml(String(to.y)) + '"></path>';
+        return '<path class="kg-edge' + (active ? ' on' : '') + '" data-kg-from="' + escapeHtml(edge[0]) + '" data-kg-to="' + escapeHtml(edge[1]) + '" d="M' + escapeHtml(String(from.x)) + ',' + escapeHtml(String(from.y)) + ' Q' + escapeHtml(mx) + ',' + escapeHtml(my) + ' ' + escapeHtml(String(to.x)) + ',' + escapeHtml(String(to.y)) + '"></path>';
       }).join('')
+      /* Nodes */
       + nodes.map(function (node) {
         var active = !focused || focused.has(node.id);
-        return '<g class="kg-node' + (active ? ' on' : ' off') + '"><circle class="kg-node-dot" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(Math.max(2.4, Number(node.r || 8) / 2.4))) + '"></circle></g>';
+        var sizeClass = "";
+        var nr = Number(node.r || 8);
+        if (nr >= 12) sizeClass = " kg-node--major";
+        else if (nr <= 7) sizeClass = " kg-node--minor";
+        var selClass = (isSelected === node.id) ? " is-selected" : "";
+        return '<g class="kg-node' + (active ? ' on' : ' off') + sizeClass + selClass + '" data-kg-id="' + escapeHtml(node.id) + '" tabindex="0" role="button" aria-label="' + escapeHtml(firstDefined(node.label, 'Node')) + ' — ' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || 'node')) + '"><circle class="kg-node-dot kg-node-dot--' + escapeHtml(node.category || 'default') + '" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(Math.max(2.8, nr / 2.4))) + '"></circle></g>';
       }).join('')
-      + '</svg><div class="kg-labels">' + nodes.map(function (node) {
+      + '</svg>'
+      /* Labels overlaid on SVG */
+      + '<div class="kg-labels">' + nodes.map(function (node) {
         var active = !focused || focused.has(node.id);
-        return '<span class="kg-label' + (active ? ' on' : ' off') + '" style="left:' + escapeHtml(String(node.x)) + '%;top:' + escapeHtml(String(node.y)) + '%">' + escapeHtml(firstDefined(node.label, 'Node')) + '</span>';
-      }).join('') + '</div></div>'
-      + '<div class="kg-legend"><span>plan</span><span>KPI</span><span>business unit</span><span>finding</span><span>document</span><span>vendor</span><span>invoice</span><span>contract</span></div>';
+        return '<span class="kg-label' + (active ? ' on' : ' off') + '" data-kg-label-id="' + escapeHtml(node.id) + '" style="left:' + escapeHtml(String(node.x)) + '%;top:' + escapeHtml(String(node.y)) + '%"><span class="kg-label__dot" style="background:' + escapeHtml(getCategoryColor(node)) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(node.label, 'Node')) + '</span>';
+      }).join('') + '</div>'
+      /* Legend */
+      + '<div class="kg-legend" aria-label="Node category legend">' + Object.keys(KG_CATEGORY_COLORS).map(function (cat) {
+        return '<span class="kg-legend__item"><span class="kg-legend__swatch" style="background:' + escapeHtml(KG_CATEGORY_COLORS[cat]) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[cat], cat)) + '</span>';
+      }).join('') + '</div>'
+      + '</div>';
+
+    /* ── Wire question lens buttons ── */
     safeArray(card.querySelectorAll('[data-kg-question]')).forEach(function (button) {
       button.onclick = function () {
         state.knowledgeQuestionIndex = Number(button.getAttribute('data-kg-question') || 0) || 0;
+        closeNodeInspector();
         renderKnowledgeGraph();
       };
     });
+
+    /* ── Wire node hover ── */
+    var stage = card.querySelector(".kg-stage");
+    if (stage) {
+      safeArray(stage.querySelectorAll(".kg-node")).forEach(function (g) {
+        var nid = g.getAttribute("data-kg-id") || "";
+        g.addEventListener("mouseenter", function () { highlightConnected(nid); });
+        g.addEventListener("mouseleave", function () { clearHighlights(); });
+        g.addEventListener("focus", function () { highlightConnected(nid); });
+        g.addEventListener("blur", function () { clearHighlights(); });
+        // Click to open inspector
+        g.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var node = nodeMap[nid];
+          if (node) openNodeInspector(node);
+        });
+        // Keyboard: Enter/Space to open inspector
+        g.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            var node = nodeMap[nid];
+            if (node) openNodeInspector(node);
+          }
+        });
+      });
+
+      // Click on stage background closes inspector
+      stage.addEventListener("click", function (e) {
+        if (e.target === stage || e.target.classList.contains("kg-svg")) {
+          closeNodeInspector();
+        }
+      });
+    }
   }
 
   function renderHero() {
