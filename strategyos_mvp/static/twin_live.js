@@ -3,7 +3,11 @@
 
   function $(id) { return document.getElementById(id); }
   function text(value, fallback) { return value === undefined || value === null || value === "" ? (fallback || "—") : String(value); }
-  function safeArray(value) { return Array.isArray(value) ? value : []; }
+  function safeArray(value) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value.forEach === 'function') return Array.from(value);
+    return [];
+  }
   function detectRole() {
     if (window.ROLE) return window.ROLE;
     var path = String(window.location.pathname || "").toLowerCase();

@@ -10,7 +10,11 @@
   var DESIGN = (window.STRATEGYOS_EXECUTIVE_DESIGN && window.STRATEGYOS_EXECUTIVE_DESIGN.personas) || {};
   var DESIGN_GLOBAL = window.STRATEGYOS_EXECUTIVE_DESIGN || {};
 
-  function safeArray(value) { return Array.isArray(value) ? value : []; }
+  function safeArray(value) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value.forEach === 'function') return Array.from(value);
+    return [];
+  }
 
   function firstDefined() {
     for (var i = 0; i < arguments.length; i += 1) {
