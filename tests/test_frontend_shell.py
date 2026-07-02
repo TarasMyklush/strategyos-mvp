@@ -76,7 +76,12 @@ def test_guide_route_renders_plain_english_public_guide():
     assert "What you can see right now" in html
     assert "Try it yourself" in html
     assert "What's next" in html
-    assert "No sign-up needed for the public preview" in html
+    assert "Use the temporary test login page" in html
+    assert 'href="/login"' in html
+    assert "https://strategyos.live/login" in html
+    assert "Executive users land on" in html
+    assert "all other test roles land on" in html
+    assert "No sign-up needed for the public preview" not in html
     assert "5–10 minutes" in html
     assert "criticalBlockers" not in html
     assert "activeActionItems" not in html

@@ -120,19 +120,19 @@
       <article class="card">
         <p class="eyebrow">Non-technical guide</p>
         <h1 id="guide-title">How StrategyOS works</h1>
-        <p class="lede">StrategyOS helps leaders and teams review strategy and financial performance with evidence, not guesswork. This page explains the system in plain English and shows how to test the public preview.</p>
+        <p class="lede">StrategyOS helps leaders and teams review strategy and financial performance with evidence, not guesswork. This page explains the system in plain English and shows how to test the current role-based preview.</p>
         <div class="cta-row">
           <a class="button primary" href="#try-it-yourself">Try it yourself</a>
-          <a class="button secondary" href="/">Open StrategyOS</a>
+          <a class="button secondary" href="/login">Open test login</a>
         </div>
       </article>
       <aside class="card quick-card" aria-label="Quick summary">
         <div>
           <h2>What to expect</h2>
-          <p>A 5–10 minute public walkthrough of the leadership view, case previews, evidence links, and governed workspace layout.</p>
+          <p>A 5–10 minute walkthrough using temporary test users for executive, operator, reviewer, business-unit, analyst, auditor, tenant, and system roles.</p>
         </div>
         <div class="quick-stat">
-          <span>No sign-up needed for the public preview</span>
+          <span>Use the temporary test login page</span>
           <strong>5–10 min</strong>
         </div>
       </aside>
@@ -162,7 +162,7 @@
       <article class="card">
         <h2>Human review stays central</h2>
         <p>The system prepares the view and connects evidence. A person still makes the final call, especially before a finding is shared with leadership or used in a board pack.</p>
-        <p class="note boundary">The full governed workflow requires an authenticated session. The public site shows a sanitised preview so visitors can understand the experience without seeing private data.</p>
+        <p class="note boundary">The full governed workflow requires an authenticated session. The temporary <a href="/login">/login</a> page lets invited testers enter as different roles without exposing private production credentials.</p>
       </article>
     </section>
 
@@ -171,29 +171,30 @@
       <ul class="plain-list">
         <li><span class="badge">/</span><span><strong>Homepage.</strong> An executive overview with KPI cards, case previews, an evidence packet preview, and a board-pack area.</span></li>
         <li><span class="badge">/executive</span><span><strong>Executive overview.</strong> The same leadership view, framed for review of current performance signals.</span></li>
-        <li><span class="badge">/app</span><span><strong>Workspace preview.</strong> A limited public view of the governed diagnostics workspace layout.</span></li>
+        <li><span class="badge">/login</span><span><strong>Temporary test login.</strong> Choose a seeded test user, enter its password, and enter the app as that role.</span></li>
+        <li><span class="badge">/app</span><span><strong>Workspace preview.</strong> The governed diagnostics workspace layout after a temporary login.</span></li>
       </ul>
-      <p class="note boundary">The public surface is a preview. Live case data, full evidence, reports, and approval actions require a connected session.</p>
+      <p class="note boundary">The public surface is a preview. Live case data, full evidence, reports, and approval actions require an authorised session; the temporary test users are only for preview and role-flow testing.</p>
     </section>
 
     <section class="section card" id="try-it-yourself" aria-labelledby="try-heading">
       <h2 id="try-heading">Try it yourself</h2>
-      <p>Estimated time: 5–10 minutes. You do not need an account for the public preview.</p>
+      <p>Estimated time: 5–10 minutes. Use one of the temporary test users on <a href="/login">/login</a>; the password list is shared separately with authorised testers.</p>
       <ol class="steps">
-        <li><span class="badge">1</span><span>Go to <a href="https://strategyos.live">https://strategyos.live</a>.</span></li>
-        <li><span class="badge">2</span><span>Look at the executive overview: the KPI cards, case list, and board-pack area.</span></li>
-        <li><span class="badge">3</span><span>Click through the case matrix to understand how public case previews are organised.</span></li>
-        <li><span class="badge">4</span><span>Open the evidence packet area to see how findings connect back to support material.</span></li>
-        <li><span class="badge">5</span><span>Visit <a href="/app">/app</a> to see the governed workspace layout.</span></li>
-        <li><span class="badge">6</span><span>If you later connect a session, the full case-to-evidence-to-report workflow becomes available for authorised users.</span></li>
+        <li><span class="badge">1</span><span>Open <a href="https://strategyos.live/login">https://strategyos.live/login</a>.</span></li>
+        <li><span class="badge">2</span><span>Select a temporary role user, enter its password, and press <strong>Log in</strong>.</span></li>
+        <li><span class="badge">3</span><span>Executive users land on <a href="/executive">/executive</a>; all other test roles land on <a href="/app">/app</a>.</span></li>
+        <li><span class="badge">4</span><span>Check the role-specific workspace: KPI cards, case list, evidence packet area, board-pack area, and allowed actions.</span></li>
+        <li><span class="badge">5</span><span>Repeat with another role to compare what an operator, reviewer, auditor, executive, tenant admin, or system user can see and do.</span></li>
+        <li><span class="badge">6</span><span>Use only the temporary test users for preview testing; real customer credentials and production data are out of scope for this page.</span></li>
       </ol>
     </section>
 
     <section class="section card" aria-labelledby="next-heading">
       <h2 id="next-heading">What's next</h2>
-      <p>StrategyOS is under active development. The current focus is strengthening the governed workflow, role-specific views, and the authenticated experience while keeping the public preview clear and truthful.</p>
+      <p>StrategyOS is under active development. The current focus is strengthening the governed workflow, role-specific views, and the authenticated experience while keeping the temporary preview clear and truthful.</p>
       <div class="cta-row">
-        <a class="button primary" href="/">Open the public preview</a>
+        <a class="button primary" href="/login">Open the test login</a>
         <a class="button secondary" href="/plan">View the plan tracker</a>
       </div>
     </section>
