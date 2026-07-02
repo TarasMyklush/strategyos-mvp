@@ -725,29 +725,41 @@ def test_leaders_corner_has_four_youtube_video_ids():
     assert "t885M1WB1pg" in js
 
 
-def test_leader_row_opens_video_modal_not_fake_placeholder():
+def test_leaders_corner_has_inline_embed_not_dead_buttons():
     js = _static_executive_js()
-    assert 'openVideoModal' in js
+    # Inline embed approach — iframe directly in leaders-card
+    assert 'leaders-featured-iframe' in js, "Must have inline iframe for featured video"
     assert 'youtube-nocookie.com/embed' in js
+    # Thumbnail selectors that swap the inline player
+    assert 'leaders-thumb' in js
+    assert 'leaders-thumb-grid' in js
+    assert 'selectLeadersVideo' in js
     # No fake placeholder copy from old entries
     assert 'Reading margin pressure' not in js
     assert 'Dr. Amal Faris' not in js
     assert 'Tariq Bensalem' not in js
     assert 'Huda Karim' not in js
+    # No dead data-vlog-topic or leader-row buttons
+    assert 'data-vlog-topic' not in js
+    assert 'leader-row__copy' not in js, "Must not render leader-row list — use inline embed + thumbnails"
 
 
-def test_video_modal_has_close_and_keyboard_support():
+def test_leaders_corner_modal_fallback_still_works():
     js = _static_executive_js()
+    # Modal functions still available as fallback/alternative path
+    assert 'openVideoModal' in js
     assert 'closeVideoModal' in js
     has_keyboard = 'Escape' in js or 'keydown' in js or 'addEventListener' in js
     assert has_keyboard, "Modal must have keyboard/Escape support"
 
 
-def test_video_modal_has_hermes_cta_and_fallback_link():
+def test_leaders_corner_has_hermes_cta_and_fallback_link():
     js = _static_executive_js()
     # Hermes integration still exists for follow-up
     assert 'askAssistant' in js
+    assert 'leaders-hermes-cta' in js
+    assert 'Ask Hermes about this topic' in js
     # Fallback link to YouTube
     assert 'youtube.com/watch' in js
-    # No dead data-vlog-topic buttons
-    assert 'data-vlog-topic' not in js
+    assert 'leaders-yt-link' in js
+    assert 'Open on YouTube' in js

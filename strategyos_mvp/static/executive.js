@@ -1121,22 +1121,74 @@
       ];
       gravityPanel.innerHTML = [
         '<div class="detail-head"><div><p class="detail-eyebrow">Gravity and guardrails</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan’s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '">' + escapeHtml(firstDefined(publication.publish_state, board.presentation_state, "draft")) + '</span></div>',
-        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(item) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-list">' + vlogs.map(function (item) { return '<button class="leader-row" type="button" data-video-id="' + escapeHtml(item.id) + '"><span class="leader-row__play">▶</span><span class="leader-row__copy"><strong>' + escapeHtml(item.title) + '</strong><span>' + escapeHtml(item.speaker) + '</span></span><span class="leader-row__theme">' + escapeHtml(item.theme) + '</span></button>'; }).join('') + '</div></section></div>'
+        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(item) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="video-frame-wrapper"><iframe id="leaders-featured-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(vlogs[0].id) + '?rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen title="' + escapeHtml(vlogs[0].title) + '"></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div><div class="leaders-thumb-grid" id="leaders-thumb-grid">' + vlogs.map(function (item, idx) { return '<button class="leaders-thumb ' + (idx === 0 ? 'is-active' : '') + '" type="button" data-video-id="' + escapeHtml(item.id) + '" data-index="' + idx + '" aria-label="Watch: ' + escapeHtml(item.title) + '"><div class="leaders-thumb__img"><span class="leaders-thumb__play">▶</span></div><span class="leaders-thumb__speaker">' + escapeHtml(item.speaker) + '</span><span class="leaders-thumb__title">' + escapeHtml(item.title) + '</span></button>'; }).join('') + '</div></section></div>'
       ].join("");
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
           askAssistant(button.getAttribute("data-chat-prompt") || "");
         };
       });
-      safeArray(gravityPanel.querySelectorAll('[data-video-id]')).forEach(function (button) {
-        button.onclick = function () {
-          var videoId = button.getAttribute('data-video-id') || '';
+      var leadersCard = gravityPanel.querySelector('.leaders-card');
+      var leadersThumbGrid = gravityPanel.querySelector('#leaders-thumb-grid');
+      if (leadersThumbGrid) {
+        leadersThumbGrid.addEventListener('click', function (event) {
+          var thumb = event.target.closest('.leaders-thumb');
+          if (!thumb) return;
+          var videoId = thumb.getAttribute('data-video-id') || '';
           var item = null;
           safeArray(vlogs).forEach(function (v) {
             if (v.id === videoId) item = v;
           });
-          if (item) openVideoModal(item);
+          if (item) selectLeadersVideo(item, vlogs, leadersCard);
+        });
+        var hermesCta = leadersCard.querySelector('#leaders-hermes-cta');
+        if (hermesCta) {
+          hermesCta.onclick = function () {
+            var activeThumb = leadersThumbGrid.querySelector('.leaders-thumb.is-active');
+            var item = null;
+            if (activeThumb) {
+              var vid = activeThumb.getAttribute('data-video-id');
+              safeArray(vlogs).forEach(function (v) {
+                if (v.id === vid) item = v;
+              });
+            }
+            if (item) {
+              askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?');
+            }
+          };
+        }
+      }
+    }
+  }
+
+  function selectLeadersVideo(item, vlogs, leadersCard) {
+    if (!leadersCard) return;
+    var iframe = leadersCard.querySelector('#leaders-featured-iframe');
+    var info = leadersCard.querySelector('#leaders-video-info');
+    var thumbGrid = leadersCard.querySelector('#leaders-thumb-grid');
+
+    if (iframe) {
+      iframe.src = 'https://www.youtube-nocookie.com/embed/' + escapeHtml(item.id) + '?rel=0&modestbranding=1';
+    }
+
+    if (info) {
+      info.innerHTML = '<h4>' + escapeHtml(item.title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(item.speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(item.theme) + '</span><p class="leaders-video-summary">' + escapeHtml(item.summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(item.transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+      var hermesCta = info.querySelector('#leaders-hermes-cta');
+      if (hermesCta) {
+        hermesCta.onclick = function () {
+          askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?');
         };
+      }
+    }
+
+    if (thumbGrid) {
+      safeArray(thumbGrid.querySelectorAll('.leaders-thumb')).forEach(function (thumb) {
+        var vid = thumb.getAttribute('data-video-id');
+        if (vid === item.id) {
+          thumb.classList.add('is-active');
+        } else {
+          thumb.classList.remove('is-active');
+        }
       });
     }
   }
