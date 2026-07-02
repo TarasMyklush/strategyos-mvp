@@ -52,7 +52,7 @@ def require(condition: bool, message: str) -> None:
 require(200 <= response.status < 400, f"Expected {path} to return 2xx/3xx, got HTTP {response.status}.")
 require(headers.get("x-content-type-options", "").lower() == "nosniff", "Missing X-Content-Type-Options: nosniff header.")
 require(headers.get("x-frame-options", "").upper() == "DENY", "Missing X-Frame-Options: DENY header.")
-require(headers.get("referrer-policy", "").lower() == "no-referrer", "Missing Referrer-Policy: no-referrer header.")
+require(headers.get("referrer-policy", "").lower() in {"strict-origin-when-cross-origin", "no-referrer"}, "Missing Referrer-Policy: strict-origin-when-cross-origin header.")
 require(bool(headers.get("permissions-policy", "").strip()), "Missing Permissions-Policy header.")
 require(not headers.get("server"), f"Server header should be stripped at the public edge, got: {headers.get('server')!r}.")
 if parsed.scheme == "https":

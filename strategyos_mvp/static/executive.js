@@ -9,6 +9,30 @@
   var _tokenKey = "strategyos.ui.token";
   var DESIGN = (window.STRATEGYOS_EXECUTIVE_DESIGN && window.STRATEGYOS_EXECUTIVE_DESIGN.personas) || {};
   var DESIGN_GLOBAL = window.STRATEGYOS_EXECUTIVE_DESIGN || {};
+  var _leadersFallbackTimer = null;
+
+  // PostMessage listener for YouTube embed error detection (faster than timeout)
+  window.addEventListener('message', function (event) {
+    if (event.origin !== 'https://www.youtube-nocookie.com') return;
+    try {
+      var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (data && data.event === 'onError') {
+        var frame = document.getElementById('leaders-featured-iframe');
+        if (frame) {
+          if (_leadersFallbackTimer) { window.clearTimeout(_leadersFallbackTimer); _leadersFallbackTimer = null; }
+          var wrapper = frame.parentNode;
+          var vidMatch = frame.src && frame.src.match(/\/embed\/([^/?]+)/);
+          var vid = vidMatch ? vidMatch[1] : '';
+          if (wrapper) {
+            wrapper.innerHTML = '<div class="leaders-fallback-card"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">This video is not available for inline playback.</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vid) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+          }
+        }
+      }
+      if (data && data.event === 'onReady') {
+        if (_leadersFallbackTimer) { window.clearTimeout(_leadersFallbackTimer); _leadersFallbackTimer = null; }
+      }
+    } catch (_) {}
+  });
 
   function safeArray(value) {
     if (Array.isArray(value)) return value;
@@ -1428,7 +1452,7 @@
       ];
       gravityPanel.innerHTML = [
         '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Thinking mode' : 'Gravity and guardrails') + '</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan’s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '</span></div>',
-        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(statusLabel(item)) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="video-frame-wrapper"><iframe id="leaders-featured-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(vlogs[0].id) + '?rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen title="' + escapeHtml(vlogs[0].title) + '"></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div><div class="leaders-thumb-grid" id="leaders-thumb-grid">' + vlogs.map(function (item, idx) { return '<button class="leaders-thumb ' + (idx === 0 ? 'is-active' : '') + '" type="button" data-video-id="' + escapeHtml(item.id) + '" data-index="' + idx + '" aria-label="Watch: ' + escapeHtml(item.title) + '"><div class="leaders-thumb__img"><span class="leaders-thumb__play">▶</span></div><span class="leaders-thumb__speaker">' + escapeHtml(item.speaker) + '</span><span class="leaders-thumb__title">' + escapeHtml(item.title) + '</span></button>'; }).join('') + '</div></section></div>'
+        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(statusLabel(item)) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="video-frame-wrapper"><iframe id="leaders-featured-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(vlogs[0].id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen title="' + escapeHtml(vlogs[0].title) + '"></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div><div class="leaders-thumb-grid" id="leaders-thumb-grid">' + vlogs.map(function (item, idx) { return '<button class="leaders-thumb ' + (idx === 0 ? 'is-active' : '') + '" type="button" data-video-id="' + escapeHtml(item.id) + '" data-index="' + idx + '" aria-label="Watch: ' + escapeHtml(item.title) + '"><div class="leaders-thumb__img"><span class="leaders-thumb__play">▶</span></div><span class="leaders-thumb__speaker">' + escapeHtml(item.speaker) + '</span><span class="leaders-thumb__title">' + escapeHtml(item.title) + '</span></button>'; }).join('') + '</div></section></div>'
       ].join("");
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
@@ -1465,6 +1489,23 @@
           };
         }
       }
+      // ── Inline embed fallback: if iframe doesn't load within 10s, show fallback card ──
+      var inlineFrame = leadersCard && leadersCard.querySelector('#leaders-featured-iframe');
+      if (inlineFrame) {
+        if (_leadersFallbackTimer) { window.clearTimeout(_leadersFallbackTimer); _leadersFallbackTimer = null; }
+        _leadersFallbackTimer = window.setTimeout(function () {
+          var wrapper = inlineFrame.parentNode;
+          if (wrapper) {
+            wrapper.innerHTML = '<div class="leaders-fallback-card"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">This video is not available inline.</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+          }
+        }, 10000);
+        inlineFrame.addEventListener('load', function () {
+          if (_leadersFallbackTimer) {
+            window.clearTimeout(_leadersFallbackTimer);
+            _leadersFallbackTimer = null;
+          }
+        }, { once: true });
+      }
     }
   }
 
@@ -1475,7 +1516,26 @@
     var thumbGrid = leadersCard.querySelector('#leaders-thumb-grid');
 
     if (iframe) {
-      iframe.src = 'https://www.youtube-nocookie.com/embed/' + escapeHtml(item.id) + '?rel=0&modestbranding=1';
+      iframe.src = 'https://www.youtube-nocookie.com/embed/' + escapeHtml(item.id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1';
+      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen');
+      // Reset fallback timer on video switch
+      if (_leadersFallbackTimer) {
+        window.clearTimeout(_leadersFallbackTimer);
+        _leadersFallbackTimer = null;
+      }
+      _leadersFallbackTimer = window.setTimeout(function () {
+        var wrapper = iframe.parentNode;
+        if (wrapper) {
+          wrapper.innerHTML = '<div class="leaders-fallback-card"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">This video is not available inline.</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+        }
+      }, 10000);
+      iframe.addEventListener('load', function () {
+        if (_leadersFallbackTimer) {
+          window.clearTimeout(_leadersFallbackTimer);
+          _leadersFallbackTimer = null;
+        }
+      }, { once: true });
     }
 
     if (info) {
@@ -1506,8 +1566,8 @@
       '<div class="video-modal" role="dialog" aria-modal="true" aria-label="Video: ' + escapeHtml(item.title) + '">',
       '<button class="video-modal-close" aria-label="Close video">×</button>',
       '<div class="video-frame-wrapper">',
-      '<iframe id="video-modal-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(item.id) + '?rel=0&modestbranding=1"',
-      'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"',
+      '<iframe id="video-modal-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(item.id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1"',
+      'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin"',
       'allowfullscreen title="' + escapeHtml(item.title) + '"></iframe>',
       '</div>',
       '<div class="video-modal-body">',

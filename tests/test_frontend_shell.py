@@ -373,7 +373,7 @@ def test_entry_routes_static_assets_have_no_external_origins():
     assert "https://cdn" not in combined
     assert "http://" not in combined
     # Allow intentional YouTube embed URLs in the Leaders' Corner modal
-    combined_no_youtube = combined.replace("https://www.youtube-nocookie.com", "").replace("https://www.youtube.com", "")
+    combined_no_youtube = combined.replace("https://www.youtube-nocookie.com", "").replace("https://www.youtube.com", "").replace("https://strategyos.live", "")
     assert "https://" not in combined_no_youtube
     assert "fonts.googleapis" not in combined
 
@@ -795,4 +795,142 @@ def test_kg_inspector_has_ask_hermes_cta():
     assert "hermes_prompt" in inspector_code, "Inspector must use hermes_prompt from node data"
     assert "askAssistant" in inspector_code, (
         "Ask Hermes CTA must call askAssistant() with the node's hermes_prompt"
+    )
+
+
+# ── YouTube Leaders' Corner embed safety ──
+
+def test_leaders_corner_embed_has_origin_param():
+    """YouTube embed URL must include origin parameter (prevents Error 153)."""
+    js = _static_executive_js()
+
+    # Inline embed (initial render)
+    assert "encodeURIComponent(window.location.origin)" in js, (
+        "origin must be set dynamically via encodeURIComponent(window.location.origin)"
+    )
+    assert "?origin=" in js, "URL must contain origin parameter"
+
+    # Verify origin param appears in at least 2 places (inline + selectLeadersVideo)
+    origin_count = js.count("encodeURIComponent(window.location.origin)")
+    assert origin_count >= 2, (
+        f"origin should appear in at least 2 URLs (inline + selectLeadersVideo), found {origin_count}"
+    )
+
+
+def test_leaders_corner_embed_has_enablejsapi():
+    """YouTube embed URL must include enablejsapi=1 for postMessage error detection."""
+    js = _static_executive_js()
+
+    assert "enablejsapi=1" in js, (
+        "enablejsapi=1 required for YouTube IFrame API postMessage events"
+    )
+
+    # Must appear in at least 2 places (inline + selectLeadersVideo)
+    jsapi_count = js.count("enablejsapi=1")
+    assert jsapi_count >= 2, (
+        f"enablejsapi=1 should appear in at least 2 URLs, found {jsapi_count}"
+    )
+
+
+def test_leaders_corner_embed_has_safe_params():
+    """YouTube embed must keep rel=0 and modestbranding=1 params."""
+    js = _static_executive_js()
+
+    assert "rel=0" in js, "rel=0 prevents related videos at end"
+    assert "modestbranding=1" in js, "modestbranding=1 keeps player clean"
+
+
+def test_leaders_corner_embed_has_referrerpolicy_and_fullscreen():
+    """iframe must have referrerpolicy and fullscreen in allow attribute."""
+    js = _static_executive_js()
+
+    assert "referrerpolicy" in js, (
+        "iframe must have referrerpolicy attribute for cross-origin"
+    )
+    assert "strict-origin-when-cross-origin" in js, (
+        "referrerpolicy must be strict-origin-when-cross-origin"
+    )
+
+    # allow attribute must include fullscreen
+    assert "fullscreen" in js, "allow attribute must include fullscreen"
+    # Verify fullscreen appears in iframe allow context (near youtube-nocookie)
+    embed_section = js[js.index("youtube-nocookie.com/embed"):]
+    assert "fullscreen" in embed_section[:500], (
+        "fullscreen must be near the youtube-nocookie embed URL"
+    )
+
+
+def test_leaders_corner_has_fallback_card_code():
+    """Fallback card code must be present for when embed fails."""
+    js = _static_executive_js()
+
+    assert "leaders-fallback-card" in js, (
+        "Fallback card HTML class must be present"
+    )
+    assert "leaders-fallback-icon" in js, (
+        "Fallback card icon class must be present"
+    )
+    assert "leaders-fallback-link" in js, (
+        "Fallback 'Open on YouTube' link class must be present"
+    )
+    assert "leaders-fallback-msg" in js, (
+        "Fallback message class must be present"
+    )
+    assert "is not available" in js, (
+        "Fallback must indicate video unavailable inline"
+    )
+
+
+def test_leaders_corner_has_postmessage_error_detection():
+    """PostMessage listener must exist for YouTube onError detection."""
+    js = _static_executive_js()
+
+    assert "addEventListener('message'" in js, (
+        "postMessage listener must be registered for YouTube events"
+    )
+    assert "youtube-nocookie.com" in js, (
+        "postMessage listener must filter youtube-nocookie.com origin"
+    )
+    assert '"onError"' in js or "'onError'" in js, (
+        "postMessage listener must handle YouTube onError event"
+    )
+    assert "leaders-featured-iframe" in js, (
+        "postMessage error handler must target leaders-featured-iframe"
+    )
+
+
+def test_leaders_corner_has_fallback_timer():
+    """Fallback timer must use global _leadersFallbackTimer variable."""
+    js = _static_executive_js()
+
+    assert "_leadersFallbackTimer" in js, (
+        "Must use global _leadersFallbackTimer for consistent fallback timing"
+    )
+    assert "clearTimeout(_leadersFallbackTimer)" in js, (
+        "Must clear previous fallback timer when switching videos"
+    )
+
+
+def test_leaders_corner_no_hardcoded_origin():
+    """Origin must NOT be hardcoded — must use window.location.origin."""
+    js = _static_executive_js()
+
+    # The hardcoded origin should NOT appear
+    assert 'origin=https://strategyos.live' not in js, (
+        "Origin must be dynamic (window.location.origin), not hardcoded to strategyos.live"
+    )
+
+
+def test_leaders_corner_fallback_css_exists():
+    """CSS must include styles for leaders-fallback-card."""
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert ".leaders-fallback-card" in css, (
+        "CSS must define .leaders-fallback-card styles"
+    )
+    assert ".leaders-fallback-icon" in css, (
+        "CSS must define .leaders-fallback-icon styles"
+    )
+    assert ".leaders-fallback-link" in css, (
+        "CSS must define .leaders-fallback-link styles"
     )

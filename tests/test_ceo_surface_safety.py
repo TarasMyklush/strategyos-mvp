@@ -307,6 +307,115 @@ def test_ceo_video_embed_preserved():
     assert "t885M1WB1pg" in js
 
 
+# ── YouTube Error 153 prevention ──
+
+def test_ceo_video_embed_referrerpolicy_attr():
+    """All YouTube iframes must carry referrerpolicy='strict-origin-when-cross-origin'."""
+    js = _static_executive_js()
+
+    # Inline embed (initial render)
+    assert 'referrerpolicy="strict-origin-when-cross-origin"' in js, (
+        "Inline iframe must have referrerpolicy='strict-origin-when-cross-origin'"
+    )
+    # selectLeadersVideo must set referrerpolicy on iframe swap
+    assert "setAttribute('referrerpolicy'" in js, (
+        "selectLeadersVideo must set referrerpolicy attribute on iframe"
+    )
+    assert "'strict-origin-when-cross-origin'" in js, (
+        "strict-origin-when-cross-origin value must appear in JS"
+    )
+    # Modal iframe must also carry referrerpolicy
+    referred = js.count("referrerpolicy")
+    assert referred >= 2, (
+        "At least 2 referrerpolicy assignments expected (inline + modal iframe)"
+    )
+
+
+def test_ceo_video_embed_allow_attrs():
+    """YouTube iframes must include web-share in the allow attribute."""
+    js = _static_executive_js()
+
+    assert "web-share" in js, (
+        "iframe allow attribute must include 'web-share'"
+    )
+    # Full allow string with web-share must appear at least once
+    assert "picture-in-picture; web-share" in js, (
+        "allow attribute must include picture-in-picture; web-share in correct order"
+    )
+
+
+def test_ceo_video_embed_origin_param():
+    """YouTube embed URL must include origin parameter (dynamic via window.location.origin)."""
+    js = _static_executive_js()
+
+    assert "encodeURIComponent(window.location.origin)" in js, (
+        "YouTube embed URL must include dynamic origin=encodeURIComponent(window.location.origin) "
+        "to help YouTube validate embedding context"
+    )
+    assert "?origin=" in js or "&origin=" in js or "origin='" in js, (
+        "YouTube embed URL must include origin parameter"
+    )
+
+
+def test_ceo_video_embed_no_referrer_removed():
+    """no-referrer must NOT appear in executive.js (was root cause of Error 153)."""
+    js = _static_executive_js()
+
+    # 'no-referrer' as a referrer policy value must not appear in JS
+    # (the Caddyfile fix handles the header side; this checks the JS side)
+    assert "no-referrer" not in js, (
+        "'no-referrer' must not appear in executive.js — "
+        "was the root cause of YouTube Error 153"
+    )
+
+
+def test_ceo_video_embed_inline_fallback():
+    """Inline embed must have dual fallback: PostMessage listener for instant
+    Error 153 detection + setTimeout backup. Shows fallback card with 'Open on YouTube' link."""
+    js = _static_executive_js()
+
+    # PostMessage listener catches YouTube iframe API errors (instant Error 153 detection)
+    assert "postMessage" in js.lower() or "message" in js.lower(), (
+        "PostMessage listener must exist for YouTube error detection"
+    )
+    assert "leaders-fallback-card" in js, (
+        "Inline fallback card CSS class must be present"
+    )
+    assert "leaders-fallback-link" in js, (
+        "Inline fallback 'Open on YouTube' link must be present"
+    )
+    # Fallback timer must exist (setTimeout with 10s as backup)
+    assert "setTimeout" in js, (
+        "Inline fallback must use setTimeout for timeout detection"
+    )
+    assert "10000" in js, (
+        "Inline fallback timeout must be 10000ms (10 seconds)"
+    )
+    # Fallback must clear timer on iframe load or PostMessage onReady
+    assert "clearTimeout" in js, (
+        "Inline fallback must clearTimeout on successful iframe load"
+    )
+    # Fallback message must be user-friendly
+    assert "not available" in js and ("inline" in js or "playback" in js), (
+        "Fallback message must indicate video not available inline"
+    )
+
+
+def test_ceo_video_modal_fallback_preserved():
+    """Modal embed fallback must be preserved (10s timeout → 'Open on YouTube')."""
+    js = _static_executive_js()
+
+    assert "video-fallback" in js, (
+        "Modal fallback div ID must be present"
+    )
+    assert "Embed unavailable" in js, (
+        "Modal fallback must contain 'Embed unavailable' text"
+    )
+    assert "video-fallback-link" in js, (
+        "Modal fallback 'Open on YouTube' link must be present"
+    )
+
+
 def test_ceo_persona_dropdown_clean_labels():
     """Persona dropdown must not show persona_id codes as tags."""
     js = _static_executive_js()

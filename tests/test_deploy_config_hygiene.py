@@ -347,7 +347,9 @@ def test_caddy_sets_basic_security_headers() -> None:
     assert 'Strict-Transport-Security "max-age=31536000; includeSubDomains"' in caddyfile
     assert 'X-Content-Type-Options "nosniff"' in caddyfile
     assert 'X-Frame-Options "DENY"' in caddyfile
-    assert 'Referrer-Policy "no-referrer"' in caddyfile
+    assert 'Referrer-Policy "strict-origin-when-cross-origin"' in caddyfile
+    assert 'Content-Security-Policy' in caddyfile
+    assert 'frame-src https://www.youtube-nocookie.com https://www.youtube.com' in caddyfile
     assert "-Server" in caddyfile
     assert "header_down -Server" in caddyfile
     assert "@idp path /.well-known/openid-configuration /oauth/*" in caddyfile
