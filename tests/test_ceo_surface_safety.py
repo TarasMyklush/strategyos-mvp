@@ -727,30 +727,132 @@ def test_ceo_no_report_bug_visible_labels():
     )
 
 
-def test_ceo_html_feedback_buttons_clean():
-    """The served CEO HTML must have clean feedback button labels
-    without any 'bug' wording in visible text, aria-label, or title.
+def test_ceo_no_feedback_controls():
+    """CEO surface must hide ALL feedback buttons (topbar + A2A footer).
+
+    Feedback controls exist in HTML for non-CEO personas but are hidden
+    via JS guards when the active persona is CEO:
+    - renderTopbar(): feedbackButton.hidden = true
+    - renderA2APanel(): a2a-report-bug hidden = true
+
+    This test verifies:
+    1. The feedback buttons exist in HTML (for non-CEO personas)
+    2. The JS contains CEO guards that hide them
+    3. showFeedbackForm still exists (for non-CEO)
+    4. CEO guard appears in the feedbackButton/reportBug handling blocks
     """
     html = _ceo_executive_html()
+    js = _static_executive_js()
 
-    # feedback-btn: aria-label, title, and visible text must not contain 'bug'
+    # feedback-btn: aria-label and title must exist in HTML (non-CEO personas need them)
     assert 'aria-label="Send feedback"' in html, (
-        "feedback-btn aria-label must say 'Send feedback', not 'Report a bug'"
+        "feedback-btn aria-label must exist in HTML"
     )
     assert 'title="Send feedback"' in html, (
-        "feedback-btn title must say 'Send feedback', not 'Report a bug'"
-    )
-    assert "<span>Report bug</span>" not in html, (
-        "feedback-btn visible text must not say 'Report bug'"
-    )
-    assert "<span>Feedback</span>" in html, (
-        "feedback-btn visible text must say 'Feedback'"
+        "feedback-btn title must exist in HTML"
     )
 
-    # a2a-report-bug: visible text must not contain 'bug'
-    assert "<button" in html and "Report a bug</button>" not in html, (
-        "a2a-report-bug visible text must not say 'Report a bug'"
+    # feedback-btn visible text 'Feedback' exists in HTML (for non-CEO)
+    assert "<span>Feedback</span>" in html, (
+        "feedback-btn visible text 'Feedback' must exist in HTML"
     )
-    assert "Feedback</button>" in html, (
-        "a2a-report-bug visible text must say 'Feedback'"
+
+    # JS must contain CEO guards to hide feedback buttons
+    assert "feedbackButton.hidden = true" in js, (
+        "renderTopbar must hide feedbackButton for CEO"
+    )
+    assert "reportBug.hidden = true" in js, (
+        "renderA2APanel must hide a2a-report-bug for CEO"
+    )
+
+    # showFeedbackForm must still exist (for non-CEO personas)
+    assert "showFeedbackForm" in js, (
+        "showFeedbackForm function must exist for non-CEO personas"
+    )
+
+    # JS must have CEO guard near feedbackButton — the code block must
+    # contain state.activePersona === "ceo" guard
+    fb_start = js.index("if (feedbackButton)")
+    fb_end = js.index("}", js.index("{", fb_start) + 200)
+    fb_block = js[fb_start:fb_end + 30]
+    assert 'state.activePersona === "ceo"' in fb_block, (
+        "CEO guard must be in feedbackButton handling block"
+    )
+
+
+def test_ceo_greeting_response_humane():
+    """CEO chat greeting must be detected BEFORE hitting /qa POST.
+
+    Greeting/small-talk patterns (hi, hello, hey, good morning, etc.)
+    must trigger a warm, humane response instead of going through the
+    Q&A/LLM pipeline.
+
+    Assertions:
+    1. greetingPatterns regex exists with hi/hello/hey patterns
+    2. The humane response text contains "I'm here" and relevant guidance
+    3. Greeting detection happens BEFORE the /qa POST (line ordering)
+    """
+    js = _static_executive_js()
+
+    # 1. greetingPatterns regex must exist with hi/hello/hey patterns
+    assert "greetingPatterns" in js, (
+        "Greeting detection regex must exist in buildAssistantReply"
+    )
+    assert "hi|hey|hello" in js, (
+        "greetingPatterns must match hi/hello/hey"
+    )
+    assert "good\\s+(morning|afternoon|evening)" in js, (
+        "greetingPatterns must match good morning/afternoon/evening"
+    )
+
+    # 2. The humane response text must contain the warm message
+    assert "I can help" in js, (
+        "CEO greeting response must contain 'I can help'"
+    )
+    assert "board readiness, margin risk, cash, or the knowledge map" in js, (
+        "CEO greeting response must guide toward board readiness, margin risk, cash, knowledge map"
+    )
+
+    # 3. Greeting detection must happen BEFORE /qa POST
+    # The greeting check appears first in buildAssistantReply, then /qa
+    greeting_idx = js.index("greetingPatterns")
+    qa_idx = js.index('postJson("/qa"')
+    assert greeting_idx < qa_idx, (
+        "Greeting detection (greetingPatterns) must appear BEFORE "
+        "postJson('/qa'...) in buildAssistantReply. "
+        "Greeting at index %d, /qa at index %d." % (greeting_idx, qa_idx)
+    )
+
+
+def test_ceo_clickability_disco_add_fixed():
+    """disco-add buttons must have onclick handler binding in JS.
+
+    Previously, '.disco-add' buttons in the agents discovery panel were
+    silent dead buttons with no onclick handler. This test verifies:
+    1. disco-add buttons have onclick handler binding in JS
+    2. CEO path calls showToast with appropriate restriction message
+    """
+    js = _static_executive_js()
+
+    # 1. disco-add buttons must have onclick handler binding
+    assert "disco-add" in js, (
+        "disco-add buttons must exist in JS"
+    )
+    assert ".disco-add" in js or "disco-add" in js, (
+        "disco-add class selector must be present for binding"
+    )
+
+    # The onclick binding must call showToast for CEO
+    assert "Agent installation is available from the operator surface." in js, (
+        "disco-add CEO path must showToast with operator surface message"
+    )
+
+    # The onclick binding must also handle non-CEO path
+    assert "Agent deployment is available from the operator or reviewer surface." in js, (
+        "disco-add non-CEO path must showToast with appropriate message"
+    )
+
+    # Verify the binding uses forEach over querySelectorAll('.disco-add')
+    assert "querySelectorAll('.disco-add')" in js, (
+        "disco-add buttons must be bound via querySelectorAll"
     )

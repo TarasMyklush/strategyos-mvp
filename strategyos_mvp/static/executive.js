@@ -562,6 +562,20 @@
   async function buildAssistantReply(message) {
     var cleanMessage = String(message || "").trim();
     if (!cleanMessage) return boardSafeStatusReply("");
+
+    // CEO greeting/small-talk detection
+    if (state.activePersona === "ceo") {
+      var greetingPatterns = /^(hi|hey|hello|good\s+(morning|afternoon|evening)|how\s+are\s+you|what'?s\s+up|sup|yo|hola|bonjour|namaste)([!.\s]*)$/i;
+      if (greetingPatterns.test(cleanMessage)) {
+        // Get executive name from assistant network, fallback to KA initials
+        var networkEntry = getAssistantNetwork().find(function(item) {
+          return item && item.persona === "ceo";
+        }) || {};
+        var execFirstName = String(firstDefined(networkEntry.who, "")).trim().split(/\s+/)[0] || "Khalid";
+        return "Hi " + execFirstName + " \u2014 I can help with board readiness, margin risk, cash, or the knowledge map. What would you like to review?";
+      }
+    }
+
     var body = { question: cleanMessage, mode: "auto" };
     var runId = activeRunId();
     if (runId && runId !== "latest-public") body.run_id = runId;
@@ -800,9 +814,12 @@
       };
     }
     if (feedbackButton) {
-      feedbackButton.onclick = function () {
-        showFeedbackForm();
-      };
+      if (state.activePersona === "ceo") {
+        feedbackButton.hidden = true;
+      } else {
+        feedbackButton.hidden = false;
+        feedbackButton.onclick = function () { showFeedbackForm(); };
+      }
     }
     if (userName) userName.textContent = "";
     if (userRole) userRole.textContent = "";
@@ -987,9 +1004,12 @@
     }
     var reportBug = $("a2a-report-bug");
     if (reportBug) {
-      reportBug.onclick = function () {
-        showFeedbackForm();
-      };
+      if (state.activePersona === "ceo") {
+        reportBug.hidden = true;
+      } else {
+        reportBug.hidden = false;
+        reportBug.onclick = function () { showFeedbackForm(); };
+      }
     }
   }
 
@@ -1919,6 +1939,15 @@
           }
         };
       }
+      safeArray(discoveryCard.querySelectorAll('.disco-add')).forEach(function (button) {
+        button.onclick = function () {
+          if (state.activePersona === "ceo") {
+            showToast('Agent installation is available from the operator surface.');
+          } else {
+            showToast('Agent deployment is available from the operator or reviewer surface.');
+          }
+        };
+      });
     }
 
     if (subtoolsCard) subtoolsCard.hidden = true;
