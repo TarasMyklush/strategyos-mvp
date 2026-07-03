@@ -176,11 +176,40 @@
     }, 0);
   }
 
-  function openAssistantDrawer() {
+  /* ── Unified Hermes drawer opening — single source of truth ── */
+  var _drawerKeydown = null;
+
+  function _openHermesDrawer() {
+    /* Guard: surfaces must not overlap — close video modal before opening drawer */
+    if (state.videoModalOpen) closeVideoModal();
     state.drawerOpen = true;
+    document.body.style.overflow = 'hidden';
+
+    /* Escape key closes the drawer */
+    _drawerKeydown = function (event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        _closeHermesDrawer();
+      }
+    };
+    document.addEventListener("keydown", _drawerKeydown);
+
     renderTopbar();
     renderAssistantStudio();
     focusAssistantInput();
+  }
+
+  function _closeHermesDrawer() {
+    state.drawerOpen = false;
+    document.body.style.overflow = '';
+    document.removeEventListener("keydown", _drawerKeydown);
+    _drawerKeydown = null;
+    renderTopbar();
+    renderAssistantStudio();
+  }
+
+  function openAssistantDrawer() {
+    _openHermesDrawer();
   }
 
   function threadTitleFromPrompt(prompt) {
@@ -1487,8 +1516,6 @@
         button.onclick = function () {
           var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '\u2014') + '% of plan): ' + (button.getAttribute('data-driver-chip') || '');
           askAssistant(prompt, button);
-          state.drawerOpen = true;
-          renderTopbar();
         };
       });
       var showWork = drillCard.querySelector('[data-driver-show-work]');
@@ -1850,8 +1877,8 @@
         var key = kind + ':' + index;
         var open = state.openDriverNoteKey === key;
         var actionPrompt = kind === 'development'
-          ? 'Project the impact on plan for “' + firstDefined(item.title, 'this development') + '”.'
-          : 'Explain the evidence behind “' + firstDefined(item.title, 'this finding') + '”.';
+          ? 'Project the impact of “' + firstDefined(item.title, 'this development') + '” on the current plan and what I should prepare for the board.'
+          : 'Explain why “' + firstDefined(item.title, 'this finding') + '” matters for the board review and what action I should consider.';
         var actionLabel = kind === 'development' ? 'Project impact on plan' : 'Ask why this matters';
         return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span><span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + '<div class="rail-toggle__actions"><button type="button" class="rail-inline-action" data-rail-prompt="' + escapeHtml(actionPrompt) + '">' + escapeHtml(actionLabel) + '</button></div></div>' : '');
       }).join('');
@@ -2066,24 +2093,18 @@
       scrim.hidden = !state.drawerOpen;
       scrim.classList.toggle("is-open", state.drawerOpen);
       scrim.onclick = function () {
-        state.drawerOpen = false;
-        renderTopbar();
-        renderAssistantStudio();
+        _closeHermesDrawer();
       };
     }
     if (launcher) {
       launcher.hidden = state.drawerOpen || state.activeView === "assistants";
       launcher.onclick = function () {
-        state.drawerOpen = true;
-        renderTopbar();
-        renderAssistantStudio();
+        _openHermesDrawer();
       };
     }
     if (closeButton) {
       closeButton.onclick = function () {
-        state.drawerOpen = false;
-        renderTopbar();
-        renderAssistantStudio();
+        _closeHermesDrawer();
       };
     }
 

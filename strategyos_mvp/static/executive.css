@@ -450,6 +450,19 @@ a { color: inherit; }
   background: rgba(29, 28, 25, 0.28);
   backdrop-filter: blur(2px);
   z-index: 14;
+  opacity: 0;
+  transition: opacity 240ms ease;
+  pointer-events: none;
+}
+.assistant-scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Override [hidden] for scrim — keep it in layout so transitions fire */
+.assistant-scrim[hidden] {
+  display: block;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .assistant-drawer {
@@ -459,14 +472,34 @@ a { color: inherit; }
   bottom: 0;
   width: min(760px, 100vw);
   z-index: 15;
-  padding: 16px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: -8px 0 32px rgba(29, 28, 25, 0.12);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(32px);
+  opacity: 0;
+  transition: transform 280ms ease, opacity 220ms ease;
+  pointer-events: none;
+}
+.assistant-drawer.is-open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Override [hidden] for drawer — keep it in layout so transitions fire */
+.assistant-drawer[hidden] {
+  display: flex;
+  transform: translateX(32px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .assistant-drawer .assistant-studio {
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 12px;
   overflow: hidden;
-  border-radius: 18px 0 0 18px;
-  box-shadow: -24px 0 60px -36px rgba(0, 0, 0, 0.4);
 }
 
 .chat-launcher {
@@ -2195,6 +2228,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 .assistant-studio {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
 }
 
 .assistant-head,

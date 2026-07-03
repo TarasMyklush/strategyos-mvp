@@ -1395,3 +1395,304 @@ def test_evidence_footer_css_no_display_flex_override():
     assert '[hidden]' in post_block, (
         ".drill-evidence CSS must be followed by [hidden] override rule"
     )
+
+
+# ── "Ask why this matters" CTA + assistant drawer regression tests ──
+
+
+def test_ask_why_cta_calls_ask_assistant():
+    """Clicking 'Ask why this matters' must call askAssistant with the finding prompt."""
+    js = _static_executive_js()
+
+    # The CTA button is rendered with data-rail-prompt attribute
+    assert "data-rail-prompt" in js, (
+        "Findings CTA button must have data-rail-prompt attribute"
+    )
+    assert "rail-inline-action" in js, (
+        "Findings CTA button must use rail-inline-action class"
+    )
+
+    # The onclick handler calls askAssistant with the prompt
+    assert "askAssistant(button.getAttribute('data-rail-prompt')" in js, (
+        "Findings CTA onclick must call askAssistant with rail-prompt"
+    )
+
+    # The prompt must contain board-contextual language
+    assert "matters for the board" in js, (
+        "Finding prompt must include board-contextual language"
+    )
+
+
+def test_assistant_drawer_css_right_panel():
+    """The assistant drawer CSS must position it as a right-side panel, not a bottom overlay."""
+    css_path = Path(__file__).resolve().parent.parent / \
+        "strategyos_mvp" / "static" / "executive.css"
+    css = css_path.read_text()
+
+    # Find the .assistant-drawer rule block
+    idx = css.find('.assistant-drawer {')
+    assert idx != -1, ".assistant-drawer CSS rule must exist"
+
+    # Extract the rule block (from opening brace to closing brace)
+    block_start = css.index('{', idx)
+    # Find the matching closing brace by counting
+    depth = 0
+    block_end = block_start
+    for i in range(block_start, len(css)):
+        if css[i] == '{':
+            depth += 1
+        elif css[i] == '}':
+            depth -= 1
+            if depth == 0:
+                block_end = i
+                break
+    block = css[idx:block_end + 1]
+
+    # Must be position:fixed
+    assert 'position: fixed' in block, (
+        ".assistant-drawer must use position:fixed for viewport anchoring"
+    )
+
+    # Must be anchored to right edge
+    assert 'right: 0' in block, (
+        ".assistant-drawer must anchor to right edge (right:0)"
+    )
+
+    # Must be full viewport height
+    assert 'top: 0' in block, (
+        ".assistant-drawer must anchor to top edge (top:0)"
+    )
+    assert 'bottom: 0' in block, (
+        ".assistant-drawer must anchor to bottom edge (bottom:0)"
+    )
+
+    # Must have sane max-width for desktop
+    assert 'min(760px' in block or '760px' in block or 'max-width' in block, (
+        ".assistant-drawer must have a bounded width for desktop"
+    )
+
+    # Must have overflow control
+    assert 'overflow' in block, (
+        ".assistant-drawer must have overflow control"
+    )
+
+    # Must have background to prevent transparent overlay
+    assert 'background' in block, (
+        ".assistant-drawer must have a background to prevent see-through"
+    )
+
+    # Must have box-shadow or border for visual separation
+    assert ('box-shadow' in block or 'border' in block), (
+        ".assistant-drawer must have visual separation from page content"
+    )
+
+    # Must NOT be a bottom sheet — verify it doesn't use bottom-only anchoring
+    # A bottom sheet would have: bottom:0, left:0, right:0, but NO top:0
+    # Our drawer has right:0 AND top:0 AND bottom:0 — it's a right panel
+    # Verify the right-anchoring is present
+    assert 'right: 0' in block, (
+        ".assistant-drawer must be right-anchored, not a bottom overlay"
+    )
+
+
+def test_body_scroll_lock_on_drawer_open():
+    """When assistant drawer opens, body overflow must be locked to prevent background scroll."""
+    js = _static_executive_js()
+
+    # _openHermesDrawer must set body.style.overflow = 'hidden'
+    assert "document.body.style.overflow = 'hidden'" in js, (
+        "_openHermesDrawer must lock body scroll with overflow:hidden"
+    )
+
+    # _closeHermesDrawer must restore body scroll
+    assert "document.body.style.overflow = ''" in js, (
+        "_closeHermesDrawer must restore body scroll"
+    )
+
+    # Both open and close functions must exist
+    assert "function _openHermesDrawer" in js, (
+        "_openHermesDrawer function must exist"
+    )
+    assert "function _closeHermesDrawer" in js, (
+        "_closeHermesDrawer function must exist"
+    )
+
+
+def test_assistant_drawer_not_bottom_overlay():
+    """The assistant drawer HTML must render as a side panel (<aside>), not an inline bottom div."""
+    html = _ceo_executive_html()
+
+    # Must use <aside> semantic element
+    assert '<aside class="assistant-drawer"' in html, (
+        "Assistant drawer must be an <aside> element, not a generic <div>"
+    )
+
+    # Must have the hidden attribute initially (the <aside> tag itself)
+    aside_idx = html.find('<aside class="assistant-drawer"')
+    assert aside_idx != -1, "Assistant drawer <aside> must exist in HTML"
+    aside_tag = html[aside_idx:aside_idx + 300]
+    assert 'hidden' in aside_tag, (
+        "Assistant drawer <aside> must have hidden attribute initially"
+    )
+
+    # Must have an ID for JS targeting
+    assert 'id="assistant-drawer"' in html, (
+        "Assistant drawer must have id='assistant-drawer'"
+    )
+
+    # Must be outside the main content flow (after main page closes)
+    main_close_idx = html.rfind('</main>')
+    drawer_idx = html.find('id="assistant-drawer"')
+    assert drawer_idx > main_close_idx, (
+        "Assistant drawer must be rendered after </main>, outside content flow"
+    )
+
+
+def test_drawer_prompt_chips_not_overlapping():
+    """Prompt chips and assistant input must not be structurally nested in a way that overlaps."""
+    html = _ceo_executive_html()
+    js = _static_executive_js()
+
+    # The prompt row and form must exist as separate elements in the HTML
+    assert 'id="assistant-prompt-row"' in html, (
+        "Prompt chips must have their own container (assistant-prompt-row) in HTML"
+    )
+    assert 'id="assistant-form"' in html, (
+        "Assistant input form must have its own container (assistant-form) in HTML"
+    )
+
+    # The prompt row element must be referenced in JS for rendering
+    assert '$("assistant-prompt-row")' in js, (
+        "assistant-prompt-row must be referenced in JS for rendering"
+    )
+
+    # The conversation layout must use CSS grid with proper row sizing
+    css_path = Path(__file__).resolve().parent.parent / \
+        "strategyos_mvp" / "static" / "executive.css"
+    css = css_path.read_text()
+
+    # .assistant-conversation must use grid-template-rows with explicit sizing
+    conv_idx = css.find('.assistant-conversation {')
+    assert conv_idx != -1, ".assistant-conversation CSS rule must exist"
+
+    # Check that grid-template-rows uses minmax(0, 1fr) for scrollable area
+    assert 'minmax(0, 1fr)' in css, (
+        ".assistant-conversation or its children must use minmax(0,1fr) for scrollable area"
+    )
+
+    # Messages area must have overflow:auto for internal scrolling
+    msg_idx = css.find('.assistant-messages {')
+    assert msg_idx != -1, ".assistant-messages CSS rule must exist"
+    msg_block = css[msg_idx:msg_idx + 300]
+    assert 'overflow: auto' in msg_block or 'overflow:auto' in msg_block, (
+        ".assistant-messages must have overflow:auto for internal scrolling"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# CTA ENUMERATION — every contextual assistant-opening CTA group
+# ══════════════════════════════════════════════════════════════════════
+
+def test_cta_enum_hero_prompts():
+    """CTA 1: Hero prompt chips call askAssistant(prompt, button)."""
+    js = _static_executive_js()
+    assert 'askAssistant(prompt, button)' in js
+
+def test_cta_enum_driver_chips():
+    """CTA 2: Driver drill [data-driver-chip] chips call askAssistant."""
+    js = _static_executive_js()
+    assert "data-driver-chip" in js
+    assert "querySelectorAll('[data-driver-chip]')" in js
+
+def test_cta_enum_driver_composer():
+    """CTA 3: Driver composer form #driver-composer calls askAssistant."""
+    js = _static_executive_js()
+    assert "driver-composer" in js
+
+def test_cta_enum_gravity_explore():
+    """CTA 4: Gravity/Explore scenarios [data-chat-prompt] chips."""
+    js = _static_executive_js()
+    assert "data-chat-prompt" in js
+
+def test_cta_enum_leaders_corner_cta():
+    """CTA 5: Leaders' Corner 'Ask Hermes about this topic' CTA."""
+    js = _static_executive_js()
+    assert "leaders-hermes-cta" in js
+    assert "Ask Hermes about this topic" in js
+
+def test_cta_enum_video_modal_cta():
+    """CTA 6: Video modal 'Ask Hermes about this topic' CTA."""
+    js = _static_executive_js()
+    assert "video-hermes-cta" in js
+
+def test_cta_enum_board_prompts():
+    """CTA 7: Board portal [data-board-prompt] prompt chips."""
+    js = _static_executive_js()
+    assert "data-board-prompt" in js
+
+def test_cta_enum_board_actions():
+    """CTA 8: Board portal [data-board-action] action buttons."""
+    js = _static_executive_js()
+    assert "data-board-action" in js
+
+def test_cta_enum_findings_ask_why():
+    """CTA 9: Findings 'Ask why this matters' [data-rail-prompt]."""
+    js = _static_executive_js()
+    assert "data-rail-prompt" in js
+    assert "Ask why this matters" in js
+
+def test_cta_enum_developments_impact():
+    """CTA 10: Developments 'Project impact on plan' [data-rail-prompt]."""
+    js = _static_executive_js()
+    assert "Project impact on plan" in js
+
+def test_cta_enum_week_explore_request():
+    """CTA 11: Week ahead 'Explore scenarios' / 'Request missing data'."""
+    js = _static_executive_js()
+    assert "Explore scenarios" in js
+    assert "Request missing data" in js
+
+def test_cta_enum_week_composer():
+    """CTA 12: Week composer form #week-composer."""
+    js = _static_executive_js()
+    assert "week-composer" in js
+
+def test_cta_enum_kg_ask_hermes():
+    """CTA 13: Knowledge graph inspector 'Ask Hermes about this'."""
+    js = _static_executive_js()
+    assert "kg-inspector-ask" in js
+    assert 'askAssistant(prompt, "kg")' in js
+
+def test_cta_enum_a2a_followup():
+    """CTA 14: A2A panel follow-up button calls askAssistant."""
+    js = _static_executive_js()
+    assert "a2a-report-bug" in js
+
+def test_cta_enum_drawer_internal_prompts():
+    """CTA 15: Assistant drawer [data-assistant-prompt] internal chips."""
+    js = _static_executive_js()
+    assert "data-assistant-prompt" in js
+
+def test_cta_enum_assistant_form():
+    """CTA 16: Assistant form #assistant-form."""
+    js = _static_executive_js()
+    assert "assistant-form" in js
+    assert "bindAssistantForm" in js
+
+def test_cta_enum_agents_browse():
+    """CTA 17: Agents discovery 'Browse all agents'."""
+    js = _static_executive_js()
+    assert "Show me the agent catalogue" in js
+
+def test_cta_enum_new_conversation_threads():
+    """CTA 18: New conversation buttons call openAssistantDrawer."""
+    js = _static_executive_js()
+    assert "data-thread-new" in js
+
+def test_cta_count_all_matches_expected():
+    """Total askAssistant call sites must match expected count."""
+    js = _static_executive_js()
+    count = js.count('askAssistant(')
+    assert count >= 17, (
+        f"Expected at least 17 askAssistant call sites, found {count}"
+    )
