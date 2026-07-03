@@ -262,7 +262,14 @@
 
   function getPersonaLabel(personaId) {
     var contract = getPersonaContract(personaId);
-    return firstDefined(contract.label, humanizeToken(personaId), "Group CEO");
+    var POLISHED_LABELS = {
+      gm: "General Manager", bucfo: "Business Unit CFO",
+      logistics: "Logistics Lead", mfg: "Manufacturing Lead",
+      hc: "Healthcare Services Lead", cap: "Capital Lead",
+      ceo: "Group CEO", board: "Board Director", reviewer: "Reviewer",
+      operator: "Operator"
+    };
+    return firstDefined(POLISHED_LABELS[personaId], contract.label, humanizeToken(personaId), "Group CEO");
   }
 
   function executiveIdentityInitials(personaId) {
@@ -786,6 +793,22 @@
     var initials = executiveIdentityInitials(state.activePersona);
 
     if (org) org.textContent = "Mizan Group";
+    // Logo click → reset to home view
+    var brandEl = document.querySelector('.brand');
+    if (brandEl) {
+      brandEl.style.cursor = 'pointer';
+      brandEl.setAttribute('role', 'link');
+      brandEl.setAttribute('tabindex', '0');
+      brandEl.title = 'StrategyOS home';
+      brandEl.onclick = function () {
+        state.activeView = 'home';
+        state.activePersona = 'ceo';
+        state.activeDriverKey = '';
+        state.activeThreadKey = '';
+        state.activeBoard = 'pre';
+        refresh(true);
+      };
+    }
     if (personaLabel) personaLabel.textContent = firstDefined(activePersona.label, "Group CEO");
     if (askToggle) {
       askToggle.innerHTML = '<span class="assistant-glyph" aria-hidden="true">' + escapeHtml(assistantGlyph) + '</span><span>' + escapeHtml(assistantName) + '</span>';
@@ -833,13 +856,16 @@
         if (existing) { existing.remove(); return; }
         var tip = document.createElement('div');
         tip.className = 'strategyos-avatar-tooltip';
-        tip.innerHTML = '<strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' \u00b7 governed run</span>';
+        tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · governed run</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button></div>';
         avatar.parentNode.appendChild(tip);
-        window.setTimeout(function () { tip.remove(); }, 4000);
         var outsideClick = function (event) {
           if (!event.target.closest('#topbar-user')) { tip.remove(); document.removeEventListener('click', outsideClick); }
         };
         window.setTimeout(function () { document.addEventListener('click', outsideClick); }, 0);
+        tip.querySelector('[data-avatar-action="switch"]').onclick = function () {
+          var btn = document.getElementById('persona-btn');
+          if (btn) { btn.click(); tip.remove(); }
+        };
       };
     }
     if (userMeta) userMeta.hidden = true;
@@ -847,13 +873,27 @@
     if (!list || !btn) return;
 
     list.innerHTML = "";
+    function polishPersonaLabel(rawLabel) {
+      var m = {
+        'ceo': 'Group CEO',
+        'bucfo': 'Business Unit CFO',
+        'bu cfo': 'Business Unit CFO',
+        'BU CFO': 'Business Unit CFO',
+        'bugm': 'Business Unit GM',
+        'bu gm': 'Business Unit GM',
+        'BU GM': 'Business Unit GM',
+        'logistics': 'Logistics',
+        'board': 'Board'
+      };
+      return m[String(rawLabel).trim()] || rawLabel;
+    }
     safeArray(state.personas).forEach(function (persona) {
       var isActive = persona.persona_id === state.activePersona;
       var item = document.createElement("button");
       item.type = "button";
       item.className = "persona-item" + (isActive ? " is-active" : "");
       item.setAttribute("role", "menuitem");
-      item.innerHTML = "<span>" + escapeHtml(firstDefined(persona.label, persona.persona_id, "Persona")) + "</span>";
+      item.innerHTML = "<span>" + escapeHtml(polishPersonaLabel(firstDefined(persona.label, persona.persona_id, "Persona"))) + "</span>";
       item.onclick = function () {
         if (persona.persona_id === state.activePersona) return;
         state.activePersona = persona.persona_id;
@@ -1022,6 +1062,11 @@
     plan: "Board Plan", KPI: "KPI", business_unit: "Business Unit", finding: "Finding",
     document: "Document", vendor: "Vendor", invoice: "Invoice", contract: "Contract"
   };
+  var REPORT_CATEGORY_MAP = {
+    board_pack: "Board pack", graph: "Data relationships", audit: "Review trail",
+    other: "Supporting material", finance: "Financial summary", narrative: "Board narrative",
+    evidence: "Evidence pack", kpi: "KPI detail"
+  };
 
   function getCategoryColor(node) {
     var cat = (node && node.category) || "";
@@ -1149,7 +1194,7 @@
     var isSelected = state._kgSelectedNodeId || null;
 
     card.innerHTML =
-      '<div class="detail-head"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">Board Intelligence Map</h3><p class="section-note">Shaped by the questions you ask — proof the system reasons across everything.</p></div><span class="pill-inline ok">Data relationships</span></div>'
+      '<div class="detail-head"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">Board Intelligence Map</h3><p class="section-note">Showing how the system reasons across your evidence.</p></div><span class="pill-inline ok">Data relationships</span></div>'
       + '<div class="kg-questions" role="tablist" aria-label="Question lenses">' + safeArray(graph.questions).map(function (question, index) {
         var active = focusQuestion && focusQuestion.id === question.id;
         var focusCount = safeArray(question.focus).length;
@@ -1285,7 +1330,19 @@
     }
 
     var arc = $("hero-arc");
-    if (arc) arc.setAttribute("stroke-dasharray", dash + " " + (circumference - dash));
+    if (arc) {
+      arc.style.strokeDasharray = dash + "px " + (circumference - dash) + "px";
+      arc.setAttribute("stroke-dasharray", dash + " " + (circumference - dash));
+    }
+    var dot = $("hero-dot");
+    if (dot) {
+      var angleRad = (clampedScore / 100) * 2 * Math.PI;
+      var dotCx = 60 + 48 * Math.sin(angleRad);
+      var dotCy = 60 - 48 * Math.cos(angleRad);
+      dot.setAttribute("cx", String(Math.round(dotCx * 10) / 10));
+      dot.setAttribute("cy", String(Math.round(dotCy * 10) / 10));
+      dot.style.visibility = "visible";
+    }
 
     var promptRow = $("hero-prompts");
     if (promptRow) {
@@ -1471,8 +1528,10 @@
         { id: 't885M1WB1pg', title: 'Bridge Strategy and Execution with Decision-Ready Views', speaker: 'Strategy Execution Webinar', theme: 'strategy execution · decision-ready views', dur: '~35 min', summary: 'Creating decision-ready views that connect strategic plans to operational execution.', transcript: 'Building decision-ready dashboards, connecting plans to operations, and creating feedback loops that keep strategy alive.' }
       ];
       gravityPanel.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Thinking mode' : 'Gravity and guardrails') + '</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan’s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '</span></div>',
-        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(statusLabel(item)) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders’ Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="video-frame-wrapper"><iframe id="leaders-featured-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(vlogs[0].id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen title="' + escapeHtml(vlogs[0].title) + '"></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div><div class="leaders-thumb-grid" id="leaders-thumb-grid">' + vlogs.map(function (item, idx) { return '<button class="leaders-thumb ' + (idx === 0 ? 'is-active' : '') + '" type="button" data-video-id="' + escapeHtml(item.id) + '" data-index="' + idx + '" aria-label="Watch: ' + escapeHtml(item.title) + '"><div class="leaders-thumb__img"><span class="leaders-thumb__play">▶</span></div><span class="leaders-thumb__speaker">' + escapeHtml(item.speaker) + '</span><span class="leaders-thumb__title">' + escapeHtml(item.title) + '</span></button>'; }).join('') + '</div></section></div>'
+        '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Thinking mode' : 'Gravity and guardrails') + '</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan\'s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '</span></div>',
+        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(statusLabel(item)) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders\' Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="leaders-fallback-card" id="leaders-featured-fallback"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Tap a video below to watch inline</p><p class="leaders-fallback-detail">' + escapeHtml(vlogs[0].title) + ' — ' + escapeHtml(vlogs[0].speaker) + '</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div><div class="video-frame-wrapper" id="leaders-frame-wrapper" hidden><iframe id="leaders-featured-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen title=""></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div>' +
+        vlogs.slice(1).map(function (v, i) { return '<div class="leaders-thumb" data-video-id="' + escapeHtml(v.id) + '" tabindex="0" role="button"><span class="leaders-thumb__img">▶</span><span class="leaders-thumb__title">' + escapeHtml(v.title) + '</span><span class="leaders-thumb__speaker">' + escapeHtml(v.speaker) + ' · ' + escapeHtml(v.dur) + '</span></div>'; }).join('') +
+        '</section></div>'
       ].join("");
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
@@ -1480,11 +1539,9 @@
         };
       });
       var leadersCard = gravityPanel.querySelector('.leaders-card');
-      var leadersThumbGrid = gravityPanel.querySelector('#leaders-thumb-grid');
-      if (leadersThumbGrid) {
-        leadersThumbGrid.addEventListener('click', function (event) {
-          var thumb = event.target.closest('.leaders-thumb');
-          if (!thumb) return;
+      // Wire inline thumbnail clicks
+      safeArray(gravityPanel.querySelectorAll('.leaders-thumb')).forEach(function (thumb) {
+        thumb.addEventListener('click', function () {
           var videoId = thumb.getAttribute('data-video-id') || '';
           var item = null;
           safeArray(vlogs).forEach(function (v) {
@@ -1492,51 +1549,53 @@
           });
           if (item) selectLeadersVideo(item, vlogs, leadersCard);
         });
-        var hermesCta = leadersCard.querySelector('#leaders-hermes-cta');
-        if (hermesCta) {
-          hermesCta.onclick = function () {
-            var activeThumb = leadersThumbGrid.querySelector('.leaders-thumb.is-active');
-            var item = null;
-            if (activeThumb) {
-              var vid = activeThumb.getAttribute('data-video-id');
-              safeArray(vlogs).forEach(function (v) {
-                if (v.id === vid) item = v;
-              });
-            }
-            if (item) {
-              askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?');
-            }
-          };
+      });
+      var hermesCta = leadersCard && leadersCard.querySelector('#leaders-hermes-cta');
+      if (hermesCta) {
+        hermesCta.onclick = function () {
+          var activeThumb = gravityPanel.querySelector('.leaders-thumb.is-active');
+          var item = null;
+          if (activeThumb) {
+            var vid = activeThumb.getAttribute('data-video-id');
+            safeArray(vlogs).forEach(function (v) {
+              if (v.id === vid) item = v;
+    });
+    safeArray(portal.querySelectorAll('[data-snapshot]')).forEach(function (card) {
+      card.onclick = function () {
+        var kind = card.getAttribute('data-snapshot') || '';
+        if (kind === 'deck') {
+          showToast('Deck release: ' + statusLabel(firstDefined(deckRelease.status, 'pending')) + ' — ' + (deckRelease.report_count || 0) + ' report(s) available.');
+        } else {
+          showToast('Frozen snapshot: ' + statusLabel(firstDefined(snapshot.status, 'live_packet')) + ' — board-safe view of the last closed meeting.');
         }
-      }
-      // ── Inline embed fallback: if iframe doesn't load within 10s, show fallback card ──
-      var inlineFrame = leadersCard && leadersCard.querySelector('#leaders-featured-iframe');
-      if (inlineFrame) {
-        if (_leadersFallbackTimer) { window.clearTimeout(_leadersFallbackTimer); _leadersFallbackTimer = null; }
-        _leadersFallbackTimer = window.setTimeout(function () {
-          var wrapper = inlineFrame.parentNode;
-          if (wrapper) {
-            wrapper.innerHTML = '<div class="leaders-fallback-card"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">This video is not available inline.</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+      };
+    });
+  }
+          if (!item) item = vlogs[0];
+          if (item) {
+            askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?');
           }
-        }, 10000);
-        inlineFrame.addEventListener('load', function () {
-          if (_leadersFallbackTimer) {
-            window.clearTimeout(_leadersFallbackTimer);
-            _leadersFallbackTimer = null;
-          }
-        }, { once: true });
+        };
       }
+      // Inline embed fallback timer is now handled in selectLeadersVideo; skip initial timer since we start with fallback card
     }
   }
 
   function selectLeadersVideo(item, vlogs, leadersCard) {
     if (!leadersCard) return;
+    var fallback = leadersCard.querySelector('#leaders-featured-fallback');
+    var frameWrapper = leadersCard.querySelector('#leaders-frame-wrapper');
     var iframe = leadersCard.querySelector('#leaders-featured-iframe');
     var info = leadersCard.querySelector('#leaders-video-info');
     var thumbGrid = leadersCard.querySelector('#leaders-thumb-grid');
 
+    // Show iframe wrapper, hide fallback
+    if (fallback) fallback.hidden = true;
+    if (frameWrapper) frameWrapper.hidden = false;
+
     if (iframe) {
       iframe.src = 'https://www.youtube-nocookie.com/embed/' + escapeHtml(item.id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1';
+      iframe.setAttribute('title', item.title);
       iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
       iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen');
       // Reset fallback timer on video switch
@@ -1545,11 +1604,15 @@
         _leadersFallbackTimer = null;
       }
       _leadersFallbackTimer = window.setTimeout(function () {
-        var wrapper = iframe.parentNode;
-        if (wrapper) {
-          wrapper.innerHTML = '<div class="leaders-fallback-card"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">This video is not available inline.</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+        if (frameWrapper && iframe) {
+          iframe.src = '';
+          frameWrapper.hidden = true;
+          if (fallback) {
+            fallback.hidden = false;
+            fallback.innerHTML = '<p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">This video is not available inline.</p><p class="leaders-fallback-detail">' + escapeHtml(item.title) + '</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a>';
+          }
         }
-      }, 10000);
+      }, 4000);
       iframe.addEventListener('load', function () {
         if (_leadersFallbackTimer) {
           window.clearTimeout(_leadersFallbackTimer);
@@ -1569,7 +1632,7 @@
     }
 
     if (thumbGrid) {
-      safeArray(thumbGrid.querySelectorAll('.leaders-thumb')).forEach(function (thumb) {
+      safeArray(leadersCard.querySelectorAll('.leaders-thumb')).forEach(function (thumb) {
         var vid = thumb.getAttribute('data-video-id');
         if (vid === item.id) {
           thumb.classList.add('is-active');
@@ -1739,11 +1802,13 @@
         if (item.next_action) flags.push('<span class="pill-inline">' + escapeHtml(humanizeToken(item.next_action)) + '</span>');
         return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Governed board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
-      '<div class="snapshot-grid"><div class="snapshot-card"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
+      '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
       (state.activePersona === "ceo"
-        ? ''
+        ? '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).map(function (item) {
+            return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '">Review: ' + escapeHtml(humanizeToken(item)) + '</button>';
+          }).join("") + '</div>'
         : '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).concat(safeArray(stateDetail.secondary_actions).slice(0, 2)).map(function (item) {
-        return '<span class="assistant-tool-chip">' + escapeHtml(humanizeToken(item)) + '</span>';
+        return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '">' + escapeHtml(humanizeToken(item)) + '</button>';
       }).join("") + '</div>'),
       '<div class="board-detail-grid"><section class="board-panel"><p class="detail-eyebrow">Meeting posture</p><div class="mini-list"><div class="board-deck"><div><strong>' + escapeHtml(firstDefined((board.meeting || {}).design_title, (board.meeting || {}).title, "Board meeting")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined((board.meeting || {}).date, (board.meeting || {}).when, "Board timing pending")) + '</p></div><span class="pill-inline ok">' + escapeHtml(firstDefined((board.meeting || {}).room, "board-safe")) + '</span></div></div></section><section class="board-panel"><p class="detail-eyebrow">Lifecycle actions</p><div class="mini-list">' + (actions.length ? actions.map(function (item) {
         return '<div class="board-action"><div><strong>' + escapeHtml(firstDefined(item.item, "Action")) + '</strong><small>' + escapeHtml(firstDefined(item.owner, "Owner")) + '</small></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.due, "next")) + '</span></div>';
@@ -1754,6 +1819,20 @@
       button.onclick = function () {
         var prompt = button.getAttribute('data-board-prompt') || '';
         askAssistant(prompt, button);
+      };
+    });
+    safeArray(portal.querySelectorAll('[data-board-action]')).forEach(function (button) {
+      button.onclick = function () {
+        var action = button.getAttribute('data-board-action') || '';
+        var boardState = statusLabel(firstDefined(board.presentation_state, board.state, 'pre'));
+        askAssistant('I need to review and act on: ' + action + ' (current board state: ' + boardState + '). What are the next steps?', button);
+      };
+    });
+    safeArray(portal.querySelectorAll('.snapshot-card')).forEach(function (card) {
+      card.style.cursor = 'pointer';
+      card.onclick = function () {
+        var label = card.querySelector('strong') ? card.querySelector('strong').textContent : '';
+        showToast((label ? label + ' detail is ' : '') + 'available from the operator surface.');
       };
     });
   }
@@ -1816,7 +1895,8 @@
       });
       safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {
         button.onclick = function () {
-          state.openWeekIndex = Number(button.getAttribute('data-week-index') || 0) || 0;
+          var idx = Number(button.getAttribute('data-week-index') || 0) || 0;
+          state.openWeekIndex = state.openWeekIndex === idx ? -1 : idx;
           renderLowerRailFidelity();
         };
       });
@@ -1922,9 +2002,13 @@
     }
 
     if (discoveryCard) {
+      function polishAgentName(name) {
+        var m = { 'Tenant runtime watch': 'System health monitor', 'Tenant Runtime Watch': 'System health monitor', 'Runtime watch': 'System health monitor' };
+        return m[String(name).trim()] || name;
+      }
       var renderDiscoveryGroup = function (title, items) {
         return '<div class="disco-group-label">' + escapeHtml(title) + '</div><div class="disco-list">' + items.map(function (item) {
-          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent')) + '</span><span class="disco-src ' + escapeHtml(firstDefined(item.source, 'native')) + '">' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
+          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(polishAgentName(firstDefined(item.name, item.label, item.module_id, 'Agent'))) + '</span><span class="disco-src ' + escapeHtml(firstDefined(item.source, 'native')) + '">' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
         }).join('') + '</div>';
       };
       discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">deploy on your data via platform connectors</span></div><div class="disco-search"><span class="disco-search-icon">⌕</span> Search the agent universe…</div>' + renderDiscoveryGroup('Native on StrategyOS', nativeAgents) + renderDiscoveryGroup('From the marketplace', marketAgents) + '<button type="button" class="disco-browse">Browse all agents →</button>';
@@ -1932,7 +2016,10 @@
       if (browseBtn) {
         browseBtn.onclick = function () {
           if (state.activePersona === "ceo") {
-            showToast('Agent discovery is available from the operator surface.');
+            switchView('assistants');
+            window.setTimeout(function () {
+              askAssistant("Show me the agent catalogue available for my role and what each one does");
+            }, 300);
           } else {
             state.discoveryFilter = state.discoveryFilter === 'all' ? 'native' : 'all';
             renderAgentsDiscovery();
@@ -2005,22 +2092,25 @@
     }
 
     if (assistantHeading) assistantHeading.textContent = assistantName;
-    if (assistantSubtitle) assistantSubtitle.textContent = getPersonaLabel(state.activePersona) + " · " + assistantRole + " · named, threaded chief-of-staff follow-up";
-    if (assistantState) assistantState.textContent = humanizeToken(firstDefined(state.activeBoard, "ready"));
+    if (assistantSubtitle) assistantSubtitle.textContent = getPersonaLabel(state.activePersona) + " \u00b7 Your AI chief of staff";
+    if (assistantState) assistantState.textContent = statusLabel(firstDefined(state.activeBoard, "ready"));
 
     if (threadList) {
       var visibleThreads = threads;
       if (state.activePersona === "ceo") {
         visibleThreads = threads.filter(function (record) {
           var title = String(firstDefined(record.title, '')).toLowerCase();
+          var preview = String(firstDefined(record.preview, '')).toLowerCase();
           var isBug = title.indexOf('report a bug') !== -1 || title.indexOf('bug') !== -1;
           var isSystem = record.kind === 'system';
-          return !isBug && !isSystem;
+          var isError = preview.indexOf('could not compute a protected data') !== -1 || title.indexOf('error') !== -1;
+          return !isBug && !isSystem && !isError;
         });
       }
       threadList.innerHTML = '<button type="button" class="assistant-thread assistant-thread--new" data-thread-new="true"><strong>＋ New conversation</strong><span>Open a writable, board-safe thread for this persona.</span></button>' + visibleThreads.map(function (record) {
         var active = record.key === currentThreadKey();
-        return '<button type="button" class="assistant-thread' + (active ? ' is-active' : '') + '" data-thread-key="' + escapeHtml(record.key) + '"><div class="assistant-thread__top"><strong>' + escapeHtml(firstDefined(record.title, 'Thread')) + '</strong><span>' + escapeHtml(friendlyThreadTime(record.lastUpdated)) + '</span></div><span>' + escapeHtml(firstDefined(record.preview, 'Board-safe follow-up')) + '</span><small>' + escapeHtml(String(safeArray(record.messages).length)) + ' message(s) · ' + escapeHtml((record.readOnly ? 'read only' : 'send and receive')) + '</small></button>';
+        var threadMeta = escapeHtml(String(safeArray(record.messages).length)) + ' message(s)' + (record.readOnly ? '' : ' · writable');
+        return '<button type="button" class="assistant-thread' + (active ? ' is-active' : '') + '" data-thread-key="' + escapeHtml(record.key) + '"><div class="assistant-thread__top"><strong>' + escapeHtml(firstDefined(record.title, 'Thread')) + '</strong><span>' + escapeHtml(friendlyThreadTime(record.lastUpdated)) + '</span></div><span>' + escapeHtml(firstDefined(record.preview, 'Board-safe follow-up')) + '</span><small>' + threadMeta + '</small></button>';
       }).join("");
       safeArray(threadList.querySelectorAll("[data-thread-new]")) .forEach(function (button) {
         button.onclick = function () {
@@ -2041,9 +2131,11 @@
     if (threadTools) {
       var tools = [];
       tools.push('<span class="assistant-tool-chip">' + escapeHtml(firstDefined((getChatContract().assistant || {}).name, assistantName)) + '</span>');
-      tools.push('<span class="assistant-tool-chip">' + escapeHtml(humanizeToken(firstDefined(state.activeBoard, (getChatContract().assistant || {}).board_state, 'pre'))) + '</span>');
-      tools.push('<span class="assistant-tool-chip">' + escapeHtml((current && current.readOnly) ? 'read only thread' : 'send and receive') + '</span>');
-      tools.push('<button type="button" class="assistant-tool-chip assistant-tool-chip--button" data-thread-new-inline="true">New conversation</button>');
+      var boardStateLabel = statusLabel(firstDefined(state.activeBoard, (getChatContract().assistant || {}).board_state, 'pre'));
+      tools.push('<span class="assistant-tool-chip">' + escapeHtml(boardStateLabel) + '</span>');
+      if (!(current && current.readOnly)) {
+        tools.push('<button type="button" class="assistant-tool-chip assistant-tool-chip--button" data-thread-new-inline="true">New conversation</button>');
+      }
       if (current && current.route && state.activePersona !== "ceo") tools.push('<span class="assistant-tool-chip">' + escapeHtml(current.route) + '</span>');
       threadTools.innerHTML = tools.join('');
       safeArray(threadTools.querySelectorAll('[data-thread-new-inline]')).forEach(function (button) {
@@ -2086,9 +2178,14 @@
       '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Board reports' : 'Report surface') + '</p><h3 class="detail-title">' + (state.activePersona === "ceo" ? 'Board reports' : 'Previewable report routes') + '</h3></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '</span></div>',
       '<p class="detail-copy">Overview, cases, evidence, and reports now sing as one workspace. This rail keeps the board-safe output explicit.</p>',
       '<div class="mini-list">' + safeArray(publication.available_artifacts).slice(0, 5).map(function (item) {
+        var formatLabel = function (fmt) {
+          var map = { graph: 'Data relationships', audit: 'Decision trail', other: 'Overview packet', json: 'Structured data', csv: 'Spreadsheet', pdf: 'PDF document', md: 'Markdown note' };
+          return map[String(fmt).toLowerCase()] || escapeHtml(fmt);
+        };
+        var catLabel = REPORT_CATEGORY_MAP[item.category] || humanizeToken(item.category) || 'report';
         var meta = state.activePersona === "ceo"
-          ? escapeHtml(firstDefined(item.category, 'report'))
-          : escapeHtml(firstDefined(item.category, 'report')) + ' \u00b7 ' + escapeHtml(firstDefined(item.format, 'file'));
+          ? escapeHtml(catLabel)
+          : escapeHtml(catLabel) + ' \u00b7 ' + escapeHtml(firstDefined(item.format, 'file'));
         return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, item.artifact_key, 'Artifact')) + '</strong><p class="list-copy">' + meta + '</p></div><span class="pill-inline ' + (item.restricted ? 'warn' : 'ok') + '">' + escapeHtml(item.restricted ? 'restricted' : 'board-safe') + '</span></div>';
       }).join("") + '</div>',
       state.activePersona === "ceo" ? '' : '<a class="summary-link" href="' + escapeHtml(firstDefined(publication.preview_route, '/public/runs/latest/report-preview')) + '">Open report preview</a>'

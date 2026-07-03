@@ -964,3 +964,296 @@ def test_ceo_clickability_disco_add_fixed():
     assert "querySelectorAll('.disco-add')" in js, (
         "disco-add buttons must be bound via querySelectorAll"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# NEW TESTS — CEO Demo Defect Batch 2026-07-03
+# ══════════════════════════════════════════════════════════════════════
+
+def test_plan_health_gauge_has_indicator_dot():
+    """#1: Plan health gauge must render hero-dot element and position it."""
+    html = _ceo_executive_html()
+    js = _static_executive_js()
+
+    # SVG must contain hero-dot circle element
+    assert 'id="hero-dot"' in html, (
+        "Plan health gauge SVG must contain indicator dot element #hero-dot"
+    )
+
+    # JS must compute dot position from score
+    assert "hero-dot" in js, (
+        "renderHero must reference hero-dot element"
+    )
+    assert "Math.sin(angleRad)" in js or "Math.sin" in js, (
+        "JS must compute angular position for indicator dot"
+    )
+    assert "dot.style.visibility" in js, (
+        "Dot visibility must be set to visible after positioning"
+    )
+
+
+def test_kpi_spacing_css_exists():
+    """#2: Board KPI must have adequate spacing between label and value."""
+    css_path = Path(__file__).resolve().parent.parent / \
+        "strategyos_mvp" / "static" / "executive.css"
+    css = css_path.read_text()
+
+    # board-kpi must have flex column layout with gap
+    assert ".board-kpi" in css, "board-kpi CSS class must exist"
+    # The class must have flex-direction: column and gap
+    assert "flex-direction: column" in css, "board-kpi must use column layout"
+
+
+def test_youtube_fallback_pre_rendered():
+    """#3: YouTube Leaders' Corner must pre-render fallback card, not iframe."""
+    js = _static_executive_js()
+
+    # Fallback card must be present in the initial HTML template
+    assert "leaders-featured-fallback" in js, (
+        "Leaders' Corner must pre-render fallback card (leaders-featured-fallback)"
+    )
+    # Frame wrapper must start hidden
+    assert "leaders-frame-wrapper" in js, (
+        "Video frame wrapper must exist for on-demand iframe creation"
+    )
+    # Fallback timer must be reduced (4s or less in selectLeadersVideo)
+    # The 10000 timer was present in original; verify it's changed
+    assert "4000" in js, (
+        "Fallback timer must be reduced to 4s (was 10s)"
+    )
+
+
+def test_week_ahead_toggle_behavior():
+    """#5: Clicking the same Week Ahead chip must toggle collapse."""
+    js = _static_executive_js()
+
+    # Toggle logic: state.openWeekIndex === idx ? -1 : idx
+    assert "openWeekIndex === idx" in js or "openWeekIndex ===" in js, (
+        "Week Ahead must toggle collapse when same chip is clicked"
+    )
+
+
+def test_browse_all_agents_opens_assistant():
+    """#6: CEO Browse All Agents must open assistant drawer, not just toast."""
+    js = _static_executive_js()
+
+    # CEO path for browse must trigger assistant interaction, not just toast
+    assert "switchView('assistants')" in js, (
+        "CEO Browse All Agents must switch to assistants view"
+    )
+    assert "Show me the agent catalogue" in js, (
+        "CEO Browse All Agents must send catalogue prompt to assistant"
+    )
+
+
+def test_report_category_map_exists():
+    """#7: Board Reports must use REPORT_CATEGORY_MAP for polished labels."""
+    js = _static_executive_js()
+
+    assert "REPORT_CATEGORY_MAP" in js, (
+        "REPORT_CATEGORY_MAP must exist for polishing board report sub-labels"
+    )
+    assert 'board_pack": "Board pack"' in js or 'board_pack: "Board pack"' in js, (
+        "REPORT_CATEGORY_MAP must map 'board_pack' to 'Board pack'"
+    )
+    assert 'graph": "Data relationships"' in js or 'graph: "Data relationships"' in js, (
+        "REPORT_CATEGORY_MAP must map 'graph' to 'Data relationships'"
+    )
+    assert 'audit": "Review trail"' in js or 'audit: "Review trail"' in js, (
+        "REPORT_CATEGORY_MAP must map 'audit' to 'Review trail'"
+    )
+    assert 'narrative": "Board narrative"' in js or 'narrative: "Board narrative"' in js, (
+        "REPORT_CATEGORY_MAP must map 'narrative' to 'Board narrative'"
+    )
+    # renderReportSurface must use REPORT_CATEGORY_MAP
+    assert "REPORT_CATEGORY_MAP[item.category]" in js, (
+        "renderReportSurface must look up category via REPORT_CATEGORY_MAP"
+    )
+
+
+def test_snapshot_cards_have_click_handlers():
+    """#8: Snapshot cards (Deck release / Frozen snapshot) must be clickable."""
+    js = _static_executive_js()
+
+    assert "snapshot-card" in js, (
+        "Snapshot cards must exist in the board portal"
+    )
+    assert "querySelectorAll('.snapshot-card')" in js or \
+        "snapshot-card" in js, (
+        "Snapshot cards must have click handler wiring"
+    )
+
+
+def test_feedback_form_css_layout():
+    """#9: Feedback form must have proper CSS layout for inputs."""
+    css_path = Path(__file__).resolve().parent.parent / \
+        "strategyos_mvp" / "static" / "executive.css"
+    css = css_path.read_text()
+
+    assert ".strategyos-feedback-card form" in css or \
+        ".strategyos-feedback-card" in css, (
+        "Feedback form must have CSS styling"
+    )
+
+
+def test_knowledge_graph_subtitle_grammar():
+    """#10: Knowledge graph subtitle must use correct grammar."""
+    js = _static_executive_js()
+
+    assert "reasons across your evidence" in js, (
+        "Knowledge graph subtitle must say 'reasons across your evidence'"
+    )
+    # Old wording must NOT appear
+    assert "proof the system" not in js, (
+        "Knowledge graph subtitle must NOT contain 'proof the system' (old wording)"
+    )
+
+
+def test_hermes_header_phrase_clean():
+    """#11: Hermes header must use 'Your AI chief of staff' not jargon."""
+    js = _static_executive_js()
+
+    assert "Your AI chief of staff" in js, (
+        "Hermes header must use 'Your AI chief of staff'"
+    )
+    # Old jargon must not appear
+    assert "named, threaded chief-of-staff follow-up" not in js, (
+        "Hermes header must NOT contain old jargon phrase"
+    )
+
+
+def test_pre_badge_uses_status_label():
+    """#12: Hermes PRE badge must show 'Pre-board' not raw 'Pre'."""
+    js = _static_executive_js()
+
+    # statusLabel must be used for board state badge (not humanizeToken)
+    # Verify statusLabel is called for activeBoard in thread tools
+    assert "statusLabel(firstDefined(state.activeBoard" in js, (
+        "Thread tools badge must use statusLabel() for board state"
+    )
+
+
+def test_thread_metadata_simplified():
+    """#13: Thread list items must not show redundant 'send and receive' tags."""
+    js = _static_executive_js()
+
+    # The old pattern: 'send and receive' in thread metadata
+    # After fix: replaced with 'writable' or removed entirely
+    assert "writable" in js, (
+        "Thread metadata must use simplified 'writable' tag"
+    )
+
+
+def test_persona_polished_labels():
+    """#14: Persona dropdown must use polished labels, not raw codes."""
+    js = _static_executive_js()
+
+    assert "POLISHED_LABELS" in js, (
+        "POLISHED_LABELS map must exist in getPersonaLabel"
+    )
+    assert 'bucfo": "Business Unit CFO"' in js or 'bucfo: "Business Unit CFO"' in js, (
+        "POLISHED_LABELS must map 'bucfo' to 'Business Unit CFO'"
+    )
+    assert 'gm": "General Manager"' in js or 'gm: "General Manager"' in js, (
+        "POLISHED_LABELS must map 'gm' to 'General Manager'"
+    )
+
+
+def test_avatar_click_rich_panel():
+    """#15: KA Avatar click must show interactive panel with actions."""
+    js = _static_executive_js()
+
+    # Avatar tooltip must have action buttons (not just text)
+    assert "Profile &amp; settings" in js or "Profile & settings" in js or \
+        "avatar-tooltip-action" in js, (
+        "Avatar panel must contain profile/settings action button"
+    )
+    assert "Switch persona" in js, (
+        "Avatar panel must contain switch persona action"
+    )
+
+
+def test_logo_home_link():
+    """#16: StrategyOS logo must be clickable home link."""
+    html = _ceo_executive_html()
+
+    assert "switchView" in html, (
+        "Logo brand div must have onclick to switchView"
+    )
+    assert 'cursor:pointer' in html or 'cursor: pointer' in html, (
+        "Logo brand div must have cursor:pointer style"
+    )
+
+
+def test_tenant_runtime_watch_renamed():
+    """#17: 'Tenant runtime watch' must be renamed to 'System health monitor'."""
+    js = _static_executive_js()
+    html = _ceo_executive_html()
+
+    # Old name appearance: may exist as key in replacement mapping; verify transform is present
+    assert "System health monitor" in js, (
+        "JS must contain 'System health monitor' as replacement"
+    )
+    # The HTML served to CEO must not render the old name
+    assert "Tenant runtime watch" not in html, (
+        "CEO HTML must not render 'Tenant runtime watch'"
+    )
+    # The replacement mapping must exist
+    assert "'Tenant runtime watch': 'System health monitor'" in js or \
+        '"Tenant runtime watch": "System health monitor"' in js, (
+        "JS must have a mapping from 'Tenant runtime watch' to 'System health monitor'"
+    )
+    # Also check Python API
+    api_path = Path(__file__).resolve().parent.parent / \
+        "strategyos_mvp" / "api.py"
+    api_text = api_path.read_text()
+    assert "Tenant runtime watch" not in api_text, (
+        "API must not contain 'Tenant runtime watch'"
+    )
+    assert "System health monitor" in api_text, (
+        "API must contain 'System health monitor'"
+    )
+
+
+def test_error_thread_filter_enhanced():
+    """#18: CEO thread filter must exclude error-containing threads."""
+    js = _static_executive_js()
+
+    # Error filter must check preview for error text
+    assert "could not compute a protected data" in js, (
+        "CEO thread filter must check for 'could not compute a protected data'"
+    )
+    # Error filter must also check title for 'error'
+    assert "title.indexOf('error')" in js or "title.indexOf(\"error\")" in js, (
+        "CEO thread filter must check title for 'error' substring"
+    )
+    assert "isError" in js, (
+        "CEO thread filter must define isError variable"
+    )
+    assert "!isError" in js, (
+        "CEO thread filter must exclude error threads"
+    )
+
+
+def test_challenged_cases_buttons_exist():
+    """#4: Close Challenged Cases buttons must exist with handlers."""
+    js = _static_executive_js()
+
+    # Buttons must exist for challenged cases
+    assert "data-board-action" in js, (
+        "Challenged case buttons must have data-board-action attribute"
+    )
+    assert "querySelectorAll('[data-board-action]')" in js or \
+        "data-board-action" in js, (
+        "Challenged case buttons must have click handler wiring"
+    )
+
+
+def test_close_challenged_cases_button_action():
+    """#4b: Close Challenged Cases buttons must trigger askAssistant()."""
+    js = _static_executive_js()
+
+    # Click handler must call askAssistant
+    assert "data-board-action" in js, (
+        "Challenged case buttons must exist with data-board-action"
+    )

@@ -4209,7 +4209,7 @@ def _agent_modules_payload(
         },
         {
             "module_id": "tenant-runtime-watch",
-            "label": "Tenant runtime watch",
+            "label": "System health monitor",
             "route": "/app?lane=system",
             "lane": "system",
             "permitted": principal_has_any_role(role, "tenant_admin", "system"),
