@@ -1,0 +1,84 @@
+name: Emergency Site Recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: strategyos-deploy-hetzner-qa
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Emergency recovery — staged compose up without --wait
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: hetzner-qa
+      url: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+    env:
+      TARGET_HOST: ${{ vars.HETZNER_USER }}@${{ vars.HETZNER_HOST }}
+      TARGET_DIR: ${{ vars.TARGET_DIR || '/opt/strategyos' }}
+      STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+      STRATEGYOS_API_IMAGE: ${{ vars.STRATEGYOS_API_IMAGE || '' }}
+    steps:
+      - name: Prepare SSH
+        env:
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          HETZNER_KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
+        run: |
+          test -n "${HETZNER_SSH_KEY}"
+          test -n "${HETZNER_KNOWN_HOSTS}"
+          install -m 700 -d "${HOME}/.ssh"
+          printf '%s\n' "${HETZNER_SSH_KEY}" > "${HOME}/.ssh/strategyos_deploy"
+          chmod 600 "${HOME}/.ssh/strategyos_deploy"
+          printf '%s\n' "${HETZNER_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          echo "SSH_OPTS=-i ${HOME}/.ssh/strategyos_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" >> "${GITHUB_ENV}"
+
+      - name: Log remote host in to GHCR
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: printf '%s' "${GHCR_TOKEN}" | ssh ${SSH_OPTS} "${TARGET_HOST}" "docker login ghcr.io -u '${GITHUB_ACTOR}' --password-stdin"
+
+      - name: Emergency recovery — staged compose up
+        run: |
+          COMPOSE_ARGS="-f deploy/docker-compose.yml -f deploy/docker-compose.release.yml -f deploy/docker-compose.hetzner-qa.yml --env-file deploy/.env --env-file deploy/.env.secrets"
+          REMOTE="ssh ${SSH_OPTS} ${TARGET_HOST}"
+
+          echo "=== Current container states ==="
+          ${REMOTE} "cd ${TARGET_DIR}/app && docker compose ${COMPOSE_ARGS} ps -a"
+
+          echo "=== Step 1: Start core dependencies (no --wait, no hatchet) ==="
+          ${REMOTE} "cd ${TARGET_DIR}/app && docker compose ${COMPOSE_ARGS} up -d --no-build minio postgres redis neo4j qdrant strategyos-idp"
+          sleep 10
+
+          echo "=== Step 2: Start minio-create-bucket ==="
+          ${REMOTE} "cd ${TARGET_DIR}/app && docker compose ${COMPOSE_ARGS} up -d --no-build minio-create-bucket"
+          sleep 15
+
+          echo "=== Step 3: Verify minio-create-bucket succeeded ==="
+          BUCKET_EXIT=$(${REMOTE} "docker inspect strategyos-minio-create-bucket-1 --format '{{.State.ExitCode}}' 2>/dev/null || echo 'unknown'")
+          echo "minio-create-bucket exit code: ${BUCKET_EXIT}"
+
+          echo "=== Step 4: Start strategyos-api ==="
+          ${REMOTE} "cd ${TARGET_DIR}/app && docker compose ${COMPOSE_ARGS} up -d --no-build strategyos-api"
+          sleep 10
+
+          echo "=== Step 5: Force-recreate caddy ==="
+          ${REMOTE} "cd ${TARGET_DIR}/app && docker compose ${COMPOSE_ARGS} up -d --no-build --force-recreate caddy"
+
+          echo "=== Final container states ==="
+          ${REMOTE} "cd ${TARGET_DIR}/app && docker compose ${COMPOSE_ARGS} ps -a"
+
+          echo "=== API logs (last 20 lines) ==="
+          ${REMOTE} "docker logs strategyos-strategyos-api-1 --tail 20 2>&1 || true"
+
+      - name: Verify site health
+        run: |
+          sleep 5
+          echo "=== Root endpoint ==="
+          curl -s -o /dev/null -w "HTTP %{http_code}\n" --connect-timeout 15 https://strategyos.live/ || echo "FAILED"
+          echo "=== Health endpoint ==="
+          curl -s -o /dev/null -w "HTTP %{http_code}\n" --connect-timeout 15 https://strategyos.live/health/live || echo "FAILED"
