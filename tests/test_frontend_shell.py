@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -1344,14 +1345,34 @@ def test_all_cta_groups_exist():
         assert pattern in executive_js, f"CTA pattern missing: {pattern}"
 
 
-def test_ceo_drawer_state_pill_empty_for_ceo():
-    """CEO drawer must set #assistant-state textContent to '' when activePersona is CEO."""
+def test_ceo_drawer_state_pill_hidden_for_ceo():
+    """CEO drawer must explicitly hide #assistant-state (hidden + empty textContent) when activePersona is CEO."""
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
-    # Verify the ternary: activePersona === "ceo" ? "" : statusLabel(...)
-    assert 'assistantState.textContent' in executive_js, \
-        "assistantState.textContent assignment not found"
-    assert 'state.activePersona === "ceo" ? ""' in executive_js, \
-        "CEO state pill empty ternary missing: activePersona === 'ceo' ? '' : ..."
+    # The hide logic must set both textContent="" and hidden=true for CEO
+    assert 'assistantState' in executive_js, \
+        "assistantState not found in executive.js"
+    assert 'assistantState.hidden = true' in executive_js, \
+        "assistantState.hidden = true missing — must explicitly hide the state pill for CEO"
+    assert 'assistantState.hidden = false' in executive_js, \
+        "assistantState.hidden = false missing — must restore visibility for non-CEO personas"
+    assert 'assistantState.textContent = ""' in executive_js, \
+        "assistantState.textContent = '' missing — must clear text for CEO"
+    # The control flow must guard on activePersona === "ceo"
+    assert 'state.activePersona === "ceo"' in executive_js, \
+        "CEO persona guard missing in executive.js"
+    # Verify the hide logic is inside renderAssistantStudio (near the assistantHeading line)
+    lines = executive_js.split('\n')
+    in_render_fn = False
+    found_hide = False
+    for i, line in enumerate(lines):
+        if 'function renderAssistantStudio' in line:
+            in_render_fn = True
+            continue
+        if in_render_fn and 'assistantState.hidden = true' in line:
+            found_hide = True
+            break
+    assert found_hide, \
+        "assistantState.hidden = true must be inside renderAssistantStudio function"
 
 
 def test_ceo_fresh_thread_per_cta():
@@ -1486,4 +1507,69 @@ def test_all_banned_strings_absent_from_ceo_drawer_code():
     assert not violations, (
         "Banned strings found outside CEO-guarded blocks:\n" +
         "\n".join(violations)
+    )
+
+
+def test_ceo_drawer_preboard_not_rendered_for_ceo():
+    """statusLabel(board) must never be called for CEO in renderAssistantStudio.
+
+    The PRE-BOARD pill comes from statusLabel returning "Pre-board" when state.activeBoard
+    is "pre".  For the CEO persona the assistant-state element must be hidden (not just
+    emptied) and statusLabel must NOT be invoked with the board value in the CEO codepath.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    lines = executive_js.split('\n')
+
+    # Find renderAssistantStudio function boundaries
+    in_fn = False
+    fn_start = -1
+    fn_end = -1
+    brace_depth = 0
+    for i, line in enumerate(lines):
+        if 'function renderAssistantStudio' in line:
+            in_fn = True
+            fn_start = i
+            brace_depth = line.count('{') - line.count('}')
+            continue
+        if not in_fn:
+            continue
+        brace_depth += line.count('{') - line.count('}')
+        if brace_depth <= 0:
+            fn_end = i
+            break
+
+    assert fn_start >= 0 and fn_end > fn_start, \
+        "renderAssistantStudio function boundaries not found"
+
+    fn_body = '\n'.join(lines[fn_start:fn_end + 1])
+
+    # 1. The CEO guard must prevent statusLabel from being called with board data
+    #    The pattern: inside "activePersona === 'ceo'" block, statusLabel is NOT called
+    #    with firstDefined(state.activeBoard, ...)
+    #    We verify this by checking that the only statusLabel calls inside the CEO branch
+    #    are on non-board values.
+    #
+    #    Since the function may contain statusLabel calls for non-CEO paths,
+    #    we check that the CEO block doesn't contain statusLabel with activeBoard.
+    ceo_block_pattern = re.search(
+        r'state\.activePersona\s*===\s*"ceo"[^}]*?\{([^}]*?)\}',
+        fn_body, re.DOTALL
+    )
+    if ceo_block_pattern:
+        ceo_block = ceo_block_pattern.group(1)
+        # statusLabel must NOT appear inside the CEO block with activeBoard
+        prohibited = 'statusLabel' in ceo_block and 'activeBoard' in ceo_block
+        assert not prohibited, (
+            "statusLabel must NOT be called with activeBoard inside CEO block "
+            "of renderAssistantStudio — this is what renders PRE-BOARD"
+        )
+
+    # 2. Verify the explicit hide: assistantState.hidden = true is in the function body
+    assert 'assistantState.hidden = true' in fn_body, (
+        "renderAssistantStudio must set assistantState.hidden = true for CEO"
+    )
+
+    # 3. The subtitle must NOT contain "Pre-board" or "PRE-BOARD" for any persona
+    assert 'Pre-board' not in fn_body, (
+        "'Pre-board' (statusLabel output) must not appear in renderAssistantStudio body"
     )
