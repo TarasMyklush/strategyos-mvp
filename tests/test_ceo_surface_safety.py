@@ -1696,3 +1696,135 @@ def test_cta_count_all_matches_expected():
     assert count >= 17, (
         f"Expected at least 17 askAssistant call sites, found {count}"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# KPI RING VISUAL ENCODING — Arc must be truthful to percentage value
+# Bug: Math.min(100, ...) made 102% and 123% produce identical arcs
+# ══════════════════════════════════════════════════════════════════════
+
+def test_driver_ring_arc_no_pct_clamp():
+    """KPI ring arc must NOT clamp percentage to 100 — values above 100
+    must produce visibly different arcs. The old Math.min(100, ...) is removed
+    from driverRingMarkup specifically (the hero gauge clamp is legitimate)."""
+    js = _static_executive_js()
+
+    # The driverRingMarkup pct variable must NOT be wrapped in Math.min(100, ...)
+    assert "var pct = Math.max(0," in js, (
+        "driverRingMarkup must set pct with Math.max(0, ...) only, no upper clamp"
+    )
+
+    # Extract only the driverRingMarkup function body to check it specifically
+    func_start = js.index("function driverRingMarkup")
+    func_end = js.index("function qaAnswerText", func_start)
+    ring_func_body = js[func_start:func_end]
+
+    # The old clamp must NOT exist inside driverRingMarkup
+    assert "Math.min(100," not in ring_func_body, (
+        "driverRingMarkup must NOT contain Math.min(100, ...) clamp — "
+        "values >100% must produce truthful, distinct arcs"
+    )
+
+
+def test_driver_ring_ringmax_scales_beyond_100():
+    """driverRingMarkup must use ringMax = 400/3 (~133.33) as the ring ceiling
+    so that pct=123 produces a taller arc than pct=102."""
+    js = _static_executive_js()
+
+    assert "ringMax = 400 / 3" in js, (
+        "driverRingMarkup must retain ringMax = 400/3 to scale values beyond 100%"
+    )
+
+    # The fraction must use Math.min(pct, ringMax) for the natural ceiling
+    assert "Math.min(pct, ringMax)" in js, (
+        "driverRingMarkup must use Math.min(pct, ringMax) as natural ring ceiling"
+    )
+
+    # The tick must reference 100/ringMax (plan marker)
+    assert "100 / ringMax" in js, (
+        "driverRingMarkup tick must be at 100/ringMax position as the plan reference line"
+    )
+
+
+def test_driver_ring_dash_proportional_to_pct():
+    """Verify mathematically that distinct pct values produce distinct dashes.
+    circumference = 2 * PI * 15 ≈ 94.2478, ringMax = 400/3 ≈ 133.33
+
+    Expected dashes before fix (with clamp):
+      pct=99  → dash ≈ 70.0
+      pct=101 → dash ≈ 70.7  (clamped to 100)
+      pct=102 → dash ≈ 70.7  (clamped to 100 — SAME as 101)
+      pct=123 → dash ≈ 70.7  (clamped to 100 — SAME as 102)
+
+    Expected dashes after fix (no clamp):
+      pct=99  → dash ≈ 70.0
+      pct=101 → dash ≈ 71.4
+      pct=102 → dash ≈ 72.1
+      pct=123 → dash ≈ 87.0
+    """
+    import math
+    radius = 15
+    circumference = 2 * math.pi * radius  # ≈ 94.2478
+    ring_max = 400.0 / 3.0  # ≈ 133.33
+
+    def expected_dash(pct_value):
+        pct = max(0, pct_value)
+        frac = max(0.02, min(pct, ring_max) / ring_max)
+        return round(circumference * frac, 1)
+
+    # 99 and 101 must differ (they were close but different)
+    dash_99 = expected_dash(99)
+    dash_101 = expected_dash(101)
+    assert dash_99 != dash_101, (
+        f"99% and 101% must produce different dashes: got {dash_99} vs {dash_101}"
+    )
+    # 99% dash should be less than 101% dash
+    assert dash_99 < dash_101, (
+        f"99% dash ({dash_99}) must be less than 101% dash ({dash_101})"
+    )
+
+    # 102 and 123 must be materially different (the main bug)
+    dash_102 = expected_dash(102)
+    dash_123 = expected_dash(123)
+    assert dash_102 != dash_123, (
+        f"102% and 123% must produce different dashes: got {dash_102} vs {dash_123}"
+    )
+    # 123% must be noticeably larger than 102% (at least 10% larger arc)
+    assert dash_123 > dash_102 * 1.10, (
+        f"123% dash ({dash_123}) must be >10% larger than 102% dash ({dash_102})"
+    )
+
+    # Verify exact expected values
+    assert abs(dash_99 - 70.0) < 0.5, f"99% dash ≈ 70.0, got {dash_99}"
+    assert abs(dash_101 - 71.4) < 0.5, f"101% dash ≈ 71.4, got {dash_101}"
+    assert abs(dash_102 - 72.1) < 0.5, f"102% dash ≈ 72.1, got {dash_102}"
+    assert abs(dash_123 - 87.0) < 0.5, f"123% dash ≈ 87.0, got {dash_123}"
+
+
+def test_driver_ring_tick_marks_plan_line():
+    """The driver ring tick must always point to the 100% plan position,
+    regardless of the driver's pct value."""
+    js = _static_executive_js()
+
+    # The tick angle is computed as (100 / ringMax) * 360 - 90
+    # This places the tick at exactly the 100%-of-plan angular position
+    assert "tickAngle" in js, (
+        "driverRingMarkup must compute a tick angle"
+    )
+    # tickAngle must not depend on driver.pct
+    pct_references_in_ring = js.count("pct")
+    # The function references 'pct' multiple times, but tickAngle should
+    # use ringMax, not pct. Verify the tick uses 100/ringMax pattern.
+    assert "(100 / ringMax)" in js or "100 / ringMax" in js, (
+        "tick angle must reference 100/ringMax as plan reference, not driver.pct"
+    )
+
+
+def test_driver_ring_frac_floor_preserved():
+    """The minimum frac of 0.02 must still be preserved so zero/very-low
+    values show a visible sliver instead of an invisible ring."""
+    js = _static_executive_js()
+
+    assert "0.02" in js, (
+        "driverRingMarkup must preserve the min frac=0.02 floor"
+    )

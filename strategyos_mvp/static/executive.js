@@ -566,7 +566,7 @@
   }
 
   function driverRingMarkup(driver) {
-    var pct = Math.max(0, Math.min(100, Number(firstDefined(driver.pct, 0)) || 0));
+    var pct = Math.max(0, Number(firstDefined(driver.pct, 0)) || 0);
     var ringMax = 400 / 3;
     var radius = 15;
     var circumference = 2 * Math.PI * radius;
