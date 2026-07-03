@@ -797,15 +797,22 @@ def test_leaders_corner_four_consistent_thumb_cards():
 
 
 def test_leaders_corner_first_thumb_is_active():
-    """First thumb (index 0) must have is-active class in JS template."""
+    """First thumb (index 0) must have is-active class inside the class attribute."""
     js = _static_executive_js()
 
-    # The is-active class must be added via ternary for first thumb
+    # The is-active class must be inside the class attribute, not outside
     assert "is-active" in js, (
         "is-active class logic must be present in thumb rendering"
     )
-    assert "(i === 0 ? ' is-active' : '')" in js, (
-        "First thumb must get is-active class via ternary (i === 0)"
+    # Correct pattern: class= ends AFTER the is-active ternary, not before
+    assert "class=\"leaders-thumb' + (i === 0 ? ' is-active' : '') + '\"" in js, (
+        "is-active must be placed inside the class attribute: "
+        "class=\"leaders-thumb' + (i === 0 ? ' is-active' : '') + '\""
+    )
+    # Verify the old broken pattern (is-active outside class attribute) is absent
+    assert "class=\"leaders-thumb\"' + (i === 0 ? ' is-active'" not in js, (
+        "is-active must NOT be placed outside the class attribute — "
+        "the closing quote of class must come AFTER the ternary"
     )
 
 
