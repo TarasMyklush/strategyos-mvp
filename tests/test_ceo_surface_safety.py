@@ -20,6 +20,13 @@ def _ceo_executive_html() -> str:
     return response.text
 
 
+def _static_executive_css() -> str:
+    client = TestClient(api_module.app)
+    response = client.get("/static/executive.css")
+    assert response.status_code == 200
+    return response.text
+
+
 def test_ceo_assistant_never_leaks_raw_internals():
     """CEO reply paths must not expose run IDs, internal statuses, finding counts, etc.
 
@@ -1873,4 +1880,82 @@ def test_driver_ring_over_plan_badge_absent_at_or_below_100():
     # The condition must be strictly > 100 (not >= 100)
     assert "> 100" in js, (
         "renderDriverGrid must use > 100 (not >= 100) so exactly-100 shows no badge"
+    )
+
+
+def test_driver_ring_over_plan_badge_outside_ring_copy():
+    """The over-plan badge must be a sibling of .driver-ring-copy (inside
+    .driver-ring-stage but outside .driver-ring-copy) so it can be
+    absolutely positioned as an outside pill without fighting the
+    centered percentage display."""
+    js = _static_executive_js()
+
+    # The badge must be rendered AFTER the ring-copy closing </div>
+    # but BEFORE the ring-stage closing </div>.
+    # JS concatenation pattern:
+    #   '</div></div>' + (Number(...) > 100 ? '<span class="driver-over-plan">...' : '') + '</div>'
+    assert "driver-ring-copy" in js, "ring-copy must exist"
+    assert "driver-over-plan" in js, "over-plan badge must exist"
+
+    # Extract the renderDriverGrid function body to verify structure
+    func_start = js.index("function renderDriverGrid")
+    func_end = js.index("function renderMetrics", func_start)
+    grid_func_body = js[func_start:func_end]
+
+    # The ring-copy closing </div></div> must appear BEFORE the driver-over-plan
+    # reference in the template string.  Find the unique pattern:
+    #   '</div></div>' + (... ? '<span class="driver-over-plan"
+    ring_copy_close_pos = grid_func_body.index("</div></div>' +")
+    badge_pos = grid_func_body.index("driver-over-plan")
+    assert badge_pos > ring_copy_close_pos, (
+        "driver-over-plan badge must appear AFTER .driver-ring-copy closing "
+        "</div></div> in the renderDriverGrid template — badge must be a "
+        "sibling of ring-copy inside ring-stage, not a child of ring-copy"
+    )
+
+
+def test_driver_ring_over_plan_badge_has_outside_pill_css():
+    """The .driver-over-plan CSS must use position:absolute so the badge
+    sits as an outside pill at the top-right of the ring, not inline inside
+    the centered ring-copy grid."""
+    css = _static_executive_css()
+
+    # Find the .driver-over-plan rule
+    assert ".driver-over-plan" in css, "driver-over-plan CSS rule must exist"
+
+    # The rule must use position: absolute (outside pill)
+    rule_start = css.index(".driver-over-plan")
+    # Find the closing brace of this rule
+    rule_end = css.index("}", rule_start)
+    rule_body = css[rule_start:rule_end]
+
+    assert "position: absolute" in rule_body, (
+        "driver-over-plan CSS must use position:absolute for outside-pill placement"
+    )
+    assert "border-radius: 999px" in rule_body, (
+        "driver-over-plan CSS must use pill shape (border-radius: 999px)"
+    )
+
+
+def test_floating_controls_safe_zone_at_desktop():
+    """At desktop widths (>1100px), the KPI grid (#driver-row) must have a
+    right margin creating a safe zone so the rightmost KPI card never sits
+    underneath the fixed-position chat-launcher or a2a-shell floating controls."""
+    css = _static_executive_css()
+
+    # There must be a desktop-width rule providing right margin to #driver-row
+    assert "#driver-row" in css, "driver-row selector must exist in CSS"
+
+    # Find the margin-right rule for #driver-row (inside a min-width query)
+    # Look for the safe-zone pattern
+    assert "margin-right" in css, "margin-right must exist for safe zone"
+
+    # The margin must use clamp() for responsive scaling
+    assert "clamp(200px" in css, (
+        "desktop safe zone must use clamp(200px, ...) to scale with viewport"
+    )
+
+    # Verify it's scoped to a desktop media query
+    assert "@media (min-width: 1101px)" in css, (
+        "safe zone must be gated behind @media (min-width: 1101px) desktop breakpoint"
     )
