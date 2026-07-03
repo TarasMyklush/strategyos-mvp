@@ -567,29 +567,13 @@
 
   function driverRingMarkup(driver) {
     var pct = Math.max(0, Number(firstDefined(driver.pct, 0)) || 0);
-    var ringMax = 400 / 3;
     var radius = 15;
     var circumference = 2 * Math.PI * radius;
-    var frac = Math.max(0.02, Math.min(pct, ringMax) / ringMax);
+    // Full circle = 100% of plan. Values above 100% cap at full ring;
+    // the over-plan amount is shown as a badge outside the ring.
+    var frac = Math.max(0.02, Math.min(pct, 100) / 100);
     var dash = circumference * frac;
-    var tickAngle = (100 / ringMax) * 360 - 90;
-    var tickRad = (tickAngle * Math.PI) / 180;
-    var cx = 18;
-    var cy = 18;
-    var cos = Math.cos(tickRad);
-    var sin = Math.sin(tickRad);
-    var tcos = -sin;
-    var tsin = cos;
-    var apexR = radius + 3.25;
-    var baseR = radius + 8.25;
-    var halfWidth = 2.8;
-    var ax = (cx + apexR * cos).toFixed(2);
-    var ay = (cy + apexR * sin).toFixed(2);
-    var b1x = (cx + baseR * cos + halfWidth * tcos).toFixed(2);
-    var b1y = (cy + baseR * sin + halfWidth * tsin).toFixed(2);
-    var b2x = (cx + baseR * cos - halfWidth * tcos).toFixed(2);
-    var b2y = (cy + baseR * sin - halfWidth * tsin).toFixed(2);
-    return '<svg class="driver-ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="driver-ring__track" cx="18" cy="18" r="15"></circle><circle class="driver-ring__value" cx="18" cy="18" r="15" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 18 18)"></circle><polygon class="driver-ring__tick" points="' + ax + ',' + ay + ' ' + b1x + ',' + b1y + ' ' + b2x + ',' + b2y + '"></polygon></svg>';
+    return '<svg class="driver-ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="driver-ring__track" cx="18" cy="18" r="15"></circle><circle class="driver-ring__value" cx="18" cy="18" r="15" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 18 18)"></circle></svg>';
   }
 
   function qaAnswerText(payload) {
@@ -1431,7 +1415,7 @@
       tile.type = "button";
       tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
       tile.innerHTML = [
-        '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy"><div class="driver-pct">' + escapeHtml(firstDefined(driver.pct, '—')) + '<span class="pct-sign">%</span></div></div></div>',
+        '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy"><div class="driver-pct">' + escapeHtml(firstDefined(driver.pct, '—')) + '<span class="pct-sign">%</span></div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div></div>',
         '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(firstDefined(driver.sub, "current measure")) + '</span></div></div>'
       ].join("");
       tile.onclick = function () {

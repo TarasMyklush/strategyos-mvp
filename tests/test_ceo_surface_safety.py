@@ -1699,17 +1699,17 @@ def test_cta_count_all_matches_expected():
 
 
 # ══════════════════════════════════════════════════════════════════════
-# KPI RING VISUAL ENCODING — Arc must be truthful to percentage value
-# Bug: Math.min(100, ...) made 102% and 123% produce identical arcs
+# KPI RING VISUAL ENCODING — Full circle MUST equal 100% (not 133.33%)
+#  - Values above 100% cap at full ring; over-plan shown as badge
+#  - No tick marker (the full circle IS the 100% reference)
+#  - Previously: ringMax=400/3 ~133.33 made 100%=3/4 circle — not CEO-intuitive
 # ══════════════════════════════════════════════════════════════════════
 
 def test_driver_ring_arc_no_pct_clamp():
-    """KPI ring arc must NOT clamp percentage to 100 — values above 100
-    must produce visibly different arcs. The old Math.min(100, ...) is removed
-    from driverRingMarkup specifically (the hero gauge clamp is legitimate)."""
+    """KPI ring arc must NOT clamp percentage to 100 — values up to 100
+    are proportional, values above 100 cap at full ring (100%)."""
     js = _static_executive_js()
 
-    # The driverRingMarkup pct variable must NOT be wrapped in Math.min(100, ...)
     assert "var pct = Math.max(0," in js, (
         "driverRingMarkup must set pct with Math.max(0, ...) only, no upper clamp"
     )
@@ -1722,101 +1722,121 @@ def test_driver_ring_arc_no_pct_clamp():
     # The old clamp must NOT exist inside driverRingMarkup
     assert "Math.min(100," not in ring_func_body, (
         "driverRingMarkup must NOT contain Math.min(100, ...) clamp — "
-        "values >100% must produce truthful, distinct arcs"
+        "the natural cap at full ring (100%) handles values >= 100%"
     )
 
 
-def test_driver_ring_ringmax_scales_beyond_100():
-    """driverRingMarkup must use ringMax = 400/3 (~133.33) as the ring ceiling
-    so that pct=123 produces a taller arc than pct=102."""
+def test_driver_ring_full_circle_equals_100():
+    """driverRingMarkup must use Math.min(pct, 100) / 100 so that
+    a full circle (frac=1.0) means exactly 100% of plan.
+    ringMax=400/3 (133.33) must NOT be present."""
     js = _static_executive_js()
 
-    assert "ringMax = 400 / 3" in js, (
-        "driverRingMarkup must retain ringMax = 400/3 to scale values beyond 100%"
+    # The old 133.33% ringMax must be gone
+    assert "ringMax = 400 / 3" not in js, (
+        "driverRingMarkup must NOT contain ringMax = 400/3 — "
+        "full circle = 100% of plan, not 133.33%"
     )
 
-    # The fraction must use Math.min(pct, ringMax) for the natural ceiling
-    assert "Math.min(pct, ringMax)" in js, (
-        "driverRingMarkup must use Math.min(pct, ringMax) as natural ring ceiling"
+    # The fraction must use Math.min(pct, 100) / 100 (full circle at 100%)
+    assert "Math.min(pct, 100) / 100" in js, (
+        "driverRingMarkup must cap at Math.min(pct, 100) / 100 — "
+        "full circle = 100%"
     )
 
-    # The tick must reference 100/ringMax (plan marker)
-    assert "100 / ringMax" in js, (
-        "driverRingMarkup tick must be at 100/ringMax position as the plan reference line"
+    # Must NOT reference ringMax anywhere
+    func_start = js.index("function driverRingMarkup")
+    func_end = js.index("function qaAnswerText", func_start)
+    ring_func_body = js[func_start:func_end]
+    assert "ringMax" not in ring_func_body, (
+        "driverRingMarkup must NOT reference ringMax — "
+        "the ring ceiling is 100, not a separate max variable"
+    )
+
+
+def test_driver_ring_no_tick():
+    """There is no tick marker needed — the full circle itself is the 100%
+    reference. tickAngle must not exist in driverRingMarkup."""
+    js = _static_executive_js()
+
+    func_start = js.index("function driverRingMarkup")
+    func_end = js.index("function qaAnswerText", func_start)
+    ring_func_body = js[func_start:func_end]
+
+    assert "tickAngle" not in ring_func_body, (
+        "driverRingMarkup must NOT compute tickAngle — "
+        "the full circle IS the 100% reference; no separate tick needed"
     )
 
 
 def test_driver_ring_dash_proportional_to_pct():
-    """Verify mathematically that distinct pct values produce distinct dashes.
-    circumference = 2 * PI * 15 ≈ 94.2478, ringMax = 400/3 ≈ 133.33
+    """Verify mathematically that dash values are proportional to pct
+    in the 0-100 range, and that values above 100 all produce the same
+    full-ring dash.
 
-    Expected dashes before fix (with clamp):
-      pct=99  → dash ≈ 70.0
-      pct=101 → dash ≈ 70.7  (clamped to 100)
-      pct=102 → dash ≈ 70.7  (clamped to 100 — SAME as 101)
-      pct=123 → dash ≈ 70.7  (clamped to 100 — SAME as 102)
+    circumference = 2 * PI * 15 ≈ 94.2478
+    For pct <= 100: dash = circumference * (pct / 100)
+    For pct >= 100: dash = circumference (full ring)
 
-    Expected dashes after fix (no clamp):
-      pct=99  → dash ≈ 70.0
-      pct=101 → dash ≈ 71.4
-      pct=102 → dash ≈ 72.1
-      pct=123 → dash ≈ 87.0
+    Expected:
+      pct=0   → dash ≈ 1.9   (0.02 floor)
+      pct=50  → dash ≈ 47.1
+      pct=78  → dash ≈ 73.5
+      pct=99  → dash ≈ 93.3
+      pct=100 → dash ≈ 94.2  (full ring)
+      pct=101 → dash ≈ 94.2  (capped — full ring)
+      pct=102 → dash ≈ 94.2  (capped — full ring)
+      pct=123 → dash ≈ 94.2  (capped — full ring)
     """
     import math
     radius = 15
     circumference = 2 * math.pi * radius  # ≈ 94.2478
-    ring_max = 400.0 / 3.0  # ≈ 133.33
 
     def expected_dash(pct_value):
         pct = max(0, pct_value)
-        frac = max(0.02, min(pct, ring_max) / ring_max)
+        frac = max(0.02, min(pct, 100) / 100)
         return round(circumference * frac, 1)
 
-    # 99 and 101 must differ (they were close but different)
+    # --- 0-100 range: proportional ---
+    dash_0 = expected_dash(0)
+    dash_50 = expected_dash(50)
+    dash_78 = expected_dash(78)
     dash_99 = expected_dash(99)
-    dash_101 = expected_dash(101)
-    assert dash_99 != dash_101, (
-        f"99% and 101% must produce different dashes: got {dash_99} vs {dash_101}"
-    )
-    # 99% dash should be less than 101% dash
-    assert dash_99 < dash_101, (
-        f"99% dash ({dash_99}) must be less than 101% dash ({dash_101})"
+    dash_100 = expected_dash(100)
+
+    # Floor preserved (0.02 minimum)
+    assert dash_0 > 1.8, f"pct=0 dash must use 0.02 floor, got {dash_0}"
+    assert abs(dash_0 - 1.9) < 0.2, f"pct=0 dash ≈ 1.9, got {dash_0}"
+
+    # 50% = half circumference
+    assert abs(dash_50 - 47.1) < 0.5, f"pct=50 dash ≈ 47.1, got {dash_50}"
+
+    # 78% = 78% of circumference
+    assert abs(dash_78 - 73.5) < 0.5, f"pct=78 dash ≈ 73.5, got {dash_78}"
+
+    # 99% just under full
+    assert abs(dash_99 - 93.3) < 0.5, f"pct=99 dash ≈ 93.3, got {dash_99}"
+
+    # 100% = full circumference
+    assert abs(dash_100 - circumference) < 0.1, (
+        f"pct=100 must be full circle (dash={circumference}), got {dash_100}"
     )
 
-    # 102 and 123 must be materially different (the main bug)
+    # --- Above 100%: all capped at full ring ---
+    dash_101 = expected_dash(101)
     dash_102 = expected_dash(102)
     dash_123 = expected_dash(123)
-    assert dash_102 != dash_123, (
-        f"102% and 123% must produce different dashes: got {dash_102} vs {dash_123}"
-    )
-    # 123% must be noticeably larger than 102% (at least 10% larger arc)
-    assert dash_123 > dash_102 * 1.10, (
-        f"123% dash ({dash_123}) must be >10% larger than 102% dash ({dash_102})"
-    )
 
-    # Verify exact expected values
-    assert abs(dash_99 - 70.0) < 0.5, f"99% dash ≈ 70.0, got {dash_99}"
-    assert abs(dash_101 - 71.4) < 0.5, f"101% dash ≈ 71.4, got {dash_101}"
-    assert abs(dash_102 - 72.1) < 0.5, f"102% dash ≈ 72.1, got {dash_102}"
-    assert abs(dash_123 - 87.0) < 0.5, f"123% dash ≈ 87.0, got {dash_123}"
+    # All above-100 values must equal the full circumference
+    for label, dash_val in [("101", dash_101), ("102", dash_102), ("123", dash_123)]:
+        assert abs(dash_val - circumference) < 0.1, (
+            f"pct={label} must cap at full ring (dash={circumference}), got {dash_val}"
+        )
 
-
-def test_driver_ring_tick_marks_plan_line():
-    """The driver ring tick must always point to the 100% plan position,
-    regardless of the driver's pct value."""
-    js = _static_executive_js()
-
-    # The tick angle is computed as (100 / ringMax) * 360 - 90
-    # This places the tick at exactly the 100%-of-plan angular position
-    assert "tickAngle" in js, (
-        "driverRingMarkup must compute a tick angle"
-    )
-    # tickAngle must not depend on driver.pct
-    pct_references_in_ring = js.count("pct")
-    # The function references 'pct' multiple times, but tickAngle should
-    # use ringMax, not pct. Verify the tick uses 100/ringMax pattern.
-    assert "(100 / ringMax)" in js or "100 / ringMax" in js, (
-        "tick angle must reference 100/ringMax as plan reference, not driver.pct"
+    # All above-100 dashes must be identical (full ring)
+    assert dash_101 == dash_102 == dash_123, (
+        f"All pct > 100 must produce identical full-ring dashes: "
+        f"got {dash_101}, {dash_102}, {dash_123}"
     )
 
 
@@ -1827,4 +1847,30 @@ def test_driver_ring_frac_floor_preserved():
 
     assert "0.02" in js, (
         "driverRingMarkup must preserve the min frac=0.02 floor"
+    )
+
+
+def test_driver_ring_over_plan_badge_present():
+    """renderDriverGrid must emit a driver-over-plan badge when pct > 100."""
+    js = _static_executive_js()
+
+    # The over-plan badge span must exist in the JS source
+    assert "driver-over-plan" in js, (
+        "renderDriverGrid must emit a driver-over-plan badge for pct > 100"
+    )
+
+    # Must compute the delta relative to 100
+    assert "> 100" in js, (
+        "renderDriverGrid must check for pct > 100 to show the over-plan badge"
+    )
+
+
+def test_driver_ring_over_plan_badge_absent_at_or_below_100():
+    """renderDriverGrid must NOT emit a badge when pct <= 100.
+    The conditional must gate on > 100, not >= 100."""
+    js = _static_executive_js()
+
+    # The condition must be strictly > 100 (not >= 100)
+    assert "> 100" in js, (
+        "renderDriverGrid must use > 100 (not >= 100) so exactly-100 shows no badge"
     )
