@@ -252,14 +252,14 @@
     var input = $("assistant-input");
     if (!validChip && form && input) {
       input.disabled = true;
-      input.placeholder = 'Hermes is thinking\u2026';
+      input.placeholder = 'Thinking\u2026';
       form.classList.add('assistant-form--loading');
     }
     var answer = await buildAssistantReply(cleanPrompt);
     // Clear loading state
     if (!validChip && form && input) {
       input.disabled = false;
-      input.placeholder = 'Ask the assistant for the next board-safe move\u2026';
+      input.placeholder = 'Ask Hermes\u2026';
       form.classList.remove('assistant-form--loading');
       focusAssistantInput();
     }
@@ -597,7 +597,7 @@
 
   function boardSafeStatusReply(message) {
     if (state.activePersona === "ceo") {
-      return "Your board pack is currently under review. Hermes will answer from the approved pack once review clears.";
+      return "The board pack is under review. Here\u2019s what I can answer now:";
     }
     var publication = getPublication();
     var planHealth = getPlanHealth();
@@ -632,7 +632,17 @@
       }
     }
 
-    var body = { question: cleanMessage, mode: "auto" };
+    // Typo normalization for common misspellings before API call
+    var normalizeTypos = function (q) {
+      var fixes = { whar: 'what', whcih: 'which', waht: 'what', whta: 'what', wher: 'where', whne: 'when', whay: 'why', hwo: 'how', wats: "what's", hows: "how's", whos: "who's", cn: 'can', shoudl: 'should', coudl: 'could', woudl: 'would', pleas: 'please', hlep: 'help' };
+      return q.split(/\s+/).map(function (w) {
+        var lower = w.toLowerCase().replace(/[^a-z']/g, '');
+        return fixes[lower] ? w.replace(new RegExp(lower.replace(/'/g, "\\'"), 'i'), fixes[lower]) : w;
+      }).join(' ');
+    };
+    var apiQuestion = normalizeTypos(cleanMessage);
+
+    var body = { question: apiQuestion, mode: "auto" };
     var runId = activeRunId();
     if (runId && runId !== "latest-public") body.run_id = runId;
     try {
@@ -2124,23 +2134,32 @@
       var toggleBtn = document.createElement('button');
       toggleBtn.type = 'button';
       toggleBtn.className = 'assistant-threads-toggle';
-      toggleBtn.setAttribute('aria-label', 'Toggle thread list');
-      toggleBtn.setAttribute('aria-expanded', 'true');
-      toggleBtn.textContent = '\u2630';
+      toggleBtn.setAttribute('aria-label', 'Toggle thread history');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      toggleBtn.textContent = 'History \u25B8';
       toggleBtn.onclick = function () {
         var threadsPane = drawer.querySelector('.assistant-threads');
+        var layout = drawer.querySelector('.assistant-layout');
         if (threadsPane) {
           var collapsed = threadsPane.classList.toggle('is-collapsed');
           toggleBtn.setAttribute('aria-expanded', String(!collapsed));
-          toggleBtn.textContent = collapsed ? '\u2630' : '\u2715';
+          toggleBtn.textContent = collapsed ? 'History \u25B8' : 'History \u25BE';
+          if (layout) layout.classList.toggle('threads-collapsed', collapsed);
         }
       };
       headActions.insertBefore(toggleBtn, closeButton);
     }
 
-    if (assistantHeading) assistantHeading.textContent = assistantName;
-    if (assistantSubtitle) assistantSubtitle.textContent = getPersonaLabel(state.activePersona) + " \u00b7 Your AI chief of staff";
+    if (assistantHeading) assistantHeading.textContent = "Ask Hermes";
+    if (assistantSubtitle) assistantSubtitle.textContent = "Answers from the current board pack";
     if (assistantState) assistantState.textContent = statusLabel(firstDefined(state.activeBoard, "ready"));
+
+    // Synchronize layout class with threads collapsed state
+    var threadsPane = drawer && drawer.querySelector('.assistant-threads');
+    var layout = drawer && drawer.querySelector('.assistant-layout');
+    if (layout && threadsPane) {
+      layout.classList.toggle('threads-collapsed', threadsPane.classList.contains('is-collapsed'));
+    }
 
     if (threadList) {
       var visibleThreads = threads;
@@ -2154,10 +2173,11 @@
           return !isBug && !isSystem && !isError;
         });
       }
-      threadList.innerHTML = '<button type="button" class="assistant-thread assistant-thread--new" data-thread-new="true"><strong>＋ New conversation</strong><span>Open a writable, board-safe thread for this persona.</span></button>' + visibleThreads.map(function (record) {
+      threadList.innerHTML = '<button type="button" class="assistant-thread assistant-thread--new" data-thread-new="true"><strong>＋ New conversation</strong><span>Start a new conversation</span></button>' + visibleThreads.map(function (record) {
         var active = record.key === currentThreadKey();
-        var threadMeta = escapeHtml(String(safeArray(record.messages).length)) + ' message(s)' + (record.readOnly ? '' : ' · writable');
-        return '<button type="button" class="assistant-thread' + (active ? ' is-active' : '') + '" data-thread-key="' + escapeHtml(record.key) + '"' + (active ? ' aria-current="page"' : '') + '><div class="assistant-thread__top"><strong>' + escapeHtml(firstDefined(record.title, 'Thread')) + '</strong><span>' + escapeHtml(friendlyThreadTime(record.lastUpdated)) + '</span></div><span>' + escapeHtml(firstDefined(record.preview, 'Board-safe follow-up')) + '</span><small>' + threadMeta + '</small></button>';
+        var threadMetaCount = safeArray(record.messages).length;
+        var threadMeta = threadMetaCount > 0 ? escapeHtml(String(threadMetaCount)) + ' message(s)' : '';
+        return '<button type="button" class="assistant-thread' + (active ? ' is-active' : '') + '" data-thread-key="' + escapeHtml(record.key) + '"' + (active ? ' aria-current="page"' : '') + '><div class="assistant-thread__top"><strong>' + escapeHtml(firstDefined(record.title, 'Thread')) + '</strong><span>' + escapeHtml(friendlyThreadTime(record.lastUpdated)) + '</span></div><span>' + escapeHtml(firstDefined(record.preview, 'Board-safe follow-up')) + '</span>' + (threadMeta ? '<small>' + threadMeta + '</small>' : '') + '</button>';
       }).join("");
       safeArray(threadList.querySelectorAll("[data-thread-new]")).forEach(function (button) {
         button.onclick = function () {
@@ -2177,20 +2197,13 @@
     if (threadMeta) threadMeta.textContent = firstDefined(current && current.preview, blueprint.brief, "Select a governed follow-up.");
     if (threadTools) {
       var tools = [];
-      tools.push('<span class="assistant-tool-chip">' + escapeHtml(firstDefined((getChatContract().assistant || {}).name, assistantName)) + '</span>');
+      if (state.activePersona !== "ceo") {
+        tools.push('<span class="assistant-tool-chip">' + escapeHtml(firstDefined((getChatContract().assistant || {}).name, assistantName)) + '</span>');
+      }
       var boardStateLabel = statusLabel(firstDefined(state.activeBoard, (getChatContract().assistant || {}).board_state, 'pre'));
       tools.push('<span class="assistant-tool-chip">' + escapeHtml(boardStateLabel) + '</span>');
-      if (!(current && current.readOnly)) {
-        tools.push('<button type="button" class="assistant-tool-chip assistant-tool-chip--button" data-thread-new-inline="true">New conversation</button>');
-      }
       if (current && current.route && state.activePersona !== "ceo") tools.push('<span class="assistant-tool-chip">' + escapeHtml(current.route) + '</span>');
       threadTools.innerHTML = tools.join('');
-      safeArray(threadTools.querySelectorAll('[data-thread-new-inline]')).forEach(function (button) {
-        button.onclick = function () {
-          createWritableThread();
-          openAssistantDrawer(button);
-        };
-      });
     }
 
     if (messages) {
@@ -2200,13 +2213,15 @@
       messages.innerHTML = visibleMessages.length ? visibleMessages.map(function (message) {
         var role = firstDefined(message.role, 'assistant');
         var roleLabel = role === 'user' ? 'You' : assistantName;
-        return '<div class="assistant-message assistant-message--' + escapeHtml(role) + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + ' · ' + escapeHtml(friendlyThreadTime(firstDefined(message.timestamp, 'now'))) + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p></div>';
+        var roleSuffix = state.activePersona === "ceo" ? '' : ' · ' + escapeHtml(friendlyThreadTime(firstDefined(message.timestamp, 'now')));
+        return '<div class="assistant-message assistant-message--' + escapeHtml(role) + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p></div>';
       }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No visible messages yet</span><p>Start a writable thread and the reply will appear here immediately.</p></div>';
       messages.scrollTop = messages.scrollHeight;
     }
 
     if (promptRow) {
-      promptRow.innerHTML = getHeroPrompts().slice(0, 3).map(function (prompt) {
+      var hasVisibleMessages = current && safeArray(current.messages).some(function (m) { return m && m.text && String(m.text).trim().length > 0; });
+      promptRow.innerHTML = hasVisibleMessages ? '' : getHeroPrompts().slice(0, 2).map(function (prompt) {
         return '<button class="prompt-chip" type="button" data-assistant-prompt="' + escapeHtml(prompt) + '">' + escapeHtml(prompt) + '</button>';
       }).join("");
       safeArray(promptRow.querySelectorAll("[data-assistant-prompt]")).forEach(function (button) {

@@ -44,8 +44,7 @@ def test_ceo_assistant_never_leaks_raw_internals():
         "boardSafeStatusReply: CEO gate must exist"
     )
     ceo_friendly_msg = (
-        "Your board pack is currently under review. "
-        "Hermes will answer from the approved pack once review clears."
+        "The board pack is under review."
     )
     assert ceo_friendly_msg in js, (
         "CEO-safe board status reply not found"
@@ -1101,15 +1100,21 @@ def test_knowledge_graph_subtitle_grammar():
 
 
 def test_hermes_header_phrase_clean():
-    """#11: Hermes header must use 'Your AI chief of staff' not jargon."""
+    """#11: Hermes header must use 'Ask Hermes' heading and 'Answers from the current board pack' subtitle."""
     js = _static_executive_js()
 
-    assert "Your AI chief of staff" in js, (
-        "Hermes header must use 'Your AI chief of staff'"
+    assert '"Ask Hermes"' in js or "'Ask Hermes'" in js, (
+        "Hermes header heading must be 'Ask Hermes'"
+    )
+    assert "Answers from the current board pack" in js, (
+        "Hermes subtitle must be 'Answers from the current board pack'"
     )
     # Old jargon must not appear
     assert "named, threaded chief-of-staff follow-up" not in js, (
         "Hermes header must NOT contain old jargon phrase"
+    )
+    assert "Your AI chief of staff" not in js, (
+        "Hermes subtitle must NOT contain old 'Your AI chief of staff' phrase"
     )
 
 
@@ -1125,13 +1130,16 @@ def test_pre_badge_uses_status_label():
 
 
 def test_thread_metadata_simplified():
-    """#13: Thread list items must not show redundant 'send and receive' tags."""
+    """#13: Thread list items must not show redundant metadata — no '· writable' tag or 'send and receive'."""
     js = _static_executive_js()
 
-    # The old pattern: 'send and receive' in thread metadata
-    # After fix: replaced with 'writable' or removed entirely
-    assert "writable" in js, (
-        "Thread metadata must use simplified 'writable' tag"
+    # The old pattern: 'send and receive' / '· writable' in thread metadata — must be gone
+    assert "· writable" not in js, (
+        "Thread metadata must NOT contain '· writable' tag"
+    )
+    # "Open a writable" text must also be gone (new conversation button simplified)
+    assert "Open a writable" not in js, (
+        "New conversation button must NOT contain 'Open a writable'"
     )
 
 
@@ -1958,4 +1966,113 @@ def test_floating_controls_safe_zone_at_desktop():
     # Verify it's scoped to a desktop media query
     assert "@media (min-width: 1101px)" in css, (
         "safe zone must be gated behind @media (min-width: 1101px) desktop breakpoint"
+    )
+
+
+# ── Hermes Assistant Drawer UX Simplification Tests ──────────────────────
+
+
+def test_ceo_assistant_header_no_named_assistant():
+    """'Named assistant' must NOT appear in CEO executive page HTML."""
+    html = _ceo_executive_html()
+    assert "Named assistant" not in html, (
+        "CEO executive page must not contain 'Named assistant' eyebrow text"
+    )
+
+
+def test_ceo_assistant_no_message_writable_metadata():
+    """'message(s) · writable' must NOT appear in executive.js CEO thread card rendering."""
+    js = _static_executive_js()
+    assert "· writable" not in js, (
+        "executive.js must not contain '· writable' metadata in thread cards"
+    )
+    # The old 'send and receive' pattern must also be gone
+    assert "send and receive" not in js, (
+        "executive.js must not contain 'send and receive' — old thread metadata pattern"
+    )
+
+
+def test_ceo_assistant_no_open_writable_text():
+    """'Open a writable' must NOT appear in executive.js."""
+    js = _static_executive_js()
+    assert "Open a writable" not in js, (
+        "executive.js must not contain 'Open a writable' — replaced with simplified text"
+    )
+
+
+def test_ceo_assistant_no_board_safe_move_placeholder():
+    """'board-safe move' must NOT appear in executive.js input placeholder."""
+    js = _static_executive_js()
+    assert "board-safe move" not in js, (
+        "executive.js input placeholder must not contain 'board-safe move'"
+    )
+
+
+def test_ceo_assistant_placeholder_is_ask_hermes():
+    """'Ask Hermes…' must be in executive.js input placeholder."""
+    js = _static_executive_js()
+    assert "Ask Hermes" in js, (
+        "executive.js input placeholder must contain 'Ask Hermes'"
+    )
+
+
+def test_ceo_assistant_history_collapsed_default():
+    """.assistant-threads must have is-collapsed class or equivalent collapsed default in JS/HTML."""
+    html = _ceo_executive_html()
+    js = _static_executive_js()
+
+    # In HTML: .assistant-threads should have is-collapsed
+    assert 'assistant-threads is-collapsed' in html, (
+        "HTML: .assistant-threads must have is-collapsed class by default"
+    )
+
+    # In JS: the toggle must set aria-expanded to 'false' (collapsed by default)
+    assert "'false'" in js, (
+        "JS: toggle button aria-expanded must default to 'false' (collapsed)"
+    )
+    # threads-collapsed class must be on layout
+    assert "threads-collapsed" in js or 'threads-collapsed' in html, (
+        "threads-collapsed class must be present (in HTML or JS sync)"
+    )
+
+
+def test_ceo_assistant_no_duplicate_under_review():
+    """Both thread card preview AND assistant answer must NOT both contain under-review copy for the same thread."""
+    js = _static_executive_js()
+    # The boardSafeStatusReply CEO message is short: "The board pack is under review. Here's what I can answer now:"
+    # We want to verify it's concise and there's no duplication pattern
+    # Count occurrences of 'under review' — should appear in boardSafeStatusReply but not duplicated
+    under_review_count = js.count("under review")
+    assert under_review_count <= 2, (
+        f"'under review' appears {under_review_count} times — "
+        "should appear at most twice (boardSafeStatusReply + possibly qaAnswerText CEO guard)"
+    )
+    # Verify boardSafeStatusReply no longer has the old verbose text
+    assert "Hermes will answer from the approved pack" not in js, (
+        "Old verbose boardSafeStatusReply text must be replaced with concise version"
+    )
+
+
+def test_ceo_assistant_header_is_ask_hermes():
+    """'Ask Hermes' must be in the heading content."""
+    js = _static_executive_js()
+    assert '"Ask Hermes"' in js, (
+        "executive.js must set assistantHeading to 'Ask Hermes'"
+    )
+    html = _ceo_executive_html()
+    assert "Ask Hermes</h3>" in html or "Ask Hermes</h3>" in html, (
+        "executive.html must have 'Ask Hermes' as the assistant heading"
+    )
+
+
+def test_ceo_assistant_prompt_chips_max_2():
+    """Prompt chip rendering in assistant drawer must use .slice(0, 2) for getHeroPrompts."""
+    js = _static_executive_js()
+    # The assistant drawer prompt chips: getHeroPrompts().slice(0, 2)
+    assert "getHeroPrompts().slice(0, 2)" in js, (
+        "Assistant drawer prompt chip rendering must use getHeroPrompts().slice(0, 2)"
+    )
+    # Old pattern getHeroPrompts().slice(0, 3) must be gone
+    assert "getHeroPrompts().slice(0, 3)" not in js, (
+        "Assistant drawer must not use getHeroPrompts().slice(0, 3)"
     )

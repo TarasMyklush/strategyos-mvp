@@ -214,17 +214,16 @@
     <article class="assistant-studio" id="assistant-studio" aria-labelledby="assistant-heading">
       <div class="assistant-head">
         <div>
-          <p class="eyebrow">Named assistant</p>
-          <h3 class="detail-title" id="assistant-heading">Executive assistant</h3>
-          <p class="section-note" id="assistant-subtitle">Named, threaded chief-of-staff follow-up for the current persona.</p>
+          <h3 class="detail-title" id="assistant-heading">Ask Hermes</h3>
+          <p class="section-note" id="assistant-subtitle">Answers from the current board pack</p>
         </div>
         <div class="assistant-head__actions">
           <span class="pill-inline ok" id="assistant-state">ready</span>
           <button class="assistant-close" id="assistant-close" type="button" aria-label="Close assistant">✕</button>
         </div>
       </div>
-      <div class="assistant-layout">
-        <aside class="assistant-threads">
+      <div class="assistant-layout threads-collapsed">
+        <aside class="assistant-threads is-collapsed">
           <div class="assistant-thread-list" id="assistant-thread-list"></div>
         </aside>
         <div class="assistant-conversation">
@@ -237,7 +236,7 @@
           <div class="assistant-prompts" id="assistant-prompt-row"></div>
           <form class="assistant-form" id="assistant-form">
             <label class="sr-only" for="assistant-input">Ask assistant</label>
-            <input id="assistant-input" name="assistant-input" type="text" placeholder="Ask the assistant for the next board-safe move…" autocomplete="off" />
+            <input id="assistant-input" name="assistant-input" type="text" placeholder="Ask Hermes…" autocomplete="off" />
             <button type="submit">Send</button>
           </form>
         </div>

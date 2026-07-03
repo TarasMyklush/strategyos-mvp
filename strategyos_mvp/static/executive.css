@@ -1900,11 +1900,11 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
     padding-bottom: env(safe-area-inset-bottom, 12px);
   }
 
-  /* Thread list toggle — visible only on mobile; collapsed by default */
-  .assistant-threads-toggle {
-    display: inline-flex;
+  /* Thread list — never visible on mobile */
+  .assistant-threads {
+    display: none;
   }
-  .assistant-threads.is-collapsed {
+  .assistant-threads-toggle {
     display: none;
   }
 
@@ -2335,6 +2335,14 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   min-height: 0;
 }
 
+/* Collapsed state: hide threads sidebar, conversation takes full width */
+.assistant-layout.threads-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+.assistant-layout.threads-collapsed .assistant-threads {
+  display: none;
+}
+
 .assistant-threads,
 .assistant-conversation {
   min-height: 0;
@@ -2396,23 +2404,22 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   background: var(--accent-soft);
 }
 
-/* Thread list toggle — hidden on desktop, shown on mobile via media query */
+/* Thread list toggle — text button, always visible */
 .assistant-threads-toggle {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 17px;
+  font-size: 12.5px;
   cursor: pointer;
   line-height: 1;
-  padding: 0;
+  padding: 5px 10px;
   margin-right: 4px;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 .assistant-threads-toggle:hover {
   background: var(--accent-soft);
