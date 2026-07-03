@@ -144,12 +144,10 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     # 22.06 top bar / nav parity
     assert 'id="view-nav"' in html
     assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
-    assert 'id="ask-toggle"' in html
     assert "Mizan Group" in html
     assert "Viewing as" not in html
-    assert "◆ Hermes" in html
+    assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
     assert ">KA<" in html
-    assert 'id="theme-toggle"' in html
     # Hero banner
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="hero-head"' in html or 'class="hero-title"' in html
@@ -163,7 +161,7 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="findings-panel"' in html
     assert 'id="developments-panel"' in html
     assert 'id="week-panel"' in html
-    assert "Think and model on your data" in html
+    assert "Explore scenarios" in html
     assert 'id="board-portal"' in html
     assert 'id="agents-activity"' in html
     assert 'id="assistant-network-card"' in html
@@ -195,12 +193,10 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'class="brand"' in html
     assert 'id="view-nav"' in html
     assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
-    assert 'id="ask-toggle"' in html
     assert "Mizan Group" in html
     assert "Viewing as" not in html
-    assert "◆ Hermes" in html
+    assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
     assert ">KA<" in html
-    assert 'id="theme-toggle"' in html
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="hero-score"' in html or 'class="hero-score__value"' in html
     assert 'id="hero-head"' in html or 'class="hero-title"' in html
@@ -258,7 +254,7 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
     assert "Mizan Group" in html
     assert "Viewing as" not in html
-    assert "◆ Hermes" in html
+    assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
     assert ">KA<" in html
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html

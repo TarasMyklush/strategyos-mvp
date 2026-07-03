@@ -778,12 +778,9 @@
     var personaLabel = $("persona-label");
     var list = $("pm-list");
     var btn = $("persona-btn");
-    var askToggle = $("ask-toggle");
     var viewNav = $("view-nav");
     var launcher = $("chat-launcher-cta");
     var launcherPrompt = document.querySelector("#chat-launcher .chat-launcher__prompt");
-    var themeToggle = $("theme-toggle");
-    var feedbackButton = $("feedback-btn");
     var userName = $("topbar-user-name");
     var userRole = $("topbar-user-role");
     var avatar = $("topbar-avatar");
@@ -810,15 +807,6 @@
       };
     }
     if (personaLabel) personaLabel.textContent = firstDefined(activePersona.label, "Group CEO");
-    if (askToggle) {
-      askToggle.innerHTML = '<span class="assistant-glyph" aria-hidden="true">' + escapeHtml(assistantGlyph) + '</span><span>' + escapeHtml(assistantName) + '</span>';
-      askToggle.classList.toggle("is-on", state.drawerOpen);
-      askToggle.onclick = function () {
-        state.drawerOpen = !state.drawerOpen;
-        renderTopbar();
-        renderAssistantStudio();
-      };
-    }
     if (launcher) {
       if (state.activePersona === "board") {
         launcher.textContent = "Ask " + assistantName;
@@ -827,23 +815,6 @@
       }
     }
     if (launcherPrompt) launcherPrompt.hidden = state.activePersona !== "board";
-    if (themeToggle) {
-      themeToggle.innerHTML = '<span aria-hidden="true">' + (state.theme === "dark" ? "☾" : "☀") + '</span><span>' + (state.theme === "dark" ? "Dark" : "Light") + '</span>';
-      themeToggle.title = 'Theme: ' + (state.theme === 'dark' ? 'dark' : 'light') + '. Toggle theme';
-      themeToggle.onclick = function () {
-        state.theme = state.theme === "dark" ? "light" : "dark";
-        document.documentElement.setAttribute("data-theme", state.theme);
-        renderTopbar();
-      };
-    }
-    if (feedbackButton) {
-      if (state.activePersona === "ceo") {
-        feedbackButton.remove();
-      } else {
-        feedbackButton.hidden = false;
-        feedbackButton.onclick = function () { showFeedbackForm(); };
-      }
-    }
     if (userName) userName.textContent = "";
     if (userRole) userRole.textContent = "";
     if (avatar) {
@@ -854,9 +825,12 @@
       avatar.onclick = function () {
         var existing = document.querySelector('.strategyos-avatar-tooltip');
         if (existing) { existing.remove(); return; }
+        var themeIcon = state.theme === "dark" ? "☾" : "☀";
+        var themeLabel = state.theme === "dark" ? "Dark" : "Light";
+        var feedbackAction = state.activePersona === "ceo" ? "" : '<button type="button" class="avatar-tooltip-action" data-avatar-action="feedback">Send feedback</button>';
         var tip = document.createElement('div');
         tip.className = 'strategyos-avatar-tooltip';
-        tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · governed run</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button></div>';
+        tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · governed run</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button><button type="button" class="avatar-tooltip-action" data-avatar-action="theme">' + escapeHtml(themeIcon) + ' ' + escapeHtml(themeLabel) + ' theme</button>' + feedbackAction + '</div>';
         avatar.parentNode.appendChild(tip);
         var outsideClick = function (event) {
           if (!event.target.closest('#topbar-user')) { tip.remove(); document.removeEventListener('click', outsideClick); }
@@ -866,6 +840,19 @@
           var btn = document.getElementById('persona-btn');
           if (btn) { btn.click(); tip.remove(); }
         };
+        var themeAction = tip.querySelector('[data-avatar-action="theme"]');
+        if (themeAction) {
+          themeAction.onclick = function () {
+            state.theme = state.theme === "dark" ? "light" : "dark";
+            document.documentElement.setAttribute("data-theme", state.theme);
+            tip.remove();
+            renderTopbar();
+          };
+        }
+        var feedbackActionEl = tip.querySelector('[data-avatar-action="feedback"]');
+        if (feedbackActionEl) {
+          feedbackActionEl.onclick = function () { tip.remove(); showFeedbackForm(); };
+        }
       };
     }
     if (userMeta) userMeta.hidden = true;
@@ -950,7 +937,7 @@
     var driverHint = $("driver-hint");
     var lowerHeading = $("lower-rail-heading");
     if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
-    if (driverHint) driverHint.textContent = "Percent of plan is the headline — the figure is the footnote. Tap a driver for the story.";
+    if (driverHint) driverHint.textContent = "All figures: % of plan";
     if (lowerHeading) lowerHeading.textContent = "What matters now";
     var footer = $("composed-footer");
     if (footer) footer.hidden = false;
@@ -967,7 +954,7 @@
       var stale = network.filter(function (item) { return Number(item.score || 0) < 70; }).length;
       card.innerHTML = [
         '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'A read on current usage, freshness, and context depth across Mizan.')) + '</p></div><span class="pill-inline ok">target ' + escapeHtml(String(firstDefined(meta.target, 80))) + '+</span></div>',
-        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(avg)) + '</strong><span>company AI adoption</span></div><div class="network-meta"><span class="pill-inline ok">up to date &amp; deep</span><span class="pill-inline warn">needs attention</span><span class="pill-inline danger">stale · ' + escapeHtml(String(stale)) + ' leader(s)</span></div></div>',
+        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(avg)) + '</strong><span>Team readiness score</span></div><div class="network-meta"><span class="pill-inline ok">Healthy</span><span class="pill-inline warn">Check-in needed</span><span class="pill-inline danger">Stale · ' + escapeHtml(String(stale)) + ' leader' + (stale !== 1 ? 's' : '') + '</span></div></div>',
         '<div class="network-list">' + network.map(function (item) {
           return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Mizan Group')) + '</p></div><div class="network-stats"><span><small>freshness</small>' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span><span><small>used</small>' + escapeHtml(firstDefined(item.usage, 'active')) + '</span><span><small>context</small>' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></div></div>';
         }).join('') + '</div>'
@@ -1305,7 +1292,7 @@
 
     $("hero-eyebrow").textContent = state.activePersona === "board"
       ? "Board portal · governed packet posture"
-      : "Good morning, " + firstName + " · the week so far";
+      : "Good morning, " + firstName;
     $("hero-head").textContent = firstDefined(preferredHero.headline, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
     $("hero-score").textContent = String(clampedScore || 0);
@@ -1379,7 +1366,7 @@
       tile.type = "button";
       tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
       tile.innerHTML = [
-        '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy"><div class="driver-pct">' + escapeHtml(firstDefined(driver.pct, '—')) + '<span class="pct-sign">%</span></div><div class="driver-ofplan">of plan</div></div></div>',
+        '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy"><div class="driver-pct">' + escapeHtml(firstDefined(driver.pct, '—')) + '<span class="pct-sign">%</span></div></div></div>',
         '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(firstDefined(driver.sub, "current measure")) + '</span></div></div>'
       ].join("");
       tile.onclick = function () {
@@ -1469,17 +1456,17 @@
         .concat(dragging.map(function (item) { return { tone: 'down', glyph: '↘', item: item }; }));
       drillCard.innerHTML = [
         '<div class="drill-surface">',
-        '<div class="drill-headline"><div><h3 class="detail-title">' + escapeHtml(firstDefined(driver.label, 'Driver drill')) + '</h3><p class="section-note">' + escapeHtml(String(firstDefined(driver.pct, '—')) + '% of plan · ' + firstDefined(driver.metric, '—') + ' · ' + firstDefined(driver.sub, 'current measure')) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work ⌕</button></div>',
+        '<div class="drill-headline"><div><h3 class="detail-title">What\'s driving ' + escapeHtml(firstDefined(driver.label, 'it')) + '</h3><p class="section-note">' + escapeHtml(String(firstDefined(driver.pct, '—')) + '% of plan · ' + firstDefined(driver.metric, '—') + ' · ' + firstDefined(driver.sub, 'current measure')) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work</button></div>',
         '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, 'Awaiting drill detail.')) + '</p>',
         '<div class="drill-grid-v2"><div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual <span class="lg plan"></span> plan</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" role="img" aria-label="' + escapeHtml(firstDefined(driver.label, 'Driver')) + ' trend: actual versus plan over the last ' + String(actualSeries.length) + ' weeks">' + yTicks.map(function (tick) { var y = chartHeight - (((tick - minSeries) / spanSeries) * 120 + 18); return '<line class="trend-gridline" x1="0" x2="320" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"></line><text class="trend-axis" x="4" y="' + Math.max(10, y - 4).toFixed(1) + '">' + escapeHtml(String(Math.round(tick * 10) / 10)) + '</text>'; }).join('') + '<path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path>' + actualPoints.map(function (pair, idx) { return '<circle class="trend-point actual" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="3"><title>Actual ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(actualSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + planPoints.map(function (pair, idx) { return '<circle class="trend-point plan" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="2.5"><title>Plan ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(planSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + xLabels.map(function (label, idx) { var point = actualPoints[idx]; return '<text class="trend-axis" x="' + point[0].toFixed(1) + '" y="150" text-anchor="middle">' + escapeHtml(label) + '</text>'; }).join('') + '</svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div><div class="drill-movers-panel"><div class="mini-head">What moved it <span class="mini-hint">tap a note — the GM’s commentary rides up with the number</span></div><div class="movers-flat">' + (moverRows.length ? moverRows.map(function (entry) {
           var item = entry.item || {};
           var noteKey = firstDefined(driver.driver_key, driver.key, '') + ':' + firstDefined(item.name, 'mover');
           var noteOpen = state.openDriverNoteKey === noteKey;
           var gm = item.gm || null;
-          return '<div class="mover-flat ' + (noteOpen ? 'is-open' : '') + '"><div class="mover-flat__row"><span class="mover-flat__dir tone-' + escapeHtml(entry.tone) + '">' + escapeHtml(entry.glyph) + '</span><span class="mover-flat__name">' + escapeHtml(firstDefined(item.name, 'Signal')) + '</span><span class="mover-flat__delta">' + escapeHtml(firstDefined(item.delta, '')) + '</span>' + (gm ? '<button type="button" class="gm-chip gm-chip--avatar' + (noteOpen ? ' is-open' : '') + '" data-driver-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>GM note</span></button>' : '<span class="gm-none" title="No GM note is attached to this mover yet.">No GM note</span>') + '</div>' + (gm && noteOpen ? '<blockquote class="gm-note"><span class="gm-note-who">' + escapeHtml(firstDefined(gm.who, 'GM')) + '</span>' + escapeHtml(firstDefined(gm.note, '')) + '<span class="gm-note-tail">↑ travels up with this number</span></blockquote>' : '') + '</div>';
+          return '<div class="mover-flat ' + (noteOpen ? 'is-open' : '') + '"><div class="mover-flat__row"><span class="mover-flat__dir tone-' + escapeHtml(entry.tone) + '">' + escapeHtml(entry.glyph) + '</span><span class="mover-flat__name">' + escapeHtml(firstDefined(item.name, 'Signal')) + '</span><span class="mover-flat__delta">' + escapeHtml(firstDefined(item.delta, '')) + '</span>' + (gm ? '<button type="button" class="gm-chip gm-chip--avatar' + (noteOpen ? ' is-open' : '') + '" data-driver-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>GM note</span></button>' : '<span class="gm-none" title="No GM note is attached to this mover yet.">No GM note</span>') + '</div>' + (gm && noteOpen ? '<blockquote class="gm-note"><span class="gm-note-who">' + escapeHtml(firstDefined(gm.who, 'GM')) + '</span>' + escapeHtml(firstDefined(gm.note, '')) + '</blockquote>' : '') + '</div>';
         }).join('') : '<div class="discovery-empty">No movement is attached yet.</div>') + '</div></div></div>',
-        '<div class="chips"><span class="chips-label">Ask on:</span>' + safeArray(driver.chips).map(function (chip) { return '<button class="chip" type="button" data-driver-chip="' + escapeHtml(chip) + '">' + escapeHtml(chip) + '</button>'; }).join('') + '</div>',
-        '<form class="chips-own" id="driver-composer"><label class="sr-only" for="driver-input">Ask about driver</label><input id="driver-input" class="driver-input" type="text" placeholder="Ask your own about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '…" /><button type="submit">Send</button></form>',
+        '<div class="chips">' + safeArray(driver.chips).map(function (chip) { return '<button class="chip" type="button" data-driver-chip="' + escapeHtml(chip) + '">' + escapeHtml(chip) + '</button>'; }).join('') + '</div>',
+        '<form class="chips-own" id="driver-composer"><label class="sr-only" for="driver-input">Ask Hermes about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '</label><input id="driver-input" class="driver-input" type="text" placeholder="Ask Hermes about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '…" /><button type="submit">Send</button></form>',
         '<div class="drill-evidence" hidden><span class="evidence-label">Evidence chain</span><span class="evidence-step">Board-approved plan v4</span><span class="evidence-arrow">→</span><span class="evidence-step">Knowledge graph · 8 BU ledgers</span><span class="evidence-arrow">→</span><span class="evidence-step">S/4HANA + BI connectors</span><span class="evidence-arrow">→</span><span class="evidence-step">computed today 06:14</span></div>',
         '</div>'
       ].join('');
@@ -1503,7 +1490,7 @@
       if (showWork && evidence) {
         showWork.onclick = function () {
           evidence.hidden = !evidence.hidden;
-          showWork.textContent = evidence.hidden ? 'Show the work ⌕' : 'Hide the work ⌕';
+          showWork.textContent = evidence.hidden ? 'Show the work' : 'Hide the work';
           if (!evidence.hidden) evidence.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         };
       }
@@ -1528,8 +1515,8 @@
         { id: 't885M1WB1pg', title: 'Bridge Strategy and Execution with Decision-Ready Views', speaker: 'Strategy Execution Webinar', theme: 'strategy execution · decision-ready views', dur: '~35 min', summary: 'Creating decision-ready views that connect strategic plans to operational execution.', transcript: 'Building decision-ready dashboards, connecting plans to operations, and creating feedback loops that keep strategy alive.' }
       ];
       gravityPanel.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Thinking mode' : 'Gravity and guardrails') + '</p><h3 class="detail-title">Think and model on your data</h3><p class="detail-copy">A sovereign sandbox that runs in your chat — on Mizan\'s figures, with no side effects.</p></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, board.presentation_state, "draft"))) + '</span></div>',
-        '<div class="gravity-grid-v2"><section class="gravity-play-card"><div class="play-badge">◇ Thinking mode</div><div class="play-title">Type a what-if and play</div><p class="play-body">Keep the room inside governed packet truth while you model scenarios and request missing data.</p><div class="pill-row">' + safeArray(gravity.rails).map(function (item) { return '<span class="pill-inline ' + toneClass(item) + '">' + escapeHtml(statusLabel(item)) + '</span>'; }).join('') + '</div><div class="mini-list">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</div></section><section class="leaders-card"><div class="leaders-badge">✦ Leaders\' Corner · vlog</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="leaders-fallback-card" id="leaders-featured-fallback"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Tap a video below to watch inline</p><p class="leaders-fallback-detail">' + escapeHtml(vlogs[0].title) + ' — ' + escapeHtml(vlogs[0].speaker) + '</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div><div class="video-frame-wrapper" id="leaders-frame-wrapper" hidden><iframe id="leaders-featured-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen title=""></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div>' +
+        '<div class="detail-head"><div><h3 class="detail-title">Explore scenarios</h3><p class="section-note">Ask what-if questions on your live data</p></div></div>',
+        '<div class="gravity-grid-v2"><section class="gravity-play-card">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</section><section class="leaders-card"><div class="leaders-badge">Leaders\' Corner</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="leaders-fallback-card" id="leaders-featured-fallback"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Select a video below</p><p class="leaders-fallback-detail">' + escapeHtml(vlogs[0].title) + ' — ' + escapeHtml(vlogs[0].speaker) + '</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div><div class="video-frame-wrapper" id="leaders-frame-wrapper" hidden><iframe id="leaders-featured-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen title=""></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Summary</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div>' +
         vlogs.slice(1).map(function (v, i) { return '<div class="leaders-thumb" data-video-id="' + escapeHtml(v.id) + '" tabindex="0" role="button"><span class="leaders-thumb__img">▶</span><span class="leaders-thumb__title">' + escapeHtml(v.title) + '</span><span class="leaders-thumb__speaker">' + escapeHtml(v.speaker) + ' · ' + escapeHtml(v.dur) + '</span></div>'; }).join('') +
         '</section></div>'
       ].join("");
@@ -1622,7 +1609,7 @@
     }
 
     if (info) {
-      info.innerHTML = '<h4>' + escapeHtml(item.title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(item.speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(item.theme) + '</span><p class="leaders-video-summary">' + escapeHtml(item.summary) + '</p><details><summary>Transcript / Key points</summary><p>' + escapeHtml(item.transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+      info.innerHTML = '<h4>' + escapeHtml(item.title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(item.speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(item.theme) + '</span><p class="leaders-video-summary">' + escapeHtml(item.summary) + '</p><details><summary>Summary</summary><p>' + escapeHtml(item.transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
       var hermesCta = info.querySelector('#leaders-hermes-cta');
       if (hermesCta) {
         hermesCta.onclick = function () {
@@ -1659,7 +1646,7 @@
       '<span class="video-modal-theme">' + escapeHtml(item.theme) + '</span>',
       '<p class="video-modal-summary">' + escapeHtml(item.summary) + '</p>',
       '<details>',
-      '<summary>Transcript / Key points</summary>',
+      '<summary>Summary</summary>',
       '<p>' + escapeHtml(item.transcript) + '</p>',
       '</details>',
       '<button class="video-modal-cta" id="video-hermes-cta">Ask Hermes about this topic</button>',
@@ -1865,19 +1852,19 @@
     };
 
     if (findingsPanel) {
-      findingsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Findings &amp; concerns</h3><p class="section-note">The system’s read — positive or negative, with its classification.</p></div></div><div class="rail-toggle-list">' + renderToggleList(findings, 'finding') + '</div>';
+      findingsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Findings &amp; concerns</h3></div></div><div class="rail-toggle-list">' + renderToggleList(findings, 'finding') + '</div>';
     }
 
     if (developmentsPanel) {
-      developmentsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Developments since you were here</h3><p class="section-note">Wins &amp; watch-outs — tap to project the impact on plan.</p></div></div><div class="rail-toggle-list">' + renderToggleList(developments, 'development') + '</div>';
+      developmentsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Developments since you were here</h3></div></div><div class="rail-toggle-list">' + renderToggleList(developments, 'development') + '</div>';
     }
 
     if (weekPanel) {
       var openIndex = Math.min(state.openWeekIndex || 0, Math.max(weekAhead.length - 1, 0));
       var activeEvent = weekAhead[openIndex] || null;
-      weekPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Week ahead</h3><p class="section-note">Your calendar, AI-triaged — a launchpad, not a list.</p></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
+      weekPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Week ahead</h3></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”: model the options and what I should walk in having decided."><strong>◇ Open in thinking mode</strong><span>no side effects</span></button><button class="timeline-chip" type="button" data-chat-prompt="For “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”, what data am I missing and who should I request it from?"><strong>⤓ Request missing data</strong><span>ask StrategyOS</span></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line…" /><button type="submit">Send</button></form></div>' : '');
+      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”: model the options and what I should walk in having decided."><strong>Explore scenarios</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”, what data am I missing and who should I request it from?"><strong>⤓ Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line…" /><button type="submit">Send</button></form></div>' : '');
       safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
         safeArray(panel && panel.querySelectorAll('[data-rail-toggle]')).forEach(function (button) {
           button.onclick = function () {
@@ -1972,7 +1959,7 @@
         var approved = !!state.approvedAgentIds[id];
         var showBar = ['running', 'approval'].indexOf(String(firstDefined(item.status, ''))) !== -1;
         return '<div class="agent-c' + (isOpen ? ' is-open' : '') + '"><button type="button" class="agent-c-head" data-agent-toggle="' + escapeHtml(id) + '"><span class="agent-pulse ' + escapeHtml(String(firstDefined(item.status, 'running'))) + '"></span><span class="agent-name">' + escapeHtml(firstDefined(item.name, item.label, id)) + '</span><span class="agent-status s-' + escapeHtml(String(firstDefined(item.status, 'running'))) + '">' + escapeHtml(statusLabel(item, approved)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (showBar ? '<div class="agent-prog"><span class="agent-prog-bar tone-' + escapeHtml(toneClass(firstDefined(item.status, 'running'))) + '" style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></span></div>' : '') + (isOpen ? '<div class="agent-c-body"><span class="tag agent-tag">' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span><p class="agent-doing">' + escapeHtml(approved && item.status === 'approval' ? 'Approved — executing now. Audit entry written.' : firstDefined(item.doing, item.summary, 'Governed activity in progress.')) + '</p><div class="agent-c-foot"><span class="agent-by">deployed by ' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><button type="button" class="agent-log-btn' + (logOpen ? ' is-open' : '') + '" data-agent-log="' + escapeHtml(id) + '">◷ audit log <span class="agent-log-count">' + escapeHtml(String(safeArray(item.log).length)) + '</span></button></div>' + (item.status === 'approval' && !approved ? '<div class="agent-approve"><span class="agent-approve-note">⚠ This agent will <strong>act</strong> — held until you approve.</span><button type="button" class="agent-approve-btn" data-agent-approve="' + escapeHtml(id) + '">Approve &amp; let it execute</button></div>' : '') + (logOpen ? '<ol class="agent-trail">' + safeArray(item.log).map(function (entry) { return '<li class="trail-item"><span class="trail-time">' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><span class="trail-dot"></span><span class="trail-text">' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</span></li>'; }).join('') + '<li class="trail-foot">every action is logged in-tenant · tap any entry to see its evidence</li></ol>' : '') + '</div>' : '') + '</div>';
-      }).join('') + '</div><div class="agents-sovereign"><span class="sov-dot"></span> ' + (state.activePersona === "ceo" ? 'Runs on your infrastructure' : 'sovereign \u00b7 runs in-tenant \u00b7 every action logged') + '</div>' + (subtools.length ? '<div class="subtools"><div class="subtools-label">Sub-agents your chiefs call as tools</div><div class="subtools-grid">' + subtools.map(function (item) { return '<div class="subtool"><span class="subtool-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25a6')) + '</span><div class="subtool-meta"><span class="subtool-name">' + escapeHtml(firstDefined(item.name, 'Tool')) + '</span><span class="subtool-desc">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</span></div></div>'; }).join('') + '</div></div>' : '');
+      }).join('') + '</div><div class="agents-sovereign"><span class="sov-dot"></span> ' + (state.activePersona === "ceo" ? '' : 'sovereign \u00b7 runs in-tenant \u00b7 every action logged') + '</div>' + (subtools.length ? '<div class="subtools"><div class="subtools-label">Available tools</div><div class="subtools-grid">' + subtools.map(function (item) { return '<div class="subtool"><span class="subtool-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25a6')) + '</span><div class="subtool-meta"><span class="subtool-name">' + escapeHtml(firstDefined(item.name, 'Tool')) + '</span><span class="subtool-desc">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</span></div></div>'; }).join('') + '</div></div>' : '');
       safeArray(runningCard.querySelectorAll('[data-agent-toggle]')).forEach(function (button) {
         button.onclick = function () {
           var id = button.getAttribute('data-agent-toggle') || '';
@@ -2011,7 +1998,7 @@
           return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(polishAgentName(firstDefined(item.name, item.label, item.module_id, 'Agent'))) + '</span><span class="disco-src ' + escapeHtml(firstDefined(item.source, 'native')) + '">' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
         }).join('') + '</div>';
       };
-      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">deploy on your data via platform connectors</span></div><div class="disco-search"><span class="disco-search-icon">⌕</span> Search the agent universe…</div>' + renderDiscoveryGroup('Native on StrategyOS', nativeAgents) + renderDiscoveryGroup('From the marketplace', marketAgents) + '<button type="button" class="disco-browse">Browse all agents →</button>';
+      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">Add to your workspace</span></div><div class="disco-search"><span class="disco-search-icon">⌕</span> Search the agent universe…</div>' + renderDiscoveryGroup('Built-in', nativeAgents) + renderDiscoveryGroup('Available agents', marketAgents) + '<button type="button" class="disco-browse">Browse all agents →</button>';
       var browseBtn = discoveryCard.querySelector('.disco-browse');
       if (browseBtn) {
         browseBtn.onclick = function () {
