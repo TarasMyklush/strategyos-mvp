@@ -1621,7 +1621,8 @@
           }
         };
       }
-      // Inline embed fallback timer is now handled in selectLeadersVideo; skip initial timer since we start with fallback card
+      // Initialize featured video on first load — switch from fallback card to embedded iframe player
+      selectLeadersVideo(vlogs[0], vlogs, leadersCard);
     }
   }
 
@@ -2163,7 +2164,15 @@
 
     if (assistantHeading) assistantHeading.textContent = "Ask Hermes";
     if (assistantSubtitle) assistantSubtitle.textContent = "Hermes will answer here using the current board pack.";
-    if (assistantState) assistantState.textContent = state.activePersona === "ceo" ? "" : statusLabel(firstDefined(state.activeBoard, "ready"));
+    if (assistantState) {
+      if (state.activePersona === "ceo") {
+        assistantState.textContent = "";
+        assistantState.hidden = true;
+      } else {
+        assistantState.textContent = statusLabel(firstDefined(state.activeBoard, "ready"));
+        assistantState.hidden = false;
+      }
+    }
 
     // Synchronize layout class with threads collapsed state
     var threadsPane = drawer && drawer.querySelector('.assistant-threads');

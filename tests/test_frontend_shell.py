@@ -996,6 +996,44 @@ def test_leaders_corner_fallback_css_exists():
     )
 
 
+def test_leaders_corner_first_load_initializes_iframe():
+    """On first load, selectLeadersVideo must be called with vlogs[0] to show embedded iframe, not dead placeholder."""
+    js = _static_executive_js()
+
+    # selectLeadersVideo must be called during initialization with the first video
+    assert "selectLeadersVideo(vlogs[0]" in js, (
+        "On first load, selectLeadersVideo(vlogs[0]) must be called to initialize embedded player"
+    )
+    # The featured iframe element must exist in the template
+    assert "leaders-featured-iframe" in js, (
+        "Featured iframe element must exist for video playback"
+    )
+    # The fallback card element must exist as safety net but JS must switch to iframe
+    assert "leaders-featured-fallback" in js, (
+        "Fallback card must exist in template but JS initializes iframe on load"
+    )
+
+
+def test_leaders_corner_single_featured_surface():
+    """Only one featured video surface must be active — no duplicate placeholder + embed stacked."""
+    js = _static_executive_js()
+
+    # The leaders-featured container must have exactly ONE of each child type
+    # (fallback card is hidden by JS, iframe is shown — not both visible)
+    assert "leaders-featured-fallback" in js, "Fallback card element must exist"
+    assert "leaders-featured-iframe" in js, "Featured iframe element must exist"
+
+    # selectLeadersVideo hides fallback and shows iframe — verify the toggle logic
+    # fallback.hidden = true must precede frameWrapper.hidden = false
+    fallback_hidden_pos = js.find("fallback.hidden = true")
+    frame_shown_pos = js.find("frameWrapper.hidden = false")
+    assert fallback_hidden_pos > 0, "selectLeadersVideo must hide fallback"
+    assert frame_shown_pos > 0, "selectLeadersVideo must show iframe wrapper"
+    assert fallback_hidden_pos < frame_shown_pos, (
+        "Fallback must be hidden BEFORE iframe wrapper is shown to prevent both visible at once"
+    )
+
+
 # ── Global Assistant CTA Surface Architecture ──
 
 def test_assistant_drawer_unified_opening_path():

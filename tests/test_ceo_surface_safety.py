@@ -995,19 +995,22 @@ def test_kpi_spacing_css_exists():
 
 
 def test_youtube_fallback_pre_rendered():
-    """#3: YouTube Leaders' Corner must pre-render fallback card, not iframe."""
+    """#3: YouTube Leaders' Corner must have fallback card HTML in template but JS must init iframe on first load."""
     js = _static_executive_js()
 
-    # Fallback card must be present in the initial HTML template
+    # Fallback card HTML must exist in the template (progressive enhancement — safe default)
     assert "leaders-featured-fallback" in js, (
-        "Leaders' Corner must pre-render fallback card (leaders-featured-fallback)"
+        "Leaders' Corner must have fallback card HTML in template (leaders-featured-fallback)"
     )
-    # Frame wrapper must start hidden
+    # Frame wrapper must exist (hidden initially in HTML, then JS shows it)
     assert "leaders-frame-wrapper" in js, (
-        "Video frame wrapper must exist for on-demand iframe creation"
+        "Video frame wrapper must exist in HTML template"
+    )
+    # JS must initialize the featured video on first load (not leave dead placeholder)
+    assert "selectLeadersVideo(vlogs[0]" in js, (
+        "On first load, selectLeadersVideo must be called with first vlog to show embedded player"
     )
     # Fallback timer must be reduced (4s or less in selectLeadersVideo)
-    # The 10000 timer was present in original; verify it's changed
     assert "4000" in js, (
         "Fallback timer must be reduced to 4s (was 10s)"
     )
