@@ -1,0 +1,40 @@
+name: StrategyOS Host Diagnostics
+on:
+  workflow_dispatch:
+jobs:
+  diagnostics:
+    runs-on: ubuntu-24.04
+    environment: hetzner-qa
+    steps:
+      - name: Prepare SSH
+        env:
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          HETZNER_KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "${HOME}/.ssh"
+          printf '%s\n' "${HETZNER_SSH_KEY}" > "${HOME}/.ssh/strategyos_deploy"
+          chmod 600 "${HOME}/.ssh/strategyos_deploy"
+          printf '%s\n' "${HETZNER_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          echo "SSH_OPTS=-i ${HOME}/.ssh/strategyos_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" >> "${GITHUB_ENV}"
+      
+      - name: Host diagnostics
+        run: |
+          TARGET_HOST="root@178.105.169.155"
+          TARGET_DIR="/opt/strategyos"
+          echo "=== Container states ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd ${TARGET_DIR}/app && docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml -f deploy/docker-compose.hetzner-qa.yml ps -a"
+          echo ""
+          echo "=== Disk space ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h && docker system df"
+          echo ""
+          echo "=== Minio logs ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-minio-1 --tail 50"
+          echo ""
+          echo "=== Minio create bucket logs ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-minio-create-bucket-1 --tail 50"
+          echo ""
+          echo "=== Minio volume ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker volume ls | grep minio"
+          echo ""
+          echo "=== Env file check ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd ${TARGET_DIR}/app && head -100 deploy/.env"
