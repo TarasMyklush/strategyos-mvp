@@ -179,10 +179,15 @@
   /* ── Unified Hermes drawer opening — single source of truth ── */
   var _drawerKeydown = null;
 
-  function _openHermesDrawer() {
+  function _openHermesDrawer(returnFocusEl) {
     /* Guard: surfaces must not overlap — close video modal before opening drawer */
     if (state.videoModalOpen) closeVideoModal();
+    /* Guard: close A2A panel if open — only one surface at a time */
+    if (state.a2aOpen) { state.a2aOpen = false; renderA2APanel(); }
+    /* Guard: no-op if drawer already open — avoid redundant renders */
+    if (state.drawerOpen) return;
     state.drawerOpen = true;
+    state.drawerReturnFocusEl = returnFocusEl || null;
     document.body.style.overflow = 'hidden';
 
     /* Escape key closes the drawer */
@@ -202,14 +207,22 @@
   function _closeHermesDrawer() {
     state.drawerOpen = false;
     document.body.style.overflow = '';
-    document.removeEventListener("keydown", _drawerKeydown);
-    _drawerKeydown = null;
+    if (_drawerKeydown) {
+      document.removeEventListener("keydown", _drawerKeydown);
+      _drawerKeydown = null;
+    }
     renderTopbar();
     renderAssistantStudio();
+    /* Restore focus to the element that triggered the drawer */
+    var returnEl = state.drawerReturnFocusEl;
+    state.drawerReturnFocusEl = null;
+    if (returnEl && typeof returnEl.focus === 'function') {
+      window.setTimeout(function () { returnEl.focus(); }, 0);
+    }
   }
 
-  function openAssistantDrawer() {
-    _openHermesDrawer();
+  function openAssistantDrawer(returnFocusEl) {
+    _openHermesDrawer(returnFocusEl);
   }
 
   function threadTitleFromPrompt(prompt) {
@@ -223,16 +236,33 @@
   async function askAssistant(prompt, sourceChip) {
     var cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) return;
-    if (sourceChip) {
-      var originalText = sourceChip.textContent;
-      sourceChip.textContent = 'loading\u2026';
-      sourceChip.disabled = true;
+    var validChip = sourceChip && typeof sourceChip === 'object' && sourceChip.nodeType === 1 ? sourceChip : null;
+    var originalText = null;
+    if (validChip) {
+      originalText = validChip.textContent;
+      validChip.textContent = 'loading\u2026';
+      validChip.disabled = true;
     }
     ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt);
     pushThreadMessage("user", cleanPrompt);
     var pending = pushThreadMessage("assistant", "Checking the governed run data\u2026");
-    openAssistantDrawer();
+    openAssistantDrawer(validChip);
+    // Show loading state in the input area when no source chip provides feedback
+    var form = $("assistant-form");
+    var input = $("assistant-input");
+    if (!validChip && form && input) {
+      input.disabled = true;
+      input.placeholder = 'Hermes is thinking\u2026';
+      form.classList.add('assistant-form--loading');
+    }
     var answer = await buildAssistantReply(cleanPrompt);
+    // Clear loading state
+    if (!validChip && form && input) {
+      input.disabled = false;
+      input.placeholder = 'Ask the assistant for the next board-safe move\u2026';
+      form.classList.remove('assistant-form--loading');
+      focusAssistantInput();
+    }
     if (pending) {
       pending.text = answer;
       pending.timestamp = new Date().toISOString();
@@ -244,9 +274,9 @@
       saveStoredThreads();
       renderAssistantStudio();
     }
-    if (sourceChip) {
-      sourceChip.textContent = originalText;
-      sourceChip.disabled = false;
+    if (validChip) {
+      validChip.textContent = originalText;
+      validChip.disabled = false;
     }
   }
 
@@ -1130,7 +1160,7 @@
     var askBtn = $("kg-inspector-ask");
     if (askBtn) askBtn.onclick = function () {
       var prompt = firstDefined(node.hermes_prompt, "Tell me about " + firstDefined(node.label, "this node") + ".");
-      askAssistant(prompt, "kg");
+      askAssistant(prompt, askBtn);
       closeNodeInspector();
     };
     // Highlight selected node in SVG
@@ -1579,21 +1609,11 @@
             var vid = activeThumb.getAttribute('data-video-id');
             safeArray(vlogs).forEach(function (v) {
               if (v.id === vid) item = v;
-    });
-    safeArray(portal.querySelectorAll('[data-snapshot]')).forEach(function (card) {
-      card.onclick = function () {
-        var kind = card.getAttribute('data-snapshot') || '';
-        if (kind === 'deck') {
-          showToast('Deck release: ' + statusLabel(firstDefined(deckRelease.status, 'pending')) + ' — ' + (deckRelease.report_count || 0) + ' report(s) available.');
-        } else {
-          showToast('Frozen snapshot: ' + statusLabel(firstDefined(snapshot.status, 'live_packet')) + ' — board-safe view of the last closed meeting.');
-        }
-      };
-    });
-  }
+            });
+          }
           if (!item) item = vlogs[0];
           if (item) {
-            askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?');
+            askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?', hermesCta);
           }
         };
       }
@@ -1646,7 +1666,7 @@
       var hermesCta = info.querySelector('#leaders-hermes-cta');
       if (hermesCta) {
         hermesCta.onclick = function () {
-          askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?');
+          askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?', hermesCta);
         };
       }
     }
@@ -1703,6 +1723,8 @@
   var _videoModalKeydown = null;
 
   function openVideoModal(item) {
+    /* Guard: surfaces must not overlap — close assistant drawer before opening video modal */
+    if (state.drawerOpen) _closeHermesDrawer();
     closeVideoModal();
     state.videoModalOpen = true;
     var html = buildVideoModalHtml(item);
@@ -1728,7 +1750,7 @@
 
     if (hermesCta) {
       hermesCta.onclick = function () {
-        askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?');
+        askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?', hermesCta);
         closeVideoModal();
       };
     }
@@ -1736,6 +1758,7 @@
     _videoModalKeydown = function (event) {
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopImmediatePropagation();
         closeVideoModal();
       }
     };
@@ -2088,10 +2111,13 @@
     if (drawer) {
       drawer.hidden = !state.drawerOpen;
       drawer.classList.toggle("is-open", state.drawerOpen);
+      drawer.setAttribute("aria-modal", state.drawerOpen ? "true" : "false");
+      drawer.setAttribute("role", "dialog");
     }
     if (scrim) {
       scrim.hidden = !state.drawerOpen;
       scrim.classList.toggle("is-open", state.drawerOpen);
+      scrim.setAttribute("aria-hidden", state.drawerOpen ? "true" : "false");
       scrim.onclick = function () {
         _closeHermesDrawer();
       };
@@ -2099,13 +2125,32 @@
     if (launcher) {
       launcher.hidden = state.drawerOpen || state.activeView === "assistants";
       launcher.onclick = function () {
-        _openHermesDrawer();
+        _openHermesDrawer(launcher);
       };
     }
     if (closeButton) {
       closeButton.onclick = function () {
         _closeHermesDrawer();
       };
+    }
+    // Inject thread list toggle for narrow/mobile screens
+    var headActions = drawer && drawer.querySelector('.assistant-head__actions');
+    if (headActions && !headActions.querySelector('.assistant-threads-toggle')) {
+      var toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'assistant-threads-toggle';
+      toggleBtn.setAttribute('aria-label', 'Toggle thread list');
+      toggleBtn.setAttribute('aria-expanded', 'true');
+      toggleBtn.textContent = '\u2630';
+      toggleBtn.onclick = function () {
+        var threadsPane = drawer.querySelector('.assistant-threads');
+        if (threadsPane) {
+          var collapsed = threadsPane.classList.toggle('is-collapsed');
+          toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+          toggleBtn.textContent = collapsed ? '\u2630' : '\u2715';
+        }
+      };
+      headActions.insertBefore(toggleBtn, closeButton);
     }
 
     if (assistantHeading) assistantHeading.textContent = assistantName;
@@ -2127,12 +2172,12 @@
       threadList.innerHTML = '<button type="button" class="assistant-thread assistant-thread--new" data-thread-new="true"><strong>＋ New conversation</strong><span>Open a writable, board-safe thread for this persona.</span></button>' + visibleThreads.map(function (record) {
         var active = record.key === currentThreadKey();
         var threadMeta = escapeHtml(String(safeArray(record.messages).length)) + ' message(s)' + (record.readOnly ? '' : ' · writable');
-        return '<button type="button" class="assistant-thread' + (active ? ' is-active' : '') + '" data-thread-key="' + escapeHtml(record.key) + '"><div class="assistant-thread__top"><strong>' + escapeHtml(firstDefined(record.title, 'Thread')) + '</strong><span>' + escapeHtml(friendlyThreadTime(record.lastUpdated)) + '</span></div><span>' + escapeHtml(firstDefined(record.preview, 'Board-safe follow-up')) + '</span><small>' + threadMeta + '</small></button>';
+        return '<button type="button" class="assistant-thread' + (active ? ' is-active' : '') + '" data-thread-key="' + escapeHtml(record.key) + '"' + (active ? ' aria-current="page"' : '') + '><div class="assistant-thread__top"><strong>' + escapeHtml(firstDefined(record.title, 'Thread')) + '</strong><span>' + escapeHtml(friendlyThreadTime(record.lastUpdated)) + '</span></div><span>' + escapeHtml(firstDefined(record.preview, 'Board-safe follow-up')) + '</span><small>' + threadMeta + '</small></button>';
       }).join("");
-      safeArray(threadList.querySelectorAll("[data-thread-new]")) .forEach(function (button) {
+      safeArray(threadList.querySelectorAll("[data-thread-new]")).forEach(function (button) {
         button.onclick = function () {
           createWritableThread();
-          openAssistantDrawer();
+          openAssistantDrawer(button);
         };
       });
       safeArray(threadList.querySelectorAll("[data-thread-key]")).forEach(function (button) {
@@ -2158,7 +2203,7 @@
       safeArray(threadTools.querySelectorAll('[data-thread-new-inline]')).forEach(function (button) {
         button.onclick = function () {
           createWritableThread();
-          openAssistantDrawer();
+          openAssistantDrawer(button);
         };
       });
     }
@@ -2181,7 +2226,7 @@
       }).join("");
       safeArray(promptRow.querySelectorAll("[data-assistant-prompt]")).forEach(function (button) {
         button.onclick = function () {
-          askAssistant(button.getAttribute("data-assistant-prompt") || "");
+          askAssistant(button.getAttribute("data-assistant-prompt") || "", button);
         };
       });
     }
@@ -2317,6 +2362,7 @@
       a2aOpen: false,
       activeA2AExchange: "",
       drawerOpen: false,
+      drawerReturnFocusEl: null,
       videoModalOpen: false,
       theme: document.documentElement.getAttribute("data-theme") || "light",
       discoveryFilter: "all",

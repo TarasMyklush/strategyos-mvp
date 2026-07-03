@@ -444,12 +444,22 @@ a { color: inherit; }
   text-decoration: underline;
 }
 
+/*
+ * Z-INDEX TOKEN SYSTEM
+ * =====================
+ *  12 — chat launcher (above page, below overlays)
+ *  13 — a2a shell
+ * 100 — KG inspector overlay
+ * 1050 — video modal scrim (modals layer)
+ * 1100 — assistant scrim (drawer surface layer — always above modals)
+ * 1101 — assistant drawer
+ */
 .assistant-scrim {
   position: fixed;
   inset: 0;
   background: rgba(29, 28, 25, 0.28);
   backdrop-filter: blur(2px);
-  z-index: 14;
+  z-index: 1100;
   opacity: 0;
   transition: opacity 240ms ease;
   pointer-events: none;
@@ -471,7 +481,7 @@ a { color: inherit; }
   top: 0;
   bottom: 0;
   width: min(760px, 100vw);
-  z-index: 15;
+  z-index: 1101;
   overflow: hidden;
   background: var(--surface);
   box-shadow: -8px 0 32px rgba(29, 28, 25, 0.12);
@@ -493,6 +503,17 @@ a { color: inherit; }
   transform: translateX(32px);
   opacity: 0;
   pointer-events: none;
+}
+
+/* Visible focus states for keyboard-navigable drawer elements */
+.assistant-drawer button:focus-visible,
+.assistant-drawer input:focus-visible,
+.assistant-drawer .assistant-thread:focus-visible,
+.assistant-drawer .prompt-chip:focus-visible,
+.assistant-drawer .assistant-close:focus-visible,
+.assistant-drawer .assistant-threads-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .assistant-drawer .assistant-studio {
@@ -1501,11 +1522,6 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 }
 
 @media (max-width: 720px) {
-  .assistant-drawer {
-    width: 100vw;
-    padding: 8px;
-  }
-
   .chat-launcher {
     left: 18px;
     right: 18px;
@@ -1829,13 +1845,77 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
     max-width: calc(100vw - 24px);
   }
 
+  /*
+   * Mobile bottom sheet: slide up from bottom instead of slide in
+   * from the right. Rounded top corners, prominent close button,
+   * and a drag handle for visual affordance.
+   */
   .assistant-drawer {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
     width: 100vw;
+    max-height: calc(100dvh - 48px);
+    border-radius: 18px 18px 0 0;
+    transform: translateY(100%);
     padding: 0;
   }
 
+  .assistant-drawer.is-open {
+    transform: translateY(0);
+  }
+
+  /* Keep drawer in layout when hidden so transitions fire */
+  .assistant-drawer[hidden] {
+    transform: translateY(100%);
+  }
+
+  .assistant-drawer::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border-strong);
+    border-radius: 2px;
+    margin: 10px auto 0;
+    flex-shrink: 0;
+  }
+
   .assistant-drawer .assistant-studio {
-    border-radius: 0;
+    border-radius: 18px 18px 0 0;
+  }
+
+  /* Prominent close button for mobile sheets */
+  .assistant-close {
+    font-size: 22px;
+    padding: 6px 10px;
+  }
+
+  /* Safe area insets for notched / rounded-corner phones */
+  .assistant-drawer {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .assistant-drawer .assistant-studio {
+    padding-bottom: env(safe-area-inset-bottom, 12px);
+  }
+
+  /* Thread list toggle — visible only on mobile; collapsed by default */
+  .assistant-threads-toggle {
+    display: inline-flex;
+  }
+  .assistant-threads.is-collapsed {
+    display: none;
+  }
+
+  /* Sticky form for mobile keyboards */
+  .assistant-form {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    padding: 10px 0 max(10px, env(safe-area-inset-bottom, 10px));
+    margin-top: 0;
+    z-index: 1;
   }
 }
 
@@ -2316,6 +2396,28 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   background: var(--accent-soft);
 }
 
+/* Thread list toggle — hidden on desktop, shown on mobile via media query */
+.assistant-threads-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 17px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+.assistant-threads-toggle:hover {
+  background: var(--accent-soft);
+}
+
 .assistant-thread span,
 .assistant-message__role {
   font-size: 12px;
@@ -2422,6 +2524,16 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 
 .assistant-form button:hover {
   opacity: 0.92;
+}
+
+/* Loading state — input dimmed, button inert while Hermes computes */
+.assistant-form--loading input {
+  opacity: 0.5;
+  cursor: wait;
+}
+.assistant-form--loading button {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .gm-none {
@@ -3748,7 +3860,7 @@ html[data-theme="dark"] .trend-axis {
 .section:has(.lower-rail), .section:has(.lower-main) { max-height: 400px; overflow: hidden; }
 
 /* ===== Leaders' Corner — video modal ===== */
-.video-modal-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1100; display: flex; align-items: center; justify-content: center; }
+.video-modal-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1050; display: flex; align-items: center; justify-content: center; }
 .video-modal-scrim[hidden] { display: none; }
 .video-modal { background: var(--surface); border-radius: 18px; max-width: 780px; width: 92vw; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.18); position: relative; }
 .video-modal-close { position: absolute; top: 8px; right: 12px; background: none; border: none; font-size: 26px; line-height: 1; cursor: pointer; color: var(--muted); z-index: 2; padding: 4px 8px; border-radius: 8px; }

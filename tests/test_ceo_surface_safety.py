@@ -1661,7 +1661,7 @@ def test_cta_enum_kg_ask_hermes():
     """CTA 13: Knowledge graph inspector 'Ask Hermes about this'."""
     js = _static_executive_js()
     assert "kg-inspector-ask" in js
-    assert 'askAssistant(prompt, "kg")' in js
+    assert 'askAssistant(prompt, askBtn)' in js
 
 def test_cta_enum_a2a_followup():
     """CTA 14: A2A panel follow-up button calls askAssistant."""
