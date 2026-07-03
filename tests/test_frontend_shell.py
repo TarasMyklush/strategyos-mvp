@@ -983,7 +983,7 @@ def test_leaders_corner_no_hardcoded_origin():
 
 
 def test_leaders_corner_fallback_css_exists():
-    """CSS must include styles for leaders-fallback-card."""
+    """CSS must include styles for leaders-fallback-card, including [hidden] override."""
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
 
     assert ".leaders-fallback-card" in css, (
@@ -994,6 +994,37 @@ def test_leaders_corner_fallback_css_exists():
     )
     assert ".leaders-fallback-link" in css, (
         "CSS must define .leaders-fallback-link styles"
+    )
+    # The hidden attribute override must exist to prevent display:flex
+    # from overruling [hidden] (fallback card stacking above iframe)
+    assert ".leaders-fallback-card[hidden]" in css, (
+        "CSS must define .leaders-fallback-card[hidden] to override display:flex "
+        "when JS sets fallback.hidden = true"
+    )
+    # Verify the override uses display:none (or !important) — not just a redefinition
+    hidden_rule_section = css[css.find(".leaders-fallback-card[hidden]"):]
+    assert "display: none" in hidden_rule_section[:120], (
+        ".leaders-fallback-card[hidden] must use display:none to hide fallback card"
+    )
+
+
+def test_leaders_corner_fallback_hidden_css_not_overridable():
+    """The .leaders-fallback-card[hidden] rule must be placed AFTER the primary
+    .leaders-fallback-card rule so it takes priority in the cascade and reliably
+    overrides display:flex when the hidden attribute is present.
+
+    This prevents the exact Hermes live-verification failure: hidden=true on the
+    element but computed display:flex still wins, stacking fallback above iframe."""
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    fallback_pos = css.find(".leaders-fallback-card {")
+    hidden_pos = css.find(".leaders-fallback-card[hidden]")
+    assert fallback_pos > 0, ".leaders-fallback-card base rule must exist"
+    assert hidden_pos > 0, ".leaders-fallback-card[hidden] override must exist"
+    # The [hidden] override must come AFTER the base rule so it wins the cascade
+    assert hidden_pos > fallback_pos, (
+        ".leaders-fallback-card[hidden] must appear AFTER .leaders-fallback-card "
+        "in the stylesheet so the cascade correctly overrides display:flex"
     )
 
 
@@ -1016,8 +1047,14 @@ def test_leaders_corner_first_load_initializes_iframe():
 
 
 def test_leaders_corner_single_featured_surface():
-    """Only one featured video surface must be active — no duplicate placeholder + embed stacked."""
+    """Only one featured video surface must be active — no duplicate placeholder + embed stacked.
+
+    Verifies three layers of protection against duplicate surfaces:
+    1. JS toggle order: fallback.hidden=true BEFORE frameWrapper.hidden=false
+    2. CSS override: .leaders-fallback-card[hidden] { display:none } in stylesheet
+    3. No path where BOTH fallback.card AND iframe are simultaneously visible"""
     js = _static_executive_js()
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
 
     # The leaders-featured container must have exactly ONE of each child type
     # (fallback card is hidden by JS, iframe is shown — not both visible)
@@ -1032,6 +1069,31 @@ def test_leaders_corner_single_featured_surface():
     assert frame_shown_pos > 0, "selectLeadersVideo must show iframe wrapper"
     assert fallback_hidden_pos < frame_shown_pos, (
         "Fallback must be hidden BEFORE iframe wrapper is shown to prevent both visible at once"
+    )
+
+    # CSS must enforce the hidden state — display:flex must not override [hidden]
+    assert ".leaders-fallback-card[hidden]" in css, (
+        "CSS must have .leaders-fallback-card[hidden] rule to prevent display:flex "
+        "from overruling hidden attribute (the Hermes live-verification failure)"
+    )
+
+    # The fallback timer path must also maintain single-surface invariant:
+    # frameWrapper.hidden = true BEFORE fallback.hidden = false
+    timer_hide_frame_pos = js.find("frameWrapper.hidden")
+    # Find the specific timer block where frameWrapper is hidden and fallback shown
+    timer_block = js[js.find("_leadersFallbackTimer = window.setTimeout"):]
+    timer_block = timer_block[:timer_block.find("}, 4000)") + 20] if "}, 4000)" in timer_block else timer_block[:600]
+    assert "frameWrapper.hidden = true" in timer_block, (
+        "Fallback timer must hide frameWrapper"
+    )
+    assert "fallback.hidden = false" in timer_block, (
+        "Fallback timer must show fallback"
+    )
+    # In the timer path, frameWrapper must be hidden before fallback is shown
+    timer_hide_pos = timer_block.find("frameWrapper.hidden = true")
+    timer_show_fallback_pos = timer_block.find("fallback.hidden = false")
+    assert timer_hide_pos > 0 and timer_show_fallback_pos > timer_hide_pos, (
+        "Timer fallback path: frameWrapper must be hidden BEFORE fallback is shown"
     )
 
 

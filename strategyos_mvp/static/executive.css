@@ -4033,6 +4033,7 @@ html[data-theme="dark"] .trend-axis {
 .leaders-fallback-link:hover {
   opacity: 0.88;
 }
+.leaders-fallback-card[hidden] { display: none; }
 
 .leaders-thumb-grid {
   display: grid;
