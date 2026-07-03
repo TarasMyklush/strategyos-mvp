@@ -273,29 +273,29 @@
     if (answer && state.activePersona === "ceo" && answer.indexOf("The board pack is under review.") === 0 && answer.length < 80) {
       var driverKeywords = (cleanPrompt || "").toLowerCase();
       if (/digital health/i.test(driverKeywords)) {
-        answer = answer + " Digital Health is a growth mover under Revenue at +36% revenue YoY. Group Revenue stands at SAR 2.09B (102% of plan). The current board pack does not expose a standalone SAR absolute for Digital Health. To pull the BU-level figure, Finance can run the governed Digital Health ledger from the operator panel.";
+        answer = "Digital Health is a growth mover under Revenue at +36% revenue YoY. Group Revenue stands at SAR 2.09B (102% of plan). The current board pack does not expose a standalone SAR absolute for Digital Health. To pull the BU-level figure, Finance can run the governed Digital Health ledger from the operator panel.";
       } else if (/e-pharmacy|epharmacy/i.test(driverKeywords)) {
-        answer = answer + " e-Pharmacy is the strongest revenue mover at +12% orders WoW, contributing ~38% of the group revenue uplift. Group Revenue is SAR 2.09B (102% of plan). GM Lina Haddad notes fulfilment is holding at a 2-day SLA and she is pushing for the JV signature to lock supply ahead of demand. For the full e-Pharmacy P&L, ask an operator to run the governed BU ledger.";
+        answer = "e-Pharmacy is the strongest revenue mover at +12% orders WoW, contributing ~38% of the group revenue uplift. Group Revenue is SAR 2.09B (102% of plan). GM Lina Haddad notes fulfilment is holding at a 2-day SLA and she is pushing for the JV signature to lock supply ahead of demand. For the full e-Pharmacy P&L, ask an operator to run the governed BU ledger.";
       } else if (/pharmacy retail/i.test(driverKeywords)) {
-        answer = answer + " Pharmacy Retail is contributing +8.3% like-for-like growth, driving ~27% of the group revenue uplift. Group Revenue stands at SAR 2.09B (102% of plan). For detailed store-level metrics, the operator panel provides governed drill-down.";
+        answer = "Pharmacy Retail is contributing +8.3% like-for-like growth, driving ~27% of the group revenue uplift. Group Revenue stands at SAR 2.09B (102% of plan). For detailed store-level metrics, the operator panel provides governed drill-down.";
       } else if (/fx|margin|hedg|forex|currency/i.test(driverKeywords)) {
-        answer = answer + " EBITDA margin is at 19.2% (99% of plan), with FX exposure dragging ~SAR 9k/week against an unhedged slice of API purchasing. A 60% EUR hedge neutralises most of it; the decision is on Thursday\u2019s board agenda. For the full hedge coverage breakdown, ask Finance to run the governed margin bridge.";
+        answer = "EBITDA margin is at 19.2% (99% of plan), with FX exposure dragging ~SAR 9k/week against an unhedged slice of API purchasing. A 60% EUR hedge neutralises most of it; the decision is on Thursday\u2019s board agenda. For the full hedge coverage breakdown, ask Finance to run the governed margin bridge.";
       } else if (/cash|liquidity|floor|covenant/i.test(driverKeywords)) {
-        answer = answer + " Cash stands at SAR 1.48B \u2014 123% of the board floor (SAR 1.2B), +SAR 280M above floor. Liquidity improved SAR 60M this week, and rates easing adds ~SAR 5M/yr of interest relief. Headroom for the GLP-1 JV is intact. For the governed treasury ledger detail, an operator can pull the full cash waterfall.";
+        answer = "Cash stands at SAR 1.48B \u2014 123% of the board floor (SAR 1.2B), +SAR 280M above floor. Liquidity improved SAR 60M this week, and rates easing adds ~SAR 5M/yr of interest relief. Headroom for the GLP-1 JV is intact. For the governed treasury ledger detail, an operator can pull the full cash waterfall.";
       } else if (/cost|api|spend|logistics/i.test(driverKeywords)) {
-        answer = answer + " Operating cost is SAR 1.69B (101% of plan), running a touch hot. API input cost is +4.1% vs plan \u2014 the main cost pressure. Logistics fuel is +2.6% vs plan. Within tolerance, but worth watching as the S/4HANA cutover lands. For a full cost breakdown, ask an operator to run the governed cost ledger.";
+        answer = "Operating cost is SAR 1.69B (101% of plan), running a touch hot. API input cost is +4.1% vs plan \u2014 the main cost pressure. Logistics fuel is +2.6% vs plan. Within tolerance, but worth watching as the S/4HANA cutover lands. For a full cost breakdown, ask an operator to run the governed cost ledger.";
       } else if (/cold.chain|coldchain|resilience/i.test(driverKeywords)) {
-        answer = answer + " Cold-chain integrity is at a record 99.4% \u2014 the best on record through the summer peak, with no excursions in the last 30 days. This reinforces the Resilience KPI and de-risks the NUPCO ramp. For the detailed logistics dashboard, an operator can surface the governed cold-chain tracker.";
+        answer = "Cold-chain integrity is at a record 99.4% \u2014 the best on record through the summer peak, with no excursions in the last 30 days. This reinforces the Resilience KPI and de-risks the NUPCO ramp. For the detailed logistics dashboard, an operator can surface the governed cold-chain tracker.";
       } else if (/recover|tamween|audit|leakage/i.test(driverKeywords)) {
-        answer = answer + " SAR 8.6M is recoverable across the group \u2014 Tamween audit (SAR 1.2M), duplicate-vendor spend, and aged AR concentrate the opportunity. The system has drafted the recovery sequence. For the itemised recovery ledger, an operator can run the governed findings Q&A.";
+        answer = "SAR 8.6M is recoverable across the group \u2014 Tamween audit (SAR 1.2M), duplicate-vendor spend, and aged AR concentrate the opportunity. The system has drafted the recovery sequence. For the itemised recovery ledger, an operator can run the governed findings Q&A.";
       } else if (/board|thursday|readiness|on track/i.test(driverKeywords)) {
-        answer = answer + " Two decisions are open for Thursday\u2019s board: the FX hedge and the GLP-1 JV. The pack is ~80% composed \u2014 the margin narrative needs your line. Revenue is at 102% of plan (SAR 2.09B), cash is strong at SAR 1.48B (123% of floor), and the cold-chain record at 99.4% is your resilience opener. What specific aspect would you like me to detail?";
+        answer = "Two decisions are open for Thursday\u2019s board: the FX hedge and the GLP-1 JV. The pack is ~80% composed \u2014 the margin narrative needs your line. Revenue is at 102% of plan (SAR 2.09B), cash is strong at SAR 1.48B (123% of floor), and the cold-chain record at 99.4% is your resilience opener. What specific aspect would you like me to detail?";
       } else if (/revenue/i.test(driverKeywords)) {
-        answer = answer + " Group Revenue is SAR 2.09B at 102% of plan (+2.3% vs plan). Lifted by e-Pharmacy (+12% orders WoW), Pharmacy Retail (+8.3%), and Digital Health (+36% YoY). Healthcare Services is the only line below plan (\u22123.8% occupancy). For BU-level absolute figures, ask an operator to run the governed revenue ledger.";
+        answer = "Group Revenue is SAR 2.09B at 102% of plan (+2.3% vs plan). Lifted by e-Pharmacy (+12% orders WoW), Pharmacy Retail (+8.3%), and Digital Health (+36% YoY). Healthcare Services is the only line below plan (\u22123.8% occupancy). For BU-level absolute figures, ask an operator to run the governed revenue ledger.";
       } else if (/healthcare services|occupancy/i.test(driverKeywords)) {
-        answer = answer + " Healthcare Services is dragging Revenue at \u22123.8% occupancy \u2014 cardiology occupancy is off plan with two consultants on leave. Locum cover lands next week and the plan is to recover the gap by quarter-end. GM Omar Said is managing the recovery. For the detailed Healthcare Services ledger, ask an operator.";
+        answer = "Healthcare Services is dragging Revenue at \u22123.8% occupancy \u2014 cardiology occupancy is off plan with two consultants on leave. Locum cover lands next week and the plan is to recover the gap by quarter-end. GM Omar Said is managing the recovery. For the detailed Healthcare Services ledger, ask an operator.";
       } else {
-        answer = answer + " The current board pack shows group Revenue at SAR 2.09B (102% of plan), EBITDA margin at 19.2% (99% of plan), operating cost at SAR 1.69B (101% of plan), and cash at SAR 1.48B (123% of the board floor). For the specific figure you\u2019re asking about, check the relevant driver card on your diagnostics or ask an operator to run a governed Q&A session against the full evidence bundle.";
+        answer = "The current board pack shows group Revenue at SAR 2.09B (102% of plan), EBITDA margin at 19.2% (99% of plan), operating cost at SAR 1.69B (101% of plan), and cash at SAR 1.48B (123% of the board floor). For the specific figure you\u2019re asking about, check the relevant driver card on your diagnostics or ask an operator to run a governed Q&A session against the full evidence bundle.";
       }
     }
     // Clear loading state
@@ -710,7 +710,22 @@
     var assistantName = firstDefined(persona.assistant, blueprint.assistant, "Hermes");
     var persisted = loadStoredThreads();
     Object.keys(persisted).forEach(function (key) {
-      if (!threadStore()[key]) threadStore()[key] = persisted[key];
+      if (threadStore()[key]) return;
+      // CEO persona: filter out stale threads that would pollute context
+      if (state.activePersona === "ceo") {
+        var thread = persisted[key];
+        var title = String(firstDefined(thread && thread.title, '')).toLowerCase();
+        var preview = String(firstDefined(thread && thread.preview, '')).toLowerCase();
+        var firstMsg = (thread && safeArray(thread.messages).length) ? String(firstDefined(thread.messages[0].text, '')).toLowerCase() : '';
+        var isVideo = title.indexOf('video') !== -1 || preview.indexOf('video') !== -1 || firstMsg.indexOf('video') !== -1;
+        var isLeader = title.indexOf('leader') !== -1 || preview.indexOf('leader') !== -1 || firstMsg.indexOf('leader') !== -1 || preview.indexOf('enterprise ai') !== -1;
+        var isSystem = thread && thread.kind === 'system';
+        var isBug = title.indexOf('bug') !== -1 || title.indexOf('report a bug') !== -1;
+        if (isVideo || isLeader || isSystem || isBug) {
+          return; // skip — don't load into memory
+        }
+      }
+      threadStore()[key] = persisted[key];
     });
     var seededThreads = safeArray(chat.threads).length ? safeArray(chat.threads) : safeArray(blueprint.threads).map(function (thread, index) {
       return {
@@ -2154,12 +2169,13 @@
       drawer.hidden = !state.drawerOpen;
       drawer.classList.toggle("is-open", state.drawerOpen);
       drawer.setAttribute("aria-modal", state.drawerOpen ? "true" : "false");
+      drawer.setAttribute("aria-hidden", state.drawerOpen ? "false" : "true");
       drawer.setAttribute("role", "dialog");
     }
     if (scrim) {
       scrim.hidden = !state.drawerOpen;
       scrim.classList.toggle("is-open", state.drawerOpen);
-      scrim.setAttribute("aria-hidden", state.drawerOpen ? "true" : "false");
+      scrim.setAttribute("aria-hidden", state.drawerOpen ? "false" : "true");
       scrim.onclick = function () {
         _closeHermesDrawer();
       };

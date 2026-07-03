@@ -1302,14 +1302,24 @@ def test_evidence_chain_hidden_by_default():
 
 
 def test_agents_grammar_need_your_attention():
-    """#3: Agents Running Now must say 'need your attention', not 'needs you'."""
+    """#3: Agents Running Now must say 'need your attention', not 'needs you'.
+    
+    Scoped to agents section only — 'needs your' in dead-end guard text
+    (e.g. 'the margin narrative needs your line') is correct grammar and
+    unrelated to the agents-label requirement.
+    """
     js = _static_executive_js()
 
     assert "need your attention" in js, (
         "Agents stats must say 'need your attention' (grammar fix)"
     )
-    assert "needs you" not in js, (
-        "Old 'needs you' grammar must be removed"
+    # 'needs you' must NOT appear in the agents section (line 2050-2090)
+    running_card_start = js.index("Running now")
+    running_card_end = running_card_start + 500
+    running_card_block = js[running_card_start:min(running_card_end, len(js))]
+    assert "needs you" not in running_card_block, (
+        "Old 'needs you' grammar must be removed from agents section. "
+        "(False positives from dead-end guard 'needs your' are excluded.)"
     )
 
 
@@ -2253,7 +2263,7 @@ def test_hermes_digital_health_branch_has_correct_context():
 
     # Find the Digital Health dead-end guard branch
     dh_start = js.index("/digital health/i.test")
-    dh_answer_line = js.index('answer = answer + "', dh_start)
+    dh_answer_line = js.index('answer = "', dh_start)
     dh_answer_end = js.index('";', dh_answer_line)
     dh_answer = js[dh_answer_line:dh_answer_end + 2]
 
@@ -2278,7 +2288,7 @@ def test_hermes_epharmacy_branch_has_correct_context():
     js = _static_executive_js()
 
     ep_start = js.index("/e-pharmacy|epharmacy/i.test")
-    ep_answer_line = js.index('answer = answer + "', ep_start)
+    ep_answer_line = js.index('answer = "', ep_start)
     ep_answer_end = js.index('";', ep_answer_line)
     ep_answer = js[ep_answer_line:ep_answer_end + 2]
 
@@ -2297,7 +2307,7 @@ def test_hermes_fx_branch_has_correct_context():
     js = _static_executive_js()
 
     fx_start = js.index("/fx|margin|hedg|forex|currency/i.test")
-    fx_answer_line = js.index('answer = answer + "', fx_start)
+    fx_answer_line = js.index('answer = "', fx_start)
     fx_answer_end = js.index('";', fx_answer_line)
     fx_answer = js[fx_answer_line:fx_answer_end + 2]
 
@@ -2316,7 +2326,7 @@ def test_hermes_cash_branch_has_correct_context():
     js = _static_executive_js()
 
     cash_start = js.index("/cash|liquidity|floor|covenant/i.test")
-    cash_answer_line = js.index('answer = answer + "', cash_start)
+    cash_answer_line = js.index('answer = "', cash_start)
     cash_answer_end = js.index('";', cash_answer_line)
     cash_answer = js[cash_answer_line:cash_answer_end + 2]
 
@@ -2335,7 +2345,7 @@ def test_hermes_cold_chain_branch_has_correct_context():
     js = _static_executive_js()
 
     cc_start = js.index("/cold.chain|coldchain|resilience/i.test")
-    cc_answer_line = js.index('answer = answer + "', cc_start)
+    cc_answer_line = js.index('answer = "', cc_start)
     cc_answer_end = js.index('";', cc_answer_line)
     cc_answer = js[cc_answer_line:cc_answer_end + 2]
 
@@ -2360,8 +2370,8 @@ def test_hermes_generic_branch_has_bounded_answer():
     guard_end = js.index("// Clear loading state", guard_start)
     guard_block = js[guard_start:guard_end]
 
-    # Find the last "answer = answer +" which is the generic fallback
-    last_answer_idx = guard_block.rindex('answer = answer + "')
+    # Find the last "answer = \"" which is the generic fallback (else branch)
+    last_answer_idx = guard_block.rindex('answer = "')
     generic_answer_end = guard_block.index('";', last_answer_idx)
     generic_answer = guard_block[last_answer_idx:generic_answer_end + 2]
 
@@ -2403,7 +2413,12 @@ def test_hermes_no_old_dead_end_patterns():
 
 
 def test_hermes_facts_lead_not_excuses():
-    """Every dead-end guard branch must lead with known facts, not 'not available' as primary."""
+    """Every dead-end guard branch must lead with known facts, not 'not available' as primary.
+    
+    VERIFIES: Each branch now uses replace-style assignment (`answer = "..."`) instead of
+    the old append-style (`answer = answer + "..."`) which left the evasive
+    "The board pack is under review." prefix in CEO-visible answers.
+    """
     js = _static_executive_js()
 
     # Find the dead-end guard block
@@ -2411,10 +2426,19 @@ def test_hermes_facts_lead_not_excuses():
     guard_end = js.index("// Clear loading state", guard_start)
     guard_block = js[guard_start:guard_end]
 
-    # Count "answer = answer +" occurrences (one per branch)
-    branch_count = guard_block.count("answer = answer +")
+    # Count replace-style assignments — each branch must use "answer = \"" (not append)
+    branch_count = guard_block.count('answer = "')
     assert branch_count >= 12, (
-        f"Dead-end guard must have at least 12 context-aware branches, found {branch_count}"
+        f"Dead-end guard must have at least 12 replace-style branches (answer = \"...\"), "
+        f"found {branch_count}. Append-style (answer = answer + \"...\") is banned — "
+        "it leaves the evasive 'The board pack is under review.' prefix."
+    )
+
+    # The old append pattern must be GONE from the dead-end guard
+    append_count = guard_block.count("answer = answer +")
+    assert append_count == 0, (
+        f"'answer = answer +' appears {append_count} times in dead-end guard — "
+        "all branches must use replace-style (answer = \"...\") not append-style"
     )
 
     # "not available" must NOT appear in any answer text
@@ -2428,4 +2452,137 @@ def test_hermes_facts_lead_not_excuses():
     is_not_available_count = guard_block.count("is not available")
     assert is_not_available_count == 0, (
         f"'is not available' appears {is_not_available_count} times — must be removed"
+    )
+
+
+# ── Drawer hidden-state enforcement ──
+
+def test_ceo_drawer_hidden_on_page_load():
+    """Fresh CEO page load must NOT expose the assistant drawer in the
+    accessibility tree. The drawer element must carry aria-hidden='true',
+    and the CSS must override [hidden] with visibility: hidden so
+    screen readers skip it entirely.
+
+    Acceptance A: No visible/open assistant drawer; no accessible
+    'Select a thread to continue' unless drawer opened.
+    """
+    js = _static_executive_js()
+    css = _static_executive_css()
+
+    # ── JS: renderAssistantStudio must set aria-hidden on drawer when closed ──
+    # The drawer DOM element getter + aria-hidden setter must be in JS
+    assert 'aria-hidden' in js, (
+        "drawer must set aria-hidden attribute in renderAssistantStudio"
+    )
+    # Verify the aria-hidden is set conditionally on drawerOpen state
+    studio_start = js.index("function renderAssistantStudio")
+    studio_end = studio_start + 3000
+    studio_block = js[studio_start:min(studio_end, len(js))]
+    assert 'state.drawerOpen ? "false" : "true"' in studio_block or \
+           'state.drawerOpen' in studio_block, (
+        "aria-hidden must toggle with state.drawerOpen"
+    )
+
+    # ── CSS: assistant-drawer[hidden] must include visibility: hidden ──
+    drawer_hidden_css_start = css.index(".assistant-drawer[hidden]")
+    drawer_hidden_css = css[drawer_hidden_css_start:drawer_hidden_css_start + 300]
+    assert "visibility: hidden" in drawer_hidden_css, (
+        "CSS rule .assistant-drawer[hidden] must set visibility: hidden "
+        "to remove drawer from accessibility tree when closed"
+    )
+
+    # ── CSS: assistant-scrim[hidden] must also include visibility: hidden ──
+    scrim_hidden_css_start = css.index(".assistant-scrim[hidden]")
+    scrim_hidden_css = css[scrim_hidden_css_start:scrim_hidden_css_start + 200]
+    assert "visibility: hidden" in scrim_hidden_css, (
+        "CSS rule .assistant-scrim[hidden] must set visibility: hidden"
+    )
+
+
+def test_ceo_no_stale_thread_leakage():
+    """CEO persona must filter out stale persisted threads that contain
+    video references, Leaders' Corner content, system threads, or bug threads.
+    
+    Acceptance B/C: No stale Leaders video/FX text polluting CEO conversations.
+    Contextual CTAs must open clean drawers without cross-contamination.
+    """
+    js = _static_executive_js()
+
+    # ── ensureThreads must contain the CEO stale-thread filter ──
+    assert "state.activePersona === \"ceo\"" in js, (
+        "CEO stale-thread guard must exist in ensureThreads"
+    )
+
+    # Find ensureThreads function
+    ensure_start = js.index("function ensureThreads")
+    ensure_end = ensure_start + 3000
+    ensure_block = js[ensure_start:min(ensure_end, len(js))]
+
+    # Video-related stale thread detection
+    assert "isVideo" in ensure_block, (
+        "ensureThreads must detect video-related stale threads for CEO"
+    )
+    assert "isLeader" in ensure_block, (
+        "ensureThreads must detect Leaders' Corner stale threads for CEO"
+    )
+    assert "isSystem" in ensure_block, (
+        "ensureThreads must filter system threads for CEO"
+    )
+
+    # Each stale-thread flag must be checked before loading
+    assert "if (isVideo" in ensure_block or "isVideo || isLeader" in ensure_block, (
+        "Stale-thread guards must conditionally skip loading for CEO"
+    )
+
+
+def test_ceo_digital_health_answer_leads_with_facts():
+    """The Digital Health dead-end guard branch must lead with data-led facts
+    (+36% YoY, SAR 2.09B), NOT start with 'The board pack is under review.'
+    or any other evasive prefix.
+
+    Acceptance B: Answer leads with Digital Health +36% YoY and group
+    Revenue SAR 2.09B; no stale Leaders video/FX text.
+    """
+    js = _static_executive_js()
+
+    # ── Digital Health branch must NOT start with evasive prefix ──
+    # Find the dead-end guard block
+    guard_start = js.index("// CEO dead-end guard:")
+    guard_end = guard_start + 4000
+    guard_block = js[guard_start:min(guard_end, len(js))]
+
+    # The Digital Health branch must be present
+    assert "/digital health/i" in guard_block, (
+        "Digital Health dead-end guard branch must exist"
+    )
+
+    # The Digital Health answer must start with "Digital Health"
+    # (not "The board pack is under review.")
+    dh_branch_start = guard_block.index("/digital health/i")
+    dh_branch_end = dh_branch_start + 800
+    dh_branch = guard_block[dh_branch_start:min(dh_branch_end, len(guard_block))]
+
+    # The answer assignment in the Digital Health branch must start data-led
+    assert 'answer = "Digital Health' in dh_branch, (
+        "Digital Health dead-end branch must use replace-style assignment "
+        "starting with 'Digital Health' — not append-style with evasive prefix"
+    )
+
+    # Key data points must be present
+    assert "+36% revenue YoY" in dh_branch, (
+        "Digital Health answer must include +36% YoY figure"
+    )
+    assert "SAR 2.09B" in dh_branch, (
+        "Digital Health answer must include group Revenue SAR 2.09B"
+    )
+    assert "102% of plan" in dh_branch, (
+        "Digital Health answer must include plan percentage context"
+    )
+
+    # No stale Leaders' Corner / video references in the Digital Health branch
+    assert "Leaders" not in dh_branch and "leaders" not in dh_branch, (
+        "Digital Health branch must not contain Leaders' Corner references"
+    )
+    assert "Enterprise AI" not in dh_branch, (
+        "Digital Health branch must not contain Enterprise AI reference"
     )
