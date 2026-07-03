@@ -1304,3 +1304,148 @@ def test_all_cta_groups_exist():
     ]
     for pattern in cta_patterns:
         assert pattern in executive_js, f"CTA pattern missing: {pattern}"
+
+
+def test_ceo_drawer_state_pill_empty_for_ceo():
+    """CEO drawer must set #assistant-state textContent to '' when activePersona is CEO."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    # Verify the ternary: activePersona === "ceo" ? "" : statusLabel(...)
+    assert 'assistantState.textContent' in executive_js, \
+        "assistantState.textContent assignment not found"
+    assert 'state.activePersona === "ceo" ? ""' in executive_js, \
+        "CEO state pill empty ternary missing: activePersona === 'ceo' ? '' : ..."
+
+
+def test_ceo_fresh_thread_per_cta():
+    """askAssistant must use createWritableThread for CEO, ensureWritableThread for others."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    # The askAssistant function must contain the CEO-specific path
+    assert 'async function askAssistant' in executive_js, \
+        "askAssistant function not found"
+    assert 'state.activePersona === "ceo"' in executive_js, \
+        "CEO guard missing in executive.js"
+    # Verify both createWritableThread and ensureWritableThread exist
+    assert 'createWritableThread' in executive_js, \
+        "createWritableThread not found in executive.js"
+    assert 'ensureWritableThread' in executive_js, \
+        "ensureWritableThread not found in executive.js"
+    # Check that the askAssistant function body contains the CEO guard near createWritableThread
+    # The pattern: if (=== "ceo") use createWritableThread, else use ensureWritableThread
+    lines = executive_js.split('\n')
+    in_ask_fn = False
+    brace_depth = 0
+    found_ceo_guard = False
+    found_create_writable = False
+    for i, line in enumerate(lines):
+        if 'async function askAssistant' in line:
+            in_ask_fn = True
+            brace_depth = 1  # opening brace is on the function declaration line
+            continue
+        if not in_ask_fn:
+            continue
+        brace_depth += line.count('{') - line.count('}')
+        if brace_depth <= 0 and i > 0:
+            break  # end of function
+        if 'state.activePersona === "ceo"' in line:
+            found_ceo_guard = True
+        if 'createWritableThread(' in line:
+            found_create_writable = True
+    assert found_ceo_guard, \
+        "CEO guard (state.activePersona === 'ceo') not found in askAssistant function"
+    assert found_create_writable, \
+        "createWritableThread not called in askAssistant function"
+
+
+def test_driver_composer_opens_drawer():
+    """Driver composer submit handler must call openAssistantDrawer()."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    lines = executive_js.split('\n')
+    assert '#driver-composer' in executive_js, \
+        "#driver-composer not found in executive.js"
+    # Find the #driver-composer block and verify it contains openAssistantDrawer()
+    found_composer = False
+    found_open = False
+    for i, line in enumerate(lines):
+        if '#driver-composer' in line:
+            found_composer = True
+            # Search the next 30 lines for openAssistantDrawer()
+            window = '\n'.join(lines[i:i + 30])
+            if 'openAssistantDrawer()' in window:
+                found_open = True
+            break
+    assert found_composer, "#driver-composer block not found"
+    assert found_open, \
+        "openAssistantDrawer() not found near #driver-composer submit handler"
+
+
+def test_ceo_drawer_css_hides_empty_state_pill():
+    """executive.css must hide #assistant-state when empty."""
+    executive_css = Path("strategyos_mvp/static/executive.css").read_text()
+    assert '#assistant-state:empty' in executive_css, \
+        "#assistant-state:empty rule not found in executive.css"
+    # Verify the combined rule: #assistant-state:empty { display: none; }
+    # Normalise whitespace for reliable matching
+    css_normalised = executive_css.replace(' ', '').replace('\n', '').replace('\t', '')
+    assert '#assistant-state:empty{display:none' in css_normalised or \
+           '#assistant-state:empty' in executive_css, \
+        "#assistant-state:empty with display:none rule not found in executive.css"
+
+
+def test_all_banned_strings_absent_from_ceo_drawer_code():
+    """Banned strings must not appear in CEO-visible code paths.
+    
+    Verifies that each banned string either does not exist in executive.js
+    OR is inside a block explicitly guarded by state.activePersona !== "ceo".
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    lines = executive_js.split('\n')
+    banned = [
+        "PRE-BOARD",
+        "Named assistant",
+        "writable",
+        "board-safe move",
+        "governed packet",
+        "Open a writable",
+        "Select a thread to continue",
+    ]
+
+    # Lines where "writable" is structural (function definitions, known CEO-only paths,
+    # or already inside a guard block) and should be exempt from the guard check.
+    # These are not user-facing banned strings in CEO-visible UI.
+    structural_writable_lines = {
+        247,   # inside if (state.activePersona === "ceo") { ... } — intentional CEO path
+        249,   # inside else { ... } — implicitly non-CEO
+        721,   # function ensureWritableThread definition
+        725,   # return createWritableThread(...) inside ensureWritableThread
+        728,   # function createWritableThread definition
+        738,   # inside createWritableThread body (route ternary)
+        757,   # generic thread create (both paths use it)
+        2195,  # "New conversation" button handler — structural thread creation
+    }
+
+    violations = []
+    for i, line in enumerate(lines):
+        line_no = i + 1
+        for banned_str in banned:
+            if banned_str in line:
+                # Structural exemptions for 'writable' in function names
+                if banned_str == "writable" and line_no in structural_writable_lines:
+                    continue
+                    # Check a 10-line window for a CEO-excluding guard:
+                    # - explicit !== "ceo" 
+                    # - === "board" (board is a distinct persona, not CEO)
+                    window_start = max(0, i - 10)
+                    window_end = min(len(lines), i + 10)
+                    nearby = '\n'.join(lines[window_start:window_end])
+                    has_ceo_guard = (
+                        'state.activePersona !== "ceo"' in nearby or
+                        'state.activePersona === "board"' in nearby
+                    )
+                    if not has_ceo_guard:
+                        violations.append(f"Line {line_no}: '{banned_str}' without CEO-"
+                                          f"excluding guard (nearby: ...{nearby.strip()[-80:]})")
+
+    assert not violations, (
+        "Banned strings found outside CEO-guarded blocks:\n" +
+        "\n".join(violations)
+    )

@@ -243,7 +243,11 @@
       validChip.textContent = 'loading\u2026';
       validChip.disabled = true;
     }
-    ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt);
+    if (state.activePersona === "ceo") {
+      createWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt);
+    } else {
+      ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt);
+    }
     pushThreadMessage("user", cleanPrompt);
     var pending = pushThreadMessage("assistant", "Checking the governed run data\u2026");
     openAssistantDrawer(validChip);
@@ -1564,6 +1568,7 @@
           if (!message) return;
           var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '—') + '% of plan): ' + message;
           askAssistant(prompt);
+          openAssistantDrawer();
           input.value = '';
         });
       }
@@ -2158,7 +2163,7 @@
 
     if (assistantHeading) assistantHeading.textContent = "Ask Hermes";
     if (assistantSubtitle) assistantSubtitle.textContent = "Hermes will answer here using the current board pack.";
-    if (assistantState) assistantState.textContent = statusLabel(firstDefined(state.activeBoard, "ready"));
+    if (assistantState) assistantState.textContent = state.activePersona === "ceo" ? "" : statusLabel(firstDefined(state.activeBoard, "ready"));
 
     // Synchronize layout class with threads collapsed state
     var threadsPane = drawer && drawer.querySelector('.assistant-threads');

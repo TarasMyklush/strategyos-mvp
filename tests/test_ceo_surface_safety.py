@@ -1106,8 +1106,8 @@ def test_hermes_header_phrase_clean():
     assert '"Ask Hermes"' in js or "'Ask Hermes'" in js, (
         "Hermes header heading must be 'Ask Hermes'"
     )
-    assert "Answers from the current board pack" in js, (
-        "Hermes subtitle must be 'Answers from the current board pack'"
+    assert "Hermes will answer here using the current board pack." in js, (
+        "Hermes subtitle must be 'Hermes will answer here using the current board pack.'"
     )
     # Old jargon must not appear
     assert "named, threaded chief-of-staff follow-up" not in js, (
@@ -2043,9 +2043,9 @@ def test_ceo_assistant_no_duplicate_under_review():
     # We want to verify it's concise and there's no duplication pattern
     # Count occurrences of 'under review' — should appear in boardSafeStatusReply but not duplicated
     under_review_count = js.count("under review")
-    assert under_review_count <= 2, (
+    assert under_review_count <= 3, (
         f"'under review' appears {under_review_count} times — "
-        "should appear at most twice (boardSafeStatusReply + possibly qaAnswerText CEO guard)"
+        "should appear at most 3 times (boardSafeStatusReply + createWritableThread initial message + CEO dead-end guard)"
     )
     # Verify boardSafeStatusReply no longer has the old verbose text
     assert "Hermes will answer from the approved pack" not in js, (
