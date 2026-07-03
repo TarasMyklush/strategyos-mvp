@@ -144,7 +144,7 @@ jobs:
       STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
       STRATEGYOS_API_IMAGE: ${{ needs.image.outputs.image-ref }}
       STRATEGYOS_COMPOSE_FILES: ${{ vars.STRATEGYOS_COMPOSE_FILES }}
-      STRATEGYOS_COMPOSE_PROFILES: ${{ vars.STRATEGYOS_COMPOSE_PROFILES }}
+      STRATEGYOS_COMPOSE_PROFILES: ${{ vars.STRATEGYOS_COMPOSE_PROFILES || 'hatchet' }}
       HETZNER_USER: ${{ vars.HETZNER_USER }}
       STRATEGYOS_HTTP_PORT: ${{ vars.STRATEGYOS_HTTP_PORT || '80' }}
       STRATEGYOS_HTTPS_PORT: ${{ vars.STRATEGYOS_HTTPS_PORT || '443' }}
@@ -385,17 +385,23 @@ jobs:
           GHCR_TOKEN: ${{ github.token }}
         run: printf '%s' "${GHCR_TOKEN}" | ssh ${SSH_OPTS} "${TARGET_HOST}" "docker login ghcr.io -u '${GITHUB_ACTOR}' --password-stdin"
 
-      - name: Pre-deploy hatchet-postgres repair
+      - name: Pre-deploy host repair
         run: |
+          echo "=== Host disk usage ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h / && echo '---' && du -sh /var/lib/docker/* 2>/dev/null | sort -rh | head -20 || true"
+
+          echo "=== Docker system prune (unused images, containers, networks, build cache) ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker system prune -af --volumes || true"
+
+          echo "=== Disk usage after cleanup ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h /"
+
           echo "=== Checking hatchet-postgres health ==="
           HEALTH=$(ssh ${SSH_OPTS} "${TARGET_HOST}" "docker inspect strategyos-hatchet-postgres-1 --format '{{.State.Health.Status}}' 2>/dev/null || echo 'no-container'")
           echo "hatchet-postgres health: ${HEALTH}"
 
-          echo "=== hatchet-postgres logs (last 50 lines) ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-hatchet-postgres-1 --tail 50 2>&1 || true"
-
-          echo "=== Docker disk usage ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h /var/lib/docker || true"
+          echo "=== hatchet-postgres logs (last 30 lines) ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-hatchet-postgres-1 --tail 30 2>&1 || true"
 
           if [ "${HEALTH}" != "healthy" ]; then
             echo "=== hatchet-postgres is not healthy (status: ${HEALTH}) — resetting hatchet volumes ==="
