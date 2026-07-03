@@ -1241,3 +1241,157 @@ def test_close_challenged_cases_button_action():
     assert "data-board-action" in js, (
         "Challenged case buttons must exist with data-board-action"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# LIVE-VERIFICATION REGRESSION TESTS — 2026-07-03
+# Six live-visible failures caught by Hermes at
+# https://strategyos.live/executive?persona=ceo&board=pre&driver=board_packet
+# Each test proves the fix is in the served JS / HTML / CSS.
+# ══════════════════════════════════════════════════════════════════════
+
+def test_driver_drill_no_tap_a_note_instruction():
+    """#1: Driver drill must NOT show 'tap a note — the GM's commentary
+    rides up with the number' instruction text."""
+    js = _static_executive_js()
+
+    assert 'tap a note' not in js, (
+        "Driver drill must NOT contain 'tap a note' instruction text"
+    )
+    assert "GM's commentary rides up with the number" not in js, (
+        "Driver drill must NOT contain GM commentary instruction"
+    )
+
+
+def test_evidence_chain_hidden_by_default():
+    """#2: Evidence chain must be hidden by default and CSS must respect
+    the hidden attribute (display: flex must not override display: none)."""
+    js = _static_executive_js()
+    css_path = Path(__file__).resolve().parent.parent / \
+        "strategyos_mvp" / "static" / "executive.css"
+    css = css_path.read_text()
+
+    # Evidence div must be hidden by default in JS template
+    assert '<div class="drill-evidence" hidden>' in js, (
+        "Evidence chain div must have hidden attribute by default"
+    )
+
+    # CSS must explicitly hide drill-evidence when [hidden]
+    assert '.drill-evidence[hidden]' in css or \
+        'drill-evidence[hidden]' in css, (
+        "CSS must have .drill-evidence[hidden] rule to override display:flex"
+    )
+
+
+def test_agents_grammar_need_your_attention():
+    """#3: Agents Running Now must say 'need your attention', not 'needs you'."""
+    js = _static_executive_js()
+
+    assert "need your attention" in js, (
+        "Agents stats must say 'need your attention' (grammar fix)"
+    )
+    assert "needs you" not in js, (
+        "Old 'needs you' grammar must be removed"
+    )
+
+
+def test_agent_status_labels_ceo_friendly():
+    """#4: Agent status labels must use CEO-friendly terms:
+    'Guarded' not 'Protected', 'View only' not 'Preview Only'."""
+    js = _static_executive_js()
+
+    # Global statusLabel map must include CEO-friendly mappings
+    assert '"protected": "Guarded"' in js, (
+        "statusLabel must map 'protected' to 'Guarded'"
+    )
+    assert '"preview": "View only"' in js or '"board_safe_preview": "View only"' in js, (
+        "statusLabel must map preview statuses to 'View only'"
+    )
+    assert '"preview_only": "View only"' in js, (
+        "statusLabel must map 'preview_only' to 'View only'"
+    )
+
+    # Local statusLabel in renderAgentsDiscovery must also use CEO labels
+    assert "return 'Guarded'" in js, (
+        "renderAgentsDiscovery statusLabel must return 'Guarded' for protected"
+    )
+    assert "return 'View only'" in js, (
+        "renderAgentsDiscovery statusLabel must return 'View only'"
+    )
+
+
+def test_leaders_corner_single_youtube_link_per_card():
+    """#5: Leaders' Corner must have only ONE 'Open on YouTube' link
+    per card/video surface, not duplicates in fallback + info sections.
+    
+    The initial render fallback card (Select a video) must NOT also show
+    a YouTube link — only leaders-video-ctas should carry one.
+    Error-handler and selectLeadersVideo fallback paths are separate
+    code paths and may keep their YouTube fallback links.
+    """
+    js = _static_executive_js()
+
+    # The initial render (gravity panel) fallback card must NOT contain a YouTube link.
+    # We verify this by checking that the "Select a video below" template
+    # does NOT have an <a> tag inside the fallback card.
+    select_text = 'Select a video below'
+    select_idx = js.index(select_text)
+    # Look at the next 300 chars after "Select a video below"
+    after_select = js[select_idx:select_idx + 300]
+    # The fallback card in the initial render must NOT have a YouTube link
+    assert 'leaders-fallback-link' not in after_select, (
+        "Initial render fallback card ('Select a video below') must NOT contain "
+        "a YouTube link — only leaders-video-ctas should have one"
+    )
+
+    # The leaders-video-info section must still have a YouTube link
+    assert "leaders-yt-link" in js, (
+        "Leaders video info must retain the single YouTube link"
+    )
+
+
+def test_assistants_tab_no_ai_adoption_wording():
+    """#6: Assistants tab must NOT contain old 'AI adoption' wording.
+    Must use 'team readiness' instead."""
+    js = _static_executive_js()
+    html = _ceo_executive_html()
+    design_path = Path(__file__).resolve().parent.parent / \
+        "strategyos_mvp" / "static" / "executive_design_data.js"
+    design = design_path.read_text()
+
+    # Design data must not contain 'AI adoption'
+    assert "AI adoption" not in design, (
+        "executive_design_data.js must not contain 'AI adoption' wording"
+    )
+    # Design data must use 'team readiness' 
+    assert "team readiness" in design, (
+        "executive_design_data.js must use 'team readiness' wording"
+    )
+
+    # Served HTML static subtitle must not contain old wording
+    assert "How current and deeply-used each assistant is" not in html, (
+        "CEO executive HTML must not contain old assistant subtitle wording"
+    )
+
+    # JS default hint must be clean
+    assert "AI adoption" not in js, (
+        "executive.js must not contain 'AI adoption'"
+    )
+
+
+def test_evidence_footer_css_no_display_flex_override():
+    """#2b: The .drill-evidence CSS must not leave display:flex unchallenged.
+    A second assertion ensures [hidden] wins over display:flex."""
+    css_path = Path(__file__).resolve().parent.parent / \
+        "strategyos_mvp" / "static" / "executive.css"
+    css = css_path.read_text()
+
+    # Find .drill-evidence rule block
+    idx = css.find('.drill-evidence')
+    assert idx != -1, ".drill-evidence CSS rule must exist"
+
+    # After the .drill-evidence block, there must be a [hidden] override
+    post_block = css[idx:idx + 400]
+    assert '[hidden]' in post_block, (
+        ".drill-evidence CSS must be followed by [hidden] override rule"
+    )

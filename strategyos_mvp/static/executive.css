@@ -3046,6 +3046,10 @@ html[data-theme="dark"] .trend-axis {
   background: rgba(255,255,255,0.72);
 }
 
+.drill-evidence[hidden] {
+  display: none;
+}
+
 .evidence-label { font-weight: 600; }
 .evidence-arrow,
 .evidence-step { color: var(--muted); }

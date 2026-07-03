@@ -392,7 +392,7 @@
     ],
     networkMeta: {
       label: "Assistant Network",
-      hint: "How current and deeply-used each leader’s assistant is — your read on data quality and AI adoption across Mizan.",
+      hint: "How current and deeply-used each leader’s assistant is — your read on data quality and team readiness across Mizan.",
       target: 80
     },
     network: [
