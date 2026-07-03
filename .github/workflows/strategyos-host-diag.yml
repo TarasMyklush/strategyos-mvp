@@ -21,20 +21,31 @@ jobs:
         run: |
           TARGET_HOST="root@178.105.169.155"
           TARGET_DIR="/opt/strategyos"
+          
           echo "=== Container states ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd ${TARGET_DIR}/app && docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml -f deploy/docker-compose.hetzner-qa.yml ps -a"
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'" || true
           echo ""
+          
           echo "=== Disk space ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h && docker system df"
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h" || true
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker system df" || true
           echo ""
+          
           echo "=== Minio logs ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-minio-1 --tail 50"
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-minio-1 --tail 100 2>&1 || echo 'NO_MINIO_CONTAINER'" || true
           echo ""
+          
           echo "=== Minio create bucket logs ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-minio-create-bucket-1 --tail 50"
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-minio-create-bucket-1 --tail 50 2>&1 || echo 'NO_MINIO_CREATE_CONTAINER'" || true
           echo ""
+          
           echo "=== Minio volume ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker volume ls | grep minio"
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker volume ls | grep minio || echo 'NO_MINIO_VOLUME'" || true
           echo ""
-          echo "=== Env file check ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd ${TARGET_DIR}/app && head -100 deploy/.env"
+          
+          echo "=== Env file check (secrets keys only) ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd ${TARGET_DIR}/app && cut -d= -f1 deploy/.env.secrets 2>&1 || echo 'NO_ENV_FILE'" || true
+          echo ""
+          
+          echo "=== Minio container inspect ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker inspect strategyos-minio-1 --format '{{.State.Status}} {{.State.Health.Status}}' 2>&1 || echo 'NO_MINIO'" || true
