@@ -169,6 +169,15 @@
     return "SAR " + number.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
+  function wordSlice(text, limit) {
+    text = String(text || "").trim();
+    if (text.length <= limit) return text;
+    var sliced = text.slice(0, limit);
+    var lastSpace = sliced.lastIndexOf(' ');
+    if (lastSpace > Math.floor(limit * 0.6)) return sliced.slice(0, lastSpace) + '\u2026';
+    return sliced + '\u2026';
+  }
+
   function focusAssistantInput() {
     window.setTimeout(function () {
       var input = $("assistant-input");
@@ -260,9 +269,20 @@
       form.classList.add('assistant-form--loading');
     }
     var answer = await buildAssistantReply(cleanPrompt);
-    // CEO dead-end guard: if the board pack review returns a stub, append useful bounded context
+    // CEO dead-end guard: if the board pack review returns a stub, respond with bounded prompt-relevant context instead of a generic fallback
     if (answer && state.activePersona === "ceo" && answer.indexOf("The board pack is under review.") === 0 && answer.length < 80) {
-      answer = answer + " This matters because it can reduce Thursday\u2019s margin story by ~SAR 9k unless hedging/API cost actions are taken. Ask Finance for hedge coverage and API spend owners before the board.";
+      var driverKeywords = (cleanPrompt || "").toLowerCase();
+      if (/digital health|revenue/i.test(driverKeywords)) {
+        answer = answer + " The exact Digital Health absolute figure is not available in the current board pack. Review the Revenue driver card on your diagnostics for percentage-of-plan and trend, or ask an operator to run a governed Q&A session with the complete evidence ledger.";
+      } else if (/fx|margin|hedg|forex|currency/i.test(driverKeywords)) {
+        answer = answer + " The FX margin detail is not available in the current board pack. Check the Margin driver card for percentage-of-plan and the latest finding, or ask Finance for the hedge coverage breakdown before the board.";
+      } else if (/cash|liquidity/i.test(driverKeywords)) {
+        answer = answer + " The absolute cash figure is not available in the current board pack. Review the Cash & Liquidity driver card on your diagnostics for position versus plan, or ask an operator to pull the governed treasury ledger.";
+      } else if (/cost|api|spend/i.test(driverKeywords)) {
+        answer = answer + " The absolute cost figure is not available in the current board pack. Review the relevant driver card on your diagnostics for percentage-of-plan and trend, or ask an operator to run the API spend breakdown.";
+      } else {
+        answer = answer + " The exact figure is not available in the current board pack. Review the relevant driver card on your diagnostics for the latest board-safe metrics, or ask an operator to run a governed Q&A session with the complete evidence ledger.";
+      }
     }
     // Clear loading state
     if (!validChip && form && input) {
@@ -276,7 +296,7 @@
       pending.timestamp = new Date().toISOString();
       var thread = threadStore()[currentThreadKey()];
       if (thread) {
-        thread.preview = String(answer || thread.preview || "").slice(0, 84);
+        thread.preview = wordSlice(answer || thread.preview, 84);
         thread.lastUpdated = new Date().toISOString();
       }
       saveStoredThreads();
@@ -731,6 +751,9 @@
     var assistantName = firstDefined((getChatContract().assistant || {}).name, persona.assistant, blueprint.assistant, "Hermes");
     var key = state.activePersona + ":followup-" + Date.now();
     var preview = String(firstDefined(seedPreview, "Writable board-safe thread.")).trim();
+    var initialMessage = seedPreview && String(seedPreview).trim()
+      ? "I'll look up \u201c" + String(seedPreview).slice(0, 48) + (String(seedPreview).length > 48 ? "\u2026" : "") + "\u201d against the current board pack."
+      : "I can answer using the current board pack. What would you like to know?";
     threadStore()[key] = {
       key: key,
       title: seedTitle || ("New conversation · " + nowStamp()),
@@ -742,7 +765,7 @@
       messages: [
         {
           role: "assistant",
-          text: "The board pack is under review. Hermes will answer using the current data.",
+          text: initialMessage,
           timestamp: new Date().toISOString()
         }
       ],
@@ -758,7 +781,7 @@
     if (!thread) return null;
     var message = { role: role, text: text, timestamp: new Date().toISOString() };
     thread.messages.push(message);
-    thread.preview = String(text || thread.preview || "").slice(0, 84);
+    thread.preview = wordSlice(text || thread.preview, 84);
     thread.lastUpdated = new Date().toISOString();
     saveStoredThreads();
     return message;

@@ -1372,7 +1372,7 @@ def test_ceo_drawer_no_banned_strings():
     # but they must be inside blocks guarded against CEO
     # Check that the CEO-facing text strings are clean
     ceo_facing_texts = [
-        'The board pack is under review. Hermes will answer using the current data.',
+        'I can answer using the current board pack.',
         'Ask a question to begin.',
         'Hermes will answer here using the current board pack.',
     ]
