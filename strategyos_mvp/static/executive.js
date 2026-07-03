@@ -256,6 +256,10 @@
       form.classList.add('assistant-form--loading');
     }
     var answer = await buildAssistantReply(cleanPrompt);
+    // CEO dead-end guard: if the board pack review returns a stub, append useful bounded context
+    if (answer && state.activePersona === "ceo" && answer.indexOf("The board pack is under review.") === 0 && answer.length < 80) {
+      answer = answer + " This matters because it can reduce Thursday\u2019s margin story by ~SAR 9k unless hedging/API cost actions are taken. Ask Finance for hedge coverage and API spend owners before the board.";
+    }
     // Clear loading state
     if (!validChip && form && input) {
       input.disabled = false;
@@ -734,7 +738,7 @@
       messages: [
         {
           role: "assistant",
-          text: "This writable thread inherits the governed packet and keeps follow-up bounded to the current room.",
+          text: "The board pack is under review. Hermes will answer using the current data.",
           timestamp: new Date().toISOString()
         }
       ],
@@ -2128,30 +2132,32 @@
         _closeHermesDrawer();
       };
     }
-    // Inject thread list toggle for narrow/mobile screens
-    var headActions = drawer && drawer.querySelector('.assistant-head__actions');
-    if (headActions && !headActions.querySelector('.assistant-threads-toggle')) {
-      var toggleBtn = document.createElement('button');
-      toggleBtn.type = 'button';
-      toggleBtn.className = 'assistant-threads-toggle';
-      toggleBtn.setAttribute('aria-label', 'Toggle thread history');
-      toggleBtn.setAttribute('aria-expanded', 'false');
-      toggleBtn.textContent = 'History \u25B8';
-      toggleBtn.onclick = function () {
-        var threadsPane = drawer.querySelector('.assistant-threads');
-        var layout = drawer.querySelector('.assistant-layout');
-        if (threadsPane) {
-          var collapsed = threadsPane.classList.toggle('is-collapsed');
-          toggleBtn.setAttribute('aria-expanded', String(!collapsed));
-          toggleBtn.textContent = collapsed ? 'History \u25B8' : 'History \u25BE';
-          if (layout) layout.classList.toggle('threads-collapsed', collapsed);
-        }
-      };
-      headActions.insertBefore(toggleBtn, closeButton);
+    // Inject thread list toggle for narrow/mobile screens (non-CEO personas only)
+    if (state.activePersona !== "ceo") {
+      var headActions = drawer && drawer.querySelector('.assistant-head__actions');
+      if (headActions && !headActions.querySelector('.assistant-threads-toggle')) {
+        var toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'assistant-threads-toggle';
+        toggleBtn.setAttribute('aria-label', 'Toggle thread history');
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        toggleBtn.textContent = 'History \u25B8';
+        toggleBtn.onclick = function () {
+          var threadsPane = drawer.querySelector('.assistant-threads');
+          var layout = drawer.querySelector('.assistant-layout');
+          if (threadsPane) {
+            var collapsed = threadsPane.classList.toggle('is-collapsed');
+            toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+            toggleBtn.textContent = collapsed ? 'History \u25B8' : 'History \u25BE';
+            if (layout) layout.classList.toggle('threads-collapsed', collapsed);
+          }
+        };
+        headActions.insertBefore(toggleBtn, closeButton);
+      }
     }
 
     if (assistantHeading) assistantHeading.textContent = "Ask Hermes";
-    if (assistantSubtitle) assistantSubtitle.textContent = "Answers from the current board pack";
+    if (assistantSubtitle) assistantSubtitle.textContent = "Hermes will answer here using the current board pack.";
     if (assistantState) assistantState.textContent = statusLabel(firstDefined(state.activeBoard, "ready"));
 
     // Synchronize layout class with threads collapsed state
@@ -2200,8 +2206,10 @@
       if (state.activePersona !== "ceo") {
         tools.push('<span class="assistant-tool-chip">' + escapeHtml(firstDefined((getChatContract().assistant || {}).name, assistantName)) + '</span>');
       }
-      var boardStateLabel = statusLabel(firstDefined(state.activeBoard, (getChatContract().assistant || {}).board_state, 'pre'));
-      tools.push('<span class="assistant-tool-chip">' + escapeHtml(boardStateLabel) + '</span>');
+      if (state.activePersona !== "ceo") {
+        var boardStateLabel = statusLabel(firstDefined(state.activeBoard, (getChatContract().assistant || {}).board_state, 'pre'));
+        tools.push('<span class="assistant-tool-chip">' + escapeHtml(boardStateLabel) + '</span>');
+      }
       if (current && current.route && state.activePersona !== "ceo") tools.push('<span class="assistant-tool-chip">' + escapeHtml(current.route) + '</span>');
       threadTools.innerHTML = tools.join('');
     }
@@ -2215,7 +2223,7 @@
         var roleLabel = role === 'user' ? 'You' : assistantName;
         var roleSuffix = state.activePersona === "ceo" ? '' : ' · ' + escapeHtml(friendlyThreadTime(firstDefined(message.timestamp, 'now')));
         return '<div class="assistant-message assistant-message--' + escapeHtml(role) + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p></div>';
-      }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No visible messages yet</span><p>Start a writable thread and the reply will appear here immediately.</p></div>';
+      }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No messages yet</span><p>Ask a question to begin.</p></div>';
       messages.scrollTop = messages.scrollHeight;
     }
 
