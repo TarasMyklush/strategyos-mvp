@@ -761,6 +761,63 @@ def test_leaders_corner_has_hermes_cta_and_fallback_link():
     assert 'Open on YouTube' in js
 
 
+# ── Leaders' Corner 4-video grid consistency (post-reorg) ──
+
+def test_leaders_corner_four_consistent_thumb_cards():
+    """All 4 videos must be in the thumb grid with consistent structure,
+    not 1 featured + 3 list rows. Grid wrapper must have proper ID."""
+    js = _static_executive_js()
+
+    # Grid wrapper must have id="leaders-thumb-grid" (not just class)
+    assert 'id="leaders-thumb-grid"' in js, (
+        "Leaders thumb grid must have id='leaders-thumb-grid' for selectLeadersVideo"
+    )
+    assert 'leaders-thumb-grid' in js, (
+        "Leaders thumb grid wrapper class must be present"
+    )
+
+    # All 4 video IDs must exist in the source (in vlogs array)
+    for vid in ['uTRKdCY4HdE', 'sFSzPE2AOE0', 'pQtdQ6AHn_Q', 't885M1WB1pg']:
+        assert ("'" + vid + "'") in js or ('"' + vid + '"') in js, (
+            f"Video ID {vid} must be present in vlogs array"
+        )
+
+    # data-video-id attribute must be present in thumb rendering (dynamic, but pattern exists)
+    assert "data-video-id" in js, (
+        "Thumb rendering must use data-video-id attributes"
+    )
+
+    # No 'Select a video below' — replaced with 'Loading video...'
+    assert 'Select a video below' not in js, (
+        "'Select a video below' instruction copy must be removed"
+    )
+    assert 'Loading video...' in js, (
+        "Fallback card must show 'Loading video...' not old instruction copy"
+    )
+
+
+def test_leaders_corner_first_thumb_is_active():
+    """First thumb (index 0) must have is-active class in JS template."""
+    js = _static_executive_js()
+
+    # The is-active class must be added via ternary for first thumb
+    assert "is-active" in js, (
+        "is-active class logic must be present in thumb rendering"
+    )
+    assert "(i === 0 ? ' is-active' : '')" in js, (
+        "First thumb must get is-active class via ternary (i === 0)"
+    )
+
+
+def test_leaders_corner_summary_label_correct():
+    """Summary label must be 'Summary', not 'Transcript' or 'Key points'."""
+    js = _static_executive_js()
+
+    assert '<summary>Summary</summary>' in js, (
+        "Video info must use 'Summary' label, not 'Transcript' or 'Key points'"
+    )
+
+
 # ── Knowledge Graph rendering ──
 
 def test_kg_render_includes_modern_elements():

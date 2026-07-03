@@ -1331,7 +1331,7 @@ def test_leaders_corner_single_youtube_link_per_card():
     """#5: Leaders' Corner must have only ONE 'Open on YouTube' link
     per card/video surface, not duplicates in fallback + info sections.
     
-    The initial render fallback card (Select a video) must NOT also show
+    The initial render fallback card (Loading) must NOT also show
     a YouTube link — only leaders-video-ctas should carry one.
     Error-handler and selectLeadersVideo fallback paths are separate
     code paths and may keep their YouTube fallback links.
@@ -1339,15 +1339,15 @@ def test_leaders_corner_single_youtube_link_per_card():
     js = _static_executive_js()
 
     # The initial render (gravity panel) fallback card must NOT contain a YouTube link.
-    # We verify this by checking that the "Select a video below" template
+    # We verify this by checking that the "Loading video..." template
     # does NOT have an <a> tag inside the fallback card.
-    select_text = 'Select a video below'
+    select_text = 'Loading video...'
     select_idx = js.index(select_text)
-    # Look at the next 300 chars after "Select a video below"
+    # Look at the next 300 chars after "Loading video..."
     after_select = js[select_idx:select_idx + 300]
     # The fallback card in the initial render must NOT have a YouTube link
     assert 'leaders-fallback-link' not in after_select, (
-        "Initial render fallback card ('Select a video below') must NOT contain "
+        "Initial render fallback card ('Loading video...') must NOT contain "
         "a YouTube link — only leaders-video-ctas should have one"
     )
 
