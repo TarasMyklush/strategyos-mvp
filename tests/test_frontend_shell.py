@@ -1635,3 +1635,39 @@ def test_ceo_drawer_preboard_not_rendered_for_ceo():
     assert 'Pre-board' not in fn_body, (
         "'Pre-board' (statusLabel output) must not appear in renderAssistantStudio body"
     )
+
+
+def test_ceo_dead_end_guard_handles_driver_relevance_questions():
+    """CEO dead-end guard must answer contextual driver relevance questions from active driver context."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    assert "function ceoDriverRelevanceReply" in executive_js
+    assert "getActiveDriver() || {}" in executive_js
+    assert "ceoDriverRelevanceReply();" in executive_js
+    assert "relevant|matter|driver\\s+card" in executive_js
+    assert "what\\s+does\\s+this\\s+mean" in executive_js
+
+
+def test_ceo_typo_normalization_includes_whis():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    assert "whis: 'why'" in executive_js
+
+
+def test_ceo_generic_fallback_no_relevant_card_operator_punt():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    fallback = "CEO implication: growth and liquidity are ahead"
+    assert fallback in executive_js
+    fallback_idx = executive_js.index(fallback)
+    fallback_block = executive_js[fallback_idx:fallback_idx + 600]
+    assert "check the relevant driver card" not in fallback_block
+    assert "governed Q&A session against the full evidence bundle" not in fallback_block
+
+
+def test_ceo_driver_relevance_answer_uses_context_fields():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    start = executive_js.index("function ceoDriverRelevanceReply")
+    end = executive_js.index("function boardSafeStatusReply", start)
+    helper = executive_js[start:end]
+    for expected in ["label", "metric", "pct", "status", "detail", "movers"]:
+        assert expected in helper
+    assert "CEO implication" in helper
+    assert "Recommended next step" in helper

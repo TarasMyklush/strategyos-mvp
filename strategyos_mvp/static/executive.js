@@ -272,7 +272,9 @@
     // CEO dead-end guard: respond with context-aware CEO-grade answers using available board pack data
     if (answer && state.activePersona === "ceo" && answer.indexOf("The board pack is under review.") === 0 && answer.length < 80) {
       var driverKeywords = (cleanPrompt || "").toLowerCase();
-      if (/digital health/i.test(driverKeywords)) {
+      if (/(relevant|matter|driver\s+card|this\s+(card|driver)|why\s+(is|this|does)|what\s+does\s+this\s+mean)/i.test(driverKeywords)) {
+        answer = ceoDriverRelevanceReply();
+      } else if (/digital health/i.test(driverKeywords)) {
         answer = "Digital Health is a growth mover under Revenue at +36% revenue YoY. Group Revenue stands at SAR 2.09B (102% of plan). The current board pack does not expose a standalone SAR absolute for Digital Health. To pull the BU-level figure, Finance can run the governed Digital Health ledger from the operator panel.";
       } else if (/e-pharmacy|epharmacy/i.test(driverKeywords)) {
         answer = "e-Pharmacy is the strongest revenue mover at +12% orders WoW, contributing ~38% of the group revenue uplift. Group Revenue is SAR 2.09B (102% of plan). GM Lina Haddad notes fulfilment is holding at a 2-day SLA and she is pushing for the JV signature to lock supply ahead of demand. For the full e-Pharmacy P&L, ask an operator to run the governed BU ledger.";
@@ -295,7 +297,7 @@
       } else if (/healthcare services|occupancy/i.test(driverKeywords)) {
         answer = "Healthcare Services is dragging Revenue at \u22123.8% occupancy \u2014 cardiology occupancy is off plan with two consultants on leave. Locum cover lands next week and the plan is to recover the gap by quarter-end. GM Omar Said is managing the recovery. For the detailed Healthcare Services ledger, ask an operator.";
       } else {
-        answer = "The current board pack shows group Revenue at SAR 2.09B (102% of plan), EBITDA margin at 19.2% (99% of plan), operating cost at SAR 1.69B (101% of plan), and cash at SAR 1.48B (123% of the board floor). For the specific figure you\u2019re asking about, check the relevant driver card on your diagnostics or ask an operator to run a governed Q&A session against the full evidence bundle.";
+        answer = "The current board pack shows group Revenue at SAR 2.09B (102% of plan), EBITDA margin at 19.2% (99% of plan), operating cost at SAR 1.69B (101% of plan), and cash at SAR 1.48B (123% of the board floor). CEO implication: growth and liquidity are ahead, while margin and operating cost need discipline. Recommended next step: ask which board decision you want to pressure-test — margin bridge, cash headroom, cost variance, or revenue quality.";
       }
     }
     // Clear loading state
@@ -637,6 +639,26 @@
     return parts.join(" ") || "No answer returned from governed Q&A.";
   }
 
+  function ceoDriverRelevanceReply() {
+    var driver = getActiveDriver() || {};
+    var label = firstDefined(driver.label, "this driver");
+    var metric = firstDefined(driver.metric, "the current metric");
+    var pct = firstDefined(driver.pct, "—");
+    var status = firstDefined(driver.status, driver.sub, "current board context");
+    var detail = firstDefined(driver.detail, "This card is surfaced because it connects the active board KPI to current execution risk.");
+    var movers = safeArray((driver.movers || {}).lifting).concat(safeArray((driver.movers || {}).dragging));
+    var moverText = movers.slice(0, 2).map(function (item) {
+      return firstDefined(item.name, "a mover") + " (" + firstDefined(item.delta, "movement") + ")";
+    }).join("; ");
+    return [
+      "This " + label + " card is relevant because it is the active board driver at " + metric + " (" + pct + "% of plan; " + status + ").",
+      detail,
+      moverText ? "The movement is explained by " + moverText + "." : "",
+      "CEO implication: this is the decision signal to either protect the upside or intervene before the variance becomes structural.",
+      "Recommended next step: inspect the largest mover behind " + label + " and decide whether it needs a board action, owner follow-up, or no action."
+    ].filter(Boolean).join(" ");
+  }
+
   function boardSafeStatusReply(message) {
     if (state.activePersona === "ceo") {
       return "The board pack is under review. Here\u2019s what I can answer now:";
@@ -676,7 +698,7 @@
 
     // Typo normalization for common misspellings before API call
     var normalizeTypos = function (q) {
-      var fixes = { whar: 'what', whcih: 'which', waht: 'what', whta: 'what', wher: 'where', whne: 'when', whay: 'why', hwo: 'how', wats: "what's", hows: "how's", whos: "who's", cn: 'can', shoudl: 'should', coudl: 'could', woudl: 'would', pleas: 'please', hlep: 'help' };
+      var fixes = { whar: 'what', whcih: 'which', waht: 'what', whta: 'what', wher: 'where', whne: 'when', whay: 'why', whis: 'why', hwo: 'how', wats: "what's", hows: "how's", whos: "who's", cn: 'can', shoudl: 'should', coudl: 'could', woudl: 'would', pleas: 'please', hlep: 'help' };
       return q.split(/\s+/).map(function (w) {
         var lower = w.toLowerCase().replace(/[^a-z']/g, '');
         return fixes[lower] ? w.replace(new RegExp(lower.replace(/'/g, "\\'"), 'i'), fixes[lower]) : w;
