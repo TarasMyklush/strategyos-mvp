@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
@@ -362,3 +363,131 @@ class CutoverMetric:
         ):
             return None
         return True
+
+
+# ---------------------------------------------------------------------------
+# Server-side assistant orchestration models
+# ---------------------------------------------------------------------------
+
+class HallucinationRiskLevel(str, Enum):
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+@dataclass
+class CalculationStep:
+    """A single deterministic, traceable calculation step."""
+    step_id: str
+    description: str
+    formula: str
+    inputs: dict[str, Any] = field(default_factory=dict)
+    result: Any = None
+    unit: str | None = None
+    citations: list[dict[str, Any]] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
+
+
+@dataclass
+class HallucinationRisk:
+    """Structured hallucination risk metadata for any AI-generated output."""
+    level: HallucinationRiskLevel
+    score: float  # 0.0 (fully grounded) to 1.0 (fully ungrounded)
+    factors: list[dict[str, Any]] = field(default_factory=list)
+    traceable: bool = True
+    traceability_gap: str | None = None
+    mitigations: list[str] = field(default_factory=list)
+    verification_path: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "level": self.level.value,
+            "score": round(self.score, 4),
+            "factors": self.factors,
+            "traceable": self.traceable,
+            "traceability_gap": self.traceability_gap,
+            "mitigations": self.mitigations,
+            "verification_path": self.verification_path,
+        }
+
+
+@dataclass
+class KGContext:
+    """Knowledge-graph context node used in orchestration."""
+    entity_id: str
+    entity_type: str
+    label: str
+    properties: dict[str, Any] = field(default_factory=dict)
+    relationships: list[dict[str, Any]] = field(default_factory=list)
+    confidence: float = 1.0
+
+
+@dataclass
+class ScenarioResult:
+    """Result of a scenario-based assistant orchestration."""
+    scenario_id: str
+    scenario_label: str
+    matched: bool
+    answer: str
+    calculations: list[CalculationStep] = field(default_factory=list)
+    kg_context: list[KGContext] = field(default_factory=list)
+    citations: list[dict[str, Any]] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
+    hallucination_risk: HallucinationRisk | None = None
+    suggestions: list[str] = field(default_factory=list)
+    scenario_type: str = "deterministic"
+    basis: str = ""
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "scenario_id": self.scenario_id,
+            "scenario_label": self.scenario_label,
+            "matched": self.matched,
+            "answer": self.answer,
+            "calculations": [
+                {
+                    "step_id": c.step_id,
+                    "description": c.description,
+                    "formula": c.formula,
+                    "inputs": c.inputs,
+                    "result": c.result,
+                    "unit": c.unit,
+                    "citations": c.citations,
+                    "assumptions": c.assumptions,
+                }
+                for c in self.calculations
+            ],
+            "kg_context": [
+                {
+                    "entity_id": k.entity_id,
+                    "entity_type": k.entity_type,
+                    "label": k.label,
+                    "properties": k.properties,
+                    "relationships": k.relationships,
+                    "confidence": k.confidence,
+                }
+                for k in self.kg_context
+            ],
+            "citations": self.citations,
+            "assumptions": self.assumptions,
+            "hallucination_risk": self.hallucination_risk.as_dict() if self.hallucination_risk else None,
+            "suggestions": self.suggestions,
+            "scenario_type": self.scenario_type,
+            "basis": self.basis,
+        }
+
+
+@dataclass
+class OrchestrationContext:
+    """Context assembled for a server-side assistant orchestration run."""
+    run_id: str
+    run_mode: str
+    bundle: Any = None  # DataBundle
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    kg_nodes: list[dict[str, Any]] = field(default_factory=list)
+    kg_edges: list[dict[str, Any]] = field(default_factory=list)
+    summary: dict[str, Any] = field(default_factory=dict)
+    principal_role: str = "operator"
+    kg_available: bool = False

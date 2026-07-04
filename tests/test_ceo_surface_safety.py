@@ -28,111 +28,18 @@ def _static_executive_css() -> str:
 
 
 def test_ceo_assistant_never_leaks_raw_internals():
-    """CEO reply paths must not expose run IDs, internal statuses, finding counts, etc.
-
-    This is the SINGLE MOST IMPORTANT CEO safety test. It proves that:
-    1. CEO guards exist in both boardSafeStatusReply() and qaAnswerText()
-    2. Each CEO guard returns BEFORE any banned internal string
-    3. No banned string appears in the CEO code path of either function
-    """
+    """CEO surface must route through the shared API without a client-side brain."""
     js = _static_executive_js()
+    qa_start = js.index("function qaAnswerText")
+    qa_end = js.index("function boardSafeStatusReply", qa_start)
+    qa_block = js[qa_start:qa_end]
 
-    # ---------------------------------------------------------------
-    # PART A: boardSafeStatusReply must have CEO-safe early return
-    # ---------------------------------------------------------------
-    assert 'state.activePersona === "ceo"' in js, (
-        "boardSafeStatusReply: CEO gate must exist"
-    )
-    ceo_friendly_msg = (
-        "The board pack is under review."
-    )
-    assert ceo_friendly_msg in js, (
-        "CEO-safe board status reply not found"
-    )
-
-    # The CEO guard must be the FIRST check inside boardSafeStatusReply
-    func_start = js.index("function boardSafeStatusReply")
-    # Find the first { after the function declaration
-    brace_idx = js.index("{", func_start)
-    first_statement = js[brace_idx : brace_idx + 300]
-    assert 'if (state.activePersona === "ceo")' in first_statement, (
-        "boardSafeStatusReply: CEO guard must be FIRST check after opening brace. "
-        "If raw strings appear before this guard, they could leak."
-    )
-
-    # ---------------------------------------------------------------
-    # PART B: qaAnswerText must have CEO-safe early return
-    # ---------------------------------------------------------------
-    qa_func_start = js.index("function qaAnswerText")
-    qa_brace_idx = js.index("{", qa_func_start)
-    qa_first_statement = js[qa_brace_idx : qa_brace_idx + 300]
-    assert 'if (state.activePersona === "ceo")' in qa_first_statement, (
-        "qaAnswerText: CEO guard must be FIRST check after opening brace"
-    )
-
-    # ---------------------------------------------------------------
-    # PART C: Banned strings must NOT appear in CEO code paths
-    # Each function with a CEO guard is split at the guard:
-    #   [pre-guard code] CEO-guard { CEO-safe return } [post-guard: non-CEO code]
-    # Banned strings in post-guard are acceptable (non-CEO path only).
-    # Banned strings in pre-guard or inside CEO block are FAILURES.
-    # ---------------------------------------------------------------
-    banned = [
-        "I could not compute a protected data answer",
-        "Recoverable value is",
-        "findings:",
-        "challenged items:",
-        "[object Promise]",
-    ]
-
-    # For boardSafeStatusReply: banned strings must NOT appear before the CEO guard
-    board_ceo_guard_idx = js.index(
-        'if (state.activePersona === "ceo")', func_start
-    )
-    # Everything from function start to CEO guard = pre-guard region
-    pre_guard = js[func_start:board_ceo_guard_idx]
-    for phrase in banned:
-        assert phrase not in pre_guard, (
-            f"boardSafeStatusReply: banned phrase '{phrase}' appears BEFORE CEO guard "
-            f"(risk: may execute before CEO check)"
-        )
-
-    # CEO path body: the code inside the if-ceo block
-    ceo_block_brace = js.index("{", board_ceo_guard_idx)
-    # Find the closing } that ends the CEO if-block
-    return_idx = js.index("return", ceo_block_brace)
-    return_semi = js.index(";", return_idx)
-    ceo_block_end = js.index("}", return_semi)  # closing brace of if-block
-    ceo_block = js[ceo_block_brace:ceo_block_end + 1]
-    for phrase in banned:
-        assert phrase not in ceo_block, (
-            f"boardSafeStatusReply: banned phrase '{phrase}' found INSIDE CEO guard block"
-        )
-
-    # For qaAnswerText: banned strings must not appear before CEO guard
-    qa_ceo_guard_idx = js.index(
-        'if (state.activePersona === "ceo")', qa_func_start
-    )
-    qa_pre_guard = js[qa_func_start:qa_ceo_guard_idx]
-    for phrase in banned:
-        assert phrase not in qa_pre_guard, (
-            f"qaAnswerText: banned phrase '{phrase}' appears BEFORE CEO guard"
-        )
-
-    # qaAnswerText CEO path must not reference internal metadata.
-    # The CEO guard block is safe: it opens a brace, declares ceoAnswer,
-    # and returns before any payload.mode / payload.basis / payload.run_id
-    # are ever reached.  Only scan the code between the opening brace of
-    # the if-ceo block and the return semicolon — do NOT extend past it
-    # into non-CEO territory (where payload.mode legitimately appears).
-    qa_ceo_brace = js.index("{", qa_ceo_guard_idx)
-    qa_ceo_return = js.index("return", qa_ceo_brace)
-    qa_ceo_semicolon = js.index(";", qa_ceo_return)
-    qa_ceo_block = js[qa_ceo_brace:qa_ceo_semicolon + 1]
-    for meta_token in ["payload.mode", "payload.basis", "payload.run_id"]:
-        assert meta_token not in qa_ceo_block, (
-            f"qaAnswerText CEO path must not reference {meta_token}"
-        )
+    assert 'postJson("/assistant/chat"' in js
+    assert 'persona: state.activePersona || "ceo"' in js
+    assert "ceoDriverRelevanceReply" not in js
+    assert "The board pack is under review." not in qa_block
+    assert "Why:" in qa_block and "Risk:" in qa_block and "Path:" in qa_block
+    assert "I could not compute a protected data answer in this executive surface." not in js
 
 
 def test_ceo_surface_no_raw_json_links():
@@ -879,47 +786,11 @@ def test_ceo_js_removes_nodes_not_hides():
 
 
 def test_ceo_greeting_response_humane():
-    """CEO chat greeting must be detected BEFORE hitting /qa POST.
-
-    Greeting/small-talk patterns (hi, hello, hey, good morning, etc.)
-    must trigger a warm, humane response instead of going through the
-    Q&A/LLM pipeline.
-
-    Assertions:
-    1. greetingPatterns regex exists with hi/hello/hey patterns
-    2. The humane response text contains "I'm here" and relevant guidance
-    3. Greeting detection happens BEFORE the /qa POST (line ordering)
-    """
+    """CEO greetings must route to the shared assistant API, not a client reply."""
     js = _static_executive_js()
-
-    # 1. greetingPatterns regex must exist with hi/hello/hey patterns
-    assert "greetingPatterns" in js, (
-        "Greeting detection regex must exist in buildAssistantReply"
-    )
-    assert "hi|hey|hello" in js, (
-        "greetingPatterns must match hi/hello/hey"
-    )
-    assert "good\\s+(morning|afternoon|evening)" in js, (
-        "greetingPatterns must match good morning/afternoon/evening"
-    )
-
-    # 2. The humane response text must contain the warm message
-    assert "I can help" in js, (
-        "CEO greeting response must contain 'I can help'"
-    )
-    assert "board readiness, margin risk, cash, or the knowledge map" in js, (
-        "CEO greeting response must guide toward board readiness, margin risk, cash, knowledge map"
-    )
-
-    # 3. Greeting detection must happen BEFORE /qa POST
-    # The greeting check appears first in buildAssistantReply, then /qa
-    greeting_idx = js.index("greetingPatterns")
-    qa_idx = js.index('postJson("/qa"')
-    assert greeting_idx < qa_idx, (
-        "Greeting detection (greetingPatterns) must appear BEFORE "
-        "postJson('/qa'...) in buildAssistantReply. "
-        "Greeting at index %d, /qa at index %d." % (greeting_idx, qa_idx)
-    )
+    assert "greetingPatterns" not in js
+    assert "I can help with board readiness, margin risk, cash, or the knowledge map" not in js
+    assert 'postJson("/assistant/chat"' in js
 
 
 def test_ceo_clickability_disco_add_fixed():
@@ -2094,70 +1965,20 @@ def test_ceo_assistant_prompt_chips_max_2():
 # ── Hermes Drawer Answer-Quality Regression Tests ──
 
 def test_hermes_answer_no_stale_fx_fallback_for_digital_health():
-    """Digital Health / Revenue prompts must NOT receive unrelated FX/margin fallback text.
-
-    The CEO dead-end guard must use context-aware branching, not a single
-    hardcoded FX/margin response for every question.  This test proves:
-    - The dead-end guard exists (CEO-gated)
-    - The guard has context-aware branches (Digital Health, FX, Cash, Cost, generic)
-    - No stale FX/SAR 9k/hedging text survives for unrelated prompts
-    """
+    """Digital Health prompts must go server-side, not through canned JS branches."""
     js = _static_executive_js()
-
-    # ── Dead-end guard must exist and be context-aware ──
-    # Guard must check CEO persona
-    assert 'state.activePersona === "ceo"' in js, (
-        "CEO dead-end guard must check activePersona"
-    )
-    # Must have context-aware Digital Health branch
-    assert "Digital Health absolute" in js or "Digital Health" in js, (
-        "Dead-end guard must have Digital Health/revenue branch"
-    )
-    # Must have FX branch
-    assert "FX margin detail" in js or "FX" in js, (
-        "Dead-end guard must have FX/margin branch"
-    )
-    # Must have Cash branch
-    assert "Cash" in js or "cash" in js, (
-        "Dead-end guard must have Cash/liquidity branch"
-    )
-    # Must have generic fallback (not FX-only), but it must not use stale driver-card punt text
-    assert "The current board pack shows group Revenue" in js, (
-        "Dead-end guard must have a generic fallback branch with board-pack facts"
-    )
-
-    # ── Stale FX text must NOT appear in non-FX branches ──
-    # "~SAR 9k" is valid in the FX branch itself; the fix ensures it does NOT
-    # leak to unrelated branches (Digital Health, Cash, etc.).  We verify
-    # below per-branch.
-    assert "~SAR 9k" in js, (
-        "~SAR 9k is valid FX branch data; the fix ensures it only appears in the FX branch"
-    )
-    assert "reduce Thursday" not in js, (
-        "Hardcoded 'reduce Thursday's margin story' must be removed"
-    )
-    assert "Ask Finance for hedge coverage and API spend" not in js, (
-        "Hardcoded 'Ask Finance' generic fallback must be removed"
-    )
+    assert 'postJson("/assistant/chat"' in js
+    assert "/digital health/i.test" not in js
+    assert "ceoDriverRelevanceReply" not in js
+    assert "assistant_mode" in js and "hallucination_risk" in js
 
 
 def test_hermes_answer_fx_fallback_still_works_for_fx_prompt():
-    """FX/margin prompts must still get FX-relevant context from the dead-end guard.
-
-    The context-aware guard must recognize FX/margin/hedging keywords
-    and route to the FX-specific branch, not the generic one.
-    """
+    """FX prompts still carry driver context into the shared assistant API."""
     js = _static_executive_js()
-
-    # FX branch conditions must exist in the code
-    assert "fx|margin|hedg|forex|currency" in js.lower() or (
-        "/fx/i" in js or "fx" in js
-    ), (
-        "Dead-end guard must have FX keyword detection for FX/margin prompts"
-    )
-    assert "hedge coverage" in js or "FX margin" in js, (
-        "FX branch must include hedge coverage reference for relevant prompts"
-    )
+    assert "driver_context" in js
+    for token in ["label", "metric", "pct", "status", "detail", "movers"]:
+        assert token in js
 
 
 def test_hermes_answer_no_truncated_fragment():
@@ -2210,12 +2031,7 @@ def test_hermes_thread_initial_message_not_under_review():
         "'The board pack is under review' — avoid duplicate under-review bubbles"
     )
 
-    # The boardSafeStatusReply CEO message is still valid
-    assert '"The board pack is under review."' in js or (
-        "The board pack is under review" in js
-    ), (
-        "boardSafeStatusReply must still have CEO-safe under-review message"
-    )
+    assert "silentInitialMessage" in cwt_body
 
 
 def test_hermes_answer_context_aware_initial_message():
@@ -2258,131 +2074,50 @@ def test_hermes_answer_generic_under_review_not_duplicated():
 # ── Hermes Answer-Quality: Context-Aware Branch Regression Tests ──
 
 def test_hermes_digital_health_branch_has_correct_context():
-    """Digital Health dead-end branch must lead with facts (+36%, SAR 2.09B), not FX terms."""
+    """Digital Health scenario prompts must route through shared /qa transport."""
     js = _static_executive_js()
-
-    # Find the Digital Health dead-end guard branch
-    dh_start = js.index("/digital health/i.test")
-    dh_answer_line = js.index('answer = "', dh_start)
-    dh_answer_end = js.index('";', dh_answer_line)
-    dh_answer = js[dh_answer_line:dh_answer_end + 2]
-
-    # Must contain Digital Health context with actual data
-    assert "36%" in dh_answer, "Digital Health branch must reference +36% revenue YoY"
-    assert "SAR 2.09B" in dh_answer, "Digital Health branch must reference group Revenue figure"
-    assert "Digital Health" in dh_answer, "Digital Health branch must reference the BU name"
-    assert "Revenue" in dh_answer, "Digital Health branch must reference Revenue driver"
-
-    # Must NOT contain unrelated FX terms
-    assert "FX exposure" not in dh_answer, "Digital Health branch must not mention FX exposure"
-    assert "margin drag" not in dh_answer, "Digital Health branch must not mention margin drag"
-
-    # Must NOT be the old dead-end style
-    assert "is not available in the current board pack" not in dh_answer, (
-        "Digital Health branch must NOT use old 'not available' primary message"
-    )
+    assert 'postJson("/assistant/chat"' in js
+    assert "driver_context" in js
+    assert "/digital health/i.test" not in js
 
 
 def test_hermes_epharmacy_branch_has_correct_context():
-    """e-Pharmacy dead-end branch must reference +12% WoW, Lina Haddad, GLP-1."""
+    """e-Pharmacy prompts should be handled by the backend, not client regex branches."""
     js = _static_executive_js()
-
-    ep_start = js.index("/e-pharmacy|epharmacy/i.test")
-    ep_answer_line = js.index('answer = "', ep_start)
-    ep_answer_end = js.index('";', ep_answer_line)
-    ep_answer = js[ep_answer_line:ep_answer_end + 2]
-
-    assert "+12%" in ep_answer or "12%" in ep_answer, "e-Pharmacy branch must reference +12% orders WoW"
-    assert "Lina Haddad" in ep_answer, "e-Pharmacy branch must reference GM Lina Haddad"
-    assert "GLP-1" in ep_answer or "JV" in ep_answer, "e-Pharmacy branch must reference JV context"
-    assert "SAR 2.09B" in ep_answer, "e-Pharmacy branch must reference group Revenue figure"
-
-    # Must NOT contain unrelated terms
-    assert "FX exposure" not in ep_answer
-    assert "cold-chain" not in ep_answer
+    assert "/e-pharmacy|epharmacy/i.test" not in js
+    assert 'postJson("/assistant/chat"' in js
 
 
 def test_hermes_fx_branch_has_correct_context():
-    """FX/margin dead-end branch must reference 19.2%, hedge, board agenda."""
+    """FX prompts should use shared API transport plus driver context."""
     js = _static_executive_js()
-
-    fx_start = js.index("/fx|margin|hedg|forex|currency/i.test")
-    fx_answer_line = js.index('answer = "', fx_start)
-    fx_answer_end = js.index('";', fx_answer_line)
-    fx_answer = js[fx_answer_line:fx_answer_end + 2]
-
-    assert "19.2%" in fx_answer, "FX branch must reference EBITDA margin 19.2%"
-    assert "hedge" in fx_answer, "FX branch must reference hedge context"
-    assert "board" in fx_answer, "FX branch must reference board agenda"
-    assert "9k" in fx_answer.lower() or "SAR 9k" in fx_answer, "FX branch must reference ~SAR 9k/week drag"
-
-    # Must NOT contain unrelated terms
-    assert "Digital Health" not in fx_answer
-    assert "cold-chain" not in fx_answer
+    assert "driver_context" in js
+    assert "/fx|margin|hedg|forex|currency/i.test" not in js
 
 
 def test_hermes_cash_branch_has_correct_context():
-    """Cash/liquidity dead-end branch must reference SAR 1.48B, 123%, SAR 1.2B floor."""
+    """Cash prompts should not rely on a client-side cash fallback branch."""
     js = _static_executive_js()
-
-    cash_start = js.index("/cash|liquidity|floor|covenant/i.test")
-    cash_answer_line = js.index('answer = "', cash_start)
-    cash_answer_end = js.index('";', cash_answer_line)
-    cash_answer = js[cash_answer_line:cash_answer_end + 2]
-
-    assert "SAR 1.48B" in cash_answer, "Cash branch must reference SAR 1.48B"
-    # 123% appears as \u2014 123% (em dash before the number)
-    assert "123%" in cash_answer or "SAR 1.2B" in cash_answer, "Cash branch must reference floor stats"
-    assert "GLP-1" in cash_answer or "JV" in cash_answer, "Cash branch must reference JV headroom"
-
-    # Must NOT contain unrelated terms
-    assert "FX exposure" not in cash_answer
-    assert "Digital Health" not in cash_answer
+    assert "/cash|liquidity|floor|covenant/i.test" not in js
+    assert 'postJson("/assistant/chat"' in js
 
 
 def test_hermes_cold_chain_branch_has_correct_context():
-    """Cold-chain/resilience dead-end branch must reference 99.4%, cold-chain, NUPCO."""
+    """Cold-chain prompts should be delegated to the backend orchestrator."""
     js = _static_executive_js()
-
-    cc_start = js.index("/cold.chain|coldchain|resilience/i.test")
-    cc_answer_line = js.index('answer = "', cc_start)
-    cc_answer_end = js.index('";', cc_answer_line)
-    cc_answer = js[cc_answer_line:cc_answer_end + 2]
-
-    assert "99.4%" in cc_answer, "Cold-chain branch must reference 99.4% record"
-    assert "cold-chain" in cc_answer.lower() or "Cold-chain" in cc_answer, (
-        "Cold-chain branch must reference cold-chain"
-    )
-    assert "NUPCO" in cc_answer, "Cold-chain branch must reference NUPCO ramp"
-
-    # Must NOT contain unrelated terms
-    assert "FX exposure" not in cc_answer
-    assert "Digital Health" not in cc_answer
-    assert "hedge" not in cc_answer
+    assert "/cold.chain|coldchain|resilience/i.test" not in js
+    assert 'postJson("/assistant/chat"' in js
 
 
 def test_hermes_generic_branch_has_bounded_answer():
-    """Generic fallback dead-end branch must reference all four KPI figures."""
+    """No generic JS fallback branch should exist anymore."""
     js = _static_executive_js()
-
-    # Find the dead-end guard block
-    guard_start = js.index("// CEO dead-end guard:")
-    guard_end = js.index("// Clear loading state", guard_start)
-    guard_block = js[guard_start:guard_end]
-
-    # Find the last "answer = \"" which is the generic fallback (else branch)
-    last_answer_idx = guard_block.rindex('answer = "')
-    generic_answer_end = guard_block.index('";', last_answer_idx)
-    generic_answer = guard_block[last_answer_idx:generic_answer_end + 2]
-
-    assert "SAR 2.09B" in generic_answer, "Generic branch must reference Revenue"
-    assert "19.2%" in generic_answer, "Generic branch must reference EBITDA margin"
-    assert "SAR 1.69B" in generic_answer, "Generic branch must reference Operating cost"
-    assert "SAR 1.48B" in generic_answer, "Generic branch must reference Cash"
+    assert "// CEO dead-end guard:" not in js
+    assert 'postJson("/assistant/chat"' in js
 
 
 def test_hermes_no_old_dead_end_patterns():
-    """Old 'not available' / 'ask an operator' dead-end patterns must be gone from all branches."""
+    """Old dead-end copy must be gone now that the backend owns answers."""
     js = _static_executive_js()
 
     # These old patterns must NOT appear anywhere in the JS
@@ -2402,96 +2137,41 @@ def test_hermes_no_old_dead_end_patterns():
         "Old generic dead-end text must be removed"
     )
 
-    # New data-led patterns must exist
-    assert "+36% revenue YoY" in js, "Must have data-led Digital Health answer"
-    assert "e-Pharmacy is the strongest revenue mover" in js, "Must have data-led e-Pharmacy answer"
-    assert "EBITDA margin is at 19.2%" in js, "Must have data-led FX/margin answer"
-    assert "Cash stands at SAR 1.48B" in js, "Must have data-led Cash answer"
-    assert "Operating cost is SAR 1.69B" in js, "Must have data-led Cost answer"
-    assert "Cold-chain integrity is at a record 99.4%" in js, "Must have data-led cold-chain answer"
-    assert "SAR 8.6M is recoverable" in js, "Must have data-led recoverable answer"
+    assert "ceoDriverRelevanceReply" not in js
+    assert "// CEO dead-end guard:" not in js
 
 
 def test_ceo_simulation_intent_gets_actionable_thinking_mode_answer():
-    """CEO simulation requests must not receive a passive board-pack recap."""
+    """Simulation prompts must be sent to the shared backend API."""
     js = _static_executive_js()
-
-    assert "function isCeoSimulationIntent" in js
-    assert "function ceoSimulationReply" in js
-    assert "run|model|simulate|simulation|scenario" in js
-    assert "board-safe simulation in thinking mode" in js
-    assert "I can model four useful cases" in js
-    assert "margin bridge recovery" in js
-    assert "cash headroom for the GLP-1 JV" in js
-    assert "FX hedge coverage" in js
-    assert "revenue quality if e-Pharmacy growth slows" in js
+    assert "isCeoSimulationIntent" not in js
+    assert "ceoSimulationReply" not in js
+    assert 'postJson("/assistant/chat"' in js
 
 
 def test_ceo_simulation_prompt_starts_with_help_not_lookup():
-    """New CEO simulation threads should sound like an assistant, not a search box."""
+    """New ask flows should suppress the seed assistant bubble to avoid duplicates."""
     js = _static_executive_js()
     create_start = js.index("function createWritableThread")
     create_end = js.index("function pushThreadMessage", create_start)
     create_block = js[create_start:create_end]
 
-    assert "isCeoSimulationIntent(seedPreview)" in create_block
-    assert "I can help pressure-test that in thinking mode" in create_block
+    assert "silentInitialMessage" in create_block
+    assert "messages: silentInitialMessage ? []" in create_block
 
 
 def test_ceo_simulation_branch_precedes_generic_board_pack_recap():
-    """Simulation intent should be handled before generic fallback recap."""
+    """Simulation handling no longer lives in a client-side branch."""
     js = _static_executive_js()
-    guard_start = js.index("// CEO dead-end guard:")
-    guard_end = js.index("// Clear loading state", guard_start)
-    guard_block = js[guard_start:guard_end]
-
-    sim_idx = guard_block.index("isCeoSimulationIntent(driverKeywords)")
-    generic_idx = guard_block.index("The current board pack shows group Revenue")
-    assert sim_idx < generic_idx
+    assert "// CEO dead-end guard:" not in js
 
 
 
 def test_hermes_facts_lead_not_excuses():
-    """Every dead-end guard branch must lead with known facts, not 'not available' as primary.
-    
-    VERIFIES: Each branch now uses replace-style assignment (`answer = "..."`) instead of
-    the old append-style (`answer = answer + "..."`) which left the evasive
-    "The board pack is under review." prefix in CEO-visible answers.
-    """
+    """There must be no client-side dead-end branches left to tune."""
     js = _static_executive_js()
-
-    # Find the dead-end guard block
-    guard_start = js.index("// CEO dead-end guard:")
-    guard_end = js.index("// Clear loading state", guard_start)
-    guard_block = js[guard_start:guard_end]
-
-    # Count replace-style assignments — each branch must use "answer = \"" (not append)
-    branch_count = guard_block.count('answer = "')
-    assert branch_count >= 12, (
-        f"Dead-end guard must have at least 12 replace-style branches (answer = \"...\"), "
-        f"found {branch_count}. Append-style (answer = answer + \"...\") is banned — "
-        "it leaves the evasive 'The board pack is under review.' prefix."
-    )
-
-    # The old append pattern must be GONE from the dead-end guard
-    append_count = guard_block.count("answer = answer +")
-    assert append_count == 0, (
-        f"'answer = answer +' appears {append_count} times in dead-end guard — "
-        "all branches must use replace-style (answer = \"...\") not append-style"
-    )
-
-    # "not available" must NOT appear in any answer text
-    not_available_count = guard_block.count(" not available")
-    assert not_available_count == 0, (
-        f"'not available' appears {not_available_count} times in dead-end guard — "
-        "answers must lead with facts, not 'not available'"
-    )
-
-    # "is not available" (old dead-end pattern) must be absent
-    is_not_available_count = guard_block.count("is not available")
-    assert is_not_available_count == 0, (
-        f"'is not available' appears {is_not_available_count} times — must be removed"
-    )
+    assert "// CEO dead-end guard:" not in js
+    assert "answer = answer +" not in js
 
 
 # ── Drawer hidden-state enforcement ──
@@ -2575,53 +2255,7 @@ def test_ceo_no_stale_thread_leakage():
 
 
 def test_ceo_digital_health_answer_leads_with_facts():
-    """The Digital Health dead-end guard branch must lead with data-led facts
-    (+36% YoY, SAR 2.09B), NOT start with 'The board pack is under review.'
-    or any other evasive prefix.
-
-    Acceptance B: Answer leads with Digital Health +36% YoY and group
-    Revenue SAR 2.09B; no stale Leaders video/FX text.
-    """
+    """Digital Health prompts are now routed to backend scenarios, not JS copy."""
     js = _static_executive_js()
-
-    # ── Digital Health branch must NOT start with evasive prefix ──
-    # Find the dead-end guard block
-    guard_start = js.index("// CEO dead-end guard:")
-    guard_end = guard_start + 4000
-    guard_block = js[guard_start:min(guard_end, len(js))]
-
-    # The Digital Health branch must be present
-    assert "/digital health/i" in guard_block, (
-        "Digital Health dead-end guard branch must exist"
-    )
-
-    # The Digital Health answer must start with "Digital Health"
-    # (not "The board pack is under review.")
-    dh_branch_start = guard_block.index("/digital health/i")
-    dh_branch_end = dh_branch_start + 800
-    dh_branch = guard_block[dh_branch_start:min(dh_branch_end, len(guard_block))]
-
-    # The answer assignment in the Digital Health branch must start data-led
-    assert 'answer = "Digital Health' in dh_branch, (
-        "Digital Health dead-end branch must use replace-style assignment "
-        "starting with 'Digital Health' — not append-style with evasive prefix"
-    )
-
-    # Key data points must be present
-    assert "+36% revenue YoY" in dh_branch, (
-        "Digital Health answer must include +36% YoY figure"
-    )
-    assert "SAR 2.09B" in dh_branch, (
-        "Digital Health answer must include group Revenue SAR 2.09B"
-    )
-    assert "102% of plan" in dh_branch, (
-        "Digital Health answer must include plan percentage context"
-    )
-
-    # No stale Leaders' Corner / video references in the Digital Health branch
-    assert "Leaders" not in dh_branch and "leaders" not in dh_branch, (
-        "Digital Health branch must not contain Leaders' Corner references"
-    )
-    assert "Enterprise AI" not in dh_branch, (
-        "Digital Health branch must not contain Enterprise AI reference"
-    )
+    assert "/digital health/i" not in js
+    assert 'postJson("/assistant/chat"' in js

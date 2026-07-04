@@ -183,6 +183,118 @@ def test_qa_llm_mode_uses_configured_adapter(monkeypatch):
         _restore_env(original)
 
 
+def test_assistant_chat_llm_mode_uses_configured_adapter(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-key",
+            "STRATEGYOS_RUN_POLICY": "external-approved",
+            "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+            "STRATEGYOS_LLM_API_KEY": "test-key",
+            "STRATEGYOS_LLM_MODEL": "gpt-test",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {
+                "bundle": object(),
+                "findings": [],
+                "summary": {"run_id": "run-1"},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+
+        def fake_answer(question, *, bundle, findings, summary, config):
+            assert question == "summarize the run"
+            assert config.llm_model == "gpt-test"
+            return {
+                "matched": True,
+                "answer": "Assistant LLM summary",
+                "basis": "Supplied run evidence.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": config.llm_model},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "summarize the run", "mode": "llm", "persona": "ceo"},
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "llm"
+        assert payload["answer"] == "Assistant LLM summary"
+        assert payload["llm_status"]["model"] == "gpt-test"
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_golden_prompt_works_without_completed_run(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: None)
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Simulate digital health flat by end of year",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["scenario_id"] == "digital_health_eoy_flat"
+        assert payload["matched"] is True
+        assert payload["prompt_contracts"]["role"]["prompt_id"] == "role:ceo:v1"
+        assert payload["hallucination_risk"]["level"] == "high"
+        assert payload["citations"], "golden prompt must return top-level evidence citations"
+        assert payload["assumptions"], "golden prompt must return top-level assumptions"
+        assert payload["run_mode"] == "no-run"
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_no_run_deterministic_question_returns_safe_fallback(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: None)
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "What is the total amount of invoices?",
+                "persona": "ceo",
+                "mode": "deterministic",
+            },
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_mode"] == "no-run"
+        assert payload["matched"] is False
+        assert payload["llm_fallback_attempted"] is False
+        assert "No completed governed run is available yet" in payload["answer"]
+        assert "NoneType" not in payload["answer"]
+        assert "NoneType" not in payload["basis"]
+    finally:
+        _restore_env(original)
+
+
 def test_latest_run_audit_summary_reads_citation_and_audit_artifacts(monkeypatch, tmp_path):
     citation_audit = tmp_path / "citation_audit.json"
     citation_audit.write_text(

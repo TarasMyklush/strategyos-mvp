@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import quote, urlparse
-from uuid import UUID
+from uuid import UUID, uuid4
 
 try:
     from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
@@ -36,10 +36,12 @@ from .executive_design import (
     executive_running_agents_design,
     executive_subtools_design,
 )
+from .assistants import get_orchestrator, list_supported_personas
 from .ingestion import load_dataset
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
+from .scenario_parser import SCENARIO_SUGGESTIONS, parse_scenario
 from .platform_foundation import (
     ARTIFACT_TITLES,
     DomainMetricContract,
@@ -189,6 +191,22 @@ class QaRequest(BaseModel):
     question: str
     run_id: str | None = None
     mode: str | None = "auto"
+    persona: str | None = None
+    trace_id: str | None = None
+    knowledge_id: str | None = None
+    context: dict[str, Any] | None = None
+    driver_context: dict[str, Any] | None = None
+
+
+class AssistantChatRequest(BaseModel):
+    question: str
+    run_id: str | None = None
+    mode: str | None = "auto"
+    persona: str | None = None
+    trace_id: str | None = None
+    knowledge_id: str | None = None
+    context: dict[str, Any] | None = None
+    driver_context: dict[str, Any] | None = None
 
 
 from .twins.api import (
@@ -8383,6 +8401,26 @@ def public_report_preview(
 _QA_CONTEXT_CACHE: dict[tuple[str, str, str], dict[str, Any]] = {}
 
 
+def _load_kg_snapshot(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    artifacts = summary.get("artifacts") or {}
+    graph_path = artifacts.get(KNOWLEDGE_GRAPH_ARTIFACT_KEY) or artifacts.get("knowledge_graph")
+    if not graph_path:
+        return ([], [])
+    path = Path(str(graph_path))
+    if not path.exists():
+        return ([], [])
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return ([], [])
+    nodes = payload.get("nodes") if isinstance(payload, dict) else []
+    edges = payload.get("edges") if isinstance(payload, dict) else []
+    return (
+        nodes if isinstance(nodes, list) else [],
+        edges if isinstance(edges, list) else [],
+    )
+
+
 def _qa_summary_for_run(run_id: str | None) -> dict[str, Any]:
     if run_id:
         record = state_store.get_run_detail(run_id)
@@ -8446,20 +8484,263 @@ def _resolve_qa_context(run_id: str | None) -> dict[str, Any]:
         try:
             bundle = load_dataset(dataset_path, strict=(run_mode != "partial"))
             findings = run_all_finance_skills(bundle)
+            kg_nodes, kg_edges = _load_kg_snapshot(summary)
         except Exception as exc:  # pragma: no cover - defensive reload guard
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Could not reload the run's data for Q&A: {exc}",
             ) from exc
-        cached = {"bundle": bundle, "findings": findings}
+        cached = {
+            "bundle": bundle,
+            "findings": findings,
+            "kg_nodes": kg_nodes,
+            "kg_edges": kg_edges,
+        }
         _QA_CONTEXT_CACHE[cache_key] = cached
     return {
         "bundle": cached["bundle"],
         "findings": cached["findings"],
+        "kg_nodes": cached.get("kg_nodes") or [],
+        "kg_edges": cached.get("kg_edges") or [],
         "summary": summary,
         "run_id": resolved_run_id,
         "run_mode": run_mode,
     }
+
+
+def _assistant_response_payload(
+    *,
+    response_mode: str,
+    question: str,
+    context: dict[str, Any],
+    requested_mode: str,
+    persona: str | None,
+    orchestrated: Any,
+    base_result: dict[str, Any] | None = None,
+    scenario_result: dict[str, Any] | None = None,
+    llm_status: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    trace = dict(getattr(orchestrated, "trace", {}) or {})
+    prompt_contracts = trace.get("prompts") or {}
+    hallucination_risk = trace.get("hallucination_risk")
+    payload = {
+        "status": "ok",
+        "run_id": context["run_id"],
+        "run_mode": context["run_mode"],
+        "mode": response_mode,
+        "assistant_mode": orchestrated.mode,
+        "requested_mode": requested_mode,
+        "question": question,
+        "persona": orchestrated.persona,
+        "matched": orchestrated.matched,
+        "answer": orchestrated.answer,
+        "basis": orchestrated.basis,
+        "why": orchestrated.basis,
+        "citations": list(getattr(orchestrated, "citations", []) or []),
+        "suggestions": list(getattr(orchestrated, "suggestions", []) or []),
+        "trace": trace,
+        "prompt_contracts": prompt_contracts,
+        "hallucination_risk": hallucination_risk,
+        "risk_metadata": {
+            "decision_mode": "llm" if getattr(orchestrated, "mode", "") == "llm" else "deterministic",
+            "hallucination_risk": hallucination_risk,
+            "traceable": bool((hallucination_risk or {}).get("traceable")),
+        },
+        "assistant_route": trace.get("deterministic_boundary", {}).get("selected_mode"),
+        "orchestration_mode": orchestrated.mode,
+        "llm_status": llm_status,
+    }
+    if base_result:
+        payload.update(base_result)
+    if scenario_result:
+        payload.update(scenario_result)
+        payload["citations"] = list(scenario_result.get("citations") or payload["citations"])
+        payload["suggestions"] = list(scenario_result.get("suggestions") or payload["suggestions"])
+        payload["hallucination_risk"] = scenario_result.get("hallucination_risk") or hallucination_risk
+        payload["risk_metadata"]["hallucination_risk"] = payload["hallucination_risk"]
+        payload["risk_metadata"]["traceable"] = bool((payload["hallucination_risk"] or {}).get("traceable"))
+    return payload
+
+
+def _assistant_chat_response(request: AssistantChatRequest | QaRequest) -> dict[str, Any]:
+    question = (request.question or "").strip()
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ask a question, e.g. 'Simulate Digital Health flat by end of year'.",
+        )
+    mode = (request.mode or "auto").strip().lower()
+    if mode not in {"auto", "deterministic", "llm"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Assistant mode must be 'auto', 'deterministic', or 'llm'.",
+        )
+    persona = (request.persona or "ceo").strip().lower() or "ceo"
+    if persona not in set(list_supported_personas()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported assistant persona '{persona}'.",
+        )
+
+    try:
+        context = _resolve_qa_context(request.run_id)
+    except HTTPException as exc:
+        if not (persona and request.run_id is None and exc.status_code == status.HTTP_404_NOT_FOUND):
+            raise
+        context = {
+            "bundle": None,
+            "findings": [],
+            "kg_nodes": [],
+            "kg_edges": [],
+            "summary": {
+                "run_id": None,
+                "run_mode": "no-run",
+                "status": "missing",
+            },
+            "run_id": None,
+            "run_mode": "no-run",
+        }
+    orchestrator = get_orchestrator()
+    findings_payload = [
+        finding.__dict__ if hasattr(finding, "__dict__") else finding
+        for finding in context["findings"]
+    ]
+
+    scenario_result = None
+    if mode in {"auto", "deterministic"}:
+        parsed = parse_scenario(
+            question,
+            {
+                "bundle": context["bundle"],
+                "findings": findings_payload,
+                "kg_nodes": context.get("kg_nodes") or [],
+                "kg_edges": context.get("kg_edges") or [],
+                "summary": context["summary"],
+                "run_id": context["run_id"],
+                "run_mode": context["run_mode"],
+                "persona": persona,
+            },
+        )
+        scenario_result = parsed.as_dict()
+        if parsed.matched:
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                scenario_result=scenario_result,
+                driver_context=request.driver_context,
+            )
+            return _assistant_response_payload(
+                response_mode="deterministic",
+                question=question,
+                context=context,
+                requested_mode=mode,
+                persona=persona,
+                orchestrated=orchestrated,
+                scenario_result=scenario_result,
+                llm_status=llm_qa.chat_status(CONFIG),
+            )
+
+    if context["bundle"] is None:
+        no_run_result = {
+            "matched": False,
+            "answer": "No completed governed run is available yet. I can still handle supported scenario prompts, or you can start a run for ledger-backed questions.",
+            "citations": [],
+            "suggestions": list(SCENARIO_SUGGESTIONS),
+            "basis": "No completed governed run is available for deterministic ledger-backed Q&A.",
+        }
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=no_run_result,
+            driver_context=request.driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=no_run_result,
+            llm_status=llm_qa.chat_status(CONFIG),
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
+
+    deterministic_result = qa_engine.answer_question(
+        question,
+        bundle=context["bundle"],
+        findings=context["findings"],
+    )
+    if mode == "deterministic" or deterministic_result.get("matched") is not False:
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=deterministic_result,
+            driver_context=request.driver_context,
+        )
+        return _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=deterministic_result,
+            llm_status=llm_qa.chat_status(CONFIG),
+        )
+
+    llm_status = llm_qa.chat_status(CONFIG)
+    if not llm_status["enabled"]:
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=deterministic_result,
+            driver_context=request.driver_context,
+        )
+        if mode == "llm":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=llm_status["reason"],
+            )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=deterministic_result,
+            llm_status=llm_status,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
+
+    result = llm_qa.answer_question(
+        question,
+        bundle=context["bundle"],
+        findings=context["findings"],
+        summary=context["summary"],
+        config=CONFIG,
+    )
+    orchestrated = orchestrator.process(
+        question,
+        persona=persona,
+        llm_result=result,
+        driver_context=request.driver_context,
+    )
+    payload = _assistant_response_payload(
+        response_mode="llm",
+        question=question,
+        context=context,
+        requested_mode=mode,
+        persona=persona,
+        orchestrated=orchestrated,
+        base_result=result,
+        llm_status=llm_status,
+    )
+    payload["mode"] = "llm"
+    return payload
 
 
 @app.post("/qa")
@@ -8474,48 +8755,315 @@ def data_qa(
             detail="Ask a question, e.g. 'What is the total amount of invoices?'.",
         )
     mode = (request.mode or "auto").strip().lower()
+    persona = (request.persona or "").strip().lower() or None
+    request_context = request.context or {}
+    if persona is None:
+        persona = (
+            str(request_context.get("active_persona") or request_context.get("persona") or "").strip().lower()
+            or None
+        )
+    if persona is None and str(_.get("role") or "") == "executive":
+        persona = "ceo"
+    if persona and persona not in set(list_supported_personas()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported assistant persona '{persona}'.",
+        )
+    driver_context = request.driver_context or request_context.get("driver_context") or {}
+    trace_id = (request.trace_id or "").strip() or uuid4().hex
     if mode not in {"auto", "deterministic", "llm"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Q&A mode must be 'auto', 'deterministic', or 'llm'.",
         )
-    context = _resolve_qa_context(request.run_id)
+    llm_status = llm_qa.chat_status(CONFIG)
+    if mode == "llm" and not llm_status["enabled"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=llm_status["reason"],
+        )
+    try:
+        context = _resolve_qa_context(request.run_id)
+    except HTTPException as exc:
+        if not (persona and request.run_id is None and exc.status_code == status.HTTP_404_NOT_FOUND):
+            raise
+        context = {
+            "bundle": None,
+            "findings": [],
+            "kg_nodes": [],
+            "kg_edges": [],
+            "summary": {
+                "run_id": None,
+                "run_mode": "no-run",
+                "status": "missing",
+            },
+            "run_id": None,
+            "run_mode": "no-run",
+        }
+    orchestrator = get_orchestrator()
+
+    def _risk_payload(response_mode: str, basis: str, matched: bool, status_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        if response_mode == "llm":
+            provider = (status_payload or {}).get("provider") or "model_provider"
+            model = (status_payload or {}).get("model") or "configured-model"
+            return {
+                "level": "high",
+                "score": 0.6,
+                "traceable": True,
+                "traceability_gap": "Narrative wording is model-generated; verify it against cited evidence before operational use.",
+                "verification_path": basis,
+                "factors": [
+                    {"name": "llm_generation", "detail": f"Answer composed by {provider}:{model} from supplied evidence."},
+                    {"name": "evidence_grounding", "detail": "Citations constrain the narrative but do not make it authoritative."},
+                ],
+                "mitigations": [
+                    "Check cited evidence before acting on the answer.",
+                    "Prefer deterministic answers whenever the question is covered by governed calculations.",
+                ],
+            }
+        return {
+            "level": "none",
+            "score": 0.0,
+            "traceable": True,
+            "traceability_gap": None,
+            "verification_path": basis,
+            "factors": [
+                {"name": "deterministic_orchestrator", "detail": "Answer came from persona rules, scenario parsing, or deterministic QA over the governed run."},
+            ],
+            "mitigations": [] if matched else ["Refine the question or use one of the suggested prompts."],
+        }
+
+    def _compose_response(
+        *,
+        response_mode: str,
+        base_payload: dict[str, Any],
+        orchestrated_payload: Any,
+        extra_trace: dict[str, Any],
+        extra_payload: dict[str, Any] | None = None,
+        status_payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        trace = {
+            **orchestrated_payload.trace,
+            "trace_id": trace_id,
+            **extra_trace,
+        }
+        prompt_contracts = trace.get("prompts") or {}
+        hallucination_risk = trace.get("hallucination_risk") or _risk_payload(
+            response_mode,
+            orchestrated_payload.basis,
+            orchestrated_payload.matched,
+            status_payload,
+        )
+        payload = {
+            "status": "ok",
+            "run_id": context["run_id"],
+            "run_mode": context["run_mode"],
+            "mode": response_mode,
+            "assistant_mode": orchestrated_payload.mode,
+            "requested_mode": mode,
+            "question": question,
+            "trace_id": trace_id,
+            **base_payload,
+            "persona": orchestrated_payload.persona,
+            "matched": orchestrated_payload.matched,
+            "answer": orchestrated_payload.answer,
+            "basis": orchestrated_payload.basis,
+            "why": orchestrated_payload.basis,
+            "citations": orchestrated_payload.citations,
+            "suggestions": orchestrated_payload.suggestions,
+            "trace": trace,
+            "prompt_contracts": prompt_contracts,
+            "audit_trail_id": trace.get("audit_trail_id"),
+            "hallucination_risk": hallucination_risk,
+            "risk_metadata": {
+                "decision_mode": "llm" if response_mode == "llm" else "deterministic",
+                "hallucination_risk": hallucination_risk,
+                "traceable": bool(hallucination_risk.get("traceable")),
+            },
+            "assistant_route": trace.get("route"),
+            "orchestration_mode": orchestrated_payload.mode,
+        }
+        if extra_payload:
+            payload.update(extra_payload)
+        if status_payload is not None:
+            payload["llm_status"] = status_payload
+        return payload
+
+    findings_payload = [
+        finding.__dict__ if hasattr(finding, "__dict__") else finding
+        for finding in context["findings"]
+    ]
+
+    if mode == "llm":
+        if context["bundle"] is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No completed run is available to answer questions yet. Start a run first.",
+            )
+        try:
+            result = llm_qa.answer_question(
+                question,
+                bundle=context["bundle"],
+                findings=context["findings"],
+                summary=context["summary"],
+                config=CONFIG,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=str(exc),
+            ) from exc
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            llm_result={**result, "assistant_mode": "llm"},
+            driver_context=driver_context,
+        )
+        return _compose_response(
+            response_mode="llm",
+            base_payload={**result, "deterministic_matched": False},
+            orchestrated_payload=orchestrated,
+            extra_trace={
+                "route": "llm_evidence",
+                "knowledge_id": request.knowledge_id,
+            },
+            status_payload=result.get("llm_status"),
+        )
+
+    scenario_result = None
+    if mode in {"auto", "deterministic"}:
+        parsed = parse_scenario(
+            question,
+            {
+                "bundle": context["bundle"],
+                "findings": findings_payload,
+                "kg_nodes": context.get("kg_nodes") or [],
+                "kg_edges": context.get("kg_edges") or [],
+                "summary": context.get("summary") or {},
+                "run_id": context["run_id"],
+                "run_mode": context["run_mode"],
+                "persona": persona,
+                "knowledge_id": request.knowledge_id,
+            },
+        )
+        scenario_result = parsed.as_dict()
+        if parsed.matched:
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                scenario_result=scenario_result,
+                driver_context=driver_context,
+            )
+            return _compose_response(
+                response_mode="deterministic",
+                base_payload=scenario_result,
+                orchestrated_payload=orchestrated,
+                extra_trace={
+                    "route": "scenario_deterministic",
+                    "scenario_id": scenario_result.get("scenario_id"),
+                    "knowledge_id": request.knowledge_id,
+                },
+                extra_payload={
+                    "hallucination_risk": scenario_result.get("hallucination_risk"),
+                },
+            )
 
     deterministic_result = None
-    if mode in {"auto", "deterministic"}:
+    if context["bundle"] is not None and mode in {"auto", "deterministic"}:
         deterministic_result = qa_engine.answer_question(
             question, bundle=context["bundle"], findings=context["findings"]
         )
         if mode == "deterministic" or deterministic_result.get("matched") is not False:
-            return {
-                "status": "ok",
-                "run_id": context["run_id"],
-                "run_mode": context["run_mode"],
-                "mode": "deterministic",
-                "requested_mode": mode,
-                "question": question,
-                **deterministic_result,
-            }
-
-    llm_status = llm_qa.chat_status(CONFIG)
-    if not llm_status["enabled"]:
-        if mode == "llm":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=llm_status["reason"],
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                qa_result={**deterministic_result, "assistant_mode": "qa_engine"},
+                driver_context=driver_context,
             )
-        assert deterministic_result is not None
-        return {
-            "status": "ok",
-            "run_id": context["run_id"],
-            "run_mode": context["run_mode"],
-            "mode": "deterministic",
-            "requested_mode": mode,
-            "question": question,
-            "llm_fallback_attempted": False,
-            "llm_status": llm_status,
-            **deterministic_result,
-        }
+            return _compose_response(
+                response_mode="deterministic",
+                base_payload=deterministic_result,
+                orchestrated_payload=orchestrated,
+                extra_trace={
+                    "route": "deterministic_qa",
+                    "intent": deterministic_result.get("intent"),
+                    "knowledge_id": request.knowledge_id,
+                },
+            )
+
+    if not llm_status["enabled"]:
+        if context["bundle"] is None:
+            return _compose_response(
+                response_mode="deterministic",
+                base_payload={
+                    "matched": False,
+                    "answer": "I don't have a deterministic answer for that yet. Try one of these:",
+                    "citations": [],
+                    "suggestions": list(SCENARIO_SUGGESTIONS),
+                },
+                orchestrated_payload=orchestrator.process(
+                    question,
+                    persona=persona,
+                    qa_result={
+                        "matched": False,
+                        "answer": "I don't have a deterministic answer for that yet. Try one of these:",
+                        "citations": [],
+                        "suggestions": list(SCENARIO_SUGGESTIONS),
+                    },
+                    driver_context=driver_context,
+                ),
+                extra_trace={
+                    "route": "deterministic_unmatched",
+                    "knowledge_id": request.knowledge_id,
+                },
+                extra_payload={"llm_fallback_attempted": False},
+                status_payload=llm_status,
+            )
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result={**deterministic_result, "assistant_mode": "qa_engine"},
+            driver_context=driver_context,
+        )
+        return _compose_response(
+            response_mode="deterministic",
+            base_payload=deterministic_result,
+            orchestrated_payload=orchestrated,
+            extra_trace={
+                "route": "deterministic_unmatched",
+                "intent": deterministic_result.get("intent"),
+                "knowledge_id": request.knowledge_id,
+            },
+            extra_payload={"llm_fallback_attempted": False},
+            status_payload=llm_status,
+        )
+
+    if context["bundle"] is None:
+        return _compose_response(
+            response_mode="deterministic",
+            base_payload={
+                "matched": False,
+                "answer": "I don't have a deterministic answer for that yet. Try one of these:",
+                "citations": [],
+                "suggestions": list(SCENARIO_SUGGESTIONS),
+            },
+            orchestrated_payload=orchestrator.process(
+                question,
+                persona=persona,
+                qa_result={
+                    "matched": False,
+                    "answer": "I don't have a deterministic answer for that yet. Try one of these:",
+                    "citations": [],
+                    "suggestions": list(SCENARIO_SUGGESTIONS),
+                },
+                driver_context=driver_context,
+            ),
+            extra_trace={
+                "route": "deterministic_unmatched",
+                "knowledge_id": request.knowledge_id,
+            },
+            status_payload=llm_status,
+        )
 
     try:
         result = llm_qa.answer_question(
@@ -8532,27 +9080,47 @@ def data_qa(
                 detail=str(exc),
             ) from exc
         assert deterministic_result is not None
-        return {
-            "status": "ok",
-            "run_id": context["run_id"],
-            "run_mode": context["run_mode"],
-            "mode": "deterministic",
-            "requested_mode": mode,
-            "question": question,
-            "llm_fallback_attempted": True,
-            "llm_error": str(exc),
-            **deterministic_result,
-        }
-    return {
-        "status": "ok",
-        "run_id": context["run_id"],
-        "run_mode": context["run_mode"],
-        "mode": "llm",
-        "requested_mode": mode,
-        "question": question,
-        "deterministic_matched": False if deterministic_result is not None else None,
-        **result,
-    }
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result={**deterministic_result, "assistant_mode": "qa_engine"},
+            driver_context=driver_context,
+        )
+        return _compose_response(
+            response_mode="deterministic",
+            base_payload=deterministic_result,
+            orchestrated_payload=orchestrated,
+            extra_trace={
+                "route": "deterministic_after_llm_error",
+                "intent": deterministic_result.get("intent"),
+                "knowledge_id": request.knowledge_id,
+            },
+            extra_payload={"llm_fallback_attempted": True, "llm_error": str(exc)},
+        )
+    orchestrated = orchestrator.process(
+        question,
+        persona=persona,
+        llm_result={**result, "assistant_mode": "llm"},
+        driver_context=driver_context,
+    )
+    return _compose_response(
+        response_mode="llm",
+        base_payload={**result, "deterministic_matched": False if deterministic_result is not None else None},
+        orchestrated_payload=orchestrated,
+        extra_trace={
+            "route": "llm_evidence",
+            "knowledge_id": request.knowledge_id,
+        },
+        status_payload=result.get("llm_status"),
+    )
+
+
+@app.post("/assistant/chat")
+def assistant_chat(
+    request: AssistantChatRequest,
+    _: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
+) -> dict[str, Any]:
+    return _assistant_chat_response(request)
 
 
 @app.post("/inputs/prepare")

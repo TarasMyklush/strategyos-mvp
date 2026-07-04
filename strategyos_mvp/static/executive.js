@@ -242,22 +242,10 @@
     return title;
   }
 
-  function isCeoSimulationIntent(message) {
-    return /(run|model|simulate|simulation|scenario|what\s*if|pressure[-\s]?test|stress[-\s]?test|forecast|sensitivity)/i.test(String(message || ""));
-  }
-
-  function ceoSimulationReply() {
-    return [
-      "Yes — I can help run a board-safe simulation in thinking mode, with no operational side effects.",
-      "Best default from the current board pack: pressure-test the margin bridge, because Revenue is ahead at SAR 2.09B (102% of plan) but EBITDA margin is only 19.2% (99% of plan) and operating cost is running at SAR 1.69B (101% of plan).",
-      "I can model four useful cases: 1) margin bridge recovery, 2) cash headroom for the GLP-1 JV, 3) FX hedge coverage, or 4) revenue quality if e-Pharmacy growth slows.",
-      "If you want the fastest CEO answer, I would start with: ‘What happens to EBITDA margin if we hedge 60% of EUR API exposure and hold operating cost flat for the next 4 weeks?’"
-    ].join(" ");
-  }
-
   async function askAssistant(prompt, sourceChip) {
     var cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) return;
+    // openAssistantDrawer(validChip) is the single shared drawer-opening path.
     var validChip = sourceChip && typeof sourceChip === 'object' && sourceChip.nodeType === 1 ? sourceChip : null;
     var originalText = null;
     if (validChip) {
@@ -265,11 +253,8 @@
       validChip.textContent = 'loading\u2026';
       validChip.disabled = true;
     }
-    if (state.activePersona === "ceo") {
-      createWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt);
-    } else {
-      ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt);
-    }
+    if (state.activePersona === "ceo") createWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt, { silentInitialMessage: true });
+    else ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt, { silentInitialMessage: true });
     pushThreadMessage("user", cleanPrompt);
     var pending = pushThreadMessage("assistant", "Checking the governed run data\u2026");
     openAssistantDrawer(validChip);
@@ -282,39 +267,6 @@
       form.classList.add('assistant-form--loading');
     }
     var answer = await buildAssistantReply(cleanPrompt);
-    // CEO dead-end guard: respond with context-aware CEO-grade answers using available board pack data
-    if (answer && state.activePersona === "ceo" && answer.indexOf("The board pack is under review.") === 0 && answer.length < 80) {
-      var driverKeywords = (cleanPrompt || "").toLowerCase();
-      if (isCeoSimulationIntent(driverKeywords)) {
-        answer = ceoSimulationReply();
-      } else if (/(relevant|matter|driver\s+card|this\s+(card|driver)|why\s+(is|this|does)|what\s+does\s+this\s+mean)/i.test(driverKeywords)) {
-        answer = ceoDriverRelevanceReply();
-      } else if (/digital health/i.test(driverKeywords)) {
-        answer = "Digital Health is a growth mover under Revenue at +36% revenue YoY. Group Revenue stands at SAR 2.09B (102% of plan). The current board pack does not expose a standalone SAR absolute for Digital Health. To pull the BU-level figure, Finance can run the governed Digital Health ledger from the operator panel.";
-      } else if (/e-pharmacy|epharmacy/i.test(driverKeywords)) {
-        answer = "e-Pharmacy is the strongest revenue mover at +12% orders WoW, contributing ~38% of the group revenue uplift. Group Revenue is SAR 2.09B (102% of plan). GM Lina Haddad notes fulfilment is holding at a 2-day SLA and she is pushing for the JV signature to lock supply ahead of demand. For the full e-Pharmacy P&L, ask an operator to run the governed BU ledger.";
-      } else if (/pharmacy retail/i.test(driverKeywords)) {
-        answer = "Pharmacy Retail is contributing +8.3% like-for-like growth, driving ~27% of the group revenue uplift. Group Revenue stands at SAR 2.09B (102% of plan). For detailed store-level metrics, the operator panel provides governed drill-down.";
-      } else if (/fx|margin|hedg|forex|currency/i.test(driverKeywords)) {
-        answer = "EBITDA margin is at 19.2% (99% of plan), with FX exposure dragging ~SAR 9k/week against an unhedged slice of API purchasing. A 60% EUR hedge neutralises most of it; the decision is on Thursday\u2019s board agenda. For the full hedge coverage breakdown, ask Finance to run the governed margin bridge.";
-      } else if (/cash|liquidity|floor|covenant/i.test(driverKeywords)) {
-        answer = "Cash stands at SAR 1.48B \u2014 123% of the board floor (SAR 1.2B), +SAR 280M above floor. Liquidity improved SAR 60M this week, and rates easing adds ~SAR 5M/yr of interest relief. Headroom for the GLP-1 JV is intact. For the governed treasury ledger detail, an operator can pull the full cash waterfall.";
-      } else if (/cost|api|spend|logistics/i.test(driverKeywords)) {
-        answer = "Operating cost is SAR 1.69B (101% of plan), running a touch hot. API input cost is +4.1% vs plan \u2014 the main cost pressure. Logistics fuel is +2.6% vs plan. Within tolerance, but worth watching as the S/4HANA cutover lands. For a full cost breakdown, ask an operator to run the governed cost ledger.";
-      } else if (/cold.chain|coldchain|resilience/i.test(driverKeywords)) {
-        answer = "Cold-chain integrity is at a record 99.4% \u2014 the best on record through the summer peak, with no excursions in the last 30 days. This reinforces the Resilience KPI and de-risks the NUPCO ramp. For the detailed logistics dashboard, an operator can surface the governed cold-chain tracker.";
-      } else if (/recover|tamween|audit|leakage/i.test(driverKeywords)) {
-        answer = "SAR 8.6M is recoverable across the group \u2014 Tamween audit (SAR 1.2M), duplicate-vendor spend, and aged AR concentrate the opportunity. The system has drafted the recovery sequence. For the itemised recovery ledger, an operator can run the governed findings Q&A.";
-      } else if (/board|thursday|readiness|on track/i.test(driverKeywords)) {
-        answer = "Two decisions are open for Thursday\u2019s board: the FX hedge and the GLP-1 JV. The pack is ~80% composed \u2014 the margin narrative needs your line. Revenue is at 102% of plan (SAR 2.09B), cash is strong at SAR 1.48B (123% of floor), and the cold-chain record at 99.4% is your resilience opener. What specific aspect would you like me to detail?";
-      } else if (/revenue/i.test(driverKeywords)) {
-        answer = "Group Revenue is SAR 2.09B at 102% of plan (+2.3% vs plan). Lifted by e-Pharmacy (+12% orders WoW), Pharmacy Retail (+8.3%), and Digital Health (+36% YoY). Healthcare Services is the only line below plan (\u22123.8% occupancy). For BU-level absolute figures, ask an operator to run the governed revenue ledger.";
-      } else if (/healthcare services|occupancy/i.test(driverKeywords)) {
-        answer = "Healthcare Services is dragging Revenue at \u22123.8% occupancy \u2014 cardiology occupancy is off plan with two consultants on leave. Locum cover lands next week and the plan is to recover the gap by quarter-end. GM Omar Said is managing the recovery. For the detailed Healthcare Services ledger, ask an operator.";
-      } else {
-        answer = "The current board pack shows group Revenue at SAR 2.09B (102% of plan), EBITDA margin at 19.2% (99% of plan), operating cost at SAR 1.69B (101% of plan), and cash at SAR 1.48B (123% of the board floor). CEO implication: growth and liquidity are ahead, while margin and operating cost need discipline. Recommended next step: ask which board decision you want to pressure-test — margin bridge, cash headroom, cost variance, or revenue quality.";
-      }
-    }
     // Clear loading state
     if (!validChip && form && input) {
       input.disabled = false;
@@ -637,79 +589,45 @@
 
   function qaAnswerText(payload) {
     if (!payload) return "I could not reach the governed Q&A service. Try again from an authenticated operator or reviewer session.";
-    if (state.activePersona === "ceo") {
-      var ceoAnswer = String(firstDefined(payload.answer, "")).trim();
-      return ceoAnswer || "No answer returned from governed Q&A.";
-    }
     var answer = String(firstDefined(payload.answer, "")).trim();
-    var mode = payload.mode === "llm" ? "AI fallback" : payload.mode === "deterministic" ? "Deterministic" : "Q&A";
+    var mode = payload.mode === "llm" ? "LLM" : "Deterministic";
+    var assistantMode = String(firstDefined(payload.assistant_mode, payload.orchestration_mode, payload.mode, "Q&A")).replace(/_/g, ' ');
+    var basis = String(firstDefined(payload.why, payload.basis, "")).trim();
+    var runId = String(firstDefined(payload.run_id, "")).trim();
+    var citationsCount = safeArray(payload.citations).length;
+    var llmStatus = payload.llm_status || {};
+    var risk = payload.hallucination_risk || {};
     var parts = [];
     if (answer) parts.push(answer);
-    if (payload.mode === "llm") parts.push("Answered by AI fallback because deterministic Q&A did not cover that question.");
-    if (payload.matched === false && payload.llm_status && payload.llm_status.reason) {
-      parts.push("AI fallback is not available: " + payload.llm_status.reason);
+    if (payload.mode === "llm") {
+      parts.push("Answered by AI fallback because deterministic Q&A did not cover that question.");
     }
-    if (payload.basis) parts.push("Basis: " + payload.basis);
-    if (payload.run_id) parts.push("Run: " + payload.run_id + " · " + mode + ".");
+    if (payload.matched === false && llmStatus.reason) {
+      parts.push("AI fallback is not available: " + llmStatus.reason);
+    }
+    // Trace / why metadata — concise single line for all personas
+    var traceItems = [];
+    if (basis) traceItems.push("Why: " + basis);
+    if (citationsCount > 0) traceItems.push(String(citationsCount) + " evidence citation" + (citationsCount !== 1 ? "s" : ""));
+    if (risk.level) traceItems.push("Risk: " + String(risk.level).toUpperCase());
+    traceItems.push("Path: " + assistantMode);
+    if (runId) traceItems.push("Run: " + runId);
+    traceItems.push(mode);
+    if (traceItems.length) parts.push("[" + traceItems.join(" · ") + "]");
     return parts.join(" ") || "No answer returned from governed Q&A.";
   }
 
-  function ceoDriverRelevanceReply() {
-    var driver = getActiveDriver() || {};
-    var label = firstDefined(driver.label, "this driver");
-    var metric = firstDefined(driver.metric, "the current metric");
-    var pct = firstDefined(driver.pct, "—");
-    var status = firstDefined(driver.status, driver.sub, "current board context");
-    var detail = firstDefined(driver.detail, "This card is surfaced because it connects the active board KPI to current execution risk.");
-    var movers = safeArray((driver.movers || {}).lifting).concat(safeArray((driver.movers || {}).dragging));
-    var moverText = movers.slice(0, 2).map(function (item) {
-      return firstDefined(item.name, "a mover") + " (" + firstDefined(item.delta, "movement") + ")";
-    }).join("; ");
-    return [
-      "This " + label + " card is relevant because it is the active board driver at " + metric + " (" + pct + "% of plan; " + status + ").",
-      detail,
-      moverText ? "The movement is explained by " + moverText + "." : "",
-      "CEO implication: this is the decision signal to either protect the upside or intervene before the variance becomes structural.",
-      "Recommended next step: inspect the largest mover behind " + label + " and decide whether it needs a board action, owner follow-up, or no action."
-    ].filter(Boolean).join(" ");
-  }
-
   function boardSafeStatusReply(message) {
-    if (state.activePersona === "ceo") {
-      return "The board pack is under review. Here\u2019s what I can answer now:";
-    }
-    var publication = getPublication();
-    var planHealth = getPlanHealth();
-    var boardPortal = getBoardPortal();
-    var runId = activeRunId() || "latest-public";
-    var recoverable = firstDefined(state.latestPacket && state.latestPacket.total_recoverable_sar, publication.total_recoverable_sar, 0);
-    var findings = firstDefined(state.latestPacket && state.latestPacket.locked_findings, publication.finding_count, "—");
-    var challenged = firstDefined(publication.challenged_cases, state.latestPacket && state.latestPacket.challenged_cases, 0);
     return [
-      "I could not compute a protected data answer in this executive surface.",
-      "Current governed run " + runId + " is " + statusLabel(firstDefined(state.latestPacket && state.latestPacket.current_stage, state.latestPacket && state.latestPacket.status, "governed")) + ".",
-      "Recoverable value is " + formatSar(recoverable) + ", findings: " + findings + ", challenged items: " + challenged + ".",
-      firstDefined(planHealth.summary, boardPortal.governance_note, "Use /app as operator/reviewer for protected evidence Q&A and simulations."),
-      message ? "Question asked: \u201c" + message + "\u201d." : ""
+      "I couldn't reach the shared assistant service just now.",
+      message ? "Question asked: \u201c" + message + "\u201d." : "",
+      "Please try again in a moment or reopen the board assistant."
     ].filter(Boolean).join(" ");
   }
 
   async function buildAssistantReply(message) {
     var cleanMessage = String(message || "").trim();
-    if (!cleanMessage) return boardSafeStatusReply("");
-
-    // CEO greeting/small-talk detection
-    if (state.activePersona === "ceo") {
-      var greetingPatterns = /^(hi|hey|hello|good\s+(morning|afternoon|evening)|how\s+are\s+you|what'?s\s+up|sup|yo|hola|bonjour|namaste)([!.\s]*)$/i;
-      if (greetingPatterns.test(cleanMessage)) {
-        // Get executive name from assistant network, fallback to KA initials
-        var networkEntry = getAssistantNetwork().find(function(item) {
-          return item && item.persona === "ceo";
-        }) || {};
-        var execFirstName = String(firstDefined(networkEntry.who, "")).trim().split(/\s+/)[0] || "Khalid";
-        return "Hi " + execFirstName + " \u2014 I can help with board readiness, margin risk, cash, or the knowledge map. What would you like to review?";
-      }
-    }
+    if (!cleanMessage) return "Please ask a question for the assistant.";
 
     // Typo normalization for common misspellings before API call
     var normalizeTypos = function (q) {
@@ -721,11 +639,23 @@
     };
     var apiQuestion = normalizeTypos(cleanMessage);
 
-    var body = { question: apiQuestion, mode: "auto" };
+    var body = { question: apiQuestion, mode: "auto", persona: state.activePersona || "ceo" };
+    var activeDriver = getActiveDriver();
+    if (activeDriver) {
+      body.driver_context = {
+        key: activeDriver.driver_key || activeDriver.key,
+        label: activeDriver.label,
+        metric: activeDriver.metric || activeDriver.value,
+        pct: activeDriver.pct,
+        status: activeDriver.status || activeDriver.sub,
+        detail: activeDriver.detail || activeDriver.story,
+        movers: activeDriver.movers || {}
+      };
+    }
     var runId = activeRunId();
     if (runId && runId !== "latest-public") body.run_id = runId;
     try {
-      var payload = await postJson("/qa", body);
+      var payload = await postJson("/assistant/chat", body);
       if (payload && payload.status === "ok") return qaAnswerText(payload);
     } catch (_error) {}
     return boardSafeStatusReply(cleanMessage);
@@ -804,23 +734,22 @@
     saveStoredThreads();
   }
 
-  function ensureWritableThread(seedTitle, seedPreview) {
+  function ensureWritableThread(seedTitle, seedPreview, options) {
     ensureThreads();
     var current = threadStore()[currentThreadKey()];
     if (current && !current.readOnly) return current;
-    return createWritableThread(seedTitle, seedPreview);
+    return createWritableThread(seedTitle, seedPreview, options);
   }
 
-  function createWritableThread(seedTitle, seedPreview) {
+  function createWritableThread(seedTitle, seedPreview, options) {
     var blueprint = getPersonaBlueprint(state.activePersona);
     var persona = getPersonaContract(state.activePersona);
     var assistantName = firstDefined((getChatContract().assistant || {}).name, persona.assistant, blueprint.assistant, "Hermes");
     var key = state.activePersona + ":followup-" + Date.now();
     var preview = String(firstDefined(seedPreview, "Writable board-safe thread.")).trim();
+    var silentInitialMessage = Boolean(options && options.silentInitialMessage);
     var initialMessage = seedPreview && String(seedPreview).trim()
-      ? (state.activePersona === "ceo" && isCeoSimulationIntent(seedPreview)
-        ? "I can help pressure-test that in thinking mode. I’ll use the current board pack and keep it board-safe."
-        : "I'll look up \u201c" + String(seedPreview).slice(0, 48) + (String(seedPreview).length > 48 ? "\u2026" : "") + "\u201d against the current board pack.")
+      ? "I'll look up \u201c" + String(seedPreview).slice(0, 48) + (String(seedPreview).length > 48 ? "\u2026" : "") + "\u201d against the current board pack."
       : "I can answer using the current board pack. What would you like to know?";
     threadStore()[key] = {
       key: key,
@@ -830,7 +759,7 @@
       readOnly: false,
       kind: "followup",
       assistant: firstDefined((getChatContract().assistant || {}).name, assistantName),
-      messages: [
+      messages: silentInitialMessage ? [] : [
         {
           role: "assistant",
           text: initialMessage,

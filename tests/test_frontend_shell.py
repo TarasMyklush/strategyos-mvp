@@ -68,8 +68,9 @@ def test_executive_assistant_uses_governed_qa_not_fake_captured_reply():
     js = _static_executive_js()
 
     assert 'mode: "auto"' in js
-    assert 'postJson("/qa"' in js
-    assert "Answered by AI fallback because deterministic Q&A did not cover that question." in js
+    assert 'postJson("/assistant/chat"' in js
+    assert 'persona: state.activePersona || "ceo"' in js
+    assert 'driver_context' in js
     assert "still the active lens" not in js
     assert "Follow-up captured" not in js
     assert "Prompt captured" not in js
@@ -1438,43 +1439,19 @@ def test_ceo_drawer_state_pill_hidden_for_ceo():
 
 
 def test_ceo_fresh_thread_per_cta():
-    """askAssistant must use createWritableThread for CEO, ensureWritableThread for others."""
+    """askAssistant must use the shared writable-thread path for every persona."""
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
-    # The askAssistant function must contain the CEO-specific path
     assert 'async function askAssistant' in executive_js, \
         "askAssistant function not found"
-    assert 'state.activePersona === "ceo"' in executive_js, \
-        "CEO guard missing in executive.js"
-    # Verify both createWritableThread and ensureWritableThread exist
     assert 'createWritableThread' in executive_js, \
         "createWritableThread not found in executive.js"
     assert 'ensureWritableThread' in executive_js, \
         "ensureWritableThread not found in executive.js"
-    # Check that the askAssistant function body contains the CEO guard near createWritableThread
-    # The pattern: if (=== "ceo") use createWritableThread, else use ensureWritableThread
-    lines = executive_js.split('\n')
-    in_ask_fn = False
-    brace_depth = 0
-    found_ceo_guard = False
-    found_create_writable = False
-    for i, line in enumerate(lines):
-        if 'async function askAssistant' in line:
-            in_ask_fn = True
-            brace_depth = 1  # opening brace is on the function declaration line
-            continue
-        if not in_ask_fn:
-            continue
-        brace_depth += line.count('{') - line.count('}')
-        if brace_depth <= 0 and i > 0:
-            break  # end of function
-        if 'state.activePersona === "ceo"' in line:
-            found_ceo_guard = True
-        if 'createWritableThread(' in line:
-            found_create_writable = True
-    assert found_ceo_guard, \
-        "CEO guard (state.activePersona === 'ceo') not found in askAssistant function"
-    assert found_create_writable, \
-        "createWritableThread not called in askAssistant function"
+    ask_start = executive_js.index('async function askAssistant')
+    ask_end = executive_js.index('function switchView', ask_start)
+    ask_block = executive_js[ask_start:ask_end]
+    assert 'silentInitialMessage: true' in ask_block
+    assert 'state.activePersona === "ceo" ? createWritableThread' not in ask_block
 
 
 def test_driver_composer_opens_drawer():
@@ -1638,13 +1615,11 @@ def test_ceo_drawer_preboard_not_rendered_for_ceo():
 
 
 def test_ceo_dead_end_guard_handles_driver_relevance_questions():
-    """CEO dead-end guard must answer contextual driver relevance questions from active driver context."""
+    """Driver relevance must be delegated to the backend with explicit context."""
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
-    assert "function ceoDriverRelevanceReply" in executive_js
-    assert "getActiveDriver() || {}" in executive_js
-    assert "ceoDriverRelevanceReply();" in executive_js
-    assert "relevant|matter|driver\\s+card" in executive_js
-    assert "what\\s+does\\s+this\\s+mean" in executive_js
+    assert "function ceoDriverRelevanceReply" not in executive_js
+    assert "driver_context" in executive_js
+    assert 'postJson("/assistant/chat"' in executive_js
 
 
 def test_ceo_typo_normalization_includes_whis():
@@ -1654,20 +1629,13 @@ def test_ceo_typo_normalization_includes_whis():
 
 def test_ceo_generic_fallback_no_relevant_card_operator_punt():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
-    fallback = "CEO implication: growth and liquidity are ahead"
-    assert fallback in executive_js
-    fallback_idx = executive_js.index(fallback)
-    fallback_block = executive_js[fallback_idx:fallback_idx + 600]
-    assert "check the relevant driver card" not in fallback_block
-    assert "governed Q&A session against the full evidence bundle" not in fallback_block
+    assert "CEO implication: growth and liquidity are ahead" not in executive_js
+    assert "governed Q&A session against the full evidence bundle" not in executive_js
 
 
 def test_ceo_driver_relevance_answer_uses_context_fields():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
-    start = executive_js.index("function ceoDriverRelevanceReply")
-    end = executive_js.index("function boardSafeStatusReply", start)
-    helper = executive_js[start:end]
+    start = executive_js.index('body.driver_context = {')
+    helper = executive_js[start:start + 400]
     for expected in ["label", "metric", "pct", "status", "detail", "movers"]:
         assert expected in helper
-    assert "CEO implication" in helper
-    assert "Recommended next step" in helper
