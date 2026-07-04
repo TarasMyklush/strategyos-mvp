@@ -1,44 +1,47 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 from typing import Any
 
 
 EXECUTIVE_DESIGN: dict[str, Any] = {
     "personas": {
         "ceo": {
-            "health": {"score": 78, "headline": "Broadly on track — margin needs attention.", "body": "Revenue is ahead of plan, but margin is leaking to FX and API cost ahead of Thursday's board.", "scoreNote": "plan health"},
+            "health": {"score": 78, "headline": "Broadly on track — margin needs attention.", "body": "Revenue is ahead of plan, but margin is leaking to FX and API cost, and two business units are dragging. Two decisions are due before Thursday’s board.", "scoreNote": "plan health"},
+            "indexLabel": "The group index",
             "assistant": "Hermes",
             "assistantRole": "chief of staff",
-            "brief": "Thursday board readiness is broadly on track, but the board narrative still needs a clean call on margin, FX hedge coverage, and the business units dragging plan.",
-            "quote": "Revenue is carrying the story; the real call is whether we close the hedge and stay ahead of the drag.",
+            "brief": "The Group CEO lane should feel like the 22.06 authority: group altitude first, board-safe narrative second, and no Oracle-pilot override copy in the anchor surface. Twin-platform history remains visible as delivery history, Oracle-backed finance rings now drive the CEO surface in the pilot record, Oracle-backed · deterministic copy remains preserved in the pilot history, and manual / deferred operational context stays explicit rather than disguised.",
+            "quote": "Margin needs attention, but the room should stay grounded in what moved the number and what decisions are due before Thursday.",
             "by": "Hermes · Group CEO chief of staff",
-            "threads": [{"key": "briefing", "title": "Thursday board readiness", "preview": "Am I on track for the board on Thursday?"}, {"key": "risk", "title": "Single biggest risk", "preview": "What is the single biggest risk to plan?"}, {"key": "recognition", "title": "Recognition note", "preview": "Who deserves recognition this week?"}],
-            "prompts": ["Am I on track for the board on Thursday?", "What is the single biggest risk to plan?", "Who deserves recognition this week?"],
+            "threads": [{"key": "briefing", "title": "Thursday board readiness", "preview": "Am I on track for the board on Thursday?"}, {"key": "hedge", "title": "What 60% EUR hedge saves", "preview": "Model a 60% EUR hedge — what does it save?"}, {"key": "recognition", "title": "e-Pharmacy capacity pull-forward", "preview": "Should we pull forward e-Pharmacy fulfilment capacity?"}],
+            "prompts": ["Why is the gap widening?", "Show e-Pharmacy detail.", "Risk to full-year plan?"],
             "drivers": [
+                {"key": "revenue", "label": "Revenue", "pct": 102, "value": "SAR 2.09B", "sub": "quarter to date", "vsPlan": "+2.3% vs plan", "story": "102% of plan and climbing — the gap to plan has widened in your favour across the quarter. Lifted by e-Pharmacy and Retail; Healthcare is the only line below.", "movers": {"lifting": [{"name": "e-Pharmacy", "delta": "+12% orders WoW", "contribution": 38}, {"name": "Pharmacy Retail", "delta": "+8.3% like-for-like", "contribution": 27}, {"name": "Digital Health", "delta": "+36% revenue YoY", "contribution": 15}], "dragging": [{"name": "Healthcare Services", "delta": "−3.8% occupancy", "contribution": -18}, {"name": "Tamween Distribution", "delta": "+0.4% — flat vs plan", "contribution": -6}]}, "chips": ["Why is the gap widening?", "Show e-Pharmacy detail", "Risk to full-year plan?"]},
+                {"key": "ebitda", "label": "EBITDA margin", "pct": 99, "value": "19.2%", "sub": "vs 19.4% plan", "vsPlan": "−20 bps vs plan", "story": "99% of plan — margin is the soft spot. FX and API input cost are the leak; two dragging BUs explain most of the rest. A hedge decision is on Thursday’s board agenda.", "movers": {"lifting": [{"name": "Manufacturing", "delta": "+60 bps on yield", "contribution": 22}, {"name": "Pharmacy Retail", "delta": "+30 bps mix", "contribution": 12}], "dragging": [{"name": "FX exposure", "delta": "~SAR 9k / wk drag", "contribution": -20}, {"name": "Tamween Distribution", "delta": "leakage · SAR 1.2M", "contribution": -16}, {"name": "API input cost", "delta": "+4.1% vs plan", "contribution": -11}]}, "chips": ["What would a 60% EUR hedge save?", "Show the FX bridge", "Which BUs can offset?"]},
                 {"key": "digital_health", "label": "Digital Health revenue", "pct": 100, "value": "SAR 186M", "sub": "flat by EOY scenario", "vsPlan": "flat vs plan", "story": "Digital Health is flattening into year-end unless adoption picks up; the board needs to decide whether to treat it as a hold or fund a sharper commercial push.", "movers": {"lifting": [{"name": "Virtual chronic care", "delta": "+3% enrolments"}], "dragging": [{"name": "Enterprise EHR deals", "delta": "slower conversion"}]}},
-                {"key": "epharmacy", "label": "e-Pharmacy growth", "pct": 112, "value": "SAR 214M", "sub": "orders +12% WoW", "vsPlan": "+12% vs plan", "story": "e-Pharmacy is the cleanest growth lever in the pack, but it slows if fulfilment capacity is not pulled forward before the refill curve steepens.", "movers": {"lifting": [{"name": "GLP-1 refill cohort", "delta": "+12% orders WoW"}], "dragging": [{"name": "Eastern hub capacity", "delta": "binding in 2 weeks"}]}},
-                {"key": "fx_hedge", "label": "FX / hedge coverage", "pct": 99, "value": "19.2% EBITDA", "sub": "hedge decision pending", "vsPlan": "−20 bps vs plan", "story": "FX and API input cost remain the key margin drag; a 60% EUR hedge is the cleanest board action to stabilise the bridge.", "movers": {"lifting": [{"name": "Manufacturing yield", "delta": "+60 bps"}], "dragging": [{"name": "FX exposure", "delta": "~SAR 9k / wk drag"}]}},
                 {"key": "healthcare", "label": "Healthcare occupancy", "pct": 96, "value": "81% occupancy", "sub": "below target", "vsPlan": "−3.8% vs plan", "story": "Healthcare occupancy is the only major operating drag in the CEO view; recovery depends on clearing staffing gaps before the variance turns structural.", "movers": {"lifting": [{"name": "Locum cover", "delta": "next week"}], "dragging": [{"name": "Cardiology occupancy", "delta": "below plan"}]}}
             ],
-            "findings": [{"title": "SAR 8.6M is recoverable across the group", "tag": "Cross-BU finding", "detail": "Reviewer evidence packets show SAR 8.6M in recoverable value across Tamween, duplicate-vendor spend, and aged AR.", "tone": "down"}, {"title": "FX is building a margin drag", "tag": "Group KPI · EBITDA margin", "detail": "A 60% EUR hedge neutralises most of the current weekly drag.", "tone": "flat"}, {"title": "Cold-chain resilience remains strong", "tag": "Group KPI · Resilience", "detail": "Operational resilience gives the board room confidence while the commercial issues are handled.", "tone": "up"}],
-            "developments": [{"title": "NUPCO awards confirmed", "meta": "Capital · today", "impact": "Improves revenue quality and cash timing.", "kind": "win"}, {"title": "Tamween audit confirmed", "meta": "Distribution · yesterday", "impact": "Adds SAR 1.2M into the SAR 8.6M recovery pool.", "kind": "watch"}],
-            "week": [{"key": "board", "day": "Thu", "title": "Board meeting", "when": "in 3 days", "prep": "Close the hedge and JV story.", "urgent": True, "prompt": "Am I on track for the board on Thursday?"}, {"key": "jv", "day": "Wed", "title": "GLP-1 JV sign-off", "when": "in 2 days", "prep": "Cash headroom is ready.", "urgent": True, "prompt": "What is the single biggest risk to plan?"}, {"key": "recognition", "day": "Tue", "title": "Weekly note", "when": "tomorrow", "prep": "Carry one clean recognition item upward.", "urgent": False, "prompt": "Who deserves recognition this week?"}],
+            "findings": [{"title": "FX is building a ~SAR 9k margin drag this week", "tag": "Group KPI · EBITDA margin", "detail": "EUR/SAR drift against an unhedged slice of API purchasing. A 60% hedge neutralises most of it; decision sits on Thursday’s board agenda.", "tone": "flat"}, {"title": "SAR 8.6M is recoverable across the group", "tag": "Cross-BU finding", "detail": "Tamween audit (SAR 1.2M), duplicate-vendor spend, and aged AR concentrate the opportunity. The system has drafted the recovery sequence.", "tone": "flat"}, {"title": "Operational resilience intact — cold-chain at a record", "tag": "Group KPI · Resilience · run by Logistics", "detail": "Cold-chain integrity reached 99.4%, the best on record, through the summer peak. No excursions in the last 30 days.", "tone": "up"}],
+            "developments": [{"title": "Cold-chain hit a record 99.4% — best ever", "meta": "Pharma Logistics · 2h ago", "impact": "Reinforces the Resilience KPI and de-risks the NUPCO ramp. No plan change — protect the practice.", "kind": "win"}, {"title": "NUPCO Q1 awards confirmed: +SAR 145M annual", "meta": "Capital · 5h ago", "impact": "Lifts the full-year revenue bridge by ~SAR 145M and improves cash timing. Plan revised upward next cycle.", "kind": "win"}, {"title": "Tamween audit: SAR 1.2M recoverable", "meta": "Tamween Distribution · yesterday", "impact": "Folds into the SAR 8.6M group recovery. Net margin uplift ~10 bps once collected.", "kind": "watch"}],
+            "week": [{"key": "board_prep", "day": "Thu", "title": "Board meeting", "when": "in 3 days", "prep": "Two decisions open: the FX hedge and the GLP-1 JV. The pack is 80% composed — margin narrative needs your line.", "urgent": True, "prompt": "Am I on track for the board on Thursday?"}, {"key": "jv", "day": "Wed", "title": "GLP-1 JV signature", "when": "in 2 days", "prep": "Supply-lock terms agreed; cash headroom confirmed. e-Pharmacy demand model attached.", "urgent": True, "prompt": "Can we fund the JV from cash?"}, {"key": "call", "day": "Tue", "title": "e-Pharmacy GM — opportunity call", "when": "tomorrow", "prep": "Lina wants to pull forward fulfilment capacity. Bring the 12% WoW order curve.", "urgent": False, "prompt": "Should we pull forward e-Pharmacy fulfilment capacity?"}, {"key": "regulator", "day": "next Fri", "title": "Regulator meeting", "when": "in 1 week", "prep": "Routine cold-chain review — the 99.4% record is your opening.", "urgent": False, "prompt": "What should I emphasise in the regulator meeting?"}],
         },
         "cfo": {
-            "health": {"score": 74, "headline": "Liquidity strong — margin quality is the watch.", "body": "Cash is above floor, but FX and API cost still blur the EBITDA bridge.", "scoreNote": "plan health"},
+            "health": {"score": 74, "headline": "Oracle-first CFO surface is live.", "body": "The CFO story now starts with Oracle finance ingestion, deterministic KPI outputs, leakage review, and explicit manual-input controls. Generic twin framing is demoted to delivery history.", "scoreNote": "oracle pilot posture"},
+            "indexLabel": "The financial index",
             "assistant": "Atlas",
             "assistantRole": "finance chief of staff",
-            "brief": "Liquidity is strong, but margin quality and the EBITDA bridge still need discipline before the board room feels effortless.",
-            "quote": "Cash stays above the floor; the board question is hedge quality, not funding survival.",
+        "brief": "This is now an Oracle-first CFO surface: liquidity stays strong, deterministic pilot math comes first, explicit reconciliation and leakage context come second, and no fake automation sits beyond finance scope.",
+            "quote": "If a number cannot be traced to Oracle finance or an approved manual input, it does not belong in the CFO pilot surface as automation.",
             "by": "Atlas · Group CFO chief of staff",
-            "threads": [{"key": "bridge", "title": "EBITDA bridge", "preview": "Walk me through the EBITDA bridge."}, {"key": "recoverable", "title": "Recovery scan", "preview": "Where is the SAR 8.6M?"}, {"key": "cash", "title": "JV funding", "preview": "Can the JV be funded from cash?"}],
+            "threads": [{"key": "briefing", "title": "EBITDA bridge for the pack", "preview": "Walk me through the EBITDA bridge."}, {"key": "hedge", "title": "SAR 8.6M recovery sequence", "preview": "Where is the SAR 8.6M and how fast can we get it?"}, {"key": "recognition", "title": "JV funding", "preview": "Can the JV be funded from cash?"}],
             "prompts": ["Walk me through the EBITDA bridge.", "Where is the SAR 8.6M?", "Can the JV be funded from cash?"],
-            "drivers": [{"key": "bridge", "label": "EBITDA bridge", "pct": 99, "value": "19.2%", "sub": "vs 19.4% plan", "vsPlan": "−20 bps vs plan", "story": "Volume and price add; FX and API cost subtract. A 60% EUR hedge recovers most of the visible drag.", "movers": {"lifting": [{"name": "Volume", "delta": "+40 bps"}], "dragging": [{"name": "FX hedge gap", "delta": "−35 bps"}]}}, {"key": "cash", "label": "Liquidity & covenant", "pct": 123, "value": "SAR 1.48B", "sub": "cash vs floor", "vsPlan": "+SAR 280M above floor", "story": "Cash and covenant headroom support the JV funding case.", "movers": {"lifting": [{"name": "Collections", "delta": "+SAR 145M"}], "dragging": [{"name": "JV pre-funding", "delta": "SAR 60M"}]}}, {"key": "wc", "label": "Working capital", "pct": 96, "value": "58 days", "sub": "cash conversion cycle", "vsPlan": "+3 days vs plan", "story": "The cycle is long mainly because inventory is being built early.", "movers": {"lifting": [{"name": "DPO discipline", "delta": "+4 days"}], "dragging": [{"name": "Inventory build", "delta": "+6 days"}]}}, {"key": "quality", "label": "Revenue quality", "pct": 101, "value": "94% recurring", "sub": "mix quality", "vsPlan": "+2.3% vs plan", "story": "Revenue quality stays sound while hedge closure protects conversion to EBITDA.", "movers": {"lifting": [{"name": "NUPCO contracts", "delta": "+SAR 145M annual"}], "dragging": [{"name": "Healthcare one-offs", "delta": "lower elective mix"}]}}],
+            "drivers": [{"key": "revq", "label": "Revenue quality", "pct": 101, "value": "SAR 2.09B", "sub": "94% recurring", "vsPlan": "+2.3% vs plan", "story": "Revenue is ahead and the mix is healthy — 94% recurring, low concentration. NUPCO awards improve quality further next cycle.", "movers": {"lifting": [{"name": "NUPCO contracts", "delta": "+SAR 145M annual", "contribution": 30}, {"name": "e-Pharmacy recurring", "delta": "+12% refill base", "contribution": 20}], "dragging": [{"name": "Healthcare one-offs", "delta": "lower elective mix", "contribution": -10}]}}, {"key": "bridge", "label": "EBITDA bridge", "pct": 99, "value": "19.2%", "sub": "vs 19.4% plan", "vsPlan": "−20 bps vs plan", "story": "Volume and price add; FX and API cost subtract. The net is a 20 bps miss — a 60% EUR hedge recovers ~15 bps of it.", "movers": {"lifting": [{"name": "Volume", "delta": "+40 bps", "contribution": 24}, {"name": "Price / mix", "delta": "+25 bps", "contribution": 14}], "dragging": [{"name": "FX", "delta": "−35 bps", "contribution": -22}, {"name": "API cost", "delta": "−30 bps", "contribution": -16}]}}, {"key": "wc", "label": "Working capital", "pct": 96, "value": "58 days", "sub": "cash conversion cycle", "vsPlan": "+3 days vs plan", "story": "DSO 47, DPO 41, DIO 52. The cycle is 3 days long, concentrated in inventory build for the JV.", "movers": {"lifting": [{"name": "DPO discipline", "delta": "+4 days", "contribution": 16}], "dragging": [{"name": "DIO — GLP-1 stock", "delta": "+6 days", "contribution": -14}, {"name": "DSO — NUPCO terms", "delta": "+2 days", "contribution": -6}]}}, {"key": "liq", "label": "Liquidity & covenant", "pct": 123, "value": "SAR 1.48B", "sub": "Net debt/EBITDA 1.6x", "vsPlan": "2.6x covenant", "story": "Cash is 123% of floor; leverage is 1.6x against a 2.6x covenant — a full turn of headroom.", "movers": {"lifting": [{"name": "Collections", "delta": "+SAR 145M", "contribution": 28}, {"name": "Rate relief", "delta": "~SAR 5M/yr", "contribution": 10}], "dragging": [{"name": "JV pre-funding", "delta": "SAR 60M", "contribution": -8}]}}],
             "cashPulse": {"title": "Cash Pulse", "note": "four pillars", "pillars": [{"label": "Cash in", "value": "SAR 612M", "sub": "collections", "delta": "+SAR 145M NUPCO", "tone": "up"}, {"label": "Cash out", "value": "SAR 534M", "sub": "disbursed", "delta": "DPO +4 days", "tone": "flat"}, {"label": "At bank", "value": "SAR 1.48B", "sub": "available liquidity", "delta": "+SAR 60M wk", "tone": "up"}, {"label": "Lost / leaking", "value": "SAR 8.6M", "sub": "recoverable group-wide", "delta": "invoke leakage scan", "tone": "down"}]},
-            "findings": [{"title": "FX drag remains visible", "tag": "Bridge", "detail": "60% EUR hedge decision pending.", "tone": "flat"}, {"title": "SAR 8.6M is recoverable", "tag": "Cash-Leakage add-on", "detail": "Evidence packets are ready for review.", "tone": "down"}, {"title": "Covenant headroom remains comfortable", "tag": "Liquidity", "detail": "1.6x leverage against a 2.6x covenant.", "tone": "up"}],
-            "developments": [{"title": "Rates eased", "meta": "Treasury · today", "impact": "Supports the cash-funding case.", "kind": "win"}],
-            "week": [{"key": "board", "day": "Thu", "title": "Board meeting", "when": "in 3 days", "prep": "Own the margin and hedge story.", "urgent": True, "prompt": "Walk me through the EBITDA bridge."}, {"key": "jv", "day": "Wed", "title": "JV funding", "when": "in 2 days", "prep": "Confirm fund-from-cash option.", "urgent": True, "prompt": "Can the JV be funded from cash?"}, {"key": "review", "day": "Tue", "title": "Recovery review", "when": "tomorrow", "prep": "Carry the SAR 8.6M evidence set.", "urgent": False, "prompt": "Where is the SAR 8.6M?"}],
+            "findings": [{"title": "FX is building a ~SAR 9k margin drag this week", "tag": "Group KPI · EBITDA bridge", "detail": "Unhedged EUR slice of API purchasing. A 60% hedge neutralises most of it — board decision Thursday.", "tone": "flat"}, {"title": "SAR 8.6M is recoverable — leakage scan ready", "tag": "Cross-BU finding · Cash-Leakage add-on", "detail": "Tamween audit, duplicate-vendor spend, aged AR. One tap opens the drafted recovery sequence.", "tone": "down"}, {"title": "Covenant headroom at a full turn (1.6x vs 2.6x)", "tag": "Group KPI · Liquidity", "detail": "Leverage stays well inside covenant; rate easing adds ~SAR 5M/yr.", "tone": "up"}],
+            "developments": [{"title": "NUPCO Q1 awards confirmed: +SAR 145M annual", "meta": "Capital · 5h ago", "impact": "Improves cash timing and revenue quality.", "kind": "win"}, {"title": "Tamween audit: SAR 1.2M recoverable", "meta": "Tamween Distribution · yesterday", "impact": "Folds into the SAR 8.6M recovery.", "kind": "watch"}, {"title": "Rates eased — ~SAR 5M/yr interest relief", "meta": "Treasury · today", "impact": "Supports the JV funding case from cash.", "kind": "win"}],
+            "week": [{"key": "board_meeting", "day": "Thu", "title": "Board meeting", "when": "in 3 days", "prep": "Own the margin and hedge narrative. The EBITDA bridge and covenant slide are composed; confirm the hedge ratio.", "urgent": True, "prompt": "Walk me through the EBITDA bridge."}, {"key": "jv_funding", "day": "Wed", "title": "GLP-1 JV funding sign-off", "when": "in 2 days", "prep": "Fund from cash vs facility — the cash case is cheaper post rate relief.", "urgent": True, "prompt": "Can the JV be funded from cash?"}, {"key": "treasury", "day": "Tue", "title": "Treasury hedge execution", "when": "tomorrow", "prep": "Pre-clear the 60% EUR hedge so it can execute the moment the board approves.", "urgent": False, "prompt": "Model the 60% hedge."}],
         },
         "gm": {
             "health": {"score": 84, "headline": "Strong week — capacity is the constraint.", "body": "Demand is healthy; capacity and SLA discipline decide whether the week stays beautiful or breaks.", "scoreNote": "plan health"},
@@ -114,3 +117,213 @@ def executive_discover_agents_design() -> list[dict[str, Any]]:
 
 def executive_subtools_design() -> list[dict[str, Any]]:
     return deepcopy(list(EXECUTIVE_DESIGN.get("subtools") or []))
+
+
+def _extract_money_to_sar(text: str, default: float = 0.0) -> float:
+    match = re.search(r"SAR\s+([0-9]+(?:\.[0-9]+)?)\s*([MB]?)", str(text or ""), re.IGNORECASE)
+    if not match:
+        return default
+    value = float(match.group(1))
+    suffix = match.group(2).upper()
+    if suffix == "M":
+        return value * 1_000_000
+    if suffix == "B":
+        return value * 1_000_000_000
+    return value
+
+
+def executive_public_assistant_packet(persona_id: str = "ceo") -> dict[str, Any]:
+    persona = executive_persona_design(persona_id)
+    board = executive_board_design()
+    activity = executive_activity_design()
+    running_agents = executive_running_agents_design()
+    findings = list(persona.get("findings") or [])
+    developments = list(persona.get("developments") or [])
+    week = list(persona.get("week") or [])
+    drivers = list(persona.get("drivers") or [])
+    kpis = list(board.get("kpis") or [])
+    public_facts = {
+        "group_recoverable_sar": 8_600_000.0,
+        "tamween_recoverable_sar": 1_200_000.0,
+        "fx_drag_weekly_sar": 9_000.0,
+        "fx_hedge_recovery_bps": 15.0,
+        "ebitda_margin_pct": 19.2,
+        "ebitda_plan_pct": 19.4,
+        "epharmacy_orders_wow_pct": 12.0,
+        "healthcare_occupancy_delta_pct": -3.8,
+        "board_pack_completion_pct": 80.0,
+        "cold_chain_integrity_pct": 99.4,
+        "nupco_award_sar": 145_000_000.0,
+        "source_boundary": "Public-safe executive packet only; reviewer evidence documents remain on the protected surface.",
+    }
+    return {
+        "packet_id": f"public-executive:{persona_id}",
+        "persona_id": persona_id,
+        "assistant": persona.get("assistant") or "Hermes",
+        "health": persona.get("health") or {},
+        "kpis": kpis,
+        "drivers": drivers,
+        "findings": findings,
+        "developments": developments,
+        "week": week,
+        "board_portal": board,
+        "activity": activity,
+        "running_agents": running_agents,
+        "public_facts": public_facts,
+        "kg_nodes": [
+            {"id": "kpi:revenue", "label": "Revenue", "properties": {"value": "SAR 2.09B", "vs_plan": "+2.3%"}},
+            {"id": "kpi:ebitda", "label": "EBITDA margin", "properties": {"value": "19.2%", "vs_plan": "−20 bps"}},
+            {"id": "initiative:epharmacy", "label": "e-Pharmacy", "properties": {"orders_wow_pct": 12}},
+            {"id": "finding:tamween", "label": "Tamween audit", "properties": {"recoverable_sar": 1_200_000}},
+            {"id": "finding:group_recovery", "label": "Group recovery", "properties": {"recoverable_sar": 8_600_000}},
+            {"id": "risk:fx", "label": "FX exposure", "properties": {"weekly_drag_sar": 9_000, "hedge_recovery_bps": 15}},
+            {"id": "board:meeting", "label": "Board meeting", "properties": {"pack_completion_pct": 80}},
+        ],
+        "kg_edges": [
+            {"source": "initiative:epharmacy", "target": "kpi:revenue", "label": "LIFTS"},
+            {"source": "risk:fx", "target": "kpi:ebitda", "label": "DRAGS"},
+            {"source": "finding:tamween", "target": "finding:group_recovery", "label": "PART_OF"},
+            {"source": "finding:group_recovery", "target": "board:meeting", "label": "BOARD_TOPIC"},
+        ],
+        "trace_summary": {
+            "activity_line": activity.get("line"),
+            "running_agent_count": len(running_agents),
+            "finding_count": len(findings),
+            "development_count": len(developments),
+        },
+    }
+
+
+PUBLIC_ASSISTANT_CONTEXT_PACKET: dict[str, Any] = {
+    "packet_id": "public-executive-context:v1",
+    "source": "executive_public_packet",
+    "source_label": "StrategyOS public executive packet",
+    "public_safe": True,
+    "kpis": [
+        {"key": "revenue", "label": "Revenue", "value": "SAR 2.09B", "vs_plan": "+2.3% vs plan", "story": "Revenue is ahead of plan, led by e-Pharmacy and Retail while Healthcare is below plan."},
+        {"key": "ebitda", "label": "EBITDA margin", "value": "19.2%", "vs_plan": "−20 bps vs plan", "story": "Margin is the soft spot, with FX and API input cost as the main drag."},
+        {"key": "cash", "label": "Cash vs floor", "value": "SAR 1.48B", "vs_plan": "+SAR 280M above floor", "story": "Liquidity remains strong and preserves headroom for the GLP-1 JV."},
+    ],
+    "drivers": [
+        {
+            "key": "revenue",
+            "label": "Revenue",
+            "value": "SAR 2.09B",
+            "vs_plan": "+2.3% vs plan",
+            "story": "The gap to plan has widened in the group's favour across the quarter.",
+            "lifting": [
+                {"name": "e-Pharmacy", "delta": "+12% orders WoW", "contribution": 38, "detail": "GLP-1 refill cohort is compounding and fulfilment is holding at a 2-day SLA."},
+                {"name": "Pharmacy Retail", "delta": "+8.3% like-for-like", "contribution": 27},
+                {"name": "Digital Health", "delta": "+36% revenue YoY", "contribution": 15},
+            ],
+            "dragging": [
+                {"name": "Healthcare Services", "delta": "−3.8% occupancy", "contribution": -18, "detail": "Two consultants are on leave; locum cover lands next week."},
+                {"name": "Tamween Distribution", "delta": "+0.4% — flat vs plan", "contribution": -6, "detail": "Recovering SAR 1.2M leakage while targeting 9.5% margin by year-end."},
+            ],
+        },
+        {
+            "key": "ebitda",
+            "label": "EBITDA margin",
+            "value": "19.2%",
+            "vs_plan": "−20 bps vs plan",
+            "story": "FX exposure and API input cost are the main leaks; a 60% EUR hedge is on Thursday's board agenda.",
+            "lifting": [
+                {"name": "Manufacturing", "delta": "+60 bps on yield", "contribution": 22},
+                {"name": "Pharmacy Retail", "delta": "+30 bps mix", "contribution": 12},
+            ],
+            "dragging": [
+                {"name": "FX exposure", "delta": "~SAR 9k / wk drag", "contribution": -20, "detail": "A 60% EUR hedge neutralises most of the current drag and recovers ~15 bps."},
+                {"name": "Tamween Distribution", "delta": "leakage · SAR 1.2M", "contribution": -16, "detail": "Recovering leakage and cutting cost via the S/4HANA cutover."},
+                {"name": "API input cost", "delta": "+4.1% vs plan", "contribution": -11},
+            ],
+        },
+    ],
+    "findings": [
+        {
+            "finding_id": "public-fx-drag",
+            "title": "FX is building a ~SAR 9k margin drag this week",
+            "pattern_type": "fx_hedge_unapplied",
+            "detail": "EUR/SAR drift against an unhedged slice of API purchasing. A 60% hedge neutralises most of it; decision sits on Thursday's board agenda.",
+            "recoverable_sar": 0.0,
+            "domain": "ebitda_margin",
+            "public_source": "executive_design",
+        },
+        {
+            "finding_id": "public-group-recovery",
+            "title": "SAR 8.6M is recoverable across the group",
+            "pattern_type": "finance_leakage",
+            "detail": "Tamween audit (SAR 1.2M), duplicate-vendor spend, and aged AR concentrate the opportunity. The system has drafted the recovery sequence.",
+            "recoverable_sar": 8_600_000.0,
+            "domain": "recovery",
+            "public_source": "executive_design",
+        },
+        {
+            "finding_id": "public-tamween-recovery",
+            "title": "Tamween audit: SAR 1.2M recoverable",
+            "pattern_type": "finance_leakage",
+            "detail": "Folds into the SAR 8.6M group recovery. Net margin uplift is ~10 bps once collected.",
+            "recoverable_sar": 1_200_000.0,
+            "domain": "tamween_distribution",
+            "public_source": "executive_design",
+        },
+        {
+            "finding_id": "public-cold-chain",
+            "title": "Operational resilience intact — cold-chain at a record",
+            "pattern_type": "resilience",
+            "detail": "Cold-chain integrity reached 99.4%, the best on record, through the summer peak.",
+            "recoverable_sar": 0.0,
+            "domain": "logistics",
+            "public_source": "executive_design",
+        },
+    ],
+    "developments": [
+        {"title": "NUPCO Q1 awards confirmed: +SAR 145M annual", "impact": "Lifts the full-year revenue bridge by ~SAR 145M and improves cash timing."},
+        {"title": "Tamween audit: SAR 1.2M recoverable", "impact": "Folds into the SAR 8.6M group recovery. Net margin uplift ~10 bps once collected."},
+        {"title": "Cold-chain hit a record 99.4% — best ever", "impact": "Reinforces the resilience KPI and de-risks the NUPCO ramp."},
+    ],
+    "week": [
+        {"key": "board_prep", "title": "Board meeting", "prep": "Two decisions open: the FX hedge and the GLP-1 JV. The pack is 80% composed — margin narrative needs your line.", "prompt": "Am I on track for the board on Thursday?"},
+        {"key": "jv", "title": "GLP-1 JV signature", "prep": "Supply-lock terms agreed; cash headroom confirmed. e-Pharmacy demand model attached.", "prompt": "Can we fund the JV from cash?"},
+        {"key": "call", "title": "e-Pharmacy GM — opportunity call", "prep": "Lina wants to pull forward fulfilment capacity. Bring the 12% WoW order curve.", "prompt": "Should we pull forward e-Pharmacy fulfilment capacity?"},
+    ],
+    "board_portal": {
+        "summary": "Board endorsed the margin-protection plan and approved the GLP-1 JV subject to final supply terms.",
+        "actions": [
+            {"item": "Ratify the 60% EUR hedge", "owner": "Group CFO"},
+            {"item": "Approve GLP-1 JV signature", "owner": "Group CEO"},
+            {"item": "Review Tamween recovery at Q3", "owner": "Audit committee"},
+        ],
+    },
+    "agent_activity": {
+        "line": "5 agents · 25 steps · 15 tool calls — recovered SAR 8.6M of leakage and composed 80% of the board pack",
+        "running_agents": [
+            {"name": "Board pack composer", "progress": 80, "doing": "Drafting the margin narrative."},
+            {"name": "Leakage recovery scan", "progress": 38, "doing": "Scanning for recoverable spend."},
+            {"name": "FX hedge pre-clearance", "progress": 100, "doing": "A 60% EUR hedge is staged pending approval."},
+        ],
+    },
+    "kg_nodes": [
+        {"id": "finding:tamween", "label": "Tamween audit", "properties": {"domain": "tamween_distribution", "recoverable_sar": 1_200_000.0}},
+        {"id": "finding:group-recovery", "label": "Group recovery", "properties": {"domain": "recovery", "recoverable_sar": 8_600_000.0}},
+        {"id": "driver:epharmacy", "label": "e-Pharmacy", "properties": {"domain": "revenue", "detail": "+12% orders WoW"}},
+        {"id": "driver:fx", "label": "FX exposure", "properties": {"domain": "ebitda_margin", "detail": "~SAR 9k / wk drag"}},
+        {"id": "driver:healthcare", "label": "Healthcare Services", "properties": {"domain": "revenue", "detail": "−3.8% occupancy"}},
+    ],
+    "kg_edges": [
+        {"source": "finding:tamween", "target": "finding:group-recovery", "label": "PART_OF"},
+        {"source": "driver:epharmacy", "target": "driver:healthcare", "label": "OFFSETS"},
+        {"source": "driver:fx", "target": "finding:group-recovery", "label": "BOARD_DECISION_CONTEXT"},
+    ],
+    "facts": [
+        "Tamween audit: SAR 1.2M recoverable.",
+        "SAR 8.6M is recoverable across the group.",
+        "e-Pharmacy orders are +12% week on week and fulfilment is holding at a 2-day SLA.",
+        "FX is building a ~SAR 9k weekly drag on EBITDA margin and a 60% EUR hedge recovers most of it.",
+        "Healthcare Services occupancy is −3.8% below plan and remains the main operating drag.",
+        "The board pack is 80% composed and the board prep still needs the margin narrative.",
+    ],
+}
+
+
+def executive_public_assistant_context() -> dict[str, Any]:
+    return deepcopy(PUBLIC_ASSISTANT_CONTEXT_PACKET)

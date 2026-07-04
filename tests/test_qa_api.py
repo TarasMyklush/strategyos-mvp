@@ -9,6 +9,7 @@ import strategyos_mvp.auth as auth_module
 import strategyos_mvp.run_registry as run_registry_module
 import strategyos_mvp.state_store as state_store
 from strategyos_mvp.config import load_config
+from strategyos_mvp.executive_design import executive_public_assistant_context
 
 
 def _apply_env(env_updates: dict[str, str | None]):
@@ -325,7 +326,7 @@ def test_assistant_chat_public_ceo_scenario_works_under_identity_provider(monkey
         assert payload["scenario_id"] == "digital_health_eoy_flat"
         assert payload["matched"] is True
         assert payload["prompt_contracts"]["role"]["prompt_id"] == "role:ceo:v1"
-        assert payload["hallucination_risk"]["level"] == "high"
+        assert payload["hallucination_risk"]["level"] == "low"
         assert payload["citations"]
         assert payload["trace"]
         assert payload["run_id"] == "latest-public"
@@ -365,7 +366,319 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         assert payload["run_mode"] == "public-safe"
         assert payload["matched"] is False
         assert payload["llm_fallback_attempted"] is False
-        assert "No completed governed run is available yet" in payload["answer"]
+        assert "shared public packet" in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_public_assistant_context_is_shared_between_bootstrap_and_chat_context(monkeypatch):
+    monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+    bootstrap = api_module._ui_bootstrap()
+    resolver_payload = api_module._resolve_public_assistant_context("latest-public", persona="ceo")
+    packet = executive_public_assistant_context()
+
+    assert bootstrap["assistant_public_context"]["packet_id"] == packet["packet_id"]
+    assert resolver_payload["summary"]["assistant_context_source"] == packet["packet_id"]
+    facts_text = " ".join(packet["facts"]).lower()
+    for term in ["tamween", "1.2m", "8.6m", "e-pharmacy", "fx", "board"]:
+        assert term in facts_text
+    findings_text = json.dumps(resolver_payload["findings"]).lower()
+    for term in ["tamween", "8.6", "fx"]:
+        assert term in findings_text
+
+
+def test_public_assistant_context_exposes_kg_and_public_safe_findings(monkeypatch):
+    monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+    payload = api_module._resolve_public_assistant_context("latest-public", persona="ceo")
+
+    assert payload["run_id"] == "latest-public"
+    assert payload["run_mode"] == "public-safe"
+    assert payload["findings"], "public-safe assistant context must not be empty"
+    assert payload["kg_nodes"], "public-safe assistant context must expose KG summary nodes"
+    assert payload["kg_edges"], "public-safe assistant context must expose KG summary edges"
+
+
+def test_public_safe_golden_prompts_return_substantive_answers(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        client = TestClient(api_module.app)
+
+        prompts = {
+            'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.': ["sar 1.2m", "sar 8.6m", "board"],
+            "Show evidence for SAR 8.6M recoverable": ["sar 8.6m", "tamween", "public"],
+            "Why is the gap widening?": ["e-pharmacy", "healthcare", "tamween"],
+            "Show e-Pharmacy detail": ["e-pharmacy", "12%", "sla"],
+            "Risk to full-year plan?": ["margin", "fx", "tamween"],
+            "Project FX hedge impact on EBITDA margin": ["ebitda", "fx", "hedge"],
+            "Simulate digital health flat by end of year": ["digital health", "scenario", "assumptions"],
+        }
+
+        for question, expected_terms in prompts.items():
+            response = client.post("/assistant/chat", json={"question": question, "persona": "ceo", "mode": "auto"})
+            assert response.status_code == 200, question
+            payload = response.json()
+            answer_lower = payload["answer"].lower()
+            assert "no completed governed run is available yet" not in answer_lower, question
+            assert "no findings available for leakage analysis" not in answer_lower, question
+            assert payload["run_id"] == "latest-public"
+            assert payload["run_mode"] == "public-safe"
+            assert payload["trace"]["entrypoint_context"]["active_persona"] == "ceo"
+            assert payload["hallucination_risk"]["level"] in {"low", "medium", "high"}
+            for term in expected_terms:
+                assert term in answer_lower or term in json.dumps(payload).lower(), f"Missing '{term}' for prompt: {question}"
+    finally:
+        _restore_env(original)
+
+
+def test_public_assistant_context_includes_shared_public_packet_facts(monkeypatch):
+    monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+    context = api_module._resolve_public_assistant_context(
+        None,
+        persona="ceo",
+        assistant_context={"source": "executive_surface", "entrypoint": "scenario_chip"},
+        driver_context=None,
+    )
+
+    packet = context["public_context_packet"]
+    assert context["run_id"] == "latest-public"
+    assert context["run_mode"] == "public-safe"
+    assert context["findings"], "public-safe assistant context must not expose empty findings"
+    assert context["kg_nodes"], "public-safe assistant context must include KG summary nodes"
+    assert context["kg_edges"], "public-safe assistant context must include KG summary edges"
+    text = json.dumps(packet)
+    for needle in ["Tamween audit", "SAR 8.6M", "e-Pharmacy", "FX", "board pack", "running_agents"]:
+        assert needle in text, f"missing shared public packet fact: {needle}"
+
+
+def test_assistant_chat_public_golden_prompts_use_shared_public_packet(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        client = TestClient(api_module.app)
+
+        golden_prompts = [
+            'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
+            "Show evidence for SAR 8.6M recoverable",
+            "Why is the gap widening?",
+            "Show e-Pharmacy detail",
+            "Risk to full-year plan?",
+            "Project FX hedge impact on EBITDA margin",
+            "Simulate digital health flat by end of year",
+        ]
+        for prompt in golden_prompts:
+            response = client.post(
+                "/assistant/chat",
+                json={
+                    "question": prompt,
+                    "persona": "ceo",
+                    "mode": "auto",
+                    "source": "executive_surface",
+                    "entrypoint": "scenario_chip",
+                },
+            )
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["run_id"] == "latest-public"
+            assert payload["run_mode"] == "public-safe"
+            assert payload["trace"]["entrypoint_context"]["source"] == "executive_surface"
+            assert payload["trace"]["entrypoint_context"]["entrypoint"] == "scenario_chip"
+            assert "No completed governed run is available yet" not in payload["answer"]
+            assert "No findings available for leakage analysis" not in payload["answer"]
+            assert payload["citations"], f"golden prompt must return citations: {prompt}"
+
+        tamween_payload = client.post(
+            "/assistant/chat",
+            json={
+                "question": golden_prompts[0],
+                "persona": "ceo",
+                "mode": "auto",
+                "source": "executive_surface",
+                "entrypoint": "development_cta",
+            },
+        ).json()
+        assert "SAR 1.2M" in tamween_payload["answer"]
+        assert "SAR 8.6M" in tamween_payload["answer"]
+        assert "board" in tamween_payload["answer"].lower()
+        assert "margin" in tamween_payload["answer"].lower()
+        assert tamween_payload["hallucination_risk"]["level"] != "none"
+    finally:
+        _restore_env(original)
+
+
+def test_resolve_public_assistant_context_populates_shared_public_packet(monkeypatch):
+    monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+    context = api_module._resolve_public_assistant_context(
+        "latest-public",
+        persona="ceo",
+        assistant_context={"source": "executive_surface", "entrypoint": "drawer_input"},
+    )
+
+    assert context["bundle"] is not None
+    assert context["findings"], "public-safe assistant context must expose findings"
+    assert context["kg_nodes"], "public-safe assistant context must expose KG nodes"
+    packet = context["public_context_packet"]
+    facts_text = " ".join(packet.get("facts") or [])
+    assert "Tamween audit: SAR 1.2M recoverable" in facts_text
+    assert "SAR 8.6M is recoverable across the group" in facts_text
+    assert "e-Pharmacy" in facts_text
+    assert "FX" in facts_text
+
+
+def test_assistant_chat_public_ceo_golden_prompts_use_shared_public_packet(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        client = TestClient(api_module.app)
+        prompts = [
+            'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
+            "Show evidence for SAR 8.6M recoverable",
+            "Why is the gap widening?",
+            "Show e-Pharmacy detail",
+            "Risk to full-year plan?",
+            "Project FX hedge impact on EBITDA margin",
+            "Simulate digital health flat by end of year",
+        ]
+
+        for prompt in prompts:
+            response = client.post(
+                "/assistant/chat",
+                json={
+                    "question": prompt,
+                    "persona": "ceo",
+                    "mode": "auto",
+                    "assistant_context": {"source": "executive_surface", "entrypoint": "golden_prompt_test"},
+                },
+            )
+
+            assert response.status_code == 200, prompt
+            payload = response.json()
+            assert payload["status"] == "ok", prompt
+            assert payload["matched"] is True, prompt
+            assert payload["run_id"] == "latest-public", prompt
+            assert payload["run_mode"] == "public-safe", prompt
+            assert "No completed governed run is available yet" not in payload["answer"], prompt
+            assert "No findings available for leakage analysis" not in payload["answer"], prompt
+            assert payload["assistant_context"]["entrypoint"] == "golden_prompt_test", prompt
+    finally:
+        _restore_env(original)
+
+
+def test_public_assistant_context_uses_shared_public_packet(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": 'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "development_cta", "board_state": "pre", "driver_key": "revenue"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_id"] == "latest-public"
+        assert payload["run_mode"] == "public-safe"
+        assert payload["assistant_context"]["entrypoint"] == "development_cta"
+        assert payload["trace"]["entrypoint_context"]["driver_key"] == "revenue"
+        assert "SAR 1.2M" in payload["answer"]
+        assert "SAR 8.6M" in payload["answer"]
+        assert payload["hallucination_risk"]["level"] in {"low", "medium"}
+        assert payload["citations"]
+        assert any("public_packet://latest-public" == item["source_path"] for item in payload["citations"])
+
+    finally:
+        _restore_env(original)
+
+
+def test_public_assistant_golden_prompts_use_shared_context(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        client = TestClient(api_module.app)
+        prompts = [
+            ("Show evidence for SAR 8.6M recoverable", "SAR 8.6M"),
+            ("Why is the gap widening?", "gap is widening"),
+            ("Show e-Pharmacy detail", "e-Pharmacy"),
+            ("Risk to full-year plan?", "full-year risk"),
+            ("Project FX hedge impact on EBITDA margin", "19.2%"),
+        ]
+
+        for question, token in prompts:
+            response = client.post(
+                "/assistant/chat",
+                json={
+                    "question": question,
+                    "persona": "ceo",
+                    "mode": "auto",
+                    "assistant_context": {"source": "executive_surface", "entrypoint": "scenario_chip", "board_state": "pre", "driver_key": "revenue"},
+                },
+            )
+            assert response.status_code == 200, question
+            payload = response.json()
+            assert "No completed governed run is available yet" not in payload["answer"], question
+            assert token.lower() in payload["answer"].lower(), question
+            assert payload["citations"], question
+
     finally:
         _restore_env(original)
 

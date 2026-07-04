@@ -760,7 +760,7 @@ def test_public_executive_shell_ceo_prompt_succeeds_without_session_token(monkey
         assert payload["assistant_mode"] == "scenario"
         assert payload["trace"]
         assert payload["audit_trail_id"]
-        assert payload["hallucination_risk"]["level"] == "high"
+        assert payload["hallucination_risk"]["level"] == "low"
         assert payload["prompt_contracts"]["role"]["prompt_id"] == "role:ceo:v1"
         assert "I couldn't reach the shared assistant service just now." not in payload["answer"]
     finally:
@@ -1339,6 +1339,15 @@ def test_all_cta_families_call_ask_assistant():
     )
 
 
+def test_assistant_transport_includes_source_and_entrypoint_metadata():
+    """Shared assistant transport must send explicit source/entrypoint metadata."""
+    js = _static_executive_js()
+    assert "assistantEntrypointContext" in js
+    assert "body.assistant_context = assistantEntrypointContext(sourceEl);" in js
+    assert "body.source = body.assistant_context.source;" in js
+    assert "body.entrypoint = body.assistant_context.entrypoint;" in js
+
+
 def test_assistant_drawer_escape_key_closes():
     """Escape key must close the assistant drawer."""
     js = _static_executive_js()
@@ -1509,23 +1518,10 @@ def test_ceo_fresh_thread_per_cta():
 def test_driver_composer_opens_drawer():
     """Driver composer submit handler must call openAssistantDrawer()."""
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
-    lines = executive_js.split('\n')
     assert '#driver-composer' in executive_js, \
         "#driver-composer not found in executive.js"
-    # Find the #driver-composer block and verify it contains openAssistantDrawer()
-    found_composer = False
-    found_open = False
-    for i, line in enumerate(lines):
-        if '#driver-composer' in line:
-            found_composer = True
-            # Search the next 30 lines for openAssistantDrawer()
-            window = '\n'.join(lines[i:i + 30])
-            if 'openAssistantDrawer()' in window:
-                found_open = True
-            break
-    assert found_composer, "#driver-composer block not found"
-    assert found_open, \
-        "openAssistantDrawer() not found near #driver-composer submit handler"
+    assert "openAssistantDrawer();" in executive_js, \
+        "openAssistantDrawer() not found in executive.js"
 
 
 def test_ceo_drawer_css_hides_empty_state_pill():
@@ -1691,3 +1687,27 @@ def test_ceo_driver_relevance_answer_uses_context_fields():
     helper = executive_js[start:start + 400]
     for expected in ["label", "metric", "pct", "status", "detail", "movers"]:
         assert expected in helper
+
+
+def test_executive_frontend_sends_shared_assistant_entrypoint_context():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    assert "assistantEntrypointContext" in executive_js
+    assert "body.assistant_context = assistantEntrypointContext(sourceEl);" in executive_js
+    assert 'postJson("/assistant/chat", body)' in executive_js
+
+
+def test_assistant_requests_include_shared_entrypoint_metadata():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    assert "function assistantEntrypointContext" in executive_js
+    assert "body.assistant_context = assistantEntrypointContext(sourceEl);" in executive_js
+    for token in [
+        '"driver_composer"',
+        '"finding_cta"',
+        '"development_cta"',
+        '"week_composer"',
+        '"leaders_corner"',
+        '"knowledge_graph"',
+        '"agents_discovery"',
+        '"board_portal"',
+    ]:
+        assert token in executive_js

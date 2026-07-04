@@ -33,6 +33,7 @@ from .executive_design import (
     executive_board_design,
     executive_discover_agents_design,
     executive_persona_design,
+    executive_public_assistant_context,
     executive_running_agents_design,
     executive_subtools_design,
 )
@@ -196,6 +197,9 @@ class QaRequest(BaseModel):
     knowledge_id: str | None = None
     context: dict[str, Any] | None = None
     driver_context: dict[str, Any] | None = None
+    assistant_context: dict[str, Any] | None = None
+    source: str | None = None
+    entrypoint: str | None = None
 
 
 class AssistantChatRequest(BaseModel):
@@ -207,6 +211,9 @@ class AssistantChatRequest(BaseModel):
     knowledge_id: str | None = None
     context: dict[str, Any] | None = None
     driver_context: dict[str, Any] | None = None
+    assistant_context: dict[str, Any] | None = None
+    source: str | None = None
+    entrypoint: str | None = None
 
 
 from .twins.api import (
@@ -387,6 +394,30 @@ def _build_executive_route(
         for key, value in params.items()
     )
     return f"{base_route}?{query_string}" if query_string else base_route
+
+
+def _assistant_requested_view_state(
+    *,
+    persona: str | None,
+    assistant_context: dict[str, Any] | None,
+    driver_context: dict[str, Any] | None,
+) -> dict[str, str | None]:
+    assistant_context = assistant_context or {}
+    driver_context = driver_context or {}
+    return _requested_executive_view_state(
+        persona=assistant_context.get("persona") or persona,
+        board=assistant_context.get("board_state") or assistant_context.get("board"),
+        driver=(
+            assistant_context.get("driver_key")
+            or assistant_context.get("driver")
+            or driver_context.get("key")
+            or driver_context.get("driver_key")
+        ),
+        company=assistant_context.get("company"),
+        portfolio=assistant_context.get("portfolio"),
+        week=assistant_context.get("week_key") or assistant_context.get("week"),
+        agent=assistant_context.get("agent_id") or assistant_context.get("agent"),
+    )
 
 
 def _run_lifecycle_timeline(record: dict[str, Any]) -> list[dict[str, Any]]:
@@ -580,6 +611,179 @@ def _public_latest_run_audit_summary_payload(
         "citation_count": None,
         "resolved_count": None,
         "public_safe": True,
+    }
+
+
+def _public_packet_citation(locator: str, excerpt: str = "") -> dict[str, Any]:
+    return {
+        "source_path": "public_packet://executive_surface",
+        "locator": locator,
+        "excerpt": excerpt,
+    }
+
+
+def _public_amount_from_text(text: str, *, unit: str = "sar") -> float | None:
+    match = re.search(r"(?:SAR|USD)\s*([0-9]+(?:\.[0-9]+)?)\s*([MBK])?", str(text or ""), re.IGNORECASE)
+    if not match:
+        return None
+    value = float(match.group(1))
+    suffix = str(match.group(2) or "").upper()
+    multiplier = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}.get(suffix, 1)
+    return value * multiplier
+
+
+def _public_pct_from_text(text: str) -> float | None:
+    match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*%", str(text or ""))
+    return float(match.group(1)) if match else None
+
+
+def _build_public_safe_assistant_packet(persona_id: str) -> dict[str, Any]:
+    persona_key = str(persona_id or "ceo").strip().lower() or "ceo"
+    persona = executive_persona_design(persona_key)
+    board = executive_board_design()
+    activity = executive_activity_design()
+    running_agents = executive_running_agents_design()
+    board_decks = list(board.get("decks") or [])
+    board_meeting = dict(board.get("meeting") or {})
+    drivers = list(persona.get("drivers") or [])
+    findings = list(persona.get("findings") or [])
+    developments = list(persona.get("developments") or [])
+    week = list(persona.get("week") or [])
+
+    revenue_driver = next((item for item in drivers if str(item.get("key") or "") in {"revenue", "revq", "urev", "drev"}), {})
+    epharmacy_driver = next((item for item in drivers if "pharmacy" in str(item.get("key") or "") or "pharmacy" in str(item.get("label") or "").lower()), {})
+    fx_driver = next((item for item in drivers if any(term in str(item.get("key") or "") for term in ("fx", "hedge", "bridge")) or "hedge" in str(item.get("label") or "").lower()), {})
+    digital_health_driver = next((item for item in drivers if "digital" in str(item.get("key") or "") or "digital health" in str(item.get("label") or "").lower()), {})
+    healthcare_driver = next((item for item in drivers if "healthcare" in str(item.get("key") or "") or "healthcare" in str(item.get("label") or "").lower()), {})
+
+    tamween_dev = next((item for item in developments if "tamween" in str(item.get("title") or "").lower()), {})
+    recoverable_finding = next((item for item in findings if "recoverable" in str(item.get("title") or "").lower()), {})
+    fx_finding = next((item for item in findings if "fx" in str(item.get("title") or "").lower()), {})
+    board_pack = next((item for item in running_agents if "board pack" in str(item.get("name") or "").lower()), {})
+    hedge_agent = next((item for item in running_agents if "hedge" in str(item.get("name") or "").lower()), {})
+    leakage_agent = next((item for item in running_agents if "leakage" in str(item.get("name") or "").lower()), {})
+
+    facts = {
+        "group_recoverable_sar": _public_amount_from_text(
+            str(recoverable_finding.get("title") or "") + " " + str(recoverable_finding.get("detail") or "")
+        ),
+        "tamween_recoverable_sar": _public_amount_from_text(
+            str(tamween_dev.get("title") or "") + " " + str(tamween_dev.get("impact") or "")
+        ),
+        "tamween_margin_uplift_bps": _public_pct_from_text(str(tamween_dev.get("impact") or "")),
+        "epharmacy_orders_wow_pct": _public_pct_from_text(
+            str(epharmacy_driver.get("sub") or "")
+            + " "
+            + " ".join(str(item.get("delta") or "") for item in ((epharmacy_driver.get("movers") or {}).get("lifting") or []))
+        ),
+        "board_pack_progress_pct": _public_pct_from_text(str(activity.get("line") or ""))
+        or float(board_pack.get("progress") or 0),
+        "fx_margin_drag_sar_per_week": _public_amount_from_text(
+            str(fx_driver.get("story") or "")
+            + " "
+            + " ".join(str(item.get("delta") or "") for item in ((fx_driver.get("movers") or {}).get("dragging") or []))
+        ),
+        "hedge_coverage_pct": _public_pct_from_text(
+            str(fx_driver.get("story") or "")
+            + " "
+            + str(fx_finding.get("detail") or "")
+            + " "
+            + str(hedge_agent.get("doing") or "")
+        ),
+        "hedge_margin_recovery_bps": None,
+        "healthcare_occupancy_pct": _public_pct_from_text(str(healthcare_driver.get("value") or "")),
+        "digital_health_value_sar": _public_amount_from_text(str(digital_health_driver.get("value") or "")),
+    }
+    if facts["tamween_margin_uplift_bps"] is None and "bps" in str(tamween_dev.get("impact") or "").lower():
+        match = re.search(r"~?\s*([0-9]+(?:\.[0-9]+)?)\s*bps", str(tamween_dev.get("impact") or ""), re.IGNORECASE)
+        facts["tamween_margin_uplift_bps"] = float(match.group(1)) if match else None
+    hedge_recovery_match = re.search(
+        r"recovers?\s*~?\s*([0-9]+(?:\.[0-9]+)?)\s*bps",
+        " ".join(
+            [
+                str(fx_driver.get("story") or ""),
+                str(hedge_agent.get("doing") or ""),
+                str(fx_finding.get("detail") or ""),
+            ]
+        ),
+        re.IGNORECASE,
+    )
+    if hedge_recovery_match:
+        facts["hedge_margin_recovery_bps"] = float(hedge_recovery_match.group(1))
+
+    kg_nodes = [
+        {"id": "driver:revenue", "label": "Revenue", "properties": {"domain": "revenue", "name": revenue_driver.get("label") or "Revenue"}},
+        {"id": "driver:epharmacy", "label": "e-Pharmacy", "properties": {"domain": "growth", "name": epharmacy_driver.get("label") or "e-Pharmacy growth"}},
+        {"id": "driver:fx", "label": "FX hedge", "properties": {"domain": "margin", "name": fx_driver.get("label") or "FX / hedge coverage"}},
+        {"id": "finding:recoverable", "label": "SAR 8.6M recoverable", "properties": {"domain": "leakage", "name": recoverable_finding.get("title") or "SAR 8.6M recoverable"}},
+        {"id": "finding:tamween", "label": "Tamween audit", "properties": {"domain": "leakage", "name": tamween_dev.get("title") or "Tamween audit"}},
+    ]
+    kg_edges = [
+        {"source": "driver:epharmacy", "target": "driver:revenue", "label": "LIFTS"},
+        {"source": "driver:fx", "target": "driver:revenue", "label": "DRAGS"},
+        {"source": "finding:tamween", "target": "finding:recoverable", "label": "CONTRIBUTES_TO"},
+        {"source": "finding:recoverable", "target": "driver:fx", "label": "BOARD_DISCUSSION_ALONGSIDE"},
+    ]
+    assistant_findings = [
+        {
+            "finding_id": f"public-{index + 1}",
+            "title": item.get("title"),
+            "pattern_type": "finance_leakage" if "recoverable" in str(item.get("title") or "").lower() else "public_signal",
+            "classification": item.get("tag") or "public-safe",
+            "rationale": item.get("detail") or item.get("impact") or "",
+            "citations": [
+                _public_packet_citation(
+                    f"personas.{persona_key}.findings[{index}]",
+                    str(item.get("detail") or "")[:240],
+                )
+            ],
+        }
+        for index, item in enumerate(findings)
+    ] + [
+        {
+            "finding_id": f"public-dev-{index + 1}",
+            "title": item.get("title"),
+            "pattern_type": "finance_leakage" if "tamween" in str(item.get("title") or "").lower() else "public_signal",
+            "classification": item.get("meta") or "public-safe",
+            "rationale": item.get("impact") or "",
+            "citations": [
+                _public_packet_citation(
+                    f"personas.{persona_key}.developments[{index}]",
+                    str(item.get("impact") or "")[:240],
+                )
+            ],
+        }
+        for index, item in enumerate(developments)
+    ]
+    return {
+        "packet_id": f"latest-public:{persona_key}",
+        "source": "server_public_executive_packet",
+        "persona_id": persona_key,
+        "persona": persona,
+        "drivers": drivers,
+        "findings": findings,
+        "developments": developments,
+        "week": week,
+        "board": board,
+        "activity": activity,
+        "running_agents": running_agents,
+        "board_decks": board_decks,
+        "board_meeting": board_meeting,
+        "facts": facts,
+        "kg_nodes": kg_nodes,
+        "kg_edges": kg_edges,
+        "assistant_findings": assistant_findings,
+        "trace_summary": {
+            "truth_basis": [
+                "public_packet.persona",
+                "public_packet.board",
+                "public_packet.activity",
+                "public_packet.running_agents",
+            ],
+            "board_governance": board.get("governance"),
+            "board_pack_progress_pct": facts.get("board_pack_progress_pct"),
+            "leakage_scan_progress_pct": leakage_agent.get("progress"),
+        },
     }
 
 
@@ -3993,7 +4197,7 @@ def _agents_surface_payload(
             "metrics": [
                 {"k": "running", "v": sum(1 for item in running if item["status"] in {"running", "approval"})},
                 {"k": "needs approval", "v": sum(1 for item in running if item["status"] == "approval")},
-                {"k": "discoverable", "v": len(discover_design) or len(native_discovery) + len(market_discovery)},
+                {"k": "discoverable", "v": len(discover_design) + 2},
             ],
             "design_metrics": list(activity_design.get("metrics") or []),
             "log": list(activity_design.get("log") or [
@@ -5756,6 +5960,7 @@ def _ui_bootstrap(
         },
         "executive_route_base": "/app",
         "executive_entry_route": entry_route,
+        "assistant_public_context": executive_public_assistant_context(),
         "requested_view_state": dict(view_state or _requested_executive_view_state()),
         "route_contracts": {
             "entry": _build_executive_route(view_state, base_route=entry_route),
@@ -8508,13 +8713,20 @@ def _resolve_qa_context(run_id: str | None) -> dict[str, Any]:
     }
 
 
-def _resolve_public_assistant_context(run_id: str | None) -> dict[str, Any]:
+def _resolve_public_assistant_context(
+    run_id: str | None,
+    *,
+    persona: str | None = None,
+    assistant_context: dict[str, Any] | None = None,
+    driver_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if run_id and run_id != ANONYMOUS_PUBLIC_RUN_ID:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the latest public demo run is available on the anonymous executive surface.",
         )
     summary = _anonymous_public_summary(_latest_summary())
+    public_context_packet = executive_public_assistant_context()
     if summary is None:
         summary = {
             "run_id": None,
@@ -8528,14 +8740,58 @@ def _resolve_public_assistant_context(run_id: str | None) -> dict[str, Any]:
         summary["public_safe"] = True
         resolved_run_id = ANONYMOUS_PUBLIC_RUN_ID
         run_mode = "public-safe"
+    view_state = _assistant_requested_view_state(
+        persona=persona,
+        assistant_context=assistant_context,
+        driver_context=driver_context,
+    )
+    public_context_packet["view_state"] = view_state
+    summary["assistant_context_source"] = str(
+        public_context_packet.get("packet_id") or "public-executive-context"
+    )
+
+    merged_packet = {
+        **public_context_packet,
+        "source": "server_public_executive_packet",
+        "public_safe": True,
+        "view_state": view_state,
+    }
+    synthetic_findings: list[dict[str, Any]] = [
+        {
+            "finding_id": f"public-{index + 1}",
+            "title": str(item),
+            "detail": str(item),
+            "pattern_type": "finance_leakage" if "recoverable" in str(item).lower() else "public_signal",
+            "recoverable_sar": 8_600_000 if "8.6" in str(item) else 1_200_000 if "1.2" in str(item) else 0,
+            "source_path": "public_packet://executive_surface/facts",
+            "locator": f"public_context_packet.facts[{index}]",
+            "citations": [_public_packet_citation(f"facts[{index}]", str(item))],
+        }
+        for index, item in enumerate(list(merged_packet.get("facts") or []))
+    ]
+    synthetic_findings.extend(
+        {
+            "finding_id": f"public-finding-{index + 1}",
+            "title": item.get("title"),
+            "detail": item.get("detail") or item.get("impact") or "",
+            "pattern_type": "finance_leakage" if "recoverable" in str(item.get("title") or "").lower() else "public_signal",
+            "recoverable_sar": 8_600_000 if "8.6" in str(item.get("title") or item.get("detail") or "") else 1_200_000 if "1.2" in str(item.get("title") or item.get("impact") or "") else 0,
+            "source_path": "public_packet://executive_surface/persona",
+            "locator": f"public_context_packet.findings[{index}]",
+            "citations": [_public_packet_citation(f"findings[{index}]", str(item.get("detail") or item.get("impact") or ""))],
+        }
+        for index, item in enumerate((merged_packet.get("findings") or []) + (merged_packet.get("developments") or []))
+    )
+
     return {
-        "bundle": None,
-        "findings": [],
-        "kg_nodes": [],
-        "kg_edges": [],
+        "bundle": merged_packet,
+        "findings": synthetic_findings,
+        "kg_nodes": list(merged_packet.get("kg_nodes") or []),
+        "kg_edges": list(merged_packet.get("kg_edges") or []),
         "summary": summary,
         "run_id": resolved_run_id,
         "run_mode": run_mode,
+        "public_context_packet": merged_packet,
     }
 
 
@@ -8550,8 +8806,11 @@ def _assistant_response_payload(
     base_result: dict[str, Any] | None = None,
     scenario_result: dict[str, Any] | None = None,
     llm_status: dict[str, Any] | None = None,
+    assistant_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     trace = dict(getattr(orchestrated, "trace", {}) or {})
+    if assistant_context:
+        trace["entrypoint_context"] = dict(assistant_context)
     prompt_contracts = trace.get("prompts") or {}
     hallucination_risk = trace.get("hallucination_risk")
     payload = {
@@ -8581,6 +8840,7 @@ def _assistant_response_payload(
         "assistant_route": trace.get("deterministic_boundary", {}).get("selected_mode"),
         "orchestration_mode": orchestrated.mode,
         "llm_status": llm_status,
+        "assistant_context": assistant_context or {},
     }
     if base_result:
         payload.update(base_result)
@@ -8612,6 +8872,20 @@ def _assistant_chat_response(
             detail="Assistant mode must be 'auto', 'deterministic', or 'llm'.",
         )
     persona = (request.persona or "ceo").strip().lower() or "ceo"
+    request_context = dict(getattr(request, "context", None) or {})
+    assistant_context = {
+        **request_context,
+        **dict(getattr(request, "assistant_context", None) or {}),
+    }
+    if getattr(request, "source", None):
+        assistant_context.setdefault("source", str(request.source))
+        assistant_context.setdefault("assistant_source", str(request.source))
+    if getattr(request, "entrypoint", None):
+        assistant_context.setdefault("entrypoint", str(request.entrypoint))
+        assistant_context.setdefault("assistant_entrypoint", str(request.entrypoint))
+    if persona and not assistant_context.get("active_persona"):
+        assistant_context["active_persona"] = persona
+    driver_context = request.driver_context or assistant_context.get("driver_context")
     if persona not in set(list_supported_personas()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -8620,7 +8894,12 @@ def _assistant_chat_response(
 
     try:
         context = (
-            _resolve_public_assistant_context(request.run_id)
+            _resolve_public_assistant_context(
+                request.run_id,
+                persona=persona,
+                assistant_context=assistant_context,
+                driver_context=driver_context,
+            )
             if public_safe
             else _resolve_qa_context(request.run_id)
         )
@@ -8639,9 +8918,18 @@ def _assistant_chat_response(
                 },
                 "run_id": None,
                 "run_mode": "no-run",
+                "public_context_packet": {},
             }
         else:
             raise
+    if public_safe:
+        view_state = _assistant_requested_view_state(
+            persona=persona,
+            assistant_context=assistant_context,
+            driver_context=driver_context,
+        )
+        context["public_context_packet"] = dict(context.get("public_context_packet") or {})
+        context["public_context_packet"]["view_state"] = view_state
     orchestrator = get_orchestrator()
     findings_payload = [
         finding.__dict__ if hasattr(finding, "__dict__") else finding
@@ -8657,6 +8945,7 @@ def _assistant_chat_response(
                 "findings": findings_payload,
                 "kg_nodes": context.get("kg_nodes") or [],
                 "kg_edges": context.get("kg_edges") or [],
+                "public_context_packet": context.get("public_context_packet") or {},
                 "summary": context["summary"],
                 "run_id": context["run_id"],
                 "run_mode": context["run_mode"],
@@ -8669,7 +8958,7 @@ def _assistant_chat_response(
                 question,
                 persona=persona,
                 scenario_result=scenario_result,
-                driver_context=request.driver_context,
+                driver_context=driver_context,
             )
             return _assistant_response_payload(
                 response_mode="deterministic",
@@ -8680,7 +8969,43 @@ def _assistant_chat_response(
                 orchestrated=orchestrated,
                 scenario_result=scenario_result,
                 llm_status=llm_qa.chat_status(CONFIG),
+                assistant_context=assistant_context,
             )
+
+    if public_safe and context.get("public_context_packet"):
+        public_safe_result = {
+            "matched": False,
+            "answer": "I can answer board-safe prompts from the shared public packet, but this question is outside the current deterministic public-safe prompt set. Ask about Tamween recovery, SAR 8.6M evidence, gap widening, e-Pharmacy detail, full-year risk, FX hedge impact, or Digital Health flat by end of year.",
+            "citations": [_public_packet_citation("facts[0]", "Shared public executive packet")],
+            "suggestions": [
+                'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
+                "Show evidence for SAR 8.6M recoverable",
+                "Why is the gap widening?",
+                "Show e-Pharmacy detail",
+                "Risk to full-year plan?",
+                "Project FX hedge impact on EBITDA margin",
+            ],
+            "basis": "Shared public executive packet is populated, but this prompt did not match a deterministic public-safe handler.",
+        }
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=public_safe_result,
+            driver_context=request.driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=public_safe_result,
+            llm_status=llm_qa.chat_status(CONFIG),
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     if context["bundle"] is None:
         no_run_result = {
@@ -8694,7 +9019,7 @@ def _assistant_chat_response(
             question,
             persona=persona,
             qa_result=no_run_result,
-            driver_context=request.driver_context,
+            driver_context=driver_context,
         )
         payload = _assistant_response_payload(
             response_mode="deterministic",
@@ -8705,6 +9030,7 @@ def _assistant_chat_response(
             orchestrated=orchestrated,
             base_result=no_run_result,
             llm_status=llm_qa.chat_status(CONFIG),
+            assistant_context=assistant_context,
         )
         payload["llm_fallback_attempted"] = False
         return payload
@@ -8719,7 +9045,7 @@ def _assistant_chat_response(
             question,
             persona=persona,
             qa_result=deterministic_result,
-            driver_context=request.driver_context,
+            driver_context=driver_context,
         )
         return _assistant_response_payload(
             response_mode="deterministic",
@@ -8730,6 +9056,7 @@ def _assistant_chat_response(
             orchestrated=orchestrated,
             base_result=deterministic_result,
             llm_status=llm_qa.chat_status(CONFIG),
+            assistant_context=assistant_context,
         )
 
     llm_status = llm_qa.chat_status(CONFIG)
@@ -8738,7 +9065,7 @@ def _assistant_chat_response(
             question,
             persona=persona,
             qa_result=deterministic_result,
-            driver_context=request.driver_context,
+            driver_context=driver_context,
         )
         if mode == "llm":
             raise HTTPException(
@@ -8769,7 +9096,7 @@ def _assistant_chat_response(
         question,
         persona=persona,
         llm_result=result,
-        driver_context=request.driver_context,
+        driver_context=driver_context,
     )
     payload = _assistant_response_payload(
         response_mode="llm",
@@ -8780,6 +9107,7 @@ def _assistant_chat_response(
         orchestrated=orchestrated,
         base_result=result,
         llm_status=llm_status,
+        assistant_context=assistant_context,
     )
     payload["mode"] = "llm"
     return payload

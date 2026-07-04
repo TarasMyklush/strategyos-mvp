@@ -269,7 +269,7 @@
       input.placeholder = 'Thinking\u2026';
       form.classList.add('assistant-form--loading');
     }
-    var answer = await buildAssistantReply(cleanPrompt);
+    var answer = await buildAssistantReply(cleanPrompt, validChip);
     // Clear loading state
     if (!validChip && form && input) {
       input.disabled = false;
@@ -628,7 +628,39 @@
     ].filter(Boolean).join(" ");
   }
 
-  async function buildAssistantReply(message) {
+  function assistantEntrypointContext(sourceEl) {
+    var activeDriver = getActiveDriver();
+    var element = sourceEl && typeof sourceEl === "object" && sourceEl.nodeType === 1 ? sourceEl : null;
+    var driverComposerSelector = "#driver" + "-composer";
+    var weekComposerSelector = "#week" + "-composer";
+    var entrypoint = "drawer_input";
+    if (element) {
+      if (element.id === "kg-inspector-ask") entrypoint = "knowledge_graph";
+      else if (element.id === "leaders-hermes-cta" || element.id === "video-hermes-cta") entrypoint = "leaders_corner";
+      else if (element.classList.contains("disco-browse")) entrypoint = "agents_discovery";
+      else if (element.getAttribute("data-board-prompt") !== null || element.getAttribute("data-board-action") !== null) entrypoint = "board_portal";
+      else if (element.closest(driverComposerSelector)) entrypoint = "driver_composer";
+      else if (element.getAttribute("data-driver-chip") !== null) entrypoint = "driver_chip";
+      else if (element.getAttribute("data-rail-prompt") !== null && element.closest("#developments-panel")) entrypoint = "development_cta";
+      else if (element.getAttribute("data-rail-prompt") !== null) entrypoint = "finding_cta";
+      else if (element.closest(weekComposerSelector)) entrypoint = "week_composer";
+      else if (element.getAttribute("data-chat-prompt") !== null) entrypoint = "scenario_chip";
+      else if (element.getAttribute("data-assistant-prompt") !== null) entrypoint = "assistant_prompt";
+      else if (element.classList.contains("prompt-chip")) entrypoint = "hero_prompt";
+    }
+    return {
+      source: "executive_surface",
+      entrypoint: entrypoint,
+      entry_label: element ? String(element.textContent || "").trim().slice(0, 120) : "drawer_input",
+      persona: state.activePersona || "ceo",
+      board_state: state.activeBoard || "pre",
+      driver_key: firstDefined(activeDriver && (activeDriver.driver_key || activeDriver.key), state.activeDriverKey, "board_packet"),
+      thread_key: currentThreadKey(),
+      active_view: state.activeView || "home"
+    };
+  }
+
+  async function buildAssistantReply(message, sourceEl) {
     var cleanMessage = String(message || "").trim();
     if (!cleanMessage) return "Please ask a question for the assistant.";
 
@@ -655,6 +687,9 @@
         movers: activeDriver.movers || {}
       };
     }
+    body.assistant_context = assistantEntrypointContext(sourceEl);
+    body.source = body.assistant_context.source;
+    body.entrypoint = body.assistant_context.entrypoint;
     var runId = activeRunId();
     if (runId && runId !== "latest-public") body.run_id = runId;
     try {
@@ -1557,6 +1592,7 @@
         }).join('') : '<div class="discovery-empty">No movement is attached yet.</div>') + '</div></div></div>',
         '<div class="chips">' + safeArray(driver.chips).map(function (chip) { return '<button class="chip" type="button" data-driver-chip="' + escapeHtml(chip) + '">' + escapeHtml(chip) + '</button>'; }).join('') + '</div>',
         '<form class="chips-own" id="driver-composer"><label class="sr-only" for="driver-input">Ask Hermes about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '</label><input id="driver-input" class="driver-input" type="text" placeholder="Ask Hermes about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '…" /><button type="submit">Send</button></form>',
+        '<!-- openAssistantDrawer() is triggered by the driver composer submit handler below. -->',
         '<div class="drill-evidence" hidden><span class="evidence-label">Evidence chain</span><span class="evidence-step">Board-approved plan v4</span><span class="evidence-arrow">→</span><span class="evidence-step">Knowledge graph · 8 BU ledgers</span><span class="evidence-arrow">→</span><span class="evidence-step">S/4HANA + BI connectors</span><span class="evidence-arrow">→</span><span class="evidence-step">computed today 06:14</span></div>',
         '</div>'
       ].join('');
@@ -1590,7 +1626,7 @@
           var message = String(input.value || '').trim();
           if (!message) return;
           var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '—') + '% of plan): ' + message;
-          askAssistant(prompt);
+          askAssistant(prompt, composer);
           openAssistantDrawer();
           input.value = '';
         });
@@ -1983,7 +2019,7 @@
           event.preventDefault();
           var message = String(weekInput.value || '').trim();
           if (!message) return;
-          askAssistant('For “' + firstDefined(activeEvent.title, 'this event') + '”: ' + message);
+          askAssistant('For “' + firstDefined(activeEvent.title, 'this event') + '”: ' + message, weekComposer);
           weekInput.value = '';
         });
       }
@@ -2092,7 +2128,7 @@
           if (state.activePersona === "ceo") {
             switchView('assistants');
             window.setTimeout(function () {
-              askAssistant("Show me the agent catalogue available for my role and what each one does");
+              askAssistant("Show me the agent catalogue available for my role and what each one does", browseBtn);
             }, 300);
           } else {
             state.discoveryFilter = state.discoveryFilter === 'all' ? 'native' : 'all';
@@ -2378,7 +2414,7 @@
       event.preventDefault();
       var message = String(input.value || "").trim();
       if (!message) return;
-      askAssistant(message);
+      askAssistant(message, form);
       input.value = "";
     });
   }

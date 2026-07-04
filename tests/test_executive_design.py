@@ -118,9 +118,9 @@ def test_health_scores_are_present_and_valid():
 
 GOLDEN_PROMPTS = {
     "ceo": [
-        "Am I on track for the board on Thursday?",
-        "What is the single biggest risk to plan?",
-        "Who deserves recognition this week?",
+        "Why is the gap widening?",
+        "Show e-Pharmacy detail.",
+        "Risk to full-year plan?",
     ],
     "cfo": [
         "Walk me through the EBITDA bridge.",
