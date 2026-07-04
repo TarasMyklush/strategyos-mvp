@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -49,6 +50,79 @@ def _client_with_auth():
         }
     )
     return original, TestClient(api_module.app)
+
+
+def _client_with_public_ceo_surface(*, llm_enabled: bool = False):
+    env = {
+        "STRATEGYOS_API_AUTH_ENABLED": "true",
+        "STRATEGYOS_IDP_ENABLED": "true",
+        "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+        "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+        "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+        "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+        "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+    }
+    if llm_enabled:
+        env.update(
+            {
+                "STRATEGYOS_RUN_POLICY": "external-approved",
+                "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+                "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+                "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+                "STRATEGYOS_LLM_API_KEY": "test-key",
+                "STRATEGYOS_LLM_MODEL": "gpt-test",
+            }
+        )
+    original = _apply_env(env)
+    return original, TestClient(api_module.app)
+
+
+def _parsed_scenario(*, matched: bool = False, payload: dict | None = None):
+    result_payload = dict(payload or {"matched": matched, "citations": [], "suggestions": []})
+
+    class ParsedScenario:
+        def __init__(self):
+            self.matched = matched
+
+        def as_dict(self):
+            return dict(result_payload)
+
+    return ParsedScenario()
+
+
+def _public_client_env(llm_enabled: bool = True) -> dict[str, str]:
+    env = {
+        "STRATEGYOS_API_AUTH_ENABLED": "true",
+        "STRATEGYOS_IDP_ENABLED": "true",
+        "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+        "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+        "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+        "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+        "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true" if llm_enabled else "false",
+        "STRATEGYOS_LLM_CHAT_ENABLED": "true" if llm_enabled else "false",
+        "STRATEGYOS_RUN_POLICY": "external-approved",
+        "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+        "STRATEGYOS_LLM_API_KEY": "test-key",
+        "STRATEGYOS_LLM_MODEL": "gpt-test",
+        "STRATEGYOS_LLM_BASE_URL": "https://api.openai.test/v1",
+    }
+    if not llm_enabled:
+        env["STRATEGYOS_LLM_API_KEY"] = ""
+    return env
+
+
+def _unmatched_parse_result():
+    return SimpleNamespace(
+        matched=False,
+        as_dict=lambda: {
+            "matched": False,
+            "answer": "",
+            "basis": "",
+            "citations": [],
+            "suggestions": [],
+        },
+    )
 
 
 def test_qa_requires_auth(monkeypatch):
@@ -367,6 +441,583 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         assert payload["matched"] is False
         assert payload["llm_fallback_attempted"] is False
         assert "shared public packet" in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_auto_unmatched_uses_llm_fallback_when_enabled(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        captured = {}
+
+        def fake_answer(question, *, bundle, findings, summary, config, public_context_packet=None, persona=None):
+            captured["question"] = question
+            captured["public_context_packet"] = public_context_packet
+            captured["persona"] = persona
+            assert config.llm_model == "gpt-test"
+            return {
+                "matched": True,
+                "answer": "Last week from the public packet: EBITDA margin is 19.2% versus 19.4% plan, FX is still a ~SAR 9k weekly drag, and e-Pharmacy orders are +12% week on week. I do not have a closed last-week ledger in the public packet, so I am answering from the visible weekly run-rate.",
+                "basis": "Grounded in the public executive packet week items, KPI cards, and findings.",
+                "citations": [
+                    {"source_path": "public_packet://latest-public", "locator": "public_context_packet.kpis[1]"},
+                    {"source_path": "public_packet://latest-public", "locator": "public_context_packet.week[0]"},
+                ],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "provider": "deepseek", "model": config.llm_model},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "auto"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "llm"
+        assert payload["requested_mode"] == "auto"
+        assert payload["run_mode"] == "public-safe"
+        assert payload["llm_fallback_attempted"] is True
+        assert payload["answer"].startswith("Last week from the public packet:")
+        assert payload["citations"][0]["source_path"] == "public_packet://latest-public"
+        assert captured["question"] == "give me numbers for last week"
+        assert captured["persona"] == "ceo"
+        assert captured["public_context_packet"]["week"]
+        assert captured["public_context_packet"]["kpis"]
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_llm_mode_bypasses_canned_deterministic_fallback(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: {
+                "matched": True,
+                "answer": "Plain-English board packet summary: revenue is ahead, margin is soft because of FX and API cost, and the two live decisions are the hedge and the JV.",
+                "basis": "Grounded in the public packet summary and board portal.",
+                "citations": [{"source_path": "public_packet://latest-public", "locator": "public_context_packet.board_portal.summary"}],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "provider": "deepseek", "model": "gpt-test"},
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "summarize the board packet in plain English", "persona": "ceo", "mode": "llm"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "llm"
+        assert payload["requested_mode"] == "llm"
+        assert "outside the current deterministic public-safe prompt set" not in payload["answer"]
+        assert payload["answer"].startswith("Plain-English board packet summary")
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_llm_mode_returns_403_when_llm_disabled(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=False)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "llm"},
+        )
+
+        assert response.status_code == 403
+        assert "LLM chat is disabled" in response.json()["detail"]
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_auto_unmatched_returns_canned_fallback_when_llm_disabled(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=False)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "auto"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "deterministic"
+        assert payload["matched"] is False
+        assert payload["llm_fallback_attempted"] is False
+        assert payload["llm_status"]["enabled"] is False
+        assert "did not match a deterministic public-safe handler" in payload["answer"]
+        assert "LLM fallback is unavailable: LLM chat is disabled." in payload["basis"]
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_natural_ceo_prompts_use_public_llm(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        answers = {
+            "give me numbers for last week": "Last week from the public packet: revenue is SAR 2.09B quarter to date, EBITDA margin is 19.2% versus 19.4% plan, FX is still a ~SAR 9k weekly drag, and e-Pharmacy orders are +12% week on week.",
+            "what changed since last week?": "Since last week, the visible packet shows NUPCO awards confirmed at +SAR 145M annual, cold-chain hit 99.4%, and the board pack moved to 80% composed while FX still pressures margin.",
+            "what should i worry about before the board meeting?": "Before the board meeting, I would worry most about the margin narrative: FX is dragging EBITDA, API cost is still leaking, and the board still needs a clear hedge decision and JV line.",
+            "which business unit is dragging margin?": "Tamween Distribution is the clearest business-unit drag on margin in the public packet because of the SAR 1.2M leakage, while Healthcare Services is the main operating drag below plan.",
+            "summarize the board packet in plain english": "In plain English: revenue is ahead, margin is the soft spot, SAR 8.6M is recoverable across the group, and the two decisions still hanging over the board are the FX hedge and the GLP-1 JV.",
+        }
+
+        def fake_answer(question, *, public_context_packet=None, **_kwargs):
+            return {
+                "matched": True,
+                "answer": answers[question.lower()],
+                "basis": "Grounded in the public packet facts, findings, developments, and board portal.",
+                "citations": [{"source_path": "public_packet://latest-public", "locator": "public_context_packet.findings[0]"}],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "provider": "deepseek", "model": "gpt-test"},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+
+        prompts = {
+            "give me numbers for last week": ["19.2%", "sar 9k", "+12% week on week"],
+            "what changed since last week?": ["sar 145m", "99.4%", "80% composed"],
+            "what should i worry about before the board meeting?": ["margin narrative", "hedge", "jv"],
+            "which business unit is dragging margin?": ["tamween", "sar 1.2m", "healthcare"],
+            "summarize the board packet in plain english": ["revenue is ahead", "sar 8.6m", "fx hedge"],
+        }
+
+        for question, expected_tokens in prompts.items():
+            response = client.post(
+                "/assistant/chat",
+                json={"question": question, "persona": "ceo", "mode": "auto"},
+            )
+            assert response.status_code == 200, question
+            payload = response.json()
+            assert payload["mode"] == "llm", question
+            assert payload["llm_fallback_attempted"] is True, question
+            assert "outside the current deterministic public-safe prompt set" not in payload["answer"], question
+            answer_lower = payload["answer"].lower()
+            for token in expected_tokens:
+                assert token in answer_lower, f"Missing '{token}' for prompt: {question}"
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_safe_unmatched_auto_uses_llm(monkeypatch):
+    original = _apply_env(_public_client_env(llm_enabled=True))
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _unmatched_parse_result())
+        captured = {}
+
+        def fake_answer(question, *, bundle, findings, summary, config, public_context_packet, persona):
+            captured["question"] = question
+            captured["public_context_packet"] = public_context_packet
+            captured["persona"] = persona
+            return {
+                "matched": True,
+                "answer": "Last week is not exposed as an exact ledger cut on the public surface, but the visible packet shows revenue ahead of plan, EBITDA margin at 19.2%, and Healthcare Services as the main drag.",
+                "basis": "Grounded in public packet facts, KPI cards, and weekly board-prep items.",
+                "citations": [
+                    {"source_path": "public_packet://executive_surface", "locator": "public_context_packet.facts[5]"}
+                ],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": config.llm_model},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "auto"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "llm"
+        assert payload["requested_mode"] == "auto"
+        assert payload["llm_fallback_attempted"] is True
+        assert captured["question"] == "give me numbers for last week"
+        assert captured["persona"] == "ceo"
+        assert captured["public_context_packet"]["packet_id"].startswith("public-executive:")
+        assert "outside the current deterministic public-safe prompt set" not in payload["answer"].lower()
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_safe_llm_mode_bypasses_canned_fallback(monkeypatch):
+    original = _apply_env(_public_client_env(llm_enabled=True))
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _unmatched_parse_result())
+        called = {"count": 0}
+
+        def fake_answer(*_args, **_kwargs):
+            called["count"] += 1
+            return {
+                "matched": True,
+                "answer": "Natural CEO answer from the public packet.",
+                "basis": "Public packet evidence.",
+                "citations": [
+                    {"source_path": "public_packet://executive_surface", "locator": "public_context_packet.kpis[1]"}
+                ],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "llm"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert called["count"] == 1
+        assert payload["mode"] == "llm"
+        assert payload["requested_mode"] == "llm"
+        assert payload["llm_fallback_attempted"] is True
+        assert payload["answer"] == "Natural CEO answer from the public packet."
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_safe_auto_returns_canned_fallback_when_llm_disabled(monkeypatch):
+    original = _apply_env(_public_client_env(llm_enabled=False))
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _unmatched_parse_result())
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "auto"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "deterministic"
+        assert payload["matched"] is False
+        assert payload["llm_fallback_attempted"] is False
+        assert "AI fallback is unavailable right now" in payload["answer"]
+        assert "LLM chat is disabled" in payload["answer"] or "not configured" in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_safe_llm_mode_returns_403_when_llm_disabled(monkeypatch):
+    original = _apply_env(_public_client_env(llm_enabled=False))
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _unmatched_parse_result())
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "llm"},
+        )
+
+        assert response.status_code == 403
+        assert "LLM chat is disabled" in response.json()["detail"]
+    finally:
+        _restore_env(original)
+
+
+def test_public_safe_natural_ceo_prompts_route_to_llm_when_deterministic_misses(monkeypatch):
+    original = _apply_env(_public_client_env(llm_enabled=True))
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _unmatched_parse_result())
+
+        def fake_answer(question, **_kwargs):
+            return {
+                "matched": True,
+                "answer": f"Natural public-packet answer for: {question}",
+                "basis": "Public packet facts and weekly board context.",
+                "citations": [
+                    {"source_path": "public_packet://executive_surface", "locator": "public_context_packet.facts[0]"}
+                ],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+        client = TestClient(api_module.app)
+        prompts = [
+            "give me numbers for last week",
+            "what changed since last week?",
+            "what should I worry about before the board meeting?",
+            "which business unit is dragging margin?",
+            "summarize the board packet in plain English",
+            'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
+            "Show evidence for SAR 8.6M recoverable",
+            "Why is the gap widening?",
+            "Show e-Pharmacy detail",
+            "Risk to full-year plan?",
+            "Project FX hedge impact on EBITDA margin",
+            "Simulate digital health flat by end of year",
+        ]
+
+        for prompt in prompts:
+            response = client.post(
+                "/assistant/chat",
+                json={"question": prompt, "persona": "ceo", "mode": "auto"},
+            )
+            assert response.status_code == 200, prompt
+            payload = response.json()
+            assert payload["mode"] == "llm", prompt
+            assert payload["llm_fallback_attempted"] is True, prompt
+            assert payload["answer"].startswith("Natural public-packet answer for:"), prompt
+            assert "outside the current deterministic public-safe prompt set" not in payload["answer"].lower(), prompt
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_auto_unmatched_uses_llm_public_packet(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+            "STRATEGYOS_RUN_POLICY": "external-approved",
+            "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+            "STRATEGYOS_LLM_API_KEY": "test-key",
+            "STRATEGYOS_LLM_MODEL": "deepseek-v4-pro",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(
+            api_module,
+            "parse_scenario",
+            lambda *_args, **_kwargs: SimpleNamespace(matched=False, as_dict=lambda: {"matched": False, "citations": [], "suggestions": []}),
+        )
+        calls = {}
+
+        def fake_answer(question, *, bundle, findings, summary, config, public_context_packet=None, persona=None):
+            calls["question"] = question
+            calls["packet"] = public_context_packet
+            calls["persona"] = persona
+            return {
+                "matched": True,
+                "answer": "Last week the public packet shows revenue still ahead, margin still soft from FX, and Tamween remains the main recovery lever.",
+                "basis": "Grounded in the public executive packet KPIs, findings, and weekly board-prep context.",
+                "citations": [
+                    {"source_path": "public_packet://latest-public", "locator": "public_context_packet.kpis[0]"},
+                    {"source_path": "public_packet://latest-public", "locator": "public_context_packet.findings[0]"},
+                ],
+                "suggestions": ["What changed since last week?"],
+                "llm_status": {"enabled": True, "provider": "deepseek", "model": "deepseek-v4-pro"},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "auto"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_mode"] == "public-safe"
+        assert payload["mode"] == "llm"
+        assert payload["requested_mode"] == "auto"
+        assert payload["llm_fallback_attempted"] is True
+        assert "outside the current deterministic public-safe prompt set" not in payload["answer"]
+        assert calls["question"] == "give me numbers for last week"
+        assert calls["persona"] == "ceo"
+        assert calls["packet"]["kpis"]
+        assert calls["packet"]["week"]
+        assert any(str(item.get("locator") or "").startswith("public_context_packet.") for item in payload["citations"])
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_llm_mode_bypasses_canned_fallback(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+            "STRATEGYOS_RUN_POLICY": "external-approved",
+            "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+            "STRATEGYOS_LLM_API_KEY": "test-key",
+            "STRATEGYOS_LLM_MODEL": "deepseek-v4-pro",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(
+            api_module,
+            "parse_scenario",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("mode=llm should bypass deterministic scenario routing")),
+        )
+        called = {}
+
+        def fake_answer(question, *, bundle, findings, summary, config, public_context_packet=None, persona=None):
+            called["question"] = question
+            called["packet_id"] = (public_context_packet or {}).get("packet_id")
+            return {
+                "matched": True,
+                "answer": "The public packet does not expose a private week-end ledger cut, but it does show revenue ahead, margin 20 bps below plan, and FX as the live watch item.",
+                "basis": "Grounded in the public executive packet only.",
+                "citations": [{"source_path": "public_packet://latest-public", "locator": "public_context_packet.public_facts"}],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "provider": "deepseek", "model": "deepseek-v4-pro"},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "llm"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "llm"
+        assert payload["requested_mode"] == "llm"
+        assert payload["llm_fallback_attempted"] is True
+        assert "outside the current deterministic public-safe prompt set" not in payload["answer"]
+        assert called["question"] == "give me numbers for last week"
+        assert called["packet_id"] == "public-executive:ceo"
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_auto_unmatched_returns_canned_list_when_llm_disabled(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "false",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "false",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(
+            api_module,
+            "parse_scenario",
+            lambda *_args, **_kwargs: SimpleNamespace(matched=False, as_dict=lambda: {"matched": False, "citations": [], "suggestions": []}),
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called when disabled")),
+        )
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "give me numbers for last week", "persona": "ceo", "mode": "auto"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "deterministic"
+        assert payload["matched"] is False
+        assert payload["llm_fallback_attempted"] is False
+        assert "this prompt did not match" in payload["answer"].lower()
+        assert "LLM fallback is unavailable: LLM chat is disabled." in payload["basis"]
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_natural_ceo_prompts_return_llm_answers(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+            "STRATEGYOS_RUN_POLICY": "external-approved",
+            "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+            "STRATEGYOS_LLM_API_KEY": "test-key",
+            "STRATEGYOS_LLM_MODEL": "deepseek-v4-pro",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(
+            api_module,
+            "parse_scenario",
+            lambda *_args, **_kwargs: SimpleNamespace(matched=False, as_dict=lambda: {"matched": False, "citations": [], "suggestions": []}),
+        )
+
+        expected = {
+            "give me numbers for last week": "last week the public packet shows revenue ahead and margin still 20 bps below plan.",
+            "what changed since last week?": "since last week the visible shift is e-Pharmacy strength holding while the FX drag is still on the board agenda.",
+            "what should i worry about before the board meeting?": "before the board meeting i would worry about the margin narrative, the fx hedge decision, and tamween recovery follow-through.",
+            "which business unit is dragging margin?": "healthcare services remains the main operating drag, while tamween and fx weigh on the margin story.",
+            "summarize the board packet in plain english": "in plain english: revenue is ahead, cash is solid, margin is the weak spot, and two board decisions remain open.",
+        }
+
+        def fake_answer(question, *, bundle, findings, summary, config, public_context_packet=None, persona=None):
+            answer = expected[question.lower()]
+            return {
+                "matched": True,
+                "answer": answer,
+                "basis": "Grounded in public KPI cards, findings, weekly items, and board portal context.",
+                "citations": [{"source_path": "public_packet://latest-public", "locator": "public_context_packet.kpis[0]"}],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "provider": "deepseek", "model": "deepseek-v4-pro"},
+            }
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+        client = TestClient(api_module.app)
+
+        for question, expected_answer in expected.items():
+            response = client.post(
+                "/assistant/chat",
+                json={"question": question, "persona": "ceo", "mode": "auto"},
+            )
+            assert response.status_code == 200, question
+            payload = response.json()
+            assert payload["mode"] == "llm", question
+            assert payload["llm_fallback_attempted"] is True, question
+            assert payload["answer"].lower() == expected_answer.lower(), question
+            assert "outside the current deterministic public-safe prompt set" not in payload["answer"], question
+            assert any(str(item.get("locator") or "").startswith("public_context_packet.") for item in payload["citations"]), question
     finally:
         _restore_env(original)
 

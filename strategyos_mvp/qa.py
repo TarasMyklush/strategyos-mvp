@@ -9,13 +9,13 @@ questions return suggestions rather than a guess.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import Any, Callable
+from dataclasses import dataclass as _dataclass
+from typing import Any as _Any, Callable as _Callable
 
 import pandas as pd
 
-from .ingestion import DataBundle
-from .models import Finding
+from .ingestion import DataBundle as _DataBundle
+from .models import Finding as _Finding
 
 
 # Colloquial phrasing -> canonical intent tokens. Each entry maps a regex (matched
@@ -65,7 +65,7 @@ def _sar(value: float) -> str:
     return f"SAR {value:,.2f}"
 
 
-def _ledger_citation(bundle: DataBundle, role: str, locator: str) -> dict[str, Any]:
+def _ledger_citation(bundle: _DataBundle, role: str, locator: str) -> dict[str, _Any]:
     contract = (bundle.data_contracts or {}).get(role) or {}
     source_path = contract.get("relative_path") or str(bundle.dataset_root)
     return {
@@ -75,8 +75,8 @@ def _ledger_citation(bundle: DataBundle, role: str, locator: str) -> dict[str, A
     }
 
 
-def _finding_citations(findings: list[Finding], limit: int = 5) -> list[dict[str, Any]]:
-    citations: list[dict[str, Any]] = []
+def _finding_citations(findings: list[_Finding], limit: int = 5) -> list[dict[str, _Any]]:
+    citations: list[dict[str, _Any]] = []
     seen: set[tuple[str, str]] = set()
     for finding in findings:
         for citation in finding.citations:
@@ -98,7 +98,7 @@ def _finding_citations(findings: list[Finding], limit: int = 5) -> list[dict[str
     return citations
 
 
-def _role_available(bundle: DataBundle, role: str) -> bool:
+def _role_available(bundle: _DataBundle, role: str) -> bool:
     available = (bundle.run_metadata or {}).get("available_roles")
     if isinstance(available, list):
         return role in available
@@ -107,7 +107,7 @@ def _role_available(bundle: DataBundle, role: str) -> bool:
     return frame is not None and not frame.empty
 
 
-def _needs(role: str, label: str) -> dict[str, Any]:
+def _needs(role: str, label: str) -> dict[str, _Any]:
     return {
         "matched": True,
         "answer": f"That question needs the {label}, which was not part of this run.",
@@ -118,18 +118,18 @@ def _needs(role: str, label: str) -> dict[str, Any]:
     }
 
 
-@dataclass(frozen=True)
-class Intent:
+@_dataclass(frozen=True)
+class _Intent:
     name: str
-    matcher: Callable[[str], bool]
-    handler: Callable[[str, DataBundle, list[Finding]], dict[str, Any]]
+    matcher: _Callable[[str], bool]
+    handler: _Callable[[str, _DataBundle, list[_Finding]], dict[str, _Any]]
 
 
 # ---------------------------------------------------------------------------
 # Handlers
 # ---------------------------------------------------------------------------
 
-def _ledger_for(question: str, bundle: DataBundle) -> tuple[str, pd.DataFrame, str]:
+def _ledger_for(question: str, bundle: _DataBundle) -> tuple[str, pd.DataFrame, str]:
     """Pick AP (payables) or AR (receivables); default AP."""
     if _has_any(question, "receivable", "ar", "customer", "collection", "sales"):
         return "ar_ledger", bundle.ar, "AR"
@@ -155,7 +155,7 @@ def _apply_filters(question: str, frame: pd.DataFrame) -> tuple[pd.DataFrame, li
     return out, notes
 
 
-def _handle_invoice_metric(question: str, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+def _handle_invoice_metric(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     role, frame, label = _ledger_for(question, bundle)
     if not _role_available(bundle, role):
         return _needs(role, f"{label} invoice ledger")
@@ -200,7 +200,7 @@ def _parse_top_n(question: str, default: int = 5) -> int:
     return default
 
 
-def _handle_top_parties(question: str, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+def _handle_top_parties(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     if _has_any(question, "customer", "receivable"):
         role, frame, name_col, label = "ar_ledger", bundle.ar, "Customer_Name", "customers"
     else:
@@ -223,7 +223,7 @@ def _handle_top_parties(question: str, bundle: DataBundle, findings: list[Findin
     }
 
 
-def _handle_named_party_spend(question: str, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+def _handle_named_party_spend(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     # "how much did we pay <vendor>" / "spend for <vendor>"
     m = re.search(r"(?:vendor|supplier|customer|pay|paid|spend(?:ing)?(?:\s+(?:for|to|with))?|for)\s+(.+)", question)
     if not m:
@@ -256,7 +256,7 @@ def _handle_named_party_spend(question: str, bundle: DataBundle, findings: list[
     }
 
 
-def _handle_distinct_parties(question: str, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+def _handle_distinct_parties(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     if _has_any(question, "customer"):
         role, frame, col, label = "ar_ledger", bundle.ar, "Customer_ID", "customers"
     else:
@@ -274,7 +274,7 @@ def _handle_distinct_parties(question: str, bundle: DataBundle, findings: list[F
     }
 
 
-def _handle_recoverable(question: str, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+def _handle_recoverable(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     if _has_any(question, "pattern", "by type", "per pattern", "category"):
         by: dict[str, float] = {}
         for f in findings:
@@ -300,7 +300,7 @@ def _handle_recoverable(question: str, bundle: DataBundle, findings: list[Findin
     }
 
 
-def _handle_findings(question: str, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+def _handle_findings(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     if _has_any(question, "how many", "count", "number of"):
         if _has_any(question, "high", "medium", "low", "confidence"):
             counts = {c: sum(1 for f in findings if f.confidence == c) for c in ("HIGH", "MEDIUM", "LOW")}
@@ -335,7 +335,7 @@ def _handle_findings(question: str, bundle: DataBundle, findings: list[Finding])
     }
 
 
-def _handle_working_capital(question: str, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+def _handle_working_capital(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     if not (_role_available(bundle, "ap_ledger") and _role_available(bundle, "ar_ledger")):
         return _needs("ar_ledger" if _role_available(bundle, "ap_ledger") else "ap_ledger", "AP and AR ledgers")
     from .skills.finance_controls import compute_working_capital_drifts
@@ -375,7 +375,7 @@ def _handle_working_capital(question: str, bundle: DataBundle, findings: list[Fi
     }
 
 
-def _handle_overdue(question: str, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+def _handle_overdue(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     role, frame, label = _ledger_for(question, bundle)
     settle_col = "Collection_Date" if label == "AR" else "Payment_Date"
     if not _role_available(bundle, role):
@@ -407,29 +407,29 @@ def _handle_overdue(question: str, bundle: DataBundle, findings: list[Finding]) 
 # Intent registry (ordered: first match wins)
 # ---------------------------------------------------------------------------
 
-INTENTS: tuple[Intent, ...] = (
-    Intent("working_capital",
+INTENTS: tuple[_Intent, ...] = (
+    _Intent("working_capital",
            lambda q: _has_any(q, "dso", "dpo", "working capital", "drift", "days sales", "days payable"),
            _handle_working_capital),
-    Intent("overdue",
+    _Intent("overdue",
            lambda q: _has_any(q, "overdue", "late") and _has(q, "invoice"),
            _handle_overdue),
-    Intent("recoverable",
+    _Intent("recoverable",
            lambda q: _has_any(q, "recoverable", "recovery", "leakage", "savings"),
            _handle_recoverable),
-    Intent("findings",
+    _Intent("findings",
            lambda q: _has(q, "finding") or _has(q, "findings"),
            _handle_findings),
-    Intent("top_parties",
+    _Intent("top_parties",
            lambda q: _has(q, "top") and _has_any(q, "vendor", "vendors", "supplier", "suppliers", "customer", "customers"),
            _handle_top_parties),
-    Intent("distinct_parties",
+    _Intent("distinct_parties",
            lambda q: _has_any(q, "how many", "count", "number of", "distinct") and _has_any(q, "vendor", "vendors", "supplier", "customer", "customers"),
            _handle_distinct_parties),
-    Intent("named_party_spend",
+    _Intent("named_party_spend",
            lambda q: _has_any(q, "spend", "spending", "paid", "pay") or (_has_any(q, "vendor", "supplier", "customer") and _has_any(q, "for")),
            _handle_named_party_spend),
-    Intent("invoice_metric",
+    _Intent("invoice_metric",
            lambda q: _has(q, "invoice") or _has(q, "invoices"),
            _handle_invoice_metric),
 )
@@ -447,7 +447,7 @@ SUGGESTIONS: tuple[str, ...] = (
 )
 
 
-def answer_question(question: str, *, bundle: DataBundle, findings: list[Finding]) -> dict[str, Any]:
+def answer_question(question: str, *, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     norm = _normalize(question)
     if not norm:
         return {"matched": False, "answer": "Please ask a question.", "suggestions": list(SUGGESTIONS)}
@@ -466,7 +466,7 @@ def answer_question(question: str, *, bundle: DataBundle, findings: list[Finding
                 result.setdefault("citations", [])
                 result["intent"] = intent.name
                 return result
-        except Exception as exc:  # defensive: never crash the chat on a bad question
+        except Exception as exc:  # defensive: never crash the request on a bad question
             return {
                 "matched": True,
                 "answer": "I could not compute that from the current run.",

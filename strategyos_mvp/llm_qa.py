@@ -1,8 +1,8 @@
 """Evidence-grounded LLM Q&A adapter.
 
-The deterministic Q&A engine remains the default. This module is only used when
-the caller explicitly selects LLM mode and the model-provider boundary is
-enabled in server-side config.
+The deterministic Q&A engine remains the default. This module is used for
+evidence-grounded fallback answers when deterministic coverage is missing and
+the model-provider boundary is enabled in server-side config.
 """
 from __future__ import annotations
 
@@ -24,6 +24,18 @@ Return only valid json with keys: matched, answer, basis, citations, suggestions
 Example json output:
 {"matched": true, "answer": "SAR 120.00 is recoverable.", "basis": "Finding F-001 in supplied evidence.", "citations": [{"source_path": "ap.xlsx", "locator": "row 2", "excerpt": "duplicate payment", "finding_id": "F-001"}], "suggestions": []}
 Do not invent vendors, totals, findings, citations, or source files.
+"""
+
+
+PUBLIC_SYSTEM_PROMPT = """You are Hermes on the public StrategyOS executive surface.
+Answer as a natural, board-safe CEO assistant using ONLY the supplied public executive packet.
+Ground every answer in the visible public packet facts: KPIs, driver cards and movers, findings, developments, week items, board portal, running agents, KG summaries, view state, and other visible public context.
+Never invent private ledger details, hidden reviewer evidence, unpublished numbers, or protected source files.
+When the user asks for last week or trend context, answer from the packet's visible weekly items, KPI stories, findings, developments, driver cards, board portal, agent status, KG summaries, and public facts.
+If exact last-week data is not present in the packet, say that plainly and answer from the nearest visible weekly run-rate or board-safe evidence.
+Return only valid json with keys: matched, answer, basis, citations, suggestions.
+For citations, prefer source_path='public_packet://latest-public' with locators like 'public_context_packet.kpis[1]' or 'public_context_packet.week[0]'.
+Do not fall back to listing allowed prompts unless the public packet is genuinely insufficient.
 """
 
 
@@ -55,10 +67,12 @@ def chat_status(config: Any) -> dict[str, Any]:
 def answer_question(
     question: str,
     *,
-    bundle: DataBundle,
-    findings: list[Finding],
+    bundle: Any,
+    findings: list[Any],
     summary: dict[str, Any],
     config: Any,
+    public_context_packet: dict[str, Any] | None = None,
+    persona: str | None = None,
 ) -> dict[str, Any]:
     status = chat_status(config)
     if not status["enabled"]:
@@ -71,11 +85,19 @@ def answer_question(
             "llm_status": status,
         }
 
-    evidence = _build_evidence_payload(bundle=bundle, findings=findings, summary=summary)
+    public_packet = dict(public_context_packet or {})
+    public_mode = bool(public_packet)
+    evidence = _build_evidence_payload(
+        bundle=bundle,
+        findings=findings,
+        summary=summary,
+        public_context_packet=public_packet,
+        persona=persona,
+    )
     provider_response = _call_openai_compatible_chat(
         config=config,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": PUBLIC_SYSTEM_PROMPT if public_mode else SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": json.dumps(
@@ -89,24 +111,42 @@ def answer_question(
         ],
     )
     parsed = _parse_json_answer(provider_response)
+    default_basis = (
+        "LLM answer grounded in supplied public executive packet."
+        if public_mode
+        else "LLM answer grounded in supplied run evidence."
+    )
+    citations = _normalize_citations(parsed.get("citations"))
+    if public_mode:
+        citations = _normalize_public_packet_citations(citations, packet=public_packet, question=question)
     return {
         "matched": _normalize_bool(parsed.get("matched", True)),
         "answer": str(parsed.get("answer") or "No answer returned."),
-        "basis": str(parsed.get("basis") or "LLM answer grounded in supplied run evidence."),
-        "citations": _normalize_citations(parsed.get("citations")),
+        "basis": str(parsed.get("basis") or default_basis),
+        "citations": citations,
         "suggestions": _normalize_suggestions(parsed.get("suggestions")),
         "llm_status": status,
         "model": status.get("model"),
         "provider": status.get("provider"),
+        "public_safe": public_mode,
     }
 
 
 def _build_evidence_payload(
     *,
-    bundle: DataBundle,
-    findings: list[Finding],
+    bundle: Any,
+    findings: list[Any],
     summary: dict[str, Any],
+    public_context_packet: dict[str, Any] | None = None,
+    persona: str | None = None,
 ) -> dict[str, Any]:
+    if public_context_packet:
+        return _public_evidence_payload(
+            packet=public_context_packet,
+            findings=findings,
+            summary=summary,
+            persona=persona,
+        )
     return {
         "run": _run_summary(summary),
         "data": {
@@ -116,6 +156,43 @@ def _build_evidence_payload(
             "data_contracts": bundle.data_contracts or {},
         },
         "findings": [_finding_summary(finding) for finding in findings[:12]],
+    }
+
+
+def _public_evidence_payload(
+    *,
+    packet: dict[str, Any],
+    findings: list[Any],
+    summary: dict[str, Any],
+    persona: str | None,
+) -> dict[str, Any]:
+    return {
+        "run": _run_summary(summary),
+        "public_context": {
+            "packet_id": packet.get("packet_id"),
+            "persona_id": packet.get("persona_id") or persona,
+            "assistant": packet.get("assistant"),
+            "public_safe": bool(packet.get("public_safe", True)),
+            "source": packet.get("source"),
+            "view_state": packet.get("view_state") or {},
+            "trace_summary": packet.get("trace_summary") or {},
+            "source_boundary": ((packet.get("public_facts") or {}).get("source_boundary")),
+        },
+        "kpis": list(packet.get("kpis") or []),
+        "drivers": list(packet.get("drivers") or []),
+        "findings": list(packet.get("findings") or []),
+        "public_findings": [_finding_summary(finding) for finding in findings[:12]],
+        "developments": list(packet.get("developments") or []),
+        "week": list(packet.get("week") or []),
+        "board_portal": packet.get("board_portal") or {},
+        "agent_activity": packet.get("agent_activity") or packet.get("activity") or {},
+        "running_agents": list(packet.get("running_agents") or []),
+        "kg_trace": {
+            "nodes": list(packet.get("kg_nodes") or []),
+            "edges": list(packet.get("kg_edges") or []),
+        },
+        "public_facts": packet.get("public_facts") or {},
+        "facts": list(packet.get("facts") or []),
     }
 
 
@@ -163,7 +240,20 @@ def _frame_summary(bundle: DataBundle, role: str, frame: Any) -> dict[str, Any]:
     return summary
 
 
-def _finding_summary(finding: Finding) -> dict[str, Any]:
+def _finding_summary(finding: Any) -> dict[str, Any]:
+    if isinstance(finding, dict):
+        return {
+            "finding_id": finding.get("finding_id"),
+            "title": finding.get("title"),
+            "pattern_type": finding.get("pattern_type"),
+            "vendor_name": finding.get("vendor_name"),
+            "recoverable_sar": round(float(finding.get("recoverable_sar") or 0), 2),
+            "confidence": finding.get("confidence"),
+            "classification": finding.get("classification"),
+            "rationale": finding.get("rationale") or finding.get("detail"),
+            "remediation": finding.get("remediation"),
+            "citations": [_citation_dict(citation, finding.get("finding_id")) for citation in (finding.get("citations") or [])[:4]],
+        }
     return {
         "finding_id": finding.finding_id,
         "title": finding.title,
@@ -280,3 +370,109 @@ def _normalize_suggestions(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value[:5] if str(item).strip()]
+
+
+def _normalize_public_packet_citations(
+    citations: list[dict[str, Any]],
+    *,
+    packet: dict[str, Any],
+    question: str,
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for item in citations[:8]:
+        locator = str(item.get("locator") or "").strip()
+        source_path = str(item.get("source_path") or "public_packet://latest-public").strip() or "public_packet://latest-public"
+        if locator and not locator.startswith("public_context_packet"):
+            locator = f"public_context_packet.{locator.lstrip('.')}"
+        normalized.append(
+            {
+                **item,
+                "source_path": source_path,
+                "locator": locator,
+                "excerpt": str(item.get("excerpt") or _excerpt_for_public_locator(packet, locator))[:600],
+            }
+        )
+    if normalized:
+        return normalized
+    return _default_public_packet_citations(packet, question)
+
+
+def _default_public_packet_citations(packet: dict[str, Any], question: str) -> list[dict[str, Any]]:
+    lower = str(question or "").lower()
+    locators: list[str] = []
+
+    def add(*items: str) -> None:
+        for item in items:
+            if item and item not in locators:
+                locators.append(item)
+
+    add("public_context_packet.facts[0]", "public_context_packet.kpis[0]")
+    if any(token in lower for token in ["last week", "this week", "week", "changed"]):
+        add("public_context_packet.week[0]", "public_context_packet.developments[0]", "public_context_packet.trace_summary")
+    if any(token in lower for token in ["board", "plain english", "summarize"]):
+        add("public_context_packet.board_portal.summary", "public_context_packet.board_portal.kpis[0]", "public_context_packet.week[0]")
+    if any(token in lower for token in ["margin", "ebitda", "fx", "hedge", "worry"]):
+        add("public_context_packet.drivers[1]", "public_context_packet.findings[0]", "public_context_packet.public_facts")
+    if any(token in lower for token in ["tamween", "8.6", "recoverable", "evidence"]):
+        add("public_context_packet.findings[1]", "public_context_packet.developments[2]", "public_context_packet.public_facts")
+    if "digital health" in lower:
+        add("public_context_packet.drivers[2]")
+    if any(token in lower for token in ["unit", "business unit", "dragging"]):
+        add("public_context_packet.drivers[1]", "public_context_packet.drivers[0]")
+
+    return [
+        {
+            "source_path": "public_packet://latest-public",
+            "locator": locator,
+            "excerpt": _excerpt_for_public_locator(packet, locator)[:600],
+        }
+        for locator in locators[:4]
+    ]
+
+
+def _excerpt_for_public_locator(packet: dict[str, Any], locator: str) -> str:
+    value = _value_for_public_locator(packet, locator)
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _value_for_public_locator(packet: dict[str, Any], locator: str) -> Any:
+    if not locator:
+        return None
+    path = locator
+    if path.startswith("public_context_packet."):
+        path = path[len("public_context_packet.") :]
+    elif path == "public_context_packet":
+        return packet
+    current: Any = packet
+    for part in [segment for segment in path.split(".") if segment]:
+        while True:
+            bracket_index = part.find("[")
+            if bracket_index == -1:
+                if part:
+                    if not isinstance(current, dict):
+                        return None
+                    current = current.get(part)
+                break
+            key = part[:bracket_index]
+            if key:
+                if not isinstance(current, dict):
+                    return None
+                current = current.get(key)
+            end_index = part.find("]", bracket_index)
+            if end_index == -1:
+                return None
+            try:
+                item_index = int(part[bracket_index + 1 : end_index])
+            except ValueError:
+                return None
+            if not isinstance(current, list) or item_index >= len(current):
+                return None
+            current = current[item_index]
+            part = part[end_index + 1 :]
+            if not part:
+                break
+    return current

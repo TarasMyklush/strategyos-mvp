@@ -8939,6 +8939,31 @@ def _assistant_chat_response(
         )
         context["public_context_packet"] = dict(context.get("public_context_packet") or {})
         context["public_context_packet"]["view_state"] = view_state
+    llm_status = llm_qa.chat_status(CONFIG)
+
+    def _public_safe_unmatched_result(reason: str | None = None) -> dict[str, Any]:
+        basis = "Shared public executive packet is populated, but this prompt did not match a deterministic public-safe handler."
+        answer = (
+            "I can answer board-safe questions from the shared public packet, but this prompt did not match a deterministic public-safe handler. "
+            "Ask about Tamween recovery, SAR 8.6M evidence, gap widening, e-Pharmacy detail, full-year risk, FX hedge impact, or Digital Health."
+        )
+        if reason:
+            basis = f"{basis} LLM fallback is unavailable: {reason}"
+            answer = f"{answer} AI fallback is unavailable right now: {reason}"
+        return {
+            "matched": False,
+            "answer": answer,
+            "citations": [_public_packet_citation("facts[0]", "Shared public executive packet")],
+            "suggestions": [
+                'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
+                "Show evidence for SAR 8.6M recoverable",
+                "Why is the gap widening?",
+                "Show e-Pharmacy detail",
+                "Risk to full-year plan?",
+                "Project FX hedge impact on EBITDA margin",
+            ],
+            "basis": basis,
+        }
     orchestrator = get_orchestrator()
     findings_payload = [
         finding.__dict__ if hasattr(finding, "__dict__") else finding
@@ -8977,25 +9002,76 @@ def _assistant_chat_response(
                 persona=persona,
                 orchestrated=orchestrated,
                 scenario_result=scenario_result,
-                llm_status=llm_qa.chat_status(CONFIG),
+                llm_status=llm_status,
                 assistant_context=assistant_context,
             )
 
     if public_safe and context.get("public_context_packet"):
-        public_safe_result = {
-            "matched": False,
-            "answer": "I can answer board-safe prompts from the shared public packet, but this question is outside the current deterministic public-safe prompt set. Ask about Tamween recovery, SAR 8.6M evidence, gap widening, e-Pharmacy detail, full-year risk, FX hedge impact, or Digital Health flat by end of year.",
-            "citations": [_public_packet_citation("facts[0]", "Shared public executive packet")],
-            "suggestions": [
-                'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
-                "Show evidence for SAR 8.6M recoverable",
-                "Why is the gap widening?",
-                "Show e-Pharmacy detail",
-                "Risk to full-year plan?",
-                "Project FX hedge impact on EBITDA margin",
-            ],
-            "basis": "Shared public executive packet is populated, but this prompt did not match a deterministic public-safe handler.",
-        }
+        if mode == "llm" and not llm_status["enabled"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=llm_status["reason"],
+            )
+        if mode != "deterministic" and llm_status["enabled"]:
+            try:
+                result = llm_qa.answer_question(
+                    question,
+                    bundle=context["bundle"],
+                    findings=context["findings"],
+                    summary=context["summary"],
+                    config=CONFIG,
+                    public_context_packet=context.get("public_context_packet") or {},
+                    persona=persona,
+                )
+            except RuntimeError as exc:
+                if mode == "llm":
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=str(exc),
+                    ) from exc
+                public_safe_result = _public_safe_unmatched_result(str(exc))
+                orchestrated = orchestrator.process(
+                    question,
+                    persona=persona,
+                    qa_result=public_safe_result,
+                    driver_context=request.driver_context,
+                )
+                payload = _assistant_response_payload(
+                    response_mode="deterministic",
+                    question=question,
+                    context=context,
+                    requested_mode=mode,
+                    persona=persona,
+                    orchestrated=orchestrated,
+                    base_result=public_safe_result,
+                    llm_status=llm_status,
+                    assistant_context=assistant_context,
+                )
+                payload["llm_fallback_attempted"] = True
+                payload["llm_error"] = str(exc)
+                return payload
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                llm_result=result,
+                driver_context=driver_context,
+            )
+            payload = _assistant_response_payload(
+                response_mode="llm",
+                question=question,
+                context=context,
+                requested_mode=mode,
+                persona=persona,
+                orchestrated=orchestrated,
+                base_result=result,
+                llm_status=result.get("llm_status") or llm_status,
+                assistant_context=assistant_context,
+            )
+            payload["mode"] = "llm"
+            payload["llm_fallback_attempted"] = True
+            return payload
+
+        public_safe_result = _public_safe_unmatched_result(None if mode == "deterministic" else llm_status.get("reason"))
         orchestrated = orchestrator.process(
             question,
             persona=persona,
@@ -9010,7 +9086,7 @@ def _assistant_chat_response(
             persona=persona,
             orchestrated=orchestrated,
             base_result=public_safe_result,
-            llm_status=llm_qa.chat_status(CONFIG),
+            llm_status=llm_status,
             assistant_context=assistant_context,
         )
         payload["llm_fallback_attempted"] = False
@@ -9038,7 +9114,7 @@ def _assistant_chat_response(
             persona=persona,
             orchestrated=orchestrated,
             base_result=no_run_result,
-            llm_status=llm_qa.chat_status(CONFIG),
+            llm_status=llm_status,
             assistant_context=assistant_context,
         )
         payload["llm_fallback_attempted"] = False
@@ -9064,11 +9140,10 @@ def _assistant_chat_response(
             persona=persona,
             orchestrated=orchestrated,
             base_result=deterministic_result,
-            llm_status=llm_qa.chat_status(CONFIG),
+            llm_status=llm_status,
             assistant_context=assistant_context,
         )
 
-    llm_status = llm_qa.chat_status(CONFIG)
     if not llm_status["enabled"]:
         orchestrated = orchestrator.process(
             question,
@@ -9119,6 +9194,7 @@ def _assistant_chat_response(
         assistant_context=assistant_context,
     )
     payload["mode"] = "llm"
+    payload["llm_fallback_attempted"] = True
     return payload
 
 

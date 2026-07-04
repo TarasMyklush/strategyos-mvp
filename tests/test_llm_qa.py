@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pandas as pd
 
 from strategyos_mvp.config import EXTERNAL_MODE_MODEL_PROVIDER, RunPolicyConfig
+from strategyos_mvp.executive_design import executive_public_assistant_packet
 from strategyos_mvp.ingestion import DataBundle
 from strategyos_mvp.models import Citation, Finding
 from strategyos_mvp import api as api_module
@@ -145,6 +146,147 @@ def test_llm_answer_uses_openai_compatible_chat(monkeypatch):
     assert result["matched"] is True
     assert result["citations"][0]["source_path"] == "ap.xlsx"
     assert result["llm_status"]["enabled"] is True
+
+
+def test_public_llm_answer_uses_minimal_public_packet_prompt(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": json.dumps(
+                                    {
+                                        "matched": True,
+                                        "answer": "Board-safe answer from the public packet.",
+                                        "basis": "Grounded in public packet facts.",
+                                        "citations": [
+                                            {
+                                                "source_path": "public_packet://executive_surface",
+                                                "locator": "public_context_packet.facts[0]",
+                                            }
+                                        ],
+                                        "suggestions": [],
+                                    }
+                                )
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["timeout"] = timeout
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr(llm_qa, "urlopen", fake_urlopen)
+
+    result = llm_qa.answer_question(
+        "give me numbers for last week",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet={
+            "packet_id": "public-executive:ceo",
+            "persona_id": "ceo",
+            "assistant": "Hermes",
+            "facts": ["SAR 8.6M is recoverable across the group."],
+            "kpis": [{"key": "revenue", "value": "SAR 2.09B"}],
+            "drivers": [{"key": "ebitda", "story": "FX is the main drag."}],
+            "findings": [{"title": "Tamween audit", "detail": "SAR 1.2M recoverable."}],
+            "developments": [{"title": "NUPCO awards confirmed"}],
+            "week": [{"title": "Board meeting", "prep": "Margin narrative still open."}],
+            "board_portal": {"summary": "Board packet summary"},
+            "agent_activity": {"line": "5 agents active"},
+            "running_agents": [{"name": "Board pack composer", "progress": 80}],
+            "kg_nodes": [{"id": "kpi:revenue"}],
+            "kg_edges": [{"source": "a", "target": "b", "label": "LINKS"}],
+            "public_facts": {"source_boundary": "Public-safe executive packet only."},
+            "view_state": {"persona": "ceo"},
+        },
+        persona="ceo",
+    )
+
+    assert captured["timeout"] == 3
+    assert "board-safe ceo assistant" in captured["body"]["messages"][0]["content"].lower()
+    assert captured["body"]["messages"][1]["content"].find("public_context") != -1
+    assert result["public_safe"] is True
+    assert result["citations"][0]["locator"] == "public_context_packet.facts[0]"
+
+
+def test_public_llm_answer_uses_public_packet_prompt(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": json.dumps(
+                                    {
+                                        "matched": True,
+                                        "answer": "Last week looked healthy on revenue, but margin still needs the FX and Tamween clean-up story.",
+                                        "basis": "Grounded in the public executive packet facts, KPI cards, and weekly board-prep items.",
+                                        "citations": [
+                                            {
+                                                "source_path": "public_packet://latest-public",
+                                                "locator": "public_context_packet.kpis[1]",
+                                            }
+                                        ],
+                                        "suggestions": ["What changed since last week?"],
+                                    }
+                                )
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr(llm_qa, "urlopen", fake_urlopen)
+
+    result = llm_qa.answer_question(
+        "give me numbers for last week",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert captured["body"]["messages"][0]["content"] == llm_qa.PUBLIC_SYSTEM_PROMPT
+    evidence = json.loads(captured["body"]["messages"][1]["content"])["evidence"]
+    assert evidence["public_context"]["persona_id"] == "ceo"
+    assert evidence["public_context"]["public_safe"] is True
+    assert evidence["kpis"]
+    assert evidence["drivers"]
+    assert evidence["week"]
+    assert evidence["public_facts"]["group_recoverable_sar"] == 8_600_000.0
+    assert result["answer"].lower().startswith("last week looked healthy")
+    assert result["citations"][0]["locator"] == "public_context_packet.kpis[1]"
 
 def test_data_qa_auto_invokes_llm_when_deterministic_misses(monkeypatch):
     monkeypatch.setattr(
