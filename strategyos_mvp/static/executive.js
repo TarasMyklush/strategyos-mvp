@@ -9,6 +9,7 @@
   var _tokenKey = "strategyos.ui.token";
   var DESIGN = (window.STRATEGYOS_EXECUTIVE_DESIGN && window.STRATEGYOS_EXECUTIVE_DESIGN.personas) || {};
   var DESIGN_GLOBAL = window.STRATEGYOS_EXECUTIVE_DESIGN || {};
+  var BOOTSTRAP_ASSISTANT_CONTEXT = bootstrap.assistant_public_context || {};
   var _leadersFallbackTimer = null;
 
   // PostMessage listener for YouTube embed error detection (faster than timeout)
@@ -332,7 +333,26 @@
   }
 
   function getPersonaBlueprint(personaId) {
+    var diagnostics = getExecutiveDiagnostics();
+    var shared = getSharedAssistantContext();
+    if (diagnostics.persona_blueprint && firstDefined(diagnostics.persona_blueprint.assistant, "")) {
+      return diagnostics.persona_blueprint;
+    }
+    if ((shared.persona_id || "ceo") === personaId) {
+      return {
+        health: shared.health || {},
+        assistant: shared.assistant,
+        drivers: safeArray(shared.drivers),
+        findings: safeArray(shared.findings),
+        developments: safeArray(shared.developments),
+        week: safeArray(shared.week)
+      };
+    }
     return DESIGN[personaId] || DESIGN.ceo || {};
+  }
+
+  function getSharedAssistantContext() {
+    return (state.latestPacket && state.latestPacket.assistant_public_context) || BOOTSTRAP_ASSISTANT_CONTEXT || {};
   }
 
   function getPersonaContract(personaId) {
@@ -384,7 +404,7 @@
   }
 
   function getBoardDesign() {
-    return DESIGN_GLOBAL.board || {};
+    return getSharedAssistantContext().board_portal || DESIGN_GLOBAL.board || {};
   }
 
   function getChatContract() {
@@ -408,6 +428,34 @@
   }
 
   function getKnowledgeGraph() {
+    var shared = getSharedAssistantContext();
+    if (safeArray(shared.kg_nodes).length) {
+      return {
+        questions: [
+          {
+            id: "shared-public-packet",
+            label: "Shared executive packet",
+            focus: safeArray(shared.kg_nodes).map(function (node) { return node.id; })
+          }
+        ],
+        nodes: safeArray(shared.kg_nodes).map(function (node, index) {
+          var columns = [18, 36, 54, 72, 84];
+          var rows = [20, 38, 56, 74];
+          return {
+            id: node.id,
+            label: node.label,
+            category: firstDefined(node.properties && node.properties.domain, "signal"),
+            detail: firstDefined(node.properties && (node.properties.detail || node.properties.value || node.properties.vs_plan), "No additional detail available."),
+            x: columns[index % columns.length],
+            y: rows[Math.floor(index / columns.length) % rows.length],
+            r: 10
+          };
+        }),
+        edges: safeArray(shared.kg_edges).map(function (edge) {
+          return [edge.source, edge.target, edge.label];
+        })
+      };
+    }
     return DESIGN_GLOBAL.graph || { questions: [], nodes: [], edges: [] };
   }
 
@@ -424,11 +472,14 @@
   }
 
   function getAgentActivitySummary() {
-    return DESIGN_GLOBAL.activity || {};
+    var shared = getSharedAssistantContext();
+    return shared.agent_activity || DESIGN_GLOBAL.activity || {};
   }
 
   function getRunningAgents() {
+    var shared = getSharedAssistantContext();
     var modules = getAgentsModule();
+    if (safeArray(shared.running_agents).length) return safeArray(shared.running_agents);
     return safeArray(modules.running).length ? safeArray(modules.running) : safeArray(DESIGN_GLOBAL.runningAgents);
   }
 

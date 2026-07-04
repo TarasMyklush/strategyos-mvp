@@ -156,6 +156,41 @@ def executive_public_assistant_packet(persona_id: str = "ceo") -> dict[str, Any]
         "nupco_award_sar": 145_000_000.0,
         "source_boundary": "Public-safe executive packet only; reviewer evidence documents remain on the protected surface.",
     }
+    facts_by_persona = {
+        "ceo": [
+            "Tamween audit: SAR 1.2M recoverable.",
+            "SAR 8.6M is recoverable across the group.",
+            "e-Pharmacy orders are +12% week on week and fulfilment is holding at a 2-day SLA.",
+            "FX is building a ~SAR 9k weekly drag on EBITDA margin and a 60% EUR hedge recovers most of it.",
+            "Healthcare Services occupancy is −3.8% below plan and remains the main operating drag.",
+            "The board pack is 80% composed and the board prep still needs the margin narrative.",
+        ],
+        "cfo": [
+            "SAR 8.6M is recoverable across the group and the leakage scan is ready.",
+            "Tamween contributes SAR 1.2M into that recovery pool.",
+            "EBITDA margin is 19.2% versus 19.4% plan; a 60% EUR hedge recovers roughly 15 bps.",
+            "Cash is SAR 1.48B with 1.6x leverage against a 2.6x covenant.",
+            "Rates easing adds roughly SAR 5M per year of relief and supports the JV funding case from cash.",
+        ],
+        "gm": [
+            "e-Pharmacy revenue is SAR 214M, +12% versus plan.",
+            "Orders are +12% week on week on the refill cohort.",
+            "Capacity binds first in the Eastern hub at 94% utilisation and within roughly 2 weeks.",
+            "Fulfilment is still holding a 2-day SLA, so the visible constraint is capacity rather than demand.",
+        ],
+        "bucfo": [
+            "Tamween has SAR 1.2M audit-confirmed recoverable value.",
+            "Margin is 8.9%, 60 bps below plan, with leakage and cutover dual-running cost as the drag.",
+            "The recovery path is sequenced across institutional AR and duplicate-vendor lines.",
+            "DSO is 91 days, 5 days above plan, and collections discipline is the cleanest acceleration lever.",
+        ],
+        "logistics": [
+            "Cold-chain integrity is 99.4%, the best on record.",
+            "Eastern surge remains the main service risk.",
+            "Service credibility is 96.5% on-time and the board should hear the resilience proof points.",
+        ],
+    }
+    facts = list(facts_by_persona.get(persona_id) or facts_by_persona["ceo"])
     return {
         "packet_id": f"public-executive:{persona_id}",
         "persona_id": persona_id,
@@ -170,6 +205,7 @@ def executive_public_assistant_packet(persona_id: str = "ceo") -> dict[str, Any]
         "activity": activity,
         "running_agents": running_agents,
         "public_facts": public_facts,
+        "facts": facts,
         "kg_nodes": [
             {"id": "kpi:revenue", "label": "Revenue", "properties": {"value": "SAR 2.09B", "vs_plan": "+2.3%"}},
             {"id": "kpi:ebitda", "label": "EBITDA margin", "properties": {"value": "19.2%", "vs_plan": "−20 bps"}},
@@ -325,5 +361,5 @@ PUBLIC_ASSISTANT_CONTEXT_PACKET: dict[str, Any] = {
 }
 
 
-def executive_public_assistant_context() -> dict[str, Any]:
-    return deepcopy(PUBLIC_ASSISTANT_CONTEXT_PACKET)
+def executive_public_assistant_context(persona_id: str = "ceo") -> dict[str, Any]:
+    return executive_public_assistant_packet(persona_id)

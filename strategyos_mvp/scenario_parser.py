@@ -1130,39 +1130,53 @@ def _parse_finance_leakage(prompt: str, context: dict[str, Any]) -> ScenarioResu
 
     findings = context.get("findings") or []
     public_packet = _public_packet(context)
-    if not findings:
-        return ScenarioResult(
-            scenario_id="finance_leakage",
-            scenario_label=SCENARIO_LABELS["finance_leakage"],
-            matched=True,
-            answer="No findings available for leakage analysis. Run a governed analysis first.",
-            calculations=[CalculationStep(
-                step_id="no_data",
-                description="No findings in current run",
-                formula="CHECK(findings) == empty",
-                inputs={},
-                result="0 findings",
-                unit="findings",
-                citations=[],
-            )],
-            kg_context=[],
-            citations=[],
-            assumptions=["No data available."],
-            hallucination_risk=_risk_medium(
-                basis="Public/demo prompt matched finance leakage but neither governed findings nor public packet facts were available.",
-                gap="Missing findings and missing public-safe executive packet context.",
-            ),
-            suggestions=["Run a governed analysis to generate findings"],
-            scenario_type="deterministic",
-            basis="Scenario parser matched 'finance_leakage'; no findings available.",
+    persona_id = str(context.get("persona") or public_packet.get("persona_id") or "ceo")
+    if public_packet and (
+        "recovery path" in norm
+        or (
+            persona_id == "bucfo"
+            and "sar 1.2m" in norm
+            and any(token in norm for token in ("recover", "path", "tamween"))
         )
-
-    has_public_recovery = any(
-        float(f.get("recoverable_sar", f.get("recoverable", 0)) or 0) > 0
-        for f in findings
-        if isinstance(f, dict)
-    ) and bool(public_packet)
-    if has_public_recovery and any(token in match_text for token in ("tamween", "audit", "board", "evidence")):
+    ):
+        recovery_driver = _public_driver(public_packet, "recovery path", "sar 1.2m", "collections discipline", "margin drag") or {}
+        return ScenarioResult(
+            scenario_id="public_exec_recovery_path",
+            scenario_label="Executive Surface — Recovery Path",
+            matched=True,
+            answer=(
+                "The public-safe recovery path is sequenced rather than hypothetical: Tamween has SAR 1.2M of audit-confirmed recoverable value, the packet ties it to institutional AR and duplicate-vendor lines, and the next move is to carry that collections sequence into the variance note and collections call. "
+                "Board-safe implication: show timing, owner, and what portion converts margin this period versus after cutover cleanup."
+            ),
+            calculations=[
+                CalculationStep(
+                    step_id="recovery_driver",
+                    description="Visible BU CFO recovery-path framing from the public packet",
+                    formula="READ public driver + public week item",
+                    inputs={"persona": persona_id, "driver": recovery_driver.get("label") or "Recovery path"},
+                    result=str(recovery_driver.get("value") or "SAR 1.2M recoverable"),
+                    unit="recovery",
+                    citations=[
+                        _public_citation("public_context_packet.drivers[1]"),
+                        _public_citation("public_context_packet.week[1]"),
+                    ],
+                )
+            ],
+            kg_context=[],
+            citations=[
+                _public_citation("public_context_packet.findings[0]"),
+                _public_citation("public_context_packet.drivers[1]"),
+            ],
+            assumptions=["Public-safe packet gives the recovery sequence narrative but not protected account-level collection evidence."],
+            hallucination_risk=_public_risk_low(
+                basis="Public-safe BU CFO recovery packet.",
+                gap="Protected collections evidence remains outside the anonymous surface.",
+            ),
+            suggestions=["Draft my variance note on the margin drag.", "What still needs closing before the cost line steps down?"],
+            scenario_type="deterministic",
+            basis="Matched recovery-path prompt against the shared public packet.",
+        )
+    if public_packet and any(token in match_text for token in ("tamween", "audit", "board", "evidence", "sar 8.6m")):
         board = _public_board(public_packet)
         meeting = board.get("meeting") or {}
         answer = (
@@ -1223,6 +1237,33 @@ def _parse_finance_leakage(prompt: str, context: dict[str, Any]) -> ScenarioResu
             suggestions=["Show the recovery sequence", "Summarize board prep for Tamween", "What still needs governed evidence?"],
             scenario_type="deterministic",
             basis="Scenario parser matched 'finance_leakage' and answered from the shared public executive packet.",
+        )
+
+    if not findings:
+        return ScenarioResult(
+            scenario_id="finance_leakage",
+            scenario_label=SCENARIO_LABELS["finance_leakage"],
+            matched=True,
+            answer="No findings available for leakage analysis. Run a governed analysis first.",
+            calculations=[CalculationStep(
+                step_id="no_data",
+                description="No findings in current run",
+                formula="CHECK(findings) == empty",
+                inputs={},
+                result="0 findings",
+                unit="findings",
+                citations=[],
+            )],
+            kg_context=[],
+            citations=[],
+            assumptions=["No data available."],
+            hallucination_risk=_risk_medium(
+                basis="Public/demo prompt matched finance leakage but neither governed findings nor public packet facts were available.",
+                gap="Missing findings and missing public-safe executive packet context.",
+            ),
+            suggestions=["Run a governed analysis to generate findings"],
+            scenario_type="deterministic",
+            basis="Scenario parser matched 'finance_leakage'; no findings available.",
         )
 
     total = sum(float(f.get("recoverable_sar", f.get("recoverable", 0)) or 0) for f in findings if isinstance(f, dict))
@@ -1326,6 +1367,7 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
         return None
     norm = _normalize(prompt)
     board = _public_board(packet)
+    persona_id = str(context.get("persona") or packet.get("persona_id") or "ceo")
 
     if "gap widening" in norm:
         revenue = _public_driver(packet, "revenue") or {}
@@ -1379,6 +1421,66 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
             suggestions=["Should we pull forward capacity?", "Risk to full-year plan?", "What should I prepare for the board?"],
             scenario_type="deterministic",
             basis="Matched e-Pharmacy detail prompt against public executive driver context.",
+        )
+
+    if "where is the sar 8.6m" in norm or "show evidence for sar 8.6m" in norm:
+        return ScenarioResult(
+            scenario_id="public_exec_recovery_evidence",
+            scenario_label="Executive Surface — Recovery Evidence",
+            matched=True,
+            answer="The visible public-safe answer is that SAR 8.6M sits in the group recovery pool, with Tamween contributing SAR 1.2M and the remainder described as duplicate-vendor spend and aged AR. On the page, that evidence boundary is the recovery finding, the Tamween development, and the board deck titled 'Tamween recovery & cutover' — enough to brief the room, but not the protected case file.",
+            calculations=[
+                CalculationStep(
+                    step_id="group_recovery_evidence",
+                    description="Visible recovery evidence chain from the public packet",
+                    formula="READ public findings + developments + board deck titles",
+                    inputs={"persona": persona_id},
+                    result="SAR 8.6M group recovery with SAR 1.2M from Tamween",
+                    unit="evidence chain",
+                    citations=[
+                        _public_citation("public_context_packet.findings[1]"),
+                        _public_citation("public_context_packet.developments[1]"),
+                        _public_citation("public_context_packet.board_portal.decks[3]"),
+                    ],
+                )
+            ],
+            kg_context=[],
+            citations=[
+                _public_citation("public_context_packet.findings[1]"),
+                _public_citation("public_context_packet.developments[1]"),
+            ],
+            assumptions=["Visible evidence is bounded to the executive packet and excludes protected reviewer documents."],
+            hallucination_risk=_public_risk_low("Public-safe recovery evidence chain from the executive packet."),
+            suggestions=["Project the impact of Tamween audit on the current plan", "Risk to full-year plan?"],
+            scenario_type="deterministic",
+            basis="Matched SAR 8.6M evidence prompt against the public executive packet.",
+        )
+
+    if "capacity binding first" in norm or "eastern hub caps" in norm or "capacity bind" in norm:
+        capacity = _public_driver(packet, "capacity", "eastern hub") or {}
+        return ScenarioResult(
+            scenario_id="public_exec_capacity_bind",
+            scenario_label="Executive Surface — Capacity Bind",
+            matched=True,
+            answer="Capacity is binding first in the Eastern hub. The public packet shows 94% utilisation, says the hub binds within roughly 2 weeks, and frames the decision as whether to pull forward automation or shift volume before SLA deterioration shows up. So the visible issue is operational capacity, not demand softness.",
+            calculations=[
+                CalculationStep(
+                    step_id="capacity_driver",
+                    description="Visible capacity bind from the GM public packet",
+                    formula="READ public capacity driver",
+                    inputs={"persona": persona_id, "driver": capacity.get("label") or "Capacity posture"},
+                    result=str(capacity.get("value") or "94% utilisation"),
+                    unit="capacity",
+                    citations=[_public_citation("public_context_packet.drivers[1]")],
+                )
+            ],
+            kg_context=[],
+            citations=[_public_citation("public_context_packet.drivers[1]")],
+            assumptions=["Public-safe capacity answer is based on visible operating summary, not warehouse-event telemetry."],
+            hallucination_risk=_public_risk_low("Public-safe GM capacity packet."),
+            suggestions=["How long until the Eastern hub caps us?", "Should we pull forward capacity?"],
+            scenario_type="deterministic",
+            basis="Matched capacity-binding prompt against the shared public packet.",
         )
 
     if "risk to full-year plan" in norm or "single biggest risk" in norm:

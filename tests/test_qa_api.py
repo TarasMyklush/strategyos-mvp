@@ -549,6 +549,26 @@ def test_resolve_public_assistant_context_populates_shared_public_packet(monkeyp
     assert "FX" in facts_text
 
 
+def test_bootstrap_and_public_latest_run_share_same_assistant_packet(monkeypatch):
+    monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+    view_state = {"persona": "ceo", "board": "pre", "driver": "revenue"}
+    bootstrap = api_module._ui_bootstrap(view_state=view_state, entry_route="/executive")
+    public_payload = api_module._latest_run_public_payload(
+        api_module._latest_summary(),
+        view_state=view_state,
+    )
+
+    bootstrap_packet = bootstrap["assistant_public_context"]
+    latest_packet = public_payload["assistant_public_context"]
+    assert bootstrap_packet["packet_id"] == latest_packet["packet_id"]
+    assert bootstrap_packet["drivers"] == latest_packet["drivers"]
+    assert bootstrap_packet["findings"] == latest_packet["findings"]
+    assert bootstrap_packet["developments"] == latest_packet["developments"]
+    assert bootstrap_packet["week"] == latest_packet["week"]
+    assert bootstrap_packet["kg_nodes"] == latest_packet["kg_nodes"]
+
+
 def test_assistant_chat_public_ceo_golden_prompts_use_shared_public_packet(monkeypatch):
     original = _apply_env(
         {
@@ -679,6 +699,59 @@ def test_public_assistant_golden_prompts_use_shared_context(monkeypatch):
             assert token.lower() in payload["answer"].lower(), question
             assert payload["citations"], question
 
+    finally:
+        _restore_env(original)
+
+
+def test_public_safe_persona_variants_return_substantive_answers(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        client = TestClient(api_module.app)
+        cases = [
+            ("cfo", "Where is the SAR 8.6M?", ["SAR 8.6M", "SAR 1.2M"]),
+            ("gm", "Where is capacity binding first?", ["Eastern hub", "capacity"]),
+            ("bucfo", "What is the SAR 1.2M recovery path?", ["SAR 1.2M", "collections"]),
+        ]
+
+        for persona, question, tokens in cases:
+            response = client.post(
+                "/assistant/chat",
+                json={
+                    "question": question,
+                    "persona": persona,
+                    "mode": "auto",
+                    "assistant_context": {"source": "executive_surface", "entrypoint": "scenario_chip"},
+                },
+            )
+            assert response.status_code == 200, question
+            payload = response.json()
+            assert payload["run_mode"] == "public-safe", question
+            assert payload["matched"] is True, question
+            assert "outside the current deterministic public-safe prompt set" not in payload["answer"], question
+            assert "No findings available for leakage analysis" not in payload["answer"], question
+            assert all(token.lower() in payload["answer"].lower() for token in tokens), question
+
+        bucfo_payload = client.post(
+            "/assistant/chat",
+            json={
+                "question": "What is the SAR 1.2M recovery path?",
+                "persona": "bucfo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "scenario_chip"},
+            },
+        ).json()
+        assert "SAR 20.8M" not in bucfo_payload["answer"]
     finally:
         _restore_env(original)
 

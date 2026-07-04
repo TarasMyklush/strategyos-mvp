@@ -33,7 +33,7 @@ from .executive_design import (
     executive_board_design,
     executive_discover_agents_design,
     executive_persona_design,
-    executive_public_assistant_context,
+    executive_public_assistant_packet,
     executive_running_agents_design,
     executive_subtools_design,
 )
@@ -507,6 +507,9 @@ def _latest_run_public_payload(
 ) -> dict[str, Any]:
     if summary is None:
         return {"status": "missing", "public_safe": True, "run_id": ANONYMOUS_PUBLIC_RUN_ID}
+    effective_view_state = dict(view_state or _requested_executive_view_state())
+    public_packet_persona = str(effective_view_state.get("persona") or "ceo")
+    assistant_public_context = executive_public_assistant_packet(public_packet_persona)
     summary = _anonymous_public_summary(summary)
     assert summary is not None
     rows = _anonymous_public_finding_payloads(_finding_rows_from_summary(summary))
@@ -572,6 +575,7 @@ def _latest_run_public_payload(
         "executive_modes": executive_modes,
         "drilldown": drilldown,
         "interaction_contracts": _interaction_contracts_payload(principal, public_safe=True),
+        "assistant_public_context": assistant_public_context,
         "agents": agents,
         "agent_modules": agent_modules,
         "chat": chat,
@@ -4197,7 +4201,7 @@ def _agents_surface_payload(
             "metrics": [
                 {"k": "running", "v": sum(1 for item in running if item["status"] in {"running", "approval"})},
                 {"k": "needs approval", "v": sum(1 for item in running if item["status"] == "approval")},
-                {"k": "discoverable", "v": len(discover_design) + 2},
+                {"k": "discoverable", "v": len(native_discovery) + len(market_discovery)},
             ],
             "design_metrics": list(activity_design.get("metrics") or []),
             "log": list(activity_design.get("log") or [
@@ -5935,6 +5939,8 @@ def _ui_bootstrap(
     entry_route: str = "/app",
 ) -> dict[str, Any]:
     llm_status = llm_qa.chat_status(CONFIG)
+    requested_view_state = dict(view_state or _requested_executive_view_state())
+    public_packet_persona = str(requested_view_state.get("persona") or "ceo")
     return {
         "product_name": "StrategyOS",
         "shell_title": "StrategyOS Governed Operations",
@@ -5960,8 +5966,8 @@ def _ui_bootstrap(
         },
         "executive_route_base": "/app",
         "executive_entry_route": entry_route,
-        "assistant_public_context": executive_public_assistant_context(),
-        "requested_view_state": dict(view_state or _requested_executive_view_state()),
+        "assistant_public_context": executive_public_assistant_packet(public_packet_persona),
+        "requested_view_state": requested_view_state,
         "route_contracts": {
             "entry": _build_executive_route(view_state, base_route=entry_route),
             "app": "/app",
@@ -8726,7 +8732,6 @@ def _resolve_public_assistant_context(
             detail="Only the latest public demo run is available on the anonymous executive surface.",
         )
     summary = _anonymous_public_summary(_latest_summary())
-    public_context_packet = executive_public_assistant_context()
     if summary is None:
         summary = {
             "run_id": None,
@@ -8745,6 +8750,9 @@ def _resolve_public_assistant_context(
         assistant_context=assistant_context,
         driver_context=driver_context,
     )
+    public_context_packet = executive_public_assistant_packet(
+        str(view_state.get("persona") or persona or "ceo")
+    )
     public_context_packet["view_state"] = view_state
     summary["assistant_context_source"] = str(
         public_context_packet.get("packet_id") or "public-executive-context"
@@ -8756,32 +8764,25 @@ def _resolve_public_assistant_context(
         "public_safe": True,
         "view_state": view_state,
     }
-    synthetic_findings: list[dict[str, Any]] = [
-        {
-            "finding_id": f"public-{index + 1}",
-            "title": str(item),
-            "detail": str(item),
-            "pattern_type": "finance_leakage" if "recoverable" in str(item).lower() else "public_signal",
-            "recoverable_sar": 8_600_000 if "8.6" in str(item) else 1_200_000 if "1.2" in str(item) else 0,
-            "source_path": "public_packet://executive_surface/facts",
-            "locator": f"public_context_packet.facts[{index}]",
-            "citations": [_public_packet_citation(f"facts[{index}]", str(item))],
-        }
-        for index, item in enumerate(list(merged_packet.get("facts") or []))
-    ]
-    synthetic_findings.extend(
-        {
-            "finding_id": f"public-finding-{index + 1}",
-            "title": item.get("title"),
-            "detail": item.get("detail") or item.get("impact") or "",
-            "pattern_type": "finance_leakage" if "recoverable" in str(item.get("title") or "").lower() else "public_signal",
-            "recoverable_sar": 8_600_000 if "8.6" in str(item.get("title") or item.get("detail") or "") else 1_200_000 if "1.2" in str(item.get("title") or item.get("impact") or "") else 0,
-            "source_path": "public_packet://executive_surface/persona",
-            "locator": f"public_context_packet.findings[{index}]",
-            "citations": [_public_packet_citation(f"findings[{index}]", str(item.get("detail") or item.get("impact") or ""))],
-        }
-        for index, item in enumerate((merged_packet.get("findings") or []) + (merged_packet.get("developments") or []))
-    )
+    synthetic_findings: list[dict[str, Any]] = []
+    for index, item in enumerate(list(merged_packet.get("findings") or [])):
+        title = str(item.get("title") or "")
+        detail = str(item.get("detail") or item.get("impact") or "")
+        synthetic_findings.append(
+            {
+                "finding_id": str(item.get("finding_id") or f"public-finding-{index + 1}"),
+                "title": title,
+                "detail": detail,
+                "pattern_type": str(
+                    item.get("pattern_type")
+                    or ("finance_leakage" if "recoverable" in title.lower() else "public_signal")
+                ),
+                "recoverable_sar": float(item.get("recoverable_sar") or 0),
+                "source_path": "public_packet://executive_surface/persona",
+                "locator": f"public_context_packet.findings[{index}]",
+                "citations": [_public_packet_citation(f"findings[{index}]", detail)],
+            }
+        )
 
     return {
         "bundle": merged_packet,
