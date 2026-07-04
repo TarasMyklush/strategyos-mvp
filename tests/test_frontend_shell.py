@@ -1719,5 +1719,6 @@ def test_executive_surface_prefers_shared_assistant_packet_for_visible_facts():
     assert "function getSharedAssistantContext()" in executive_js
     assert "state.latestPacket && state.latestPacket.assistant_public_context" in executive_js
     assert "return getSharedAssistantContext().board_portal || DESIGN_GLOBAL.board || {}" in executive_js
+    assert "if ((shared.persona_id || \"ceo\") === personaId)" in executive_js
     assert "return shared.agent_activity || DESIGN_GLOBAL.activity || {}" in executive_js
     assert "if (safeArray(shared.kg_nodes).length)" in executive_js

@@ -473,7 +473,7 @@
 
   function getAgentActivitySummary() {
     var shared = getSharedAssistantContext();
-    return shared.agent_activity || shared.activity || DESIGN_GLOBAL.activity || {};
+    return shared.agent_activity || DESIGN_GLOBAL.activity || {};
   }
 
   function getRunningAgents() {
