@@ -7,6 +7,8 @@
   if (bootstrap.environment) {}
   if (bootstrap.api_auth_enabled) {}
   var _tokenKey = "strategyos.ui.token";
+  var ASSISTANT_ENDPOINT = "/assistant/chat";
+  var ASSISTANT_TRANSPORT_FALLBACK = "I couldn't reach the shared assistant service just now.";
   var DESIGN = (window.STRATEGYOS_EXECUTIVE_DESIGN && window.STRATEGYOS_EXECUTIVE_DESIGN.personas) || {};
   var DESIGN_GLOBAL = window.STRATEGYOS_EXECUTIVE_DESIGN || {};
   var BOOTSTRAP_ASSISTANT_CONTEXT = bootstrap.assistant_public_context || {};
@@ -147,15 +149,66 @@
     });
   }
 
-  function postJson(path, body) {
+  function parseJsonResponse(response) {
+    return response.text().then(function (text) {
+      if (!text) return null;
+      try {
+        return JSON.parse(text);
+      } catch (_error) {
+        return { raw: text };
+      }
+    });
+  }
+
+  function assistantTraceId() {
+    return "hermes-" + Date.now() + "-" + Math.random().toString(16).slice(2, 10);
+  }
+
+  function postJson(path, body, options) {
     var headers = authHeaders();
     headers["Content-Type"] = "application/json";
+    var requestId = firstDefined(options && options.requestId, body && body.trace_id, "");
+    if (requestId) headers["X-Request-ID"] = requestId;
     return fetch(path, {
       method: "POST",
       headers: headers,
       body: JSON.stringify(body || {})
     }).then(function (response) {
-      return response.ok ? response.json() : null;
+      return parseJsonResponse(response).then(function (payload) {
+        var responseRequestId = firstDefined(
+          response.headers.get("x-request-id"),
+          payload && payload.request_id,
+          payload && payload.trace_id,
+          requestId
+        );
+        if (!response.ok) {
+          var error = new Error("Assistant request failed with status " + response.status);
+          error.endpoint = path;
+          error.status = response.status;
+          error.payload = payload;
+          error.requestId = responseRequestId;
+          error.errorType = response.status === 401 ? "auth_error"
+            : response.status === 403 ? "forbidden"
+            : response.status >= 500 ? "server_error"
+            : "http_error";
+          throw error;
+        }
+        return {
+          payload: payload,
+          status: response.status,
+          endpoint: path,
+          requestId: responseRequestId
+        };
+      });
+    }).catch(function (error) {
+      if (error && error.endpoint) throw error;
+      var networkError = new Error(firstDefined(error && error.message, "Assistant transport failure"));
+      networkError.endpoint = path;
+      networkError.status = 0;
+      networkError.requestId = requestId;
+      networkError.errorType = "network_error";
+      networkError.cause = error;
+      throw networkError;
     });
   }
 
@@ -259,6 +312,7 @@
     }
     if (state.activePersona === "ceo") createWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt, { silentInitialMessage: true });
     else ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt, { silentInitialMessage: true });
+    var threadKey = currentThreadKey();
     pushThreadMessage("user", cleanPrompt);
     var pending = pushThreadMessage("assistant", "Checking the governed run data\u2026");
     openAssistantDrawer(validChip);
@@ -270,7 +324,7 @@
       input.placeholder = 'Thinking\u2026';
       form.classList.add('assistant-form--loading');
     }
-    var answer = await buildAssistantReply(cleanPrompt, validChip);
+    var result = await buildAssistantReply(cleanPrompt, validChip);
     // Clear loading state
     if (!validChip && form && input) {
       input.disabled = false;
@@ -279,12 +333,9 @@
       focusAssistantInput();
     }
     if (pending) {
-      pending.text = answer;
-      pending.timestamp = new Date().toISOString();
-      var thread = threadStore()[currentThreadKey()];
+      var thread = threadStore()[threadKey];
       if (thread) {
-        thread.preview = wordSlice(answer || thread.preview, 84);
-        thread.lastUpdated = new Date().toISOString();
+        applyAssistantResultToMessage(thread, pending, result);
       }
       saveStoredThreads();
       renderAssistantStudio();
@@ -671,12 +722,184 @@
     return parts.join(" ") || "No answer returned from governed Q&A.";
   }
 
+  var ASSISTANT_TRANSPORT_FAILURE_TEXT = ASSISTANT_TRANSPORT_FALLBACK;
+
   function boardSafeStatusReply(message) {
     return [
-      "I couldn't reach the shared assistant service just now.",
+      ASSISTANT_TRANSPORT_FAILURE_TEXT,
       message ? "Question asked: \u201c" + message + "\u201d." : "",
       "Please try again in a moment or reopen the board assistant."
     ].filter(Boolean).join(" ");
+  }
+
+  function isLegacyAssistantTransportFallback(text) {
+    return String(text || "").indexOf(ASSISTANT_TRANSPORT_FAILURE_TEXT) !== -1;
+  }
+
+  function inferRetryPrompt(messages, index) {
+    for (var cursor = index - 1; cursor >= 0; cursor -= 1) {
+      var candidate = messages[cursor] || {};
+      if (candidate.role === "user") {
+        var prompt = String(firstDefined(candidate.text, "")).trim();
+        if (prompt) return prompt;
+      }
+    }
+    return "";
+  }
+
+  function summarizeAssistantFailure(message) {
+    var statusCode = firstDefined(message && message.statusCode, "");
+    var requestId = firstDefined(message && message.requestId, "");
+    var errorType = firstDefined(message && message.errorType, "transport_failure");
+    var parts = ["Temporary transport failure", firstDefined(message && message.endpoint, "/assistant/chat")];
+    if (statusCode) parts.push("status " + statusCode);
+    parts.push(humanizeToken(errorType));
+    if (requestId) parts.push("request " + requestId);
+    return parts.join(" · ");
+  }
+
+  function buildRetryPreview(prompt) {
+    var cleanPrompt = String(prompt || "").trim();
+    return cleanPrompt ? "Retry needed · " + wordSlice(cleanPrompt, 68) : "Retry needed · Assistant response unavailable";
+  }
+
+  function latestRetryableAssistantFailure(thread) {
+    var messages = safeArray(thread && thread.messages);
+    for (var index = messages.length - 1; index >= 0; index -= 1) {
+      var message = messages[index] || {};
+      if (message.role === "assistant" && message.status === "failed" && message.retryable !== false) {
+        return { index: index, message: message };
+      }
+    }
+    return null;
+  }
+
+  function recalcThreadPreview(thread) {
+    if (!thread) return;
+    var messages = safeArray(thread.messages);
+    var fallbackPreview = firstDefined(thread.preview, "Board-safe follow-up");
+    for (var index = messages.length - 1; index >= 0; index -= 1) {
+      var message = messages[index] || {};
+      var text = String(firstDefined(message.text, "")).trim();
+      if (!text) continue;
+      if (message.role === "assistant" && message.status === "failed") {
+        thread.preview = buildRetryPreview(firstDefined(message.retryPrompt, inferRetryPrompt(messages, index), ""));
+        return;
+      }
+      thread.preview = wordSlice(text, 84);
+      return;
+    }
+    thread.preview = fallbackPreview;
+  }
+
+  function markThreadTransportFailuresRetryable(thread) {
+    if (!thread || !safeArray(thread.messages).length) return false;
+    var changed = false;
+    thread.messages = safeArray(thread.messages).map(function (message, index, messages) {
+      if (!message || message.role !== "assistant") return message;
+      if (message.status === "failed") {
+        if (!message.retryPrompt) {
+          message.retryPrompt = inferRetryPrompt(messages, index);
+          changed = true;
+        }
+        if (!message.endpoint) {
+          message.endpoint = "/assistant/chat";
+          changed = true;
+        }
+        if (!message.errorType) {
+          message.errorType = "transport_failure";
+          changed = true;
+        }
+        if (!message.text) {
+          message.text = "Hermes could not reach the shared assistant service. Retry now once the service is reachable.";
+          changed = true;
+        }
+        message.retryable = true;
+        message.needsRetry = true;
+        message.autoRetryEligible = true;
+        return message;
+      }
+      if (!isLegacyAssistantTransportFallback(message.text)) return message;
+      changed = true;
+      return {
+        role: "assistant",
+        text: "Hermes could not reach the shared assistant service. Retry now once the service is reachable.",
+        timestamp: firstDefined(message.timestamp, new Date().toISOString()),
+        status: "failed",
+        retryable: true,
+        needsRetry: true,
+        autoRetryEligible: true,
+        retryPrompt: inferRetryPrompt(messages, index),
+        endpoint: "/assistant/chat",
+        errorType: "stale_transport_fallback"
+      };
+    });
+    if (changed) recalcThreadPreview(thread);
+    return changed;
+  }
+
+  function logAssistantTransportFailure(details) {
+    console.error("[Hermes] assistant transport failure", details);
+  }
+
+  function makeAssistantFailureResult(message, details) {
+    var metadata = details || {};
+    var result = {
+      ok: false,
+      answer: "Hermes could not reach the shared assistant service. Retry now once the service is reachable.",
+      endpoint: firstDefined(metadata.endpoint, "/assistant/chat"),
+      statusCode: firstDefined(metadata.statusCode, ""),
+      requestId: firstDefined(metadata.requestId, ""),
+      errorType: firstDefined(metadata.errorType, "transport_failure"),
+      retryPrompt: String(message || "").trim(),
+      retryable: true,
+      needsRetry: true,
+      autoRetryEligible: false,
+      transient: true
+    };
+    logAssistantTransportFailure({
+      endpoint: result.endpoint,
+      status: result.statusCode || null,
+      requestId: result.requestId || null,
+      errorType: result.errorType,
+      prompt: result.retryPrompt,
+      details: metadata.details || null,
+      responseBody: metadata.responseBody || ""
+    });
+    return result;
+  }
+
+  function applyAssistantResultToMessage(thread, message, result) {
+    if (!thread || !message || !result) return;
+    if (result.ok) {
+      message.text = result.answer;
+      message.timestamp = new Date().toISOString();
+      message.status = "ok";
+      message.retryable = false;
+      message.needsRetry = false;
+      message.autoRetryEligible = false;
+      delete message.retryPrompt;
+      delete message.requestId;
+      delete message.statusCode;
+      delete message.errorType;
+      delete message.endpoint;
+      delete message.transient;
+    } else {
+      message.text = result.answer;
+      message.timestamp = new Date().toISOString();
+      message.status = "failed";
+      message.retryable = result.retryable !== false;
+      message.needsRetry = result.needsRetry !== false;
+      message.autoRetryEligible = result.autoRetryEligible === true;
+      message.retryPrompt = firstDefined(result.retryPrompt, message.retryPrompt, "");
+      message.requestId = firstDefined(result.requestId, "");
+      message.statusCode = firstDefined(result.statusCode, "");
+      message.errorType = firstDefined(result.errorType, "transport_failure");
+      message.endpoint = firstDefined(result.endpoint, "/assistant/chat");
+      message.transient = result.transient !== false;
+    }
+    thread.lastUpdated = new Date().toISOString();
+    recalcThreadPreview(thread);
   }
 
   function assistantEntrypointContext(sourceEl) {
@@ -713,7 +936,9 @@
 
   async function buildAssistantReply(message, sourceEl) {
     var cleanMessage = String(message || "").trim();
-    if (!cleanMessage) return "Please ask a question for the assistant.";
+    if (!cleanMessage) {
+      return { ok: false, answer: "Please ask a question for the assistant.", retryable: false, needsRetry: false, errorType: "empty_prompt", endpoint: "/assistant/chat" };
+    }
 
     // Typo normalization for common misspellings before API call
     var normalizeTypos = function (q) {
@@ -744,10 +969,35 @@
     var runId = activeRunId();
     if (runId && runId !== "latest-public") body.run_id = runId;
     try {
-      var payload = await postJson("/assistant/chat", body);
-      if (payload && payload.status === "ok") return qaAnswerText(payload);
-    } catch (_error) {}
-    return boardSafeStatusReply(cleanMessage);
+      var endpoint = "/assistant/chat";
+      var clientRequestId = "hermes-ui-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+      body.trace_id = clientRequestId;
+      var response = await postJson("/assistant/chat", body, { requestId: clientRequestId });
+      var requestId = firstDefined(
+        response.requestId,
+        clientRequestId
+      );
+      var payload = response.payload;
+      if (payload && payload.status === "ok") {
+        return { ok: true, answer: qaAnswerText(payload), requestId: requestId, endpoint: endpoint };
+      }
+      return makeAssistantFailureResult(cleanMessage, {
+        endpoint: endpoint,
+        statusCode: response.status,
+        requestId: requestId,
+        errorType: "invalid_payload",
+        details: "Response was reachable but did not return status=ok.",
+        responseBody: payload
+      });
+    } catch (error) {
+      return makeAssistantFailureResult(cleanMessage, {
+        endpoint: firstDefined(error && error.endpoint, "/assistant/chat"),
+        statusCode: firstDefined(error && error.status, ""),
+        requestId: firstDefined(error && error.requestId, ""),
+        errorType: firstDefined(error && error.errorType, "network_error"),
+        details: error && error.message ? error.message : String(error || "unknown network error")
+      });
+    }
   }
 
   function threadStore() {
@@ -782,6 +1032,7 @@
         }
       }
       threadStore()[key] = persisted[key];
+      markThreadTransportFailuresRetryable(threadStore()[key]);
     });
     var seededThreads = safeArray(chat.threads).length ? safeArray(chat.threads) : safeArray(blueprint.threads).map(function (thread, index) {
       return {
@@ -865,12 +1116,48 @@
   function pushThreadMessage(role, text) {
     var thread = role === "user" ? ensureWritableThread() : threadStore()[currentThreadKey()] || ensureWritableThread();
     if (!thread) return null;
-    var message = { role: role, text: text, timestamp: new Date().toISOString() };
+    var message = { role: role, text: text, timestamp: new Date().toISOString(), status: role === "assistant" ? "pending" : "ok" };
     thread.messages.push(message);
-    thread.preview = wordSlice(text || thread.preview, 84);
     thread.lastUpdated = new Date().toISOString();
+    recalcThreadPreview(thread);
     saveStoredThreads();
     return message;
+  }
+
+  async function retryAssistantMessage(threadKey, messageIndex, sourceEl, options) {
+    var thread = threadStore()[threadKey];
+    var message = thread && safeArray(thread.messages)[messageIndex];
+    var retryPrompt = String(firstDefined(message && message.retryPrompt, inferRetryPrompt(thread && thread.messages, messageIndex), "")).trim();
+    if (!thread || !message || !retryPrompt) return;
+    if (sourceEl) sourceEl.disabled = true;
+    message.text = "Retrying the shared assistant service…";
+    message.status = "pending";
+    message.needsRetry = false;
+    thread.lastUpdated = new Date().toISOString();
+    recalcThreadPreview(thread);
+    saveStoredThreads();
+    renderAssistantStudio();
+    var result = await buildAssistantReply(retryPrompt, sourceEl);
+    applyAssistantResultToMessage(thread, message, result);
+    state.failedAssistantAutoRetried[threadKey + ":" + messageIndex] = true;
+    saveStoredThreads();
+    renderAssistantStudio();
+    if (sourceEl) sourceEl.disabled = false;
+    if (!(options && options.silentToast) && result.ok) {
+      showToast("Hermes reply restored.");
+    }
+  }
+
+  function maybeAutoRetryLatestFailure(thread) {
+    if (!state.drawerOpen || !thread) return;
+    var latestFailure = latestRetryableAssistantFailure(thread);
+    if (!latestFailure || !latestFailure.message || !latestFailure.message.retryPrompt || latestFailure.message.autoRetryEligible !== true) return;
+    var retryKey = thread.key + ":" + latestFailure.index;
+    if (state.failedAssistantAutoRetried[retryKey]) return;
+    state.failedAssistantAutoRetried[retryKey] = true;
+    window.setTimeout(function () {
+      retryAssistantMessage(thread.key, latestFailure.index, null, { silentToast: true });
+    }, 0);
   }
 
   function friendlyThreadTime(value) {
@@ -1582,7 +1869,7 @@
       {
         label: "Report surface",
         value: String(firstDefined(publication.report_count, 0)) + " routes",
-        detail: firstDefined(publication.preview_route, "Board pack preview waits for the current governed packet.")
+        detail: firstDefined(publication.preview_route, "Board pack preview waits for the current board pack.")
       }
     ];
     grid.innerHTML = metrics.map(function (metric) {
@@ -2222,6 +2509,7 @@
     var closeButton = $("assistant-close");
     var threads = personaThreadRecords();
     var current = threadStore()[currentThreadKey()];
+    if (current) markThreadTransportFailuresRetryable(current);
 
     if (drawer) {
       drawer.hidden = !state.drawerOpen;
@@ -2328,6 +2616,7 @@
     if (threadMeta) threadMeta.textContent = firstDefined(current && current.preview, blueprint.brief, "Select a governed follow-up.");
     if (threadTools) {
       var tools = [];
+      var latestFailure = latestRetryableAssistantFailure(current);
       if (state.activePersona !== "ceo") {
         tools.push('<span class="assistant-tool-chip">' + escapeHtml(firstDefined((getChatContract().assistant || {}).name, assistantName)) + '</span>');
       }
@@ -2336,19 +2625,46 @@
         tools.push('<span class="assistant-tool-chip">' + escapeHtml(boardStateLabel) + '</span>');
       }
       if (current && current.route && state.activePersona !== "ceo") tools.push('<span class="assistant-tool-chip">' + escapeHtml(current.route) + '</span>');
+      if (latestFailure && latestFailure.message && latestFailure.message.retryPrompt) {
+        tools.push('<button type="button" class="assistant-tool-chip assistant-tool-chip--action" data-assistant-retry-latest="true">Retry now</button>');
+      }
       threadTools.innerHTML = tools.join('');
+      safeArray(threadTools.querySelectorAll('[data-assistant-retry-latest]')).forEach(function (button) {
+        button.onclick = function () {
+          retryAssistantMessage(current.key, latestFailure.index, button);
+        };
+      });
     }
 
     if (messages) {
-      var visibleMessages = safeArray(current && current.messages).filter(function (message) {
-        return String(firstDefined(message && message.text, '')).trim().length > 0;
+      var visibleMessages = safeArray(current && current.messages).map(function (message, index) {
+        return { message: message, index: index };
+      }).filter(function (entry) {
+        return String(firstDefined(entry && entry.message && entry.message.text, '')).trim().length > 0;
       });
-      messages.innerHTML = visibleMessages.length ? visibleMessages.map(function (message) {
+      messages.innerHTML = visibleMessages.length ? visibleMessages.map(function (entry) {
+        var message = entry.message || {};
         var role = firstDefined(message.role, 'assistant');
         var roleLabel = role === 'user' ? 'You' : assistantName;
         var roleSuffix = state.activePersona === "ceo" ? '' : ' · ' + escapeHtml(friendlyThreadTime(firstDefined(message.timestamp, 'now')));
-        return '<div class="assistant-message assistant-message--' + escapeHtml(role) + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p></div>';
+        var classes = ['assistant-message', 'assistant-message--' + escapeHtml(role)];
+        if (message.status === 'failed') classes.push('assistant-message--failed');
+        if (message.status === 'pending') classes.push('assistant-message--pending');
+        var failureMeta = '';
+        if (role === 'assistant' && message.status === 'failed') {
+          failureMeta = '<div class="assistant-message__meta">' + escapeHtml(summarizeAssistantFailure(message)) + '</div>';
+        }
+        var retryButton = '';
+        if (role === 'assistant' && message.status === 'failed' && message.retryPrompt) {
+          retryButton = '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-retry-index="' + escapeHtml(String(entry.index)) + '">Retry now</button></div>';
+        }
+        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p>' + failureMeta + retryButton + '</div>';
       }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No messages yet</span><p>Ask a question to begin.</p></div>';
+      safeArray(messages.querySelectorAll('[data-assistant-retry-index]')).forEach(function (button) {
+        button.onclick = function () {
+          retryAssistantMessage(current.key, Number(button.getAttribute('data-assistant-retry-index') || '-1'), button);
+        };
+      });
       messages.scrollTop = messages.scrollHeight;
     }
 
@@ -2363,6 +2679,7 @@
         };
       });
     }
+    maybeAutoRetryLatestFailure(current);
   }
 
   function renderReportSurface() {
@@ -2496,6 +2813,7 @@
       activeA2AExchange: "",
       drawerOpen: false,
       drawerReturnFocusEl: null,
+      failedAssistantAutoRetried: {},
       videoModalOpen: false,
       theme: document.documentElement.getAttribute("data-theme") || "light",
       discoveryFilter: "all",

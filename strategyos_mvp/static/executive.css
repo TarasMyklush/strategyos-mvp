@@ -2501,6 +2501,43 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   line-height: 1.55;
 }
 
+.assistant-message--failed {
+  border-color: color-mix(in srgb, #b42318 28%, var(--border));
+  background: color-mix(in srgb, #b42318 6%, rgba(255,255,255,0.94));
+}
+
+.assistant-message--pending {
+  opacity: 0.8;
+}
+
+.assistant-message__meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.assistant-message__actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.assistant-retry-button,
+.assistant-tool-chip--action {
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent-2);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.assistant-retry-button:hover,
+.assistant-tool-chip--action:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
 .assistant-prompts {
   display: flex;
   flex-wrap: wrap;

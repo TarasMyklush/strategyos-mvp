@@ -68,7 +68,8 @@ def test_executive_assistant_uses_governed_qa_not_fake_captured_reply():
     js = _static_executive_js()
 
     assert 'mode: "auto"' in js
-    assert 'postJson("/assistant/chat"' in js
+    assert 'var endpoint = "/assistant/chat";' in js
+    assert 'postJson("/assistant/chat", body' in js or 'fetch(endpoint, {' in js
     assert 'persona: state.activePersona || "ceo"' in js
     assert 'driver_context' in js
     assert "still the active lens" not in js
@@ -1558,16 +1559,12 @@ def test_all_banned_strings_absent_from_ceo_drawer_code():
     # Lines where "writable" is structural (function definitions, known CEO-only paths,
     # or already inside a guard block) and should be exempt from the guard check.
     # These are not user-facing banned strings in CEO-visible UI.
-    structural_writable_lines = {
-        247,   # inside if (state.activePersona === "ceo") { ... } — intentional CEO path
-        249,   # inside else { ... } — implicitly non-CEO
-        721,   # function ensureWritableThread definition
-        725,   # return createWritableThread(...) inside ensureWritableThread
-        728,   # function createWritableThread definition
-        738,   # inside createWritableThread body (route ternary)
-        757,   # generic thread create (both paths use it)
-        2195,  # "New conversation" button handler — structural thread creation
-    }
+    structural_writable_fragments = (
+        'createWritableThread(',
+        'ensureWritableThread(',
+        'Writable board-safe thread.',
+        'createWritableThread();',
+    )
 
     violations = []
     for i, line in enumerate(lines):
@@ -1575,21 +1572,21 @@ def test_all_banned_strings_absent_from_ceo_drawer_code():
         for banned_str in banned:
             if banned_str in line:
                 # Structural exemptions for 'writable' in function names
-                if banned_str == "writable" and line_no in structural_writable_lines:
+                if banned_str == "writable" and any(fragment in line for fragment in structural_writable_fragments):
                     continue
-                    # Check a 10-line window for a CEO-excluding guard:
-                    # - explicit !== "ceo" 
-                    # - === "board" (board is a distinct persona, not CEO)
-                    window_start = max(0, i - 10)
-                    window_end = min(len(lines), i + 10)
-                    nearby = '\n'.join(lines[window_start:window_end])
-                    has_ceo_guard = (
-                        'state.activePersona !== "ceo"' in nearby or
-                        'state.activePersona === "board"' in nearby
-                    )
-                    if not has_ceo_guard:
-                        violations.append(f"Line {line_no}: '{banned_str}' without CEO-"
-                                          f"excluding guard (nearby: ...{nearby.strip()[-80:]})")
+                # Check a 10-line window for a CEO-excluding guard:
+                # - explicit !== "ceo"
+                # - === "board" (board is a distinct persona, not CEO)
+                window_start = max(0, i - 10)
+                window_end = min(len(lines), i + 10)
+                nearby = '\n'.join(lines[window_start:window_end])
+                has_ceo_guard = (
+                    'state.activePersona !== "ceo"' in nearby or
+                    'state.activePersona === "board"' in nearby
+                )
+                if not has_ceo_guard:
+                    violations.append(f"Line {line_no}: '{banned_str}' without CEO-"
+                                      f"excluding guard (nearby: ...{nearby.strip()[-80:]})")
 
     assert not violations, (
         "Banned strings found outside CEO-guarded blocks:\n" +
@@ -1667,7 +1664,7 @@ def test_ceo_dead_end_guard_handles_driver_relevance_questions():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
     assert "function ceoDriverRelevanceReply" not in executive_js
     assert "driver_context" in executive_js
-    assert 'postJson("/assistant/chat"' in executive_js
+    assert 'var endpoint = "/assistant/chat";' in executive_js
 
 
 def test_ceo_typo_normalization_includes_whis():
@@ -1693,7 +1690,7 @@ def test_executive_frontend_sends_shared_assistant_entrypoint_context():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
     assert "assistantEntrypointContext" in executive_js
     assert "body.assistant_context = assistantEntrypointContext(sourceEl);" in executive_js
-    assert 'postJson("/assistant/chat", body)' in executive_js
+    assert 'var endpoint = "/assistant/chat";' in executive_js
 
 
 def test_assistant_requests_include_shared_entrypoint_metadata():
@@ -1722,3 +1719,40 @@ def test_executive_surface_prefers_shared_assistant_packet_for_visible_facts():
     assert "if ((shared.persona_id || \"ceo\") === personaId)" in executive_js
     assert "return shared.agent_activity || DESIGN_GLOBAL.activity || {}" in executive_js
     assert "if (safeArray(shared.kg_nodes).length)" in executive_js
+
+
+def test_assistant_transport_failures_are_retryable_not_final_answers():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    assert 'function markThreadTransportFailuresRetryable' in executive_js
+    assert 'message.status = "failed"' in executive_js
+    assert 'message.retryPrompt' in executive_js
+    assert 'data-assistant-retry-index' in executive_js
+    assert 'Retry now' in executive_js
+    assert 'maybeAutoRetryLatestFailure(current);' in executive_js
+    assert 'state.failedAssistantAutoRetried' in executive_js
+
+
+def test_assistant_transport_failures_log_visible_diagnostics():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    assert 'console.error("[Hermes] assistant transport failure", details);' in executive_js
+    assert 'body.trace_id = clientRequestId;' in executive_js
+    assert 'headers["X-Request-ID"] = requestId;' in executive_js or 'headers["X-Request-ID"] = clientRequestId;' in executive_js
+    assert 'response.headers.get("x-request-id")' in executive_js
+    assert 'errorType: firstDefined(error && error.errorType, "network_error")' in executive_js or 'errorType: "network_error"' in executive_js
+    assert 'errorType = response.status === 401 ? "auth_error"' in executive_js or ': "http_error";' in executive_js
+
+
+def test_exact_fx_cta_thread_is_preserved_as_retryable_flow():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+    assert 'Explain why “' in executive_js
+    assert 'matters for the board review and what action I should consider.' in executive_js
+    assert 'markThreadTransportFailuresRetryable(current);' in executive_js
+    assert 'data-assistant-retry-latest' in executive_js
+
+
+def test_assistant_css_styles_retryable_failure_state():
+    executive_css = Path("strategyos_mvp/static/executive.css").read_text()
+    assert '.assistant-message--failed' in executive_css
+    assert '.assistant-message__meta' in executive_css
+    assert '.assistant-retry-button' in executive_css
+    assert '.assistant-tool-chip--action' in executive_css

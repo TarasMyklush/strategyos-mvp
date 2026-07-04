@@ -567,6 +567,22 @@ def test_bootstrap_and_public_latest_run_share_same_assistant_packet(monkeypatch
     assert bootstrap_packet["developments"] == latest_packet["developments"]
     assert bootstrap_packet["week"] == latest_packet["week"]
     assert bootstrap_packet["kg_nodes"] == latest_packet["kg_nodes"]
+    assert bootstrap_packet["agent_activity"] == latest_packet["agent_activity"]
+
+
+def test_executive_diagnostics_persona_blueprint_derives_from_shared_packet(monkeypatch):
+    monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+    payload = api_module._latest_run_public_payload(
+        api_module._latest_summary(),
+        view_state={"persona": "ceo", "board": "pre", "driver": "revenue"},
+    )
+    shared_packet = payload["assistant_public_context"]
+    blueprint = payload["executive_diagnostics"]["persona_blueprint"]
+    assert blueprint["assistant"] == shared_packet["assistant"]
+    assert blueprint["drivers"] == shared_packet["drivers"]
+    assert blueprint["findings"] == shared_packet["findings"]
+    assert blueprint["developments"] == shared_packet["developments"]
+    assert blueprint["week"] == shared_packet["week"]
 
 
 def test_assistant_chat_public_ceo_golden_prompts_use_shared_public_packet(monkeypatch):
@@ -655,6 +671,7 @@ def test_public_assistant_context_uses_shared_public_packet(monkeypatch):
         assert payload["hallucination_risk"]["level"] in {"low", "medium"}
         assert payload["citations"]
         assert any("public_packet://latest-public" == item["source_path"] for item in payload["citations"])
+        assert any(str(item.get("locator") or "").startswith("public_context_packet.") for item in payload["citations"])
 
     finally:
         _restore_env(original)
@@ -698,7 +715,51 @@ def test_public_assistant_golden_prompts_use_shared_context(monkeypatch):
             assert "No completed governed run is available yet" not in payload["answer"], question
             assert token.lower() in payload["answer"].lower(), question
             assert payload["citations"], question
+            assert any(str(item.get("locator") or "").startswith("public_context_packet.") for item in payload["citations"]), question
 
+    finally:
+        _restore_env(original)
+
+
+def test_public_assistant_exact_fx_board_review_prompt_returns_substantive_answer(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        client = TestClient(api_module.app)
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Explain why “FX is building a ~SAR 9k margin drag this week” matters for the board review and what action I should consider.",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "source": "executive_surface",
+                    "entrypoint": "finding_cta",
+                    "board_state": "pre",
+                    "driver_key": "margin"
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert "i couldn't reach the shared assistant service just now." not in answer
+        assert "sar 9k" in answer
+        assert "19.2%" in answer
+        assert "hedge" in answer
+        assert payload["trace"]["entrypoint_context"]["entrypoint"] == "finding_cta"
     finally:
         _restore_env(original)
 
