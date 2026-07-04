@@ -8860,7 +8860,13 @@ def _assistant_response_payload(
         payload["hallucination_risk"] = scenario_result.get("hallucination_risk") or hallucination_risk
         payload["risk_metadata"]["hallucination_risk"] = payload["hallucination_risk"]
         payload["risk_metadata"]["traceable"] = bool((payload["hallucination_risk"] or {}).get("traceable"))
+    payload["answer"] = _sanitize_assistant_visible_text(payload.get("answer"))
     return payload
+
+
+def _sanitize_assistant_visible_text(value: Any) -> str:
+    text = llm_qa._clean_visible_answer(value)
+    return str(text or "").strip()
 
 
 def _assistant_chat_response(

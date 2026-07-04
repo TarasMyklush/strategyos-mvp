@@ -280,6 +280,41 @@ def test_assistant_chat_llm_mode_uses_configured_adapter(monkeypatch):
         _restore_env(original)
 
 
+def test_assistant_chat_llm_mode_sanitizes_raw_json_answer(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(
+            api_module,
+            "parse_scenario",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("mode=llm should bypass deterministic scenario routing")),
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: {
+                "matched": True,
+                "answer": '{\n  "matched": true,\n  "answer": "Plain-English board packet summary.",\n  "basis": "Grounded in the public packet.",\n  "citations": [],\n  "suggestions": []\n}',
+                "basis": "Grounded in the public packet.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "provider": "deepseek", "model": "gpt-test"},
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "summarize the board packet in plain English", "persona": "ceo", "mode": "llm"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answer"] == "Plain-English board packet summary."
+        assert not payload["answer"].lstrip().startswith("{")
+    finally:
+        _restore_env(original)
+
+
 def test_assistant_chat_golden_prompt_works_without_completed_run(monkeypatch):
     original, client = _client_with_auth()
     try:
