@@ -175,6 +175,24 @@ def answer_question(
             response_format={"type": "json_object"},
         )
         parsed = _parse_json_answer(provider_response)
+        cleaned_answer = _clean_visible_answer(parsed.get("answer"))
+        if _requires_plain_text_repair(cleaned_answer):
+            provider_response = _call_openai_compatible_chat(
+                config=config,
+                messages=_plain_text_retry_messages(
+                    question=question,
+                    evidence=evidence,
+                    public_mode=public_mode,
+                ),
+                response_format=None,
+            )
+            parsed = {
+                "matched": _normalize_bool(parsed.get("matched", True)),
+                "answer": _clean_visible_answer(provider_response),
+                "basis": default_basis,
+                "citations": _normalize_citations(parsed.get("citations")),
+                "suggestions": _normalize_suggestions(parsed.get("suggestions")),
+            }
     except (_EmptyProviderResponseError, _MalformedProviderResponseError):
         try:
             provider_response = _call_openai_compatible_chat(
@@ -664,6 +682,15 @@ def _extract_answer_field_from_jsonish_text(text: str) -> str:
         return json.loads(f'"{match.group(1)}"').strip()
     except json.JSONDecodeError:
         return match.group(1).replace('\\n', '\n').replace('\\"', '"').strip()
+
+
+def _requires_plain_text_repair(text: str) -> bool:
+    stripped = str(text or "").lstrip()
+    if not stripped:
+        return False
+    if stripped.startswith("{"):
+        return True
+    return '"answer"' in stripped and len(stripped) < 240
 
 
 def _normalize_citations(value: Any) -> list[dict[str, Any]]:

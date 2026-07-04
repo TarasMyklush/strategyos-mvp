@@ -844,3 +844,62 @@ def test_clean_visible_answer_extracts_answer_from_truncated_jsonish_text():
     cleaned = llm_qa._clean_visible_answer(raw)
 
     assert cleaned == "Since last week, NUPCO awards were confirmed and FX remains the main margin watch item."
+
+
+def test_jsonish_structured_answer_triggers_plain_text_repair(monkeypatch):
+    responses = [
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "matched": True,
+                                "answer": '{ "matched": true, "answer": "The board packet is 80% composed and margin still needs your line.',
+                                "basis": "LLM provider returned plain text instead of JSON.",
+                                "citations": [],
+                                "suggestions": [],
+                            }
+                        )
+                    }
+                }
+            ]
+        },
+        {"choices": [{"message": {"content": "The board packet is 80% composed and margin still needs your line."}}]},
+    ]
+    captured_bodies = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        del timeout
+        captured_bodies.append(json.loads(request.data.decode("utf-8")))
+        return FakeResponse(responses[len(captured_bodies) - 1])
+
+    monkeypatch.setattr(llm_qa, "urlopen", fake_urlopen)
+
+    result = llm_qa.answer_question(
+        "summarize the board packet in plain English",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert len(captured_bodies) == 2
+    assert captured_bodies[0]["response_format"] == {"type": "json_object"}
+    assert "response_format" not in captured_bodies[1]
+    assert result["answer"] == "The board packet is 80% composed and margin still needs your line."
