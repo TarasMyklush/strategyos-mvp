@@ -242,6 +242,19 @@
     return title;
   }
 
+  function isCeoSimulationIntent(message) {
+    return /(run|model|simulate|simulation|scenario|what\s*if|pressure[-\s]?test|stress[-\s]?test|forecast|sensitivity)/i.test(String(message || ""));
+  }
+
+  function ceoSimulationReply() {
+    return [
+      "Yes — I can help run a board-safe simulation in thinking mode, with no operational side effects.",
+      "Best default from the current board pack: pressure-test the margin bridge, because Revenue is ahead at SAR 2.09B (102% of plan) but EBITDA margin is only 19.2% (99% of plan) and operating cost is running at SAR 1.69B (101% of plan).",
+      "I can model four useful cases: 1) margin bridge recovery, 2) cash headroom for the GLP-1 JV, 3) FX hedge coverage, or 4) revenue quality if e-Pharmacy growth slows.",
+      "If you want the fastest CEO answer, I would start with: ‘What happens to EBITDA margin if we hedge 60% of EUR API exposure and hold operating cost flat for the next 4 weeks?’"
+    ].join(" ");
+  }
+
   async function askAssistant(prompt, sourceChip) {
     var cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) return;
@@ -272,7 +285,9 @@
     // CEO dead-end guard: respond with context-aware CEO-grade answers using available board pack data
     if (answer && state.activePersona === "ceo" && answer.indexOf("The board pack is under review.") === 0 && answer.length < 80) {
       var driverKeywords = (cleanPrompt || "").toLowerCase();
-      if (/(relevant|matter|driver\s+card|this\s+(card|driver)|why\s+(is|this|does)|what\s+does\s+this\s+mean)/i.test(driverKeywords)) {
+      if (isCeoSimulationIntent(driverKeywords)) {
+        answer = ceoSimulationReply();
+      } else if (/(relevant|matter|driver\s+card|this\s+(card|driver)|why\s+(is|this|does)|what\s+does\s+this\s+mean)/i.test(driverKeywords)) {
         answer = ceoDriverRelevanceReply();
       } else if (/digital health/i.test(driverKeywords)) {
         answer = "Digital Health is a growth mover under Revenue at +36% revenue YoY. Group Revenue stands at SAR 2.09B (102% of plan). The current board pack does not expose a standalone SAR absolute for Digital Health. To pull the BU-level figure, Finance can run the governed Digital Health ledger from the operator panel.";
@@ -803,7 +818,9 @@
     var key = state.activePersona + ":followup-" + Date.now();
     var preview = String(firstDefined(seedPreview, "Writable board-safe thread.")).trim();
     var initialMessage = seedPreview && String(seedPreview).trim()
-      ? "I'll look up \u201c" + String(seedPreview).slice(0, 48) + (String(seedPreview).length > 48 ? "\u2026" : "") + "\u201d against the current board pack."
+      ? (state.activePersona === "ceo" && isCeoSimulationIntent(seedPreview)
+        ? "I can help pressure-test that in thinking mode. I’ll use the current board pack and keep it board-safe."
+        : "I'll look up \u201c" + String(seedPreview).slice(0, 48) + (String(seedPreview).length > 48 ? "\u2026" : "") + "\u201d against the current board pack.")
       : "I can answer using the current board pack. What would you like to know?";
     threadStore()[key] = {
       key: key,

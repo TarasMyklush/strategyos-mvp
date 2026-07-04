@@ -2121,9 +2121,9 @@ def test_hermes_answer_no_stale_fx_fallback_for_digital_health():
     assert "Cash" in js or "cash" in js, (
         "Dead-end guard must have Cash/liquidity branch"
     )
-    # Must have generic fallback (not FX-only)
-    assert "check the relevant driver card" in js or "full evidence bundle" in js, (
-        "Dead-end guard must have a generic fallback branch referencing driver cards"
+    # Must have generic fallback (not FX-only), but it must not use stale driver-card punt text
+    assert "The current board pack shows group Revenue" in js, (
+        "Dead-end guard must have a generic fallback branch with board-pack facts"
     )
 
     # ── Stale FX text must NOT appear in non-FX branches ──
@@ -2410,6 +2410,45 @@ def test_hermes_no_old_dead_end_patterns():
     assert "Operating cost is SAR 1.69B" in js, "Must have data-led Cost answer"
     assert "Cold-chain integrity is at a record 99.4%" in js, "Must have data-led cold-chain answer"
     assert "SAR 8.6M is recoverable" in js, "Must have data-led recoverable answer"
+
+
+def test_ceo_simulation_intent_gets_actionable_thinking_mode_answer():
+    """CEO simulation requests must not receive a passive board-pack recap."""
+    js = _static_executive_js()
+
+    assert "function isCeoSimulationIntent" in js
+    assert "function ceoSimulationReply" in js
+    assert "run|model|simulate|simulation|scenario" in js
+    assert "board-safe simulation in thinking mode" in js
+    assert "I can model four useful cases" in js
+    assert "margin bridge recovery" in js
+    assert "cash headroom for the GLP-1 JV" in js
+    assert "FX hedge coverage" in js
+    assert "revenue quality if e-Pharmacy growth slows" in js
+
+
+def test_ceo_simulation_prompt_starts_with_help_not_lookup():
+    """New CEO simulation threads should sound like an assistant, not a search box."""
+    js = _static_executive_js()
+    create_start = js.index("function createWritableThread")
+    create_end = js.index("function pushThreadMessage", create_start)
+    create_block = js[create_start:create_end]
+
+    assert "isCeoSimulationIntent(seedPreview)" in create_block
+    assert "I can help pressure-test that in thinking mode" in create_block
+
+
+def test_ceo_simulation_branch_precedes_generic_board_pack_recap():
+    """Simulation intent should be handled before generic fallback recap."""
+    js = _static_executive_js()
+    guard_start = js.index("// CEO dead-end guard:")
+    guard_end = js.index("// Clear loading state", guard_start)
+    guard_block = js[guard_start:guard_end]
+
+    sim_idx = guard_block.index("isCeoSimulationIntent(driverKeywords)")
+    generic_idx = guard_block.index("The current board pack shows group Revenue")
+    assert sim_idx < generic_idx
+
 
 
 def test_hermes_facts_lead_not_excuses():
