@@ -564,29 +564,9 @@ def compose_persona_answer(
             trace=trace,
         )
 
-    # 2. Try persona-specific deterministic patterns first
-    persona_match = assess_question_for_persona(
-        question, persona_key, driver_context
-    )
-    if persona_match.matched and persona_match.answer != "__FALLTHROUGH__":
-        return persona_match
-
-    # 3. QA engine result
-    if qa_result and qa_result.get("matched") is not False:
-        answer = qa_result.get("answer", "")
-        assistant_mode = str(qa_result.get("assistant_mode") or "qa_engine")
-        return PersonaAnswer(
-            answer=_format_for_persona(answer, persona_key),
-            matched=True,
-            persona=persona_key,
-            mode=assistant_mode,
-            basis=qa_result.get("basis", ""),
-            citations=qa_result.get("citations", []),
-            suggestions=qa_result.get("suggestions") or _suggested_followups(persona_key),
-            trace={**trace, "mode": assistant_mode, "matched": True},
-        )
-
-    # 4. LLM result
+    # 2. If an LLM answer already exists, prefer it over generic persona
+    # patterns. Persona canned responses are guardrails for deterministic
+    # fallthrough, not something that should overwrite a grounded answer.
     if llm_result and llm_result.get("matched") is not False:
         answer = llm_result.get("answer", "")
         assistant_mode = str(llm_result.get("assistant_mode") or "llm")
@@ -598,6 +578,28 @@ def compose_persona_answer(
             basis=llm_result.get("basis", "LLM evidence-grounded Q&A"),
             citations=llm_result.get("citations", []),
             suggestions=llm_result.get("suggestions") or _suggested_followups(persona_key),
+            trace={**trace, "mode": assistant_mode, "matched": True},
+        )
+
+    # 3. Try persona-specific deterministic patterns first
+    persona_match = assess_question_for_persona(
+        question, persona_key, driver_context
+    )
+    if persona_match.matched and persona_match.answer != "__FALLTHROUGH__":
+        return persona_match
+
+    # 4. QA engine result
+    if qa_result and qa_result.get("matched") is not False:
+        answer = qa_result.get("answer", "")
+        assistant_mode = str(qa_result.get("assistant_mode") or "qa_engine")
+        return PersonaAnswer(
+            answer=_format_for_persona(answer, persona_key),
+            matched=True,
+            persona=persona_key,
+            mode=assistant_mode,
+            basis=qa_result.get("basis", ""),
+            citations=qa_result.get("citations", []),
+            suggestions=qa_result.get("suggestions") or _suggested_followups(persona_key),
             trace={**trace, "mode": assistant_mode, "matched": True},
         )
 

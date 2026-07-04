@@ -606,8 +606,11 @@ def test_assistant_chat_public_natural_ceo_prompts_use_public_llm(monkeypatch):
             assert response.status_code == 200, question
             payload = response.json()
             assert payload["mode"] == "llm", question
+            assert payload["assistant_mode"] == "llm", question
+            assert payload["orchestration_mode"] == "llm", question
             assert payload["llm_fallback_attempted"] is True, question
             assert "outside the current deterministic public-safe prompt set" not in payload["answer"], question
+            assert payload["why"] == "Grounded in the public packet facts, findings, developments, and board portal.", question
             answer_lower = payload["answer"].lower()
             for token in expected_tokens:
                 assert token in answer_lower, f"Missing '{token}' for prompt: {question}"

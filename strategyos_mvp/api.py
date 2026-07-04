@@ -8822,6 +8822,7 @@ def _assistant_response_payload(
         trace["entrypoint_context"] = dict(assistant_context)
     prompt_contracts = trace.get("prompts") or {}
     hallucination_risk = trace.get("hallucination_risk")
+    merged_result = dict(base_result or {})
     payload = {
         "status": "ok",
         "run_id": context["run_id"],
@@ -8851,8 +8852,36 @@ def _assistant_response_payload(
         "llm_status": llm_status,
         "assistant_context": assistant_context or {},
     }
-    if base_result:
-        payload.update(base_result)
+    if merged_result:
+        payload.update(merged_result)
+        if getattr(orchestrated, "matched", False):
+            payload.update(
+                {
+                    "mode": response_mode,
+                    "assistant_mode": orchestrated.mode,
+                    "requested_mode": requested_mode,
+                    "persona": orchestrated.persona,
+                    "matched": orchestrated.matched,
+                    "answer": orchestrated.answer,
+                    "basis": orchestrated.basis,
+                    "why": orchestrated.basis,
+                    "citations": list(getattr(orchestrated, "citations", []) or []),
+                    "suggestions": list(getattr(orchestrated, "suggestions", []) or []),
+                    "trace": trace,
+                    "prompt_contracts": prompt_contracts,
+                    "audit_trail_id": trace.get("audit_trail_id"),
+                    "hallucination_risk": hallucination_risk,
+                    "risk_metadata": {
+                        "decision_mode": "llm" if getattr(orchestrated, "mode", "") == "llm" else "deterministic",
+                        "hallucination_risk": hallucination_risk,
+                        "traceable": bool((hallucination_risk or {}).get("traceable")),
+                    },
+                    "assistant_route": trace.get("deterministic_boundary", {}).get("selected_mode"),
+                    "orchestration_mode": orchestrated.mode,
+                    "llm_status": llm_status,
+                    "assistant_context": assistant_context or {},
+                }
+            )
     if scenario_result:
         payload.update(scenario_result)
         payload["citations"] = list(scenario_result.get("citations") or payload["citations"])
