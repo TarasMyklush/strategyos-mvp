@@ -295,6 +295,81 @@ def test_assistant_chat_no_run_deterministic_question_returns_safe_fallback(monk
         _restore_env(original)
 
 
+def test_assistant_chat_public_ceo_scenario_works_under_identity_provider(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Simulate digital health flat by end of year",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["scenario_id"] == "digital_health_eoy_flat"
+        assert payload["matched"] is True
+        assert payload["prompt_contracts"]["role"]["prompt_id"] == "role:ceo:v1"
+        assert payload["hallucination_risk"]["level"] == "high"
+        assert payload["citations"]
+        assert payload["trace"]
+        assert payload["run_id"] == "latest-public"
+        assert payload["run_mode"] == "public-safe"
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exists(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "What is the total amount of invoices?",
+                "persona": "ceo",
+                "mode": "deterministic",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_id"] == "latest-public"
+        assert payload["run_mode"] == "public-safe"
+        assert payload["matched"] is False
+        assert payload["llm_fallback_attempted"] is False
+        assert "No completed governed run is available yet" in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
 def test_latest_run_audit_summary_reads_citation_and_audit_artifacts(monkeypatch, tmp_path):
     citation_audit = tmp_path / "citation_audit.json"
     citation_audit.write_text(

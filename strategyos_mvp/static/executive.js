@@ -131,7 +131,10 @@
 
   function authHeaders() {
     var token = "";
-    try { token = window.localStorage.getItem(_tokenKey) || ""; } catch (_error) { token = ""; }
+    token = firstDefined(state && state.token, "");
+    if (!token) {
+      try { token = window.localStorage.getItem(_tokenKey) || ""; } catch (_error) { token = ""; }
+    }
     if (!token) return {};
     if (bootstrap.idp_enabled || token.indexOf(".") !== -1) return { Authorization: "Bearer " + token };
     return { "X-API-Key": token };
@@ -2352,7 +2355,7 @@
       state.latestPacket = response[0] || {};
       state.session = response[1] || {};
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
-      state.token = firstDefined((state.session || {}).token, state.token, window.localStorage.getItem(_tokenKey));
+      state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
       state.activePersona = firstDefined((state.latestPacket.executive_modes || {}).active_persona_id, state.activePersona, "ceo");
       if (state.activePersona === "board") state.activeView = "home";
       state.activeBoard = firstDefined((state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, state.activeBoard, "pre");

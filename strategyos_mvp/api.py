@@ -8508,6 +8508,37 @@ def _resolve_qa_context(run_id: str | None) -> dict[str, Any]:
     }
 
 
+def _resolve_public_assistant_context(run_id: str | None) -> dict[str, Any]:
+    if run_id and run_id != ANONYMOUS_PUBLIC_RUN_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the latest public demo run is available on the anonymous executive surface.",
+        )
+    summary = _anonymous_public_summary(_latest_summary())
+    if summary is None:
+        summary = {
+            "run_id": None,
+            "run_mode": "no-run",
+            "status": "missing",
+            "public_safe": True,
+        }
+        resolved_run_id = None
+        run_mode = "no-run"
+    else:
+        summary["public_safe"] = True
+        resolved_run_id = ANONYMOUS_PUBLIC_RUN_ID
+        run_mode = "public-safe"
+    return {
+        "bundle": None,
+        "findings": [],
+        "kg_nodes": [],
+        "kg_edges": [],
+        "summary": summary,
+        "run_id": resolved_run_id,
+        "run_mode": run_mode,
+    }
+
+
 def _assistant_response_payload(
     *,
     response_mode: str,
@@ -8540,6 +8571,7 @@ def _assistant_response_payload(
         "suggestions": list(getattr(orchestrated, "suggestions", []) or []),
         "trace": trace,
         "prompt_contracts": prompt_contracts,
+        "audit_trail_id": trace.get("audit_trail_id"),
         "hallucination_risk": hallucination_risk,
         "risk_metadata": {
             "decision_mode": "llm" if getattr(orchestrated, "mode", "") == "llm" else "deterministic",
@@ -8562,7 +8594,11 @@ def _assistant_response_payload(
     return payload
 
 
-def _assistant_chat_response(request: AssistantChatRequest | QaRequest) -> dict[str, Any]:
+def _assistant_chat_response(
+    request: AssistantChatRequest | QaRequest,
+    *,
+    public_safe: bool = False,
+) -> dict[str, Any]:
     question = (request.question or "").strip()
     if not question:
         raise HTTPException(
@@ -8583,23 +8619,29 @@ def _assistant_chat_response(request: AssistantChatRequest | QaRequest) -> dict[
         )
 
     try:
-        context = _resolve_qa_context(request.run_id)
+        context = (
+            _resolve_public_assistant_context(request.run_id)
+            if public_safe
+            else _resolve_qa_context(request.run_id)
+        )
     except HTTPException as exc:
-        if not (persona and request.run_id is None and exc.status_code == status.HTTP_404_NOT_FOUND):
-            raise
-        context = {
-            "bundle": None,
-            "findings": [],
-            "kg_nodes": [],
-            "kg_edges": [],
-            "summary": {
+        if persona and request.run_id is None and exc.status_code == status.HTTP_404_NOT_FOUND:
+            context = {
+                "bundle": None,
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {
+                    "run_id": None,
+                    "run_mode": "no-run",
+                    "status": "missing",
+                    "public_safe": bool(public_safe),
+                },
                 "run_id": None,
                 "run_mode": "no-run",
-                "status": "missing",
-            },
-            "run_id": None,
-            "run_mode": "no-run",
-        }
+            }
+        else:
+            raise
     orchestrator = get_orchestrator()
     findings_payload = [
         finding.__dict__ if hasattr(finding, "__dict__") else finding
@@ -9118,9 +9160,28 @@ def data_qa(
 @app.post("/assistant/chat")
 def assistant_chat(
     request: AssistantChatRequest,
-    _: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
-    return _assistant_chat_response(request)
+    role = str(principal.get("role") or "anonymous")
+    authenticated = bool(principal.get("authenticated"))
+    persona = (request.persona or "ceo").strip().lower() or "ceo"
+    public_safe = _principal_prefers_public_safe_surface(principal)
+
+    if not authenticated:
+        if persona not in EXECUTIVE_PERSONA_IDS:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="A valid identity token is required.",
+            )
+        return _assistant_chat_response(request, public_safe=True)
+
+    if not principal_has_any_role(role, *PRODUCT_READ_ROLES):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This identity is not permitted for this endpoint.",
+        )
+
+    return _assistant_chat_response(request, public_safe=bool(public_safe and persona in EXECUTIVE_PERSONA_IDS))
 
 
 @app.post("/inputs/prepare")

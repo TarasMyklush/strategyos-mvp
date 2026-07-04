@@ -221,9 +221,11 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="chat-launcher"' in html
     assert "strategyos.ui.token" in js
     assert "function authHeaders()" in js
+    assert "token = firstDefined(state && state.token, \"\")" in js
     assert "Authorization: \"Bearer \" + token" in js
     assert "fetch(path, { headers: authHeaders() })" in js
     assert '<script id="strategyos-bootstrap"' not in html
+    assert "(state.session || {}).token" not in js
 
 
 def test_app_entry_routes_render_executive_shell():
@@ -711,6 +713,56 @@ def test_ui_session_returns_clean_display_identity_for_idp_subject(monkeypatch):
         assert payload["display_name"] == "Operator"
         assert "localhost" not in payload["display_name"]
         assert "localhost" not in payload["display_subject"]
+    finally:
+        _restore_env(original)
+
+
+def test_public_executive_shell_ceo_prompt_succeeds_without_session_token(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: None)
+        client = TestClient(api_module.app)
+
+        shell = client.get("/executive?persona=ceo")
+        session = client.get("/ui/session")
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Simulate digital health flat by end of year",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+        )
+
+        assert shell.status_code == 200
+        assert session.status_code == 200
+        session_payload = session.json()
+        assert session_payload["authenticated"] is False
+        assert session_payload["role"] == "anonymous"
+        assert "token" not in session_payload
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["scenario_id"] == "digital_health_eoy_flat"
+        assert payload["matched"] is True
+        assert payload["mode"] == "deterministic"
+        assert payload["assistant_mode"] == "scenario"
+        assert payload["trace"]
+        assert payload["audit_trail_id"]
+        assert payload["hallucination_risk"]["level"] == "high"
+        assert payload["prompt_contracts"]["role"]["prompt_id"] == "role:ceo:v1"
+        assert "I couldn't reach the shared assistant service just now." not in payload["answer"]
     finally:
         _restore_env(original)
 
