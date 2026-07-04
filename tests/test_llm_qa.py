@@ -432,10 +432,8 @@ def test_empty_provider_content_after_retry_raises_clear_error(monkeypatch):
             "give me numbers for last week",
             bundle=_bundle(),
             findings=[_finding()],
-            summary={"run_id": "latest-public", "run_mode": "public-safe"},
+            summary={"run_id": "run-1", "run_mode": "full"},
             config=_config(),
-            public_context_packet=executive_public_assistant_packet("ceo"),
-            persona="ceo",
         )
 
 
@@ -903,3 +901,31 @@ def test_jsonish_structured_answer_triggers_plain_text_repair(monkeypatch):
     assert captured_bodies[0]["response_format"] == {"type": "json_object"}
     assert "response_format" not in captured_bodies[1]
     assert result["answer"] == "The board packet is 80% composed and margin still needs your line."
+
+
+def test_public_prompt_uses_packet_repair_after_both_empty_answers(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": ""}}]}).encode("utf-8")
+
+    monkeypatch.setattr(llm_qa, "urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    result = llm_qa.answer_question(
+        "what should I worry about before the board meeting?",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert result["matched"] is True
+    assert "board meeting" in result["answer"].lower() or "board pack" in result["answer"].lower()
+    assert "fx hedge" in result["answer"].lower()
