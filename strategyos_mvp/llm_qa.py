@@ -630,7 +630,20 @@ def _clean_visible_answer(value: Any) -> str:
         nested_answer = nested.get("answer")
         if nested_answer is not None and str(nested_answer).strip() and str(nested_answer).strip() != text:
             return _clean_visible_answer(nested_answer)
+    extracted = _extract_answer_field_from_jsonish_text(text)
+    if extracted:
+        return extracted
     return text
+
+
+def _extract_answer_field_from_jsonish_text(text: str) -> str:
+    match = re.search(r'"answer"\s*:\s*"((?:\\.|[^"\\])*)"', str(text or ""), flags=re.DOTALL)
+    if not match:
+        return ""
+    try:
+        return json.loads(f'"{match.group(1)}"').strip()
+    except json.JSONDecodeError:
+        return match.group(1).replace('\\n', '\n').replace('\\"', '"').strip()
 
 
 def _normalize_citations(value: Any) -> list[dict[str, Any]]:

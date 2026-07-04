@@ -747,6 +747,8 @@
       var nested = cleanVisibleQaAnswer(parsed.answer);
       if (nested) return nested;
     }
+    var extracted = extractAnswerFieldFromJsonishText(text);
+    if (extracted) return extracted;
     return text;
   }
 
@@ -766,6 +768,16 @@
       }
     }
     return null;
+  }
+
+  function extractAnswerFieldFromJsonishText(text) {
+    var match = String(text || '').match(/"answer"\s*:\s*"((?:\\.|[^"\\])*)"/s);
+    if (!match) return '';
+    try {
+      return JSON.parse('"' + match[1] + '"').trim();
+    } catch (_error) {
+      return String(match[1] || '').replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+    }
   }
 
   var ASSISTANT_TRANSPORT_FAILURE_TEXT = ASSISTANT_TRANSPORT_FALLBACK;

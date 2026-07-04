@@ -2274,3 +2274,45 @@ console.log(JSON.stringify({{
     assert result["answerText"].startswith("Since last week, NUPCO awards were confirmed")
     assert '"matched"' not in result["answerText"]
     assert "Answered by AI fallback" in result["answerMeta"]
+
+
+def test_qa_answer_text_extracts_answer_from_truncated_jsonish_payload_behaviorally():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    harness_js = executive_js.replace(prefix, 'function __executiveQaHarness() {\n  "use strict";\n', 1)
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { qaAnswerText: qaAnswerText };\n}\nmodule.exports = __executiveQaHarness;\n',
+        1,
+    )
+
+    truncated_answer = '{\n  "matched": true,\n  "answer": "Since last week, NUPCO awards were confirmed and FX remains the main margin watch item.",\n  "basis": "Grounded in public developments."'
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-qa-harness-truncated-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+global.window = {{ STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [], findings: [], developments: [], week: [] }} }}, networkMeta: {{}}, network: [], a2a: [], subtools: [] }}, localStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }}, sessionStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }}, MIZAN_X: {{ threads: {{}}, assistants: {{}} }}, setTimeout(fn) {{ fn(); return 1; }}, clearTimeout() {{}}, setInterval() {{ return 1; }}, addEventListener() {{}}, removeEventListener() {{}}, location: {{ pathname: '/app' }}, history: {{ replaceState() {{}} }}, navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }} }};
+global.document = {{ body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }}, documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }}, addEventListener() {{}}, removeEventListener() {{}}, getElementById(id) {{ if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ requested_view_state: {{ persona: 'ceo', board: 'pre' }}, assistant_public_context: {{ persona_id: 'ceo' }} }}) }}; return null; }}, querySelector() {{ return null; }}, querySelectorAll() {{ return []; }}, createElement() {{ return {{ setAttribute() {{}}, appendChild() {{}}, style: {{}}, classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }} }}; }} }};
+const factory = require(tempFile);
+const harness = factory();
+const payload = {{ answer: {json.dumps(truncated_answer)}, llm_status: {{ enabled: true }} }};
+console.log(JSON.stringify({{ answerText: harness.qaAnswerText(payload) }}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "assistant_qa_truncated_answer_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result["answerText"] == "Since last week, NUPCO awards were confirmed and FX remains the main margin watch item."

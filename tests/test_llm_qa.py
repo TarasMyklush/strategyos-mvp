@@ -794,3 +794,11 @@ def test_provider_content_block_prefers_structured_json_part(monkeypatch):
 
     assert result["answer"] == "Tamween Distribution is the clearest margin drag in the public packet."
     assert result["basis"] == "Grounded in public findings and drivers."
+
+
+def test_clean_visible_answer_extracts_answer_from_truncated_jsonish_text():
+    raw = '{\n  "matched": true,\n  "answer": "Since last week, NUPCO awards were confirmed and FX remains the main margin watch item.",\n  "basis": "Grounded in public developments."'
+
+    cleaned = llm_qa._clean_visible_answer(raw)
+
+    assert cleaned == "Since last week, NUPCO awards were confirmed and FX remains the main margin watch item."
