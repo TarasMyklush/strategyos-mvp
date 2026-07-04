@@ -182,6 +182,11 @@ def test_ready_health_is_ok_when_human_review_is_intentionally_disabled(monkeypa
             "_check_runtime_dependencies",
             lambda: {"status": "ok", "checks": {}},
         )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "provider_health_status",
+            lambda _config: {"status": "ok", "enabled": False, "checked": False},
+        )
 
         client = TestClient(api_module.app)
         response = client.get("/health/ready", headers={"X-API-Key": "operator-key"})
@@ -230,6 +235,54 @@ def test_dependencies_health_requires_auth_and_reports_runtime_deps(monkeypatch)
         payload = authorized.json()
         assert payload["status"] == "ok"
         assert payload["checks"]["tesseract"]["installed_version"] == "5.5.0-1+b1"
+    finally:
+        _restore_env(original)
+
+
+def test_ready_health_fails_when_enabled_llm_provider_returns_auth_or_balance_error(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-key",
+        }
+    )
+    try:
+        for check_name in [
+            "_check_postgres",
+            "_check_redis",
+            "_check_neo4j",
+            "_check_qdrant",
+            "_check_object_store",
+            "_check_workspace",
+        ]:
+            monkeypatch.setattr(api_module, check_name, lambda: {"status": "ok"})
+        monkeypatch.setattr(
+            api_module,
+            "_check_runtime_dependencies",
+            lambda: {"status": "ok", "checks": {}},
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "provider_health_status",
+            lambda _config: {
+                "status": "failed",
+                "enabled": True,
+                "checked": True,
+                "provider": "openai",
+                "model": "gpt-5",
+                "reason": 'LLM provider returned HTTP 402: {"error":{"message":"Insufficient Balance"}}',
+            },
+        )
+
+        client = TestClient(api_module.app)
+        response = client.get("/health/ready", headers={"X-API-Key": "operator-key"})
+
+        assert response.status_code == 503
+        payload = response.json()
+        assert payload["status"] == "failed"
+        assert payload["checks"]["llm_chat"]["status"] == "failed"
+        assert "Insufficient Balance" in payload["checks"]["llm_chat"]["reason"]
     finally:
         _restore_env(original)
 

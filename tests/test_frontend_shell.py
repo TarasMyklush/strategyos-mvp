@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -1750,9 +1752,525 @@ def test_exact_fx_cta_thread_is_preserved_as_retryable_flow():
     assert 'data-assistant-retry-latest' in executive_js
 
 
+def test_stale_fx_fallback_thread_reloads_and_auto_recovers():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveTestHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        '  function renderAssistantStudio() {',
+        '  function renderAssistantStudio() {\n    if (window.__TEST_MINIMAL_RENDER__) return;',
+        1,
+    )
+    harness_js = harness_js.replace(
+        '  function showToast(message) {',
+        '  function showToast(message) {\n    if (window.__TEST_MINIMAL_RENDER__) { window.__TEST_LAST_TOAST__ = message; return; }',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return {\n'
+        '    state: state,\n'
+        '    ensureThreads: ensureThreads,\n'
+        '    threadStore: threadStore,\n'
+        '    maybeAutoRetryLatestFailure: maybeAutoRetryLatestFailure\n'
+        '  };\n'
+        '}\n'
+        'module.exports = __executiveTestHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+const persistedThreadKey = 'ceo:fx-thread';
+const storageKey = 'strategyos.chat.latest-public.ceo';
+const fxPrompt = 'Explain why “FX is building a ~SAR 9k margin drag this week” matters for the board review and what action I should consider.';
+const staleFallback = "I couldn't reach the shared assistant service just now. Question asked: “" + fxPrompt + "”. Please try again in a moment or reopen the board assistant.";
+
+const bootstrapPayload = {{
+  requested_view_state: {{ persona: 'ceo', board: 'pre' }},
+  executive_entry_route: '/app',
+  assistant_public_context: {{ persona_id: 'ceo', assistant: 'Hermes', drivers: [], findings: [], developments: [], week: [] }},
+}};
+
+const persistedThreads = {{
+  [persistedThreadKey]: {{
+    key: persistedThreadKey,
+    title: 'FX follow-up',
+    preview: staleFallback,
+    route: '',
+    readOnly: false,
+    kind: 'followup',
+    assistant: 'Hermes',
+    messages: [
+      {{ role: 'user', text: fxPrompt, timestamp: '2026-07-04T00:00:00.000Z' }},
+      {{ role: 'assistant', text: staleFallback, timestamp: '2026-07-04T00:00:01.000Z' }},
+    ],
+    lastUpdated: '2026-07-04T00:00:01.000Z',
+  }}
+}};
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [], findings: [], developments: [], week: [] }} }}, networkMeta: {{}}, network: [], a2a: [], subtools: [] }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore({{ [storageKey]: JSON.stringify(persistedThreads) }}),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  __TEST_MINIMAL_RENDER__: true,
+  __TEST_LAST_TOAST__: '',
+  setTimeout(fn) {{ fn(); return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify(bootstrapPayload) }};
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{
+    return {{
+      className: '',
+      textContent: '',
+      style: {{}},
+      hidden: false,
+      setAttribute() {{}},
+      appendChild() {{}},
+      remove() {{}},
+      querySelector() {{ return null; }},
+      querySelectorAll() {{ return []; }},
+      parentNode: {{ appendChild() {{}} }},
+    }};
+  }},
+}};
+
+global.fetch = async function(pathname) {{
+  if (pathname !== '/assistant/chat') throw new Error('unexpected fetch ' + pathname);
+  return {{
+    ok: true,
+    status: 200,
+    headers: {{ get(name) {{ return String(name).toLowerCase() === 'x-request-id' ? 'server-req-1' : null; }} }},
+    text: async function() {{
+      return JSON.stringify({{
+        status: 'ok',
+        answer: 'The public packet shows EBITDA margin at 19.2% versus a 19.4% plan with FX flagged as the cleanest board action item. The 60% EUR hedge leaves ~SAR 9k weekly drag, so the board action is to tighten the hedge response now.',
+        mode: 'deterministic',
+        assistant_mode: 'scenario',
+        why: 'FX is the cleanest board action item in the public packet.',
+        run_id: 'latest-public',
+        citations: [{{ locator: 'public_context_packet.margin', source_path: 'public_packet://latest-public' }}],
+        hallucination_risk: {{ level: 'low' }},
+      }});
+    }},
+  }};
+}};
+
+async function main() {{
+  const factory = require(tempFile);
+  const harness = factory();
+  harness.state.latestPacket = {{
+    run_id: 'latest-public',
+    chat: {{ run_id: 'latest-public', threads: [], assistant: {{ name: 'Hermes' }} }},
+    assistant_public_context: bootstrapPayload.assistant_public_context,
+    executive_modes: {{ active_persona_id: 'ceo', active_board_state: 'pre', active_driver_key: 'margin' }},
+  }};
+  harness.state.activePersona = 'ceo';
+  harness.state.activeThreadKey = persistedThreadKey;
+  harness.state.drawerOpen = true;
+
+  harness.ensureThreads();
+  const thread = harness.threadStore()[persistedThreadKey];
+  const afterReload = {{
+    status: thread.messages[1].status,
+    retryable: thread.messages[1].retryable,
+    text: thread.messages[1].text,
+    preview: thread.preview,
+  }};
+
+  harness.maybeAutoRetryLatestFailure(thread);
+  for (let index = 0; index < 8 && thread.messages[1].status === 'pending'; index += 1) {{
+    await Promise.resolve();
+  }}
+
+  const finalMessage = thread.messages[1];
+  console.log(JSON.stringify({{
+    afterReload,
+    finalStatus: finalMessage.status,
+    finalText: finalMessage.text,
+    finalPreview: thread.preview,
+    autoRetried: harness.state.failedAssistantAutoRetried[persistedThreadKey + ':1'] === true,
+  }}));
+}}
+
+main().catch((error) => {{
+  console.error(error);
+  process.exit(1);
+}});
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "stale_fx_reload_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+    result = json.loads(completed.stdout.strip())
+
+    assert result["afterReload"]["status"] == "failed"
+    assert result["afterReload"]["retryable"] is True
+    assert "Retry now once the service is reachable" in result["afterReload"]["text"]
+    assert result["afterReload"]["preview"].startswith("Retry needed ·")
+    assert result["autoRetried"] is True
+    assert result["finalStatus"] == "ok"
+    assert "I couldn't reach the shared assistant service just now." not in result["finalText"]
+    assert "~SAR 9k weekly drag" in result["finalText"]
+    assert "19.2% versus a 19.4% plan" in result["finalText"]
+
+
 def test_assistant_css_styles_retryable_failure_state():
     executive_css = Path("strategyos_mvp/static/executive.css").read_text()
     assert '.assistant-message--failed' in executive_css
     assert '.assistant-message__meta' in executive_css
     assert '.assistant-retry-button' in executive_css
     assert '.assistant-tool-chip--action' in executive_css
+
+
+def test_assistant_success_messages_render_metadata_behaviorally():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveTestHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return {\n'
+        '    state: state,\n'
+        '    ensureThreads: ensureThreads,\n'
+        '    threadStore: threadStore,\n'
+        '    renderAssistantStudio: renderAssistantStudio,\n'
+        '    applyAssistantResultToMessage: applyAssistantResultToMessage\n'
+        '  };\n'
+        '}\n'
+        'module.exports = __executiveTestHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-meta-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+function makeClassList() {{
+  const values = new Set();
+  return {{
+    add(name) {{ values.add(name); }},
+    remove(name) {{ values.delete(name); }},
+    contains(name) {{ return values.has(name); }},
+    toggle(name, force) {{
+      if (force === true) {{ values.add(name); return true; }}
+      if (force === false) {{ values.delete(name); return false; }}
+      if (values.has(name)) {{ values.delete(name); return false; }}
+      values.add(name); return true;
+    }},
+  }};
+}}
+
+function makeElement(id = '') {{
+  return {{
+    id,
+    innerHTML: '',
+    textContent: '',
+    hidden: false,
+    onclick: null,
+    scrollTop: 0,
+    scrollHeight: 0,
+    style: {{}},
+    attributes: {{}},
+    classList: makeClassList(),
+    setAttribute(name, value) {{ this.attributes[name] = String(value); }},
+    getAttribute(name) {{ return this.attributes[name] || null; }},
+    querySelector() {{ return null; }},
+    querySelectorAll() {{ return []; }},
+    closest() {{ return null; }},
+    appendChild() {{}},
+    insertBefore() {{}},
+    focus() {{}},
+  }};
+}}
+
+const bootstrapPayload = {{
+  requested_view_state: {{ persona: 'ceo', board: 'pre' }},
+  executive_entry_route: '/app',
+  assistant_public_context: {{ persona_id: 'ceo', assistant: 'Hermes', drivers: [], findings: [], developments: [], week: [] }},
+}};
+
+const drawer = makeElement('assistant-drawer');
+drawer.querySelector = function(selector) {{
+  if (selector === '.assistant-threads') return makeElement('threads-pane');
+  if (selector === '.assistant-layout') return makeElement('layout');
+  if (selector === '.assistant-head__actions') return makeElement('head-actions');
+  return null;
+}};
+
+const elements = {{
+  'assistant-thread-list': makeElement('assistant-thread-list'),
+  'assistant-thread-title': makeElement('assistant-thread-title'),
+  'assistant-thread-meta': makeElement('assistant-thread-meta'),
+  'assistant-messages': makeElement('assistant-messages'),
+  'assistant-prompt-row': makeElement('assistant-prompt-row'),
+  'assistant-thread-tools': makeElement('assistant-thread-tools'),
+  'assistant-heading': makeElement('assistant-heading'),
+  'assistant-subtitle': makeElement('assistant-subtitle'),
+  'assistant-state': makeElement('assistant-state'),
+  'assistant-drawer': drawer,
+  'assistant-scrim': makeElement('assistant-scrim'),
+  'chat-launcher': makeElement('chat-launcher'),
+  'assistant-close': makeElement('assistant-close'),
+}};
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [], findings: [], developments: [], week: [] }} }}, networkMeta: {{}}, network: [], a2a: [], subtools: [] }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout(fn) {{ fn(); return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify(bootstrapPayload) }};
+    return elements[id] || null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{ return makeElement(); }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+harness.state.latestPacket = {{
+  run_id: 'latest-public',
+  chat: {{ run_id: 'latest-public', threads: [], assistant: {{ name: 'Hermes' }} }},
+  assistant_public_context: bootstrapPayload.assistant_public_context,
+  executive_modes: {{ active_persona_id: 'ceo', active_board_state: 'pre', active_driver_key: 'margin' }},
+}};
+harness.state.activePersona = 'ceo';
+harness.state.activeThreadKey = 'ceo:meta-thread';
+harness.state.drawerOpen = true;
+
+harness.ensureThreads();
+const thread = harness.threadStore()['ceo:meta-thread'] = {{
+  key: 'ceo:meta-thread',
+  title: 'Board packet summary',
+  preview: 'Board packet summary',
+  route: '',
+  readOnly: false,
+  kind: 'followup',
+  assistant: 'Hermes',
+  messages: [
+    {{ role: 'user', text: 'summarize the board packet in plain english', timestamp: '2026-07-04T00:00:00.000Z', status: 'ok' }},
+    {{ role: 'assistant', text: 'pending', timestamp: '2026-07-04T00:00:01.000Z', status: 'pending' }},
+  ],
+  lastUpdated: '2026-07-04T00:00:01.000Z',
+}};
+
+harness.applyAssistantResultToMessage(thread, thread.messages[1], {{
+  ok: true,
+  answer: 'In plain English: revenue is ahead, margin is the soft spot, and the board still needs a hedge decision.',
+  metadata: '[Why: Grounded in the board portal summary. · 2 evidence citations · Risk: LOW · Path: llm · Run: latest-public · LLM · Answered by AI fallback]',
+  responsePayload: {{ mode: 'llm', assistant_mode: 'llm' }},
+}});
+harness.renderAssistantStudio();
+
+console.log(JSON.stringify({{
+  messagesHtml: elements['assistant-messages'].innerHTML,
+  storedMeta: thread.messages[1].meta,
+  storedPayloadMode: thread.messages[1].payload && thread.messages[1].payload.mode,
+}}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "assistant_meta_render_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert "board still needs a hedge decision" in result["messagesHtml"]
+    assert "assistant-message__meta" in result["messagesHtml"]
+    assert "Why: Grounded in the board portal summary." in result["messagesHtml"]
+    assert "2 evidence citations" in result["messagesHtml"]
+    assert result["storedMeta"].startswith("[Why:")
+    assert result["storedPayloadMode"] == "llm"
+
+
+def test_qa_answer_text_unwraps_raw_json_payload_behaviorally():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveQaHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { qaAnswerText: qaAnswerText, qaAnswerMeta: qaAnswerMeta };\n'
+        '}\n'
+        'module.exports = __executiveQaHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-qa-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [], findings: [], developments: [], week: [] }} }}, networkMeta: {{}}, network: [], a2a: [], subtools: [] }},
+  localStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }},
+  sessionStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }},
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout(fn) {{ fn(); return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ requested_view_state: {{ persona: 'ceo', board: 'pre' }}, assistant_public_context: {{ persona_id: 'ceo' }} }}) }};
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{ return {{ setAttribute() {{}}, appendChild() {{}}, style: {{}}, classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }} }}; }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+const payload = {{
+  mode: 'llm',
+  assistant_mode: 'llm',
+  run_id: 'latest-public',
+  answer: JSON.stringify({{
+    matched: true,
+    answer: 'Since last week, NUPCO awards were confirmed and FX remains the main margin watch item.',
+    basis: 'Grounded in public developments and drivers.',
+    citations: [],
+    suggestions: [],
+  }}),
+  basis: 'outer wrapper',
+  citations: [{{ source_path: 'public_packet://latest-public', locator: 'public_context_packet.developments[0]' }}],
+  llm_status: {{ enabled: true }},
+}};
+console.log(JSON.stringify({{
+  answerText: harness.qaAnswerText(payload),
+  answerMeta: harness.qaAnswerMeta(payload),
+}}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "assistant_qa_answer_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result["answerText"].startswith("Since last week, NUPCO awards were confirmed")
+    assert '"matched"' not in result["answerText"]
+    assert "Answered by AI fallback" in result["answerMeta"]

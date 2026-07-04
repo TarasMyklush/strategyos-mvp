@@ -694,23 +694,25 @@
 
   function qaAnswerText(payload) {
     if (!payload) return "I could not reach the governed Q&A service. Try again from an authenticated operator or reviewer session.";
-    var answer = String(firstDefined(payload.answer, "")).trim();
+    var answer = cleanVisibleQaAnswer(firstDefined(payload.answer, ""));
+    var llmStatus = payload.llm_status || {};
+    var parts = [];
+    if (answer) parts.push(answer);
+    if (payload.matched === false && llmStatus.reason) {
+      parts.push("AI fallback is not available: " + llmStatus.reason);
+    }
+    return parts.join(" ") || "No answer returned from governed Q&A.";
+  }
+
+  function qaAnswerMeta(payload) {
+    if (!payload) return "";
     var mode = payload.mode === "llm" ? "LLM" : "Deterministic";
     var assistantMode = String(firstDefined(payload.assistant_mode, payload.orchestration_mode, payload.mode, "Q&A")).replace(/_/g, ' ');
     var basis = String(firstDefined(payload.why, payload.basis, "")).trim();
     var runId = String(firstDefined(payload.run_id, "")).trim();
     var citationsCount = safeArray(payload.citations).length;
-    var llmStatus = payload.llm_status || {};
     var risk = payload.hallucination_risk || {};
-    var parts = [];
-    if (answer) parts.push(answer);
-    if (payload.mode === "llm") {
-      parts.push("Answered by AI fallback because deterministic Q&A did not cover that question.");
-    }
-    if (payload.matched === false && llmStatus.reason) {
-      parts.push("AI fallback is not available: " + llmStatus.reason);
-    }
-    // Trace / why metadata — concise single line for all personas
+    var llmStatus = payload.llm_status || {};
     var traceItems = [];
     if (basis) traceItems.push("Why: " + basis);
     if (citationsCount > 0) traceItems.push(String(citationsCount) + " evidence citation" + (citationsCount !== 1 ? "s" : ""));
@@ -718,8 +720,52 @@
     traceItems.push("Path: " + assistantMode);
     if (runId) traceItems.push("Run: " + runId);
     traceItems.push(mode);
-    if (traceItems.length) parts.push("[" + traceItems.join(" · ") + "]");
-    return parts.join(" ") || "No answer returned from governed Q&A.";
+    if (payload.mode === "llm") {
+      traceItems.push("Answered by AI fallback");
+    }
+    if (payload.matched === false && llmStatus.reason) {
+      traceItems.push("AI fallback unavailable: " + llmStatus.reason);
+    }
+    return traceItems.length ? "[" + traceItems.join(" · ") + "]" : "";
+  }
+
+  function cleanVisibleQaAnswer(value) {
+    if (value == null) return "";
+    if (Array.isArray(value)) {
+      return value.map(function (item) { return cleanVisibleQaAnswer(item); }).filter(Boolean).join(" ").trim();
+    }
+    if (typeof value === 'object') {
+      if (value.answer !== undefined) return cleanVisibleQaAnswer(value.answer);
+      try { return JSON.stringify(value); } catch (_error) { return String(value); }
+    }
+    var text = String(value || '').trim();
+    if (!text) return '';
+    var fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    if (fenced) text = String(fenced[1] || '').trim();
+    var parsed = maybeParseQaJson(text);
+    if (parsed && typeof parsed === 'object' && parsed.answer !== undefined) {
+      var nested = cleanVisibleQaAnswer(parsed.answer);
+      if (nested) return nested;
+    }
+    return text;
+  }
+
+  function maybeParseQaJson(text) {
+    var raw = String(text || '').trim();
+    if (!raw) return null;
+    for (var depth = 0; depth < 3; depth += 1) {
+      try {
+        var parsed = JSON.parse(raw);
+        if (typeof parsed === 'string') {
+          raw = parsed.trim();
+          continue;
+        }
+        return parsed;
+      } catch (_error) {
+        return null;
+      }
+    }
+    return null;
   }
 
   var ASSISTANT_TRANSPORT_FAILURE_TEXT = ASSISTANT_TRANSPORT_FALLBACK;
@@ -873,6 +919,8 @@
     if (!thread || !message || !result) return;
     if (result.ok) {
       message.text = result.answer;
+      message.meta = firstDefined(result.metadata, "");
+      message.payload = result.responsePayload || null;
       message.timestamp = new Date().toISOString();
       message.status = "ok";
       message.retryable = false;
@@ -886,6 +934,8 @@
       delete message.transient;
     } else {
       message.text = result.answer;
+      message.meta = "";
+      message.payload = null;
       message.timestamp = new Date().toISOString();
       message.status = "failed";
       message.retryable = result.retryable !== false;
@@ -979,7 +1029,14 @@
       );
       var payload = response.payload;
       if (payload && payload.status === "ok") {
-        return { ok: true, answer: qaAnswerText(payload), requestId: requestId, endpoint: endpoint };
+        return {
+          ok: true,
+          answer: qaAnswerText(payload),
+          metadata: qaAnswerMeta(payload),
+          responsePayload: payload,
+          requestId: requestId,
+          endpoint: endpoint
+        };
       }
       return makeAssistantFailureResult(cleanMessage, {
         endpoint: endpoint,
@@ -2653,6 +2710,8 @@
         var failureMeta = '';
         if (role === 'assistant' && message.status === 'failed') {
           failureMeta = '<div class="assistant-message__meta">' + escapeHtml(summarizeAssistantFailure(message)) + '</div>';
+        } else if (role === 'assistant' && message.meta) {
+          failureMeta = '<div class="assistant-message__meta">' + escapeHtml(firstDefined(message.meta, '')) + '</div>';
         }
         var retryButton = '';
         if (role === 'assistant' && message.status === 'failed' && message.retryPrompt) {

@@ -7,6 +7,8 @@ the model-provider boundary is enabled in server-side config.
 from __future__ import annotations
 
 import json
+import logging
+import re
 from dataclasses import asdict, is_dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -15,6 +17,13 @@ from urllib.request import Request, urlopen
 from .config import EXTERNAL_MODE_MODEL_PROVIDER
 from .ingestion import DataBundle
 from .models import Finding
+
+
+logger = logging.getLogger(__name__)
+
+
+class _EmptyProviderResponseError(RuntimeError):
+    """Raised when the provider returns no usable assistant text."""
 
 
 SYSTEM_PROMPT = """You are StrategyOS evidence Q&A.
@@ -64,6 +73,49 @@ def chat_status(config: Any) -> dict[str, Any]:
     }
 
 
+def provider_health_status(config: Any) -> dict[str, Any]:
+    status = chat_status(config)
+    payload = {
+        "enabled": bool(status.get("enabled")),
+        "provider": status.get("provider") or getattr(config, "llm_provider", "deepseek"),
+        "model": status.get("model") or getattr(config, "llm_model", ""),
+    }
+    if not status.get("enabled"):
+        return {
+            "status": "ok",
+            **payload,
+            "checked": False,
+            "reason": status.get("reason") or "LLM chat is disabled.",
+        }
+    try:
+        _call_openai_compatible_chat(
+            config=config,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Return exactly the single word ok.",
+                },
+                {"role": "user", "content": "healthcheck"},
+            ],
+            temperature=0.0,
+            max_tokens=8,
+            response_format=None,
+        )
+    except RuntimeError as exc:
+        return {
+            "status": "failed",
+            **payload,
+            "checked": True,
+            "reason": str(exc),
+        }
+    return {
+        "status": "ok",
+        **payload,
+        "checked": True,
+        "probe": "chat_completions",
+    }
+
+
 def answer_question(
     question: str,
     *,
@@ -94,34 +146,59 @@ def answer_question(
         public_context_packet=public_packet,
         persona=persona,
     )
-    provider_response = _call_openai_compatible_chat(
-        config=config,
-        messages=[
-            {"role": "system", "content": PUBLIC_SYSTEM_PROMPT if public_mode else SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {
-                        "question": question,
-                        "evidence": evidence,
-                    },
-                    ensure_ascii=False,
-                ),
-            },
-        ],
-    )
-    parsed = _parse_json_answer(provider_response)
     default_basis = (
         "LLM answer grounded in supplied public executive packet."
         if public_mode
         else "LLM answer grounded in supplied run evidence."
     )
+    json_messages = [
+        {"role": "system", "content": PUBLIC_SYSTEM_PROMPT if public_mode else SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "question": question,
+                    "evidence": evidence,
+                },
+                ensure_ascii=False,
+            ),
+        },
+    ]
+    try:
+        provider_response = _call_openai_compatible_chat(
+            config=config,
+            messages=json_messages,
+            response_format={"type": "json_object"},
+        )
+        parsed = _parse_json_answer(provider_response)
+    except _EmptyProviderResponseError:
+        try:
+            provider_response = _call_openai_compatible_chat(
+                config=config,
+                messages=_plain_text_retry_messages(
+                    question=question,
+                    evidence=evidence,
+                    public_mode=public_mode,
+                ),
+                response_format=None,
+            )
+        except _EmptyProviderResponseError as exc:
+            raise RuntimeError(
+                "LLM provider returned an empty answer after retrying with a plain-text prompt."
+            ) from exc
+        parsed = {
+            "matched": True,
+            "answer": _clean_visible_answer(provider_response),
+            "basis": default_basis,
+            "citations": [],
+            "suggestions": [],
+        }
     citations = _normalize_citations(parsed.get("citations"))
     if public_mode:
         citations = _normalize_public_packet_citations(citations, packet=public_packet, question=question)
     return {
         "matched": _normalize_bool(parsed.get("matched", True)),
-        "answer": str(parsed.get("answer") or "No answer returned."),
+        "answer": _clean_visible_answer(parsed.get("answer")) or "No answer returned.",
         "basis": str(parsed.get("basis") or default_basis),
         "citations": citations,
         "suggestions": _normalize_suggestions(parsed.get("suggestions")),
@@ -290,15 +367,19 @@ def _call_openai_compatible_chat(
     *,
     config: Any,
     messages: list[dict[str, str]],
+    temperature: float = 0.1,
+    max_tokens: int = 900,
+    response_format: dict[str, str] | None = None,
 ) -> str:
     url = _chat_completions_url(str(config.llm_base_url))
     payload = {
         "model": config.llm_model,
         "messages": messages,
-        "temperature": 0.1,
-        "max_tokens": 900,
-        "response_format": {"type": "json_object"},
+        "temperature": temperature,
+        "max_tokens": max_tokens,
     }
+    if response_format is not None:
+        payload["response_format"] = response_format
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -321,9 +402,16 @@ def _call_openai_compatible_chat(
     choices = parsed.get("choices") or []
     if not choices:
         raise RuntimeError("LLM provider returned no choices.")
-    content = ((choices[0].get("message") or {}).get("content") or "").strip()
+    content = _extract_provider_text(parsed)
     if not content:
-        raise RuntimeError("LLM provider returned an empty answer.")
+        choice0 = choices[0] if isinstance(choices[0], dict) else {}
+        logger.warning(
+            "LLM provider returned empty assistant text; payload_shape=%s message=%s choice0=%s",
+            _provider_payload_shape(parsed),
+            json.dumps((choice0.get("message") or {}), ensure_ascii=False, default=str)[:1200],
+            json.dumps(choice0, ensure_ascii=False, default=str)[:1200],
+        )
+        raise _EmptyProviderResponseError("LLM provider returned an empty answer.")
     return content
 
 
@@ -335,9 +423,8 @@ def _chat_completions_url(base_url: str) -> str:
 
 
 def _parse_json_answer(raw: str) -> dict[str, Any]:
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
+    payload = _maybe_json_object(raw)
+    if payload is None:
         return {
             "matched": True,
             "answer": raw,
@@ -345,7 +432,205 @@ def _parse_json_answer(raw: str) -> dict[str, Any]:
             "citations": [],
             "suggestions": [],
         }
-    return payload if isinstance(payload, dict) else {}
+    if not isinstance(payload, dict):
+        return {}
+    nested_answer = _maybe_json_object(payload.get("answer"))
+    if isinstance(nested_answer, dict) and any(
+        key in nested_answer for key in ("answer", "matched", "basis", "citations", "suggestions")
+    ):
+        merged = dict(payload)
+        merged.update({key: value for key, value in nested_answer.items() if value not in (None, "")})
+        return merged
+    return payload
+
+
+def _maybe_json_object(raw: str) -> dict[str, Any] | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    decoder = json.JSONDecoder()
+    candidates = [text]
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        candidates.insert(0, fenced.group(1).strip())
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end > start:
+        candidates.append(text[start : end + 1].strip())
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError:
+            payload = _raw_decode_json_object(candidate, decoder=decoder)
+            if payload is None:
+                continue
+        if isinstance(payload, str):
+            nested = _maybe_json_object(payload)
+            if nested is not None:
+                return nested
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _raw_decode_json_object(raw: str, *, decoder: json.JSONDecoder) -> dict[str, Any] | str | None:
+    text = str(raw or "")
+    for index, char in enumerate(text):
+        if char not in '{["':
+            continue
+        try:
+            payload, _end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, (dict, str)):
+            return payload
+    return None
+
+
+def _extract_provider_text(payload: dict[str, Any]) -> str:
+    choices = payload.get("choices") or []
+    if choices:
+        first_choice = choices[0] if isinstance(choices[0], dict) else {}
+        message = first_choice.get("message") or {}
+        structured_content = _extract_structured_provider_text(message.get("content"))
+        if structured_content:
+            return structured_content
+        content = _coerce_provider_content_text(message.get("content"))
+        if content:
+            return content
+        tool_calls = message.get("tool_calls") if isinstance(message, dict) else None
+        tool_call_arguments = _extract_tool_call_arguments(tool_calls)
+        if tool_call_arguments:
+            return tool_call_arguments
+        for field in ("text", "output_text", "refusal", "reasoning"):
+            value = _coerce_provider_content_text(first_choice.get(field))
+            if value:
+                return value
+            value = _coerce_provider_content_text(message.get(field))
+            if value:
+                return value
+    for field in ("output_text", "text", "content"):
+        value = _coerce_provider_content_text(payload.get(field))
+        if value:
+            return value
+    return ""
+
+
+def _extract_structured_provider_text(value: Any) -> str:
+    if isinstance(value, str):
+        text = value.strip()
+        return text if _maybe_json_object(text) is not None else ""
+    if isinstance(value, list):
+        for item in value:
+            structured = _extract_structured_provider_text(item)
+            if structured:
+                return structured
+        return ""
+    if isinstance(value, dict):
+        for key in ("text", "content", "output_text", "value"):
+            structured = _extract_structured_provider_text(value.get(key))
+            if structured:
+                return structured
+    return ""
+
+
+def _coerce_provider_content_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            part_text = _coerce_provider_content_text(item)
+            if part_text:
+                parts.append(part_text)
+        return "\n".join(parts).strip()
+    if isinstance(value, dict):
+        for key in ("text", "content", "output_text", "value", "refusal", "reasoning"):
+            part = value.get(key)
+            text = _coerce_provider_content_text(part)
+            if text:
+                return text
+    return ""
+
+
+def _extract_tool_call_arguments(tool_calls: Any) -> str:
+    if not isinstance(tool_calls, list):
+        return ""
+    for item in tool_calls:
+        if not isinstance(item, dict):
+            continue
+        function = item.get("function") or {}
+        if not isinstance(function, dict):
+            continue
+        arguments = function.get("arguments")
+        if isinstance(arguments, str) and arguments.strip():
+            return arguments.strip()
+    return ""
+
+
+def _provider_payload_shape(payload: dict[str, Any]) -> dict[str, Any]:
+    choices = payload.get("choices") or []
+    first_choice = choices[0] if choices and isinstance(choices[0], dict) else {}
+    message = first_choice.get("message") or {}
+    return {
+        "top_level_keys": sorted(str(key) for key in payload.keys()),
+        "choice_keys": sorted(str(key) for key in first_choice.keys()),
+        "message_keys": sorted(str(key) for key in message.keys()) if isinstance(message, dict) else [],
+        "content_type": type(message.get("content")).__name__ if isinstance(message, dict) else None,
+    }
+
+
+def _plain_text_retry_messages(
+    *,
+    question: str,
+    evidence: dict[str, Any],
+    public_mode: bool,
+) -> list[dict[str, str]]:
+    system_prompt = (
+        "You are Hermes on the public StrategyOS executive surface. "
+        "Answer in plain English using only the supplied public packet. "
+        "Do not return JSON. Do not mention hidden or private data."
+        if public_mode
+        else "Answer using only the supplied evidence. Do not return JSON."
+    )
+    return [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": (
+                f"Question: {question}\n"
+                "Give a direct human answer only. If the evidence is insufficient, say so plainly.\n"
+                f"Evidence: {json.dumps(evidence, ensure_ascii=False)}"
+            ),
+        },
+    ]
+
+
+def _clean_visible_answer(value: Any) -> str:
+    if isinstance(value, dict):
+        nested_answer = value.get("answer")
+        if nested_answer is not None:
+            return _clean_visible_answer(nested_answer)
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, list):
+        return " ".join(part for part in (_clean_visible_answer(item) for item in value) if part).strip()
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    nested = _maybe_json_object(text)
+    if isinstance(nested, dict):
+        nested_answer = nested.get("answer")
+        if nested_answer is not None and str(nested_answer).strip() and str(nested_answer).strip() != text:
+            return _clean_visible_answer(nested_answer)
+    return text
 
 
 def _normalize_citations(value: Any) -> list[dict[str, Any]]:

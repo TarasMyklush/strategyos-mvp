@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from strategyos_mvp.config import EXTERNAL_MODE_MODEL_PROVIDER, RunPolicyConfig
 from strategyos_mvp.executive_design import executive_public_assistant_packet
@@ -288,6 +289,231 @@ def test_public_llm_answer_uses_public_packet_prompt(monkeypatch):
     assert result["answer"].lower().startswith("last week looked healthy")
     assert result["citations"][0]["locator"] == "public_context_packet.kpis[1]"
 
+
+def test_llm_answer_parses_markdown_wrapped_json(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": "```json\n{\"matched\": true, \"answer\": \"Board-safe answer.\", \"basis\": \"Packet evidence.\", \"citations\": [], \"suggestions\": []}\n```"
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    monkeypatch.setattr(llm_qa, "urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    result = llm_qa.answer_question(
+        "summarize the board packet in plain English",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert result["matched"] is True
+    assert result["answer"] == "Board-safe answer."
+    assert result["basis"] == "Packet evidence."
+
+
+def test_empty_provider_content_retries_with_plain_text_prompt(monkeypatch):
+    responses = [
+        {"choices": [{"message": {"content": ""}}]},
+        {"choices": [{"message": {"content": "The public packet shows revenue ahead, margin soft, and FX still on the board agenda."}}]},
+    ]
+    captured_bodies = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured_bodies.append(json.loads(request.data.decode("utf-8")))
+        return FakeResponse(responses[len(captured_bodies) - 1])
+
+    monkeypatch.setattr(llm_qa, "urlopen", fake_urlopen)
+
+    result = llm_qa.answer_question(
+        "what should I worry about before the board meeting?",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert len(captured_bodies) == 2
+    assert captured_bodies[0]["response_format"] == {"type": "json_object"}
+    assert "response_format" not in captured_bodies[1]
+    assert "do not return json" in captured_bodies[1]["messages"][0]["content"].lower()
+    assert result["answer"].startswith("The public packet shows revenue ahead")
+    assert result["citations"]
+
+
+def test_empty_provider_content_after_retry_raises_clear_error(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": ""}}]}).encode("utf-8")
+
+    monkeypatch.setattr(llm_qa, "urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    with pytest.raises(RuntimeError, match="empty answer after retry"):
+        llm_qa.answer_question(
+            "give me numbers for last week",
+            bundle=_bundle(),
+            findings=[_finding()],
+            summary={"run_id": "latest-public", "run_mode": "public-safe"},
+            config=_config(),
+            public_context_packet=executive_public_assistant_packet("ceo"),
+            persona="ceo",
+        )
+
+
+def test_double_encoded_json_answer_is_unwrapped(monkeypatch):
+    nested = {
+        "matched": True,
+        "answer": "Since last week revenue stayed ahead while FX still pressures margin.",
+        "basis": "Grounded in public packet week items.",
+        "citations": [{"source_path": "public_packet://latest-public", "locator": "public_context_packet.week[0]"}],
+        "suggestions": [],
+    }
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {"choices": [{"message": {"content": json.dumps(json.dumps(nested))}}]}
+            ).encode("utf-8")
+
+    monkeypatch.setattr(llm_qa, "urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    result = llm_qa.answer_question(
+        "what changed since last week?",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert result["answer"] == nested["answer"]
+    assert result["basis"] == nested["basis"]
+    assert result["citations"][0]["locator"] == "public_context_packet.week[0]"
+
+
+@pytest.mark.parametrize(
+    "question,answer",
+    [
+        ("give me numbers for last week", "Last week the visible packet shows revenue ahead, margin slightly below plan, and FX still acting as a drag."),
+        ("what changed since last week?", "Since last week, NUPCO awards were confirmed, the board pack moved forward, and FX remains the watch item."),
+        ("what should I worry about before the board meeting?", "Before the board meeting, worry about the margin narrative, the hedge decision, and Tamween follow-through."),
+        ("summarize the board packet in plain English", "In plain English: revenue is ahead, margin is soft, SAR 8.6M is recoverable, and two board decisions are still open."),
+    ],
+)
+def test_natural_public_prompts_return_clean_answer_text_not_raw_json(monkeypatch, question, answer):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": json.dumps(
+                                    {
+                                        "matched": True,
+                                        "answer": json.dumps(
+                                            {
+                                                "matched": True,
+                                                "answer": answer,
+                                                "basis": "Grounded in the public packet.",
+                                                "citations": [{"source_path": "public_packet://latest-public", "locator": "public_context_packet.facts[0]"}],
+                                                "suggestions": [],
+                                            }
+                                        ),
+                                        "basis": "Outer wrapper should be ignored.",
+                                        "citations": [],
+                                        "suggestions": [],
+                                    }
+                                )
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    monkeypatch.setattr(llm_qa, "urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    result = llm_qa.answer_question(
+        question,
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert result["answer"] == answer
+    assert not result["answer"].lstrip().startswith("{")
+    assert result["basis"] == "Grounded in the public packet."
+
+
+def test_provider_health_status_reports_failed_provider_runtime(monkeypatch):
+    monkeypatch.setattr(
+        llm_qa,
+        "_call_openai_compatible_chat",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            RuntimeError('LLM provider returned HTTP 402: {"error":{"message":"Insufficient Balance"}}')
+        ),
+    )
+
+    status = llm_qa.provider_health_status(_config())
+
+    assert status["status"] == "failed"
+    assert status["enabled"] is True
+    assert status["checked"] is True
+    assert "Insufficient Balance" in status["reason"]
+
 def test_data_qa_auto_invokes_llm_when_deterministic_misses(monkeypatch):
     monkeypatch.setattr(
         api_module,
@@ -337,3 +563,234 @@ def test_data_qa_auto_invokes_llm_when_deterministic_misses(monkeypatch):
     assert result["requested_mode"] == "auto"
     assert result["deterministic_matched"] is False
     assert result["answer"] == "AI fallback answered from supplied evidence."
+
+
+def test_llm_answer_retries_plain_text_when_structured_response_is_empty(monkeypatch):
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self._payload).encode("utf-8")
+
+    calls: list[dict[str, object]] = []
+    responses = [
+        {"choices": [{"message": {"content": ""}}]},
+        {"choices": [{"message": {"content": "Last week from the public packet, margin is still the issue and FX remains the live watch item."}}]},
+    ]
+
+    def fake_urlopen(request, timeout):
+        calls.append({"timeout": timeout, "body": json.loads(request.data.decode("utf-8"))})
+        return FakeResponse(responses[len(calls) - 1])
+
+    monkeypatch.setattr(llm_qa, "urlopen", fake_urlopen)
+
+    result = llm_qa.answer_question(
+        "give me numbers for last week",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert len(calls) == 2
+    assert calls[0]["body"]["response_format"] == {"type": "json_object"}
+    assert "response_format" not in calls[1]["body"]
+    assert result["answer"].startswith("Last week from the public packet")
+    assert result["basis"] == "LLM answer grounded in supplied public executive packet."
+
+
+def test_parse_json_answer_unwraps_double_encoded_payload():
+    raw = json.dumps(
+        json.dumps(
+            {
+                "matched": True,
+                "answer": "Since last week, NUPCO awards were confirmed and the board pack moved forward.",
+                "basis": "Grounded in the public packet.",
+                "citations": [],
+                "suggestions": [],
+            }
+        )
+    )
+
+    parsed = llm_qa._parse_json_answer(raw)
+
+    assert parsed["matched"] is True
+    assert parsed["answer"].startswith("Since last week")
+    assert parsed["basis"] == "Grounded in the public packet."
+
+
+def test_parse_json_answer_unwraps_nested_answer_json():
+    raw = json.dumps(
+        {
+            "matched": True,
+            "answer": json.dumps(
+                {
+                    "matched": True,
+                    "answer": "The board meeting risk is still the margin narrative and hedge decision.",
+                    "basis": "Grounded in public drivers and board context.",
+                    "citations": [],
+                    "suggestions": [],
+                }
+            ),
+            "basis": "placeholder",
+            "citations": [],
+            "suggestions": [],
+        }
+    )
+
+    parsed = llm_qa._parse_json_answer(raw)
+
+    assert parsed["answer"].startswith("The board meeting risk")
+    assert parsed["basis"] == "Grounded in public drivers and board context."
+
+
+def test_public_natural_prompts_return_clean_visible_answers(monkeypatch):
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self._payload).encode("utf-8")
+
+    prompts = {
+        "give me numbers for last week": {
+            "content": json.dumps(
+                {
+                    "matched": True,
+                    "answer": "Last week from the public packet: revenue stayed ahead, EBITDA margin was 19.2% versus 19.4% plan, and FX remained a weekly drag.",
+                    "basis": "Grounded in KPI cards and weekly items.",
+                    "citations": [],
+                    "suggestions": [],
+                }
+            ),
+            "must_contain": ["19.2%", "fx"],
+        },
+        "what changed since last week?": {
+            "content": json.dumps(
+                {
+                    "matched": True,
+                    "answer": json.dumps(
+                        {
+                            "matched": True,
+                            "answer": "Since last week, NUPCO awards were confirmed, cold-chain stayed at 99.4%, and the board pack moved closer to ready.",
+                            "basis": "Grounded in public developments and weekly items.",
+                            "citations": [],
+                            "suggestions": [],
+                        }
+                    ),
+                    "basis": "placeholder",
+                    "citations": [],
+                    "suggestions": [],
+                }
+            ),
+            "must_contain": ["nupco", "99.4%"],
+        },
+        "what should i worry about before the board meeting?": {
+            "content": json.dumps(
+                json.dumps(
+                    {
+                        "matched": True,
+                        "answer": "Before the board meeting, the main worry is still the margin narrative: FX, API cost leakage, and the open hedge decision.",
+                        "basis": "Grounded in drivers and board context.",
+                        "citations": [],
+                        "suggestions": [],
+                    }
+                )
+            ),
+            "must_contain": ["margin narrative", "hedge"],
+        },
+        "summarize the board packet in plain english": {
+            "content": "```json\n{\"matched\": true, \"answer\": \"In plain English: revenue is ahead, margin is the soft spot, SAR 8.6M is recoverable, and the live decisions are the hedge and the JV.\", \"basis\": \"Grounded in the board portal and public facts.\", \"citations\": [], \"suggestions\": []}\n```",
+            "must_contain": ["plain english", "sar 8.6m"],
+        },
+    }
+
+    def fake_urlopen(request, timeout):
+        del timeout
+        body = json.loads(request.data.decode("utf-8"))
+        question = json.loads(body["messages"][1]["content"])["question"].lower()
+        return FakeResponse({"choices": [{"message": {"content": prompts[question]["content"]}}]})
+
+    monkeypatch.setattr(llm_qa, "urlopen", fake_urlopen)
+
+    for question, expectation in prompts.items():
+        result = llm_qa.answer_question(
+            question,
+            bundle=_bundle(),
+            findings=[_finding()],
+            summary={"run_id": "latest-public", "run_mode": "public-safe"},
+            config=_config(),
+            public_context_packet=executive_public_assistant_packet("ceo"),
+            persona="ceo",
+        )
+        answer_lower = result["answer"].lower()
+        assert not result["answer"].lstrip().startswith("{"), question
+        assert '"matched"' not in answer_lower, question
+        for token in expectation["must_contain"]:
+            assert token in answer_lower, f"Missing {token!r} for {question}"
+
+
+def test_provider_content_block_prefers_structured_json_part(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": [
+                                    {"type": "reasoning", "text": "I should answer from the public packet only."},
+                                    {
+                                        "type": "text",
+                                        "text": json.dumps(
+                                            {
+                                                "matched": True,
+                                                "answer": "Tamween Distribution is the clearest margin drag in the public packet.",
+                                                "basis": "Grounded in public findings and drivers.",
+                                                "citations": [],
+                                                "suggestions": [],
+                                            }
+                                        ),
+                                    },
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    monkeypatch.setattr(llm_qa, "urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    result = llm_qa.answer_question(
+        "which business unit is dragging margin?",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert result["answer"] == "Tamween Distribution is the clearest margin drag in the public packet."
+    assert result["basis"] == "Grounded in public findings and drivers."

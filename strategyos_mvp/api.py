@@ -6467,6 +6467,7 @@ def readiness_payload() -> dict[str, Any]:
         "workspace": _check_workspace(),
         "ocr_runtime": _check_runtime_dependencies(),
         "run_execution": _check_run_execution(),
+        "llm_chat": llm_qa.provider_health_status(CONFIG),
         "auth": _check_auth_boundary(),
         "governance": _check_governance_boundary(),
         "twins": _check_twins(),
@@ -6873,7 +6874,7 @@ def health_config(
         "api_auth_enabled": CONFIG.api_auth_enabled,
         "require_human_review": CONFIG.require_human_review,
         "twins": twin_operational_health_payload(),
-        "llm_chat": llm_qa.chat_status(CONFIG),
+        "llm_chat": llm_qa.provider_health_status(CONFIG),
         "run_execution": _check_run_execution(),
     }
 
