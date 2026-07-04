@@ -1197,7 +1197,7 @@ def _parse_finance_leakage(prompt: str, context: dict[str, Any]) -> ScenarioResu
                 inputs={"surface": "latest-public"},
                 result=_sar(8_600_000),
                 unit="SAR",
-                citations=[_public_citation("executive_diagnostics.persona_blueprint.findings[0]")],
+                citations=[_public_citation("public_context_packet.findings[1]")],
             ),
             CalculationStep(
                 step_id="tamween_component",
@@ -1206,7 +1206,7 @@ def _parse_finance_leakage(prompt: str, context: dict[str, Any]) -> ScenarioResu
                 inputs={"surface": "latest-public"},
                 result=_sar(1_200_000),
                 unit="SAR",
-                citations=[_public_citation("executive_diagnostics.persona_blueprint.developments[1]")],
+                citations=[_public_citation("public_context_packet.developments[1]")],
             ),
         ]
         if meeting:
@@ -1384,7 +1384,7 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
                     inputs={"driver": revenue.get("label") or "Revenue"},
                     result=str(revenue.get("value") or revenue.get("metric") or "above plan"),
                     unit="driver",
-                    citations=[_public_citation("drivers.revenue")],
+                    citations=[_public_citation("public_context_packet.drivers[0]")],
                 )
             ],
             kg_context=[],
@@ -1411,7 +1411,7 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
                     inputs={"driver": epharmacy.get("label") or "e-Pharmacy"},
                     result=str(epharmacy.get("value") or epharmacy.get("metric") or "growth lever"),
                     unit="driver",
-                    citations=[_public_citation("drivers.e-pharmacy")],
+                    citations=[_public_citation("public_context_packet.drivers[0]")],
                 )
             ],
             kg_context=[],
@@ -1498,8 +1498,8 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
                     result="Margin / FX / recovery execution",
                     unit="risk theme",
                     citations=[
-                        _public_citation("executive_diagnostics.persona_blueprint.findings[1]"),
-                        _public_citation("executive_diagnostics.persona_blueprint.drivers"),
+                        _public_citation("public_context_packet.findings[0]"),
+                        _public_citation("public_context_packet.drivers[1]"),
                     ],
                 )
             ],
@@ -1526,7 +1526,7 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
                     inputs={"kpi": "EBITDA margin"},
                     result="19.2% vs 19.4% plan",
                     unit="margin",
-                    citations=[_public_citation("board_portal.kpis[1]")],
+                    citations=[_public_citation("public_context_packet.board_portal.kpis[1]")],
                 ),
                 CalculationStep(
                     step_id="fx_driver",
@@ -1535,7 +1535,7 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
                     inputs={"surface": "latest-public"},
                     result="Board hedge decision pending",
                     unit="driver",
-                    citations=[_public_citation("executive_diagnostics.persona_blueprint.findings[1]")],
+                    citations=[_public_citation("public_context_packet.findings[0]")],
                 ),
             ],
             kg_context=[],

@@ -333,11 +333,7 @@
   }
 
   function getPersonaBlueprint(personaId) {
-    var diagnostics = getExecutiveDiagnostics();
     var shared = getSharedAssistantContext();
-    if (diagnostics.persona_blueprint && firstDefined(diagnostics.persona_blueprint.assistant, "")) {
-      return diagnostics.persona_blueprint;
-    }
     if ((shared.persona_id || "ceo") === personaId) {
       return {
         health: shared.health || {},
@@ -347,6 +343,10 @@
         developments: safeArray(shared.developments),
         week: safeArray(shared.week)
       };
+    }
+    var diagnostics = getExecutiveDiagnostics();
+    if (diagnostics.persona_blueprint && firstDefined(diagnostics.persona_blueprint.assistant, "")) {
+      return diagnostics.persona_blueprint;
     }
     return DESIGN[personaId] || DESIGN.ceo || {};
   }
@@ -473,7 +473,7 @@
 
   function getAgentActivitySummary() {
     var shared = getSharedAssistantContext();
-    return shared.agent_activity || DESIGN_GLOBAL.activity || {};
+    return shared.agent_activity || shared.activity || DESIGN_GLOBAL.activity || {};
   }
 
   function getRunningAgents() {

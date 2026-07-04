@@ -202,6 +202,7 @@ def executive_public_assistant_packet(persona_id: str = "ceo") -> dict[str, Any]
         "developments": developments,
         "week": week,
         "board_portal": board,
+        "agent_activity": activity,
         "activity": activity,
         "running_agents": running_agents,
         "public_facts": public_facts,

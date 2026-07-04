@@ -3858,8 +3858,16 @@ def _executive_diagnostics_payload(
         "Group CEO",
     )
     active_driver_key = str(executive_modes.get("active_driver_key") or "board_packet")
-    persona_blueprint = executive_persona_design(persona_id)
-    board_design = executive_board_design()
+    public_packet = executive_public_assistant_packet(persona_id)
+    persona_blueprint = {
+        "health": dict(public_packet.get("health") or {}),
+        "assistant": public_packet.get("assistant"),
+        "drivers": list(public_packet.get("drivers") or []),
+        "findings": list(public_packet.get("findings") or []),
+        "developments": list(public_packet.get("developments") or []),
+        "week": list(public_packet.get("week") or []),
+    }
+    board_design = dict(public_packet.get("board_portal") or executive_board_design())
     driver_tiles = []
     persona_drivers = list(persona_blueprint.get("drivers") or [])
     for item in persona_drivers[:4] or list(executive_modes.get("driver_focus") or [])[:4]:
