@@ -372,6 +372,48 @@ def test_empty_provider_content_retries_with_plain_text_prompt(monkeypatch):
     assert result["citations"]
 
 
+def test_malformed_json_like_provider_content_retries_with_plain_text_prompt(monkeypatch):
+    responses = [
+        {"choices": [{"message": {"content": '{ "matched": true, "answer": "The'}}]},
+        {"choices": [{"message": {"content": "The public packet shows revenue ahead, margin soft, and FX still on the board agenda."}}]},
+    ]
+    captured_bodies = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured_bodies.append(json.loads(request.data.decode("utf-8")))
+        return FakeResponse(responses[len(captured_bodies) - 1])
+
+    monkeypatch.setattr(llm_qa, "urlopen", fake_urlopen)
+
+    result = llm_qa.answer_question(
+        "summarize the board packet in plain English",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "latest-public", "run_mode": "public-safe"},
+        config=_config(),
+        public_context_packet=executive_public_assistant_packet("ceo"),
+        persona="ceo",
+    )
+
+    assert len(captured_bodies) == 2
+    assert captured_bodies[0]["response_format"] == {"type": "json_object"}
+    assert "response_format" not in captured_bodies[1]
+    assert result["answer"].startswith("The public packet shows revenue ahead")
+
+
 def test_empty_provider_content_after_retry_raises_clear_error(monkeypatch):
     class FakeResponse:
         def __enter__(self):

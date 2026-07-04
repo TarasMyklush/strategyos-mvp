@@ -26,6 +26,10 @@ class _EmptyProviderResponseError(RuntimeError):
     """Raised when the provider returns no usable assistant text."""
 
 
+class _MalformedProviderResponseError(RuntimeError):
+    """Raised when the provider returns broken JSON-like assistant text."""
+
+
 SYSTEM_PROMPT = """You are StrategyOS evidence Q&A.
 Answer only from the JSON evidence supplied by the application.
 If the evidence is insufficient, say that and set matched=false.
@@ -171,7 +175,7 @@ def answer_question(
             response_format={"type": "json_object"},
         )
         parsed = _parse_json_answer(provider_response)
-    except _EmptyProviderResponseError:
+    except (_EmptyProviderResponseError, _MalformedProviderResponseError):
         try:
             provider_response = _call_openai_compatible_chat(
                 config=config,
@@ -425,6 +429,8 @@ def _chat_completions_url(base_url: str) -> str:
 def _parse_json_answer(raw: str) -> dict[str, Any]:
     payload = _maybe_json_object(raw)
     if payload is None:
+        if _looks_like_broken_json_answer(raw):
+            raise _MalformedProviderResponseError("LLM provider returned malformed JSON output.")
         return {
             "matched": True,
             "answer": raw,
@@ -441,6 +447,8 @@ def _parse_json_answer(raw: str) -> dict[str, Any]:
         merged = dict(payload)
         merged.update({key: value for key, value in nested_answer.items() if value not in (None, "")})
         return merged
+    if _looks_like_broken_json_answer(payload.get("answer")):
+        raise _MalformedProviderResponseError("LLM provider returned malformed nested JSON output.")
     return payload
 
 
@@ -634,6 +642,18 @@ def _clean_visible_answer(value: Any) -> str:
     if extracted:
         return extracted
     return text
+
+
+def _looks_like_broken_json_answer(raw: Any) -> bool:
+    text = str(raw or "").strip()
+    if not text:
+        return False
+    if _maybe_json_object(text) is not None:
+        return False
+    jsonish_markers = ('"answer"', '"matched"', '"basis"', '"citations"', '"suggestions"')
+    if text.startswith("{") or text.startswith("```"):
+        return any(marker in text for marker in jsonish_markers) or text.count('"') >= 2
+    return '"answer"' in text and ('{' in text or '```' in text)
 
 
 def _extract_answer_field_from_jsonish_text(text: str) -> str:
