@@ -1,31 +1,41 @@
 (function () {
   window.STRATEGYOS_PLAN = {
-    updated: "2026-07-01",
+    updated: "2026-07-05",
     liveStatus: {
-      state: "Overall live truth: the final COPY-001 copy-polish row is complete on the source surface. All behavior, UX, and copy work in this tranche now lives in shipped history.",
-      lastVerified: "2026-07-01",
-      note: "0 active UI rows remain, 0 UI rows are parked outside the tranche, and 9 shipped history entries remain visible below."
+      state: "Overall live truth: Ask Hermes assistant hardening is shipped and live-verified; no active assistant-hardening rows remain.",
+      lastVerified: "2026-07-05",
+      note: "Latest verified release: 1ddd7e1. CI and deploy passed; direct API and browser drawer checks passed for mode=auto, mode=llm, deterministic scenarios, evidence prompts, and UI answer rendering."
     },
     criticalBlockers: [],
     activeActionItems: [],
     hostedVerificationState: {
-      summary: "Pass — COPY-001 is closed in source: the oversized plan headline and adjacent copy were tightened, no active action items remain, and prior behavior/UX work stays in shipped history.",
-      lastChecked: "2026-07-01",
+      summary: "Pass — assistant hardening release 1ddd7e1 is shipped, deployed, and live-verified on the public Ask Hermes surface; no assistant-hardening action rows remain active.",
+      lastChecked: "2026-07-05",
       checks: [
         {
-          label: "Hosted /static/executive.js, /static/executive.css, and /static/plan_data.js now hash-match the local source tranche.",
+          label: "CI succeeded for release 1ddd7e1.",
           result: "pass",
-          note: "Direct asset comparison confirmed the hosted executive and plan assets are byte-for-byte identical to the local release candidate."
+          note: "The assistant hardening regression lane passed before release, including orchestrator, deterministic-vs-LLM boundary, QA transport, API, scenario parser, twin reasoning, fixtures, and smoke coverage."
         },
         {
-          label: "Hosted executive assets expose the expected UI fixes: findings/developments expansion, show-the-work toggle, chart axes/tooltips, GM-note empty state, theme label, feedback path, and Hermes scroll affordances.",
+          label: "Deploy succeeded for release 1ddd7e1.",
           result: "pass",
-          note: "Direct hosted inspection found the live executive HTML/JS/CSS markers for the 11-row behaviour tranche, so those rows no longer belong in active execution."
+          note: "Release 1ddd7e1 cleared deploy and the hosted surface now reflects the hardened assistant path and updated /plan copy."
         },
         {
-          label: "COPY-001 is closed after the final source copy pass.",
+          label: "Working tree is clean at release verification time.",
           result: "pass",
-          note: "The active tranche is now empty; keep /plan focused on that closure truth instead of repeating already-hosted UI fixes or stale residual-work language."
+          note: "Release verification recorded a clean working tree so the shipped assistant-hardening summary matches the exact deployed commit."
+        },
+        {
+          label: "Live direct /assistant/chat checks passed for margin variance in mode=auto and mode=llm.",
+          result: "pass",
+          note: "The hosted assistant returned grounded CEO answers for \"What’s driving the margin variance?\" with citations and low-risk trace instead of collapsing into generic intercept copy."
+        },
+        {
+          label: "Live browser drawer check passed for 'What’s driving the margin variance?'.",
+          result: "pass",
+          note: "Browser verification confirmed the public Ask Hermes drawer rendered the grounded margin-variance answer, including FX exposure, EUR/SAR, SAR 9k/week, Tamween SAR 1.2M, API costs, citations, and low-risk trace."
         }
       ]
     },
@@ -35,6 +45,21 @@
       rows: []
     },
     completedHistory: [
+      {
+        id: "DONE-010",
+        date: "2026-07-05",
+        label: "Ask Hermes assistant hardening shipped and verified",
+        summary: "The public CEO Ask Hermes assistant now uses the shared server-side assistant path with deterministic finance/scenario routing first and governed LLM fallback for open-ended prompts, backed by tests, CI, deploy, and live UI verification.",
+        items: [
+          "Removed brittle persona regex topic interceptors so substantive margin, revenue, cash, risk, KPI, Digital Health, e-Pharmacy, and recovery questions no longer get generic “which part do you want?” replies before QA/LLM can answer.",
+          "Kept deterministic-first finance behavior: scenario/math answers and governed public-packet facts stay deterministic; LLM is used only for the unstructured/open-ended tail.",
+          "Hardened provider transport with bounded transient retry/backoff and non-blocking assistant API handoff; provider failures now retain trace metadata instead of silently collapsing into canned copy.",
+          "Bounded assistant audit memory with a capped audit log and documented the process-local durability boundary.",
+          "Wrapped untrusted evidence/public packet text before model egress so prompt-injection-like finding/citation text is treated as evidence, not instructions.",
+          "Expanded regression coverage across assistant orchestrator, deterministic-vs-LLM boundary, LLM QA transport/retry/guarding, QA API, scenario parser, twin reasoning, fixtures, and deploy smoke gates.",
+          "Released and verified latest commit 1ddd7e1 after CI/deploy success; live /assistant/chat and browser drawer now answer “What’s driving the margin variance?” with a grounded CEO answer including FX exposure, EUR/SAR, SAR 9k/week, Tamween SAR 1.2M, API costs, citations, and low-risk trace."
+        ]
+      },
       {
         id: "DONE-009",
         date: "2026-07-01",

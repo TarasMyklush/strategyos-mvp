@@ -151,6 +151,7 @@ class TestNoRegression:
         assert resp.status_code == 200
         assert "Execution Tracker" in resp.text
         assert "No active scope remains" in resp.text
+        assert "/static/plan_data.js" in resp.text
 
     def test_twin_api_router_is_registered(self):
         """Verify twin endpoints are reachable via the main app."""

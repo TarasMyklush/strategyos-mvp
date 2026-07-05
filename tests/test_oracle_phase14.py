@@ -78,9 +78,10 @@ def test_phase14_plan_data_marks_phase14_complete_after_phase15_closes() -> None
     text = _plan_data()
     foundation_block = _completed_history_block(text, "DONE-005")
 
-    assert 'updated: "2026-07-01"' in text
+    assert 'updated: "2026-07-05"' in text
     assert "criticalBlockers: []" in text
     assert "activeActionItems: []" in text
+    assert 'id: "DONE-010"' in text
     assert "Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection" in foundation_block
     assert "CEO/CFO pilot alignment, production validation, and pilot readiness work" in foundation_block
 

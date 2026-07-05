@@ -12,14 +12,23 @@ def _read(path: Path) -> str:
 def test_plan_copy_closeout_has_no_active_plan_scope_rows() -> None:
     data = _read(PLAN_DATA)
 
+    assert 'updated: "2026-07-05"' in data
     assert 'criticalBlockers: []' in data
     assert 'activeActionItems: []' in data
-    assert '0 active UI rows remain' in data
+    assert 'Ask Hermes assistant hardening is shipped and live-verified' in data
+    assert '1ddd7e1' in data
+    assert 'DONE-010' in data
+    assert 'Ask Hermes assistant hardening shipped and verified' in data
+    assert 'CI succeeded for release 1ddd7e1.' in data
+    assert 'Deploy succeeded for release 1ddd7e1.' in data
+    assert 'Working tree is clean at release verification time.' in data
+    assert 'Live direct /assistant/chat checks passed for margin variance in mode=auto and mode=llm.' in data
+    assert "Live browser drawer check passed for 'What’s driving the margin variance?'." in data
+    assert 'deterministic finance/scenario routing first and governed LLM fallback' in data
+    assert 'provider failures now retain trace metadata instead of silently collapsing into canned copy' in data
+    assert 'What’s driving the margin variance?' in data
     assert 'DONE-009' in data
     assert 'Final copy-polish row closed' in data
-    assert 'COPY-001 is complete' in data
-    assert 'Only COPY-001 remains active' not in data
-    assert 'backlog is now down to the final copy-polish row' not in data
 
     action_section = data.split('activeActionItems:', 1)[1].split('hostedVerificationState:', 1)[0]
     blocker_section = data.split('criticalBlockers:', 1)[1].split('activeActionItems:', 1)[0]
