@@ -313,6 +313,9 @@ def test_remote_smoke_run_forwards_auth_header() -> None:
     assert 'RUN_AUTH_HEADER="${RUN_AUTH_HEADER:-}"' in script
     assert 'RUN_PAYLOAD="${RUN_PAYLOAD:-}"' in script
     assert 'curl -fsS -X POST "${base_url}/runs" -H "${RUN_AUTH_HEADER}"' in script
+    assert "run_id=\"$(printf '%s' \"${response}\" | json_field run_id || true)\"" in script
+    assert 'case "${run_status}:${current_stage}" in' in script
+    assert 'awaiting_review:*|*:awaiting_review)' in script
 
 
 def test_protected_readiness_script_retries_transient_failures() -> None:

@@ -100,6 +100,16 @@ if [ "${RUN_POLL_JOB}" != "true" ]; then
 fi
 
 if [ -z "${job_id}" ]; then
+  run_id="$(printf '%s' "${response}" | json_field run_id || true)"
+  run_status="$(printf '%s' "${response}" | json_field status || true)"
+  current_stage="$(printf '%s' "${response}" | json_field current_stage || true)"
+  if [ -n "${run_id}" ]; then
+    case "${run_status}:${current_stage}" in
+      succeeded:*|completed:*|awaiting_review:*|*:awaiting_review)
+        exit 0
+        ;;
+    esac
+  fi
   echo "Smoke run failed: /runs response contained no job_id, so no run was queued." >&2
   exit 1
 fi
