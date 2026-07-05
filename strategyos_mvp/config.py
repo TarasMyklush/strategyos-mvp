@@ -64,6 +64,55 @@ def env_path(name: str, default: Path) -> Path:
     return Path(env(name, str(default))).expanduser().resolve()
 
 
+def _source_pack_raw_candidates(workspace_root: Path) -> list[Path]:
+    source_pack_root = (workspace_root / "outputs" / "source_packs").expanduser().resolve()
+    if not source_pack_root.exists():
+        return []
+    candidates = [path for path in source_pack_root.glob("*/raw") if path.is_dir()]
+    return sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)
+
+
+def _resolved_repo_fixture_dataset_root(dataset_root: Path) -> Path:
+    if not dataset_root.exists() or not dataset_root.is_dir():
+        return dataset_root
+
+    symlinked_dirs = [
+        child for child in dataset_root.iterdir() if child.is_dir() and child.is_symlink()
+    ]
+    if not symlinked_dirs:
+        return dataset_root
+
+    resolved_roots = {child.resolve().parent for child in symlinked_dirs}
+    if len(resolved_roots) != 1:
+        return dataset_root
+
+    resolved_root = next(iter(resolved_roots))
+    return resolved_root if resolved_root.is_dir() else dataset_root
+
+
+def default_source_dataset_path(
+    workspace_root: Path,
+    poc_root: Path,
+    *,
+    package_root: Path = PACKAGE_ROOT,
+) -> Path:
+    configured_default = (poc_root / "01_Synthetic_Dataset").expanduser().resolve()
+    if configured_default.exists():
+        return configured_default
+
+    repo_fixture = (package_root / ".fixtures" / "01_Synthetic_Dataset").expanduser().resolve()
+    if repo_fixture.exists():
+        return _resolved_repo_fixture_dataset_root(repo_fixture)
+
+    for candidate in _source_pack_raw_candidates(workspace_root):
+        if (candidate / "02_ERP_Extracts" / "AP_Invoices_H1_2026.xlsx").exists() and (
+            candidate / "04_Contracts"
+        ).exists():
+            return candidate
+
+    return configured_default
+
+
 @dataclass(frozen=True)
 class ObjectStoreConfig:
     bucket: str | None
@@ -369,7 +418,8 @@ def load_config() -> StrategyOSConfig:
         workspace_root=workspace_root,
         poc_root=poc_root,
         source_dataset=env_path(
-            "STRATEGYOS_SOURCE_DATASET", poc_root / "01_Synthetic_Dataset"
+            "STRATEGYOS_SOURCE_DATASET",
+            default_source_dataset_path(workspace_root, poc_root),
         ),
         output_root=output_root,
         default_run_dir=env_path(

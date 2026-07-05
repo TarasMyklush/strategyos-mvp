@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 import tempfile
 
-from strategyos_mvp.config import load_config
+from strategyos_mvp.config import default_source_dataset_path, load_config
 from strategyos_mvp.storage import object_store_status, sync_artifacts
 
 
@@ -188,3 +188,70 @@ def test_load_config_parses_schema_tolerant_thresholds_and_fx_defaults(monkeypat
     assert config.finance_working_capital_max_driver_concentration == 0.55
     assert config.finance_working_capital_min_consecutive_drift_weeks == 3
     assert config.finance_working_capital_min_drift_days == 4.5
+
+
+def test_default_source_dataset_path_falls_back_to_repo_fixture(tmp_path):
+    workspace_root = tmp_path / "workspace"
+    poc_root = tmp_path / "missing-poc"
+    package_root = tmp_path / "repo"
+    fixture_dataset = package_root / ".fixtures" / "01_Synthetic_Dataset"
+    fixture_dataset.mkdir(parents=True)
+
+    resolved = default_source_dataset_path(
+        workspace_root,
+        poc_root,
+        package_root=package_root,
+    )
+
+    assert resolved == fixture_dataset.resolve()
+
+
+def test_default_source_dataset_path_dereferences_symlinked_repo_fixture_dirs(tmp_path):
+    workspace_root = tmp_path / "workspace"
+    poc_root = tmp_path / "missing-poc"
+    package_root = tmp_path / "repo"
+    raw_root = workspace_root / "outputs" / "source_packs" / "pack-b" / "raw"
+    (raw_root / "02_ERP_Extracts").mkdir(parents=True, exist_ok=True)
+    (raw_root / "04_Contracts").mkdir(parents=True, exist_ok=True)
+    (raw_root / "02_ERP_Extracts" / "AP_Invoices_H1_2026.xlsx").write_text("ok", encoding="utf-8")
+
+    fixture_dataset = package_root / ".fixtures" / "01_Synthetic_Dataset"
+    fixture_dataset.mkdir(parents=True)
+    (fixture_dataset / "02_ERP_Extracts").symlink_to(
+        raw_root / "02_ERP_Extracts",
+        target_is_directory=True,
+    )
+    (fixture_dataset / "04_Contracts").symlink_to(
+        raw_root / "04_Contracts",
+        target_is_directory=True,
+    )
+
+    resolved = default_source_dataset_path(
+        workspace_root,
+        poc_root,
+        package_root=package_root,
+    )
+
+    assert resolved == raw_root.resolve()
+
+
+def test_default_source_dataset_path_falls_back_to_latest_source_pack_raw(tmp_path):
+    workspace_root = tmp_path / "workspace"
+    poc_root = tmp_path / "missing-poc"
+    package_root = tmp_path / "repo"
+    latest_raw = workspace_root / "outputs" / "source_packs" / "pack-b" / "raw"
+    older_raw = workspace_root / "outputs" / "source_packs" / "pack-a" / "raw"
+    for raw_root in (older_raw, latest_raw):
+        (raw_root / "02_ERP_Extracts").mkdir(parents=True, exist_ok=True)
+        (raw_root / "04_Contracts").mkdir(parents=True, exist_ok=True)
+        (raw_root / "02_ERP_Extracts" / "AP_Invoices_H1_2026.xlsx").write_text("ok", encoding="utf-8")
+    os.utime(older_raw, (1, 1))
+    os.utime(latest_raw, (2, 2))
+
+    resolved = default_source_dataset_path(
+        workspace_root,
+        poc_root,
+        package_root=package_root,
+    )
+
+    assert resolved == latest_raw.resolve()

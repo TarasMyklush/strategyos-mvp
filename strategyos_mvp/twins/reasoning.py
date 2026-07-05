@@ -81,7 +81,7 @@ def run_structured_reasoning(
             "fallback_reason": str(exc),
             "output": deterministic_output,
             "raw_output": None,
-            "transport": getattr(exc, "transport_status", transport_trace),
+            "transport": llm_qa.provider_transport_payload(exc) or transport_trace,
         })
         repositories.reasoning.save(trace)
         return deterministic_output, trace
@@ -203,38 +203,14 @@ def _call_litellm_reasoning(
         },
         method="POST",
     )
+    retry_config = llm_qa.provider_retry_config(config)
     body = llm_qa._post_with_retry(
         request=request,
         timeout_seconds=float(getattr(config, "llm_timeout_seconds", 30) or 30),
         provider_label="LiteLLM",
-        max_attempts=int(
-            getattr(
-                config,
-                "llm_retry_attempts",
-                getattr(config, "llm_transport_max_attempts", 3),
-            )
-            or 3
-        ),
-        backoff_seconds=float(
-            (
-                getattr(config, "llm_retry_backoff_ms", None)
-                if getattr(config, "llm_retry_backoff_ms", None) is not None
-                else getattr(config, "llm_transport_backoff_seconds", 0.25) * 1000
-            )
-            / 1000.0
-        ),
-        max_backoff_seconds=max(
-            1.5,
-            float(
-                (
-                    getattr(config, "llm_retry_backoff_ms", None)
-                    if getattr(config, "llm_retry_backoff_ms", None) is not None
-                    else getattr(config, "llm_transport_backoff_seconds", 0.25) * 1000
-                )
-                / 1000.0
-            )
-            * 4,
-        ),
+        max_attempts=int(retry_config["max_attempts"]),
+        backoff_seconds=float(retry_config["backoff_seconds"]),
+        max_backoff_seconds=float(retry_config["max_backoff_seconds"]),
         transport_trace=transport_trace,
     )
 

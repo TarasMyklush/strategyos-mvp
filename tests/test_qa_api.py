@@ -772,6 +772,41 @@ def test_assistant_chat_public_llm_mode_surfaces_provider_error_on_runtime_failu
         _restore_env(original)
 
 
+def test_assistant_chat_public_llm_mode_accepts_transport_payload_alias(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(
+            api_module,
+            "parse_scenario",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("mode=llm should bypass deterministic scenario routing")),
+        )
+
+        def fake_answer(*_args, **_kwargs):
+            exc = RuntimeError("LLM provider transient failure after 2 attempts: timeout")
+            exc.transport = {
+                "attempts": 2,
+                "retries": 1,
+                "calls": [{"outcome": "failed", "retry_reasons": ["TimeoutError"]}],
+                "final_error": "LLM provider transient failure after 2 attempts: timeout",
+            }
+            raise exc
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "summarize the board packet in plain English", "persona": "ceo", "mode": "llm"},
+        )
+
+        assert response.status_code == 502
+        detail = response.json()["detail"]
+        assert detail["transport"]["attempts"] == 2
+        assert detail["transport"]["retries"] == 1
+    finally:
+        _restore_env(original)
+
+
 def test_assistant_chat_auto_falls_back_after_transient_llm_transport_failure(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:

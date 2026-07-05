@@ -9,6 +9,7 @@ from typing import Iterable
 
 from pypdf import PdfReader
 
+from .file_traversal import iter_files
 from .models import Citation
 from .ocr import ocr_empty_pdf_pages
 from .prompt_injection import guard_untrusted_document_text
@@ -100,11 +101,7 @@ class EvidenceStore:
 
 
 def iter_source_files(dataset_root: Path) -> list[Path]:
-    return sorted(
-        p
-        for p in dataset_root.rglob("*")
-        if p.is_file() and p.name not in IGNORED_NAMES and not p.name.startswith(".")
-    )
+    return iter_files(dataset_root, ignored_names=IGNORED_NAMES)
 
 
 def sha256_file(path: Path) -> str:

@@ -350,6 +350,54 @@ def test_reasoning_trace_records_transport_retries(tmp_path, monkeypatch):
         _restore_env(original)
 
 
+def test_reasoning_trace_preserves_transport_payload_alias(tmp_path, monkeypatch):
+    original = _apply_env({
+        "STRATEGYOS_TWINS_DATA_DIR": str(tmp_path / "app-data"),
+        "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+        "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+        "STRATEGYOS_RUN_POLICY": "external-approved",
+        "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+        "STRATEGYOS_LLM_API_KEY": "test-key",
+        "STRATEGYOS_LLM_BASE_URL": "https://litellm.local",
+        "STRATEGYOS_LLM_MODEL": "gpt-4o-mini",
+    })
+    try:
+        import strategyos_mvp.twins.reasoning as reasoning_module
+
+        monkeypatch.setattr(reasoning_module.llm_qa, "chat_status", lambda config: {
+            "enabled": True,
+            "provider": "litellm",
+            "model": "gpt-4o-mini",
+        })
+
+        def _fake_call(**_kwargs):
+            exc = RuntimeError("LiteLLM provider transient failure after 2 attempts: timeout")
+            exc.transport = {
+                "attempts": 2,
+                "retries": 1,
+                "calls": [{"outcome": "failed", "retry_reasons": ["TimeoutError"]}],
+            }
+            raise exc
+
+        monkeypatch.setattr(reasoning_module, "_call_litellm_reasoning", _fake_call)
+
+        repositories = build_repositories(tmp_path / "twins")
+        runtime = TwinRuntime(CEO_TWIN, create_twin_state("ceo"), repositories=repositories)
+        runtime.run_once()
+
+        traces = repositories.reasoning.list("ceo")
+        retry_trace = next(
+            trace
+            for trace in traces
+            if trace.get("fallback_reason") == "LiteLLM provider transient failure after 2 attempts: timeout"
+        )
+        assert retry_trace["source"] == "deterministic_fallback"
+        assert retry_trace["transport"]["attempts"] == 2
+        assert retry_trace["transport"]["retries"] == 1
+    finally:
+        _restore_env(original)
+
+
 def test_phase0_to_phase8_surfaces_still_hold(tmp_path):
     original = _apply_env({
         "STRATEGYOS_API_AUTH_ENABLED": "false",

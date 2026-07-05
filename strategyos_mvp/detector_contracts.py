@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from .data_roles import run_model_role_specs
+from .file_traversal import iter_files
 
 
 @dataclass(frozen=True)
@@ -127,11 +128,11 @@ def _candidate_paths(dataset_root: Path, contract: DetectorRoleContract) -> list
     if default_path.exists():
         candidates.append(default_path)
     discovered_paths = sorted(
-        dataset_root.rglob("*"),
+        iter_files(dataset_root),
         key=lambda path: (len(path.relative_to(dataset_root).parts), path.as_posix()),
     )
     for path in discovered_paths:
-        if not path.is_file() or path == default_path:
+        if path == default_path:
             continue
         if path.suffix.lower() not in {".csv", ".tsv", ".json", ".xls", ".xlsx"}:
             continue

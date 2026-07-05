@@ -477,6 +477,26 @@ def _guard_untrusted_text_value(text: str, *, source_name: str) -> str:
     )["guarded_text"]
 
 
+def provider_transport_payload(exc: BaseException) -> dict[str, Any] | None:
+    """Return normalized provider transport metadata from an exception."""
+    payload = getattr(exc, "transport_status", None)
+    if payload is None:
+        payload = getattr(exc, "transport", None)
+    return payload if isinstance(payload, dict) else None
+
+
+def provider_retry_config(config: Any) -> dict[str, float | int]:
+    """Return the canonical bounded retry/backoff config for provider calls."""
+    attempts = max(1, int(getattr(config, "llm_retry_attempts", 3) or 3))
+    backoff_ms = max(0, int(getattr(config, "llm_retry_backoff_ms", 250) or 250))
+    backoff_seconds = backoff_ms / 1000.0
+    return {
+        "max_attempts": attempts,
+        "backoff_seconds": backoff_seconds,
+        "max_backoff_seconds": max(1.5, backoff_seconds * 4),
+    }
+
+
 def _call_openai_compatible_chat(
     *,
     config: Any,
@@ -504,38 +524,14 @@ def _call_openai_compatible_chat(
         },
         method="POST",
     )
+    retry_config = provider_retry_config(config)
     body = _post_with_retry(
         request=request,
         timeout_seconds=float(getattr(config, "llm_timeout_seconds", 30) or 30),
         provider_label="LLM",
-        max_attempts=int(
-            getattr(
-                config,
-                "llm_retry_attempts",
-                getattr(config, "llm_transport_max_attempts", 3),
-            )
-            or 3
-        ),
-        backoff_seconds=float(
-            (
-                getattr(config, "llm_retry_backoff_ms", None)
-                if getattr(config, "llm_retry_backoff_ms", None) is not None
-                else getattr(config, "llm_transport_backoff_seconds", 0.25) * 1000
-            )
-            / 1000.0
-        ),
-        max_backoff_seconds=max(
-            1.5,
-            float(
-                (
-                    getattr(config, "llm_retry_backoff_ms", None)
-                    if getattr(config, "llm_retry_backoff_ms", None) is not None
-                    else getattr(config, "llm_transport_backoff_seconds", 0.25) * 1000
-                )
-                / 1000.0
-            )
-            * 4,
-        ),
+        max_attempts=int(retry_config["max_attempts"]),
+        backoff_seconds=float(retry_config["backoff_seconds"]),
+        max_backoff_seconds=float(retry_config["max_backoff_seconds"]),
         transport_trace=transport_trace,
     )
 

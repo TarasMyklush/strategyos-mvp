@@ -25,6 +25,7 @@ from .data_roles import (
     tabular_role_columns,
 )
 from .evidence import sha256_file
+from .file_traversal import iter_files
 from .ocr import ocr_empty_pdf_pages, ocr_image_file
 from .platform_foundation import (
     artifact_contracts_payload,
@@ -165,11 +166,7 @@ def _normalize_zip_member_path(filename: str) -> PurePosixPath | None:
 
 
 def _iter_source_files(root: Path) -> Iterable[Path]:
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
-        if path.name.startswith(".") or path.name in IGNORED_NAMES:
-            continue
+    for path in iter_files(root, ignored_names=IGNORED_NAMES):
         yield path
 
 

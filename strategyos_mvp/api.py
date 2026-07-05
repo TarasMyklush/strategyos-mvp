@@ -9073,7 +9073,7 @@ async def _assistant_chat_response(
                 )
             except RuntimeError as exc:
                 if mode == "llm":
-                    transport_status = getattr(exc, "transport_status", None)
+                    transport_status = llm_qa.provider_transport_payload(exc)
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
                         detail={
@@ -9082,7 +9082,7 @@ async def _assistant_chat_response(
                         } if transport_status else str(exc),
                     ) from exc
                 public_safe_result = _public_safe_unmatched_result(str(exc))
-                failure_transport = dict(getattr(exc, "transport_status", None) or {})
+                failure_transport = dict(llm_qa.provider_transport_payload(exc) or {})
                 if failure_transport:
                     failure_transport["fallback_used"] = True
                 failure_status = {
@@ -9436,7 +9436,7 @@ def data_qa(
                 config=CONFIG,
             )
         except RuntimeError as exc:
-            transport_status = getattr(exc, "transport_status", None)
+            transport_status = llm_qa.provider_transport_payload(exc)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail={
@@ -9606,7 +9606,7 @@ def data_qa(
         )
     except RuntimeError as exc:
         if mode == "llm":
-            transport_status = getattr(exc, "transport_status", None)
+            transport_status = llm_qa.provider_transport_payload(exc)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail={
@@ -9615,7 +9615,7 @@ def data_qa(
                 } if transport_status else str(exc),
             ) from exc
         assert deterministic_result is not None
-        failure_transport = dict(getattr(exc, "transport_status", None) or {})
+        failure_transport = dict(llm_qa.provider_transport_payload(exc) or {})
         if failure_transport:
             failure_transport["fallback_used"] = True
         llm_failure_status = {

@@ -436,3 +436,20 @@ def test_source_pack_prompt_injection_payload_is_wrapped_as_untrusted_evidence(t
         assert source["classification"]["role"] == "invoice_document"
     finally:
         _restore_env(original)
+
+
+def test_iter_source_files_follows_symlinked_directories(tmp_path):
+    raw_root = tmp_path / "raw"
+    linked_root = tmp_path / "linked"
+    nested_dir = raw_root / "contracts"
+    nested_dir.mkdir(parents=True)
+    (nested_dir / "terms.pdf").write_bytes(b"%PDF-1.4\n% synthetic\n")
+    linked_root.mkdir()
+    (linked_root / "contracts").symlink_to(nested_dir, target_is_directory=True)
+
+    discovered = [
+        path.relative_to(linked_root).as_posix()
+        for path in source_pack_module._iter_source_files(linked_root)
+    ]
+
+    assert discovered == ["contracts/terms.pdf"]
