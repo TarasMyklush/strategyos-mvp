@@ -80,6 +80,36 @@ def rel_contract_pdf(name_contains: str, bundle: DataBundle) -> str | None:
     return None
 
 
+def _extract_vendor_id(text: str) -> str | None:
+    match = re.search(r"Vendor ID\s*(?::|#)?\s*(V-\d+)", text, re.I)
+    if match:
+        return match.group(1)
+    match = re.search(r"Vendor ID .*?:\s*(V-\d+)", text, re.I)
+    return match.group(1) if match else None
+
+
+def _invoice_ids_from_text(text: str) -> list[str]:
+    return list(dict.fromkeys(re.findall(r"INV-\d{4}-\d+", text, re.I)))
+
+
+def _pending_pdf_citation(bundle: DataBundle, rel_path: str, label: str, note: str) -> Citation:
+    return bundle.evidence.citation(rel_path, label, note)
+
+
+def _ocr_required_bank_statement(bundle: DataBundle) -> str | None:
+    bank_rel = "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf"
+    if bank_rel in bundle.evidence.manifest:
+        return bank_rel
+    candidates = [
+        rel
+        for rel, status in bundle.evidence.ocr_status.items()
+        if rel.startswith("01_Bank_Statements/") and status.get("required")
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
 def excel_citation(bundle: DataBundle, rel_path: str, row_index: int, excerpt: str) -> Citation:
     return bundle.evidence.citation(rel_path, row_locator(row_index), excerpt)
 
@@ -627,9 +657,9 @@ def detect_missed_early_pay_discounts(bundle: DataBundle) -> list[Finding]:
             continue
         text = " ".join(pages)
         if re.search(r"2\s*/\s*10\s+net\s+30", text, re.I):
-            match = re.search(r"Vendor ID .*?:\s*(V-\d+)", text, re.I)
-            if match:
-                discount_vendors.append((match.group(1), rel))
+            vendor_id = _extract_vendor_id(text)
+            if vendor_id:
+                discount_vendors.append((vendor_id, rel))
     findings: list[Finding] = []
     for vendor_id, contract in discount_vendors:
         rows = bundle.ap[
@@ -689,11 +719,10 @@ def detect_auto_renewal_escalation(bundle: DataBundle) -> list[Finding]:
         text = " ".join(pages)
         if "Automatic Renewal" not in text or "CPI" not in text:
             continue
-        vendor_match = re.search(r"Vendor ID .*?:\s*(V-\d+)", text)
+        vendor_id = _extract_vendor_id(text)
         base_match = re.search(r"Base monthly service fee SAR\s*([\d,]+)", text)
-        if not vendor_match or not base_match:
+        if not vendor_id or not base_match:
             continue
-        vendor_id = vendor_match.group(1)
         base_fee = float(base_match.group(1).replace(",", ""))
         rows = bundle.ap[bundle.ap["Vendor_ID"].astype(str).eq(vendor_id) & bundle.ap["Status"].eq("Paid")]
         if rows.empty:
@@ -754,11 +783,17 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     hedge_text = " ".join(str(x) for x in hedges.fillna("").to_numpy().ravel())
     rate_values = [float(x) for x in re.findall(r"\b3\.\d{2,4}\b", hedge_text)]
     hedge_rate = min(rate_values) if rate_values else CONFIG.finance_fx_hedge_default_rate
+    invoice_ids = _invoice_ids_from_text(hedge_text)
     rows = bundle.ap[
         bundle.ap["Currency"].astype(str).str.upper().eq("EUR")
-        & bundle.ap["Vendor_Name"].astype(str).str.contains("Bordeaux Wines", case=False, na=False)
         & bundle.ap["Status"].eq("Paid")
     ].copy()
+    if invoice_ids:
+        rows = rows[rows["Invoice_ID"].astype(str).isin(invoice_ids)].copy()
+    else:
+        rows = rows[
+            rows["Vendor_Name"].astype(str).str.contains("Bordeaux Wines", case=False, na=False)
+        ].copy()
     if rows.empty:
         return findings
     # Pick the invoice whose SAR/EUR rate diverges most from hedge rate.
@@ -782,10 +817,10 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
         )
         if invoice_citation is not None:
             citations.append(invoice_citation)
-    bank_rel = "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf"
+    bank_rel = _ocr_required_bank_statement(bundle)
     bank_match = None
     missing_bank_ocr = False
-    if bank_rel in bundle.evidence.manifest:
+    if bank_rel and bank_rel in bundle.evidence.manifest:
         missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, ["Bordeaux Wines", "89,400.00", "4.2100"])
         bank_citation = pdf_citation(bundle, bank_rel, "OCR bank statement settlement row", ["Bordeaux Wines", "89,400.00", "4.2100"])
         if bank_citation is not None:
@@ -797,6 +832,16 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
         citations.append(bank_citation)
         if not missing_bank_ocr:
             missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, ["Bordeaux Wines", "89,400.00", "4.2100"])
+    elif bank_rel and bank_rel in bundle.evidence.manifest:
+        missing_bank_ocr = True
+        citations.append(
+            _pending_pdf_citation(
+                bundle,
+                bank_rel,
+                "OCR bank statement settlement row (verification pending)",
+                "OCR-required bank statement evidence pending verification for Bordeaux Wines / EUR 89,400.00 / 4.2100.",
+            )
+        )
     email_citation = _find_email_text_citation(bundle, "bordeaux wines")
     if email_citation is not None:
         citations.append(email_citation)
