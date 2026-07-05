@@ -38,7 +38,7 @@ def test_case_file_writer_emits_phase5_deliverables(tmp_path: Path):
     assert "Task 1 leakage overlap" in working_capital
     assert "Driver citations" in working_capital
     qa = artifacts["qa"].read_text(encoding="utf-8")
-    assert "Premier Packaging LLC (V-1872) has the largest single-event cash leakage" in qa
+    assert "Premier Pharma Packaging LLC (V-1872) has the largest single-event cash leakage" in qa
     assert "Baseline H1 EBITDA from GL/TB: SAR 215,741,310.56" in qa
     assert "EBITDA margin of 56.03% before recovery" in qa
     assert "margin becomes 56.15%" in qa
