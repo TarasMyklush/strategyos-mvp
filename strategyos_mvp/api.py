@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import re
 import socket
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
@@ -106,6 +108,8 @@ from .vector_store import (
 
 
 ANONYMOUS_PUBLIC_RUN_ID = "latest-public"
+_LLM_PROVIDER_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="strategyos-llm")
+_LLM_PROVIDER_SEMAPHORE = asyncio.Semaphore(8)
 PUBLIC_EVIDENCE_BOUNDARY_NOTE = (
     "Evidence preview is available only on the protected reviewer/operator surface."
 )
@@ -8898,7 +8902,16 @@ def _sanitize_assistant_visible_text(value: Any) -> str:
     return str(text or "").strip()
 
 
-def _assistant_chat_response(
+async def _llm_answer_question_async(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    loop = asyncio.get_running_loop()
+    async with _LLM_PROVIDER_SEMAPHORE:
+        return await loop.run_in_executor(
+            _LLM_PROVIDER_EXECUTOR,
+            lambda: llm_qa.answer_question(*args, **kwargs),
+        )
+
+
+async def _assistant_chat_response(
     request: AssistantChatRequest | QaRequest,
     *,
     public_safe: bool = False,
@@ -9049,7 +9062,7 @@ def _assistant_chat_response(
             )
         if mode != "deterministic" and llm_status["enabled"]:
             try:
-                result = llm_qa.answer_question(
+                result = await _llm_answer_question_async(
                     question,
                     bundle=context["bundle"],
                     findings=context["findings"],
@@ -9060,15 +9073,30 @@ def _assistant_chat_response(
                 )
             except RuntimeError as exc:
                 if mode == "llm":
+                    transport_status = getattr(exc, "transport_status", None)
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=str(exc),
+                        detail={
+                            "message": str(exc),
+                            "transport": transport_status,
+                        } if transport_status else str(exc),
                     ) from exc
                 public_safe_result = _public_safe_unmatched_result(str(exc))
+                failure_transport = dict(getattr(exc, "transport_status", None) or {})
+                if failure_transport:
+                    failure_transport["fallback_used"] = True
+                failure_status = {
+                    **llm_status,
+                    "transport": failure_transport,
+                }
                 orchestrated = orchestrator.process(
                     question,
                     persona=persona,
-                    qa_result=public_safe_result,
+                    qa_result={
+                        **public_safe_result,
+                        "assistant_mode": "qa_engine",
+                        "_orchestrator_force_answer": True,
+                    },
                     driver_context=request.driver_context,
                 )
                 payload = _assistant_response_payload(
@@ -9079,11 +9107,12 @@ def _assistant_chat_response(
                     persona=persona,
                     orchestrated=orchestrated,
                     base_result=public_safe_result,
-                    llm_status=llm_status,
+                    llm_status=failure_status,
                     assistant_context=assistant_context,
                 )
                 payload["llm_fallback_attempted"] = True
                 payload["llm_error"] = str(exc)
+                payload["trace"]["llm_transport_failed"] = True
                 return payload
             orchestrated = orchestrator.process(
                 question,
@@ -9110,7 +9139,11 @@ def _assistant_chat_response(
         orchestrated = orchestrator.process(
             question,
             persona=persona,
-            qa_result=public_safe_result,
+            qa_result={
+                **public_safe_result,
+                "assistant_mode": "qa_engine",
+                "_orchestrator_force_answer": True,
+            },
             driver_context=request.driver_context,
         )
         payload = _assistant_response_payload(
@@ -9138,7 +9171,11 @@ def _assistant_chat_response(
         orchestrated = orchestrator.process(
             question,
             persona=persona,
-            qa_result=no_run_result,
+            qa_result={
+                **no_run_result,
+                "assistant_mode": "qa_engine",
+                "_orchestrator_force_answer": True,
+            },
             driver_context=driver_context,
         )
         payload = _assistant_response_payload(
@@ -9164,7 +9201,7 @@ def _assistant_chat_response(
         orchestrated = orchestrator.process(
             question,
             persona=persona,
-            qa_result=deterministic_result,
+            qa_result={**deterministic_result, "assistant_mode": "qa_engine", "_orchestrator_force_answer": True},
             driver_context=driver_context,
         )
         return _assistant_response_payload(
@@ -9204,7 +9241,7 @@ def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
-    result = llm_qa.answer_question(
+    result = await _llm_answer_question_async(
         question,
         bundle=context["bundle"],
         findings=context["findings"],
@@ -9399,9 +9436,13 @@ def data_qa(
                 config=CONFIG,
             )
         except RuntimeError as exc:
+            transport_status = getattr(exc, "transport_status", None)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=str(exc),
+                detail={
+                    "message": str(exc),
+                    "transport": transport_status,
+                } if transport_status else str(exc),
             ) from exc
         orchestrated = orchestrator.process(
             question,
@@ -9565,11 +9606,22 @@ def data_qa(
         )
     except RuntimeError as exc:
         if mode == "llm":
+            transport_status = getattr(exc, "transport_status", None)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=str(exc),
+                detail={
+                    "message": str(exc),
+                    "transport": transport_status,
+                } if transport_status else str(exc),
             ) from exc
         assert deterministic_result is not None
+        failure_transport = dict(getattr(exc, "transport_status", None) or {})
+        if failure_transport:
+            failure_transport["fallback_used"] = True
+        llm_failure_status = {
+            **llm_status,
+            "transport": failure_transport,
+        }
         orchestrated = orchestrator.process(
             question,
             persona=persona,
@@ -9584,8 +9636,10 @@ def data_qa(
                 "route": "deterministic_after_llm_error",
                 "intent": deterministic_result.get("intent"),
                 "knowledge_id": request.knowledge_id,
+                "llm_transport_failed": True,
             },
             extra_payload={"llm_fallback_attempted": True, "llm_error": str(exc)},
+            status_payload=llm_failure_status,
         )
     orchestrated = orchestrator.process(
         question,
@@ -9606,7 +9660,7 @@ def data_qa(
 
 
 @app.post("/assistant/chat")
-def assistant_chat(
+async def assistant_chat(
     request: AssistantChatRequest,
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
@@ -9621,7 +9675,7 @@ def assistant_chat(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="A valid identity token is required.",
             )
-        return _assistant_chat_response(request, public_safe=True)
+        return await _assistant_chat_response(request, public_safe=True)
 
     if not principal_has_any_role(role, *PRODUCT_READ_ROLES):
         raise HTTPException(
@@ -9629,7 +9683,7 @@ def assistant_chat(
             detail="This identity is not permitted for this endpoint.",
         )
 
-    return _assistant_chat_response(request, public_safe=bool(public_safe and persona in EXECUTIVE_PERSONA_IDS))
+    return await _assistant_chat_response(request, public_safe=bool(public_safe and persona in EXECUTIVE_PERSONA_IDS))
 
 
 @app.post("/inputs/prepare")

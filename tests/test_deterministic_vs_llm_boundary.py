@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 
 import strategyos_mvp.qa as qa_module
+from strategyos_mvp.assistants.orchestrator import _CEO_PATTERNS, _CFO_PATTERNS
 from strategyos_mvp import qa
 
 
@@ -239,6 +240,15 @@ def test_llm_qa_module_exists_and_is_separate():
     assert "config" not in qa_sig.parameters, (
         "qa.answer_question must NOT accept config (it is deterministic)"
     )
+
+
+def test_persona_regex_layer_no_longer_intercepts_generic_finance_topics():
+    ceo_patterns = " ".join(pattern for pattern, _ in _CEO_PATTERNS)
+    cfo_patterns = " ".join(pattern for pattern, _ in _CFO_PATTERNS)
+    forbidden = ["margin", "revenue", "cash", "risk", "growth", "kpi", "budget", "forecast"]
+    for token in forbidden:
+        assert token not in ceo_patterns.lower(), f"CEO regex still intercepts generic finance term: {token}"
+        assert token not in cfo_patterns.lower(), f"CFO regex still intercepts generic finance term: {token}"
 
 
 def test_deterministic_engine_surface_area():

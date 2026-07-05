@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import socket
+import time
 from dataclasses import asdict, is_dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -17,6 +19,7 @@ from urllib.request import Request, urlopen
 from .config import EXTERNAL_MODE_MODEL_PROVIDER
 from .ingestion import DataBundle
 from .models import Finding
+from .prompt_injection import guard_untrusted_document_text
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +31,37 @@ class _EmptyProviderResponseError(RuntimeError):
 
 class _MalformedProviderResponseError(RuntimeError):
     """Raised when the provider returns broken JSON-like assistant text."""
+
+
+class ProviderTransportError(RuntimeError):
+    """Raised when transient provider transport failures exhaust retries."""
+
+    def __init__(self, message: str, *, transport_status: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.transport_status = transport_status
+
+
+_TRANSIENT_PROVIDER_STATUS_CODES = {429, 502, 503, 504}
+_EVIDENCE_TEXT_KEYS = {
+    "answer",
+    "basis",
+    "content",
+    "detail",
+    "excerpt",
+    "fact",
+    "finding",
+    "locator_text",
+    "note",
+    "narrative",
+    "prep",
+    "rationale",
+    "reason",
+    "remediation",
+    "story",
+    "summary",
+    "text",
+    "title",
+}
 
 
 SYSTEM_PROMPT = """You are StrategyOS evidence Q&A.
@@ -143,6 +177,7 @@ def answer_question(
 
     public_packet = dict(public_context_packet or {})
     public_mode = bool(public_packet)
+    transport_trace: list[dict[str, Any]] = []
     evidence = _build_evidence_payload(
         bundle=bundle,
         findings=findings,
@@ -173,6 +208,7 @@ def answer_question(
             config=config,
             messages=json_messages,
             response_format={"type": "json_object"},
+            transport_trace=transport_trace,
         )
         parsed = _parse_json_answer(provider_response)
         cleaned_answer = _clean_visible_answer(parsed.get("answer"))
@@ -185,6 +221,7 @@ def answer_question(
                     public_mode=public_mode,
                 ),
                 response_format=None,
+                transport_trace=transport_trace,
             )
             parsed = {
                 "matched": _normalize_bool(parsed.get("matched", True)),
@@ -203,13 +240,14 @@ def answer_question(
                     public_mode=public_mode,
                 ),
                 response_format=None,
+                transport_trace=transport_trace,
             )
         except _EmptyProviderResponseError as exc:
             if public_mode:
                 fallback = _public_packet_repair_answer(question=question, packet=public_packet)
                 if fallback is not None:
                     return fallback | {
-                        "llm_status": status,
+                        "llm_status": _status_with_transport(status, transport_trace),
                         "model": status.get("model"),
                         "provider": status.get("provider"),
                         "public_safe": public_mode,
@@ -227,13 +265,14 @@ def answer_question(
     citations = _normalize_citations(parsed.get("citations"))
     if public_mode:
         citations = _normalize_public_packet_citations(citations, packet=public_packet, question=question)
+    status_payload = _status_with_transport(status, transport_trace)
     return {
         "matched": _normalize_bool(parsed.get("matched", True)),
         "answer": _clean_visible_answer(parsed.get("answer")) or "No answer returned.",
         "basis": str(parsed.get("basis") or default_basis),
         "citations": citations,
         "suggestions": _normalize_suggestions(parsed.get("suggestions")),
-        "llm_status": status,
+        "llm_status": status_payload,
         "model": status.get("model"),
         "provider": status.get("provider"),
         "public_safe": public_mode,
@@ -249,13 +288,14 @@ def _build_evidence_payload(
     persona: str | None = None,
 ) -> dict[str, Any]:
     if public_context_packet:
-        return _public_evidence_payload(
+        payload = _public_evidence_payload(
             packet=public_context_packet,
             findings=findings,
             summary=summary,
             persona=persona,
         )
-    return {
+        return _guard_model_evidence_payload(payload)
+    payload = {
         "run": _run_summary(summary),
         "data": {
             "ap_ledger": _frame_summary(bundle, "ap_ledger", bundle.ap),
@@ -265,6 +305,7 @@ def _build_evidence_payload(
         },
         "findings": [_finding_summary(finding) for finding in findings[:12]],
     }
+    return _guard_model_evidence_payload(payload)
 
 
 def _public_evidence_payload(
@@ -394,6 +435,48 @@ def _citation_dict(citation: Any, finding_id: str | None = None) -> dict[str, An
     }
 
 
+def _guard_model_evidence_payload(payload: Any, *, source_name: str = "assistant_evidence") -> Any:
+    if isinstance(payload, str):
+        return _guard_untrusted_text_value(payload, source_name=source_name) if _should_guard_text_value(None, payload) else payload
+    if isinstance(payload, dict):
+        guarded: dict[str, Any] = {}
+        for key, value in payload.items():
+            child_source = f"{source_name}.{key}"
+            if isinstance(value, str) and _should_guard_text_value(key, value):
+                guarded[key] = _guard_untrusted_text_value(value, source_name=child_source)
+            else:
+                guarded[key] = _guard_model_evidence_payload(value, source_name=child_source)
+        return guarded
+    if isinstance(payload, list):
+        return [
+            _guard_model_evidence_payload(item, source_name=f"{source_name}[{index}]")
+            for index, item in enumerate(payload)
+        ]
+    return payload
+
+
+def _should_guard_text_value(key: str | None, value: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text:
+        return False
+    normalized_key = str(key or "").strip().lower()
+    if normalized_key in {"source_path", "source", "packet_id", "persona_id", "assistant", "finding_id", "vendor_id", "vendor_name", "classification", "pattern_type", "run_id", "run_mode", "status", "current_stage", "approval_status", "source_hash", "label", "key", "id", "name"}:
+        return False
+    return normalized_key in _EVIDENCE_TEXT_KEYS or len(text.split()) >= 3
+
+
+def _guard_untrusted_text_value(text: str, *, source_name: str) -> str:
+    if "BEGIN_UNTRUSTED_EVIDENCE" in text and "END_UNTRUSTED_EVIDENCE" in text:
+        return text
+    return guard_untrusted_document_text(
+        text,
+        source_name=source_name,
+        max_chars=1200,
+    )["guarded_text"]
+
+
 def _call_openai_compatible_chat(
     *,
     config: Any,
@@ -401,6 +484,7 @@ def _call_openai_compatible_chat(
     temperature: float = 0.1,
     max_tokens: int = 900,
     response_format: dict[str, str] | None = None,
+    transport_trace: list[dict[str, Any]] | None = None,
 ) -> str:
     url = _chat_completions_url(str(config.llm_base_url))
     payload = {
@@ -420,14 +504,40 @@ def _call_openai_compatible_chat(
         },
         method="POST",
     )
-    try:
-        with urlopen(request, timeout=config.llm_timeout_seconds) as response:
-            body = response.read().decode("utf-8")
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"LLM provider returned HTTP {exc.code}: {detail}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"LLM provider is unavailable: {exc.reason}") from exc
+    body = _post_with_retry(
+        request=request,
+        timeout_seconds=float(getattr(config, "llm_timeout_seconds", 30) or 30),
+        provider_label="LLM",
+        max_attempts=int(
+            getattr(
+                config,
+                "llm_retry_attempts",
+                getattr(config, "llm_transport_max_attempts", 3),
+            )
+            or 3
+        ),
+        backoff_seconds=float(
+            (
+                getattr(config, "llm_retry_backoff_ms", None)
+                if getattr(config, "llm_retry_backoff_ms", None) is not None
+                else getattr(config, "llm_transport_backoff_seconds", 0.25) * 1000
+            )
+            / 1000.0
+        ),
+        max_backoff_seconds=max(
+            1.5,
+            float(
+                (
+                    getattr(config, "llm_retry_backoff_ms", None)
+                    if getattr(config, "llm_retry_backoff_ms", None) is not None
+                    else getattr(config, "llm_transport_backoff_seconds", 0.25) * 1000
+                )
+                / 1000.0
+            )
+            * 4,
+        ),
+        transport_trace=transport_trace,
+    )
 
     parsed = json.loads(body)
     choices = parsed.get("choices") or []
@@ -444,6 +554,120 @@ def _call_openai_compatible_chat(
         )
         raise _EmptyProviderResponseError("LLM provider returned an empty answer.")
     return content
+
+
+def _post_with_retry(
+    *,
+    request: Request,
+    timeout_seconds: float,
+    provider_label: str,
+    max_attempts: int,
+    backoff_seconds: float,
+    max_backoff_seconds: float,
+    transport_trace: list[dict[str, Any]] | None = None,
+) -> str:
+    attempts = max(1, min(int(max_attempts), 5))
+    retry_reasons: list[str] = []
+    last_error: RuntimeError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                body = response.read().decode("utf-8")
+            if transport_trace is not None:
+                transport_trace.append(
+                    {
+                        "provider": provider_label.lower(),
+                        "attempts": attempt,
+                        "retries": attempt - 1,
+                        "retry_reasons": list(retry_reasons),
+                        "timeout_seconds": timeout_seconds,
+                        "outcome": "success",
+                    }
+                )
+            return body
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+            retryable = exc.code in _TRANSIENT_PROVIDER_STATUS_CODES
+            last_error = RuntimeError(f"{provider_label} provider returned HTTP {exc.code}: {detail}")
+            reason = f"http_{exc.code}"
+        except URLError as exc:
+            retryable = _is_retryable_transport_reason(exc.reason)
+            last_error = RuntimeError(f"{provider_label} provider is unavailable: {exc.reason}")
+            reason = f"urlerror:{type(exc.reason).__name__}"
+        except (TimeoutError, socket.timeout, ConnectionResetError) as exc:
+            retryable = True
+            last_error = RuntimeError(f"{provider_label} provider transport failed: {exc}")
+            reason = type(exc).__name__
+        except OSError as exc:
+            retryable = _is_retryable_transport_reason(exc)
+            last_error = RuntimeError(f"{provider_label} provider transport failed: {exc}")
+            reason = type(exc).__name__
+        if retryable and attempt < attempts:
+            retry_reasons.append(reason)
+            time.sleep(min(max_backoff_seconds, backoff_seconds * (2 ** (attempt - 1))))
+            continue
+        if transport_trace is not None:
+            transport_status = {
+                "attempts": attempt,
+                "retries": attempt - 1,
+                "calls": list(transport_trace),
+                "fallback_used": False,
+                "final_error": str(last_error) if last_error else f"{provider_label} provider failed.",
+            }
+            transport_trace.append(
+                {
+                    "provider": provider_label.lower(),
+                    "attempts": attempt,
+                    "retries": attempt - 1,
+                    "retry_reasons": list(retry_reasons),
+                    "timeout_seconds": timeout_seconds,
+                    "outcome": "failed",
+                    "final_error": str(last_error) if last_error else f"{provider_label} provider failed.",
+                }
+            )
+        assert last_error is not None
+        raise ProviderTransportError(str(last_error), transport_status=transport_status if transport_trace is not None else {
+            "attempts": attempt,
+            "retries": attempt - 1,
+            "calls": [],
+            "fallback_used": False,
+            "final_error": str(last_error),
+        }) from last_error
+    raise RuntimeError(f"{provider_label} provider failed without a response.")
+
+
+def _status_with_transport(status: dict[str, Any], transport_trace: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        **status,
+        "transport": {
+            "attempts": sum(int(item.get("attempts") or 0) for item in transport_trace),
+            "retries": sum(int(item.get("retries") or 0) for item in transport_trace),
+            "calls": transport_trace,
+            "fallback_used": False,
+            "provider_output_repair": len(transport_trace) > 1,
+        },
+    }
+
+
+def _is_retryable_transport_reason(reason: Any) -> bool:
+    if isinstance(reason, (TimeoutError, socket.timeout, ConnectionResetError)):
+        return True
+    if isinstance(reason, OSError) and getattr(reason, "errno", None) in {54, 104, 110, 111}:
+        return True
+    reason_text = str(reason or "").lower()
+    return any(
+        token in reason_text
+        for token in (
+            "timed out",
+            "timeout",
+            "connection reset",
+            "connection aborted",
+            "temporarily unavailable",
+            "try again",
+            "connection refused",
+            "remote end closed connection",
+        )
+    )
 
 
 def _chat_completions_url(base_url: str) -> str:
@@ -812,15 +1036,19 @@ def _normalize_public_packet_citations(
     normalized: list[dict[str, Any]] = []
     for item in citations[:8]:
         locator = str(item.get("locator") or "").strip()
-        source_path = str(item.get("source_path") or "public_packet://latest-public").strip() or "public_packet://latest-public"
         if locator and not locator.startswith("public_context_packet"):
             locator = f"public_context_packet.{locator.lstrip('.')}"
+        if not locator or _value_for_public_locator(packet, locator) is None:
+            continue
         normalized.append(
             {
                 **item,
-                "source_path": source_path,
+                "source_path": "public_packet://latest-public",
                 "locator": locator,
-                "excerpt": str(item.get("excerpt") or _excerpt_for_public_locator(packet, locator))[:600],
+                "excerpt": _guard_untrusted_text_value(
+                    _excerpt_for_public_locator(packet, locator),
+                    source_name=locator,
+                ),
             }
         )
     if normalized:
@@ -855,7 +1083,10 @@ def _default_public_packet_citations(packet: dict[str, Any], question: str) -> l
         {
             "source_path": "public_packet://latest-public",
             "locator": locator,
-            "excerpt": _excerpt_for_public_locator(packet, locator)[:600],
+            "excerpt": _guard_untrusted_text_value(
+                _excerpt_for_public_locator(packet, locator),
+                source_name=locator,
+            ),
         }
         for locator in locators[:4]
     ]

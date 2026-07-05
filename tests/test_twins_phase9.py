@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+from io import BytesIO
+from urllib.error import HTTPError
 
 from fastapi.testclient import TestClient
 
@@ -257,6 +259,93 @@ def test_model_guardrail_blocks_state_changing_actions(tmp_path, monkeypatch):
         assert any(item["event_type"] == "reasoning_guardrail" for item in decisions)
         traces = repositories.reasoning.list("ceo")
         assert any(trace["review_state"] == "pending_human_review" for trace in traces)
+    finally:
+        _restore_env(original)
+
+
+def test_reasoning_trace_records_transport_retries(tmp_path, monkeypatch):
+    original = _apply_env({
+        "STRATEGYOS_TWINS_DATA_DIR": str(tmp_path / "app-data"),
+        "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+        "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+        "STRATEGYOS_RUN_POLICY": "external-approved",
+        "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+        "STRATEGYOS_LLM_API_KEY": "test-key",
+        "STRATEGYOS_LLM_BASE_URL": "https://litellm.local",
+        "STRATEGYOS_LLM_MODEL": "gpt-4o-mini",
+    })
+    try:
+        import strategyos_mvp.twins.reasoning as reasoning_module
+
+        monkeypatch.setattr(reasoning_module.llm_qa, "chat_status", lambda config: {
+            "enabled": True,
+            "provider": "litellm",
+            "model": "gpt-4o-mini",
+        })
+
+        attempts = {"count": 0}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "content": json.dumps(
+                                        {
+                                            "issues": [
+                                                {
+                                                    "investigation_id": "ceo_issue_1",
+                                                    "type": "kpi_gap",
+                                                    "priority": "high",
+                                                    "kpi_node_id": "margin_q2",
+                                                    "detail": "Margin evidence is stale and needs finance refresh.",
+                                                    "owner": "cfo",
+                                                    "resolution_hint": "request_data",
+                                                    "evidence_refs": [{"finding_id": "F-001"}],
+                                                }
+                                            ],
+                                            "summary": "Recovered after retry.",
+                                            "confidence": 0.82,
+                                            "review_state": "needs_review",
+                                            "citations": [{"finding_id": "F-001"}],
+                                        }
+                                    )
+                                }
+                            }
+                        ]
+                    }
+                ).encode("utf-8")
+
+        def fake_urlopen(request, timeout):
+            del timeout
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise HTTPError(request.full_url, 503, "Service Unavailable", hdrs=None, fp=BytesIO(b'{"error":"retry"}'))
+            return FakeResponse()
+
+        monkeypatch.setattr(reasoning_module.llm_qa, "urlopen", fake_urlopen)
+        monkeypatch.setattr(reasoning_module.llm_qa.time, "sleep", lambda *_args, **_kwargs: None)
+
+        repositories = build_repositories(tmp_path / "twins")
+        runtime = TwinRuntime(CEO_TWIN, create_twin_state("ceo"), repositories=repositories)
+        runtime.run_once()
+
+        traces = repositories.reasoning.list("ceo")
+        retry_trace = next(
+            trace
+            for trace in traces
+            if trace.get("transport") and trace["transport"][0].get("retry_reasons") == ["http_503"]
+        )
+        assert retry_trace["source"] == "litellm"
+        assert retry_trace["transport"][0]["outcome"] == "success"
     finally:
         _restore_env(original)
 

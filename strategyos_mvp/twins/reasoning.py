@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
+import inspect
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
 from uuid import uuid4
 
 from strategyos_mvp import llm_qa
@@ -48,18 +48,27 @@ def run_structured_reasoning(
         "provider": status.get("provider"),
         "model": status.get("model"),
     }
+    transport_trace: list[dict[str, Any]] = []
     if not status.get("enabled"):
         trace.update({
             "source": "deterministic_fallback",
             "fallback_reason": status.get("reason") or "LLM reasoning is disabled.",
             "output": deterministic_output,
             "raw_output": None,
+            "transport": transport_trace,
         })
         repositories.reasoning.save(trace)
         return deterministic_output, trace
 
     try:
-        raw_output = _call_litellm_reasoning(config=config, stage=stage, input_context=input_context)
+        call_kwargs = {
+            "config": config,
+            "stage": stage,
+            "input_context": input_context,
+        }
+        if "transport_trace" in inspect.signature(_call_litellm_reasoning).parameters:
+            call_kwargs["transport_trace"] = transport_trace
+        raw_output = _call_litellm_reasoning(**call_kwargs)
         normalized = _normalize_stage_output(
             stage=stage,
             raw_output=raw_output,
@@ -72,6 +81,7 @@ def run_structured_reasoning(
             "fallback_reason": str(exc),
             "output": deterministic_output,
             "raw_output": None,
+            "transport": getattr(exc, "transport_status", transport_trace),
         })
         repositories.reasoning.save(trace)
         return deterministic_output, trace
@@ -83,6 +93,7 @@ def run_structured_reasoning(
             "fallback_reason": "Model returned no structured items.",
             "output": deterministic_output,
             "raw_output": raw_output,
+            "transport": transport_trace,
         })
         repositories.reasoning.save(trace)
         return deterministic_output, trace
@@ -96,6 +107,7 @@ def run_structured_reasoning(
         "review_state": normalized.get("review_state", "needs_review"),
         "summary": normalized.get("summary", ""),
         "citations": normalized.get("citations", []),
+        "transport": transport_trace,
     })
     repositories.reasoning.save(trace)
     return output_items, trace
@@ -169,6 +181,7 @@ def _call_litellm_reasoning(
     config: StrategyOSConfig,
     stage: str,
     input_context: dict[str, Any],
+    transport_trace: list[dict[str, Any]] | None = None,
 ) -> str:
     url = _chat_completions_url(str(config.llm_base_url))
     payload = {
@@ -190,14 +203,40 @@ def _call_litellm_reasoning(
         },
         method="POST",
     )
-    try:
-        with urlopen(request, timeout=config.llm_timeout_seconds) as response:
-            body = response.read().decode("utf-8")
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"LiteLLM provider returned HTTP {exc.code}: {detail}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"LiteLLM provider is unavailable: {exc.reason}") from exc
+    body = llm_qa._post_with_retry(
+        request=request,
+        timeout_seconds=float(getattr(config, "llm_timeout_seconds", 30) or 30),
+        provider_label="LiteLLM",
+        max_attempts=int(
+            getattr(
+                config,
+                "llm_retry_attempts",
+                getattr(config, "llm_transport_max_attempts", 3),
+            )
+            or 3
+        ),
+        backoff_seconds=float(
+            (
+                getattr(config, "llm_retry_backoff_ms", None)
+                if getattr(config, "llm_retry_backoff_ms", None) is not None
+                else getattr(config, "llm_transport_backoff_seconds", 0.25) * 1000
+            )
+            / 1000.0
+        ),
+        max_backoff_seconds=max(
+            1.5,
+            float(
+                (
+                    getattr(config, "llm_retry_backoff_ms", None)
+                    if getattr(config, "llm_retry_backoff_ms", None) is not None
+                    else getattr(config, "llm_transport_backoff_seconds", 0.25) * 1000
+                )
+                / 1000.0
+            )
+            * 4,
+        ),
+        transport_trace=transport_trace,
+    )
 
     parsed = json.loads(body)
     choices = parsed.get("choices") or []

@@ -492,6 +492,47 @@ def test_assistant_chat_public_auto_unmatched_uses_llm_fallback_when_enabled(mon
         _restore_env(original)
 
 
+def test_assistant_chat_public_finance_terms_do_not_hit_generic_persona_templates(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+
+        answers = {
+            "what's driving the margin variance?": "Margin variance is being driven by FX drag, Tamween recovery leakage, and mix pressure in Healthcare Services.",
+            "show revenue risk": "Revenue risk is concentrated in Healthcare Services while e-Pharmacy remains the visible growth offset.",
+            "what's our cash risk?": "Cash risk remains bounded in the public packet, but the board should still watch the margin-to-cash conversion story.",
+            "which kpi matters most right now?": "The EBITDA margin KPI matters most right now because it carries the FX and recovery narrative into the board pack.",
+        }
+
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda question, **_kwargs: {
+                "matched": True,
+                "answer": answers[question.lower()],
+                "basis": "Grounded in the public packet.",
+                "citations": [{"source_path": "public_packet://latest-public", "locator": "public_context_packet.findings[0]"}],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "provider": "deepseek", "model": "gpt-test"},
+            },
+        )
+
+        for question, expected in answers.items():
+            response = client.post(
+                "/assistant/chat",
+                json={"question": question, "persona": "ceo", "mode": "auto"},
+            )
+            assert response.status_code == 200, question
+            payload = response.json()
+            assert payload["mode"] == "llm", question
+            assert payload["answer"] == expected, question
+            assert "which aspect would you like to examine" not in payload["answer"].lower(), question
+            assert "which part do you want to explore" not in payload["answer"].lower(), question
+    finally:
+        _restore_env(original)
+
+
 def test_assistant_chat_public_llm_mode_bypasses_canned_deterministic_fallback(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
@@ -649,6 +690,51 @@ def test_assistant_chat_public_auto_returns_canned_fallback_on_llm_runtime_error
         _restore_env(original)
 
 
+def test_assistant_chat_auto_fallback_exposes_transport_retry_metadata(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+
+        def fake_answer(*_args, **_kwargs):
+            raise api_module.llm_qa.ProviderTransportError(
+                "LLM provider returned HTTP 503: busy",
+                transport_status={
+                    "attempts": 3,
+                    "retries": 2,
+                    "calls": [
+                        {
+                            "provider": "llm",
+                            "attempts": 3,
+                            "retries": 2,
+                            "retry_reasons": ["http_503", "http_503"],
+                            "timeout_seconds": 3,
+                            "outcome": "failed",
+                            "final_error": "LLM provider returned HTTP 503: busy",
+                        }
+                    ],
+                    "fallback_used": False,
+                    "final_error": "LLM provider returned HTTP 503: busy",
+                },
+            )
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "what's driving the margin variance?", "persona": "ceo", "mode": "auto"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["llm_fallback_attempted"] is True
+        assert payload["llm_status"]["transport"]["retries"] == 2
+        assert payload["llm_status"]["transport"]["fallback_used"] is True
+        assert payload["matched"] is False
+    finally:
+        _restore_env(original)
+
+
 def test_assistant_chat_public_llm_mode_surfaces_provider_error_on_runtime_failure(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
@@ -660,8 +746,15 @@ def test_assistant_chat_public_llm_mode_surfaces_provider_error_on_runtime_failu
         )
 
         def fake_answer(*_args, **_kwargs):
-            raise RuntimeError(
-                'LLM provider returned HTTP 402: {"error":{"message":"Insufficient Balance"}}'
+            raise api_module.llm_qa.ProviderTransportError(
+                'LLM provider transient failure after 3 attempts: HTTP 503: {"error":"busy"}',
+                transport_status={
+                    "attempts": 3,
+                    "retries": 2,
+                    "calls": [{"outcome": "failed", "retry_reasons": ["http_503", "http_503"]}],
+                    "fallback_used": False,
+                    "final_error": "LLM provider transient failure after 3 attempts: HTTP 503: {\"error\":\"busy\"}",
+                },
             )
 
         monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
@@ -672,7 +765,58 @@ def test_assistant_chat_public_llm_mode_surfaces_provider_error_on_runtime_failu
         )
 
         assert response.status_code == 502
-        assert "Insufficient Balance" in response.json()["detail"]
+        detail = response.json()["detail"]
+        assert "HTTP 503" in detail["message"]
+        assert detail["transport"]["attempts"] == 3
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_auto_falls_back_after_transient_llm_transport_failure(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(
+            api_module.qa_engine,
+            "answer_question",
+            lambda *_args, **_kwargs: {
+                "matched": False,
+                "answer": "No deterministic answer.",
+                "basis": "Deterministic QA did not match.",
+                "citations": [],
+                "suggestions": [],
+            },
+        )
+
+        def fake_answer(*_args, **_kwargs):
+            raise api_module.llm_qa.ProviderTransportError(
+                "LLM provider transient failure after 3 attempts: timeout",
+                transport_status={
+                    "attempts": 3,
+                    "retries": 2,
+                    "calls": [{"outcome": "failed", "retry_reasons": ["TimeoutError", "TimeoutError"]}],
+                    "fallback_used": False,
+                    "final_error": "LLM provider transient failure after 3 attempts: timeout",
+                },
+            )
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "What's driving the margin variance?", "persona": "ceo", "mode": "auto"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "deterministic"
+        assert payload["assistant_mode"] == "qa_engine"
+        assert payload["llm_fallback_attempted"] is True
+        assert payload["trace"]["llm_transport_failed"] is True
+        assert payload["llm_status"]["transport"]["attempts"] == 3
+        assert payload["llm_status"]["transport"]["retries"] == 2
+        assert "transient failure" in payload["llm_error"].lower()
     finally:
         _restore_env(original)
 

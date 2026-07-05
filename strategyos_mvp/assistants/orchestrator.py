@@ -17,12 +17,14 @@ Architecture:
 
 from __future__ import annotations
 
+from collections import deque
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Callable
 from uuid import uuid4
 
+from ..config import env_int
 from ..models import HallucinationRisk, HallucinationRiskLevel
 from ..twins.persona import (
     CEO_TWIN,
@@ -158,132 +160,27 @@ _CEO_PATTERNS: list[tuple[str, str | Callable[[], str]]] = [
             "or the knowledge map. What would you like to review?"
         ),
     ),
-    # Board status / readiness
-    (
-        r"\b(board|thursday|readiness|on\s+track)\b",
-        "The board pack is under review. Here's what I can cover now: "
-        "revenue position, margin health, cash headroom, cost variance, "
-        "driver-level performance, and open board decisions. "
-        "What specific area would you like to check?",
-    ),
     # Driver relevance (context-aware — will be enriched by caller)
     (
         r"\b(relevan|matter|driver\s+card|this\s+(card|driver)|why\s+(is|this|does)|what\s+does\s+this\s+mean)\b",
         "__DRIVER_RELEVANCE__",  # Placeholder — enriched by caller with driver context
     ),
-    # Revenue overview
-    (
-        r"\b(revenue|top.?line)\b",
-        "Group Revenue is available from the governed run ledger. "
-        "The board pack shows current performance as a % of plan with "
-        "driver-level breakdowns. Would you like the group-level figure, "
-        "a specific business unit, or the driver that's moving it most?",
-    ),
-    # Margin / profitability
-    (
-        r"\b(margin|profit|ebitda)\b",
-        "EBITDA margin is tracked against plan in the current board pack. "
-        "The margin bridge shows variance by driver — including FX exposure, "
-        "cost pressure, and revenue mix. Which aspect would you like to examine?",
-    ),
-    # Cash / liquidity
-    (
-        r"\b(cash|liquidity|floor|covenant)\b",
-        "Cash position and liquidity are monitored against the board floor. "
-        "The treasury ledger tracks cash headroom, weekly liquidity changes, "
-        "and covenant compliance. Would you like the current snapshot or "
-        "the forward projection?",
-    ),
-    # Cost
-    (
-        r"\b(cost|spend|expense|overhead)\b",
-        "Operating costs are tracked against plan with driver-level variance. "
-        "Key cost pressures are highlighted in the board pack — including "
-        "input costs, logistics, and fixed overhead. Which cost line do "
-        "you want to see?",
-    ),
-    # Risk
-    (
-        r"\b(risk|threat|exposure|hedge|forex|fx|currency)\b",
-        "Strategic risks are flagged in the board pack with severity and "
-        "mitigation status. Current flagged items include FX exposure "
-        "and supply-chain dependencies. Would you like the risk register "
-        "or a specific item?",
-    ),
-    # Growth / expansion
-    (
-        r"\b(growth|expand|scaling|new\s+(market|segment))\b",
-        "Growth drivers are mapped in the KPI tree with leading and "
-        "lagging indicators. Revenue growth is broken down by business "
-        "unit and initiative. Which growth lever would you like to "
-        "examine — organic, new markets, or digital?",
-    ),
-    # KPI tree / knowledge graph
-    (
-        r"\b(kpi|metric|measure|indicator|knowledge\s+(graph|map)|cause.?and.?effect)\b",
-        "The KPI tree maps cause-and-effect chains from value drivers "
-        "to strategic objectives. Leading indicators are tracked weekly; "
-        "lagging indicators are updated each board cycle. Which part "
-        "of the map do you want to explore?",
-    ),
 ]
 
 _CFO_PATTERNS: list[tuple[str, str | Callable[[], str]]] = [
-    # Greetings
     (
         r"^(hi|hey|hello|good\s+(morning|afternoon|evening)|how\s+are\s+you|what'?s\s+up)([!.\s]*)$",
         "Hello — I can help with revenue, margin, cash flow, budget "
         "variance, and financial controls. What would you like to analyse?",
     ),
-    # Financial data request
-    (
-        r"\b(margin|revenue|cash\s+flow|budget|forecast|variance)\b",
-        "__CFO_FINANCIAL__",  # Placeholder — enriched with actual bundle data
-    ),
-    # Controls / compliance
-    (
-        r"\b(control|compliance|audit|sox|internal\s+control)\b",
-        "Financial controls status is available from the reviewer dashboard. "
-        "Evidence packets are adjudicated and the audit trail is maintained. "
-        "Would you like the control health summary or a specific control area?",
-    ),
-    # Working capital
-    (
-        r"\b(working\s+capital|dso|dpo|inventory|receivables?|payables?)\b",
-        "Working capital metrics are tracked in the financial ledger — "
-        "DSO, DPO, inventory turns, and cash conversion cycle. "
-        "Which metric would you like to see?",
-    ),
 ]
 
 _GM_PATTERNS: list[tuple[str, str | Callable[[], str]]] = [
-    # Greetings
     (
         r"^(hi|hey|hello|good\s+(morning|afternoon|evening)|how\s+are\s+you|what'?s\s+up)([!.\s]*)$",
         "Hello — I can help with BU performance, growth drivers, "
         "resource allocation, and operational metrics. What would you "
         "like to review?",
-    ),
-    # BU performance
-    (
-        r"\b(bu|business\s+unit|division|branch|unit\s+performance)\b",
-        "BU performance is tracked against plan with revenue, growth, "
-        "and operational metrics. Which business unit would you like "
-        "to drill into?",
-    ),
-    # Resources / talent
-    (
-        r"\b(resource|talent|staff|headcount|allocation)\b",
-        "Resource allocation is mapped against BU plans and initiative "
-        "milestones. Would you like the allocation summary or "
-        "a specific BU's resource profile?",
-    ),
-    # Operational metrics
-    (
-        r"\b(operational|efficiency|throughput|sla|fulfilment)\b",
-        "Operational metrics are available by business unit — including "
-        "throughput, SLA compliance, and efficiency ratios. Which "
-        "metric are you interested in?",
     ),
 ]
 
@@ -294,18 +191,6 @@ _STRATEGY_PATTERNS: list[tuple[str, str | Callable[[], str]]] = [
         "mappings, initiative alignment, and strategic coherence. "
         "What would you like to assess?",
     ),
-    (
-        r"\b(alignment|coherence|gap|misalignment|structural)\b",
-        "KPI tree alignment is assessed against strategic objectives. "
-        "Structural gaps and misaligned drivers are flagged. Would you "
-        "like the alignment report or a specific area?",
-    ),
-    (
-        r"\b(value\s+driver|initiative|leading|lagging|indicator)\b",
-        "Value drivers and initiatives are mapped in the KPI tree with "
-        "leading/lagging indicators. Which driver or initiative would "
-        "you like to examine?",
-    ),
 ]
 
 _ANALYST_PATTERNS: list[tuple[str, str | Callable[[], str]]] = [
@@ -314,12 +199,6 @@ _ANALYST_PATTERNS: list[tuple[str, str | Callable[[], str]]] = [
         "Hello — I can help with data readiness, source validation, "
         "and evidence quality. What would you like to check?",
     ),
-    (
-        r"\b(data|source|freshness|lineage|quality|validation)\b",
-        "Data readiness and source validation results are available. "
-        "Evidence quality scores are tracked across all KPIs. Which "
-        "data domain would you like to validate?",
-    ),
 ]
 
 _REVIEWER_PATTERNS: list[tuple[str, str | Callable[[], str]]] = [
@@ -327,12 +206,6 @@ _REVIEWER_PATTERNS: list[tuple[str, str | Callable[[], str]]] = [
         r"^(hi|hey|hello|good\s+(morning|afternoon|evening))([!.\s]*)$",
         "Hello — I can help with pending findings, evidence verification, "
         "and compliance status. What would you like to review?",
-    ),
-    (
-        r"\b(finding|review|adjudicat|compliance|evidence|audit)\b",
-        "Pending findings and adjudication status are available from the "
-        "reviewer dashboard. Would you like the pending queue or "
-        "a specific finding?",
     ),
 ]
 
@@ -564,31 +437,25 @@ def compose_persona_answer(
             trace=trace,
         )
 
-    # 2. If an LLM answer already exists, prefer it over generic persona
-    # patterns. Persona canned responses are guardrails for deterministic
-    # fallthrough, not something that should overwrite a grounded answer.
-    if llm_result and llm_result.get("matched") is not False:
-        answer = llm_result.get("answer", "")
-        assistant_mode = str(llm_result.get("assistant_mode") or "llm")
+    # 2. Some callers need to preserve an explicit deterministic fallback
+    # answer even when it is formally unmatched. This keeps shared packet /
+    # transport fallback guidance from being replaced by persona boilerplate.
+    if qa_result and qa_result.get("_orchestrator_force_answer"):
+        answer = qa_result.get("answer", "")
+        assistant_mode = str(qa_result.get("assistant_mode") or "qa_engine")
+        matched = bool(qa_result.get("matched"))
         return PersonaAnswer(
             answer=_format_for_persona(answer, persona_key),
-            matched=True,
+            matched=matched,
             persona=persona_key,
             mode=assistant_mode,
-            basis=llm_result.get("basis", "LLM evidence-grounded Q&A"),
-            citations=llm_result.get("citations", []),
-            suggestions=llm_result.get("suggestions") or _suggested_followups(persona_key),
-            trace={**trace, "mode": assistant_mode, "matched": True},
+            basis=qa_result.get("basis", ""),
+            citations=qa_result.get("citations", []),
+            suggestions=qa_result.get("suggestions") or _suggested_followups(persona_key),
+            trace={**trace, "mode": assistant_mode, "matched": matched, "forced_answer": True},
         )
 
-    # 3. Try persona-specific deterministic patterns first
-    persona_match = assess_question_for_persona(
-        question, persona_key, driver_context
-    )
-    if persona_match.matched and persona_match.answer != "__FALLTHROUGH__":
-        return persona_match
-
-    # 4. QA engine result
+    # 3. Deterministic QA stays ahead of persona regex and LLM fallback.
     if qa_result and qa_result.get("matched") is not False:
         answer = qa_result.get("answer", "")
         assistant_mode = str(qa_result.get("assistant_mode") or "qa_engine")
@@ -603,7 +470,31 @@ def compose_persona_answer(
             trace={**trace, "mode": assistant_mode, "matched": True},
         )
 
-    # 5. Complete fallback — nothing matched
+    # 4. If an LLM answer already exists, prefer it over generic persona
+    # patterns. Persona canned responses are guardrails for greetings and
+    # grounded context prompts only; they must not overwrite a grounded answer.
+    if llm_result and llm_result.get("matched") is not False:
+        answer = llm_result.get("answer", "")
+        assistant_mode = str(llm_result.get("assistant_mode") or "llm")
+        return PersonaAnswer(
+            answer=_format_for_persona(answer, persona_key),
+            matched=True,
+            persona=persona_key,
+            mode=assistant_mode,
+            basis=llm_result.get("basis", "LLM evidence-grounded Q&A"),
+            citations=llm_result.get("citations", []),
+            suggestions=llm_result.get("suggestions") or _suggested_followups(persona_key),
+            trace={**trace, "mode": assistant_mode, "matched": True},
+        )
+
+    # 5. Try the reduced persona-specific deterministic patterns.
+    persona_match = assess_question_for_persona(
+        question, persona_key, driver_context
+    )
+    if persona_match.matched and persona_match.answer != "__FALLTHROUGH__":
+        return persona_match
+
+    # 6. Complete fallback — nothing matched
     fallback = _PERSONA_DEFAULTS.get(persona_key, _PERSONA_DEFAULTS["ceo"])
     return PersonaAnswer(
         answer=fallback,
@@ -782,10 +673,16 @@ class AssistantOrchestrator:
 
     Integrates persona-aware routing with the existing QA engine and
     LLM fallback pipeline.
+
+    The audit trail is a bounded, process-local ring buffer for live
+    verification. It is not a durable multi-worker audit store.
     """
 
-    def __init__(self) -> None:
-        self._audit_log: list[dict[str, Any]] = []
+    def __init__(self, *, audit_log_maxlen: int | None = None) -> None:
+        configured_maxlen = audit_log_maxlen
+        if configured_maxlen is None:
+            configured_maxlen = env_int("STRATEGYOS_ASSISTANT_AUDIT_LOG_MAX_ENTRIES", 1000)
+        self._audit_log = deque(maxlen=max(1, int(configured_maxlen)))
 
     def process(
         self,
@@ -836,6 +733,11 @@ class AssistantOrchestrator:
             citations=result.citations,
             scenario_result=scenario_result,
         )
+        result.trace["audit_store"] = {
+            "kind": "process_local_deque",
+            "durable": False,
+            "max_entries": self._audit_log.maxlen,
+        }
 
         # Audit logging (for Hermes live verification)
         audit_trail_id = str(uuid4())
@@ -856,7 +758,7 @@ class AssistantOrchestrator:
 
     def get_audit_trail(self, limit: int = 20) -> list[dict[str, Any]]:
         """Return recent audit entries for traceability."""
-        return list(self._audit_log[-limit:])
+        return list(self._audit_log)[-limit:]
 
 
 def get_orchestrator() -> AssistantOrchestrator:
