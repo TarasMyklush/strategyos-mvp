@@ -9166,12 +9166,6 @@ async def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
-    deterministic_result = qa_engine.answer_question(
-        question,
-        bundle=context["bundle"],
-        findings=context["findings"],
-    )
-    deterministic_result.setdefault("answered_by", "tabular")
     graph_result = route_graph_question(context["run_id"], question)
     retrieval_result = _route_keyword_retrieval(context["run_id"], question)
     if graph_result.get("matched") or retrieval_result.get("matched"):
@@ -9179,7 +9173,6 @@ async def _assistant_chat_response(
         orchestrated = orchestrator.process(
             question,
             persona=persona,
-            qa_result={**deterministic_result, "assistant_mode": "qa_engine"},
             graph_result=graph_result,
             retrieval_result=retrieval_result,
             driver_context=driver_context,
@@ -9195,6 +9188,12 @@ async def _assistant_chat_response(
             llm_status=llm_status,
             assistant_context=assistant_context,
         )
+    deterministic_result = qa_engine.answer_question(
+        question,
+        bundle=context["bundle"],
+        findings=context["findings"],
+    )
+    deterministic_result.setdefault("answered_by", "tabular")
     if mode == "deterministic" or deterministic_result.get("matched") is not False:
         orchestrated = orchestrator.process(
             question,
@@ -9500,10 +9499,6 @@ def data_qa(
 
     deterministic_result = None
     if context["bundle"] is not None and mode in {"auto", "deterministic"}:
-        deterministic_result = qa_engine.answer_question(
-            question, bundle=context["bundle"], findings=context["findings"]
-        )
-        deterministic_result.setdefault("answered_by", "tabular")
         graph_result = route_graph_question(context["run_id"], question)
         retrieval_result = _route_keyword_retrieval(context["run_id"], question)
         if graph_result.get("matched") or retrieval_result.get("matched"):
@@ -9511,7 +9506,6 @@ def data_qa(
             orchestrated = orchestrator.process(
                 question,
                 persona=persona,
-                qa_result={**deterministic_result, "assistant_mode": "qa_engine"},
                 graph_result=graph_result,
                 retrieval_result=retrieval_result,
                 driver_context=driver_context,
@@ -9527,6 +9521,10 @@ def data_qa(
                     "knowledge_id": request.knowledge_id,
                 },
             )
+        deterministic_result = qa_engine.answer_question(
+            question, bundle=context["bundle"], findings=context["findings"]
+        )
+        deterministic_result.setdefault("answered_by", "tabular")
         if mode == "deterministic" or deterministic_result.get("matched") is not False:
             orchestrated = orchestrator.process(
                 question,
