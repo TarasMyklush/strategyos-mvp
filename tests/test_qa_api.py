@@ -566,6 +566,34 @@ def test_assistant_chat_authenticated_graph_route_returns_graph_provenance(monke
         _restore_env(original)
 
 
+def test_assistant_chat_graph_route_short_circuits_tabular_qa(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {"bundle": object(), "findings": [], "summary": {"run_id": "run-1"}, "run_id": "run-1", "run_mode": "full", "kg_nodes": [], "kg_edges": []},
+        )
+        monkeypatch.setattr(api_module, "route_graph_question", lambda run_id, question: {"matched": True, "answer": "Graph answer", "basis": "Neo4j traversal", "citations": [], "assistant_mode": "graph", "answered_by": "graph", "intent": "finding_evidence_chain"})
+        monkeypatch.setattr(api_module, "_route_keyword_retrieval", lambda run_id, question: {"matched": False})
+        monkeypatch.setattr(
+            api_module.qa_engine,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("graph grounding should run before tabular QA")),
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "show evidence for F-004", "persona": "ceo", "mode": "auto"},
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["answered_by"] == "graph"
+    finally:
+        _restore_env(original)
+
+
 def test_qa_vector_route_falls_through_when_disabled(monkeypatch):
     original = _apply_env(
         {
@@ -628,6 +656,34 @@ def test_qa_vector_route_returns_keyword_provenance_when_configured(monkeypatch)
         payload = response.json()
         assert payload["answered_by"] == "vector"
         assert payload["citations"][0]["source_path"] == "08_Invoices/invoice.pdf"
+    finally:
+        _restore_env(original)
+
+
+def test_qa_graph_route_short_circuits_tabular_qa(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {"bundle": object(), "findings": [], "summary": {"run_id": "run-1"}, "run_id": "run-1", "run_mode": "full", "kg_nodes": [], "kg_edges": []},
+        )
+        monkeypatch.setattr(api_module, "route_graph_question", lambda run_id, question: {"matched": True, "answer": "Graph answer", "basis": "Neo4j traversal", "citations": [], "assistant_mode": "graph", "answered_by": "graph", "intent": "finding_evidence_chain"})
+        monkeypatch.setattr(api_module, "_route_keyword_retrieval", lambda run_id, question: {"matched": False})
+        monkeypatch.setattr(
+            api_module.qa_engine,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("graph grounding should run before tabular QA")),
+        )
+
+        response = client.post(
+            "/qa",
+            json={"question": "show evidence for F-004", "persona": "ceo", "mode": "auto"},
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["answered_by"] == "graph"
     finally:
         _restore_env(original)
 
