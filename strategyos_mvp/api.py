@@ -40,6 +40,7 @@ from .executive_design import (
     executive_subtools_design,
 )
 from .assistants import get_orchestrator, list_supported_personas
+from .assistants.graph_retrieval import route_graph_question
 from .ingestion import load_dataset
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
@@ -105,8 +106,6 @@ from .vector_store import (
     search_run_vectors,
     vector_status_for_run,
 )
-
-
 ANONYMOUS_PUBLIC_RUN_ID = "latest-public"
 _LLM_PROVIDER_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="strategyos-llm")
 _LLM_PROVIDER_SEMAPHORE = asyncio.Semaphore(8)
@@ -8836,6 +8835,7 @@ def _assistant_response_payload(
         "requested_mode": requested_mode,
         "question": question,
         "persona": orchestrated.persona,
+        "answered_by": getattr(orchestrated, "answered_by", ""),
         "matched": orchestrated.matched,
         "answer": orchestrated.answer,
         "basis": orchestrated.basis,
@@ -8865,6 +8865,7 @@ def _assistant_response_payload(
                     "assistant_mode": orchestrated.mode,
                     "requested_mode": requested_mode,
                     "persona": orchestrated.persona,
+                    "answered_by": getattr(orchestrated, "answered_by", ""),
                     "matched": orchestrated.matched,
                     "answer": orchestrated.answer,
                     "basis": orchestrated.basis,
@@ -8895,6 +8896,53 @@ def _assistant_response_payload(
         payload["risk_metadata"]["traceable"] = bool((payload["hallucination_risk"] or {}).get("traceable"))
     payload["answer"] = _sanitize_assistant_visible_text(payload.get("answer"))
     return payload
+
+
+def _public_safe_llm_status() -> dict[str, Any]:
+    status_payload = dict(llm_qa.chat_status(CONFIG) or {})
+    status_payload["enabled"] = False
+    status_payload["reason"] = "Public-safe surface disables llm, graph, and vector grounding."
+    return status_payload
+
+
+def _route_keyword_retrieval(run_id: str | None, question: str) -> dict[str, Any]:
+    if not CONFIG.vector_routing_enabled:
+        return {"matched": False, "answered_by": "", "reason": "vector_routing_disabled"}
+    lower_question = str(question or "").lower()
+    if not any(term in lower_question for term in ("evidence", "document", "documents", "invoice", "contract", "source", "support", "proof", "finding")):
+        return {"matched": False, "answered_by": "", "reason": "question_not_routed"}
+    qdrant_status = check_qdrant_ready()
+    if qdrant_status.get("status") != "ok":
+        return {"matched": False, "answered_by": "", "vector_status": qdrant_status}
+    result = search_run_vectors(run_id, question, limit=3)
+    if result.get("status") != "ready" or not result.get("results"):
+        return {"matched": False, "answered_by": "", "vector_status": result}
+    citations = []
+    for item in list(result.get("results") or [])[:3]:
+        locator = str(item.get("locator") or item.get("finding_id") or item.get("point_id") or "")
+        citations.append(
+            {
+                "source_path": item.get("source_path") or item.get("source") or "qdrant://strategyos_search_chunks",
+                "locator": locator,
+                "excerpt": item.get("excerpt") or item.get("summary") or item.get("text") or "",
+            }
+        )
+    top = result["results"][0]
+    answer = (
+        f"Keyword retrieval found {len(result['results'])} supporting record(s). "
+        f"Top match: {top.get('title') or top.get('summary') or top.get('finding_id') or 'supporting evidence'}"
+    )
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Keyword/lexical overlap over run-scoped Qdrant payloads while the embedding backend is hash_fallback.",
+        "citations": citations,
+        "suggestions": [],
+        "assistant_mode": "vector",
+        "answered_by": "vector",
+        "intent": "keyword_retrieval",
+        "vector_status": result,
+    }
 
 
 def _sanitize_assistant_visible_text(value: Any) -> str:
@@ -8987,7 +9035,7 @@ async def _assistant_chat_response(
         )
         context["public_context_packet"] = dict(context.get("public_context_packet") or {})
         context["public_context_packet"]["view_state"] = view_state
-    llm_status = llm_qa.chat_status(CONFIG)
+    llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     def _public_safe_unmatched_result(reason: str | None = None) -> dict[str, Any]:
         basis = "Shared public executive packet is populated, but this prompt did not match a deterministic public-safe handler."
@@ -9055,93 +9103,19 @@ async def _assistant_chat_response(
             )
 
     if public_safe and context.get("public_context_packet"):
-        if mode == "llm" and not llm_status["enabled"]:
+        if mode == "llm":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=llm_status["reason"],
             )
-        if mode != "deterministic" and llm_status["enabled"]:
-            try:
-                result = await _llm_answer_question_async(
-                    question,
-                    bundle=context["bundle"],
-                    findings=context["findings"],
-                    summary=context["summary"],
-                    config=CONFIG,
-                    public_context_packet=context.get("public_context_packet") or {},
-                    persona=persona,
-                )
-            except RuntimeError as exc:
-                if mode == "llm":
-                    transport_status = llm_qa.provider_transport_payload(exc)
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail={
-                            "message": str(exc),
-                            "transport": transport_status,
-                        } if transport_status else str(exc),
-                    ) from exc
-                public_safe_result = _public_safe_unmatched_result(str(exc))
-                failure_transport = dict(llm_qa.provider_transport_payload(exc) or {})
-                if failure_transport:
-                    failure_transport["fallback_used"] = True
-                failure_status = {
-                    **llm_status,
-                    "transport": failure_transport,
-                }
-                orchestrated = orchestrator.process(
-                    question,
-                    persona=persona,
-                    qa_result={
-                        **public_safe_result,
-                        "assistant_mode": "qa_engine",
-                        "_orchestrator_force_answer": True,
-                    },
-                    driver_context=request.driver_context,
-                )
-                payload = _assistant_response_payload(
-                    response_mode="deterministic",
-                    question=question,
-                    context=context,
-                    requested_mode=mode,
-                    persona=persona,
-                    orchestrated=orchestrated,
-                    base_result=public_safe_result,
-                    llm_status=failure_status,
-                    assistant_context=assistant_context,
-                )
-                payload["llm_fallback_attempted"] = True
-                payload["llm_error"] = str(exc)
-                payload["trace"]["llm_transport_failed"] = True
-                return payload
-            orchestrated = orchestrator.process(
-                question,
-                persona=persona,
-                llm_result=result,
-                driver_context=driver_context,
-            )
-            payload = _assistant_response_payload(
-                response_mode="llm",
-                question=question,
-                context=context,
-                requested_mode=mode,
-                persona=persona,
-                orchestrated=orchestrated,
-                base_result=result,
-                llm_status=result.get("llm_status") or llm_status,
-                assistant_context=assistant_context,
-            )
-            payload["mode"] = "llm"
-            payload["llm_fallback_attempted"] = True
-            return payload
-
         public_safe_result = _public_safe_unmatched_result(None if mode == "deterministic" else llm_status.get("reason"))
         orchestrated = orchestrator.process(
             question,
             persona=persona,
             qa_result={
                 **public_safe_result,
-                "assistant_mode": "qa_engine",
+                "assistant_mode": "packet",
+                "answered_by": "packet",
                 "_orchestrator_force_answer": True,
             },
             driver_context=request.driver_context,
@@ -9197,11 +9171,35 @@ async def _assistant_chat_response(
         bundle=context["bundle"],
         findings=context["findings"],
     )
+    deterministic_result.setdefault("answered_by", "tabular")
+    graph_result = route_graph_question(context["run_id"], question)
+    retrieval_result = _route_keyword_retrieval(context["run_id"], question)
+    if graph_result.get("matched") or retrieval_result.get("matched"):
+        selected_result = graph_result if graph_result.get("matched") else retrieval_result
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result={**deterministic_result, "assistant_mode": "qa_engine"},
+            graph_result=graph_result,
+            retrieval_result=retrieval_result,
+            driver_context=driver_context,
+        )
+        return _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=selected_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
     if mode == "deterministic" or deterministic_result.get("matched") is not False:
         orchestrated = orchestrator.process(
             question,
             persona=persona,
-            qa_result={**deterministic_result, "assistant_mode": "qa_engine", "_orchestrator_force_answer": True},
+            qa_result={**deterministic_result, "assistant_mode": "qa_engine", "answered_by": deterministic_result.get("answered_by") or "tabular", "_orchestrator_force_answer": True},
             driver_context=driver_context,
         )
         return _assistant_response_payload(
@@ -9220,7 +9218,7 @@ async def _assistant_chat_response(
         orchestrated = orchestrator.process(
             question,
             persona=persona,
-            qa_result=deterministic_result,
+            qa_result={**deterministic_result, "answered_by": deterministic_result.get("answered_by") or "tabular"},
             driver_context=driver_context,
         )
         if mode == "llm":
@@ -9392,6 +9390,7 @@ def data_qa(
             "trace_id": trace_id,
             **base_payload,
             "persona": orchestrated_payload.persona,
+            "answered_by": orchestrated_payload.answered_by,
             "matched": orchestrated_payload.matched,
             "answer": orchestrated_payload.answer,
             "basis": orchestrated_payload.basis,
@@ -9504,11 +9503,35 @@ def data_qa(
         deterministic_result = qa_engine.answer_question(
             question, bundle=context["bundle"], findings=context["findings"]
         )
-        if mode == "deterministic" or deterministic_result.get("matched") is not False:
+        deterministic_result.setdefault("answered_by", "tabular")
+        graph_result = route_graph_question(context["run_id"], question)
+        retrieval_result = _route_keyword_retrieval(context["run_id"], question)
+        if graph_result.get("matched") or retrieval_result.get("matched"):
+            selected_result = graph_result if graph_result.get("matched") else retrieval_result
             orchestrated = orchestrator.process(
                 question,
                 persona=persona,
                 qa_result={**deterministic_result, "assistant_mode": "qa_engine"},
+                graph_result=graph_result,
+                retrieval_result=retrieval_result,
+                driver_context=driver_context,
+            )
+            route_name = "graph_grounding" if graph_result.get("matched") else "vector_keyword_retrieval"
+            return _compose_response(
+                response_mode="deterministic",
+                base_payload=selected_result,
+                orchestrated_payload=orchestrated,
+                extra_trace={
+                    "route": route_name,
+                    "intent": selected_result.get("intent"),
+                    "knowledge_id": request.knowledge_id,
+                },
+            )
+        if mode == "deterministic" or deterministic_result.get("matched") is not False:
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                qa_result={**deterministic_result, "assistant_mode": "qa_engine", "answered_by": deterministic_result.get("answered_by") or "tabular"},
                 driver_context=driver_context,
             )
             return _compose_response(
@@ -9553,7 +9576,7 @@ def data_qa(
         orchestrated = orchestrator.process(
             question,
             persona=persona,
-            qa_result={**deterministic_result, "assistant_mode": "qa_engine"},
+            qa_result={**deterministic_result, "assistant_mode": "qa_engine", "answered_by": deterministic_result.get("answered_by") or "tabular"},
             driver_context=driver_context,
         )
         return _compose_response(

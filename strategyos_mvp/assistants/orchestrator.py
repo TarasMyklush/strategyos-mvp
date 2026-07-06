@@ -67,6 +67,7 @@ class PersonaAnswer:
     citations: list[dict[str, Any]] = field(default_factory=list)
     suggestions: list[str] = field(default_factory=list)
     trace: dict[str, Any] = field(default_factory=dict)
+    answered_by: str = ""
 
 
 def role_prompt_contract(persona: str | None) -> dict[str, Any]:
@@ -393,6 +394,8 @@ def compose_persona_answer(
     question: str = "",
     llm_result: dict[str, Any] | None = None,
     scenario_result: dict[str, Any] | None = None,
+    graph_result: dict[str, Any] | None = None,
+    retrieval_result: dict[str, Any] | None = None,
     driver_context: dict[str, Any] | None = None,
 ) -> PersonaAnswer:
     """Compose a persona-aware answer from QA engine and/or LLM results.
@@ -435,6 +438,7 @@ def compose_persona_answer(
             citations=scenario_result.get("citations", []),
             suggestions=scenario_result.get("suggestions", []) or _suggested_followups(persona_key),
             trace=trace,
+            answered_by="scenario",
         )
 
     # 2. Some callers need to preserve an explicit deterministic fallback
@@ -453,9 +457,42 @@ def compose_persona_answer(
             citations=qa_result.get("citations", []),
             suggestions=qa_result.get("suggestions") or _suggested_followups(persona_key),
             trace={**trace, "mode": assistant_mode, "matched": matched, "forced_answer": True},
+            answered_by=str(qa_result.get("answered_by") or "fallback"),
         )
 
-    # 3. Deterministic QA stays ahead of persona regex and LLM fallback.
+    # 3. Graph grounding stays ahead of tabular QA and LLM fallback.
+    if graph_result and graph_result.get("matched"):
+        answer = graph_result.get("answer", "")
+        assistant_mode = str(graph_result.get("assistant_mode") or "graph")
+        return PersonaAnswer(
+            answer=_format_for_persona(answer, persona_key),
+            matched=True,
+            persona=persona_key,
+            mode=assistant_mode,
+            basis=graph_result.get("basis", ""),
+            citations=graph_result.get("citations", []),
+            suggestions=graph_result.get("suggestions") or _suggested_followups(persona_key),
+            trace={**trace, "mode": assistant_mode, "matched": True},
+            answered_by=str(graph_result.get("answered_by") or "graph"),
+        )
+
+    # 4. Keyword/vector grounding stays ahead of tabular QA and LLM fallback.
+    if retrieval_result and retrieval_result.get("matched"):
+        answer = retrieval_result.get("answer", "")
+        assistant_mode = str(retrieval_result.get("assistant_mode") or "vector")
+        return PersonaAnswer(
+            answer=_format_for_persona(answer, persona_key),
+            matched=True,
+            persona=persona_key,
+            mode=assistant_mode,
+            basis=retrieval_result.get("basis", ""),
+            citations=retrieval_result.get("citations", []),
+            suggestions=retrieval_result.get("suggestions") or _suggested_followups(persona_key),
+            trace={**trace, "mode": assistant_mode, "matched": True},
+            answered_by=str(retrieval_result.get("answered_by") or "vector"),
+        )
+
+    # 5. Deterministic tabular QA stays ahead of LLM fallback and persona regex.
     if qa_result and qa_result.get("matched") is not False:
         answer = qa_result.get("answer", "")
         assistant_mode = str(qa_result.get("assistant_mode") or "qa_engine")
@@ -468,11 +505,11 @@ def compose_persona_answer(
             citations=qa_result.get("citations", []),
             suggestions=qa_result.get("suggestions") or _suggested_followups(persona_key),
             trace={**trace, "mode": assistant_mode, "matched": True},
+            answered_by=str(qa_result.get("answered_by") or "tabular"),
         )
 
-    # 4. If an LLM answer already exists, prefer it over generic persona
-    # patterns. Persona canned responses are guardrails for greetings and
-    # grounded context prompts only; they must not overwrite a grounded answer.
+    # 6. If an LLM answer already exists, prefer it over generic persona
+    # patterns. Persona canned responses are the true last resort.
     if llm_result and llm_result.get("matched") is not False:
         answer = llm_result.get("answer", "")
         assistant_mode = str(llm_result.get("assistant_mode") or "llm")
@@ -485,16 +522,18 @@ def compose_persona_answer(
             citations=llm_result.get("citations", []),
             suggestions=llm_result.get("suggestions") or _suggested_followups(persona_key),
             trace={**trace, "mode": assistant_mode, "matched": True},
+            answered_by=str(llm_result.get("answered_by") or "llm"),
         )
 
-    # 5. Try the reduced persona-specific deterministic patterns.
+    # 7. Try the reduced persona-specific deterministic patterns.
     persona_match = assess_question_for_persona(
         question, persona_key, driver_context
     )
     if persona_match.matched and persona_match.answer != "__FALLTHROUGH__":
+        persona_match.answered_by = "persona_canned"
         return persona_match
 
-    # 6. Complete fallback — nothing matched
+    # 8. Complete fallback — nothing matched
     fallback = _PERSONA_DEFAULTS.get(persona_key, _PERSONA_DEFAULTS["ceo"])
     return PersonaAnswer(
         answer=fallback,
@@ -504,6 +543,7 @@ def compose_persona_answer(
         basis=f"All paths exhausted for {persona_key} — returned fallback guidance.",
         suggestions=_suggested_followups(persona_key),
         trace={**trace, "mode": "fallback", "matched": False},
+        answered_by="fallback",
     )
 
 
@@ -691,6 +731,8 @@ class AssistantOrchestrator:
         qa_result: dict[str, Any] | None = None,
         llm_result: dict[str, Any] | None = None,
         scenario_result: dict[str, Any] | None = None,
+        graph_result: dict[str, Any] | None = None,
+        retrieval_result: dict[str, Any] | None = None,
         driver_context: dict[str, Any] | None = None,
     ) -> PersonaAnswer:
         """Process a question through the orchestrator.
@@ -714,6 +756,8 @@ class AssistantOrchestrator:
             question=question,
             llm_result=llm_result,
             scenario_result=scenario_result,
+            graph_result=graph_result,
+            retrieval_result=retrieval_result,
             driver_context=driver_context,
         )
 

@@ -246,6 +246,7 @@ class StrategyOSConfig:
     llm_timeout_seconds: int
     llm_retry_attempts: int
     llm_retry_backoff_ms: int
+    vector_routing_enabled: bool
     batch_apis_enabled: bool
     hosted_ocr_vision_enabled: bool
     source_pack_structured_candidate_threshold: float
@@ -553,6 +554,7 @@ def load_config() -> StrategyOSConfig:
         llm_timeout_seconds=env_int("STRATEGYOS_LLM_TIMEOUT_SECONDS", 30),
         llm_retry_attempts=env_int("STRATEGYOS_LLM_RETRY_ATTEMPTS", 3),
         llm_retry_backoff_ms=env_int("STRATEGYOS_LLM_RETRY_BACKOFF_MS", 250),
+        vector_routing_enabled=env_bool("STRATEGYOS_VECTOR_ROUTING_ENABLED", False),
         batch_apis_enabled=env_bool("STRATEGYOS_BATCH_APIS_ENABLED", False),
         hosted_ocr_vision_enabled=env_bool("STRATEGYOS_HOSTED_OCR_VISION_ENABLED", False),
         source_pack_structured_candidate_threshold=env_float(

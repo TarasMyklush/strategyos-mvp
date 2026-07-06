@@ -24,6 +24,8 @@ MAX_INDEX_TEXT = 4_000
 MAX_RESULT_TEXT = 700
 MAX_SEARCH_LIMIT = 50
 MAX_SEARCH_CANDIDATES = 100
+HASH_FALLBACK_BACKEND = "hash_fallback"
+LEXICAL_KEYWORD_MODE = "lexical_keyword"
 INDEXED_FILTER_FIELDS = (
     "run_id",
     "tenant_slug",
@@ -63,10 +65,9 @@ def check_qdrant_ready() -> dict[str, Any]:
             "search_collection": COLLECTION_NAME,
             "legacy_collection": LEGACY_COLLECTION_NAME,
             "qdrant_version": version,
-            "native_hybrid_supported": _native_hybrid_supported(version),
-            "hybrid_mode": "qdrant_native"
-            if _native_hybrid_supported(version)
-            else "hybrid_compat",
+            "embedding_backend": _embedding_backend(),
+            "native_hybrid_supported": False,
+            "hybrid_mode": LEXICAL_KEYWORD_MODE,
         }
     except Exception as exc:
         return {"status": "failed", "reason": str(exc)}
@@ -204,7 +205,8 @@ def search_run_vectors(
             "collection": collection,
             "query": query,
             "limit": limit,
-            "mode": "hybrid_compat",
+            "mode": LEXICAL_KEYWORD_MODE,
+            "embedding_backend": _embedding_backend(),
             "filters": _filters_payload(filters),
             "results": results,
         }
@@ -487,6 +489,10 @@ def _embed_text(text: str) -> list[float]:
     return [value / magnitude for value in vector]
 
 
+def _embedding_backend() -> str:
+    return HASH_FALLBACK_BACKEND
+
+
 def _sample_payload(payload: dict[str, Any] | None) -> dict[str, Any] | None:
     if not payload:
         return None
@@ -624,15 +630,14 @@ def _search_collection(
     candidate_limit = min(MAX_SEARCH_CANDIDATES, max(limit * 5, 20))
     payload = _qdrant_request(
         "POST",
-        f"/collections/{collection_name}/points/search",
+        f"/collections/{collection_name}/points/scroll",
         {
-            "vector": _embed_text(query),
             "limit": candidate_limit,
             "with_payload": True,
             "filter": filter_payload,
         },
     )
-    return list(payload.get("result", []))
+    return list(payload.get("result", {}).get("points", []))
 
 
 def _rank_results(
@@ -645,22 +650,18 @@ def _rank_results(
     ranked: list[dict[str, Any]] = []
     for vector_rank, item in enumerate(raw_results, start=1):
         payload = item.get("payload") or {}
-        vector_score = _float_or_zero(item.get("score"))
         lexical_score = _lexical_score(query, payload)
-        normalized_vector = max(0.0, min(1.0, (vector_score + 1.0) / 2.0))
-        fused_score = (0.62 * normalized_vector) + (0.38 * lexical_score)
         point_id = str(item.get("id") or payload.get("point_id") or "")
         ranked.append(
             {
                 "point_id": point_id,
                 "result_type": payload.get("point_type") or "finding",
-                "score": round(fused_score, 6),
+                "score": round(lexical_score, 6),
                 "ranking": {
-                    "mode": "hybrid_compat",
-                    "vector_score": vector_score,
+                    "mode": LEXICAL_KEYWORD_MODE,
                     "lexical_score": round(lexical_score, 6),
-                    "fused_score": round(fused_score, 6),
                     "vector_rank": vector_rank,
+                    "embedding_backend": _embedding_backend(),
                 },
                 "finding_id": payload.get("finding_id"),
                 "citation_id": payload.get("citation_id"),

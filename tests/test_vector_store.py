@@ -90,21 +90,6 @@ def test_sync_and_search_vectors_for_a_run(monkeypatch, tmp_path):
                 and _matches_filter(point, payload["filter"])
             ]
             return {"result": {"points": points[: payload.get("limit", 1)]}}
-        if method == "POST" and path.endswith("/points/search"):
-            run_id = payload["filter"]["must"][0]["match"]["value"]
-            query_vector = payload["vector"]
-            matches = []
-            for point in state["points"]:
-                if point["payload"]["run_id"] != run_id:
-                    continue
-                if not _matches_filter(point, payload["filter"]):
-                    continue
-                score = sum(
-                    a * b for a, b in zip(query_vector, point["vector"], strict=False)
-                )
-                matches.append({"id": point["id"], "payload": point["payload"], "score": score})
-            matches.sort(key=lambda item: item["score"], reverse=True)
-            return {"result": matches[: payload.get("limit", 5)]}
         raise AssertionError(f"Unexpected request: {method} {path}")
 
     monkeypatch.setattr(vector_store, "_qdrant_request", fake_request)
@@ -157,7 +142,10 @@ def test_sync_and_search_vectors_for_a_run(monkeypatch, tmp_path):
     assert sync["point_count"] == 4
     assert sync["point_types"] == {"finding": 2, "citation": 1, "evidence_chunk": 1}
     assert search["status"] == "ready"
+    assert search["mode"] == "lexical_keyword"
+    assert search["embedding_backend"] == "hash_fallback"
     assert search["results"][0]["finding_id"] == "F-002"
+    assert search["results"][0]["ranking"]["mode"] == "lexical_keyword"
     assert search["results"][0]["open_evidence"]["href"].startswith("/data/evidence-preview?")
     assert filtered["filters"] == {"point_type": ["citation"]}
     assert {item["result_type"] for item in filtered["results"]} == {"citation"}
@@ -212,3 +200,23 @@ def test_embed_text_returns_normalized_vector():
     magnitude = math.sqrt(sum(value * value for value in vector))
     assert len(vector) == vector_store.VECTOR_SIZE
     assert round(magnitude, 6) == 1.0
+
+
+def test_check_qdrant_ready_reports_truthful_keyword_mode(monkeypatch):
+    monkeypatch.setattr(
+        vector_store,
+        "CONFIG",
+        SimpleNamespace(qdrant_url="http://qdrant:6333"),
+    )
+    monkeypatch.setattr(
+        vector_store,
+        "_qdrant_request",
+        lambda method, path, payload=None: {"result": {"collections": []}} if path == "/collections" else {"version": "1.13.0"},
+    )
+    monkeypatch.setattr(vector_store, "_qdrant_version", lambda: "1.13.0")
+
+    payload = vector_store.check_qdrant_ready()
+
+    assert payload["embedding_backend"] == "hash_fallback"
+    assert payload["native_hybrid_supported"] is False
+    assert payload["hybrid_mode"] == "lexical_keyword"
