@@ -940,10 +940,16 @@ def test_kg_universe_uses_honest_derived_density_nodes():
     assert 'satelliteKind = satelliteIndex % 5 === 0 ? "source"' in js, (
         "Dense universe must derive source/evidence satellites"
     )
+    assert "targetTotalNodes = Math.max(110" in js, (
+        "Dense universe must target 100+ visible nodes in honest derived mode"
+    )
     assert "visual evidence density, not a new business claim" in js, (
         "Derived density nodes must explicitly disclaim fabricated business claims"
     )
     assert 'category: "relationship"' in js, "Relationship relay nodes must exist"
+    assert "relayCount = primaryNodes.length <= 6 ? 3 : 2" in js, (
+        "Sparse governed graphs must gain extra bridge relays so the universe reads visually dense"
+    )
 
 
 # ── YouTube Leaders' Corner embed safety ──

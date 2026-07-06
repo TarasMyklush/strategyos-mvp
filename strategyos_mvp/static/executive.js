@@ -554,18 +554,18 @@
     });
 
     var clusterAnchors = {
-      plan: { x: 48, y: 46, radius: 9 },
-      KPI: { x: 35, y: 20, radius: 12 },
-      business_unit: { x: 72, y: 58, radius: 14 },
-      finding: { x: 20, y: 60, radius: 12 },
-      document: { x: 18, y: 78, radius: 10 },
-      vendor: { x: 82, y: 26, radius: 9 },
-      invoice: { x: 34, y: 82, radius: 10 },
-      contract: { x: 84, y: 72, radius: 10 },
-      evidence: { x: 58, y: 18, radius: 8 },
-      source: { x: 64, y: 82, radius: 8 },
-      relationship: { x: 56, y: 64, radius: 8 },
-      signal: { x: 62, y: 18, radius: 10 }
+      plan: { x: 50, y: 48, radius: 12 },
+      KPI: { x: 20, y: 18, radius: 16 },
+      business_unit: { x: 79, y: 24, radius: 16 },
+      finding: { x: 18, y: 60, radius: 16 },
+      document: { x: 16, y: 84, radius: 14 },
+      vendor: { x: 86, y: 46, radius: 15 },
+      invoice: { x: 38, y: 86, radius: 14 },
+      contract: { x: 82, y: 80, radius: 14 },
+      evidence: { x: 52, y: 14, radius: 12 },
+      source: { x: 66, y: 86, radius: 12 },
+      relationship: { x: 58, y: 62, radius: 12 },
+      signal: { x: 32, y: 36, radius: 14 }
     };
 
     var primaryNodes = rawNodes.map(function (node, index) {
@@ -613,24 +613,32 @@
           node.label_priority = true;
           return;
         }
-        var ring = Math.floor(index / 4);
-        var orbit = anchor.radius + ring * 7 + (kgUnit(node.id, "orbit") * 2.6);
-        var angle = ((Math.PI * 2) / Math.max(group.length, 1)) * index + kgUnit(node.id, "angle") * 0.65 - 0.3;
-        node.x = clampNumber(anchor.x + Math.cos(angle) * orbit, 10, 82);
-        node.y = clampNumber(anchor.y + Math.sin(angle) * orbit * 0.78, 10, 84);
+        var ring = Math.floor(index / 3);
+        var orbit = anchor.radius + ring * 10 + (kgUnit(node.id, "orbit") * 3.8);
+        var angle = ((Math.PI * 2) / Math.max(group.length, 1)) * index + kgUnit(node.id, "angle") * 0.95 - 0.45;
+        var ellipse = 0.84 + kgUnit(node.id, "ellipse") * 0.34;
+        node.x = clampNumber(anchor.x + Math.cos(angle) * orbit, 7, 93);
+        node.y = clampNumber(anchor.y + Math.sin(angle) * orbit * ellipse, 8, 92);
+        node.r = Math.max(node.r, node.label_priority ? 10.8 : 7.6);
       });
     });
 
     var universeNodes = primaryNodes.slice();
     var universeEdges = rawEdges.slice();
+    var targetTotalNodes = Math.max(110, primaryNodes.length * 26);
+    var totalImportance = primaryNodes.reduce(function (sum, node) {
+      return sum + Math.max(1, Number(node.importance || 0));
+    }, 0) || 1;
 
-    primaryNodes.forEach(function (node, index) {
-      var baseCount = Math.max(4, Math.min(9, node.source_count + (node.importance >= 78 ? 2 : 0)));
+    primaryNodes.forEach(function (node) {
+      var share = Math.max(0.08, Number(node.importance || 0) / totalImportance);
+      var baseCount = Math.max(16, Math.min(34, Math.round((targetTotalNodes - primaryNodes.length) * share)));
       for (var satelliteIndex = 0; satelliteIndex < baseCount; satelliteIndex += 1) {
         var satelliteKind = satelliteIndex % 5 === 0 ? "source" : (satelliteIndex % 3 === 0 ? "relationship" : "evidence");
         var satId = node.id + "__" + satelliteKind + "_" + satelliteIndex;
-        var satAngle = ((Math.PI * 2) / Math.max(baseCount, 1)) * satelliteIndex + kgUnit(satId, "angle") * 0.7;
-        var satDistance = 4.8 + (satelliteIndex % 3) * 2.1 + (node.importance >= 84 ? 1.2 : 0);
+        var satRing = Math.floor(satelliteIndex / 8);
+        var satAngle = ((Math.PI * 2) / Math.max(baseCount, 1)) * satelliteIndex + kgUnit(satId, "angle") * 0.9 + satRing * 0.24;
+        var satDistance = 5.8 + satRing * 3.4 + (satelliteIndex % 4) * 1.5 + (node.importance >= 84 ? 1.4 : 0);
         universeNodes.push({
           id: satId,
           label: node.label + " · " + humanizeToken(satelliteKind) + " node",
@@ -645,43 +653,54 @@
           synthetic: true,
           parent_id: node.id,
           label_priority: false,
-          x: clampNumber(node.x + Math.cos(satAngle) * satDistance, 6, 88),
-          y: clampNumber(node.y + Math.sin(satAngle) * satDistance * 0.76, 8, 88),
-          r: satelliteKind === "source" ? 3.1 : (satelliteKind === "relationship" ? 2.8 : 2.4),
+          x: clampNumber(node.x + Math.cos(satAngle) * satDistance, 4, 96),
+          y: clampNumber(node.y + Math.sin(satAngle) * satDistance * 0.84, 6, 95),
+          r: satelliteKind === "source" ? 4.2 : (satelliteKind === "relationship" ? 3.7 : 3.2),
           focus_anchor: node.id
         });
         universeEdges.push([node.id, satId, satelliteKind]);
       }
-      if (index < rawEdges.length) {
-        var edge = rawEdges[index];
-        var from = primaryNodes.find(function (candidate) { return candidate.id === edge[0]; });
-        var to = primaryNodes.find(function (candidate) { return candidate.id === edge[1]; });
-        if (from && to) {
-          var relayId = edge[0] + "__" + edge[1] + "__relay";
-          universeNodes.push({
-            id: relayId,
-            label: from.label + " → " + to.label + " relationship",
-            short_label: "Path",
-            category: "relationship",
-            detail: "Derived relationship node showing the governed path between " + from.label + " and " + to.label + ". This is a visual relay, not a separate finding.",
-            hermes_prompt: firstDefined(from.hermes_prompt, "Explain how " + from.label + " connects to " + to.label + "."),
-            importance: 14,
-            source_count: 1,
-            primary_degree: 2,
-            kind: "relationship",
-            synthetic: true,
-            parent_id: from.id,
-            related_id: to.id,
-            label_priority: false,
-            x: clampNumber((from.x + to.x) / 2 + (kgUnit(relayId, "x") - 0.5) * 4.2, 8, 88),
-            y: clampNumber((from.y + to.y) / 2 + (kgUnit(relayId, "y") - 0.5) * 3.4, 8, 88),
-            r: 2.2,
-            focus_anchor: from.id
-          });
-          universeEdges.push([from.id, relayId, "relationship"]);
-          universeEdges.push([relayId, to.id, "relationship"]);
-        }
+    });
+
+    rawEdges.forEach(function (edge, edgeIndex) {
+      var from = primaryNodes.find(function (candidate) { return candidate.id === edge[0]; });
+      var to = primaryNodes.find(function (candidate) { return candidate.id === edge[1]; });
+      if (!from || !to) return;
+      var relayCount = primaryNodes.length <= 6 ? 3 : 2;
+      var prevId = from.id;
+      var dx = Number(to.x || 0) - Number(from.x || 0);
+      var dy = Number(to.y || 0) - Number(from.y || 0);
+      var norm = Math.sqrt(dx * dx + dy * dy) || 1;
+      var nx = -dy / norm;
+      var ny = dx / norm;
+      for (var relayStep = 0; relayStep < relayCount; relayStep += 1) {
+        var progress = (relayStep + 1) / (relayCount + 1);
+        var relayId = edge[0] + "__" + edge[1] + "__relay_" + edgeIndex + "_" + relayStep;
+        var bend = ((relayStep % 2 === 0 ? 1 : -1) * (2.8 + kgUnit(relayId, "bend") * 3.2));
+        universeNodes.push({
+          id: relayId,
+          label: from.label + " → " + to.label + " relationship",
+          short_label: relayStep === 1 ? "Bridge" : "Path",
+          category: "relationship",
+          detail: "Derived relationship node showing the governed path between " + from.label + " and " + to.label + ". This is a visual relay, not a separate finding.",
+          hermes_prompt: firstDefined(from.hermes_prompt, "Explain how " + from.label + " connects to " + to.label + "."),
+          importance: 16,
+          source_count: 1,
+          primary_degree: 2,
+          kind: "relationship",
+          synthetic: true,
+          parent_id: from.id,
+          related_id: to.id,
+          label_priority: false,
+          x: clampNumber(Number(from.x || 0) + dx * progress + nx * bend, 5, 95),
+          y: clampNumber(Number(from.y || 0) + dy * progress + ny * bend, 6, 94),
+          r: 3.3,
+          focus_anchor: from.id
+        });
+        universeEdges.push([prevId, relayId, "relationship"]);
+        prevId = relayId;
       }
+      universeEdges.push([prevId, to.id, "relationship"]);
     });
 
     return {
@@ -2015,7 +2034,7 @@
         else if (nr <= 7) sizeClass = " kg-node--minor";
         if (node.synthetic) sizeClass += ' kg-node--synthetic';
         var selClass = (isSelected === node.id) ? " is-selected" : "";
-        return '<g class="kg-node' + (active ? ' on' : ' off') + sizeClass + selClass + '" data-kg-id="' + escapeHtml(node.id) + '" tabindex="0" role="button" aria-label="' + escapeHtml(firstDefined(node.label, 'Node')) + ' — ' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || 'node')) + '"><circle class="kg-node-dot kg-node-dot--' + escapeHtml(node.category || 'default') + '" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(Math.max(node.synthetic ? 1.7 : 2.6, nr / (node.synthetic ? 1.25 : 2.2)))) + '"></circle></g>';
+        return '<g class="kg-node' + (active ? ' on' : ' off') + sizeClass + selClass + '" data-kg-id="' + escapeHtml(node.id) + '" tabindex="0" role="button" aria-label="' + escapeHtml(firstDefined(node.label, 'Node')) + ' — ' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || 'node')) + '"><circle class="kg-node-dot kg-node-dot--' + escapeHtml(node.category || 'default') + '" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(Math.max(node.synthetic ? 2.4 : 3.8, nr / (node.synthetic ? 1.05 : 1.65)))) + '"></circle></g>';
       }).join('')
       + '</svg>'
       /* Labels overlaid on SVG */

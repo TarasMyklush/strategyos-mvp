@@ -1108,12 +1108,13 @@ a { color: inherit; }
 .kg-stage__hud {
   top: 18px;
   left: 0;
-  right: 210px;
+  right: 250px;
 }
 
 .kg-controls {
   top: 18px;
   right: 0;
+  max-width: min(360px, 38%);
   justify-content: flex-end;
 }
 
@@ -1143,8 +1144,8 @@ a { color: inherit; }
 
 .kg-stage {
   position: relative;
-  min-height: 640px;
-  padding: 76px 0 84px;
+  min-height: 760px;
+  padding: 88px 28px 96px 24px;
   overflow: hidden;
   cursor: grab;
 }
@@ -1156,9 +1157,14 @@ a { color: inherit; }
 .kg-canvas {
   position: relative;
   width: 100%;
-  height: 100%;
+  min-height: 620px;
+  height: clamp(620px, 72vh, 860px);
   transform-origin: 50% 50%;
   transition: transform 140ms ease;
+}
+
+.kg-stage-shell.is-focus-mode .kg-canvas {
+  height: clamp(760px, 84vh, 1040px);
 }
 
 .kg-svg,
@@ -1175,14 +1181,14 @@ a { color: inherit; }
 
 .kg-edge {
   fill: none;
-  stroke: rgba(181, 198, 230, 0.13);
-  stroke-width: 0.34;
+  stroke: rgba(181, 198, 230, 0.24);
+  stroke-width: 0.56;
   transition: stroke 180ms ease, stroke-width 180ms ease, opacity 180ms ease;
 }
 
 .kg-edge.on {
-  stroke: rgba(203, 216, 244, 0.30);
-  stroke-width: 0.5;
+  stroke: rgba(203, 216, 244, 0.46);
+  stroke-width: 0.88;
 }
 
 .kg-edge--relationship {
@@ -1190,11 +1196,13 @@ a { color: inherit; }
 }
 
 .kg-edge.kg-dimmed {
-  stroke: rgba(181, 198, 230, 0.05);
-  stroke-width: 0.2;
+  stroke: rgba(181, 198, 230, 0.08);
+  stroke-width: 0.28;
 }
 
 .kg-node-dot {
+  opacity: 0.98;
+  filter: drop-shadow(0 0 8px rgba(111, 140, 255, 0.16));
   transition: fill 160ms ease, filter 160ms ease, opacity 180ms ease, transform 180ms ease;
   transform-origin: center;
 }
@@ -1214,11 +1222,12 @@ a { color: inherit; }
 .kg-node-dot--default { fill: #92a0b8; }
 
 .kg-node--major .kg-node-dot {
-  filter: drop-shadow(0 0 12px rgba(111, 140, 255, 0.44));
+  filter: drop-shadow(0 0 16px rgba(111, 140, 255, 0.52));
 }
 
 .kg-node--synthetic .kg-node-dot {
-  opacity: 0.84;
+  opacity: 0.94;
+  filter: drop-shadow(0 0 9px rgba(110, 231, 255, 0.18));
 }
 
 .kg-node:hover .kg-node-dot,
@@ -3923,8 +3932,16 @@ html[data-theme="dark"] .trend-axis {
 
   /* Reserve a lighter safe lane for the floating Hermes/A2A controls so the
      lower-right graph cluster remains clickable without entering focus mode. */
+  #knowledge-graph-card {
+    margin-right: clamp(200px, 22vw, 400px);
+  }
+
   .knowledge-graph-card .kg-stage-shell {
-    margin-right: clamp(96px, 12vw, 220px);
+    margin-right: clamp(180px, 20vw, 360px);
+  }
+
+  .kg-inspector {
+    right: clamp(200px, 22vw, 400px);
   }
 }
 
