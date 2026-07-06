@@ -8950,6 +8950,38 @@ def _sanitize_assistant_visible_text(value: Any) -> str:
     return str(text or "").strip()
 
 
+def _supplemental_grounding_payload(
+    *,
+    graph_result: dict[str, Any] | None = None,
+    retrieval_result: dict[str, Any] | None = None,
+    deterministic_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    if graph_result and graph_result.get("matched"):
+        payload["graph"] = {
+            "intent": graph_result.get("intent"),
+            "answer": graph_result.get("answer"),
+            "basis": graph_result.get("basis"),
+            "citations": list(graph_result.get("citations") or [])[:8],
+            "value": graph_result.get("value"),
+        }
+    if retrieval_result and retrieval_result.get("matched"):
+        payload["retrieval"] = {
+            "intent": retrieval_result.get("intent"),
+            "answer": retrieval_result.get("answer"),
+            "basis": retrieval_result.get("basis"),
+            "citations": list(retrieval_result.get("citations") or [])[:8],
+        }
+    if deterministic_result and deterministic_result.get("matched") is not False:
+        payload["tabular"] = {
+            "intent": deterministic_result.get("intent"),
+            "answer": deterministic_result.get("answer"),
+            "basis": deterministic_result.get("basis"),
+            "citations": list(deterministic_result.get("citations") or [])[:8],
+        }
+    return payload
+
+
 async def _llm_answer_question_async(*args: Any, **kwargs: Any) -> dict[str, Any]:
     loop = asyncio.get_running_loop()
     async with _LLM_PROVIDER_SEMAPHORE:
@@ -9244,10 +9276,63 @@ async def _assistant_chat_response(
         findings=context["findings"],
         summary=context["summary"],
         config=CONFIG,
+        persona=persona,
+        supplemental_evidence=_supplemental_grounding_payload(
+            graph_result=graph_result,
+            retrieval_result=retrieval_result,
+            deterministic_result=deterministic_result,
+        ),
     )
+    if result.get("matched") is False:
+        grounded_fallback = None
+        if graph_result and graph_result.get("matched"):
+            grounded_fallback = graph_result
+        elif retrieval_result and retrieval_result.get("matched"):
+            grounded_fallback = retrieval_result
+        elif deterministic_result.get("matched") is not False:
+            grounded_fallback = {
+                **deterministic_result,
+                "assistant_mode": "qa_engine",
+                "answered_by": deterministic_result.get("answered_by") or "tabular",
+            }
+        if grounded_fallback is not None:
+            grounded_orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                graph_result=graph_result,
+                retrieval_result=retrieval_result,
+                qa_result={
+                    **deterministic_result,
+                    "assistant_mode": "qa_engine",
+                    "answered_by": deterministic_result.get("answered_by") or "tabular",
+                },
+                driver_context=driver_context,
+            )
+            payload = _assistant_response_payload(
+                response_mode="llm",
+                question=question,
+                context=context,
+                requested_mode=mode,
+                persona=persona,
+                orchestrated=grounded_orchestrated,
+                base_result=grounded_fallback,
+                llm_status=result.get("llm_status") or llm_status,
+                assistant_context=assistant_context,
+            )
+            payload["mode"] = "llm"
+            payload["llm_fallback_attempted"] = True
+            payload["llm_grounded_fallback"] = True
+            return payload
     orchestrated = orchestrator.process(
         question,
         persona=persona,
+        graph_result=graph_result,
+        retrieval_result=retrieval_result,
+        qa_result={
+            **deterministic_result,
+            "assistant_mode": "qa_engine",
+            "answered_by": deterministic_result.get("answered_by") or "tabular",
+        },
         llm_result=result,
         driver_context=driver_context,
     )
@@ -9419,12 +9504,22 @@ def data_qa(
         for finding in context["findings"]
     ]
 
+    graph_result = None
+    retrieval_result = None
+    deterministic_result = None
+
     if mode == "llm":
         if context["bundle"] is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No completed run is available to answer questions yet. Start a run first.",
             )
+        graph_result = route_graph_question(context["run_id"], question)
+        retrieval_result = _route_keyword_retrieval(context["run_id"], question)
+        deterministic_result = qa_engine.answer_question(
+            question, bundle=context["bundle"], findings=context["findings"]
+        )
+        deterministic_result.setdefault("answered_by", "tabular")
         try:
             result = llm_qa.answer_question(
                 question,
@@ -9432,6 +9527,12 @@ def data_qa(
                 findings=context["findings"],
                 summary=context["summary"],
                 config=CONFIG,
+                persona=persona,
+                supplemental_evidence=_supplemental_grounding_payload(
+                    graph_result=graph_result,
+                    retrieval_result=retrieval_result,
+                    deterministic_result=deterministic_result,
+                ),
             )
         except RuntimeError as exc:
             transport_status = llm_qa.provider_transport_payload(exc)
@@ -9442,9 +9543,53 @@ def data_qa(
                     "transport": transport_status,
                 } if transport_status else str(exc),
             ) from exc
+        if result.get("matched") is False:
+            grounded_fallback = None
+            if graph_result and graph_result.get("matched"):
+                grounded_fallback = graph_result
+            elif retrieval_result and retrieval_result.get("matched"):
+                grounded_fallback = retrieval_result
+            elif deterministic_result.get("matched") is not False:
+                grounded_fallback = {
+                    **deterministic_result,
+                    "assistant_mode": "qa_engine",
+                    "answered_by": deterministic_result.get("answered_by") or "tabular",
+                }
+            if grounded_fallback is not None:
+                grounded_orchestrated = orchestrator.process(
+                    question,
+                    persona=persona,
+                    graph_result=graph_result,
+                    retrieval_result=retrieval_result,
+                    qa_result={
+                        **deterministic_result,
+                        "assistant_mode": "qa_engine",
+                        "answered_by": deterministic_result.get("answered_by") or "tabular",
+                    },
+                    driver_context=driver_context,
+                )
+                return _compose_response(
+                    response_mode="llm",
+                    base_payload={**grounded_fallback, "deterministic_matched": True},
+                    orchestrated_payload=grounded_orchestrated,
+                    extra_trace={
+                        "route": "llm_grounded_fallback",
+                        "intent": grounded_fallback.get("intent"),
+                        "knowledge_id": request.knowledge_id,
+                    },
+                    extra_payload={"llm_fallback_attempted": True, "llm_grounded_fallback": True},
+                    status_payload=result.get("llm_status") or llm_status,
+                )
         orchestrated = orchestrator.process(
             question,
             persona=persona,
+            graph_result=graph_result,
+            retrieval_result=retrieval_result,
+            qa_result={
+                **deterministic_result,
+                "assistant_mode": "qa_engine",
+                "answered_by": deterministic_result.get("answered_by") or "tabular",
+            },
             llm_result={**result, "assistant_mode": "llm"},
             driver_context=driver_context,
         )
@@ -9497,7 +9642,6 @@ def data_qa(
                 },
             )
 
-    deterministic_result = None
     if context["bundle"] is not None and mode in {"auto", "deterministic"}:
         graph_result = route_graph_question(context["run_id"], question)
         retrieval_result = _route_keyword_retrieval(context["run_id"], question)
@@ -9624,6 +9768,12 @@ def data_qa(
             findings=context["findings"],
             summary=context["summary"],
             config=CONFIG,
+            persona=persona,
+            supplemental_evidence=_supplemental_grounding_payload(
+                graph_result=graph_result,
+                retrieval_result=retrieval_result,
+                deterministic_result=deterministic_result,
+            ),
         )
     except RuntimeError as exc:
         if mode == "llm":
@@ -9665,6 +9815,9 @@ def data_qa(
     orchestrated = orchestrator.process(
         question,
         persona=persona,
+        graph_result=graph_result,
+        retrieval_result=retrieval_result,
+        qa_result={**deterministic_result, "assistant_mode": "qa_engine", "answered_by": deterministic_result.get("answered_by") or "tabular"} if deterministic_result is not None else None,
         llm_result={**result, "assistant_mode": "llm"},
         driver_context=driver_context,
     )
@@ -9688,8 +9841,6 @@ async def assistant_chat(
     role = str(principal.get("role") or "anonymous")
     authenticated = bool(principal.get("authenticated"))
     persona = (request.persona or "ceo").strip().lower() or "ceo"
-    public_safe = _principal_prefers_public_safe_surface(principal)
-
     if not authenticated:
         if persona not in EXECUTIVE_PERSONA_IDS:
             raise HTTPException(
@@ -9704,7 +9855,7 @@ async def assistant_chat(
             detail="This identity is not permitted for this endpoint.",
         )
 
-    return await _assistant_chat_response(request, public_safe=bool(public_safe and persona in EXECUTIVE_PERSONA_IDS))
+    return await _assistant_chat_response(request, public_safe=False)
 
 
 @app.post("/inputs/prepare")

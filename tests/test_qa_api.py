@@ -77,6 +77,21 @@ def _client_with_public_ceo_surface(*, llm_enabled: bool = False):
     return original, TestClient(api_module.app)
 
 
+def _client_with_identity_auth():
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_IDP_ENABLED": "true",
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_TOKEN_URL": "http://strategyos-idp:9000/oauth/token",
+            "STRATEGYOS_IDP_INTROSPECTION_URL": "http://strategyos-idp:9000/oauth/introspect",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+        }
+    )
+    return original, TestClient(api_module.app)
+
+
 def _parsed_scenario(*, matched: bool = False, payload: dict | None = None):
     result_payload = dict(payload or {"matched": matched, "citations": [], "suggestions": []})
 
@@ -194,7 +209,7 @@ def test_qa_llm_mode_uses_configured_adapter(monkeypatch):
             },
         )
 
-        def fake_answer(question, *, bundle, findings, summary, config):
+        def fake_answer(question, *, bundle, findings, summary, config, **_kwargs):
             assert question == "summarize the run"
             assert config.llm_model == "gpt-test"
             return {
@@ -251,7 +266,7 @@ def test_assistant_chat_llm_mode_uses_configured_adapter(monkeypatch):
             },
         )
 
-        def fake_answer(question, *, bundle, findings, summary, config):
+        def fake_answer(question, *, bundle, findings, summary, config, **_kwargs):
             assert question == "summarize the run"
             assert config.llm_model == "gpt-test"
             return {
@@ -566,6 +581,76 @@ def test_assistant_chat_authenticated_graph_route_returns_graph_provenance(monke
         _restore_env(original)
 
 
+def test_assistant_chat_authenticated_executive_token_uses_private_run_context(monkeypatch):
+    original, client = _client_with_public_ceo_surface()
+    try:
+        monkeypatch.setattr(
+            auth_module,
+            "_introspect_identity_token",
+            lambda token: {"role": "executive", "subject": "idp:test-user", "tenant_id": "strategyos"},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {"bundle": object(), "findings": [], "summary": {"run_id": "run-auth-1"}, "run_id": "run-auth-1", "run_mode": "full", "kg_nodes": [], "kg_edges": []},
+        )
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(api_module, "route_graph_question", lambda run_id, question: {"matched": True, "answer": "KG-backed executive answer", "basis": "Neo4j traversal", "citations": [], "assistant_mode": "graph", "answered_by": "graph", "intent": "vendor_collusion_cluster"})
+        monkeypatch.setattr(api_module, "_route_keyword_retrieval", lambda run_id, question: {"matched": False})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Which vendors are implicated in collusion clusters and what evidence supports it? Explain for the CEO.",
+                "persona": "ceo",
+                "mode": "auto",
+                "source": "executive_surface",
+                "entrypoint": "drawer_input",
+            },
+            headers={"Authorization": "Bearer executive-token"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_id"] == "run-auth-1"
+        assert payload["run_mode"] == "full"
+        assert payload["answered_by"] == "graph"
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_authenticated_identity_token_uses_private_run_context(monkeypatch):
+    original, client = _client_with_identity_auth()
+    try:
+        monkeypatch.setattr(
+            auth_module,
+            "_introspect_identity_token",
+            lambda token: {"role": "executive", "subject": "idp:test-user", "tenant_id": "strategyos"},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {"bundle": object(), "findings": [], "summary": {"run_id": "run-1"}, "run_id": "run-1", "run_mode": "full", "kg_nodes": [], "kg_edges": []},
+        )
+        monkeypatch.setattr(api_module, "route_graph_question", lambda run_id, question: {"matched": True, "answer": "Graph answer", "basis": "Neo4j traversal", "citations": [], "assistant_mode": "graph", "answered_by": "graph", "intent": "vendor_collusion_cluster"})
+        monkeypatch.setattr(api_module, "_route_keyword_retrieval", lambda run_id, question: {"matched": False})
+        monkeypatch.setattr(api_module.qa_engine, "answer_question", lambda *_args, **_kwargs: {"matched": False, "answer": "no tabular", "citations": [], "suggestions": []})
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "Which vendors are implicated in collusion clusters?", "persona": "ceo", "mode": "auto"},
+            headers={"Authorization": "Bearer live-token"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_id"] == "run-1"
+        assert payload["run_mode"] == "full"
+        assert payload["answered_by"] == "graph"
+    finally:
+        _restore_env(original)
+
+
 def test_assistant_chat_graph_route_short_circuits_tabular_qa(monkeypatch):
     original, client = _client_with_auth()
     try:
@@ -684,6 +769,86 @@ def test_qa_graph_route_short_circuits_tabular_qa(monkeypatch):
 
         assert response.status_code == 200
         assert response.json()["answered_by"] == "graph"
+    finally:
+        _restore_env(original)
+
+
+def test_qa_llm_mode_preserves_graph_grounding_when_llm_cannot_synthesize(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_RUN_POLICY": "external-approved",
+            "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+            "STRATEGYOS_LLM_API_KEY": "test-key",
+            "STRATEGYOS_LLM_MODEL": "gpt-test",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {"bundle": object(), "findings": [], "summary": {"run_id": "run-1"}, "run_id": "run-1", "run_mode": "full", "kg_nodes": [], "kg_edges": []},
+        )
+        monkeypatch.setattr(api_module, "route_graph_question", lambda run_id, question: {"matched": True, "answer": "Tamween Distribution and Al Rashid share the same bank account. CEO implication: linked vendor identities need immediate review.", "basis": "Neo4j traversal", "citations": [{"source_path": "03_Master_Data/Vendor_Master.xlsx", "locator": "Vendor:V-1"}], "assistant_mode": "graph", "answered_by": "graph", "intent": "vendor_collusion_cluster"})
+        monkeypatch.setattr(api_module, "_route_keyword_retrieval", lambda run_id, question: {"matched": False})
+        monkeypatch.setattr(api_module.qa_engine, "answer_question", lambda *_args, **_kwargs: {"matched": False, "answer": "No deterministic answer.", "citations": [], "suggestions": [], "answered_by": "tabular"})
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", lambda *args, **kwargs: {"matched": False, "answer": "", "basis": "Insufficient synthesis.", "citations": [], "suggestions": [], "llm_status": {"enabled": True, "model": "gpt-test"}})
+
+        response = client.post(
+            "/qa",
+            json={"question": "Which vendors are implicated in collusion clusters and what evidence supports it? Explain for the CEO.", "persona": "ceo", "mode": "llm"},
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "llm"
+        assert payload["answered_by"] == "graph"
+        assert "CEO implication" in payload["answer"]
+        assert payload["llm_grounded_fallback"] is True
+    finally:
+        _restore_env(original)
+
+
+def test_qa_llm_mode_preserves_graph_grounding_when_graph_matches(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_RUN_POLICY": "external-approved",
+            "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+            "STRATEGYOS_LLM_API_KEY": "test-key",
+            "STRATEGYOS_LLM_MODEL": "gpt-test",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {"bundle": object(), "findings": [], "summary": {"run_id": "run-1"}, "run_id": "run-1", "run_mode": "full", "kg_nodes": [], "kg_edges": []},
+        )
+        monkeypatch.setattr(api_module, "route_graph_question", lambda run_id, question: {"matched": True, "answer": "Tamween Distribution and Alpha LLC share a bank account. CEO implication: investigate before further payments.", "basis": "Neo4j traversal", "citations": [{"source_path": "03_Master_Data/Vendor_Master.xlsx", "locator": "Vendor:V-1"}], "assistant_mode": "graph", "answered_by": "graph", "intent": "vendor_collusion_cluster"})
+        monkeypatch.setattr(api_module, "_route_keyword_retrieval", lambda run_id, question: {"matched": False})
+        monkeypatch.setattr(api_module.qa_engine, "answer_question", lambda *_args, **_kwargs: {"matched": False, "answer": "No deterministic answer.", "citations": [], "suggestions": []})
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", lambda *_args, **_kwargs: {"matched": False, "answer": "The current board pack shows governed data.", "basis": "generic fallback", "citations": [], "suggestions": [], "llm_status": {"enabled": True}})
+
+        response = client.post(
+            "/qa",
+            json={"question": "Which vendors are implicated in collusion clusters and what evidence supports it? Explain for the CEO.", "persona": "ceo", "mode": "llm"},
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "graph"
+        assert "Tamween Distribution and Alpha LLC" in payload["answer"]
     finally:
         _restore_env(original)
 

@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from typing import Any, Callable, Protocol
 
 from .config import CONFIG
@@ -80,22 +79,23 @@ class Neo4jGraphSource:
         for row in rows:
             evidence = _nodes(row.get("evidence"))
             citations.extend(_citations(evidence))
+            findings = _dedupe_nodes(_nodes(row.get("findings")))
             clusters.append(
                 {
                     "left_vendor": _node_summary(row.get("left")),
                     "right_vendor": _node_summary(row.get("right")),
                     "relationship_type": row.get("relationship_type"),
-                    "findings": _nodes(row.get("findings")),
+                    "findings": findings,
+                    "recoverable_sar": round(sum(_node_amount(item) for item in findings), 2),
                     "citations": _citations(evidence),
                 }
             )
+        answer = _humanize_vendor_collusion_clusters(clusters)
         return {
             "matched": True,
             "available": True,
             "intent": "vendor_collusion_cluster",
-            "answer": (
-                f"Found {len(clusters)} vendor entity-resolution cluster(s) with shared bank-account or tax-id edges."
-            ),
+            "answer": answer,
             "value": clusters,
             "unit": "clusters",
             "basis": "Neo4j run-scoped traversal of Vendor SAME_BANK_ACCOUNT_AS/SAME_TAX_ID_AS relationships.",
@@ -144,10 +144,7 @@ class Neo4jGraphSource:
             "matched": True,
             "available": True,
             "intent": "finding_evidence_chain",
-            "answer": (
-                f"{normalized_finding_id} is connected to {len(_nodes(row.get('evidence')))} direct evidence source(s), "
-                f"{len(vendors)} vendor(s), and {len(contracts)} contract node(s)."
-            ),
+            "answer": _humanize_finding_evidence_chain(finding, vendors, evidence, contracts),
             "value": {
                 "finding": finding,
                 "evidence": _dedupe_nodes(evidence),
@@ -162,12 +159,17 @@ class Neo4jGraphSource:
     def vendor_finding_exposure(
         self, run_id: str, vendor_id: str, *, limit: int = DEFAULT_QUERY_LIMIT
     ) -> dict[str, Any]:
-        normalized_vendor_id = _strip_prefix(vendor_id, "Vendor:")
+        vendor_reference = _strip_prefix(vendor_id, "Vendor:")
+        vendor_reference_lc = vendor_reference.lower()
         row = self._single(
             """
             MATCH (finding:StrategyOSNode {run_id: $run_id, domain_label: 'Finding'})-[involves]->(vendor:StrategyOSNode {run_id: $run_id, domain_label: 'Vendor'})
             WHERE involves.original_label = 'INVOLVES_VENDOR'
-              AND (vendor.node_key = $vendor_node_key OR vendor.vendor_id = $vendor_id)
+              AND (
+                    vendor.node_key = $vendor_node_key
+                 OR vendor.vendor_id = $vendor_id
+                 OR toLower(coalesce(vendor.vendor_name, '')) CONTAINS $vendor_name_lc
+              )
             WITH vendor, collect(DISTINCT finding)[0..$limit] AS findings
             OPTIONAL MATCH (linked_finding:StrategyOSNode {run_id: $run_id, domain_label: 'Finding'})-[support]->(evidence:StrategyOSNode {run_id: $run_id, domain_label: 'Evidence'})
             WHERE linked_finding IN findings AND support.original_label = 'SUPPORTED_BY'
@@ -178,28 +180,28 @@ class Neo4jGraphSource:
             LIMIT 1
             """,
             run_id=run_id,
-            vendor_id=normalized_vendor_id,
-            vendor_node_key=f"Vendor:{normalized_vendor_id}",
+            vendor_id=vendor_reference,
+            vendor_node_key=f"Vendor:{vendor_reference}",
+            vendor_name_lc=vendor_reference_lc,
             limit=_bounded_limit(limit),
         )
         if not row:
             return _empty_answer(
                 intent="vendor_finding_exposure",
-                answer=f"No Neo4j findings were linked to vendor {normalized_vendor_id}.",
+                answer=f"No Neo4j findings were linked to vendor {vendor_reference}.",
                 unit="findings",
             )
         findings = _nodes(row.get("findings"))
         evidence = _nodes(row.get("evidence"))
         recoverable_sar = _as_float(row.get("recoverable_sar"))
+        vendor = _node_summary(row.get("vendor"))
         return {
             "matched": True,
             "available": True,
             "intent": "vendor_finding_exposure",
-            "answer": (
-                f"Vendor {normalized_vendor_id} is linked to {len(findings)} finding(s) with {_sar(recoverable_sar)} recoverable."
-            ),
+            "answer": _humanize_vendor_exposure(vendor, findings, recoverable_sar),
             "value": {
-                "vendor": _node_summary(row.get("vendor")),
+                "vendor": vendor,
                 "findings": findings,
                 "recoverable_sar": round(recoverable_sar, 2),
             },
@@ -236,7 +238,7 @@ class Neo4jGraphSource:
             "matched": True,
             "available": True,
             "intent": "shared_evidence_findings",
-            "answer": f"Found {len(groups)} evidence source(s) shared by multiple findings.",
+            "answer": _humanize_shared_evidence(groups),
             "value": groups,
             "unit": "evidence_sources",
             "basis": "Neo4j run-scoped traversal of Finding SUPPORTED_BY Evidence pairs.",
@@ -279,7 +281,7 @@ class Neo4jGraphSource:
             "matched": True,
             "available": True,
             "intent": "vendor_contract_gap",
-            "answer": f"Found {len(vendors)} vendor(s) with invoices and no HAS_CONTRACT edge.",
+            "answer": _humanize_vendor_contract_gaps(vendors),
             "value": vendors,
             "unit": "vendors",
             "basis": "Neo4j run-scoped traversal for vendors issuing invoices without a contract relationship.",
@@ -595,3 +597,121 @@ def _as_float(value: Any) -> float:
 
 def _sar(value: float) -> str:
     return f"SAR {value:,.2f}"
+
+
+def _node_display(node: dict[str, Any] | None) -> str:
+    if not node:
+        return "Unknown"
+    properties = node.get("properties") or {}
+    return str(
+        node.get("display")
+        or properties.get("vendor_name")
+        or properties.get("title")
+        or properties.get("finding_id")
+        or properties.get("vendor_id")
+        or node.get("id")
+        or "Unknown"
+    )
+
+
+def _node_amount(node: dict[str, Any] | None) -> float:
+    if not node:
+        return 0.0
+    properties = node.get("properties") or {}
+    return _as_float(properties.get("recoverable_sar") or properties.get("amount_sar"))
+
+
+def _finding_label(node: dict[str, Any]) -> str:
+    properties = node.get("properties") or {}
+    finding_id = str(properties.get("finding_id") or node.get("id") or "").replace("Finding:", "")
+    title = str(properties.get("title") or "").strip()
+    return f"{finding_id} ({title})" if title and finding_id else title or finding_id or _node_display(node)
+
+
+def _humanize_vendor_collusion_clusters(clusters: list[dict[str, Any]]) -> str:
+    if not clusters:
+        return "No vendor entity-resolution clusters were found in the Neo4j run graph."
+    parts = []
+    for cluster in clusters[:3]:
+        left_name = _node_display(cluster.get("left_vendor"))
+        right_name = _node_display(cluster.get("right_vendor"))
+        relationship = str(cluster.get("relationship_type") or "shared identifier").replace("_", " ").lower()
+        findings = list(cluster.get("findings") or [])
+        finding_text = ", ".join(_finding_label(item) for item in findings[:3])
+        exposure = _as_float(cluster.get("recoverable_sar"))
+        detail = f"{left_name} and {right_name} share {relationship}"
+        if finding_text:
+            detail += f" and connect to {finding_text}"
+        if exposure > 0:
+            detail += f", with {_sar(exposure)} of recoverable exposure across linked findings"
+        parts.append(detail + ".")
+    return (
+        f"The graph flags {len(clusters)} vendor cluster(s) that need CEO review. "
+        + " ".join(parts)
+        + " CEO implication: these are collusion-risk signals from shared identifiers, not proof on their own. "
+          "Next step: validate beneficial ownership, freeze new payments if warranted, and review the linked findings and evidence."
+    )
+
+
+def _humanize_vendor_exposure(vendor: dict[str, Any], findings: list[dict[str, Any]], recoverable_sar: float) -> str:
+    vendor_name = _node_display(vendor)
+    if not findings:
+        return f"{vendor_name} is in the run graph, but no linked findings were returned."
+    finding_text = ", ".join(_finding_label(item) for item in findings[:4])
+    return (
+        f"{vendor_name} is linked to {len(findings)} finding(s): {finding_text}. "
+        f"Current recoverable exposure tied to those findings is {_sar(recoverable_sar)}. "
+        "CEO implication: this vendor needs board-level attention only if the control failure is material or recurring. "
+        "Next step: review the cited evidence and decide whether to escalate, contain, or monitor."
+    )
+
+
+def _humanize_finding_evidence_chain(
+    finding: dict[str, Any],
+    vendors: list[dict[str, Any]],
+    evidence: list[dict[str, Any]],
+    contracts: list[dict[str, Any]],
+) -> str:
+    finding_text = _finding_label(finding)
+    evidence_text = ", ".join(_node_display(item) for item in evidence[:4]) or "no cited evidence source"
+    vendor_text = ", ".join(_node_display(item) for item in vendors[:4]) or "no named vendor"
+    contract_text = ", ".join(_node_display(item) for item in contracts[:3])
+    answer = (
+        f"{finding_text} is backed by {evidence_text} and links to {vendor_text}. "
+        "CEO implication: this issue is traceable to named evidence, so it is ready for board or audit challenge."
+    )
+    if contract_text:
+        answer += f" Contract context also appears in {contract_text}."
+    answer += " Next step: confirm owner, recovery plan, and target closure date before escalation."
+    return answer
+
+
+def _humanize_shared_evidence(groups: list[dict[str, Any]]) -> str:
+    if not groups:
+        return "No shared evidence links were found across findings in the Neo4j run graph."
+    top = groups[0]
+    evidence_name = _node_display(top.get("evidence"))
+    findings = list(top.get("findings") or [])
+    finding_text = ", ".join(_finding_label(item) for item in findings[:4])
+    return (
+        f"Found {len(groups)} shared evidence source(s). The clearest chain is {evidence_name}, which supports {finding_text}. "
+        "CEO implication: multiple findings leaning on the same evidence may indicate a broader control theme rather than an isolated defect. "
+        "Next step: confirm whether remediation should happen at the process level, not case by case."
+    )
+
+
+def _humanize_vendor_contract_gaps(vendors: list[dict[str, Any]]) -> str:
+    if not vendors:
+        return "No vendors with invoice activity and missing contract links were found in the Neo4j run graph."
+    highlights = []
+    for item in vendors[:3]:
+        vendor_name = _node_display(item.get("vendor"))
+        invoice_count = int(item.get("invoice_count") or 0)
+        invoice_amount = _as_float(item.get("invoice_amount_sar"))
+        highlights.append(f"{vendor_name} ({invoice_count} invoices, {_sar(invoice_amount)})")
+    return (
+        f"Found {len(vendors)} vendor(s) with invoice activity but no contract link. "
+        f"Highest-exposure examples: {', '.join(highlights)}. "
+        "CEO implication: spend is flowing before contractual protection is visible in the graph. "
+        "Next step: confirm whether contracts exist off-graph, then prioritize remediation by exposure and recurrence."
+    )

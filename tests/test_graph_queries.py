@@ -193,6 +193,8 @@ def test_vendor_collusion_clusters_are_run_scoped_and_cited():
     assert result["value"][0]["relationship_type"] == "SAME_BANK_ACCOUNT_AS"
     assert result["value"][0]["left_vendor"]["properties"]["vendor_id"] == "V-1142"
     assert result["citations"][0]["source_path"] == "03_Master_Data/Vendor_Master.xlsx"
+    assert "Al Rashid Co" in result["answer"]
+    assert "CEO implication" in result["answer"]
     query, params = session.calls[0]
     assert "SAME_BANK_ACCOUNT_AS" not in query
     assert params["relationship_labels"] == ["SAME_BANK_ACCOUNT_AS", "SAME_TAX_ID_AS"]
@@ -229,6 +231,9 @@ def test_finding_evidence_chain_returns_cited_chain():
         "08_Invoices/invoice.pdf",
         "04_Contracts/ct.pdf",
     }
+    assert "F-004" in result["answer"]
+    assert "08_Invoices/invoice.pdf" in result["answer"]
+    assert "CEO implication" in result["answer"]
     query, params = session.calls[0]
     assert "Finding:F-004" not in query
     assert params["finding_id"] == "F-004"
@@ -246,6 +251,7 @@ def test_shared_evidence_findings_and_contract_gaps_shape_answers():
         "statement.pdf"
     )
     assert len(shared["value"][0]["findings"]) == 2
+    assert "F-001" in shared["answer"]
 
     gap_session = FakeSession()
     gaps = graph_queries.vendor_contract_gaps("run-1", source=_source(gap_session))
@@ -254,3 +260,5 @@ def test_shared_evidence_findings_and_contract_gaps_shape_answers():
     assert gaps["value"][0]["vendor"]["properties"]["vendor_id"] == "V-2091"
     assert gaps["value"][0]["invoice_count"] == 11
     assert gaps["value"][0]["invoice_amount_sar"] == 420200.0
+    assert "Quick Print Services" in gaps["answer"]
+    assert "CEO implication" in gaps["answer"]

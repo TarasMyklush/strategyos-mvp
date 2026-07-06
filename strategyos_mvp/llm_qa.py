@@ -67,6 +67,7 @@ _EVIDENCE_TEXT_KEYS = {
 SYSTEM_PROMPT = """You are StrategyOS evidence Q&A.
 Answer only from the JSON evidence supplied by the application.
 If the evidence is insufficient, say that and set matched=false.
+When the evidence includes graph, retrieval, or deterministic grounding, synthesize it into plain executive language: name the entities involved, explain the evidence, quantify exposure when present, state the board implication, and recommend the next action.
 Return only valid json with keys: matched, answer, basis, citations, suggestions.
 Example json output:
 {"matched": true, "answer": "SAR 120.00 is recoverable.", "basis": "Finding F-001 in supplied evidence.", "citations": [{"source_path": "ap.xlsx", "locator": "row 2", "excerpt": "duplicate payment", "finding_id": "F-001"}], "suggestions": []}
@@ -163,6 +164,7 @@ def answer_question(
     config: Any,
     public_context_packet: dict[str, Any] | None = None,
     persona: str | None = None,
+    supplemental_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     status = chat_status(config)
     if not status["enabled"]:
@@ -184,6 +186,7 @@ def answer_question(
         summary=summary,
         public_context_packet=public_packet,
         persona=persona,
+        supplemental_evidence=supplemental_evidence,
     )
     default_basis = (
         "LLM answer grounded in supplied public executive packet."
@@ -286,6 +289,7 @@ def _build_evidence_payload(
     summary: dict[str, Any],
     public_context_packet: dict[str, Any] | None = None,
     persona: str | None = None,
+    supplemental_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if public_context_packet:
         payload = _public_evidence_payload(
@@ -305,6 +309,8 @@ def _build_evidence_payload(
         },
         "findings": [_finding_summary(finding) for finding in findings[:12]],
     }
+    if supplemental_evidence:
+        payload["grounding"] = supplemental_evidence
     return _guard_model_evidence_payload(payload)
 
 
