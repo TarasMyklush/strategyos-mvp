@@ -898,6 +898,11 @@ def test_kg_render_includes_modern_elements():
     assert 'role="application"' in js, "Graph stage must have application ARIA role"
     assert "aria-label" in js, "Graph must have aria-labels"
     assert "kg-dimmed" in js, "Dimmed state class for hover must exist"
+    assert "Graph Universe" in js, "Knowledge graph should expose Graph Universe mode"
+    assert "kg-density-toggle" in js, "Density toggle control must exist"
+    assert "kg-zoom-in" in js and "kg-zoom-out" in js, "Zoom controls must exist"
+    assert "kg-focus-mode" in js, "Focus mode control must exist"
+    assert "evidence/source/relationship nodes" in js, "Synthetic node provenance copy must be explicit"
 
 
 def test_kg_inspector_has_ask_hermes_cta():
@@ -913,6 +918,32 @@ def test_kg_inspector_has_ask_hermes_cta():
     assert "askAssistant" in inspector_code, (
         "Ask Hermes CTA must call askAssistant() with the node's hermes_prompt"
     )
+
+
+def test_kg_universe_controls_present():
+    """Graph universe must expose the dense-navigation controls."""
+    js = _static_executive_js()
+
+    assert "kg-controls" in js, "Graph universe toolbar must exist"
+    assert "kg-density-toggle" in js, "Density toggle must exist"
+    assert "kg-zoom-in" in js, "Zoom-in control must exist"
+    assert "kg-zoom-out" in js, "Zoom-out control must exist"
+    assert "kg-fit" in js, "Fit control must exist"
+    assert "kg-reset" in js, "Reset control must exist"
+    assert "kg-focus-mode" in js, "Focus mode control must exist"
+
+
+def test_kg_universe_uses_honest_derived_density_nodes():
+    """Dense graph mode must use explicit derived evidence/source/path nodes, not silent fake claims."""
+    js = _static_executive_js()
+
+    assert 'satelliteKind = satelliteIndex % 5 === 0 ? "source"' in js, (
+        "Dense universe must derive source/evidence satellites"
+    )
+    assert "visual evidence density, not a new business claim" in js, (
+        "Derived density nodes must explicitly disclaim fabricated business claims"
+    )
+    assert 'category: "relationship"' in js, "Relationship relay nodes must exist"
 
 
 # ── YouTube Leaders' Corner embed safety ──

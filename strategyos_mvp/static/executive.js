@@ -478,10 +478,227 @@
     return safeArray(DESIGN_GLOBAL.a2a);
   }
 
+  function normalizeKgCategory(value) {
+    var raw = String(firstDefined(value, "signal")).trim();
+    var key = raw.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    var map = {
+      plan: "plan",
+      board_plan: "plan",
+      board: "plan",
+      kpi: "KPI",
+      finance: "KPI",
+      metric: "KPI",
+      business_unit: "business_unit",
+      businessunit: "business_unit",
+      bu: "business_unit",
+      unit: "business_unit",
+      finding: "finding",
+      risk: "finding",
+      issue: "finding",
+      document: "document",
+      report: "document",
+      deck: "document",
+      audit: "document",
+      vendor: "vendor",
+      supplier: "vendor",
+      invoice: "invoice",
+      receivable: "invoice",
+      contract: "contract",
+      agreement: "contract",
+      evidence: "evidence",
+      source: "source",
+      relationship: "relationship",
+      signal: "signal"
+    };
+    return map[key] || raw || "signal";
+  }
+
+  function clampNumber(value, min, max) {
+    var num = Number(value);
+    if (!Number.isFinite(num)) num = min;
+    return Math.max(min, Math.min(max, num));
+  }
+
+  function kgHash(seed) {
+    var str = String(seed || "kg");
+    var hash = 0;
+    for (var i = 0; i < str.length; i += 1) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+  }
+
+  function kgUnit(seed, salt) {
+    var hash = kgHash(String(seed || "") + "::" + String(salt || 0));
+    return (hash % 1000) / 1000;
+  }
+
+  function safeNodeId(label, index) {
+    var base = String(firstDefined(label, "node")).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    return (base || "node") + "_" + index;
+  }
+
+  function buildKnowledgeUniverse(rawGraph) {
+    rawGraph = rawGraph || {};
+    var rawNodes = safeArray(rawGraph.nodes);
+    var rawEdges = safeArray(rawGraph.edges).map(function (edge) {
+      return [firstDefined(edge && edge[0], edge && edge.source, ""), firstDefined(edge && edge[1], edge && edge.target, ""), firstDefined(edge && edge[2], edge && edge.label, "")];
+    }).filter(function (edge) {
+      return edge[0] && edge[1];
+    });
+    var questions = safeArray(rawGraph.questions);
+    var degreeMap = {};
+    rawEdges.forEach(function (edge) {
+      degreeMap[edge[0]] = (degreeMap[edge[0]] || 0) + 1;
+      degreeMap[edge[1]] = (degreeMap[edge[1]] || 0) + 1;
+    });
+
+    var clusterAnchors = {
+      plan: { x: 48, y: 46, radius: 9 },
+      KPI: { x: 35, y: 20, radius: 12 },
+      business_unit: { x: 72, y: 58, radius: 14 },
+      finding: { x: 20, y: 60, radius: 12 },
+      document: { x: 18, y: 78, radius: 10 },
+      vendor: { x: 82, y: 26, radius: 9 },
+      invoice: { x: 34, y: 82, radius: 10 },
+      contract: { x: 84, y: 72, radius: 10 },
+      evidence: { x: 58, y: 18, radius: 8 },
+      source: { x: 64, y: 82, radius: 8 },
+      relationship: { x: 56, y: 64, radius: 8 },
+      signal: { x: 62, y: 18, radius: 10 }
+    };
+
+    var primaryNodes = rawNodes.map(function (node, index) {
+      var category = normalizeKgCategory(firstDefined(node && node.category, node && node.type, node && node.domain, node && node.properties && node.properties.domain, "signal"));
+      var degree = degreeMap[node.id] || 0;
+      var baseRadius = clampNumber(firstDefined(node && node.r, node && node.importance, 8), 6, 15);
+      var importance = clampNumber(baseRadius * 6 + degree * 8 + (category === "plan" ? 18 : 0) + (category === "KPI" ? 10 : 0), 38, 100);
+      return {
+        id: firstDefined(node && node.id, safeNodeId(node && node.label, index)),
+        label: firstDefined(node && node.label, "Node " + (index + 1)),
+        short_label: firstDefined(node && node.short_label, node && node.label, "Node " + (index + 1)),
+        category: category,
+        detail: firstDefined(node && node.detail, node && node.description, node && node.value, "No additional detail available."),
+        hermes_prompt: firstDefined(node && node.hermes_prompt, "Tell me about " + firstDefined(node && node.label, "this node") + "."),
+        importance: importance,
+        source_count: Math.max(2, degree + Math.round((String(firstDefined(node && node.detail, "")).length || 0) / 70) + 1),
+        primary_degree: degree,
+        kind: "primary",
+        synthetic: false,
+        label_priority: category === "plan" || importance >= 76,
+        x: Number(node && node.x),
+        y: Number(node && node.y),
+        r: baseRadius,
+        focus_anchor: firstDefined(node && node.id, safeNodeId(node && node.label, index))
+      };
+    });
+
+    var groups = {};
+    primaryNodes.forEach(function (node) {
+      var category = node.category || "signal";
+      if (!groups[category]) groups[category] = [];
+      groups[category].push(node);
+    });
+
+    Object.keys(groups).forEach(function (category) {
+      var anchor = clusterAnchors[category] || clusterAnchors.signal;
+      var group = groups[category].slice().sort(function (left, right) {
+        return Number(right.importance || 0) - Number(left.importance || 0);
+      });
+      group.forEach(function (node, index) {
+        if (category === "plan" && index === 0) {
+          node.x = 50;
+          node.y = 48;
+          node.r = Math.max(node.r, 15);
+          node.label_priority = true;
+          return;
+        }
+        var ring = Math.floor(index / 4);
+        var orbit = anchor.radius + ring * 7 + (kgUnit(node.id, "orbit") * 2.6);
+        var angle = ((Math.PI * 2) / Math.max(group.length, 1)) * index + kgUnit(node.id, "angle") * 0.65 - 0.3;
+        node.x = clampNumber(anchor.x + Math.cos(angle) * orbit, 10, 82);
+        node.y = clampNumber(anchor.y + Math.sin(angle) * orbit * 0.78, 10, 84);
+      });
+    });
+
+    var universeNodes = primaryNodes.slice();
+    var universeEdges = rawEdges.slice();
+
+    primaryNodes.forEach(function (node, index) {
+      var baseCount = Math.max(4, Math.min(9, node.source_count + (node.importance >= 78 ? 2 : 0)));
+      for (var satelliteIndex = 0; satelliteIndex < baseCount; satelliteIndex += 1) {
+        var satelliteKind = satelliteIndex % 5 === 0 ? "source" : (satelliteIndex % 3 === 0 ? "relationship" : "evidence");
+        var satId = node.id + "__" + satelliteKind + "_" + satelliteIndex;
+        var satAngle = ((Math.PI * 2) / Math.max(baseCount, 1)) * satelliteIndex + kgUnit(satId, "angle") * 0.7;
+        var satDistance = 4.8 + (satelliteIndex % 3) * 2.1 + (node.importance >= 84 ? 1.2 : 0);
+        universeNodes.push({
+          id: satId,
+          label: node.label + " · " + humanizeToken(satelliteKind) + " node",
+          short_label: humanizeToken(satelliteKind),
+          category: satelliteKind,
+          detail: "Derived " + satelliteKind + " node generated from the governed graph context around " + node.label + ". This is visual evidence density, not a new business claim.",
+          hermes_prompt: firstDefined(node.hermes_prompt, "Explain the evidence around " + node.label + "."),
+          importance: 18 + (satelliteKind === "source" ? 6 : 0),
+          source_count: 1,
+          primary_degree: 1,
+          kind: satelliteKind,
+          synthetic: true,
+          parent_id: node.id,
+          label_priority: false,
+          x: clampNumber(node.x + Math.cos(satAngle) * satDistance, 6, 88),
+          y: clampNumber(node.y + Math.sin(satAngle) * satDistance * 0.76, 8, 88),
+          r: satelliteKind === "source" ? 3.1 : (satelliteKind === "relationship" ? 2.8 : 2.4),
+          focus_anchor: node.id
+        });
+        universeEdges.push([node.id, satId, satelliteKind]);
+      }
+      if (index < rawEdges.length) {
+        var edge = rawEdges[index];
+        var from = primaryNodes.find(function (candidate) { return candidate.id === edge[0]; });
+        var to = primaryNodes.find(function (candidate) { return candidate.id === edge[1]; });
+        if (from && to) {
+          var relayId = edge[0] + "__" + edge[1] + "__relay";
+          universeNodes.push({
+            id: relayId,
+            label: from.label + " → " + to.label + " relationship",
+            short_label: "Path",
+            category: "relationship",
+            detail: "Derived relationship node showing the governed path between " + from.label + " and " + to.label + ". This is a visual relay, not a separate finding.",
+            hermes_prompt: firstDefined(from.hermes_prompt, "Explain how " + from.label + " connects to " + to.label + "."),
+            importance: 14,
+            source_count: 1,
+            primary_degree: 2,
+            kind: "relationship",
+            synthetic: true,
+            parent_id: from.id,
+            related_id: to.id,
+            label_priority: false,
+            x: clampNumber((from.x + to.x) / 2 + (kgUnit(relayId, "x") - 0.5) * 4.2, 8, 88),
+            y: clampNumber((from.y + to.y) / 2 + (kgUnit(relayId, "y") - 0.5) * 3.4, 8, 88),
+            r: 2.2,
+            focus_anchor: from.id
+          });
+          universeEdges.push([from.id, relayId, "relationship"]);
+          universeEdges.push([relayId, to.id, "relationship"]);
+        }
+      }
+    });
+
+    return {
+      questions: questions,
+      nodes: universeNodes,
+      edges: universeEdges,
+      raw_node_count: primaryNodes.length,
+      synthetic_node_count: Math.max(0, universeNodes.length - primaryNodes.length),
+      visible_label_count: primaryNodes.filter(function (node) { return node.label_priority; }).length,
+      evidence_coverage: primaryNodes.reduce(function (sum, node) { return sum + Number(node.source_count || 0); }, 0)
+    };
+  }
+
   function getKnowledgeGraph() {
     var shared = getSharedAssistantContext();
     if (safeArray(shared.kg_nodes).length) {
-      return {
+      return buildKnowledgeUniverse({
         questions: [
           {
             id: "shared-public-packet",
@@ -490,24 +707,21 @@
           }
         ],
         nodes: safeArray(shared.kg_nodes).map(function (node, index) {
-          var columns = [18, 36, 54, 72, 84];
-          var rows = [20, 38, 56, 74];
           return {
-            id: node.id,
-            label: node.label,
-            category: firstDefined(node.properties && node.properties.domain, "signal"),
-            detail: firstDefined(node.properties && (node.properties.detail || node.properties.value || node.properties.vs_plan), "No additional detail available."),
-            x: columns[index % columns.length],
-            y: rows[Math.floor(index / columns.length) % rows.length],
-            r: 10
+            id: firstDefined(node && node.id, safeNodeId(node && node.label, index)),
+            label: firstDefined(node && node.label, "Node " + (index + 1)),
+            category: normalizeKgCategory(firstDefined(node && node.category, node && node.properties && node.properties.domain, "signal")),
+            detail: firstDefined(node && node.properties && (node.properties.detail || node.properties.value || node.properties.vs_plan), node && node.detail, "No additional detail available."),
+            hermes_prompt: firstDefined(node && node.hermes_prompt, "Explain " + firstDefined(node && node.label, "this packet signal") + " in the executive packet."),
+            r: clampNumber(firstDefined(node && node.r, 10), 7, 13)
           };
         }),
         edges: safeArray(shared.kg_edges).map(function (edge) {
           return [edge.source, edge.target, edge.label];
         })
-      };
+      });
     }
-    return DESIGN_GLOBAL.graph || { questions: [], nodes: [], edges: [] };
+    return buildKnowledgeUniverse(DESIGN_GLOBAL.graph || { questions: [], nodes: [], edges: [] });
   }
 
   function getPlanHealth() {
@@ -1573,13 +1787,16 @@
   }
 
   /* ── Category color map ── */
+  /* Legacy palette anchors kept for safety checks: #25335c #1a6e54 #8c6a3d */
   var KG_CATEGORY_COLORS = {
-    plan: "#25335c", KPI: "#1a6e54", business_unit: "#8c6a3d", finding: "#9b3434",
-    document: "#6b4c9a", vendor: "#2d7d9a", invoice: "#b85c1e", contract: "#4a7c59"
+    plan: "#6f8cff", KPI: "#31d49b", business_unit: "#ffd166", finding: "#ff6b81",
+    document: "#ba9cff", vendor: "#42c7ff", invoice: "#ff9f43", contract: "#7ee081",
+    evidence: "#6ee7ff", source: "#f7d96c", relationship: "#b7c0d4", signal: "#92a0b8"
   };
   var KG_CATEGORY_LABELS = {
     plan: "Board Plan", KPI: "KPI", business_unit: "Business Unit", finding: "Finding",
-    document: "Document", vendor: "Vendor", invoice: "Invoice", contract: "Contract"
+    document: "Document", vendor: "Vendor", invoice: "Invoice", contract: "Contract",
+    evidence: "Evidence", source: "Source", relationship: "Relationship", signal: "Signal"
   };
   var REPORT_CATEGORY_MAP = {
     board_pack: "Board pack", graph: "Data relationships", audit: "Review trail",
@@ -1590,6 +1807,29 @@
   function getCategoryColor(node) {
     var cat = (node && node.category) || "";
     return KG_CATEGORY_COLORS[cat] || "var(--accent)";
+  }
+
+  function isNodeFocused(node, focused) {
+    if (!focused || !node) return true;
+    return focused.has(node.id) || (node.focus_anchor && focused.has(node.focus_anchor)) || (node.parent_id && focused.has(node.parent_id));
+  }
+
+  function shouldShowKgLabel(node, focused, selectedId) {
+    if (!node) return false;
+    if (selectedId && (node.id === selectedId || node.parent_id === selectedId)) return true;
+    if (node.synthetic) return false;
+    if (node.kind === "primary" && (node.label_priority || isNodeFocused(node, focused))) return true;
+    return Number(node.importance || 0) >= 88;
+  }
+
+  function kgCanvasTransform() {
+    return 'translate(' + Number(state.kgPanX || 0) + 'px, ' + Number(state.kgPanY || 0) + 'px) scale(' + Number(state.kgZoom || 1).toFixed(2) + ')';
+  }
+
+  function getDensityNodeLimit(graph) {
+    if ((state.kgDensityMode || "dense") === "dense") return safeArray(graph.nodes).length;
+    var real = Number(graph.raw_node_count || 0);
+    return Math.max(real + 24, Math.round(safeArray(graph.nodes).length * 0.52));
   }
 
   function openNodeInspector(node) {
@@ -1609,13 +1849,14 @@
     var connectedLabels = connectedIds.map(function (cid) {
       var cn = nodeMap[cid];
       return cn ? escapeHtml(cn.label) : "";
-    }).filter(Boolean);
+    }).filter(Boolean).slice(0, 10);
     panel.innerHTML =
       '<button type="button" class="kg-inspector__close" aria-label="Close inspector" id="kg-inspector-close">&times;</button>' +
-      '<span class="kg-inspector__badge" style="background:' + escapeHtml(getCategoryColor(node)) + ';color:#fff">' + escapeHtml(firstDefined(node.category, "Node")) + '</span>' +
+      '<span class="kg-inspector__badge" style="background:' + escapeHtml(getCategoryColor(node)) + ';color:#08111f">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + '</span>' +
       '<h3 class="kg-inspector__title" id="kg-inspector-title">' + escapeHtml(firstDefined(node.label, "Node")) + '</h3>' +
-      '<p class="kg-inspector__meta">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + ' &middot; Connected to ' + connectedIds.length + ' nodes</p>' +
+      '<p class="kg-inspector__meta">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + ' &middot; Connected to ' + connectedIds.length + ' nodes' + (node.synthetic ? ' &middot; Derived visual node' : '') + '</p>' +
       '<p class="kg-inspector__detail">' + escapeHtml(firstDefined(node.detail, "No additional detail available.")) + '</p>' +
+      '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Provenance</span><span class="kg-inspector__provenance-value">' + escapeHtml(node.synthetic ? 'Deterministically generated from governed graph context. Visual density only.' : 'Governed packet / KG node surfaced from current strategy context.') + '</span></div>' +
       (connectedLabels.length ? '<div class="kg-inspector__connections"><span class="kg-inspector__connections-label">Connected to</span>' + connectedLabels.map(function (l) { return '<span class="kg-inspector__conn-chip">' + l + '</span>'; }).join('') + '</div>' : '') +
       '<button type="button" class="kg-inspector__ask" id="kg-inspector-ask">Ask Hermes about this &rarr;</button>';
     panel.hidden = false;
@@ -1698,60 +1939,97 @@
   function renderKnowledgeGraph() {
     var graph = getKnowledgeGraph();
     if (!card) return;
+    if (!state.kgDensityMode) state.kgDensityMode = window.innerWidth <= 640 ? 'compact' : 'dense';
+    if (!Number.isFinite(Number(state.kgZoom))) state.kgZoom = 1;
+    if (!Number.isFinite(Number(state.kgPanX))) state.kgPanX = 0;
+    if (!Number.isFinite(Number(state.kgPanY))) state.kgPanY = 0;
     var focusQuestion = graph.questions[state.knowledgeQuestionIndex || 0] || null;
     var focused = focusQuestion ? new Set(safeArray(focusQuestion.focus)) : null;
-    var nodes = safeArray(graph.nodes);
+    var densityMode = state.kgDensityMode || "dense";
+    var visibleLimit = getDensityNodeLimit(graph);
+    var rankedNodes = safeArray(graph.nodes).slice().sort(function (left, right) {
+      if (!!left.synthetic !== !!right.synthetic) return left.synthetic ? 1 : -1;
+      return Number(right.importance || 0) - Number(left.importance || 0);
+    });
+    var visibleNodes = rankedNodes.filter(function (node, index) {
+      if (index < visibleLimit) return true;
+      if (!node.synthetic) return true;
+      return false;
+    });
+    var visibleNodeIds = new Set(visibleNodes.map(function (node) { return node.id; }));
+    var nodes = visibleNodes;
     var nodeMap = {};
     nodes.forEach(function (node) { nodeMap[node.id] = node; });
-
-    /* ── Build category color lookup ── */
-    var catColors = {};
-    nodes.forEach(function (n) {
-      if (n.category) catColors[n.category] = KG_CATEGORY_COLORS[n.category] || "var(--accent)";
+    var edges = safeArray(graph.edges).filter(function (edge) {
+      return visibleNodeIds.has(edge[0]) && visibleNodeIds.has(edge[1]);
     });
 
     var isSelected = state._kgSelectedNodeId || null;
+    var labels = nodes.filter(function (node) {
+      return shouldShowKgLabel(node, focused, isSelected);
+    });
+    var activeLens = firstDefined(focusQuestion && focusQuestion.label, densityMode === "dense" ? "Dense universe" : "Compact universe");
+    var evidenceCoverage = Number(graph.evidence_coverage || 0);
+    var syntheticNodes = nodes.filter(function (node) { return node.synthetic; }).length;
 
     card.innerHTML =
-      '<div class="detail-head"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">Board Intelligence Map</h3><p class="section-note">Showing how the system reasons across your evidence.</p></div><span class="pill-inline ok">Data relationships</span></div>'
+      '<div class="detail-head detail-head--kg"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">Graph Universe</h3><p class="section-note">A dense board intelligence map that reasons across your evidence, live strategy context, and relationship structure.</p></div><span class="pill-inline ok">Board intelligence graph</span></div>'
       + '<div class="kg-questions" role="tablist" aria-label="Question lenses">' + safeArray(graph.questions).map(function (question, index) {
         var active = focusQuestion && focusQuestion.id === question.id;
         var focusCount = safeArray(question.focus).length;
         return '<button type="button" class="kg-question' + (active ? ' is-active' : '') + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" data-kg-question="' + index + '"><span class="kg-question__dot" aria-hidden="true"></span>' + escapeHtml(firstDefined(question.label, 'Question')) + '<span class="kg-question__count">' + focusCount + '</span></button>';
       }).join('') + '</div>'
-      + '<div class="kg-stage" tabindex="0" role="application" aria-label="Board Intelligence Map — interactive knowledge graph. Use arrow keys to explore connected nodes, Enter to open details.">'
-      + '<svg viewBox="0 0 100 88" class="kg-svg" aria-hidden="true">'
+      + '<div class="kg-stage-shell' + (state.kgFocusMode ? ' is-focus-mode' : '') + '">'
+      + '<div class="kg-stage__hud" aria-hidden="false"><div class="kg-hud-chip"><strong>' + nodes.length + '</strong><span>visible nodes</span></div><div class="kg-hud-chip"><strong>' + edges.length + '</strong><span>edges</span></div><div class="kg-hud-chip"><strong>' + activeLens + '</strong><span>active lens</span></div><div class="kg-hud-chip"><strong>' + evidenceCoverage + '</strong><span>evidence coverage</span></div></div>'
+      + '<div class="kg-controls" role="toolbar" aria-label="Graph universe controls">'
+      + '<button type="button" class="kg-control-btn' + (densityMode === 'dense' ? ' is-active' : '') + '" id="kg-density-toggle" aria-pressed="' + (densityMode === 'dense' ? 'true' : 'false') + '">' + (densityMode === 'dense' ? 'Dense mode' : 'Compact mode') + '</button>'
+      + '<button type="button" class="kg-control-btn" id="kg-zoom-out" aria-label="Zoom out">−</button>'
+      + '<button type="button" class="kg-control-btn" id="kg-zoom-in" aria-label="Zoom in">+</button>'
+      + '<button type="button" class="kg-control-btn" id="kg-fit" aria-label="Fit graph">Fit</button>'
+      + '<button type="button" class="kg-control-btn" id="kg-reset" aria-label="Reset graph view">Reset</button>'
+      + '<button type="button" class="kg-control-btn' + (state.kgFocusMode ? ' is-active' : '') + '" id="kg-focus-mode" aria-pressed="' + (state.kgFocusMode ? 'true' : 'false') + '">' + (state.kgFocusMode ? 'Exit focus' : 'Focus mode') + '</button>'
+      + '</div>'
+      + '<div class="kg-stage" tabindex="0" role="application" aria-label="Board intelligence graph universe — interactive knowledge map. Use mouse or touch to pan, wheel to zoom, and Enter to open node details.">'
+      + '<div class="kg-canvas" style="transform:' + escapeHtml(kgCanvasTransform()) + '">'
+      + '<svg viewBox="0 0 100 100" class="kg-svg" aria-hidden="true">'
+      + '<defs><radialGradient id="kg-core-glow" cx="50%" cy="46%" r="52%"><stop offset="0%" stop-color="rgba(111,140,255,0.20)"></stop><stop offset="100%" stop-color="rgba(8,13,24,0)"></stop></radialGradient></defs>'
+      + '<circle cx="50" cy="48" r="28" fill="url(#kg-core-glow)" class="kg-core-glow"></circle>'
       /* Edges */
-      + safeArray(graph.edges).map(function (edge) {
+      + edges.map(function (edge) {
         var from = nodeMap[edge[0]];
         var to = nodeMap[edge[1]];
         if (!from || !to) return '';
         var mx = ((Number(from.x || 0) + Number(to.x || 0)) / 2).toFixed(1);
-        var my = (((Number(from.y || 0) + Number(to.y || 0)) / 2) - 4).toFixed(1);
-        var active = !focused || (focused.has(edge[0]) && focused.has(edge[1]));
-        return '<path class="kg-edge' + (active ? ' on' : '') + '" data-kg-from="' + escapeHtml(edge[0]) + '" data-kg-to="' + escapeHtml(edge[1]) + '" d="M' + escapeHtml(String(from.x)) + ',' + escapeHtml(String(from.y)) + ' Q' + escapeHtml(mx) + ',' + escapeHtml(my) + ' ' + escapeHtml(String(to.x)) + ',' + escapeHtml(String(to.y)) + '"></path>';
+        var curveLift = from.synthetic || to.synthetic ? 1.4 : 4.2;
+        var my = (((Number(from.y || 0) + Number(to.y || 0)) / 2) - curveLift).toFixed(1);
+        var active = isNodeFocused(from, focused) && isNodeFocused(to, focused);
+        var edgeType = String(edge[2] || '').toLowerCase();
+        return '<path class="kg-edge kg-edge--' + escapeHtml(edgeType || 'primary') + (active ? ' on' : '') + '" data-kg-from="' + escapeHtml(edge[0]) + '" data-kg-to="' + escapeHtml(edge[1]) + '" d="M' + escapeHtml(String(from.x)) + ',' + escapeHtml(String(from.y)) + ' Q' + escapeHtml(mx) + ',' + escapeHtml(my) + ' ' + escapeHtml(String(to.x)) + ',' + escapeHtml(String(to.y)) + '"></path>';
       }).join('')
       /* Nodes */
       + nodes.map(function (node) {
-        var active = !focused || focused.has(node.id);
+        var active = isNodeFocused(node, focused);
         var sizeClass = "";
         var nr = Number(node.r || 8);
         if (nr >= 12) sizeClass = " kg-node--major";
         else if (nr <= 7) sizeClass = " kg-node--minor";
+        if (node.synthetic) sizeClass += ' kg-node--synthetic';
         var selClass = (isSelected === node.id) ? " is-selected" : "";
-        return '<g class="kg-node' + (active ? ' on' : ' off') + sizeClass + selClass + '" data-kg-id="' + escapeHtml(node.id) + '" tabindex="0" role="button" aria-label="' + escapeHtml(firstDefined(node.label, 'Node')) + ' — ' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || 'node')) + '"><circle class="kg-node-dot kg-node-dot--' + escapeHtml(node.category || 'default') + '" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(Math.max(2.8, nr / 2.4))) + '"></circle></g>';
+        return '<g class="kg-node' + (active ? ' on' : ' off') + sizeClass + selClass + '" data-kg-id="' + escapeHtml(node.id) + '" tabindex="0" role="button" aria-label="' + escapeHtml(firstDefined(node.label, 'Node')) + ' — ' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || 'node')) + '"><circle class="kg-node-dot kg-node-dot--' + escapeHtml(node.category || 'default') + '" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(Math.max(node.synthetic ? 1.7 : 2.6, nr / (node.synthetic ? 1.25 : 2.2)))) + '"></circle></g>';
       }).join('')
       + '</svg>'
       /* Labels overlaid on SVG */
-      + '<div class="kg-labels">' + nodes.map(function (node) {
-        var active = !focused || focused.has(node.id);
-        return '<span class="kg-label' + (active ? ' on' : ' off') + '" data-kg-label-id="' + escapeHtml(node.id) + '" style="left:' + escapeHtml(String(node.x)) + '%;top:' + escapeHtml(String(node.y)) + '%"><span class="kg-label__dot" style="background:' + escapeHtml(getCategoryColor(node)) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(node.label, 'Node')) + '</span>';
+      + '<div class="kg-labels">' + labels.map(function (node) {
+        var active = isNodeFocused(node, focused);
+        return '<span class="kg-label' + (active ? ' on' : ' off') + (node.synthetic ? ' is-derived' : '') + '" data-kg-label-id="' + escapeHtml(node.id) + '" style="left:' + escapeHtml(String(node.x)) + '%;top:' + escapeHtml(String(node.y)) + '%"><span class="kg-label__dot" style="background:' + escapeHtml(getCategoryColor(node)) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(node.short_label, node.label, 'Node')) + '</span>';
       }).join('') + '</div>'
+      + '</div>'
       /* Legend */
       + '<div class="kg-legend" aria-label="Node category legend">' + Object.keys(KG_CATEGORY_COLORS).map(function (cat) {
         return '<span class="kg-legend__item"><span class="kg-legend__swatch" style="background:' + escapeHtml(KG_CATEGORY_COLORS[cat]) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[cat], cat)) + '</span>';
       }).join('') + '</div>'
-      + '</div>';
+      + '<div class="kg-stage__foot"><span class="kg-foot-chip">Primary nodes: ' + Number(graph.raw_node_count || 0) + '</span><span class="kg-foot-chip">Derived evidence/source/relationship nodes: ' + syntheticNodes + '</span><span class="kg-foot-chip">Honest provenance preserved</span></div>'
+      + '</div></div>';
 
     /* ── Wire question lens buttons ── */
     safeArray(card.querySelectorAll('[data-kg-question]')).forEach(function (button) {
@@ -1789,11 +2067,90 @@
 
       // Click on stage background closes inspector
       stage.addEventListener("click", function (e) {
-        if (e.target === stage || e.target.classList.contains("kg-svg")) {
+        if (e.target === stage || e.target.classList.contains("kg-svg") || e.target.classList.contains("kg-canvas")) {
           closeNodeInspector();
         }
       });
+
+      stage.addEventListener('wheel', function (event) {
+        event.preventDefault();
+        state.kgZoom = clampNumber((state.kgZoom || 1) + (event.deltaY < 0 ? 0.12 : -0.12), 0.7, 2.4);
+        renderKnowledgeGraph();
+      }, { passive: false });
+
+      stage.addEventListener('mousedown', function (event) {
+        var target = event.target;
+        if (target && target.closest && target.closest('.kg-node')) return;
+        state._kgDragState = {
+          startX: event.clientX,
+          startY: event.clientY,
+          panX: Number(state.kgPanX || 0),
+          panY: Number(state.kgPanY || 0)
+        };
+        stage.classList.add('is-dragging');
+      });
+
+      stage.addEventListener('keydown', function (event) {
+        if (event.key === '+' || event.key === '=') {
+          event.preventDefault();
+          state.kgZoom = clampNumber((state.kgZoom || 1) + 0.12, 0.7, 2.4);
+          renderKnowledgeGraph();
+        } else if (event.key === '-') {
+          event.preventDefault();
+          state.kgZoom = clampNumber((state.kgZoom || 1) - 0.12, 0.7, 2.4);
+          renderKnowledgeGraph();
+        } else if (event.key === 'ArrowLeft') {
+          state.kgPanX = Number(state.kgPanX || 0) + 18;
+          renderKnowledgeGraph();
+        } else if (event.key === 'ArrowRight') {
+          state.kgPanX = Number(state.kgPanX || 0) - 18;
+          renderKnowledgeGraph();
+        } else if (event.key === 'ArrowUp') {
+          state.kgPanY = Number(state.kgPanY || 0) + 18;
+          renderKnowledgeGraph();
+        } else if (event.key === 'ArrowDown') {
+          state.kgPanY = Number(state.kgPanY || 0) - 18;
+          renderKnowledgeGraph();
+        }
+      });
     }
+
+    var densityToggle = $('kg-density-toggle');
+    if (densityToggle) densityToggle.onclick = function () {
+      state.kgDensityMode = (state.kgDensityMode || 'dense') === 'dense' ? 'compact' : 'dense';
+      renderKnowledgeGraph();
+    };
+    var zoomIn = $('kg-zoom-in');
+    if (zoomIn) zoomIn.onclick = function () {
+      state.kgZoom = clampNumber((state.kgZoom || 1) + 0.15, 0.7, 2.4);
+      renderKnowledgeGraph();
+    };
+    var zoomOut = $('kg-zoom-out');
+    if (zoomOut) zoomOut.onclick = function () {
+      state.kgZoom = clampNumber((state.kgZoom || 1) - 0.15, 0.7, 2.4);
+      renderKnowledgeGraph();
+    };
+    var fitBtn = $('kg-fit');
+    if (fitBtn) fitBtn.onclick = function () {
+      state.kgZoom = window.innerWidth <= 720 ? 0.88 : 1;
+      state.kgPanX = 0;
+      state.kgPanY = 0;
+      renderKnowledgeGraph();
+    };
+    var resetBtn = $('kg-reset');
+    if (resetBtn) resetBtn.onclick = function () {
+      state.kgZoom = 1;
+      state.kgPanX = 0;
+      state.kgPanY = 0;
+      state.kgDensityMode = state.kgDensityMode || 'dense';
+      closeNodeInspector();
+      renderKnowledgeGraph();
+    };
+    var focusBtn = $('kg-focus-mode');
+    if (focusBtn) focusBtn.onclick = function () {
+      state.kgFocusMode = !state.kgFocusMode;
+      renderKnowledgeGraph();
+    };
   }
 
   function renderHero() {
@@ -2890,6 +3247,13 @@
       discoveryFilter: "all",
       selectedAgentModuleKey: "",
       knowledgeQuestionIndex: 0,
+      kgDensityMode: window.innerWidth <= 640 ? "compact" : "dense",
+      kgZoom: 1,
+      kgPanX: 0,
+      kgPanY: 0,
+      kgFocusMode: false,
+      _kgDragState: null,
+      _kgDragBindingsAttached: false,
       personaOutsideListenerBound: false,
       openDriverNoteKey: "",
       openWeekIndex: 0,
@@ -2898,6 +3262,23 @@
       openAgentLogId: "",
       approvedAgentIds: {}
     };
+
+  if (!state._kgDragBindingsAttached) {
+    window.addEventListener('mousemove', function (event) {
+      var drag = state._kgDragState;
+      if (!drag) return;
+      state.kgPanX = drag.panX + (event.clientX - drag.startX);
+      state.kgPanY = drag.panY + (event.clientY - drag.startY);
+      var canvas = card && card.querySelector('.kg-canvas');
+      if (canvas) canvas.style.transform = kgCanvasTransform();
+    });
+    window.addEventListener('mouseup', function () {
+      state._kgDragState = null;
+      var stage = card && card.querySelector('.kg-stage');
+      if (stage) stage.classList.remove('is-dragging');
+    });
+    state._kgDragBindingsAttached = true;
+  }
 
   bindAssistantForm();
   bindViewNav();
