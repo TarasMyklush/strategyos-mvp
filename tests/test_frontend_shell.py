@@ -365,6 +365,16 @@ def test_app_entry_bootstrap_preserves_requested_view_state():
     )
 
 
+def test_app_entry_uses_content_hashed_executive_assets():
+    html = _app_entry_response()
+    asset_rev = api_module._executive_asset_revision()
+
+    assert f'/static/executive.css?v={asset_rev}' in html
+    assert f'/static/executive_design_data.js?v={asset_rev}' in html
+    assert f'/static/executive.js?v={asset_rev}' in html
+    assert "__EXECUTIVE_ASSET_REV__" not in html
+
+
 def test_entry_routes_static_assets_have_no_external_origins():
     html = _app_entry_response()
     js = _static_executive_js()

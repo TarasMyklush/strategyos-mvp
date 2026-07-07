@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import hashlib
 import json
 import re
 import socket
@@ -229,6 +230,27 @@ app = FastAPI(title="StrategyOS MVP API", version="0.1.0")
 STATIC_DIR = Path(__file__).with_name("static")
 TWINS_STATIC_DIR = Path(__file__).parent / "twins" / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+_EXECUTIVE_ASSET_REV_FILES = (
+    "executive.css",
+    "executive.js",
+    "executive_design_data.js",
+)
+
+
+def _asset_revision(*relative_paths: str) -> str:
+    digest = hashlib.sha1()
+    for relative_path in relative_paths:
+        path = STATIC_DIR / relative_path
+        digest.update(relative_path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()[:12]
+
+
+def _executive_asset_revision() -> str:
+    return _asset_revision(*_EXECUTIVE_ASSET_REV_FILES)
 app.include_router(twin_router)
 
 ARTIFACT_PREVIEW_LIMIT_BYTES = 24_000
@@ -6033,6 +6055,7 @@ def _executive_html(
     view_state: dict[str, str | None] | None = None,
     entry_route: str = "/app",
 ) -> str:
+    asset_rev = _executive_asset_revision()
     bootstrap_json = (
         json.dumps(_ui_bootstrap(view_state=view_state, entry_route=entry_route))
         .replace("&", "\\u0026")
@@ -6041,6 +6064,7 @@ def _executive_html(
     )
     template_path = STATIC_DIR / "executive.html"
     html_text = template_path.read_text(encoding="utf-8")
+    html_text = html_text.replace("__EXECUTIVE_ASSET_REV__", asset_rev)
     html_text = html_text.replace("__STRATEGYOS_EXECUTIVE_BOOTSTRAP__", bootstrap_json)
     if view_state and view_state.get("persona") == "ceo":
         lines = html_text.split("\n")
