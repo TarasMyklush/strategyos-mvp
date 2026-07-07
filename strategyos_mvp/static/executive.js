@@ -150,6 +150,77 @@
     return 'Keep the room on the frozen record after close so follow-up stays bounded to approved outputs.';
   }
 
+  function boardStateDetailForRender(boardState, board) {
+    var existing = (board || {}).state_detail || {};
+    var defaults = {
+      pre: {
+        state: 'pre',
+        title: 'Pre-board preparation',
+        summary: 'Prepare one board-safe packet for CEO review by resolving challenged evidence, tightening supplementary answers, and confirming the release posture.',
+        note: 'Keep the packet inside the executive lane until challenged evidence is closed and supplementary answers are board-ready.',
+        primary_actions: ['prepare_board_pack', 'capture_reviewer_decision'],
+        secondary_actions: ['inspect_report_preview', 'review_supplementary_questions']
+      },
+      live: {
+        state: 'live',
+        title: 'Live board session',
+        summary: 'Operate only inside the approved packet while questions stay linked to challenged evidence and governed release posture.',
+        note: 'Stay inside the approved packet while the room is live and route every answer back to governed evidence.',
+        primary_actions: ['capture_reviewer_decision', 'inspect_board_pack_status'],
+        secondary_actions: ['open_supplementary_rail', 'freeze_live_answers']
+      },
+      closed: {
+        state: 'closed',
+        title: 'Closed / frozen snapshot',
+        summary: 'Keep the board memory frozen and bounded to approved outputs after the session closes.',
+        note: 'The room is closed now; preserve the frozen record and work follow-ups outside the board surface.',
+        primary_actions: ['inspect_frozen_snapshot', 'review_board_memory'],
+        secondary_actions: ['compare_packet_release', 'check_follow_up_obligations']
+      }
+    };
+    var fallback = defaults[boardState] || defaults.pre;
+    var matchesSelectedState = String(firstDefined(existing.state, '')).toLowerCase() === boardState;
+    return {
+      state: boardState,
+      title: firstDefined(matchesSelectedState ? existing.title : '', fallback.title),
+      summary: firstDefined(matchesSelectedState ? existing.summary : '', fallback.summary),
+      note: firstDefined(matchesSelectedState ? existing.note : '', fallback.note),
+      primary_actions: safeArray(matchesSelectedState ? existing.primary_actions : fallback.primary_actions),
+      secondary_actions: safeArray(matchesSelectedState ? existing.secondary_actions : fallback.secondary_actions)
+    };
+  }
+
+  function boardLifecycleForRender(boardState, board) {
+    return safeArray((board || {}).lifecycle_flow).map(function (item) {
+      var copy = {};
+      Object.keys(item || {}).forEach(function (key) {
+        copy[key] = item[key];
+      });
+      copy.presented = String(firstDefined(item && item.state_id, '')).toLowerCase() === boardState;
+      return copy;
+    });
+  }
+
+  function bindBoardStateInteractions(row) {
+    if (!row || row.__boardStateInteractionsBound) return;
+    row.__boardStateInteractionsBound = true;
+    row.addEventListener('click', function (event) {
+      var target = event && event.target && typeof event.target.closest === 'function'
+        ? event.target
+        : null;
+      if (!target) return;
+      var stateButton = target.closest('[data-board-state]');
+      if (!stateButton || !row.contains(stateButton)) return;
+      var nextState = String(stateButton.getAttribute('data-board-state') || '').trim().toLowerCase();
+      if (!nextState || state.activeBoard === nextState) return;
+      event.preventDefault();
+      state.activeBoard = nextState;
+      animateCard('board-portal');
+      updateHistory();
+      renderPersonaView();
+    });
+  }
+
   function statusLabel(token) {
     if (!token) return "—";
     var key = String(token).toLowerCase().replace(/[_-]/g, " ").trim();
@@ -2832,18 +2903,13 @@
       var button = document.createElement("button");
       button.type = "button";
       button.className = "state-tab" + (mode.state_id === state.activeBoard ? " is-active" : "");
+      button.setAttribute('data-board-state', mode.state_id);
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", mode.state_id === state.activeBoard ? "true" : "false");
       button.innerHTML = '<span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id)) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, "")) + '</span></span>';
-      button.onclick = function () {
-        if (state.activeBoard === mode.state_id) return;
-        state.activeBoard = mode.state_id;
-        animateCard("board-portal");
-        updateHistory();
-        renderPersonaView();
-      };
       row.appendChild(button);
     });
+    bindBoardStateInteractions(row);
     if (note) note.textContent = firstDefined(boardStateSupportNote(board), "Board lifecycle stays explicit from pre-board preparation through frozen close.");
   }
 
@@ -2856,12 +2922,13 @@
 
     var decks = safeArray(board.decks).slice(0, 4);
     var actions = safeArray(board.actions).slice(0, 3);
-    var questions = safeArray(board.supplementary_questions).slice(0, 3);
-    var lifecycle = safeArray(board.lifecycle_flow);
+    var questions = safeArray(safeArray(board.supplementary_questions).length ? board.supplementary_questions : board.supplementary).slice(0, 3);
     var deckRelease = board.deck_release || {};
     var snapshot = board.frozen_snapshot || {};
-    var stateDetail = board.state_detail || {};
     var boardState = String(firstDefined(state.activeBoard, board.presentation_state, board.state, 'pre')).toLowerCase();
+    var stateDetail = boardStateDetailForRender(boardState, board);
+    var lifecycle = boardLifecycleForRender(boardState, board);
+    var livePrompts = safeArray(safeArray(board.live_prompts).length ? board.live_prompts : board.livePrompts);
     var stateSpecific = '';
     if (boardState === 'pre') {
       stateSpecific = '<div class="board-mode-grid"><section class="board-panel"><p class="detail-eyebrow">CEO-approved material</p><div class="mini-list">' + (decks.length ? decks.map(function (item) {
@@ -2870,14 +2937,14 @@
         return '<div class="board-deck"><div><strong>' + escapeHtml(firstDefined(item.q, 'Question')) + '</strong><p class="list-copy">to ' + escapeHtml(firstDefined(item.to, 'board lane')) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'board')) + '</span></div>';
       }).join('') : '<div class="discovery-empty">No supplementary questions are attached to this lifecycle state.</div>') + '</div></section></div>';
     } else if (boardState === 'live') {
-      stateSpecific = '<div class="board-live-card"><div class="board-live-card__head"><strong>Live session · Q&amp;A on approved material</strong><span>' + escapeHtml(assistantNameForState()) + ' answers only from the CEO-approved material</span></div><div class="board-live-card__status"><span class="live-pulse"></span><strong>In session</strong><span>' + escapeHtml(firstDefined((board.meeting || {}).title, 'Board meeting')) + '</span></div><div class="pill-row">' + ['Why is EBITDA 20 bps under plan?', 'Show the hedge downside', 'Is the JV funded from cash?'].map(function (prompt) { return '<button class="prompt-chip" type="button" data-board-prompt="' + escapeHtml(prompt) + '">' + escapeHtml(prompt) + '</button>'; }).join('') + '</div></div>';
+      stateSpecific = '<div class="board-live-card"><div class="board-live-card__head"><strong>Live session · Q&amp;A on approved material</strong><span>' + escapeHtml(assistantNameForState()) + ' answers only from the CEO-approved material</span></div><div class="board-live-card__status"><span class="live-pulse"></span><strong>In session</strong><span>' + escapeHtml(firstDefined((board.meeting || {}).title, 'Board meeting')) + '</span></div><div class="pill-row">' + (livePrompts.length ? livePrompts : ['Why is EBITDA 20 bps under plan?', 'Show the hedge downside', 'Is the JV funded from cash?']).map(function (prompt) { return '<button class="prompt-chip" type="button" data-board-prompt="' + escapeHtml(prompt) + '">' + escapeHtml(prompt) + '</button>'; }).join('') + '</div></div>';
     } else {
       stateSpecific = '<div class="board-mode-grid"><section class="board-panel"><p class="detail-eyebrow">Meeting summary &amp; action plan</p><p class="board-copy">' + escapeHtml(firstDefined(board.summary, snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</p><div class="mini-list">' + (actions.length ? actions.map(function (item) {
         return '<div class="board-action"><div><strong>' + escapeHtml(firstDefined(item.item, 'Action')) + '</strong><small>' + escapeHtml(firstDefined(item.owner, 'Owner')) + '</small></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.due, 'next')) + '</span></div>';
       }).join('') : '<div class="discovery-empty">No closed-state actions are attached yet.</div>') + '</div></section><section class="board-panel frozen-panel"><p class="detail-eyebrow">Frozen snapshot</p><strong>' + escapeHtml(humanizeToken(firstDefined(snapshot.status, 'frozen'))) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(snapshot.summary, 'Between meetings, the board room only sees the frozen snapshot.')) + '</p><button class="timeline-chip" type="button" data-board-prompt="Model a what-if on the frozen board snapshot: if EUR strengthens 5%, what was the hedged outcome?"><strong>◇ What-if on the snapshot</strong><span>No live org data reaches the board</span></button></section></div>';
     }
     portal.innerHTML = [
-      '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined((board.state_detail || {}).title, board.state_label, "Board status")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined((board.state_detail || {}).summary, board.board_summary, "Board posture stays bounded to the current view.")) + '</p></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(board.presentation_state, board.state, "pre"))) + '">' + escapeHtml(statusLabel(firstDefined(board.state_label, board.presentation_state, board.state, "pre"))) + '</span></div>',
+      '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined(stateDetail.title, board.state_label, "Board status")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined(stateDetail.summary, board.board_summary, "Board posture stays bounded to the current view.")) + '</p></div><span class="pill-inline ' + toneClass(statusLabel(boardState)) + '">' + escapeHtml(statusLabel(boardState)) + '</span></div>',
       '<div class="board-kpis">' + safeArray(board.kpis).slice(0, 4).map(function (item) {
         return '<div class="board-kpi"><span class="board-kpi__label">' + escapeHtml(firstDefined(item.label, "Metric")) + '</span><strong class="board-kpi__value">' + escapeHtml(firstDefined(item.value, item.pct, "—")) + '</strong><span class="board-kpi__sub">' + escapeHtml(firstDefined(item.sub, item.pct ? String(item.pct) + "%" : "Board data")) + '</span></div>';
       }).join("") + '</div>',

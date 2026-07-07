@@ -1393,6 +1393,24 @@ def test_board_portal_uses_delegated_click_handling_for_ctas():
     assert "askAssistant(boardActionPrompt(actionButton.getAttribute('data-board-action') || '', getBoardPortal()), actionButton);" in js
 
 
+def test_board_state_tabs_use_stable_delegated_click_handling():
+    """Board state tabs must bind through the shared row, not fragile per-button onclick handlers."""
+    js = _static_executive_js()
+
+    assert "function bindBoardStateInteractions(row)" in js
+    assert "row.addEventListener('click'" in js
+    assert "target.closest('[data-board-state]')" in js
+    assert "state.activeBoard = nextState;" in js
+    assert "button.setAttribute('data-board-state', mode.state_id);" in js
+
+    tabs_start = js.index("function renderBoardStateTabs()")
+    portal_start = js.index("function renderBoardPortal()", tabs_start)
+    tabs_block = js[tabs_start:portal_start]
+    assert "button.onclick" not in tabs_block, (
+        "Board state tabs must not depend on per-button onclick wiring that can go inert after rerender"
+    )
+
+
 def test_board_portal_refresh_preserves_user_selected_stage():
     """Refresh must not overwrite the stage a user just selected in the Board Portal."""
     js = _static_executive_js()
@@ -1402,6 +1420,151 @@ def test_board_portal_refresh_preserves_user_selected_stage():
         "Board Portal refresh must prefer the locally selected activeBoard before packet defaults, "
         "or Live/Closed clicks snap back to Pre-board"
     )
+
+
+def test_board_portal_renders_selected_stage_copy_instead_of_server_default():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveBoardRenderHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { renderBoardPortal: renderBoardPortal, state: state };\n}\nmodule.exports = __executiveBoardRenderHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-board-render-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+function makeElement(id) {{
+  return {{
+    id,
+    innerHTML: '',
+    textContent: '',
+    style: {{}},
+    disabled: false,
+    hidden: false,
+    children: [],
+    classList: {{ add() {{}}, remove() {{}} }},
+    setAttribute() {{}},
+    appendChild(child) {{ this.children.push(child); return child; }},
+    addEventListener() {{}},
+    querySelector() {{ return null; }},
+    querySelectorAll() {{ return []; }},
+    contains() {{ return true; }},
+  }};
+}}
+
+const elements = {{
+  'board-portal': makeElement('board-portal'),
+  'board-note': makeElement('board-note'),
+}};
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout() {{ return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  clearInterval() {{}},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  innerWidth: 1280,
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ assistant_public_context: {{}} }}) }};
+    return elements[id] || null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement(tag) {{ return makeElement(tag); }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+harness.state.latestPacket = {{
+  board_portal: {{
+    presentation_state: 'pre',
+    state_label: 'Pre-board',
+    state_detail: {{ state: 'pre', title: 'Pre-board preparation', summary: 'Prepare the packet.' }},
+    meeting: {{ title: 'Q2 Board Meeting', date: 'Thu 18 Jun · 14:00', room: 'Riyadh HQ + remote' }},
+    kpis: [],
+    decks: [],
+    actions: [{{ item: 'Ratify the 60% EUR hedge', owner: 'Group CFO', due: 'on approval' }}],
+    supplementary_questions: [{{ q: 'What is the downside if EUR strengthens after a 60% hedge?', to: 'Group CEO', status: 'sent' }}],
+    live_prompts: ['Why is EBITDA 20 bps under plan?'],
+    lifecycle_flow: [
+      {{ state_id: 'pre', label: 'Pre-board', detail: 'Prepare governed packet', presented: true }},
+      {{ state_id: 'live', label: 'Live', detail: 'Run the room inside approved material', presented: false }},
+      {{ state_id: 'closed', label: 'Closed', detail: 'Freeze memory after the room closes', presented: false }}
+    ],
+    frozen_snapshot: {{ status: 'frozen', summary: 'Frozen snapshot summary.' }},
+    board_summary: 'Board summary fallback.'
+  }}
+}};
+
+harness.state.activePersona = 'ceo';
+harness.state.activeBoard = 'live';
+harness.renderBoardPortal();
+const liveHtml = elements['board-portal'].innerHTML;
+
+harness.state.activeBoard = 'closed';
+harness.renderBoardPortal();
+const closedHtml = elements['board-portal'].innerHTML;
+
+console.log(JSON.stringify({{ liveHtml, closedHtml }}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_render_state_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert "Live board session" in result["liveHtml"]
+    assert "Pre-board preparation" not in result["liveHtml"], (
+        "Selected Live stage must not keep rendering pre-board header copy from the server default"
+    )
+    assert "Closed / frozen snapshot" in result["closedHtml"]
 
 
 def test_board_portal_css_does_not_permanently_hide_second_panel():
@@ -3043,11 +3206,11 @@ console.log(JSON.stringify({{ prepare, challenged }}));
 
 def test_board_state_tabs_switch_client_state_without_refresh_reset():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
-    tabs_start = executive_js.index("function renderBoardStateTabs()")
-    portal_start = executive_js.index("function renderBoardPortal()", tabs_start)
-    tabs_block = executive_js[tabs_start:portal_start]
+    bind_start = executive_js.index("function bindBoardStateInteractions(row)")
+    bind_end = executive_js.index("function statusLabel(token)", bind_start)
+    tabs_block = executive_js[bind_start:bind_end]
 
-    assert 'state.activeBoard = mode.state_id;' in tabs_block
+    assert 'state.activeBoard = nextState;' in tabs_block
     assert 'updateHistory();' in tabs_block
     assert 'renderPersonaView();' in tabs_block
     assert 'refresh(true);' not in tabs_block, (
