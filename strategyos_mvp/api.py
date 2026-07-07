@@ -9139,6 +9139,13 @@ async def _assistant_chat_response(
         # General-knowledge / out-of-domain guard: if the question contains none of
         # the board/business tokens that the deterministic handlers know about, do NOT
         # fabricate a business answer. Return safe "out of context" instead.
+        # Use word-boundary matching so short tokens like "ap" don't accidentally
+        # match inside unrelated words ("capital", "map", "gap"). Multi-word tokens
+        # like "working capital" are checked as exact substring phrases.
+        def _is_business_token(text: str, token: str) -> bool:
+            if " " in token:
+                return token in text
+            return bool(re.search(r"\b" + re.escape(token) + r"\b", text))
         _BUSINESS_TOKENS = (
             "margin", "ebitda", "profitability", "profit", "loss", "revenue", "income",
             "risk", "plan", "year", "quarter", "board", "packet", "prep", "session",
@@ -9148,7 +9155,7 @@ async def _assistant_chat_response(
             "invoice", "vendor", "spend", "ap", "working capital", "cash",
             "balance", "budget", "forecast", "scenario", "what-if", "what if",
         )
-        is_out_of_domain = not any(token in norm for token in _BUSINESS_TOKENS)
+        is_out_of_domain = not any(_is_business_token(norm, token) for token in _BUSINESS_TOKENS)
         if is_out_of_domain:
             return {
                 "matched": False,
