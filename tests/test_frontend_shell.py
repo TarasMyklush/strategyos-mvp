@@ -1412,7 +1412,8 @@ def test_board_state_tabs_use_stable_delegated_click_handling():
     assert "row.addEventListener('click'" in js
     assert "target.closest('[data-board-state]')" in js
     assert "state.activeBoard = nextState;" in js
-    assert "button.setAttribute('data-board-state', mode.state_id);" in js
+    assert "button.setAttribute('data-board-state', modeState);" in js
+    assert "var modeState = String(firstDefined(mode.state_id, mode.id, mode.key, '')).trim().toLowerCase();" in js
 
     tabs_start = js.index("function renderBoardStateTabs()")
     portal_start = js.index("function renderBoardPortal()", tabs_start)
@@ -1622,6 +1623,10 @@ const row = {{
   addEventListener(name, handler) {{ this.listeners[name] = handler; }},
   appendChild(child) {{ this.buttons.push(child); return child; }},
   contains(target) {{ return this.buttons.includes(target); }},
+  querySelectorAll(selector) {{
+    if (selector === '[data-board-state]') return this.buttons.slice();
+    return [];
+  }},
   querySelector(selector) {{
     const match = selector.match(/\\[data-board-state="([^"]+)"\\]/);
     if (!match) return null;
@@ -1699,6 +1704,186 @@ console.log(JSON.stringify({{ activeBoard: harness.state.activeBoard }}));
     assert result["activeBoard"] == "live", (
         "Board state selector buttons must switch the client lifecycle state when clicked through the exact data-board-state selector path"
     )
+
+
+def test_board_state_tabs_exact_selector_click_updates_dom_state_with_normalized_ids():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveBoardStateDomHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { renderBoardStateTabs: renderBoardStateTabs, state: state };\n}\nmodule.exports = __executiveBoardStateDomHarness;\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        "    renderPersonaView();",
+        "    if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-board-state-dom-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+function makeButton() {{
+  return {{
+    tagName: 'BUTTON',
+    nodeType: 1,
+    attributes: {{}},
+    className: '',
+    innerHTML: '',
+    listeners: {{}},
+    type: 'button',
+    setAttribute(name, value) {{ this.attributes[name] = String(value); }},
+    getAttribute(name) {{ return this.attributes[name] || null; }},
+    addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+    click() {{ if (this.listeners.click) this.listeners.click({{ preventDefault() {{}}, stopPropagation() {{}} }}); }},
+    closest(selector) {{ return selector === '[data-board-state]' ? this : null; }},
+  }};
+}}
+
+function makeElement(id) {{
+  return {{
+    id,
+    innerHTML: '',
+    textContent: '',
+    style: {{}},
+    disabled: false,
+    hidden: false,
+    children: [],
+    classList: {{ add() {{}}, remove() {{}} }},
+    setAttribute() {{}},
+    appendChild(child) {{ this.children.push(child); return child; }},
+    addEventListener() {{}},
+    querySelector() {{ return null; }},
+    querySelectorAll() {{ return []; }},
+    contains() {{ return true; }},
+  }};
+}}
+
+const row = {{
+  __boardStateInteractionsBound: false,
+  innerHTML: '',
+  buttons: [],
+  listeners: {{}},
+  addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+  appendChild(child) {{ this.buttons.push(child); return child; }},
+  contains(target) {{ return this.buttons.includes(target); }},
+  querySelectorAll(selector) {{
+    if (selector === '[data-board-state]') return this.buttons.slice();
+    return [];
+  }},
+  querySelector(selector) {{
+    const match = selector.match(/\[data-board-state="([^"]+)"\]/);
+    if (!match) return null;
+    return this.buttons.find((button) => button.getAttribute('data-board-state') === match[1]) || null;
+  }},
+}};
+
+const note = {{ textContent: '' }};
+const portal = makeElement('board-portal');
+
+global.window = {{
+  __BOARD_STATE_TEST_SUPPRESS_RENDER__: true,
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout() {{ return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  clearInterval() {{}},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  innerWidth: 1280,
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ assistant_public_context: {{}} }}) }};
+    if (id === 'board-state-row') return row;
+    if (id === 'board-state-note') return note;
+    if (id === 'board-portal') return portal;
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement(tag) {{ return tag === 'button' ? makeButton() : makeElement(tag); }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+harness.state.latestPacket = {{
+  board_portal: {{
+    lifecycle_flow: [
+      {{ state_id: ' PRE ', label: 'Pre-board', detail: 'Prepare governed packet' }},
+      {{ state_id: ' Live ', label: 'Live', detail: 'Run the room inside approved material' }},
+      {{ state_id: ' Closed ', label: 'Closed', detail: 'Freeze memory after the room closes' }}
+    ],
+    presentation_state: 'pre',
+    meeting: {{ title: 'Q2 Board Meeting' }},
+  }},
+}};
+harness.state.activeBoard = 'pre';
+harness.renderBoardStateTabs();
+const pre = row.querySelector('[data-board-state="pre"]');
+const live = row.querySelector('[data-board-state="live"]');
+live.click();
+console.log(JSON.stringify({{
+  activeBoard: harness.state.activeBoard,
+  preSelected: pre.getAttribute('aria-selected'),
+  preClass: pre.className,
+  liveSelected: live.getAttribute('aria-selected'),
+  liveClass: live.className,
+}}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_state_selector_dom_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result["activeBoard"] == "live"
+    assert result["preSelected"] == "false"
+    assert result["preClass"] == "state-tab"
+    assert result["liveSelected"] == "true"
+    assert result["liveClass"] == "state-tab is-active"
 
 
 def test_board_portal_refresh_preserves_user_selected_stage():

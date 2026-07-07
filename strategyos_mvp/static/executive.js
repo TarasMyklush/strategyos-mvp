@@ -233,12 +233,30 @@
     });
   }
 
+  function syncBoardStateTabUI(nextState) {
+    var row = $("board-state-row");
+    if (!row) return;
+    safeArray(row.querySelectorAll('[data-board-state]')).forEach(function (button) {
+      var buttonState = String(button.getAttribute('data-board-state') || '').trim().toLowerCase();
+      var isActive = buttonState === nextState;
+      button.className = 'state-tab' + (isActive ? ' is-active' : '');
+      button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+  }
+
+  function renderBoardStageSurface() {
+    renderBoardStateTabs();
+    renderBoardPortal();
+  }
+
   function activateBoardState(nextState) {
     nextState = String(nextState || '').trim().toLowerCase();
     if (!nextState || state.activeBoard === nextState) return false;
     state.activeBoard = nextState;
+    syncBoardStateTabUI(nextState);
     animateCard('board-portal');
     updateHistory();
+    renderBoardStageSurface();
     renderPersonaView();
     return true;
   }
@@ -2919,19 +2937,22 @@
     var board = getBoardPortal();
     var modes = safeArray(board.lifecycle_flow).length ? safeArray(board.lifecycle_flow) : (((state.latestPacket || {}).executive_modes || {}).board_states || []);
     var note = $("board-state-note");
+    var activeBoardState = String(firstDefined(state.activeBoard, board.presentation_state, board.state, 'pre')).trim().toLowerCase();
     if (!row) return;
     row.innerHTML = "";
     safeArray(modes).forEach(function (mode) {
+      var modeState = String(firstDefined(mode.state_id, mode.id, mode.key, '')).trim().toLowerCase();
+      if (!modeState) return;
       var button = document.createElement("button");
       button.type = "button";
-      button.className = "state-tab" + (mode.state_id === state.activeBoard ? " is-active" : "");
-      button.setAttribute('data-board-state', mode.state_id);
+      button.className = "state-tab" + (modeState === activeBoardState ? " is-active" : "");
+      button.setAttribute('data-board-state', modeState);
       button.setAttribute("role", "tab");
-      button.setAttribute("aria-selected", mode.state_id === state.activeBoard ? "true" : "false");
+      button.setAttribute("aria-selected", modeState === activeBoardState ? "true" : "false");
       button.innerHTML = '<span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id)) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, "")) + '</span></span>';
       button.addEventListener('click', function (event) {
         event.preventDefault();
-        activateBoardState(mode.state_id);
+        activateBoardState(modeState);
       });
       row.appendChild(button);
     });
