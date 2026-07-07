@@ -50,6 +50,7 @@ jobs:
 
       - name: Install OCR runtime
         run: |
+          sudo rm -f /etc/apt/sources.list.d/microsoft*.list 2>/dev/null || true
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-eng
 
