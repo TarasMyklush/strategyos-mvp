@@ -38,7 +38,7 @@ def test_ceo_assistant_never_leaks_raw_internals():
     assert 'persona: state.activePersona || "ceo"' in js
     assert "ceoDriverRelevanceReply" not in js
     assert "The board pack is under review." not in qa_block
-    assert "Why:" in qa_block and "Risk:" in qa_block and "Path:" in qa_block
+    assert "Why:" not in qa_block and "Risk:" not in qa_block and "Path:" not in qa_block
     assert "I could not compute a protected data answer in this executive surface." not in js
 
 
@@ -230,17 +230,13 @@ def test_ceo_video_embed_referrerpolicy_attr():
     assert 'referrerpolicy="strict-origin-when-cross-origin"' in js, (
         "Inline iframe must have referrerpolicy='strict-origin-when-cross-origin'"
     )
-    # selectLeadersVideo must set referrerpolicy on iframe swap
-    assert "setAttribute('referrerpolicy'" in js, (
-        "selectLeadersVideo must set referrerpolicy attribute on iframe"
-    )
-    assert "'strict-origin-when-cross-origin'" in js, (
+    assert "strict-origin-when-cross-origin" in js, (
         "strict-origin-when-cross-origin value must appear in JS"
     )
-    # Modal iframe must also carry referrerpolicy
+    # Template + modal iframe must carry referrerpolicy
     referred = js.count("referrerpolicy")
     assert referred >= 2, (
-        "At least 2 referrerpolicy assignments expected (inline + modal iframe)"
+        "At least 2 referrerpolicy references expected (card template + modal iframe)"
     )
 
 
@@ -866,24 +862,23 @@ def test_kpi_spacing_css_exists():
 
 
 def test_youtube_fallback_pre_rendered():
-    """#3: YouTube Leaders' Corner must have fallback card HTML in template but JS must init iframe on first load."""
+    """#3: Leaders' Corner must keep a controlled fallback shell on first load."""
     js = _static_executive_js()
 
     # Fallback card HTML must exist in the template (progressive enhancement — safe default)
     assert "leaders-featured-fallback" in js, (
         "Leaders' Corner must have fallback card HTML in template (leaders-featured-fallback)"
     )
-    # Frame wrapper must exist (hidden initially in HTML, then JS shows it)
+    # Frame wrapper must still exist for optional playback plumbing.
     assert "leaders-frame-wrapper" in js, (
         "Video frame wrapper must exist in HTML template"
     )
-    # JS must initialize the featured video on first load (not leave dead placeholder)
+    # JS must initialize the featured video card on first load.
     assert "selectLeadersVideo(vlogs[0]" in js, (
-        "On first load, selectLeadersVideo must be called with first vlog to show embedded player"
+        "On first load, selectLeadersVideo must be called with first vlog to show controlled preview"
     )
-    # Fallback timer must be reduced (4s or less in selectLeadersVideo)
-    assert "4000" in js, (
-        "Fallback timer must be reduced to 4s (was 10s)"
+    assert "Preview stays in English on this surface." in js, (
+        "Leaders' Corner preview must stay in controlled English copy rather than third-party thumbnail text"
     )
 
 
@@ -1360,6 +1355,21 @@ def test_leaders_corner_single_youtube_link_per_card():
     assert "leaders-yt-link" in js, (
         "Leaders video info must retain the single YouTube link"
     )
+
+
+def test_leaders_corner_does_not_auto_mount_youtube_player_before_user_choice():
+    """Leaders' Corner must keep the initial surface fully controlled until a user picks a video.
+
+    This prevents third-party localized YouTube chrome from leaking into the first paint.
+    """
+    js = _static_executive_js()
+
+    block_start = js.index("function selectLeadersVideo(")
+    block_end = js.index("function buildVideoModalHtml(", block_start)
+    block = js[block_start:block_end]
+    assert "frameWrapper.hidden = true" in block
+    assert "iframe.src = ''" in block
+    assert "Preview stays in English on this surface." in block
 
 
 def test_assistants_tab_no_ai_adoption_wording():
@@ -2075,7 +2085,8 @@ def test_hermes_answer_no_stale_fx_fallback_for_digital_health():
     assert 'postJson("/assistant/chat"' in js
     assert "/digital health/i.test" not in js
     assert "ceoDriverRelevanceReply" not in js
-    assert "assistant_mode" in js and "hallucination_risk" in js
+    assert "driver_context" in js
+    assert "trace_id" in js
 
 
 def test_hermes_answer_fx_fallback_still_works_for_fx_prompt():

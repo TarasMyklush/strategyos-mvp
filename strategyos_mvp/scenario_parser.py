@@ -1598,6 +1598,43 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
             basis="Matched full-year-risk prompt against public executive packet.",
         )
 
+    if (
+        "margin pressure" in norm
+        or "pressure on margin" in norm
+        or "driving margin pressure" in norm
+    ):
+        return ScenarioResult(
+            scenario_id="public_exec_margin_pressure",
+            scenario_label="Executive Surface — Margin Pressure",
+            matched=True,
+            answer=(
+                "Margin pressure this quarter is coming from three visible factors in the public packet: FX is still dragging EBITDA, API input cost remains hot, and Healthcare occupancy is below plan. "
+                "Tamween is also still flat versus the recovery path, so the board implication is to tighten the hedge response, protect occupancy recovery, and convert the recovery pool into realized uplift."
+            ),
+            calculations=[
+                CalculationStep(
+                    step_id="margin_pressure_bridge",
+                    description="Summarize visible margin pressure drivers from the public executive packet",
+                    formula="READ public findings + drivers + board KPI posture",
+                    inputs={"surface": "latest-public"},
+                    result="FX, API cost, Healthcare occupancy, and Tamween timing remain the visible margin drivers",
+                    unit="margin narrative",
+                    citations=[
+                        _public_citation("public_context_packet.findings[0]"),
+                        _public_citation("public_context_packet.drivers[1]"),
+                        _public_citation("public_context_packet.board_portal.kpis[1]"),
+                    ],
+                )
+            ],
+            kg_context=[],
+            citations=[],
+            assumptions=["Answer stays bounded to visible board-packet facts rather than protected case-level detail."],
+            hallucination_risk=_public_risk_low("Public-safe packet margin-pressure framing."),
+            suggestions=["Project FX hedge impact on EBITDA margin", "Risk to full-year plan?", "Show evidence for SAR 8.6M recoverable"],
+            scenario_type="deterministic",
+            basis="Matched margin-pressure prompt against public executive packet.",
+        )
+
     if any(token in norm for token in ("fx", "hedge", "currency")) and any(token in norm for token in ("impact", "ebitda", "margin", "bridge")):
         return ScenarioResult(
             scenario_id="public_exec_fx_impact",

@@ -479,7 +479,7 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         assert payload["matched"] is False
         assert payload["llm_fallback_attempted"] is False
         assert payload["answered_by"] in {"packet", "scenario"}
-        assert "shared public packet" in payload["answer"]
+        assert "public packet" in payload["answer"].lower()
     finally:
         _restore_env(original)
 
@@ -511,6 +511,33 @@ def test_assistant_chat_public_auto_unmatched_does_not_call_llm_when_enabled(mon
         assert payload["answered_by"] in {"packet", "scenario"}
         assert payload["llm_status"]["enabled"] is False
         assert called["llm"] == 0
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_ceo_margin_pressure_prompt_returns_packet_answer():
+    original, client = _client_with_public_ceo_surface()
+    try:
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "What is driving margin pressure this quarter?",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "deterministic"
+        assert payload["matched"] is True
+        text = payload["answer"].lower()
+        assert "fx" in text
+        assert "api" in text
+        assert "healthcare occupancy" in text
+        assert "tamween" in text
+        assert "public-safe" not in text
+        assert "deterministic" not in text
     finally:
         _restore_env(original)
 
@@ -997,6 +1024,53 @@ def test_public_safe_golden_prompts_return_substantive_answers(monkeypatch):
             assert payload["hallucination_risk"]["level"] in {"low", "medium", "high"}
             for term in expected_terms:
                 assert term in answer_lower or term in json.dumps(payload).lower(), f"Missing '{term}' for prompt: {question}"
+    finally:
+        _restore_env(original)
+
+
+def test_public_ceo_margin_pressure_prompt_returns_business_answer_without_debug_fallback(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "What is driving margin pressure this quarter?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "drawer_input", "board_state": "pre", "driver_key": "ebitda"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+
+        assert payload["status"] == "ok"
+        assert payload["run_id"] == "latest-public"
+        assert payload["run_mode"] == "public-safe"
+        assert "fx" in answer
+        assert "api" in answer
+        assert "healthcare" in answer or "occupancy" in answer
+        assert "tamween" in answer
+        assert "board" in answer or "action" in answer
+
+        for banned in (
+            "deterministic public-safe handler",
+            "shared public packet",
+            "public-safe",
+            "deterministic",
+            "handler",
+            "llm",
+            "graph",
+            "vector",
+            "path:",
+            "run:",
+            "risk: none",
+            "i can answer board-safe questions",
+        ):
+            assert banned not in answer, f"unexpected debug fallback leak in answer: {banned}"
     finally:
         _restore_env(original)
 

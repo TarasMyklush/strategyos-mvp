@@ -964,10 +964,10 @@ def test_leaders_corner_embed_has_origin_param():
     )
     assert "?origin=" in js, "URL must contain origin parameter"
 
-    # Verify origin param appears in at least 2 places (inline + selectLeadersVideo)
+    # The embed URL must still be wired for controlled playback surfaces.
     origin_count = js.count("encodeURIComponent(window.location.origin)")
-    assert origin_count >= 2, (
-        f"origin should appear in at least 2 URLs (inline + selectLeadersVideo), found {origin_count}"
+    assert origin_count >= 1, (
+        f"origin should appear in at least 1 playback URL, found {origin_count}"
     )
 
 
@@ -979,10 +979,10 @@ def test_leaders_corner_embed_has_enablejsapi():
         "enablejsapi=1 required for YouTube IFrame API postMessage events"
     )
 
-    # Must appear in at least 2 places (inline + selectLeadersVideo)
+    # Must still appear in the controlled playback path.
     jsapi_count = js.count("enablejsapi=1")
-    assert jsapi_count >= 2, (
-        f"enablejsapi=1 should appear in at least 2 URLs, found {jsapi_count}"
+    assert jsapi_count >= 1, (
+        f"enablejsapi=1 should appear in at least 1 playback URL, found {jsapi_count}"
     )
 
 
@@ -1140,53 +1140,17 @@ def test_leaders_corner_first_load_initializes_iframe():
 
 
 def test_leaders_corner_single_featured_surface():
-    """Only one featured video surface must be active — no duplicate placeholder + embed stacked.
-
-    Verifies three layers of protection against duplicate surfaces:
-    1. JS toggle order: fallback.hidden=true BEFORE frameWrapper.hidden=false
-    2. CSS override: .leaders-fallback-card[hidden] { display:none } in stylesheet
-    3. No path where BOTH fallback.card AND iframe are simultaneously visible"""
+    """Featured surface must stay controlled and English-first on the card."""
     js = _static_executive_js()
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
 
-    # The leaders-featured container must have exactly ONE of each child type
-    # (fallback card is hidden by JS, iframe is shown — not both visible)
     assert "leaders-featured-fallback" in js, "Fallback card element must exist"
     assert "leaders-featured-iframe" in js, "Featured iframe element must exist"
-
-    # selectLeadersVideo hides fallback and shows iframe — verify the toggle logic
-    # fallback.hidden = true must precede frameWrapper.hidden = false
-    fallback_hidden_pos = js.find("fallback.hidden = true")
-    frame_shown_pos = js.find("frameWrapper.hidden = false")
-    assert fallback_hidden_pos > 0, "selectLeadersVideo must hide fallback"
-    assert frame_shown_pos > 0, "selectLeadersVideo must show iframe wrapper"
-    assert fallback_hidden_pos < frame_shown_pos, (
-        "Fallback must be hidden BEFORE iframe wrapper is shown to prevent both visible at once"
-    )
-
-    # CSS must enforce the hidden state — display:flex must not override [hidden]
+    assert "Preview stays in English on this surface." in js
+    assert "iframe.src = ''" in js, "Card preview must clear inline iframe src"
+    assert "Watch in player" in js, "Card preview must offer controlled playback CTA"
     assert ".leaders-fallback-card[hidden]" in css, (
-        "CSS must have .leaders-fallback-card[hidden] rule to prevent display:flex "
-        "from overruling hidden attribute (the Hermes live-verification failure)"
-    )
-
-    # The fallback timer path must also maintain single-surface invariant:
-    # frameWrapper.hidden = true BEFORE fallback.hidden = false
-    timer_hide_frame_pos = js.find("frameWrapper.hidden")
-    # Find the specific timer block where frameWrapper is hidden and fallback shown
-    timer_block = js[js.find("_leadersFallbackTimer = window.setTimeout"):]
-    timer_block = timer_block[:timer_block.find("}, 4000)") + 20] if "}, 4000)" in timer_block else timer_block[:600]
-    assert "frameWrapper.hidden = true" in timer_block, (
-        "Fallback timer must hide frameWrapper"
-    )
-    assert "fallback.hidden = false" in timer_block, (
-        "Fallback timer must show fallback"
-    )
-    # In the timer path, frameWrapper must be hidden before fallback is shown
-    timer_hide_pos = timer_block.find("frameWrapper.hidden = true")
-    timer_show_fallback_pos = timer_block.find("fallback.hidden = false")
-    assert timer_hide_pos > 0 and timer_show_fallback_pos > timer_hide_pos, (
-        "Timer fallback path: frameWrapper must be hidden BEFORE fallback is shown"
+        "CSS must preserve hidden override for the fallback shell"
     )
 
 
@@ -2438,7 +2402,7 @@ const thread = harness.threadStore()['ceo:meta-thread'] = {{
 harness.applyAssistantResultToMessage(thread, thread.messages[1], {{
   ok: true,
   answer: 'In plain English: revenue is ahead, margin is the soft spot, and the board still needs a hedge decision.',
-  metadata: '[Why: Grounded in the board portal summary. · 2 evidence citations · Risk: LOW · Path: llm · Run: latest-public · LLM · Answered by AI fallback]',
+  metadata: '',
   responsePayload: {{ mode: 'llm', assistant_mode: 'llm' }},
 }});
 harness.renderAssistantStudio();
@@ -2463,11 +2427,102 @@ console.log(JSON.stringify({{
 
     result = json.loads(completed.stdout.strip())
     assert "board still needs a hedge decision" in result["messagesHtml"]
-    assert "assistant-message__meta" in result["messagesHtml"]
-    assert "Why: Grounded in the board portal summary." in result["messagesHtml"]
-    assert "2 evidence citations" in result["messagesHtml"]
-    assert result["storedMeta"].startswith("[Why:")
+    assert "assistant-message__meta" not in result["messagesHtml"]
+    assert result["storedMeta"] == ""
     assert result["storedPayloadMode"] == "llm"
+
+
+def test_public_ceo_answer_metadata_omits_debug_trace_terms_behaviorally():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+
+    harness_js = executive_js.replace(prefix, 'function __executiveQaHarness() {\n  "use strict";\n', 1)
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { qaAnswerMeta: qaAnswerMeta };\n}\nmodule.exports = __executiveQaHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-qa-meta-safety-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [], findings: [], developments: [], week: [] }} }}, networkMeta: {{}}, network: [], a2a: [], subtools: [] }},
+  localStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }},
+  sessionStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }},
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout(fn) {{ fn(); return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ requested_view_state: {{ persona: 'ceo', board: 'pre' }}, assistant_public_context: {{ persona_id: 'ceo' }} }}) }};
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{ return {{ setAttribute() {{}}, appendChild() {{}}, style: {{}}, classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }} }}; }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+const meta = harness.qaAnswerMeta({{
+  mode: 'llm',
+  assistant_mode: 'packet',
+  run_id: 'latest-public',
+  basis: 'Grounded in current board facts.',
+  citations: [{{ source_path: 'public_packet://latest-public', locator: 'public_context_packet.facts[0]' }}],
+  hallucination_risk: {{ level: 'low' }},
+  llm_status: {{ enabled: true, reason: 'provider unavailable' }},
+  matched: false,
+}});
+console.log(JSON.stringify({{ meta }}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "assistant_meta_safety_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    meta = result["meta"].lower()
+    for banned in (
+        "[",
+        "]",
+        "path:",
+        "run:",
+        "llm",
+        "answered by ai fallback",
+        "public-safe",
+        "deterministic",
+        "vector",
+        "graph",
+    ):
+        assert banned not in meta, f"unexpected debug metadata leak: {banned}"
 
 
 def test_qa_answer_text_unwraps_raw_json_payload_behaviorally():
@@ -2565,7 +2620,7 @@ console.log(JSON.stringify({{
     result = json.loads(completed.stdout.strip())
     assert result["answerText"].startswith("Since last week, NUPCO awards were confirmed")
     assert '"matched"' not in result["answerText"]
-    assert "Answered by AI fallback" in result["answerMeta"]
+    assert result["answerMeta"] == ""
 
 
 def test_qa_answer_text_extracts_answer_from_truncated_jsonish_payload_behaviorally():
@@ -2608,6 +2663,258 @@ console.log(JSON.stringify({{ answerText: harness.qaAnswerText(payload) }}));
 
     result = json.loads(completed.stdout.strip())
     assert result["answerText"] == "Since last week, NUPCO awards were confirmed and FX remains the main margin watch item."
+
+
+def test_ceo_follow_up_reuses_visible_thread_and_keeps_composer_live():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+
+    harness_js = executive_js.replace(prefix, 'function __executiveFollowupHarness() {\n  "use strict";\n', 1)
+    harness_js = harness_js.replace(
+        suffix,
+        '  return {\n'
+        '    state: state,\n'
+        '    askAssistant: askAssistant,\n'
+        '    ensureThreads: ensureThreads,\n'
+        '    threadStore: threadStore,\n'
+        '    currentThreadKey: currentThreadKey,\n'
+        '    renderAssistantStudio: renderAssistantStudio\n'
+        '  };\n'
+        '}\n'
+        'module.exports = __executiveFollowupHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-followup-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+function makeClassList() {{
+  const values = new Set();
+  return {{
+    add(name) {{ values.add(name); }},
+    remove(name) {{ values.delete(name); }},
+    contains(name) {{ return values.has(name); }},
+    toggle(name, force) {{
+      if (force === true) {{ values.add(name); return true; }}
+      if (force === false) {{ values.delete(name); return false; }}
+      if (values.has(name)) {{ values.delete(name); return false; }}
+      values.add(name); return true;
+    }},
+  }};
+}}
+
+function makeElement(id = '') {{
+  return {{
+    id,
+    nodeType: 1,
+    value: '',
+    innerHTML: '',
+    textContent: '',
+    placeholder: '',
+    hidden: false,
+    disabled: false,
+    onclick: null,
+    scrollTop: 0,
+    scrollHeight: 0,
+    style: {{}},
+    attributes: {{}},
+    listeners: {{}},
+    classList: makeClassList(),
+    setAttribute(name, value) {{ this.attributes[name] = String(value); }},
+    getAttribute(name) {{ return this.attributes[name] || null; }},
+    addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+    removeEventListener(name) {{ delete this.listeners[name]; }},
+    querySelector() {{ return null; }},
+    querySelectorAll() {{ return []; }},
+    closest() {{ return null; }},
+    appendChild() {{}},
+    insertBefore() {{}},
+    focus() {{ this.focused = true; }},
+  }};
+}}
+
+const bootstrapPayload = {{
+  requested_view_state: {{ persona: 'ceo', board: 'pre' }},
+  executive_entry_route: '/app',
+  assistant_public_context: {{ persona_id: 'ceo', assistant: 'Hermes', drivers: [], findings: [], developments: [], week: [] }},
+}};
+
+const drawer = makeElement('assistant-drawer');
+const threadsPane = makeElement('threads-pane');
+threadsPane.classList.add('assistant-threads');
+threadsPane.classList.add('is-collapsed');
+const layout = makeElement('layout');
+layout.classList.add('assistant-layout');
+layout.classList.add('threads-collapsed');
+const headActions = makeElement('head-actions');
+headActions.classList.add('assistant-head__actions');
+drawer.querySelector = function(selector) {{
+  if (selector === '.assistant-threads') return threadsPane;
+  if (selector === '.assistant-layout') return layout;
+  if (selector === '.assistant-head__actions') return headActions;
+  return null;
+}};
+
+const form = makeElement('assistant-form');
+const input = makeElement('assistant-input');
+input.placeholder = 'Ask Hermes…';
+form.querySelector = function(selector) {{
+  if (selector === '#assistant-input') return input;
+  return null;
+}};
+
+const elements = {{
+  'assistant-thread-list': makeElement('assistant-thread-list'),
+  'assistant-thread-title': makeElement('assistant-thread-title'),
+  'assistant-thread-meta': makeElement('assistant-thread-meta'),
+  'assistant-messages': makeElement('assistant-messages'),
+  'assistant-prompt-row': makeElement('assistant-prompt-row'),
+  'assistant-thread-tools': makeElement('assistant-thread-tools'),
+  'assistant-heading': makeElement('assistant-heading'),
+  'assistant-subtitle': makeElement('assistant-subtitle'),
+  'assistant-state': makeElement('assistant-state'),
+  'assistant-drawer': drawer,
+  'assistant-scrim': makeElement('assistant-scrim'),
+  'chat-launcher': makeElement('chat-launcher'),
+  'assistant-close': makeElement('assistant-close'),
+  'assistant-form': form,
+  'assistant-input': input,
+  'persona-label': makeElement('persona-label'),
+  'brand-org': makeElement('brand-org'),
+  'topbar-avatar': makeElement('topbar-avatar'),
+}};
+
+const fetchCalls = [];
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [], findings: [], developments: [], week: [] }} }}, networkMeta: {{}}, network: [], a2a: [], subtools: [] }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  innerWidth: 1280,
+  setTimeout(fn) {{ fn(); return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  location: {{ pathname: '/app', origin: 'https://strategyos.live' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify(bootstrapPayload) }};
+    return elements[id] || null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{ return makeElement(); }},
+}};
+
+global.fetch = async function(pathname) {{
+  fetchCalls.push(pathname);
+  return {{
+    ok: true,
+    status: 200,
+    headers: {{ get(name) {{ return String(name).toLowerCase() === 'x-request-id' ? 'server-req-' + fetchCalls.length : null; }} }},
+    text: async function() {{
+      return JSON.stringify({{
+        status: 'ok',
+        answer: fetchCalls.length === 1
+          ? 'FX and API cost are the main margin pressure. Healthcare occupancy and Tamween recovery still need board action.'
+          : 'Follow-up: the hedge decision and the healthcare recovery actions should stay in the same board thread.',
+        mode: 'deterministic',
+        assistant_mode: 'scenario',
+        run_id: 'latest-public',
+        citations: [{{ source_path: 'public_packet://latest-public', locator: 'public_context_packet.facts[0]' }}],
+        hallucination_risk: {{ level: 'low' }},
+      }});
+    }},
+  }};
+}};
+
+async function main() {{
+  const factory = require(tempFile);
+  const harness = factory();
+  harness.state.latestPacket = {{
+    run_id: 'latest-public',
+    chat: {{ run_id: 'latest-public', threads: [], assistant: {{ name: 'Hermes' }} }},
+    assistant_public_context: bootstrapPayload.assistant_public_context,
+    executive_modes: {{ active_persona_id: 'ceo', active_board_state: 'pre', active_driver_key: 'ebitda' }},
+  }};
+  harness.state.activePersona = 'ceo';
+  harness.state.drawerOpen = true;
+  harness.ensureThreads();
+
+  await harness.askAssistant('What is driving margin pressure this quarter?', form);
+  const firstThreadKey = harness.currentThreadKey();
+  const firstThread = harness.threadStore()[firstThreadKey];
+
+  await harness.askAssistant('What should I do next?', form);
+  const secondThreadKey = harness.currentThreadKey();
+  const secondThread = harness.threadStore()[secondThreadKey];
+
+  console.log(JSON.stringify({{
+    fetchCalls,
+    threadKeys: Object.keys(harness.threadStore()),
+    firstThreadKey,
+    secondThreadKey,
+    firstThreadMessages: firstThread ? firstThread.messages.length : 0,
+    secondThreadMessages: secondThread ? secondThread.messages.length : 0,
+    inputStillExists: Boolean(elements['assistant-input']),
+    formStillExists: Boolean(elements['assistant-form']),
+    inputDisabled: elements['assistant-input'].disabled,
+    inputPlaceholder: elements['assistant-input'].placeholder,
+  }}));
+}}
+
+main().catch((error) => {{
+  console.error(error);
+  process.exit(1);
+}});
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "assistant_followup_thread_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result["fetchCalls"] == ["/assistant/chat", "/assistant/chat"]
+    assert result["formStillExists"] is True
+    assert result["inputStillExists"] is True
+    assert result["inputDisabled"] is False
+    assert result["inputPlaceholder"] == "Ask Hermes…"
+    assert result["firstThreadKey"] == result["secondThreadKey"], "Follow-up must stay in the same visible thread"
+    assert result["secondThreadMessages"] == 4, "Follow-up thread must keep both Q&A turns together"
 
 
 def test_board_action_prompt_builder_outputs_plain_english_prompts():

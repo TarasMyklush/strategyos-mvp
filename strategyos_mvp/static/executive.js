@@ -104,6 +104,15 @@
     return 'Help me review ' + boardActionLabel(actionKey).toLowerCase() + ' for the ' + boardStateLabel + ' board stage. What needs review, what evidence is missing, and what should I do next?';
   }
 
+  function isAssistantFeedbackTarget(element) {
+    return Boolean(
+      element &&
+      typeof element === 'object' &&
+      element.nodeType === 1 &&
+      element.tagName === 'BUTTON'
+    );
+  }
+
   function boardStateSupportNote(board) {
     var stateDetail = (board || {}).state_detail || {};
     if (stateDetail.note) return stateDetail.note;
@@ -394,15 +403,14 @@
     var cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) return;
     // openAssistantDrawer(validChip) is the single shared drawer-opening path.
-    var validChip = sourceChip && typeof sourceChip === 'object' && sourceChip.nodeType === 1 ? sourceChip : null;
+    var validChip = isAssistantFeedbackTarget(sourceChip) ? sourceChip : null;
     var originalText = null;
     if (validChip) {
       originalText = validChip.textContent;
       validChip.textContent = 'loading\u2026';
       validChip.disabled = true;
     }
-    if (state.activePersona === "ceo") createWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt, { silentInitialMessage: true });
-    else ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt, { silentInitialMessage: true });
+    ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt, { silentInitialMessage: true });
     var threadKey = currentThreadKey();
     pushThreadMessage("user", cleanPrompt);
     var pending = pushThreadMessage("assistant", "Checking the governed run data\u2026");
@@ -1019,38 +1027,11 @@
   function qaAnswerText(payload) {
     if (!payload) return "I could not reach the governed Q&A service. Try again from an authenticated operator or reviewer session.";
     var answer = cleanVisibleQaAnswer(firstDefined(payload.answer, ""));
-    var llmStatus = payload.llm_status || {};
-    var parts = [];
-    if (answer) parts.push(answer);
-    if (payload.matched === false && llmStatus.reason) {
-      parts.push("AI fallback is not available: " + llmStatus.reason);
-    }
-    return parts.join(" ") || "No answer returned from governed Q&A.";
+    return answer || "No answer returned from governed Q&A.";
   }
 
   function qaAnswerMeta(payload) {
-    if (!payload) return "";
-    var mode = payload.mode === "llm" ? "LLM" : "Deterministic";
-    var assistantMode = String(firstDefined(payload.assistant_mode, payload.orchestration_mode, payload.mode, "Q&A")).replace(/_/g, ' ');
-    var basis = String(firstDefined(payload.why, payload.basis, "")).trim();
-    var runId = String(firstDefined(payload.run_id, "")).trim();
-    var citationsCount = safeArray(payload.citations).length;
-    var risk = payload.hallucination_risk || {};
-    var llmStatus = payload.llm_status || {};
-    var traceItems = [];
-    if (basis) traceItems.push("Why: " + basis);
-    if (citationsCount > 0) traceItems.push(String(citationsCount) + " evidence citation" + (citationsCount !== 1 ? "s" : ""));
-    if (risk.level) traceItems.push("Risk: " + String(risk.level).toUpperCase());
-    traceItems.push("Path: " + assistantMode);
-    if (runId) traceItems.push("Run: " + runId);
-    traceItems.push(mode);
-    if (payload.mode === "llm") {
-      traceItems.push("Answered by AI fallback");
-    }
-    if (payload.matched === false && llmStatus.reason) {
-      traceItems.push("AI fallback unavailable: " + llmStatus.reason);
-    }
-    return traceItems.length ? "[" + traceItems.join(" · ") + "]" : "";
+    return "";
   }
 
   function cleanVisibleQaAnswer(value) {
@@ -1870,7 +1851,7 @@
       card.innerHTML = [
         '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'A read on current usage, freshness, and context depth across Mizan.')) + '</p></div><span class="pill-inline ok">target ' + escapeHtml(String(firstDefined(meta.target, 80))) + '+</span></div>',
         '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(avg)) + '</strong><span>Team readiness score</span></div><div class="network-meta"><span class="pill-inline ok">Healthy</span><span class="pill-inline warn">Check-in needed</span><span class="pill-inline danger">Stale · ' + escapeHtml(String(stale)) + ' leader' + (stale !== 1 ? 's' : '') + '</span></div></div>',
-        '<div class="network-list"><div class="network-list-head"><span class="sr-only">Score</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span>Freshness</span><span>Used</span><span>Context</span></div></div>' + network.map(function (item) {
+        '<div class="network-list"><div class="network-list-head"><span class="sr-only">Score</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">Freshness</span><span class="network-list-head__stat">Used</span><span class="network-list-head__stat">Context</span></div></div>' + network.map(function (item) {
           return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Mizan Group')) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
         }).join('') + '</div>'
       ].join('');
@@ -2574,7 +2555,7 @@
       ];
       gravityPanel.innerHTML = [
         '<div class="detail-head"><div><h3 class="detail-title">Explore scenarios</h3><p class="section-note">Ask what-if questions on your live data</p></div></div>',
-        '<div class="gravity-grid-v2"><section class="gravity-play-card">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</section><section class="leaders-card"><div class="leaders-badge">Leaders\' Corner</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="leaders-fallback-card" id="leaders-featured-fallback"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Loading video...</p><p class="leaders-fallback-detail">' + escapeHtml(vlogs[0].title) + ' — ' + escapeHtml(vlogs[0].speaker) + '</p></div><div class="video-frame-wrapper" id="leaders-frame-wrapper" hidden><iframe id="leaders-featured-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen title=""></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Summary</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div>' +
+        '<div class="gravity-grid-v2"><section class="gravity-play-card">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</section><section class="leaders-card"><div class="leaders-badge">Leaders\' Corner</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="leaders-fallback-card" id="leaders-featured-fallback"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Loading video...</p><p class="leaders-fallback-detail">' + escapeHtml(vlogs[0].title) + ' — ' + escapeHtml(vlogs[0].speaker) + '</p></div><div class="video-frame-wrapper" id="leaders-frame-wrapper" hidden><iframe id="leaders-featured-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen title=""></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Summary</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><button class="leaders-video-open" type="button">Watch in player</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div>' +
         '<div class="leaders-thumb-grid" id="leaders-thumb-grid">' +
         vlogs.map(function (v, i) { return '<div class="leaders-thumb' + (i === 0 ? ' is-active' : '') + '" data-video-id="' + escapeHtml(v.id) + '" tabindex="0" role="button"><span class="leaders-thumb__img">▶</span><span class="leaders-thumb__title">' + escapeHtml(v.title) + '</span><span class="leaders-thumb__speaker">' + escapeHtml(v.speaker) + ' · ' + escapeHtml(v.dur) + '</span></div>'; }).join('') +
         '</div></section></div>'
@@ -2626,44 +2607,35 @@
     var info = leadersCard.querySelector('#leaders-video-info');
     var thumbGrid = leadersCard.querySelector('#leaders-thumb-grid');
 
-    // Show iframe wrapper, hide fallback
-    if (fallback) fallback.hidden = true;
-    if (frameWrapper) frameWrapper.hidden = false;
-
-    if (iframe) {
-      iframe.src = 'https://www.youtube-nocookie.com/embed/' + escapeHtml(item.id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1';
-      iframe.setAttribute('title', item.title);
-      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen');
-      // Reset fallback timer on video switch
-      if (_leadersFallbackTimer) {
-        window.clearTimeout(_leadersFallbackTimer);
-        _leadersFallbackTimer = null;
+    if (_leadersFallbackTimer) {
+      window.clearTimeout(_leadersFallbackTimer);
+      _leadersFallbackTimer = null;
+    }
+    if (frameWrapper) frameWrapper.hidden = true;
+    if (iframe) iframe.src = '';
+    if (fallback) {
+      fallback.hidden = false;
+      fallback.innerHTML = '<p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Preview stays in English on this surface.</p><p class="leaders-fallback-detail">' + escapeHtml(item.title) + ' — ' + escapeHtml(item.speaker) + '</p><div class="leaders-fallback-actions"><button class="leaders-fallback-watch" type="button">Watch in player</button><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+      var watchBtn = fallback.querySelector('.leaders-fallback-watch');
+      if (watchBtn) {
+        watchBtn.onclick = function () {
+          openVideoModal(item);
+        };
       }
-      _leadersFallbackTimer = window.setTimeout(function () {
-        if (frameWrapper && iframe) {
-          iframe.src = '';
-          frameWrapper.hidden = true;
-          if (fallback) {
-            fallback.hidden = false;
-            fallback.innerHTML = '<p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">This video is not available inline.</p><p class="leaders-fallback-detail">' + escapeHtml(item.title) + '</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a>';
-          }
-        }
-      }, 4000);
-      iframe.addEventListener('load', function () {
-        if (_leadersFallbackTimer) {
-          window.clearTimeout(_leadersFallbackTimer);
-          _leadersFallbackTimer = null;
-        }
-      }, { once: true });
     }
 
     if (info) {
-      info.innerHTML = '<h4>' + escapeHtml(item.title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(item.speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(item.theme) + '</span><p class="leaders-video-summary">' + escapeHtml(item.summary) + '</p><details><summary>Summary</summary><p>' + escapeHtml(item.transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+      info.innerHTML = '<h4>' + escapeHtml(item.title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(item.speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(item.theme) + '</span><p class="leaders-video-summary">' + escapeHtml(item.summary) + '</p><details><summary>Summary</summary><p>' + escapeHtml(item.transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><button class="leaders-video-open" type="button">Watch in player</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
       var hermesCta = info.querySelector('#leaders-hermes-cta');
       if (hermesCta) {
         hermesCta.onclick = function () {
           askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?', hermesCta);
+        };
+      }
+      var openBtn = info.querySelector('.leaders-video-open');
+      if (openBtn) {
+        openBtn.onclick = function () {
+          openVideoModal(item);
         };
       }
     }
@@ -2839,7 +2811,7 @@
         var flags = [];
         if (item.actual) flags.push('<span class="pill-inline ok">actual</span>');
         if (item.presented) flags.push('<span class="pill-inline warn">presented</span>');
-        if (item.next_action) flags.push('<span class="pill-inline board-status-chip">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</span>');
+        if (item.next_action) flags.push('<button type="button" class="pill-inline board-status-chip board-status-chip--action" data-board-action="' + escapeHtml(String(item.next_action)) + '">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</button>');
         return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Governed board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
       '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
@@ -3379,7 +3351,7 @@
       event.preventDefault();
       var message = String(input.value || "").trim();
       if (!message) return;
-      askAssistant(message, form);
+      askAssistant(message, null);
       input.value = "";
     });
   }
