@@ -4300,8 +4300,6 @@ html[data-theme="dark"] .trend-axis {
 #cases.section.is-open, #evidence.section.is-open, #reports.section.is-open {
   max-height: 600px; overflow: auto;
 }
-.board-panel { max-height: 220px; overflow: hidden; }
-.board-panel + .board-panel { display: none; }
 .section:has(.agents-row) { max-height: 200px; overflow: hidden; }
 .section:has(.lower-rail), .section:has(.lower-main) { max-height: 400px; overflow: hidden; }
 

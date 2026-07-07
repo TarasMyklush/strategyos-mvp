@@ -2839,7 +2839,8 @@
         if (state.activeBoard === mode.state_id) return;
         state.activeBoard = mode.state_id;
         animateCard("board-portal");
-        refresh(true);
+        updateHistory();
+        renderPersonaView();
       };
       row.appendChild(button);
     });
@@ -3393,7 +3394,7 @@
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
       state.activePersona = firstDefined((state.latestPacket.executive_modes || {}).active_persona_id, state.activePersona, "ceo");
       if (state.activePersona === "board") state.activeView = "home";
-      state.activeBoard = firstDefined((state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, state.activeBoard, "pre");
+      state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, "pre");
       state.activeDriverKey = firstDefined((state.latestPacket.executive_modes || {}).active_driver_key, state.activeDriverKey, "board_packet");
       state.activeCompany = firstDefined((state.latestPacket.executive_modes || {}).company_id, state.activeCompany);
       state.activePortfolio = firstDefined((state.latestPacket.executive_modes || {}).portfolio_id, state.activePortfolio);

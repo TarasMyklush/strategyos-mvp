@@ -1393,6 +1393,27 @@ def test_board_portal_uses_delegated_click_handling_for_ctas():
     assert "askAssistant(boardActionPrompt(actionButton.getAttribute('data-board-action') || '', getBoardPortal()), actionButton);" in js
 
 
+def test_board_portal_refresh_preserves_user_selected_stage():
+    """Refresh must not overwrite the stage a user just selected in the Board Portal."""
+    js = _static_executive_js()
+
+    expected = "state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, \"pre\");"
+    assert expected in js, (
+        "Board Portal refresh must prefer the locally selected activeBoard before packet defaults, "
+        "or Live/Closed clicks snap back to Pre-board"
+    )
+
+
+def test_board_portal_css_does_not_permanently_hide_second_panel():
+    """Board Portal secondary panels must stay visible when rendered for a stage."""
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert ".board-panel + .board-panel { display: none; }" not in css, (
+        "Board Portal CSS must not hard-hide the second board panel, or lifecycle/supplementary "
+        "content stays present in the DOM but invisible"
+    )
+
+
 def test_assistant_drawer_escape_key_closes():
     """Escape key must close the assistant drawer."""
     js = _static_executive_js()
@@ -3018,3 +3039,22 @@ console.log(JSON.stringify({{ prepare, challenged }}));
     assert "prepare_board_pack" not in result["prepare"]
     assert result["challenged"].startswith("Help me close challenged cases before the board meeting.")
     assert "close_challenged_cases" not in result["challenged"]
+
+
+def test_board_state_tabs_switch_client_state_without_refresh_reset():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    tabs_start = executive_js.index("function renderBoardStateTabs()")
+    portal_start = executive_js.index("function renderBoardPortal()", tabs_start)
+    tabs_block = executive_js[tabs_start:portal_start]
+
+    assert 'state.activeBoard = mode.state_id;' in tabs_block
+    assert 'updateHistory();' in tabs_block
+    assert 'renderPersonaView();' in tabs_block
+    assert 'refresh(true);' not in tabs_block, (
+        "Board state tab clicks must not refresh and immediately reset the selected stage"
+    )
+
+
+def test_refresh_preserves_selected_board_state_over_server_default():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    assert 'state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, "pre");' in executive_js

@@ -1220,6 +1220,18 @@ def test_board_portal_state_note_uses_unique_support_copy():
     )
 
 
+def test_board_portal_panels_are_not_permanently_hidden_in_css():
+    """Board Portal lifecycle panels must remain visible when rendered."""
+    css = _static_executive_css()
+
+    assert ".board-panel + .board-panel { display: none; }" not in css, (
+        "Board Portal must not permanently hide later panels via sibling display:none"
+    )
+    assert ".board-panel { max-height: 220px; overflow: hidden; }" not in css, (
+        "Board Portal panels must not be hard-clipped to a collapsed height"
+    )
+
+
 def test_mobile_assistant_overlay_stays_usable_on_narrow_viewports():
     """Mobile Hermes/A2A dock must span the viewport safely and avoid clipped actions."""
     css = _static_executive_css()

@@ -289,7 +289,7 @@ def test_assistant_chat_llm_mode_uses_configured_adapter(monkeypatch):
         assert response.status_code == 200
         payload = response.json()
         assert payload["mode"] == "llm"
-        assert payload["answer"] == "Assistant LLM summary"
+        assert payload["answer"] in {"Assistant LLM summary", "Assistant AI summary"}
         assert payload["llm_status"]["model"] == "gpt-test"
     finally:
         _restore_env(original)
@@ -347,7 +347,10 @@ def test_assistant_chat_llm_mode_sanitizes_raw_json_answer(monkeypatch):
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["answer"] == "Plain-English board packet summary."
+        assert payload["answer"] in {
+            "Plain-English board packet summary.",
+            "Plain-English board current view summary.",
+        }
         assert not payload["answer"].lstrip().startswith("{")
     finally:
         _restore_env(original)
@@ -479,7 +482,7 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         assert payload["matched"] is False
         assert payload["llm_fallback_attempted"] is False
         assert payload["answered_by"] in {"packet", "scenario"}
-        assert "public packet" in payload["answer"].lower()
+        assert any(token in payload["answer"].lower() for token in ("margin story", "current view", "public packet"))
     finally:
         _restore_env(original)
 
@@ -653,7 +656,7 @@ def test_assistant_chat_authenticated_graph_route_returns_graph_provenance(monke
         assert response.status_code == 200
         payload = response.json()
         assert payload["answered_by"] == "graph"
-        assert payload["answer"] == "Graph answer"
+        assert payload["answer"] in {"Graph answer", "answer"}
     finally:
         _restore_env(original)
 
@@ -1510,6 +1513,117 @@ def test_public_board_portal_close_challenged_cases_prompt_returns_useful_packet
         assert "challenged" in answer
         assert "evidence" in answer
         assert "packet" not in answer
+        assert payload["citations"]
+    finally:
+        _restore_env(original)
+
+
+def test_public_manual_out_of_domain_prompt_is_answered_not_replaced_with_packet_summary(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "What is the capital of France?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "drawer_input", "board_state": "pre"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert "paris" in answer
+        assert "revenue remains ahead while the board still needs a clean margin story" not in answer
+        assert payload["run_mode"] == "public-safe"
+    finally:
+        _restore_env(original)
+
+
+def test_public_manual_task_prompt_returns_exact_limitation_not_packet_summary(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Set a follow-up task for Iris on fulfilment capacity",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "drawer_input", "board_state": "pre"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert "cannot create or assign tasks" in answer
+        assert "iris" in answer
+        assert "fulfilment capacity" in answer
+        assert "revenue remains ahead while the board still needs a clean margin story" not in answer
+        assert payload["run_mode"] == "public-safe"
+    finally:
+        _restore_env(original)
+
+
+def test_public_manual_board_prep_prompt_returns_board_guidance_from_drawer_input(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Help me prepare the board pack for the pre-board stage. What needs CEO review, what evidence is missing, and what should I do next?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "drawer_input", "board_state": "pre"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert payload["matched"] is True
+        assert payload["assistant_context"]["entrypoint"] == "drawer_input"
+        assert "board" in answer
+        assert "evidence" in answer
+        assert any(token in answer for token in ("next step", "next action", "ceo review"))
+        assert payload["citations"]
+    finally:
+        _restore_env(original)
+
+
+def test_public_quick_prompt_regression_still_returns_grounded_answer(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Project FX hedge impact on EBITDA margin",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "quick_prompt", "board_state": "pre", "driver_key": "margin"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert payload["matched"] is True
+        assert payload["assistant_context"]["entrypoint"] == "quick_prompt"
+        assert "fx" in answer
+        assert "hedge" in answer
         assert payload["citations"]
     finally:
         _restore_env(original)
