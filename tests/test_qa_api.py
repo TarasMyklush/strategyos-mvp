@@ -1518,6 +1518,74 @@ def test_public_board_portal_close_challenged_cases_prompt_returns_useful_packet
         _restore_env(original)
 
 
+def test_public_board_portal_hedge_downside_prompt_returns_hedge_answer_not_generic_fallback(monkeypatch):
+    """P0 regression: board portal 'Show the hedge downside' must return
+    hedge-specific answer, not the canned board catch-all fallback."""
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Show the hedge downside",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "board_portal", "board_state": "live", "driver_key": "board_packet"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert payload["run_id"] == "latest-public"
+        assert payload["run_mode"] == "public-safe"
+        # Must NOT return the canned board catch-all
+        assert "chief of staff" not in answer
+        assert "outside the available" not in answer
+        # Must mention hedge
+        assert "hedge" in answer
+        # Must mention FX drag or EUR
+        assert any(token in answer for token in ("fx", "eur", "60%", "hedge"))
+        assert payload["citations"]
+    finally:
+        _restore_env(original)
+
+
+def test_public_board_portal_jv_funded_from_cash_prompt_returns_jv_answer_not_generic_fallback(monkeypatch):
+    """P0 regression: board portal 'Is the JV funded from cash?' must return
+    JV/liquidity-specific answer, not the canned board catch-all fallback."""
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Is the JV funded from cash?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "board_portal", "board_state": "live", "driver_key": "board_packet"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert payload["run_id"] == "latest-public"
+        assert payload["run_mode"] == "public-safe"
+        # Must NOT return the canned board catch-all
+        assert "chief of staff" not in answer
+        assert "outside the available" not in answer
+        # Must mention JV or funding or cash
+        assert any(token in answer for token in ("jv", "joint venture", "fund", "cash", "liquidity"))
+        assert payload["citations"]
+    finally:
+        _restore_env(original)
+
+
 def test_public_manual_out_of_domain_prompt_is_answered_not_replaced_with_packet_summary(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:

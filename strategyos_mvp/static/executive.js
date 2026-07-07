@@ -1677,7 +1677,10 @@
       entry_label: element ? String(element.textContent || "").trim().slice(0, 120) : "drawer_input",
       persona: state.activePersona || "ceo",
       board_state: state.activeBoard || "pre",
-      driver_key: firstDefined(activeDriver && (activeDriver.driver_key || activeDriver.key), state.activeDriverKey, "board_packet"),
+      // Board portal prompts must NOT carry stale hero/revenue driver_key — use
+      // "board_packet" so the backend routes the question against board-relevant
+      // answer chains (e.g. hedge downside, JV funding) instead of revenue context.
+      driver_key: entrypoint === "board_portal" ? "board_packet" : firstDefined(activeDriver && (activeDriver.driver_key || activeDriver.key), state.activeDriverKey, "board_packet"),
       thread_key: currentThreadKey(),
       active_view: state.activeView || "home"
     };
@@ -1700,19 +1703,28 @@
     var apiQuestion = normalizeTypos(cleanMessage);
 
     var body = { question: apiQuestion, mode: "auto", persona: state.activePersona || "ceo" };
-    var activeDriver = getActiveDriver();
-    if (activeDriver) {
-      body.driver_context = {
-        key: activeDriver.driver_key || activeDriver.key,
-        label: activeDriver.label,
-        metric: activeDriver.metric || activeDriver.value,
-        pct: activeDriver.pct,
-        status: activeDriver.status || activeDriver.sub,
-        detail: activeDriver.detail || activeDriver.story,
-        movers: activeDriver.movers || {}
-      };
+    var entrypointCtx = assistantEntrypointContext(sourceEl);
+    body.assistant_context = entrypointCtx;
+    // Board portal prompts must NOT carry hero/revenue driver_context, because
+    // the board entrypoint_context already identifies board state/lifecycle and
+    // stale driver metrics (e.g. driver_context.key="revenue") cause the backend
+    // to answer out of context for board-specific questions like hedge downside
+    // or JV funding. Only attach driver_context for non-board entrypoints so the
+    // server routes the question against the correct board-relevant answer chain.
+    if (entrypointCtx.entrypoint !== "board_portal") {
+      var activeDriver = getActiveDriver();
+      if (activeDriver) {
+        body.driver_context = {
+          key: activeDriver.driver_key || activeDriver.key,
+          label: activeDriver.label,
+          metric: activeDriver.metric || activeDriver.value,
+          pct: activeDriver.pct,
+          status: activeDriver.status || activeDriver.sub,
+          detail: activeDriver.detail || activeDriver.story,
+          movers: activeDriver.movers || {}
+        };
+      }
     }
-    body.assistant_context = assistantEntrypointContext(sourceEl);
     body.source = body.assistant_context.source;
     body.entrypoint = body.assistant_context.entrypoint;
     var runId = activeRunId();

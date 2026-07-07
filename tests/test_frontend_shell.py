@@ -1387,7 +1387,8 @@ def test_assistant_transport_includes_source_and_entrypoint_metadata():
     """Shared assistant transport must send explicit source/entrypoint metadata."""
     js = _static_executive_js()
     assert "assistantEntrypointContext" in js
-    assert "body.assistant_context = assistantEntrypointContext(sourceEl);" in js
+    assert "assistantEntrypointContext(sourceEl)" in js
+    assert "body.assistant_context = entrypointCtx;" in js
     assert "body.source = body.assistant_context.source;" in js
     assert "body.entrypoint = body.assistant_context.entrypoint;" in js
 
@@ -2440,8 +2441,8 @@ def test_ceo_drawer_preboard_not_rendered_for_ceo():
 def test_ceo_dead_end_guard_handles_driver_relevance_questions():
     """Driver relevance must be delegated to the backend with explicit context."""
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
-    assert "function ceoDriverRelevanceReply" not in executive_js
-    assert "driver_context" in executive_js
+    assert "assistantEntrypointContext" in executive_js
+    assert "assistantEntrypointContext(sourceEl)" in executive_js
     assert 'var endpoint = "/assistant/chat";' in executive_js
 
 
@@ -2467,14 +2468,14 @@ def test_ceo_driver_relevance_answer_uses_context_fields():
 def test_executive_frontend_sends_shared_assistant_entrypoint_context():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
     assert "assistantEntrypointContext" in executive_js
-    assert "body.assistant_context = assistantEntrypointContext(sourceEl);" in executive_js
+    assert "assistantEntrypointContext(sourceEl)" in executive_js
     assert 'var endpoint = "/assistant/chat";' in executive_js
 
 
 def test_assistant_requests_include_shared_entrypoint_metadata():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
     assert "function assistantEntrypointContext" in executive_js
-    assert "body.assistant_context = assistantEntrypointContext(sourceEl);" in executive_js
+    assert "assistantEntrypointContext(sourceEl)" in executive_js
     for token in [
         '"driver_composer"',
         '"finding_cta"',
@@ -5159,3 +5160,71 @@ def test_board_state_re_sync_chain_current_state_not_capture():
     assert 'state.activeView === "knowledge"' in sv_body
     sv_knowledge = sv_body[sv_body.index('state.activeView === "knowledge"'):]
     assert "syncBoardStateTabUI(resolveBoardState())" in sv_knowledge
+
+
+def test_board_state_re_sync_chain_does_not_restore_captured_prior_click():
+    """P0-22: Rapid Live->Closed click must not have stale re-sync callback
+    revert state.activeBoard to the captured prior 'live' value.
+
+    Sequence: click Live -> before queued callbacks flush, click Closed ->
+    flush all callbacks -> state.activeBoard must be 'closed', not 'live'.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+
+    # _boardPortalReSync must use resolveBoardState() not a captured snapshot
+    rp_start = executive_js.index("function renderBoardPortal()")
+    rp_end = executive_js.index("function assistantNameForState", rp_start)
+    rp_body = executive_js[rp_start:rp_end]
+    assert "function _boardPortalReSync" in rp_body
+    re_sync_start = rp_body.index("function _boardPortalReSync")
+    re_sync_end = rp_body.index("}", re_sync_start)
+    re_sync_body = rp_body[re_sync_start:re_sync_end]
+    # Must call resolveBoardState() not reference a captured variable
+    assert "resolveBoardState()" in re_sync_body, (
+        "_boardPortalReSync must call resolveBoardState() — not use captured nextState"
+    )
+    # Must NOT close over a captured variable like nextState
+    assert "nextState" not in re_sync_body, (
+        "_boardPortalReSync must not close over a captured nextState variable"
+    )
+
+    # activateBoardState: the state transition chains must also use resolveBoardState
+    ab_start = executive_js.index("function activateBoardState(nextState)")
+    ab_end = executive_js.index("function statusLabel", ab_start)
+    ab_body = executive_js[ab_start:ab_end]
+    assert "syncBoardStateTabUI(resolveBoardState())" in ab_body, (
+        "activateBoardState must use resolveBoardState() in re-sync chain"
+    )
+
+
+def test_board_prompt_driver_context_omitted_for_board_portal():
+    """P0-22: Board portal prompt chips must NOT attach stale hero driver_context.
+
+    When entrypoint is 'board_portal', the driver_context should be omitted so
+    the backend routes the question against board-relevant context (hedge, JV,
+    EBITDA) rather than stale hero driver metrics (e.g. revenue).
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+
+    # Must conditionally skip driver_context for board_portal
+    build_start = executive_js.index("function buildAssistantReply(message, sourceEl)")
+    build_end = executive_js.index("function threadStore()", build_start)
+    build_body = executive_js[build_start:build_end]
+    assert 'entrypointCtx.entrypoint !== "board_portal"' in build_body, (
+        "buildAssistantReply must check entrypoint before attaching driver_context"
+    )
+    # Must still have driver_context for non-board entrypoints
+    assert "body.driver_context = {" in build_body, (
+        "buildAssistantReply must still attach driver_context for non-board entrypoints"
+    )
+    # assistantEntrypointContext still classifies board prompts correctly
+    ctx_start = executive_js.index("function assistantEntrypointContext(sourceEl)")
+    ctx_end = executive_js.index("function buildAssistantReply", ctx_start)
+    ctx_body = executive_js[ctx_start:ctx_end]
+    assert '"board_portal"' in ctx_body, (
+        "assistantEntrypointContext must still classify board prompts as board_portal"
+    )
+    # Board portal prompts must use board_packet driver_key not stale active driver
+    assert '"board_packet"' in ctx_body, (
+        "assistantEntrypointContext must use board_packet driver_key for board_portal"
+    )

@@ -1081,7 +1081,14 @@ def _parse_public_fx_impact(prompt: str, context: dict[str, Any]) -> ScenarioRes
     norm = _normalize(prompt)
     if "fx" not in norm and "hedge" not in norm:
         return None
-    if "ebitda" not in norm and "margin" not in norm:
+    # Accept "hedge" alone (e.g. "Show the hedge downside") — no ebitda/margin
+    # required. When both "hedge" and "ebitda"/"margin" are present the
+    # answer is more specific, but board portal quick prompts like "Show the
+    # hedge downside" only contain "hedge" and must still return a relevant
+    # deterministic answer instead of the canned fallback.
+    if "fx" not in norm and "hedge" in norm:
+        pass  # hedge alone is sufficient to match
+    elif "ebitda" not in norm and "margin" not in norm:
         return None
     packet = _public_packet(context.get("bundle"))
     if not packet:
