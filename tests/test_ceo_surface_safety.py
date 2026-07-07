@@ -1220,16 +1220,16 @@ def test_mobile_assistant_overlay_stays_usable_on_narrow_viewports():
     css = _static_executive_css()
 
     mobile_start = css.index("@media (max-width: 760px)")
-    mobile_block = css[mobile_start:mobile_start + 1400]
+    mobile_block = css[mobile_start:mobile_start + 2600]
 
-    assert ".assistant-dock" in mobile_block and "left: 12px;" in mobile_block and "right: 12px;" in mobile_block, (
-        "Mobile assistant dock must anchor to both sides so the floating overlay does not clip off-screen"
+    assert ".assistant-dock" in mobile_block and "left: 0;" in mobile_block and "right: 0;" in mobile_block and "width: 100%;" in mobile_block, (
+        "Mobile assistant dock must anchor to both sides and span the viewport so the floating overlay does not clip off-screen"
     )
     assert ".a2a-fab" in mobile_block and "width: 100%;" in mobile_block, (
         "Mobile A2A launcher must fill the dock width for reliable tap targets"
     )
-    assert ".a2a-head," in mobile_block and ".a2a-foot," in mobile_block and "flex-wrap: wrap;" in mobile_block, (
-        "Mobile A2A panel header/footer must wrap instead of overflowing narrow viewports"
+    assert ".chat-launcher__cta," in mobile_block and ".a2a-fab" in mobile_block and "justify-content: space-between;" in mobile_block, (
+        "Mobile launcher and A2A trigger must stretch cleanly instead of clipping on narrow viewports"
     )
 
 

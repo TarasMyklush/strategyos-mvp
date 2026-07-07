@@ -1298,6 +1298,36 @@ def test_assistant_drawer_mobile_bottom_sheet():
     assert "::before" in mobile_block, "Mobile drawer must have drag handle pseudo-element"
 
 
+def test_mobile_assistant_dock_and_a2a_panel_use_full_width_stack():
+    """Mobile overlay controls must stack cleanly and stay usable on narrow viewports."""
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    mobile_idx = css.index("@media (max-width: 760px)")
+    mobile_block = css[mobile_idx:mobile_idx + 1800]
+
+    assert ".assistant-dock" in mobile_block and "width: 100%" in mobile_block, (
+        "Mobile assistant dock must use full available width"
+    )
+    assert ".chat-launcher__cta" in mobile_block and ".a2a-fab" in mobile_block and "justify-content: space-between" in mobile_block, (
+        "Mobile launcher and A2A trigger must stretch cleanly instead of clipping"
+    )
+    assert ".a2a-foot-btn" in mobile_block and ".a2a-tab" in mobile_block and ".a2a-bubble" in mobile_block and "width: 100%" in mobile_block, (
+        "Mobile A2A panel controls and messages must avoid narrow-viewport clipping"
+    )
+
+
+def test_board_portal_state_detail_note_differs_from_summary():
+    """Board portal payload must expose unique note vs summary copy for each board state."""
+    board_portal = api_module._board_portal_payload(None)
+    detail = board_portal["state_detail"]
+
+    assert detail.get("note"), "Board portal state detail must include note copy"
+    assert detail.get("summary"), "Board portal state detail must include summary copy"
+    assert detail["note"] != detail["summary"], (
+        "Board portal note and summary must stay distinct to avoid duplicate CEO copy"
+    )
+
+
 def test_assistant_drawer_desktop_layout():
     """Desktop drawer must use two-column layout with thread sidebar + conversation."""
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")

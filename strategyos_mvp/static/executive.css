@@ -1989,31 +1989,42 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 }
 
 @media (max-width: 760px) {
-  .assistant-dock {
-    left: 12px;
-    right: 12px;
-    bottom: max(12px, env(safe-area-inset-bottom));
-    width: auto;
+  .assistant-drawer {
+    bottom: 0;
+    max-height: calc(100dvh - 48px);
+    border-radius: 18px 18px 0 0;
+    transform: translateY(100%);
   }
 
-  .chat-launcher,
-  .a2a-shell {
-    right: 12px;
+  .assistant-drawer::before {
+    content: "";
+  }
+
+  .assistant-dock {
+    left: 0;
+    right: 0;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: 100%;
+    padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    gap: 10px;
   }
 
   .chat-launcher {
-    max-width: calc(100vw - 24px);
-    flex-wrap: wrap;
+    max-width: none;
+    flex-direction: column;
+    align-items: flex-start;
     justify-content: space-between;
+    padding: 12px;
   }
 
+  .chat-launcher__cta,
   .a2a-fab {
     width: 100%;
     justify-content: space-between;
   }
 
   .a2a-panel {
-    max-height: min(52dvh, 420px);
+    max-height: min(56vh, 420px);
     border-radius: 20px;
     padding: 14px;
   }
@@ -2021,19 +2032,30 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   .a2a-head,
   .a2a-foot,
   .a2a-foot-actions {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .a2a-foot-actions {
     width: 100%;
   }
 
-  .a2a-foot-btn {
-    flex: 1 1 160px;
+  .a2a-foot-btn,
+  .a2a-tab,
+  .a2a-bubble {
+    width: 100%;
   }
 
   .a2a-tab {
     max-width: 100%;
+  }
+
+  .a2a-bubble {
+    max-width: 100%;
+  }
+
+  .a2a-min {
+    align-self: flex-end;
   }
 
   .a2a-tab-unit {
@@ -2057,6 +2079,16 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
     padding: 0;
   }
 
+  .assistant-drawer::before {
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border-strong);
+    border-radius: 2px;
+    margin: 10px auto 0;
+    flex-shrink: 0;
+  }
+
   .assistant-drawer.is-open {
     visibility: visible;
     transform: translateY(0);
@@ -2066,17 +2098,6 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   .assistant-drawer[hidden] {
     visibility: hidden;
     transform: translateY(100%);
-  }
-
-  .assistant-drawer::before {
-    content: "";
-    display: block;
-    width: 40px;
-    height: 4px;
-    background: var(--border-strong);
-    border-radius: 2px;
-    margin: 10px auto 0;
-    flex-shrink: 0;
   }
 
   .assistant-drawer .assistant-studio {

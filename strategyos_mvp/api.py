@@ -3189,20 +3189,26 @@ def _board_portal_payload(
     next_action = str((publication.get("approval") or {}).get("next_action") or "")
     state_detail = {
         "pre": {
+            "state": "pre",
             "title": "Pre-board preparation",
-            "summary": "Use this stage to close evidence gaps, tighten supplementary answers, and confirm the packet is ready for CEO review.",
+            "summary": "Prepare one board-safe packet for CEO review by resolving challenged evidence, tightening supplementary answers, and confirming the release posture.",
+            "note": "Keep the packet inside the executive lane until challenged evidence is closed and supplementary answers are board-ready.",
             "primary_actions": ["prepare_board_pack", next_action or "capture_reviewer_decision"],
             "secondary_actions": ["inspect_report_preview", "review_supplementary_questions"],
         },
         "live": {
+            "state": "live",
             "title": "Live board session",
             "summary": "Operate only inside the approved packet while questions stay linked to challenged evidence and governed release posture.",
+            "note": "Stay inside the approved packet while the room is live and route every answer back to governed evidence.",
             "primary_actions": [next_action or "capture_reviewer_decision", "inspect_board_pack_status"],
             "secondary_actions": ["open_supplementary_rail", "freeze_live_answers"],
         },
         "closed": {
+            "state": "closed",
             "title": "Closed / frozen snapshot",
             "summary": "Keep the board memory frozen and bounded to approved outputs after the session closes.",
+            "note": "The room is closed now; preserve the frozen record and work follow-ups outside the board surface.",
             "primary_actions": ["inspect_frozen_snapshot", "review_board_memory"],
             "secondary_actions": ["compare_packet_release", "check_follow_up_obligations"],
         },
@@ -3279,6 +3285,7 @@ def _board_portal_payload(
             "state": presentation_state,
             "title": state_detail.get("title") or "Board posture",
             "summary": state_detail.get("summary") or "Board posture is bounded to the governed packet.",
+            "note": state_detail.get("note") or "Keep the board packet bounded to governed review posture.",
             "primary_actions": state_detail.get("primary_actions") or [],
             "secondary_actions": state_detail.get("secondary_actions") or [],
         },

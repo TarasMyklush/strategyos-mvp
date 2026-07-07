@@ -105,6 +105,8 @@
   }
 
   function boardStateSupportNote(board) {
+    var stateDetail = (board || {}).state_detail || {};
+    if (stateDetail.note) return stateDetail.note;
     var boardState = String(firstDefined(state.activeBoard, (board || {}).presentation_state, (board || {}).state, 'pre')).toLowerCase();
     if (boardState === 'pre') {
       return 'Close evidence gaps now so the CEO sees one clean packet, then keep live answers inside released material.';
