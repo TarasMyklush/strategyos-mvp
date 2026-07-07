@@ -141,6 +141,11 @@
       portal.__boardPortalHandler = null;
     }
     portal.__boardPortalHandler = function (event) {
+      // Gate with _boardPromptHandled flag: whichever handler fires first
+      // (delegated bubble vs individual onclick) processes the event and the
+      // other skips, preventing duplicate /assistant/chat POSTs.
+      if (event._boardPromptHandled) return;
+      event._boardPromptHandled = true;
       var target = eventTargetElement(event);
       if (!target) return;
       var promptButton = target.closest('[data-board-prompt]');
@@ -3412,14 +3417,23 @@
     // the target.closest() fallback fails in a specific DOM state, or
     // the portal's single-event-listener guard was set on a prior render
     // but the content was replaced.
+    // IMPORTANT: gate individual onclick handlers with a _boardPromptHandled
+    // flag so the delegated handler (portal.__boardPortalHandler, which fires
+    // first during bubble) and this individual onclick do not both invoke
+    // askAssistant, causing duplicate /assistant/chat POSTs and duplicate
+    // drawer messages.
     safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
       button.onclick = function (event) {
+        if (event._boardPromptHandled) return;
+        event._boardPromptHandled = true;
         event.preventDefault();
         activateBoardPrompt(button.getAttribute('data-board-prompt') || '', button);
       };
     });
     safeArray(portal.querySelectorAll('[data-board-action]')).forEach(function (button) {
       button.onclick = function (event) {
+        if (event._boardPromptHandled) return;
+        event._boardPromptHandled = true;
         event.preventDefault();
         activateBoardAction(button.getAttribute('data-board-action') || '', getBoardPortal(), button);
       };
