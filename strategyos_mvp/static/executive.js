@@ -81,7 +81,7 @@
       freeze_live_answers: 'Freeze live answers',
       inspect_frozen_snapshot: 'Inspect frozen snapshot',
       review_board_memory: 'Review board memory',
-      compare_packet_release: 'Compare packet release',
+      compare_packet_release: 'Compare board release',
       check_follow_up_obligations: 'Check follow-up obligations'
     };
     return labels[key] || humanizeToken(actionKey);
@@ -93,7 +93,7 @@
     var boardStateLabel = statusLabel(boardState).toLowerCase();
     var challengedCount = Number(firstDefined(((board || {}).supplementary || {}).question_count, 0)) || 0;
     if (key === 'prepare_board_pack') {
-      return 'Help me prepare the board pack for the ' + boardStateLabel + ' stage. What needs CEO review, what evidence is missing, and what should I do next?';
+      return 'Help me prepare the board materials for the ' + boardStateLabel + ' stage. What needs CEO review, what evidence is missing, and what should I do next?';
     }
     if (key === 'close_challenged_cases') {
       return 'Help me close challenged cases before the board meeting. Which cases are challenged, what evidence is needed, and what is my next action?' + (challengedCount ? ' I can currently see ' + challengedCount + ' challenged case' + (challengedCount === 1 ? '' : 's') + '.' : '');
@@ -142,10 +142,10 @@
     if (stateDetail.note) return stateDetail.note;
     var boardState = String(firstDefined(state.activeBoard, (board || {}).presentation_state, (board || {}).state, 'pre')).toLowerCase();
     if (boardState === 'pre') {
-      return 'Close evidence gaps now so the CEO sees one clean packet, then keep live answers inside released material.';
+      return 'Close evidence gaps now so the CEO sees one clean board view, then keep live answers inside released material.';
     }
     if (boardState === 'live') {
-      return 'Stay inside the approved packet while questions map back to challenged evidence and governed answers.';
+      return 'Stay inside the approved view while questions map back to challenged evidence and board-supported answers.';
     }
     return 'Keep the room on the frozen record after close so follow-up stays bounded to approved outputs.';
   }
@@ -167,8 +167,8 @@
       "pending": "Pending",
       "in review": "Under review",
       "in_review": "Under review",
-      "live packet": "Live packet",
-      "live_packet": "Live packet",
+      "live packet": "Frozen",
+      "live_packet": "Frozen",
       "protected": "Guarded",
       "board_safe_preview": "View only",
       "board_safe_publication": "View only",
@@ -437,7 +437,7 @@
     ensureWritableThread(threadTitleFromPrompt(cleanPrompt), cleanPrompt, { silentInitialMessage: true });
     var threadKey = currentThreadKey();
     pushThreadMessage("user", cleanPrompt);
-    var pending = pushThreadMessage("assistant", "Checking the governed run data\u2026");
+    var pending = pushThreadMessage("assistant", "Checking the board data\u2026");
     openAssistantDrawer(validChip);
     // Show loading state in the input area when no source chip provides feedback
     var form = $("assistant-form");
@@ -767,7 +767,7 @@
           label: node.label + " · " + humanizeToken(satelliteKind) + " node",
           short_label: humanizeToken(satelliteKind),
           category: satelliteKind,
-          detail: "Derived " + satelliteKind + " node generated from the governed graph context around " + node.label + ". This is visual evidence density, not a new business claim.",
+          detail: "Derived " + satelliteKind + " node generated from the graph context around " + node.label + ". This is visual evidence density, not a new business claim.",
           hermes_prompt: firstDefined(node.hermes_prompt, "Explain the evidence around " + node.label + "."),
           importance: 18 + (satelliteKind === "source" ? 6 : 0),
           source_count: 1,
@@ -805,7 +805,7 @@
           label: from.label + " → " + to.label + " relationship",
           short_label: relayStep === 1 ? "Bridge" : "Path",
           category: "relationship",
-          detail: "Derived relationship node showing the governed path between " + from.label + " and " + to.label + ". This is a visual relay, not a separate finding.",
+          detail: "Derived relationship node showing the board path between " + from.label + " and " + to.label + ". This is a visual relay, not a separate finding.",
           hermes_prompt: firstDefined(from.hermes_prompt, "Explain how " + from.label + " connects to " + to.label + "."),
           importance: 16,
           source_count: 1,
@@ -844,7 +844,7 @@
         questions: [
           {
             id: "shared-public-packet",
-            label: "Shared executive packet",
+            label: "Board context",
             focus: safeArray(shared.kg_nodes).map(function (node) { return node.id; })
           }
         ],
@@ -854,7 +854,7 @@
             label: firstDefined(node && node.label, "Node " + (index + 1)),
             category: normalizeKgCategory(firstDefined(node && node.category, node && node.properties && node.properties.domain, "signal")),
             detail: firstDefined(node && node.properties && (node.properties.detail || node.properties.value || node.properties.vs_plan), node && node.detail, "No additional detail available."),
-            hermes_prompt: firstDefined(node && node.hermes_prompt, "Explain " + firstDefined(node && node.label, "this packet signal") + " in the executive packet."),
+            hermes_prompt: firstDefined(node && node.hermes_prompt, "Explain " + firstDefined(node && node.label, "this board signal") + " in the current strategy context."),
             r: clampNumber(firstDefined(node && node.r, 10), 7, 13)
           };
         }),
@@ -1049,9 +1049,9 @@
   }
 
   function qaAnswerText(payload) {
-    if (!payload) return "I could not reach the governed Q&A service. Try again from an authenticated operator or reviewer session.";
+    if (!payload) return "I could not reach the Q&A service. Try again from an authenticated session.";
     var answer = cleanVisibleQaAnswer(firstDefined(payload.answer, ""));
-    return answer || "No answer returned from governed Q&A.";
+    return answer || "No answer returned at this time.";
   }
 
   function qaAnswerMeta(payload) {
@@ -1496,11 +1496,11 @@
       if (!threadStore()[key]) {
         var initial = {
           role: "assistant",
-          text: assistantName + " is holding the room in " + getPersonaLabel(state.activePersona) + " mode. Ask for the next governed move, the board-safe summary, or the evidence gap.",
+          text: assistantName + " is ready in " + getPersonaLabel(state.activePersona) + " mode. Ask for the next board decision, the board-safe summary, or the evidence gap.",
           timestamp: new Date().toISOString()
         };
         if (thread.kind === "system") {
-          initial.text = firstDefined(thread.preview, "Governed run status is attached here.");
+          initial.text = firstDefined(thread.preview, "Board status is attached here.");
         }
         threadStore()[key] = {
           key: key,
@@ -1696,10 +1696,10 @@
       '<div class="strategyos-profile-card">',
       '<button class="strategyos-profile-close" type="button" aria-label="Close profile and settings">&times;</button>',
       '<h3>Profile &amp; settings</h3>',
-      '<p class="section-note">Adjust your working persona, theme, and governed run surface without leaving the board lane.</p>',
+      '<p class="section-note">Adjust your working persona, theme, and board context without leaving the board lane.</p>',
       '<div class="strategyos-profile-list">',
       '<div class="strategyos-profile-item"><strong>Active role</strong><span>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</span></div>',
-      '<div class="strategyos-profile-item"><strong>Assistant</strong><span>' + escapeHtml(assistantName) + ' · governed run</span></div>',
+      '<div class="strategyos-profile-item"><strong>Assistant</strong><span>' + escapeHtml(assistantName) + ' · board data</span></div>',
       '<div class="strategyos-profile-item"><strong>Theme</strong><span>' + escapeHtml(state.theme === 'dark' ? 'Dark' : 'Light') + '</span></div>',
       '</div>',
       '<div class="strategyos-profile-actions">',
@@ -1792,7 +1792,7 @@
         var feedbackAction = state.activePersona === "ceo" ? "" : '<button type="button" class="avatar-tooltip-action" data-avatar-action="feedback">Send feedback</button>';
         var tip = document.createElement('div');
         tip.className = 'strategyos-avatar-tooltip';
-        tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div class="avatar-tooltip-copy"><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · governed run</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button><button type="button" class="avatar-tooltip-action" data-avatar-action="theme">' + escapeHtml(themeIcon) + ' ' + escapeHtml(themeLabel) + ' theme</button>' + feedbackAction + '</div>';
+        tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div class="avatar-tooltip-copy"><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · board data</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button><button type="button" class="avatar-tooltip-action" data-avatar-action="theme">' + escapeHtml(themeIcon) + ' ' + escapeHtml(themeLabel) + ' theme</button>' + feedbackAction + '</div>';
         avatar.parentNode.appendChild(tip);
         var outsideClick = function (event) {
           if (!event.target.closest('#topbar-user')) { tip.remove(); document.removeEventListener('click', outsideClick); }
@@ -2079,7 +2079,7 @@
       '<h3 class="kg-inspector__title" id="kg-inspector-title">' + escapeHtml(firstDefined(node.label, "Node")) + '</h3>' +
       '<p class="kg-inspector__meta">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + ' &middot; Connected to ' + connectedIds.length + ' nodes' + (node.synthetic ? ' &middot; Derived visual node' : '') + '</p>' +
       '<p class="kg-inspector__detail">' + escapeHtml(firstDefined(node.detail, "No additional detail available.")) + '</p>' +
-      '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Provenance</span><span class="kg-inspector__provenance-value">' + escapeHtml(node.synthetic ? 'Deterministically generated from governed graph context. Visual density only.' : 'Governed packet / KG node surfaced from current strategy context.') + '</span></div>' +
+      '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Provenance</span><span class="kg-inspector__provenance-value">' + escapeHtml(node.synthetic ? 'Deterministically generated from board graph context. Visual density only.' : 'Board context / KG node surfaced from current strategy data.') + '</span></div>' +
       (connectedLabels.length ? '<div class="kg-inspector__connections"><span class="kg-inspector__connections-label">Connected to</span>' + connectedLabels.map(function (l) { return '<span class="kg-inspector__conn-chip">' + l + '</span>'; }).join('') + '</div>' : '') +
       '<button type="button" class="kg-inspector__ask" id="kg-inspector-ask">Ask Hermes about this &rarr;</button>';
     panel.hidden = false;
@@ -2403,7 +2403,7 @@
     ];
 
     $("hero-eyebrow").textContent = state.activePersona === "board"
-      ? "Board portal · governed packet posture"
+      ? "Board portal · current board posture"
       : "Good morning, " + firstName;
     $("hero-head").textContent = firstDefined(preferredHero.headline, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
@@ -2502,8 +2502,8 @@
     var metrics = [
       {
         label: "Driver posture",
-        value: firstDefined(driver.label, getPlanHealth().label, "Awaiting packet"),
-        detail: firstDefined(driver.detail, getPlanHealth().summary, "No governed driver summary yet.")
+        value: firstDefined(driver.label, getPlanHealth().label, "Awaiting board data"),
+        detail: firstDefined(driver.detail, getPlanHealth().summary, "No board driver summary yet.")
       },
       {
         label: "Board lifecycle",
@@ -2850,7 +2850,7 @@
     var board = getBoardPortal();
     var portal = $("board-portal");
     var note = $("board-note");
-    if (note) note.textContent = firstDefined(board.governance_note, "Board-safe lifecycle, materials, and governed memory.");
+    if (note) note.textContent = firstDefined(board.governance_note, "Board-safe lifecycle, materials, and context.");
     if (!portal) return;
 
     var decks = safeArray(board.decks).slice(0, 4);
@@ -2866,28 +2866,28 @@
       stateSpecific = '<div class="board-mode-grid"><section class="board-panel"><p class="detail-eyebrow">CEO-approved material</p><div class="mini-list">' + (decks.length ? decks.map(function (item) {
         return '<div class="board-deck"><div><strong>' + escapeHtml(firstDefined(item.title, 'Deck')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.by, item.tag, 'Board material')) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, item.pages ? item.pages + ' pages' : 'ready')) + '</span></div>';
       }).join('') : '<div class="discovery-empty">No board material is released yet.</div>') + '</div></section><section class="board-panel"><p class="detail-eyebrow">Supplementary questions</p><div class="mini-list">' + (questions.length ? questions.map(function (item) {
-        return '<div class="board-deck"><div><strong>' + escapeHtml(firstDefined(item.q, 'Question')) + '</strong><p class="list-copy">to ' + escapeHtml(firstDefined(item.to, 'board lane')) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'governed')) + '</span></div>';
+        return '<div class="board-deck"><div><strong>' + escapeHtml(firstDefined(item.q, 'Question')) + '</strong><p class="list-copy">to ' + escapeHtml(firstDefined(item.to, 'board lane')) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'board')) + '</span></div>';
       }).join('') : '<div class="discovery-empty">No supplementary questions are attached to this lifecycle state.</div>') + '</div></section></div>';
     } else if (boardState === 'live') {
-      stateSpecific = '<div class="board-live-card"><div class="board-live-card__head"><strong>Live session · Q&amp;A on approved material</strong><span>' + escapeHtml(assistantNameForState()) + ' answers only from the CEO-approved pack</span></div><div class="board-live-card__status"><span class="live-pulse"></span><strong>In session</strong><span>' + escapeHtml(firstDefined((board.meeting || {}).title, 'Board meeting')) + '</span></div><div class="pill-row">' + ['Why is EBITDA 20 bps under plan?', 'Show the hedge downside', 'Is the JV funded from cash?'].map(function (prompt) { return '<button class="prompt-chip" type="button" data-board-prompt="' + escapeHtml(prompt) + '">' + escapeHtml(prompt) + '</button>'; }).join('') + '</div></div>';
+      stateSpecific = '<div class="board-live-card"><div class="board-live-card__head"><strong>Live session · Q&amp;A on approved material</strong><span>' + escapeHtml(assistantNameForState()) + ' answers only from the CEO-approved material</span></div><div class="board-live-card__status"><span class="live-pulse"></span><strong>In session</strong><span>' + escapeHtml(firstDefined((board.meeting || {}).title, 'Board meeting')) + '</span></div><div class="pill-row">' + ['Why is EBITDA 20 bps under plan?', 'Show the hedge downside', 'Is the JV funded from cash?'].map(function (prompt) { return '<button class="prompt-chip" type="button" data-board-prompt="' + escapeHtml(prompt) + '">' + escapeHtml(prompt) + '</button>'; }).join('') + '</div></div>';
     } else {
       stateSpecific = '<div class="board-mode-grid"><section class="board-panel"><p class="detail-eyebrow">Meeting summary &amp; action plan</p><p class="board-copy">' + escapeHtml(firstDefined(board.summary, snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</p><div class="mini-list">' + (actions.length ? actions.map(function (item) {
         return '<div class="board-action"><div><strong>' + escapeHtml(firstDefined(item.item, 'Action')) + '</strong><small>' + escapeHtml(firstDefined(item.owner, 'Owner')) + '</small></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.due, 'next')) + '</span></div>';
-      }).join('') : '<div class="discovery-empty">No closed-state actions are attached yet.</div>') + '</div></section><section class="board-panel frozen-panel"><p class="detail-eyebrow">Frozen snapshot</p><strong>' + escapeHtml(humanizeToken(firstDefined(snapshot.status, 'live_packet'))) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(snapshot.summary, 'Between meetings, the board room only sees the frozen snapshot.')) + '</p><button class="timeline-chip" type="button" data-board-prompt="Model a what-if on the frozen board snapshot: if EUR strengthens 5%, what was the hedged outcome?"><strong>◇ What-if on the snapshot</strong><span>No live org data reaches the board</span></button></section></div>';
+      }).join('') : '<div class="discovery-empty">No closed-state actions are attached yet.</div>') + '</div></section><section class="board-panel frozen-panel"><p class="detail-eyebrow">Frozen snapshot</p><strong>' + escapeHtml(humanizeToken(firstDefined(snapshot.status, 'frozen'))) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(snapshot.summary, 'Between meetings, the board room only sees the frozen snapshot.')) + '</p><button class="timeline-chip" type="button" data-board-prompt="Model a what-if on the frozen board snapshot: if EUR strengthens 5%, what was the hedged outcome?"><strong>◇ What-if on the snapshot</strong><span>No live org data reaches the board</span></button></section></div>';
     }
     portal.innerHTML = [
-      '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined((board.state_detail || {}).title, board.state_label, "Governed board packet")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined((board.state_detail || {}).summary, board.board_summary, "Board posture stays bounded to the current packet.")) + '</p></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(board.presentation_state, board.state, "pre"))) + '">' + escapeHtml(statusLabel(firstDefined(board.state_label, board.presentation_state, board.state, "pre"))) + '</span></div>',
+      '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined((board.state_detail || {}).title, board.state_label, "Board status")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined((board.state_detail || {}).summary, board.board_summary, "Board posture stays bounded to the current view.")) + '</p></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(board.presentation_state, board.state, "pre"))) + '">' + escapeHtml(statusLabel(firstDefined(board.state_label, board.presentation_state, board.state, "pre"))) + '</span></div>',
       '<div class="board-kpis">' + safeArray(board.kpis).slice(0, 4).map(function (item) {
-        return '<div class="board-kpi"><span class="board-kpi__label">' + escapeHtml(firstDefined(item.label, "Metric")) + '</span><strong class="board-kpi__value">' + escapeHtml(firstDefined(item.value, item.pct, "—")) + '</strong><span class="board-kpi__sub">' + escapeHtml(firstDefined(item.sub, item.pct ? String(item.pct) + "%" : "Governed packet")) + '</span></div>';
+        return '<div class="board-kpi"><span class="board-kpi__label">' + escapeHtml(firstDefined(item.label, "Metric")) + '</span><strong class="board-kpi__value">' + escapeHtml(firstDefined(item.value, item.pct, "—")) + '</strong><span class="board-kpi__sub">' + escapeHtml(firstDefined(item.sub, item.pct ? String(item.pct) + "%" : "Board data")) + '</span></div>';
       }).join("") + '</div>',
       '<div class="board-state-stack">' + lifecycle.map(function (item) {
         var flags = [];
         if (item.actual) flags.push('<span class="pill-inline ok">actual</span>');
         if (item.presented) flags.push('<span class="pill-inline warn">presented</span>');
         if (item.next_action) flags.push('<button type="button" class="pill-inline board-status-chip board-status-chip--action" data-board-action="' + escapeHtml(String(item.next_action)) + '" aria-label="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '" title="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</button>');
-        return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Governed board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
+        return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
-      '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
+      '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'frozen'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
       (state.activePersona === "ceo"
         ? '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).map(function (item) {
             return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '" aria-label="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '" title="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '">Review: ' + escapeHtml(humanizeToken(item)) + '</button>';
@@ -3242,7 +3242,7 @@
     }
 
     if (threadTitle) threadTitle.textContent = firstDefined(current && current.title, "Thread");
-    if (threadMeta) threadMeta.textContent = firstDefined(current && current.preview, blueprint.brief, "Select a governed follow-up.");
+    if (threadMeta) threadMeta.textContent = firstDefined(current && current.preview, blueprint.brief, "Select a board follow-up.");
     if (threadTools) {
       var tools = [];
       var latestFailure = latestRetryableAssistantFailure(current);
@@ -3322,7 +3322,7 @@
       '<p class="detail-copy">Overview, cases, evidence, and reports now sing as one workspace. This rail keeps the board-safe output explicit.</p>',
       '<div class="mini-list">' + safeArray(publication.available_artifacts).slice(0, 5).map(function (item) {
         var formatLabel = function (fmt) {
-          var map = { graph: 'Data relationships', audit: 'Decision trail', other: 'Overview packet', json: 'Structured data', csv: 'Spreadsheet', pdf: 'PDF document', md: 'Markdown note' };
+          var map = { graph: 'Data relationships', audit: 'Decision trail', other: 'Overview file', json: 'Structured data', csv: 'Spreadsheet', pdf: 'PDF document', md: 'Markdown note' };
           return map[String(fmt).toLowerCase()] || escapeHtml(fmt);
         };
         var catLabel = REPORT_CATEGORY_MAP[item.category] || humanizeToken(item.category) || 'report';

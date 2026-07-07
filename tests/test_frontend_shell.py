@@ -3014,7 +3014,7 @@ console.log(JSON.stringify({{ prepare, challenged }}));
         )
 
     result = json.loads(completed.stdout.strip())
-    assert result["prepare"].startswith("Help me prepare the board pack for the pre-board stage.")
+    assert result["prepare"].startswith("Help me prepare the board materials for the pre-board stage.")
     assert "prepare_board_pack" not in result["prepare"]
     assert result["challenged"].startswith("Help me close challenged cases before the board meeting.")
     assert "close_challenged_cases" not in result["challenged"]

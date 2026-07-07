@@ -1134,8 +1134,8 @@ def test_board_portal_review_buttons_use_plain_english_prompts():
     assert "I need to review and act on: ' + action" not in js, (
         "Board Portal CTAs must not build prompts from raw internal action codes"
     )
-    assert "Help me prepare the board pack" in js, (
-        "Board Portal CTA copy must include a plain-English board-pack review prompt"
+    assert "Help me prepare the board materials" in js, (
+        "Board Portal CTA copy must include a plain-English board review prompt"
     )
     assert "Help me close challenged cases" in js, (
         "Board Portal CTA copy must include a plain-English challenged-cases prompt"
@@ -1212,7 +1212,7 @@ def test_board_portal_state_note_uses_unique_support_copy():
     assert "function boardStateSupportNote(board)" in js, (
         "Board Portal should derive a distinct support note for lifecycle guidance"
     )
-    assert "Close evidence gaps now so the CEO sees one clean packet" in js, (
+    assert "Close evidence gaps now so the CEO sees one clean board view" in js, (
         "Pre-board support note should give unique CEO guidance instead of repeating the card summary"
     )
     assert 'note.textContent = firstDefined(boardStateSupportNote(board)' in js, (

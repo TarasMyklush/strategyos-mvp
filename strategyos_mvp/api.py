@@ -4036,7 +4036,7 @@ def _chat_threads_payload(
                 "persona_label": persona_label,
                 "assistant": assistant_name,
                 "title": item.get("title") or _humanize_chat_token(thread_key),
-                "preview": item.get("preview") or "Open this governed thread.",
+                "preview": item.get("preview") or "Open this board thread.",
                 "starter_prompt": item.get("preview") or item.get("title") or "",
                 "message_count": 0,
                 "read_only": False,
@@ -4051,9 +4051,10 @@ def _chat_threads_payload(
                 ),
             }
         )
+    preview_status = (summary or {}).get('status') or 'available'
+    preview_stage = current_stage.replace('_', ' ')
     workflow_preview = (
-        f"Run {run_id} is {str((summary or {}).get('status') or 'governed').replace('_', ' ')}"
-        f" at {current_stage.replace('_', ' ')}"
+        f"Board context is {preview_status.replace('_', ' ')} at {preview_stage}"
     )
     if challenged_count:
         workflow_preview += f" · {challenged_count} challenged item{'s' if challenged_count != 1 else ''}"
@@ -4064,7 +4065,7 @@ def _chat_threads_payload(
             "persona_id": persona_id,
             "persona_label": persona_label,
             "assistant": assistant_name,
-            "title": "Governed run status",
+            "title": "Board status",
             "preview": workflow_preview,
             "starter_prompt": None,
             "message_count": 1,

@@ -1082,7 +1082,7 @@
       }
     }
     const fallbackNote = !activeRunId()
-      ? "Load a governed run to populate finance, evidence, release, and runtime branches."
+      ? "Load board data to populate finance, evidence, release, and runtime branches."
       : challenged > 0
         ? `${formatCount(challenged)} challenged case${challenged === 1 ? " is" : "s are"} keeping plan health bounded by evidence closure.`
         : `${formatCount(findings.length)} governed case${findings.length === 1 ? " is" : "s are"} informing the current tenant signal while publication stays ${publicationStatusLabel(publication.status).toLowerCase()}.`;

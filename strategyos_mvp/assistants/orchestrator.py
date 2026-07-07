@@ -213,19 +213,18 @@ _REVIEWER_PATTERNS: list[tuple[str, str | Callable[[], str]]] = [
 # Default catch-all response per persona when nothing matches
 _PERSONA_DEFAULTS: dict[str, str] = {
     "ceo": (
-        "The current board pack shows governed data across revenue, margin, "
-        "cash, cost, and strategic drivers. CEO implication: the latest "
-        "governed run is available — which board decision would you like "
+        "The current board data shows information across revenue, margin, "
+        "cash, cost, and strategic drivers. Which board decision would you like "
         "to pressure-test? I can help with the margin bridge, cash headroom, "
         "cost variance, revenue quality, or driver-level detail."
     ),
     "cfo": (
-        "Financial data from the latest governed run is available. I can "
+        "Financial data is available. I can "
         "help with revenue, margin, cash flow, budget variance, and "
         "financial controls. Which area would you like to analyse?"
     ),
     "gm": (
-        "BU performance data from the latest governed run is available. "
+        "BU performance data is available. "
         "I can help with BU revenue, growth drivers, resource allocation, "
         "and operational metrics. Which BU or metric would you like to see?"
     ),
@@ -594,7 +593,7 @@ def _build_cfo_financial_reply(question: str) -> str:
     lower_q = question.lower()
     if "margin" in lower_q:
         return (
-            "Margin data is available from the latest governed run. "
+            "Margin data is available. "
             "EBITDA margin is tracked against plan with variance analysis "
             "by driver. The margin bridge shows FX exposure, cost pressure, "
             "and revenue mix effects. Would you like the full bridge or "
@@ -602,7 +601,7 @@ def _build_cfo_financial_reply(question: str) -> str:
         )
     if "revenue" in lower_q:
         return (
-            "Revenue data is available from the latest governed run — "
+            "Revenue data is available — "
             "broken down by business unit, channel, and product line. "
             "The revenue ledger shows plan vs actual with driver-level "
             "attribution. Which segment would you like to analyse?"
@@ -622,7 +621,7 @@ def _build_cfo_financial_reply(question: str) -> str:
             "centre or BU would you like to examine?"
         )
     return (
-        "Financial data from the latest governed run is available. "
+        "Financial data is available. "
         "I can help with revenue, margin, cash flow, budget variance, "
         "and financial controls. Which area would you like to analyse?"
     )
