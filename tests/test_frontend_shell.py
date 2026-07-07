@@ -4628,7 +4628,7 @@ def test_switch_view_knowledge_has_raf_fallthrough():
     knowledge_guard_start = fn_body.index('state.activeView === "knowledge"') if 'state.activeView === "knowledge"' in fn_body else -1
     assert knowledge_guard_start >= 0, "Must contain knowledge guard block"
     knowledge_block = fn_body[knowledge_guard_start:]
-    assert "requestAnimationFrame" in knowledge_block[:600], (
+    assert "requestAnimationFrame" in knowledge_block[:800], (
         "switchView knowledge guard must include requestAnimationFrame fallthrough"
     )
 
@@ -4759,3 +4759,359 @@ def test_board_state_tabs_activeboard_priority_over_transition_signal():
     assert active_pos < transition_pos, (
         "resolveBoardState must check state.activeBoard before state._boardStateTransition"
     )
+
+
+def test_board_state_tabs_click_updates_aria_selected_and_class_and_content():
+    """P0-14: Clicking a board state tab (e.g. Live) must update:
+    - aria-selected on both the previously-active and newly-active tabs
+    - className (state-tab vs state-tab is-active) on both tabs
+    - portal inner HTML to reflect the new board state (e.g. Live board session title)
+
+    This reproduces the exact Hermes live verification path:
+    1. Render board state tabs with Pre-board active
+    2. Click the Live tab
+    3. Verify aria-selected, className, and portal content all reflect Live
+    """
+    import subprocess, json, tempfile
+    from pathlib import Path
+
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveBoardTabClickHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { renderBoardStateTabs: renderBoardStateTabs, renderBoardPortal: renderBoardPortal, state: state, getBoardPortal: getBoardPortal, resolveBoardState: resolveBoardState };\n}\nmodule.exports = __executiveBoardTabClickHarness;\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        "    renderPersonaView();",
+        "    if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
+        1,
+    )
+
+    node_script = """const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = """ + json.dumps(harness_js) + """;
+const tempFile = path.join(os.tmpdir(), 'executive-board-tab-click-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed) {
+  var data = {};
+  if (seed) { Object.keys(seed).forEach(function(k) { data[k] = seed[k]; }); }
+  return {
+    getItem: function(key) { return data.hasOwnProperty(key) ? data[key] : null; },
+    setItem: function(key, value) { data[key] = String(value); },
+    removeItem: function(key) { delete data[key]; },
+    clear: function() { data = {}; },
+  };
+}
+
+var setTimeoutCalls = [];
+
+function makeButton() {
+  var attributes = {};
+  var listeners = {};
+  return {
+    tagName: 'BUTTON',
+    nodeType: 1,
+    attributes: attributes,
+    className: '',
+    innerHTML: '<span class="state-tab__copy"><strong>Tab</strong><span>desc</span></span>',
+    style: {},
+    listeners: listeners,
+    setAttribute: function(name, value) { attributes[name] = String(value); if (name === 'class') { this.className = value; } },
+    getAttribute: function(name) { return attributes[name] || null; },
+    addEventListener: function(name, handler) { listeners[name] = handler; },
+    click: function() {
+      var handler = listeners.click;
+      if (handler) {
+        handler({
+          type: 'click',
+          target: this,
+          currentTarget: this,
+          preventDefault: function() {},
+          stopPropagation: function() {},
+          _boardTabHandled: false,
+        });
+      }
+    },
+    closest: function(selector) { return selector === '[data-board-state]' || selector === '.state-tab' ? this : null; },
+    querySelector: function() { return null; },
+    contains: function() { return false; },
+  };
+}
+
+var boardPortalElement = {
+  id: 'board-portal',
+  tagName: 'ARTICLE',
+  innerHTML: '<div id="board-portal-test">initial</div>',
+  style: { background: 'white' },
+  classList: { add: function() {}, remove: function() {}, contains: function() { return false; } },
+  listeners: {},
+  setAttribute: function() {},
+  getAttribute: function() { return null; },
+  addEventListener: function(name, handler) { this.listeners[name] = handler; },
+  querySelector: function() { return null; },
+  querySelectorAll: function() { return []; },
+  contains: function() { return true; },
+};
+
+var row = {
+  __boardStateInteractionsBound: false,
+  __id: 'board-state-row',
+  innerHTML: '',
+  buttons: [],
+  listeners: {},
+  addEventListener: function(name, handler) { this.listeners[name] = handler; },
+  appendChild: function(child) { this.buttons.push(child); return child; },
+  contains: function(target) { return this.buttons.indexOf(target) !== -1 || target === this; },
+  querySelectorAll: function(selector) {
+    if (selector === '[data-board-state]') return this.buttons.slice();
+    return [];
+  },
+  querySelector: function(selector) {
+    var m = selector.match(/\[data-board-state="([^"]+)"\]/);
+    if (!m) return null;
+    for (var i = 0; i < this.buttons.length; i++) {
+      if (this.buttons[i].getAttribute('data-board-state') === m[1]) return this.buttons[i];
+    }
+    return null;
+  },
+};
+
+var note = { textContent: '' };
+
+function fireTimeouts() {
+  var safety = 0;
+  while (setTimeoutCalls.length > 0 && safety < 50) {
+    var fn = setTimeoutCalls.shift();
+    if (typeof fn === 'function') fn();
+    safety++;
+  }
+}
+
+global.window = {
+  __BOARD_STATE_TEST_SUPPRESS_RENDER__: true,
+  STRATEGYOS_EXECUTIVE_DESIGN: { personas: { ceo: { assistant: 'Hermes', threads: [] } } },
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: { threads: {}, assistants: {} },
+  setTimeout: function(fn) { setTimeoutCalls.push(fn); return 1; },
+  clearTimeout: function() {},
+  setInterval: function() { return 1; },
+  clearInterval: function() {},
+  requestAnimationFrame: function(fn) { setTimeoutCalls.push(fn); return 1; },
+  addEventListener: function() {},
+  removeEventListener: function() {},
+  innerWidth: 1280,
+  location: { pathname: '/app' },
+  history: { replaceState: function() {} },
+  navigator: { clipboard: { writeText: function() { return Promise.resolve(); } } },
+};
+
+global.document = {
+  body: { style: {}, appendChild: function() {}, removeChild: function() {} },
+  documentElement: { getAttribute: function() { return 'light'; }, setAttribute: function() {} },
+  addEventListener: function() {},
+  removeEventListener: function() {},
+  getElementById: function(id) {
+    if (id === 'strategyos-executive-bootstrap') return { textContent: JSON.stringify({ assistant_public_context: {} }) };
+    if (id === 'board-state-row') return row;
+    if (id === 'board-state-note') return note;
+    if (id === 'board-portal') return boardPortalElement;
+    if (id === 'board-note') return note;
+    return null;
+  },
+  querySelector: function() { return null; },
+  querySelectorAll: function() { return []; },
+  createElement: function(tag) { return tag === 'button' ? makeButton() : { setAttribute: function() {}, classList: { add: function() {}, remove: function() {}, contains: function() { return false; }, toggle: function() { return false; } } }; },
+};
+
+const factory = require(tempFile);
+const harness = factory();
+
+harness.state.latestPacket = {
+  board_portal: {
+    lifecycle_flow: [
+      { state_id: 'pre', label: 'Pre-board', detail: 'Prepare governed packet' },
+      { state_id: 'live', label: 'Live', detail: 'Run the room inside approved material' },
+      { state_id: 'closed', label: 'Closed', detail: 'Freeze memory after the room closes' }
+    ],
+    presentation_state: 'pre',
+    state: 'pre',
+    state_detail: { state: 'pre', title: 'Pre-board preparation', summary: 'Prepare the packet.' },
+  },
+};
+harness.state.activeBoard = 'pre';
+
+harness.renderBoardStateTabs();
+harness.renderBoardPortal();
+
+var pre = row.querySelector('[data-board-state="pre"]');
+var live = row.querySelector('[data-board-state="live"]');
+var closed = row.querySelector('[data-board-state="closed"]');
+
+var initial = {
+  preSelected: pre.getAttribute('aria-selected'),
+  preClass: pre.className,
+  liveSelected: live.getAttribute('aria-selected'),
+  liveClass: live.className,
+  closedSelected: closed.getAttribute('aria-selected'),
+  closedClass: closed.className,
+  portalHtml: boardPortalElement.innerHTML,
+  activeBoard: harness.state.activeBoard,
+  resolveState: harness.resolveBoardState(),
+};
+
+live.click();
+fireTimeouts();
+
+var afterLiveClick = {
+  preSelected: pre.getAttribute('aria-selected'),
+  preClass: pre.className,
+  liveSelected: live.getAttribute('aria-selected'),
+  liveClass: live.className,
+  closedSelected: closed.getAttribute('aria-selected'),
+  closedClass: closed.className,
+  portalHtml: boardPortalElement.innerHTML,
+  activeBoard: harness.state.activeBoard,
+  resolveState: harness.resolveBoardState(),
+};
+
+closed.click();
+fireTimeouts();
+
+var afterClosedClick = {
+  preSelected: pre.getAttribute('aria-selected'),
+  preClass: pre.className,
+  liveSelected: live.getAttribute('aria-selected'),
+  liveClass: live.className,
+  closedSelected: closed.getAttribute('aria-selected'),
+  closedClass: closed.className,
+  portalHtml: boardPortalElement.innerHTML,
+  activeBoard: harness.state.activeBoard,
+  resolveState: harness.resolveBoardState(),
+};
+
+live.click();
+fireTimeouts();
+
+var afterBackToLive = {
+  preSelected: pre.getAttribute('aria-selected'),
+  preClass: pre.className,
+  liveSelected: live.getAttribute('aria-selected'),
+  liveClass: live.className,
+  closedSelected: closed.getAttribute('aria-selected'),
+  closedClass: closed.className,
+  portalHtml: boardPortalElement.innerHTML,
+  activeBoard: harness.state.activeBoard,
+  resolveState: harness.resolveBoardState(),
+};
+
+console.log(JSON.stringify({
+  initial: initial,
+  after_live_click: afterLiveClick,
+  after_closed_click: afterClosedClick,
+  after_back_to_live: afterBackToLive,
+}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_tab_click_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+
+    i = result["initial"]
+    assert i["preSelected"] == "true", "Initial: Pre-board must be selected"
+    assert i["preClass"] == "state-tab is-active", "Initial: Pre-board must be is-active"
+    assert i["liveSelected"] == "false", "Initial: Live must not be selected"
+    assert i["closedSelected"] == "false", "Initial: Closed must not be selected"
+
+    c2 = result["after_live_click"]
+    assert c2["activeBoard"] == "live", f"Click Live: activeBoard must be 'live', got '{c2['activeBoard']}'"
+    assert c2["liveSelected"] == "true", "Click Live: Live aria-selected must be true"
+    assert c2["liveClass"] == "state-tab is-active", "Click Live: Live class must be 'state-tab is-active'"
+    assert c2["preSelected"] == "false", "Click Live: Pre-board aria-selected must be false"
+    assert c2["preClass"] == "state-tab", "Click Live: Pre-board class must be 'state-tab'"
+    assert c2["closedSelected"] == "false", "Click Live: Closed aria-selected must be false"
+    assert "Live board session" in c2["portalHtml"] or "Live" in c2["portalHtml"], (
+        f"Click Live: Portal content must reflect Live state, got: {c2['portalHtml'][:200]}"
+    )
+    assert "Pre-board preparation" not in c2["portalHtml"], (
+        "Click Live: Portal content must not show Pre-board preparation title"
+    )
+
+    c3 = result["after_closed_click"]
+    assert c3["activeBoard"] == "closed", f"Click Closed: activeBoard must be 'closed', got '{c3['activeBoard']}'"
+    assert c3["closedSelected"] == "true", "Click Closed: Closed aria-selected must be true"
+    assert c3["closedClass"] == "state-tab is-active", "Click Closed: Closed class must be 'state-tab is-active'"
+    assert c3["liveSelected"] == "false", "Click Closed: Live aria-selected must be false"
+    assert c3["preSelected"] == "false", "Click Closed: Pre-board aria-selected must be false"
+
+    c4 = result["after_back_to_live"]
+    assert c4["activeBoard"] == "live", f"Back to Live: activeBoard must be 'live', got '{c4['activeBoard']}'"
+    assert c4["liveSelected"] == "true", "Back to Live: Live aria-selected must be true"
+    assert c4["liveClass"] == "state-tab is-active", "Back to Live: Live class must be 'state-tab is-active'"
+    assert c4["preSelected"] == "false", "Back to Live: Pre-board aria-selected must be false"
+    assert c4["closedSelected"] == "false", "Back to Live: Closed aria-selected must be false"
+
+
+def test_board_state_tabs_delegated_handler_fallback():
+    """P0-14: The delegated click handler on board-state-row must have fallback
+    paths when event.target.closest('[data-board-state]') fails or returns null."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    fn_start = executive_js.index("function _ensureBoardStateRowDelegated")
+    fn_end = executive_js.index("function renderBoardStateTabs", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+
+    assert "target.closest" in fn_body, "Must use target.closest as primary path"
+    assert "tagName === 'BUTTON'" in fn_body or 'tagName === "BUTTON"' in fn_body, (
+        "Must have tagName fallback for closest failure"
+    )
+    assert "querySelector" in fn_body and "data-board-state" in fn_body, (
+        "Must have querySelector fallback for nested elements"
+    )
+
+
+def test_board_state_re_sync_chain_current_state_not_capture():
+    """P0-14: All re-sync chains must use resolveBoardState() not captured snapshot."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+
+    # activateBoardState
+    ab_start = executive_js.index("function activateBoardState(nextState)")
+    ab_end = executive_js.index("function statusLabel", ab_start)
+    ab_body = executive_js[ab_start:ab_end]
+    assert "syncBoardStateTabUI(resolveBoardState())" in ab_body
+
+    # renderBoardPortal
+    rp_start = executive_js.index("function renderBoardPortal()")
+    rp_end = executive_js.index("function assistantNameForState", rp_start)
+    rp_body = executive_js[rp_start:rp_end]
+    assert "syncBoardStateTabUI(resolveBoardState())" in rp_body
+    reSync_def = rp_body.index("function _boardPortalReSync")
+    assert "syncBoardStateTabUI(resolveBoardState())" in rp_body[reSync_def:reSync_def + 300]
+
+    # switchView
+    sv_start = executive_js.index("function switchView(view)")
+    sv_end = executive_js.index("function animateCard", sv_start)
+    sv_body = executive_js[sv_start:sv_end]
+    assert 'state.activeView === "knowledge"' in sv_body
+    sv_knowledge = sv_body[sv_body.index('state.activeView === "knowledge"'):]
+    assert "syncBoardStateTabUI(resolveBoardState())" in sv_knowledge

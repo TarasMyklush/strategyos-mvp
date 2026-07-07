@@ -299,17 +299,19 @@
     state._boardStateTransition = '';
     // Multi-timing re-sync chain: re-assert the intended tab state across
     // several timing windows to overcome any competing re-render (e.g. an
-    // async refresh() response that fires during or after this function).
-    // The chain uses rAF (next paint), setTimeout(0) (after microtasks),
-    // setTimeout(50) (after any short-latency async re-render), and
-    // setTimeout(250) (after any medium-latency async re-render like a
-    // pending refresh() completing). Each re-sync also restores
-    // state.activeBoard if a concurrent process reverted it.
+    // async refresh() response that fires during or after this function, or
+    // a switchView re-sync chain that registered before this call and fires
+    // a stale captured snapshot on the same timing).
+    // The chain uses rAF (next paint), multiple setTimeout levels to catch
+    // deferred re-renders, and a 1000ms catch-all. Each timing callback
+    // RE-READS resolveBoardState() so that a stale captured value from a
+    // competing re-sync chain that fires after this one cannot regress the
+    // user's selection. state.activeBoard is restored as a safety net.
     function _boardStateReSync() {
       if (state.activeBoard !== nextState) {
         state.activeBoard = nextState;
       }
-      syncBoardStateTabUI(nextState);
+      syncBoardStateTabUI(resolveBoardState());
     }
     if (typeof window.requestAnimationFrame === 'function') {
       window.requestAnimationFrame(_boardStateReSync);
@@ -318,6 +320,7 @@
       window.setTimeout(_boardStateReSync, 0);
       window.setTimeout(_boardStateReSync, 50);
       window.setTimeout(_boardStateReSync, 250);
+      window.setTimeout(_boardStateReSync, 1000);
     }
     return true;
   }
@@ -656,22 +659,23 @@
     if (state.activeView === "knowledge") {
       syncBoardStateTabUI(resolveBoardState());
       // Multi-timing re-sync: the hidden→visible CSSOM recalc can fire during
-      // paint and discard inline style attributes. rAF, setTimeout(0/50/250)
+      // paint and discard inline style attributes. rAF, setTimeout(0/50/250/1000)
       // bypass this window at multiple timing levels to catch any deferred
-      // CSSOM recalc or competing re-render.
-      (function (snapshot) {
-        function _switchViewReSync() {
-          syncBoardStateTabUI(snapshot);
-        }
-        if (typeof window.requestAnimationFrame === 'function') {
-          window.requestAnimationFrame(_switchViewReSync);
-        }
-        if (typeof window.setTimeout === 'function') {
-          window.setTimeout(_switchViewReSync, 0);
-          window.setTimeout(_switchViewReSync, 50);
-          window.setTimeout(_switchViewReSync, 250);
-        }
-      })(resolveBoardState());
+      // CSSOM recalc or competing re-render. Each callback RE-READS
+      // resolveBoardState() so that a user tab click between callbacks is not
+      // overwritten by a stale captured snapshot from this chain.
+      function _switchViewReSync() {
+        syncBoardStateTabUI(resolveBoardState());
+      }
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(_switchViewReSync);
+      }
+      if (typeof window.setTimeout === 'function') {
+        window.setTimeout(_switchViewReSync, 0);
+        window.setTimeout(_switchViewReSync, 50);
+        window.setTimeout(_switchViewReSync, 250);
+        window.setTimeout(_switchViewReSync, 1000);
+      }
     }
   }
 
@@ -3236,19 +3240,22 @@
     // completing after a delayed server response) does not discard the
     // triple-redundant style guards.
     syncBoardStateTabUI(resolveBoardState());
-    (function (snapshot) {
-      function _boardPortalReSync() {
-        syncBoardStateTabUI(snapshot);
-      }
-      if (typeof window.requestAnimationFrame === 'function') {
-        window.requestAnimationFrame(_boardPortalReSync);
-      }
-      if (typeof window.setTimeout === 'function') {
-        window.setTimeout(_boardPortalReSync, 0);
-        window.setTimeout(_boardPortalReSync, 50);
-        window.setTimeout(_boardPortalReSync, 250);
-      }
-    })(resolveBoardState());
+    // Multi-timing re-sync: each callback RE-READS resolveBoardState() so that a
+    // stale snapshot from a competing chain (e.g. switchView's _switchViewReSync)
+    // that fires between timing callbacks does not revert the UI.
+    // Includes a 1000ms catch-all for any deferred async render completion.
+    function _boardPortalReSync() {
+      syncBoardStateTabUI(resolveBoardState());
+    }
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(_boardPortalReSync);
+    }
+    if (typeof window.setTimeout === 'function') {
+      window.setTimeout(_boardPortalReSync, 0);
+      window.setTimeout(_boardPortalReSync, 50);
+      window.setTimeout(_boardPortalReSync, 250);
+      window.setTimeout(_boardPortalReSync, 1000);
+    }
     bindBoardPortalInteractions(portal);
     safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
       button.addEventListener('click', function (event) {
