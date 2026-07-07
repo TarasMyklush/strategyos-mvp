@@ -4715,3 +4715,47 @@ def test_render_persona_view_reasserts_board_tab_ui_for_knowledge():
     assert reassert_pos > summary_pos, (
         "syncBoardStateTabUI call must be AFTER renderSummary (last render function)"
     )
+
+
+def test_board_state_tabs_mutation_observer_auto_recovers_from_dom_reset():
+    """Board lifecycle tab state must auto-recover via MutationObserver when DOM
+    is mutated by a concurrent process (e.g. CSSOM recalc, refresh render cycle,
+    or third-party script). This simulates the live failure mode where clicking
+    Live tab leaves Pre-board as active after a competing DOM mutation."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+
+    # Verify MutationObserver is used on board-state-row
+    assert "MutationObserver" in executive_js, (
+        "executive.js must use MutationObserver to guard board tab state"
+    )
+    assert "board-state-row" in executive_js[executive_js.index("MutationObserver"):], (
+        "MutationObserver must observe board-state-row"
+    )
+    assert "_ensureBoardStateObserver" in executive_js, (
+        "executive.js must define _ensureBoardStateObserver"
+    )
+
+    # Verify synchronous re-sync is present on the observer callback
+    observer_call = executive_js[executive_js.index("_ensureBoardStateObserver"):]
+    assert "syncBoardStateTabUI(state.activeBoard || resolveBoardState())" in observer_call, (
+        "MutationObserver callback must re-sync using state.activeBoard as primary source"
+    )
+
+
+def test_board_state_tabs_activeboard_priority_over_transition_signal():
+    """resolveBoardState must prefer state.activeBoard over state._boardStateTransition.
+    Once a user has selected a board stage, that selection (activeBoard) must be the
+    authoritative source — the transient transition signal should not override the
+    user's anchored choice in any resolveBoardState call."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+
+    fn_start = executive_js.index("function resolveBoardState()")
+    fn_end = executive_js.index("function syncBoardStateTabUI", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+
+    # Must check state.activeBoard before state._boardStateTransition
+    active_pos = fn_body.index("state.activeBoard")
+    transition_pos = fn_body.index("state._boardStateTransition")
+    assert active_pos < transition_pos, (
+        "resolveBoardState must check state.activeBoard before state._boardStateTransition"
+    )

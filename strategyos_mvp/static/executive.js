@@ -220,11 +220,15 @@
   }
 
   function resolveBoardState() {
-    // Priority: in-transition > locally selected > server presentation_state > default
+    // Priority: user-selected anchor > in-transition signal > server state > default.
+    // state.activeBoard is the authoritative user selection set by activateBoardState.
+    // state._boardStateTransition is a transient signal used only by refresh() to
+    // avoid overriding an in-flight user transition. Once the transition completes,
+    // _boardStateTransition is cleared and activeBoard is the source of truth.
     return String(
       firstDefined(
-        state._boardStateTransition,
         state.activeBoard,
+        state._boardStateTransition,
         getBoardPortal().presentation_state,
         getBoardPortal().state,
         'pre'
@@ -3026,16 +3030,49 @@
       event._boardTabHandled = true;
       var target = event && event.target;
       if (!target) return;
+      // Primary path: closest('[data-board-state]') walks up the DOM tree
+      // from the clicked element to find the tab button. In a real browser
+      // event, the target could be any nested element inside the button
+      // (e.g. <strong> or <span>), and closest walks up from there.
+      var tabBtn = null;
       if (typeof target.closest === 'function') {
-        var tabBtn = target.closest('[data-board-state]');
-        if (tabBtn && row.contains(tabBtn)) {
-          event.preventDefault();
-          event.stopPropagation();
-          var stateVal = tabBtn.getAttribute('data-board-state') || '';
-          if (stateVal) activateBoardState(stateVal);
+        tabBtn = target.closest('[data-board-state]');
+        if (tabBtn && !row.contains(tabBtn)) tabBtn = null;
+      }
+      // Fallback 1: the target element IS a button with data-board-state
+      // (covers the case where closest is unavailable or returns null).
+      if (!tabBtn && target.tagName === 'BUTTON' && target.getAttribute && target.getAttribute('data-board-state')) {
+        tabBtn = target;
+      }
+      if (!tabBtn) {
+        // Fallback 2: querySelector on the target itself (covers the case
+        // where the target contains a data-board-state element but the
+        // event does not bubble from it — e.g. a synthetic event).
+        if (typeof target.querySelector === 'function') {
+          var qs = target.querySelector('[data-board-state]');
+          if (qs && row.contains(qs)) tabBtn = qs;
         }
       }
+      if (tabBtn && row.contains(tabBtn)) {
+        event.preventDefault();
+        event.stopPropagation();
+        var stateVal = tabBtn.getAttribute('data-board-state') || '';
+        if (stateVal) activateBoardState(stateVal);
+      }
     });
+  }
+
+  var _boardStateObserverAttached = false;
+  function _ensureBoardStateObserver() {
+    if (_boardStateObserverAttached) return;
+    var row = $("board-state-row");
+    if (!row) return;
+    if (typeof window.MutationObserver !== 'function') return;
+    _boardStateObserverAttached = true;
+    var observer = new window.MutationObserver(function () {
+      syncBoardStateTabUI(state.activeBoard || resolveBoardState());
+    });
+    observer.observe(row, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-selected', 'class'] });
   }
 
   function renderBoardStateTabs() {
@@ -3046,6 +3083,7 @@
     var activeBoardState = resolveBoardState();
     if (!row) return;
     _ensureBoardStateRowDelegated();
+    _ensureBoardStateObserver();
     // Sync existing buttons: update attributes in-place for fast state change.
     // Only destroy and recreate when the mode list changes (rare — server packet).
     var existingByState = {};
