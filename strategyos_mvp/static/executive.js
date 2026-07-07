@@ -3334,12 +3334,30 @@
       window.setTimeout(_boardPortalReSync, 250);
       window.setTimeout(_boardPortalReSync, 1000);
     }
+    // Re-bind the delegated click handler on every render so that
+    // innerHTML replacement does not lose event coverage. The portal's
+    // delegated handler survives innerHTML replacement, but re-binding
+    // on each render defensively captures any timing or CSSOM edge case.
     bindBoardPortalInteractions(portal);
-    // No individual click handlers needed for [data-board-prompt] or
-    // [data-board-action] — bindBoardPortalInteractions uses a single
-    // delegated click handler on the portal element that survives innerHTML
-    // replacement and is re-bound on each render to capture fresh closures
-    // over getBoardPortal() and boardActionPrompt().
+    // Individual click handlers provide a second backstop path per button,
+    // mirroring the hero-prompt pattern (button.onclick) which has been
+    // verified to work in all deployed environments. This redundancy
+    // covers edge cases where the delegated bubble is intercepted,
+    // the target.closest() fallback fails in a specific DOM state, or
+    // the portal's single-event-listener guard was set on a prior render
+    // but the content was replaced.
+    safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
+      button.onclick = function (event) {
+        event.preventDefault();
+        activateBoardPrompt(button.getAttribute('data-board-prompt') || '', button);
+      };
+    });
+    safeArray(portal.querySelectorAll('[data-board-action]')).forEach(function (button) {
+      button.onclick = function (event) {
+        event.preventDefault();
+        activateBoardAction(button.getAttribute('data-board-action') || '', getBoardPortal(), button);
+      };
+    });
     safeArray(portal.querySelectorAll('.snapshot-card')).forEach(function (card) {
       card.style.cursor = 'pointer';
       card.onclick = function () {
