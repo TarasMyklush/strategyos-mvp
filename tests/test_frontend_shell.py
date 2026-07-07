@@ -4500,7 +4500,10 @@ def test_board_state_tabs_sync_inline_style_survives_render():
     fn_end = executive_js.index("function renderBoardStageSurface()", fn_start)
     fn_body = executive_js[fn_start:fn_end]
 
-    assert "button.style.background = isActive ? 'var(--accent-soft)' : 'transparent'" in fn_body, (
+    assert "var expectedBackground = isActive ? 'var(--accent-soft)' : 'transparent';" in fn_body, (
+        "syncBoardStateTabUI must compute the inline fallback background for each tab"
+    )
+    assert "button.style.background = expectedBackground;" in fn_body, (
         "syncBoardStateTabUI must set inline style.background as triple-redundant fallback"
     )
     assert "data-board-state-active" in fn_body, (
@@ -4737,8 +4740,49 @@ def test_board_state_tabs_mutation_observer_auto_recovers_from_dom_reset():
 
     # Verify synchronous re-sync is present on the observer callback
     observer_call = executive_js[executive_js.index("_ensureBoardStateObserver"):]
-    assert "syncBoardStateTabUI(state.activeBoard || resolveBoardState())" in observer_call, (
-        "MutationObserver callback must re-sync using state.activeBoard as primary source"
+    assert "var desiredState = state.activeBoard || resolveBoardState();" in observer_call, (
+        "MutationObserver callback must derive desiredState using state.activeBoard as primary source"
+    )
+    assert "syncBoardStateTabUI(desiredState);" in observer_call, (
+        "MutationObserver callback must re-sync using the resolved desiredState"
+    )
+
+
+def test_board_state_tabs_mutation_observer_has_loop_guard():
+    """MutationObserver must not feed back into itself and freeze the browser.
+
+    Regression: observing aria-selected/class changes on board-state-row while the
+    callback itself mutates those same attributes can create an automation-visible
+    hang. The observer therefore needs both a self-suppression flag and a mismatch
+    check so it only re-syncs when the DOM is actually wrong.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+
+    assert "var _boardStateObserverSyncing = false;" in executive_js, (
+        "executive.js must track when board tab syncing is already in progress"
+    )
+    assert "function boardStateTabUIMismatch(nextState)" in executive_js, (
+        "executive.js must expose a board tab mismatch detector for observer guardrails"
+    )
+
+    observer_start = executive_js.index("function _ensureBoardStateObserver()")
+    observer_end = executive_js.index("function renderBoardStateTabs()", observer_start)
+    observer_block = executive_js[observer_start:observer_end]
+    assert "if (_boardStateObserverSyncing) return;" in observer_block, (
+        "MutationObserver callback must skip self-triggered attribute mutations"
+    )
+    assert "if (!boardStateTabUIMismatch(desiredState)) return;" in observer_block, (
+        "MutationObserver callback must bail out when board tab DOM is already correct"
+    )
+
+    sync_start = executive_js.index("function syncBoardStateTabUI(nextState)")
+    sync_end = executive_js.index("function renderBoardStageSurface()", sync_start)
+    sync_block = executive_js[sync_start:sync_end]
+    assert "_boardStateObserverSyncing = true;" in sync_block, (
+        "syncBoardStateTabUI must raise the observer suppression flag while mutating attributes"
+    )
+    assert "_boardStateObserverSyncing = false;" in sync_block, (
+        "syncBoardStateTabUI must always clear the observer suppression flag"
     )
 
 

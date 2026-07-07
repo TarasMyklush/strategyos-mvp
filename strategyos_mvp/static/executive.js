@@ -236,27 +236,60 @@
     ).trim().toLowerCase();
   }
 
+  var _boardStateObserverSyncing = false;
+
+  function boardStateTabUIMismatch(nextState) {
+    var row = $("board-state-row");
+    if (!row) return false;
+    var mismatched = false;
+    safeArray(row.querySelectorAll('[data-board-state]')).forEach(function (button) {
+      if (mismatched) return;
+      var buttonState = String(button.getAttribute('data-board-state') || '').trim().toLowerCase();
+      var isActive = buttonState === nextState;
+      var expectedClass = 'state-tab' + (isActive ? ' is-active' : '');
+      var expectedSelected = isActive ? 'true' : 'false';
+      var expectedBackground = isActive ? 'var(--accent-soft)' : 'transparent';
+      if (
+        button.className !== expectedClass
+        || button.getAttribute('aria-selected') !== expectedSelected
+        || button.getAttribute('data-board-state-active') !== expectedSelected
+        || (button.style && button.style.background !== expectedBackground)
+      ) {
+        mismatched = true;
+      }
+    });
+    return mismatched;
+  }
+
   function syncBoardStateTabUI(nextState) {
     var row = $("board-state-row");
     if (!row) return;
-    safeArray(row.querySelectorAll('[data-board-state]')).forEach(function (button) {
-      var buttonState = String(button.getAttribute('data-board-state') || '').trim().toLowerCase();
-      var isActive = buttonState === nextState;
-      button.className = 'state-tab' + (isActive ? ' is-active' : '');
-      button.setAttribute('aria-selected', isActive ? 'true' : 'false');
-      // Redundant data attribute guard: some environments strip className
-      // during hydration or CSSOM recalculation. The data attribute is a
-      // second signal the test harness and future render code can rely on.
-      button.setAttribute('data-board-state-active', isActive ? 'true' : 'false');
-      // Triple-redundant inline style attribute: some browsers discard
-      // className during aggressive CSSOM recalculation after innerHTML
-      // replacement (observed on Chrome 127+ after renderBoardStageSurface
-      // destroys and recreates all tab buttons). The inline background
-      // survives even when class-based styling is lost to a CSSOM race.
-      if (button.style) {
-        button.style.background = isActive ? 'var(--accent-soft)' : 'transparent';
-      }
-    });
+    _boardStateObserverSyncing = true;
+    try {
+      safeArray(row.querySelectorAll('[data-board-state]')).forEach(function (button) {
+        var buttonState = String(button.getAttribute('data-board-state') || '').trim().toLowerCase();
+        var isActive = buttonState === nextState;
+        var expectedClass = 'state-tab' + (isActive ? ' is-active' : '');
+        var expectedSelected = isActive ? 'true' : 'false';
+        var expectedBackground = isActive ? 'var(--accent-soft)' : 'transparent';
+        if (button.className !== expectedClass) button.className = expectedClass;
+        if (button.getAttribute('aria-selected') !== expectedSelected) button.setAttribute('aria-selected', expectedSelected);
+        // Redundant data attribute guard: some environments strip className
+        // during hydration or CSSOM recalculation. The data attribute is a
+        // second signal the test harness and future render code can rely on.
+        if (button.getAttribute('data-board-state-active') !== expectedSelected) button.setAttribute('data-board-state-active', expectedSelected);
+        // Triple-redundant inline style attribute: some browsers discard
+        // className during aggressive CSSOM recalculation after innerHTML
+        // replacement (observed on Chrome 127+ after renderBoardStageSurface
+        // destroys and recreates all tab buttons). The inline background
+        // survives even when class-based styling is lost to a CSSOM race.
+        if (button.style && button.style.background !== expectedBackground) {
+          button.style.background = expectedBackground;
+        }
+      });
+    } finally {
+      _boardStateObserverSyncing = false;
+    }
   }
 
   function renderBoardStageSurface() {
@@ -3074,7 +3107,10 @@
     if (typeof window.MutationObserver !== 'function') return;
     _boardStateObserverAttached = true;
     var observer = new window.MutationObserver(function () {
-      syncBoardStateTabUI(state.activeBoard || resolveBoardState());
+      var desiredState = state.activeBoard || resolveBoardState();
+      if (_boardStateObserverSyncing) return;
+      if (!boardStateTabUIMismatch(desiredState)) return;
+      syncBoardStateTabUI(desiredState);
     });
     observer.observe(row, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-selected', 'class'] });
   }
