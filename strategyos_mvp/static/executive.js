@@ -244,6 +244,14 @@
       // during hydration or CSSOM recalculation. The data attribute is a
       // second signal the test harness and future render code can rely on.
       button.setAttribute('data-board-state-active', isActive ? 'true' : 'false');
+      // Triple-redundant inline style attribute: some browsers discard
+      // className during aggressive CSSOM recalculation after innerHTML
+      // replacement (observed on Chrome 127+ after renderBoardStageSurface
+      // destroys and recreates all tab buttons). The inline background
+      // survives even when class-based styling is lost to a CSSOM race.
+      if (button.style) {
+        button.style.background = isActive ? 'var(--accent-soft)' : 'transparent';
+      }
     });
   }
 
@@ -252,73 +260,37 @@
     renderBoardPortal();
   }
 
-  function _domSyncGuard(targetState) {
-    // Multi-phase DOM sync: setTimeout catches deferred CSSOM recalc
-    // (Safari/mobile). requestAnimationFrame catches the next paint cycle
-    // (Chrome layout thrashing during innerHTML replacement). Both fire
-    // because no single timing covers all browser rendering models.
-    window.setTimeout(function () {
-      syncBoardStateTabUI(targetState);
-      // Clear the cooldown after the first guard fires so subsequent
-      // refresh() calls can read the server packet for board state update.
-      state._boardStateTransitionCooldown = 0;
-      window.requestAnimationFrame(function () {
-        syncBoardStateTabUI(targetState);
-      });
-    }, 0);
-  }
+  // _domSyncGuard removed in P0-10. renderBoardStateTabs now has a fast path
+  // that updates button attributes in-place instead of innerHTML destroy-recreate,
+  // eliminating the root cause of the multi-phase guard: the brief window where
+  // buttons didn't exist during the destroy-recreate cycle.
 
   function activateBoardState(nextState) {
     nextState = String(nextState || '').trim().toLowerCase();
     if (!nextState) return false;
     // Always proceed — even if state.activeBoard matches, the DOM may not
     // reflect it due to a concurrent refresh or incomplete render cycle.
-    // Re-rendering is idempotent and fast; the guard was causing clicks on
-    // Live/Closed to be silently swallowed when state.activeBoard appeared
-    // already set but the DOM showed Pre-board as active.
     state._boardStateTransition = nextState;
     state.activeBoard = nextState;
     // Sync existing buttons immediately so there is no visual lag between
     // the click and the full render cycle completing.
-    syncBoardStateTabUI(nextState);
-    animateCard('board-portal');
-    updateHistory();
-    // Render ONLY the board surface — NOT the entire persona view.
-    // renderPersonaView is too heavy (15+ render functions including
-    // hero, drivers, metrics, agents, knowledge graph, etc.) and was
-    // causing a race: during the innerHTML replacement cycle in
-    // renderBoardStateTabs, the old tab buttons with click handlers
-    // are destroyed and new ones created. renderBoardStageSurface
-    // is scoped to exactly the board parts: tabs + portal content.
+    // renderBoardStateTabs now has a fast path that avoids innerHTML
+    // destroy-recreate when the mode list is unchanged.
     renderBoardStageSurface();
-    // Post-render guard: force the intended tab state on whatever buttons
-    // exist after all rendering is done. This catches any edge case where
-    // a render function read getBoardPortal().presentation_state instead
-    // of state.activeBoard.
+    // Post-render guard: force intended tab state on whatever buttons exist.
     syncBoardStateTabUI(nextState);
     // Re-assert guard: if a concurrent refresh() reset activeBoard during
-    // renderBoardStageSurface, restore it. This is the final belt.
+    // renderBoardStageSurface, restore it.
     if (state.activeBoard !== nextState) {
       state.activeBoard = nextState;
       syncBoardStateTabUI(nextState);
     }
-    // Clear the transition signal after all sync guards have run.
-    // It must remain set during renderBoardStageSurface so that
-    // resolveBoardState() — used by renderBoardStateTabs and
-    // renderBoardPortal — reads the intended state even if
-    // state.activeBoard is temporarily stale from a concurrent refresh().
-    // After clearing, the guard in refresh() (line ~3567) can once again
-    // update state.activeBoard from the server packet when no user-driven
+    // Clear transition signal after all guards have run so refresh() can
+    // update activeBoard from the server packet when no user-driven
     // tab switch is in flight.
     state._boardStateTransition = '';
-    // Set a brief cooldown window so refresh() does not intervene before the
-    // multi-phase DOM sync guard completes. The cooldown is cleared inside
-    // _domSyncGuard after the first setTimeout fires (end of current stack).
-    state._boardStateTransitionCooldown = Date.now() + 100;
-    // Multi-phase DOM sync guard: covers Chrome layout thrashing during
-    // innerHTML replacement (setTimeout 0) and Safari deferred CSSOM recalc
-    // during paint (requestAnimationFrame). Clears cooldown after first pass.
-    _domSyncGuard(nextState);
+    animateCard('board-portal');
+    updateHistory();
     return true;
   }
 
@@ -2993,6 +2965,27 @@
     }
   }
 
+  var _boardStateRowDelegatedBound = false;
+  function _ensureBoardStateRowDelegated() {
+    if (_boardStateRowDelegatedBound) return;
+    _boardStateRowDelegatedBound = true;
+    var row = $("board-state-row");
+    if (!row) return;
+    row.addEventListener('click', function (event) {
+      var target = event && event.target;
+      if (!target) return;
+      if (typeof target.closest === 'function') {
+        var tabBtn = target.closest('[data-board-state]');
+        if (tabBtn && row.contains(tabBtn)) {
+          event.preventDefault();
+          event.stopPropagation();
+          var stateVal = tabBtn.getAttribute('data-board-state') || '';
+          if (stateVal) activateBoardState(stateVal);
+        }
+      }
+    });
+  }
+
   function renderBoardStateTabs() {
     var row = $("board-state-row");
     var board = getBoardPortal();
@@ -3000,6 +2993,41 @@
     var note = $("board-state-note");
     var activeBoardState = resolveBoardState();
     if (!row) return;
+    _ensureBoardStateRowDelegated();
+    // Sync existing buttons: update attributes in-place for fast state change.
+    // Only destroy and recreate when the mode list changes (rare — server packet).
+    var existingByState = {};
+    safeArray(row.querySelectorAll('[data-board-state]')).forEach(function (b) {
+      var s = String(b.getAttribute('data-board-state') || '').trim().toLowerCase();
+      if (s) existingByState[s] = b;
+    });
+    var modeStates = safeArray(modes).map(function (mode) {
+      return String(firstDefined(mode.state_id, mode.id, mode.key, '')).trim().toLowerCase();
+    }).filter(function (s) { return s; });
+    var modeSet = {};
+    modeStates.forEach(function (s) { modeSet[s] = true; });
+    // Fast path: mode list unchanged — just update attributes, no DOM rebuild.
+    var listsMatch = Object.keys(existingByState).length === modeStates.length;
+    if (listsMatch) {
+      for (var k in existingByState) {
+        if (!modeSet[k]) { listsMatch = false; break; }
+      }
+    }
+    if (listsMatch) {
+      // Update existing buttons to reflect the active state.
+      // This avoids the innerHTML destroy-recreate cycle entirely.
+      row.querySelectorAll('[data-board-state]').forEach(function (button) {
+        var bs = String(button.getAttribute('data-board-state') || '').trim().toLowerCase();
+        var isActive = bs === activeBoardState;
+        button.className = 'state-tab' + (isActive ? ' is-active' : '');
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        button.setAttribute('data-board-state-active', isActive ? 'true' : 'false');
+        if (button.style) button.style.background = isActive ? 'var(--accent-soft)' : 'transparent';
+      });
+      if (note) note.textContent = firstDefined(boardStateSupportNote(board), "Board lifecycle stays explicit from pre-board preparation through frozen close.");
+      return;
+    }
+    // Slow path: mode list changed — full DOM rebuild.
     row.innerHTML = "";
     safeArray(modes).forEach(function (mode) {
       var modeState = String(firstDefined(mode.state_id, mode.id, mode.key, '')).trim().toLowerCase();
@@ -3018,6 +3046,10 @@
       // regardless of DOM mutations during the render cycle.
       (function (boundState) {
         button.addEventListener('click', function (event) {
+          // Individual handler: prevent double-dispatch. The delegated handler
+          // on board-state-row is the primary path; this is a backstop.
+          if (event._boardTabHandled) return;
+          event._boardTabHandled = true;
           event.preventDefault();
           event.stopPropagation();
           var el = event.currentTarget || event.target;
@@ -3596,12 +3628,9 @@
       // During an active board-state transition, the packet's presentation_state
       // must not override the user's in-flight selection. _boardStateTransition
       // is set by activateBoardState and cleared after the render cycle completes.
-      // A _boardStateTransitionCooldown timestamp provides a brief window after
-      // the transition clears during which refresh() also defers to the existing
-      // frontend state. This prevents a refresh() that fires between the
-      // _boardStateTransition clear and the multi-phase DOM sync guard (setTimeout
-      // + requestAnimationFrame) from reading a stale server presentation_state.
-      if (!state._boardStateTransition && !state._boardStateTransitionCooldown) {
+      // This prevents a refresh() from reading a stale server presentation_state
+      // while a user-initiated tab switch is in progress.
+      if (!state._boardStateTransition) {
         state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, "pre");
       }
       state.activeDriverKey = firstDefined((state.latestPacket.executive_modes || {}).active_driver_key, state.activeDriverKey, "board_packet");

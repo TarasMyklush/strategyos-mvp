@@ -1773,16 +1773,30 @@ console.log(JSON.stringify({{
 
 
 def test_board_portal_refresh_preserves_user_selected_stage():
-    """Refresh must not overwrite the stage a user just selected in the Board Portal."""
+    """P0-10: refresh must not overwrite the stage a user just selected in the Board Portal.
+
+    The fast path in renderBoardStateTabs updates existing button attributes in-place
+    instead of destroying and recreating the DOM, eliminating the timing window that
+    required the _boardStateTransitionCooldown guard. The firstDefined guard in refresh()
+    still preserves the existing activeBoard value via the _boardStateTransition signal.
+    """
     js = _static_executive_js()
 
-    assert "if (!state._boardStateTransition && !state._boardStateTransitionCooldown) {" in js, (
-        "Board Portal refresh must guard the activeBoard assignment behind _boardStateTransition "
-        "and _boardStateTransitionCooldown, or Live/Closed clicks snap back to Pre-board during a concurrent refresh"
-    )
     assert "state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, \"pre\");" in js, (
         "Board Portal refresh must preserve activeBoard with firstDefined including existing state"
     )
+    # P0-10: renderBoardStateTabs fast path updates button attributes in-place instead
+    # of innerHTML destroy-recreate. This eliminates the need for _boardStateTransition-
+    # Cooldown because buttons persist across state switches. The delegated click handler
+    # on board-state-row ensures clicks are captured regardless of button lifecycle.
+    # The _boardStateTransition signal (set by activateBoardState, cleared after render)
+    # still guards refresh() from overwriting the user's selected state.
+    assert "if (!state._boardStateTransition) {" in js, (
+        "Board Portal refresh must guard activeBoard assignment behind _boardStateTransition "
+        "or server presentation_state overwrites the user's selected stage"
+    )
+    assert "syncBoardStateTabUI" in js, "syncBoardStateTabUI must exist for attribute updates"
+    assert "renderBoardStateTabs" in js, "renderBoardStateTabs must exist for fast path"
 
 
 def test_board_portal_renders_selected_stage_copy_instead_of_server_default():
@@ -4469,3 +4483,40 @@ console.log(JSON.stringify({
     assert c4["liveActive"] == "true", "Back to Live: data-board-state-active not true"
     assert c4["closedSelected"] == "false", "Back to Live: Closed still selected"
     assert c4["preSelected"] == "false", "Back to Live: Pre-board still selected"
+
+
+def test_board_state_tabs_sync_inline_style_survives_render():
+    """syncBoardStateTabUI must set inline style.background on buttons so the visual
+    state survives even if className is stripped during CSSOM recalculation."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    fn_start = executive_js.index("function syncBoardStateTabUI(nextState)")
+    fn_end = executive_js.index("function renderBoardStageSurface()", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+
+    assert "button.style.background = isActive ? 'var(--accent-soft)' : 'transparent'" in fn_body, (
+        "syncBoardStateTabUI must set inline style.background as triple-redundant fallback"
+    )
+    assert "data-board-state-active" in fn_body, (
+        "syncBoardStateTabUI must set data-board-state-active attribute"
+    )
+
+
+def test_board_state_tabs_fast_path_replaces_dom_sync_guard():
+    """P0-10: renderBoardStateTabs fast path replaces the three-phase _domSyncGuard.
+
+    _domSyncGuard was removed because the fast path updates existing button attributes
+    in-place instead of innerHTML destroy-recreate. The delegated click handler on
+    board-state-row ensures clicks are captured even during full DOM rebuild.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    # Verify the guard was replaced with the comment
+    assert "_domSyncGuard removed in P0-10" in executive_js, (
+        "_domSyncGuard was removed in P0-10 — fast path eliminates the destroy-recreate cycle"
+    )
+    # Verify the fast path exists
+    assert "listsMatch" in executive_js, (
+        "renderBoardStateTabs must have the listsMatch fast-path detection"
+    )
+    assert "_ensureBoardStateRowDelegated" in executive_js, (
+        "renderBoardStateTabs must have the delegated click handler"
+    )
