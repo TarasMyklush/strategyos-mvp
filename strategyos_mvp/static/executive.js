@@ -68,6 +68,16 @@
       .join(" ");
   }
 
+  function eventTargetElement(event) {
+    var target = event && event.target;
+    if (!target) return null;
+    if (typeof target.closest === 'function') return target;
+    if (target.nodeType === 3 && target.parentElement && typeof target.parentElement.closest === 'function') {
+      return target.parentElement;
+    }
+    return null;
+  }
+
   function boardActionLabel(actionKey) {
     var key = String(actionKey || '').trim().toLowerCase();
     var labels = {
@@ -108,9 +118,7 @@
     if (!portal || portal.__boardPortalInteractionsBound) return;
     portal.__boardPortalInteractionsBound = true;
     portal.addEventListener('click', function (event) {
-      var target = event && event.target && typeof event.target.closest === 'function'
-        ? event.target
-        : null;
+      var target = eventTargetElement(event);
       if (!target) return;
       var promptButton = target.closest('[data-board-prompt]');
       if (promptButton && portal.contains(promptButton)) {
@@ -205,9 +213,7 @@
     if (!row || row.__boardStateInteractionsBound) return;
     row.__boardStateInteractionsBound = true;
     row.addEventListener('click', function (event) {
-      var target = event && event.target && typeof event.target.closest === 'function'
-        ? event.target
-        : null;
+      var target = eventTargetElement(event);
       if (!target) return;
       var stateButton = target.closest('[data-board-state]');
       if (!stateButton || !row.contains(stateButton)) return;

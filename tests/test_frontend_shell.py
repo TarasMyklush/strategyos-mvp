@@ -1397,6 +1397,7 @@ def test_board_state_tabs_use_stable_delegated_click_handling():
     """Board state tabs must bind through the shared row, not fragile per-button onclick handlers."""
     js = _static_executive_js()
 
+    assert "function eventTargetElement(event)" in js
     assert "function bindBoardStateInteractions(row)" in js
     assert "row.addEventListener('click'" in js
     assert "target.closest('[data-board-state]')" in js
@@ -1408,6 +1409,141 @@ def test_board_state_tabs_use_stable_delegated_click_handling():
     tabs_block = js[tabs_start:portal_start]
     assert "button.onclick" not in tabs_block, (
         "Board state tabs must not depend on per-button onclick wiring that can go inert after rerender"
+    )
+
+
+def test_board_state_tabs_accept_clicks_from_nested_text_nodes():
+    """Board state tab delegation must still work when the browser reports a text node target."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveBoardStateHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { bindBoardStateInteractions: bindBoardStateInteractions, state: state };\n}\nmodule.exports = __executiveBoardStateHarness;\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        "      renderPersonaView();",
+        "      if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-board-state-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+function makeElement(id = '') {{
+  return {{
+    id,
+    nodeType: 1,
+    innerHTML: '',
+    textContent: '',
+    style: {{}},
+    attributes: {{}},
+    listeners: {{}},
+    classList: {{ add() {{}}, remove() {{}}, toggle() {{ return false; }} }},
+    setAttribute(name, value) {{ this.attributes[name] = String(value); }},
+    getAttribute(name) {{ return this.attributes[name] || null; }},
+    appendChild() {{}},
+    addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+    querySelector() {{ return null; }},
+    querySelectorAll() {{ return []; }},
+    contains(node) {{ return node === this._button; }},
+  }};
+}}
+
+const row = makeElement('board-state-row');
+const button = makeElement('live-button');
+button.setAttribute('data-board-state', 'live');
+const label = makeElement('live-label');
+label.closest = function(selector) {{
+  if (selector === '[data-board-state]') return button;
+  return null;
+}};
+const textNode = {{ nodeType: 3, parentElement: label }};
+row._button = button;
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
+  __BOARD_STATE_TEST_SUPPRESS_RENDER__: true,
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout() {{ return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  clearInterval() {{}},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  innerWidth: 1280,
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ assistant_public_context: {{}} }}) }};
+    if (id === 'board-state-row') return row;
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{ return makeElement(); }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+harness.state.activeBoard = 'pre';
+harness.bindBoardStateInteractions(row);
+row.listeners.click({{
+  target: textNode,
+  preventDefault() {{}},
+}});
+
+console.log(JSON.stringify({{ activeBoard: harness.state.activeBoard }}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_state_text_node_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result["activeBoard"] == "live", (
+        "Board state delegation must resolve text-node clicks through the parent element so Live selection works in production"
     )
 
 
