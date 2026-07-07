@@ -4628,6 +4628,90 @@ def test_switch_view_knowledge_has_raf_fallthrough():
     knowledge_guard_start = fn_body.index('state.activeView === "knowledge"') if 'state.activeView === "knowledge"' in fn_body else -1
     assert knowledge_guard_start >= 0, "Must contain knowledge guard block"
     knowledge_block = fn_body[knowledge_guard_start:]
-    assert "requestAnimationFrame" in knowledge_block[:300], (
+    assert "requestAnimationFrame" in knowledge_block[:600], (
         "switchView knowledge guard must include requestAnimationFrame fallthrough"
+    )
+
+
+def test_activate_board_state_has_multi_timing_re_sync_chain():
+    """P0-13: activateBoardState must schedule a multi-timing re-sync chain
+    (rAF + setTimeout(0/50/250)) in addition to the existing synchronous and
+    rAF guards. This catches competing async re-renders (e.g. a pending
+    refresh() response completing after the user's click) that can revert
+    the active board state before the browser paints.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    fn_start = executive_js.index("function activateBoardState(nextState)")
+    fn_end = executive_js.index("function statusLabel", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+    # Must have the multi-timing re-sync chain
+    assert "function _boardStateReSync" in fn_body, (
+        "activateBoardState must define _boardStateReSync helper"
+    )
+    assert "window.requestAnimationFrame(_boardStateReSync)" in fn_body, (
+        "activateBoardState must schedule rAF with _boardStateReSync"
+    )
+    assert "window.setTimeout(_boardStateReSync, 0)" in fn_body, (
+        "activateBoardState must schedule setTimeout(0) with _boardStateReSync"
+    )
+    assert "window.setTimeout(_boardStateReSync, 50)" in fn_body, (
+        "activateBoardState must schedule setTimeout(50) with _boardStateReSync"
+    )
+    assert "window.setTimeout(_boardStateReSync, 250)" in fn_body, (
+        "activateBoardState must schedule setTimeout(250) with _boardStateReSync"
+    )
+
+
+def test_render_board_portal_has_multi_timing_re_sync_chain():
+    """P0-13: renderBoardPortal must schedule a multi-timing re-sync chain
+    (rAF + setTimeout(0/50/250)) in addition to the synchronous
+    syncBoardStateTabUI call. This catches CSSOM recalc and competing
+    re-renders at multiple timing levels.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    fn_start = executive_js.index("function renderBoardPortal()")
+    fn_end = executive_js.index("function assistantNameForState", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+    # Must have the synchronous sync
+    assert "syncBoardStateTabUI(resolveBoardState())" in fn_body, (
+        "renderBoardPortal must call syncBoardStateTabUI synchronously"
+    )
+    # Must have multi-timing re-sync with rAF + setTimeouts
+    assert "window.requestAnimationFrame" in fn_body, (
+        "renderBoardPortal must have rAF in re-sync chain"
+    )
+    assert "window.setTimeout(_boardPortalReSync, 0)" in fn_body, (
+        "renderBoardPortal must have setTimeout(0) in re-sync chain"
+    )
+    assert "window.setTimeout(_boardPortalReSync, 50)" in fn_body, (
+        "renderBoardPortal must have setTimeout(50) in re-sync chain"
+    )
+    assert "window.setTimeout(_boardPortalReSync, 250)" in fn_body, (
+        "renderBoardPortal must have setTimeout(250) in re-sync chain"
+    )
+
+
+def test_render_persona_view_reasserts_board_tab_ui_for_knowledge():
+    """P0-13: renderPersonaView must call syncBoardStateTabUI at the end
+    for the knowledge view, after ALL render functions have completed.
+    This catches className/inline-style reversion from any of the many
+    innerHTML replacements in the render pipeline.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    fn_start = executive_js.index("function renderPersonaView()")
+    fn_end = executive_js.index("function refresh", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+    # Must have final re-assert for knowledge view after all renders
+    assert 'state.activeView === "knowledge"' in fn_body, (
+        "renderPersonaView must check for knowledge view"
+    )
+    assert "syncBoardStateTabUI(resolveBoardState())" in fn_body, (
+        "renderPersonaView must re-assert board tab UI for knowledge view"
+    )
+    # The re-assert must be AFTER all render functions, i.e. it must
+    # appear after renderSummary in the function body
+    summary_pos = fn_body.rindex("renderSummary")
+    reassert_pos = fn_body.rindex("syncBoardStateTabUI")
+    assert reassert_pos > summary_pos, (
+        "syncBoardStateTabUI call must be AFTER renderSummary (last render function)"
     )

@@ -293,17 +293,27 @@
     // after this function returns but before the next event loop pump) still
     // sees _boardStateTransition as truthy and preserves activeBoard.
     state._boardStateTransition = '';
-    // Post-paint re-sync: after the current CSSOM recalc + paint cycle triggered
-    // by portal.innerHTML replacement, re-assert the intended tab state. This
-    // catches Chrome layout-thrashing edge cases where className and inline
-    // style attributes are discarded during paint (observed on Chrome 127+).
+    // Multi-timing re-sync chain: re-assert the intended tab state across
+    // several timing windows to overcome any competing re-render (e.g. an
+    // async refresh() response that fires during or after this function).
+    // The chain uses rAF (next paint), setTimeout(0) (after microtasks),
+    // setTimeout(50) (after any short-latency async re-render), and
+    // setTimeout(250) (after any medium-latency async re-render like a
+    // pending refresh() completing). Each re-sync also restores
+    // state.activeBoard if a concurrent process reverted it.
+    function _boardStateReSync() {
+      if (state.activeBoard !== nextState) {
+        state.activeBoard = nextState;
+      }
+      syncBoardStateTabUI(nextState);
+    }
     if (typeof window.requestAnimationFrame === 'function') {
-      window.requestAnimationFrame(function () {
-        if (state.activeBoard !== nextState) {
-          state.activeBoard = nextState;
-        }
-        syncBoardStateTabUI(nextState);
-      });
+      window.requestAnimationFrame(_boardStateReSync);
+    }
+    if (typeof window.setTimeout === 'function') {
+      window.setTimeout(_boardStateReSync, 0);
+      window.setTimeout(_boardStateReSync, 50);
+      window.setTimeout(_boardStateReSync, 250);
     }
     return true;
   }
@@ -641,15 +651,23 @@
     // and data attributes as triple-redundant fallbacks for this edge case.
     if (state.activeView === "knowledge") {
       syncBoardStateTabUI(resolveBoardState());
-      // Post-paint re-sync: the hidden→visible CSSOM recalc can fire during
-      // paint and discard inline style attributes. rAF bypasses this window.
-      if (typeof window.requestAnimationFrame === 'function') {
-        (function (snapshot) {
-          window.requestAnimationFrame(function () {
-            syncBoardStateTabUI(snapshot);
-          });
-        })(resolveBoardState());
-      }
+      // Multi-timing re-sync: the hidden→visible CSSOM recalc can fire during
+      // paint and discard inline style attributes. rAF, setTimeout(0/50/250)
+      // bypass this window at multiple timing levels to catch any deferred
+      // CSSOM recalc or competing re-render.
+      (function (snapshot) {
+        function _switchViewReSync() {
+          syncBoardStateTabUI(snapshot);
+        }
+        if (typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(_switchViewReSync);
+        }
+        if (typeof window.setTimeout === 'function') {
+          window.setTimeout(_switchViewReSync, 0);
+          window.setTimeout(_switchViewReSync, 50);
+          window.setTimeout(_switchViewReSync, 250);
+        }
+      })(resolveBoardState());
     }
   }
 
@@ -3175,16 +3193,24 @@
     // recalc which can discard className and inline style attributes on
     // tab buttons outside the portal. Re-assert the intended tab state
     // immediately after the layout is invalidated, then again after the
-    // paint cycle (rAF) so that any Chrome CSSOM recalc that runs during
-    // paint does not discard the triple-redundant style guards set below.
+    // paint cycle (rAF) and at several setTimeout intervals so that any
+    // Chrome CSSOM recalc or competing async re-render (e.g. refresh()
+    // completing after a delayed server response) does not discard the
+    // triple-redundant style guards.
     syncBoardStateTabUI(resolveBoardState());
-    if (typeof window.requestAnimationFrame === 'function') {
-      (function (snapshot) {
-        window.requestAnimationFrame(function () {
-          syncBoardStateTabUI(snapshot);
-        });
-      })(resolveBoardState());
-    }
+    (function (snapshot) {
+      function _boardPortalReSync() {
+        syncBoardStateTabUI(snapshot);
+      }
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(_boardPortalReSync);
+      }
+      if (typeof window.setTimeout === 'function') {
+        window.setTimeout(_boardPortalReSync, 0);
+        window.setTimeout(_boardPortalReSync, 50);
+        window.setTimeout(_boardPortalReSync, 250);
+      }
+    })(resolveBoardState());
     bindBoardPortalInteractions(portal);
     safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
       button.addEventListener('click', function (event) {
@@ -3672,6 +3698,15 @@
     renderAssistantStudio();
     renderReportSurface();
     renderSummary();
+    // Final board-tab re-sync for the knowledge view: after ALL render
+    // functions have completed, re-assert the intended tab state so that
+    // any className or inline style discarded during the full render
+    // pipeline (CSSOM recalc from innerHTML replacements across multiple
+    // render functions) is restored. Only applies when the board portal
+    // is visible (knowledge view active).
+    if (state.activeView === "knowledge") {
+      syncBoardStateTabUI(resolveBoardState());
+    }
   }
 
   async function refresh(withAnimation) {
