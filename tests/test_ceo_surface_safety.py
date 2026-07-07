@@ -1142,6 +1142,16 @@ def test_board_portal_review_buttons_use_plain_english_prompts():
     )
 
 
+def test_board_portal_buttons_expose_plain_english_hermes_action_labels():
+    """Board Portal CTAs must read as human actions, not inert status styling."""
+    js = _static_executive_js()
+
+    assert 'aria-label="Ask Hermes what to do next: ' in js
+    assert 'aria-label="Ask Hermes to review ' in js
+    assert 'Next: ' in js
+    assert 'Review: ' in js
+
+
 def test_avatar_profile_action_is_wired_not_dead():
     """Avatar tooltip Profile & settings action must have a real click handler."""
     js = _static_executive_js()

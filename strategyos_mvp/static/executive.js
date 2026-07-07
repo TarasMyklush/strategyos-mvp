@@ -104,6 +104,30 @@
     return 'Help me review ' + boardActionLabel(actionKey).toLowerCase() + ' for the ' + boardStateLabel + ' board stage. What needs review, what evidence is missing, and what should I do next?';
   }
 
+  function bindBoardPortalInteractions(portal) {
+    if (!portal || portal.__boardPortalInteractionsBound) return;
+    portal.__boardPortalInteractionsBound = true;
+    portal.addEventListener('click', function (event) {
+      var target = event && event.target && typeof event.target.closest === 'function'
+        ? event.target
+        : null;
+      if (!target) return;
+      var promptButton = target.closest('[data-board-prompt]');
+      if (promptButton && portal.contains(promptButton)) {
+        event.preventDefault();
+        event.stopPropagation();
+        askAssistant(promptButton.getAttribute('data-board-prompt') || '', promptButton);
+        return;
+      }
+      var actionButton = target.closest('[data-board-action]');
+      if (actionButton && portal.contains(actionButton)) {
+        event.preventDefault();
+        event.stopPropagation();
+        askAssistant(boardActionPrompt(actionButton.getAttribute('data-board-action') || '', getBoardPortal()), actionButton);
+      }
+    });
+  }
+
   function isAssistantFeedbackTarget(element) {
     return Boolean(
       element &&
@@ -2860,34 +2884,23 @@
         var flags = [];
         if (item.actual) flags.push('<span class="pill-inline ok">actual</span>');
         if (item.presented) flags.push('<span class="pill-inline warn">presented</span>');
-        if (item.next_action) flags.push('<button type="button" class="pill-inline board-status-chip board-status-chip--action" data-board-action="' + escapeHtml(String(item.next_action)) + '">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</button>');
+        if (item.next_action) flags.push('<button type="button" class="pill-inline board-status-chip board-status-chip--action" data-board-action="' + escapeHtml(String(item.next_action)) + '" aria-label="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '" title="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</button>');
         return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Governed board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
       '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
       (state.activePersona === "ceo"
         ? '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).map(function (item) {
-            return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '">Review: ' + escapeHtml(humanizeToken(item)) + '</button>';
+            return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '" aria-label="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '" title="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '">Review: ' + escapeHtml(humanizeToken(item)) + '</button>';
           }).join("") + '</div>'
         : '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).concat(safeArray(stateDetail.secondary_actions).slice(0, 2)).map(function (item) {
-        return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '">' + escapeHtml(humanizeToken(item)) + '</button>';
+        return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '" aria-label="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '" title="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '">' + escapeHtml(humanizeToken(item)) + '</button>';
       }).join("") + '</div>'),
       '<div class="board-detail-grid"><section class="board-panel"><p class="detail-eyebrow">Meeting posture</p><div class="mini-list"><div class="board-deck"><div><strong>' + escapeHtml(firstDefined((board.meeting || {}).design_title, (board.meeting || {}).title, "Board meeting")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined((board.meeting || {}).date, (board.meeting || {}).when, "Board timing pending")) + '</p></div><span class="pill-inline ok">' + escapeHtml(firstDefined((board.meeting || {}).room, "board-safe")) + '</span></div></div></section><section class="board-panel"><p class="detail-eyebrow">Lifecycle actions</p><div class="mini-list">' + (actions.length ? actions.map(function (item) {
         return '<div class="board-action"><div><strong>' + escapeHtml(firstDefined(item.item, "Action")) + '</strong><small>' + escapeHtml(firstDefined(item.owner, "Owner")) + '</small></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.due, "next")) + '</span></div>';
       }).join("") : '<div class="discovery-empty">No lifecycle actions are attached to this state.</div>') + '</div></section></div>',
       stateSpecific
     ].join("");
-    safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
-      button.onclick = function () {
-        var prompt = button.getAttribute('data-board-prompt') || '';
-        askAssistant(prompt, button);
-      };
-    });
-      safeArray(portal.querySelectorAll('[data-board-action]')).forEach(function (button) {
-      button.onclick = function () {
-        var action = button.getAttribute('data-board-action') || '';
-        askAssistant(boardActionPrompt(action, board), button);
-      };
-    });
+    bindBoardPortalInteractions(portal);
     safeArray(portal.querySelectorAll('.snapshot-card')).forEach(function (card) {
       card.style.cursor = 'pointer';
       card.onclick = function () {

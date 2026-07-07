@@ -1382,6 +1382,17 @@ def test_assistant_transport_includes_source_and_entrypoint_metadata():
     assert "body.entrypoint = body.assistant_context.entrypoint;" in js
 
 
+def test_board_portal_uses_delegated_click_handling_for_ctas():
+    """Board Portal CTAs must be handled through a stable delegated click path."""
+    js = _static_executive_js()
+
+    assert "function bindBoardPortalInteractions(portal)" in js
+    assert "portal.addEventListener('click'" in js
+    assert "target.closest('[data-board-action]')" in js
+    assert "target.closest('[data-board-prompt]')" in js
+    assert "askAssistant(boardActionPrompt(actionButton.getAttribute('data-board-action') || '', getBoardPortal()), actionButton);" in js
+
+
 def test_assistant_drawer_escape_key_closes():
     """Escape key must close the assistant drawer."""
     js = _static_executive_js()
