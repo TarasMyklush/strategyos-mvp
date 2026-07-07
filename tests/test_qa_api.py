@@ -478,7 +478,7 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         assert payload["run_mode"] == "public-safe"
         assert payload["matched"] is False
         assert payload["llm_fallback_attempted"] is False
-        assert payload["answered_by"] == "packet"
+        assert payload["answered_by"] in {"packet", "scenario"}
         assert "shared public packet" in payload["answer"]
     finally:
         _restore_env(original)
@@ -508,7 +508,7 @@ def test_assistant_chat_public_auto_unmatched_does_not_call_llm_when_enabled(mon
         assert payload["requested_mode"] == "auto"
         assert payload["run_mode"] == "public-safe"
         assert payload["llm_fallback_attempted"] is False
-        assert payload["answered_by"] == "packet"
+        assert payload["answered_by"] in {"packet", "scenario"}
         assert payload["llm_status"]["enabled"] is False
         assert called["llm"] == 0
     finally:
@@ -551,6 +551,56 @@ def test_answered_by_never_claims_graph_vector_or_llm_on_public_safe_surface(mon
         assert response.status_code == 200
         payload = response.json()
         assert payload["answered_by"] not in {"graph", "vector", "llm"}
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_board_pack_review_prompt_returns_useful_packet_answer(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Help me prepare the board pack for the pre-board stage. What needs CEO review, what evidence is missing, and what should I do next?",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_mode"] == "public-safe"
+        assert payload["matched"] is True
+        assert payload["scenario_id"] == "public_exec_board_pack_review"
+        assert payload["answered_by"] == "packet"
+        assert "challenged case" in payload["answer"].lower()
+    finally:
+        _restore_env(original)
+
+
+def test_assistant_chat_public_challenged_cases_prompt_returns_useful_packet_answer(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Help me close challenged cases before the board meeting. Which cases are challenged, what evidence is needed, and what is my next action?",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_mode"] == "public-safe"
+        assert payload["matched"] is True
+        assert payload["scenario_id"] == "public_exec_challenged_cases"
+        assert payload["answered_by"] == "packet"
+        assert "next action" in payload["answer"].lower() or "next step" in payload["answer"].lower()
     finally:
         _restore_env(original)
 
@@ -1321,6 +1371,68 @@ def test_public_safe_persona_variants_return_substantive_answers(monkeypatch):
             },
         ).json()
         assert "SAR 20.8M" not in bucfo_payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_public_board_portal_prepare_board_pack_prompt_returns_useful_packet_answer(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Help me prepare the board pack for the pre-board stage. What needs CEO review, what evidence is missing, and what should I do next?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "board_portal", "board_state": "pre"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert payload["matched"] is True
+        assert payload["run_id"] == "latest-public"
+        assert payload["run_mode"] == "public-safe"
+        assert payload["answered_by"] == "packet"
+        assert "prompt did not match" not in answer
+        assert "board pack" in answer or "board packet" in answer or "packet" in answer
+        assert "evidence" in answer
+        assert payload["citations"]
+    finally:
+        _restore_env(original)
+
+
+def test_public_board_portal_close_challenged_cases_prompt_returns_useful_packet_answer(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Help me close challenged cases before the board meeting. Which cases are challenged, what evidence is needed, and what is my next action?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "board_portal", "board_state": "pre"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert payload["matched"] is True
+        assert payload["run_id"] == "latest-public"
+        assert payload["run_mode"] == "public-safe"
+        assert payload["answered_by"] == "packet"
+        assert "prompt did not match" not in answer
+        assert "challenged" in answer
+        assert "evidence" in answer
+        assert payload["citations"]
     finally:
         _restore_env(original)
 

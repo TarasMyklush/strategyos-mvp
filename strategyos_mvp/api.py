@@ -3190,7 +3190,7 @@ def _board_portal_payload(
     state_detail = {
         "pre": {
             "title": "Pre-board preparation",
-            "summary": "Prepare the governed packet, tighten supplementary questions, and keep release posture bounded before the room opens.",
+            "summary": "Use this stage to close evidence gaps, tighten supplementary answers, and confirm the packet is ready for CEO review.",
             "primary_actions": ["prepare_board_pack", next_action or "capture_reviewer_decision"],
             "secondary_actions": ["inspect_report_preview", "review_supplementary_questions"],
         },
@@ -4442,7 +4442,7 @@ def _agent_modules_payload(
             "route": "/app?lane=operate",
             "lane": "operate",
             "permitted": principal_has_any_role(role, "operator", "tenant_operator", "tenant_admin", "system"),
-            "summary": "Shows source-pack intake, launch, and post-approval resume semantics.",
+            "summary": "Tracks paused work and shows when it is safe to resume after approval.",
         },
         {
             "module_id": "tenant-runtime-watch",
@@ -4450,7 +4450,7 @@ def _agent_modules_payload(
             "route": "/app?lane=system",
             "lane": "system",
             "permitted": principal_has_any_role(role, "tenant_admin", "system"),
-            "summary": "Exposes deeper store, connector, and publication-boundary truth.",
+            "summary": "Shows whether data sources, approvals, and publishing checks are healthy.",
         },
     ]
     approvals = [
@@ -9115,6 +9115,8 @@ async def _assistant_chat_response(
             },
         )
         scenario_result = parsed.as_dict()
+        if public_safe and parsed.matched:
+            scenario_result.setdefault("answered_by", "packet")
         if parsed.matched:
             orchestrated = orchestrator.process(
                 question,

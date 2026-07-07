@@ -2353,3 +2353,93 @@ console.log(JSON.stringify({{ answerText: harness.qaAnswerText(payload) }}));
 
     result = json.loads(completed.stdout.strip())
     assert result["answerText"] == "Since last week, NUPCO awards were confirmed and FX remains the main margin watch item."
+
+
+def test_board_action_prompt_builder_outputs_plain_english_prompts():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executivePromptHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { boardActionPrompt: boardActionPrompt };\n}\nmodule.exports = __executivePromptHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-board-prompt-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout() {{ return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ assistant_public_context: {{}} }}) }};
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{ return {{ style: {{}}, setAttribute() {{}}, appendChild() {{}}, querySelector() {{ return null; }}, querySelectorAll() {{ return []; }}, parentNode: {{ appendChild() {{}} }} }}; }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+const prepare = harness.boardActionPrompt('prepare_board_pack', {{ presentation_state: 'pre' }});
+const challenged = harness.boardActionPrompt('close_challenged_cases', {{ presentation_state: 'pre', supplementary: {{ question_count: 3 }} }});
+console.log(JSON.stringify({{ prepare, challenged }}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_prompt_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result["prepare"].startswith("Help me prepare the board pack for the pre-board stage.")
+    assert "prepare_board_pack" not in result["prepare"]
+    assert result["challenged"].startswith("Help me close challenged cases before the board meeting.")
+    assert "close_challenged_cases" not in result["challenged"]

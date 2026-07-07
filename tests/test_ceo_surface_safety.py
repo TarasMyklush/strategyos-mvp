@@ -91,8 +91,8 @@ def test_ceo_jargon_replacements():
     assert "Runs on your infrastructure" not in js, (
         "Sovereign text must be CEO-friendly"
     )
-    assert "Built-in" in js, (
-        "Connector badges must say 'Built-in'"
+    assert "StrategyOS assistants" in js, (
+        "Native assistant section must use a clear heading instead of an orphaned 'Built-in' label"
     )
     assert "Board reports" in js, (
         "Report surface must be rebadged as 'Board reports'"
@@ -1132,6 +1132,77 @@ def test_close_challenged_cases_button_action():
     )
 
 
+def test_board_portal_review_buttons_use_plain_english_prompts():
+    """Board Portal review CTAs must not pass raw action codes to Hermes."""
+    js = _static_executive_js()
+
+    assert "I need to review and act on: ' + action" not in js, (
+        "Board Portal CTAs must not build prompts from raw internal action codes"
+    )
+    assert "Help me prepare the board pack" in js, (
+        "Board Portal CTA copy must include a plain-English board-pack review prompt"
+    )
+    assert "Help me close challenged cases" in js, (
+        "Board Portal CTA copy must include a plain-English challenged-cases prompt"
+    )
+
+
+def test_avatar_profile_action_is_wired_not_dead():
+    """Avatar tooltip Profile & settings action must have a real click handler."""
+    js = _static_executive_js()
+    avatar_start = js.index("data-avatar-action=\"profile\"")
+    avatar_block = js[avatar_start:avatar_start + 900]
+
+    assert "querySelector('[data-avatar-action=\"profile\"]')" in avatar_block, (
+        "Profile action must be queried after the tooltip renders"
+    )
+    assert ".onclick = function" in avatar_block, (
+        "Profile action must have an onclick handler instead of a dead menu item"
+    )
+
+
+def test_assistant_network_uses_header_row_not_repeated_labels():
+    """Assistant rows must not repeat Freshness/Used/Context labels on every row."""
+    js = _static_executive_js()
+    network_start = js.index("function renderAssistantNetwork()")
+    network_end = js.index("function renderA2APanel()", network_start)
+    network_block = js[network_start:network_end]
+
+    assert "network-header" in network_block or "network-list-head" in network_block, (
+        "Assistant network must render one visible header row for Freshness / Used / Context"
+    )
+    assert "<small>freshness</small>" not in network_block, (
+        "Assistant rows must not repeat the visible 'freshness' label"
+    )
+    assert "<small>used</small>" not in network_block, (
+        "Assistant rows must not repeat the visible 'used' label"
+    )
+    assert "<small>context</small>" not in network_block, (
+        "Assistant rows must not repeat the visible 'context' label"
+    )
+
+
+def test_agents_running_panel_has_no_orphan_sovereign_bullet_for_ceo():
+    """CEO agents panel must not render an empty decorative sovereign bullet."""
+    js = _static_executive_js()
+
+    assert "<span class=\"sov-dot\"></span> ' + (state.activePersona === \"ceo\" ? ''" not in js, (
+        "CEO agents panel must not leave an orphan sovereign dot when no text follows"
+    )
+
+
+def test_discovery_cards_do_not_duplicate_built_in_label_for_ceo():
+    """CEO discovery cards must not render 'Built-in' as repeated clutter."""
+    js = _static_executive_js()
+
+    assert "state.activePersona === \"ceo\" ? 'Built-in' :" not in js, (
+        "CEO discovery rendering must not hardcode repeated 'Built-in' labels inside every card"
+    )
+    assert "Built-in assistants" not in js, (
+        "Discovery section should use a clear StrategyOS heading instead of the old Built-in fragment"
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════
 # LIVE-VERIFICATION REGRESSION TESTS — 2026-07-03
 # Six live-visible failures caught by Hermes at
@@ -1830,26 +1901,18 @@ def test_driver_ring_over_plan_badge_has_outside_pill_css():
 
 
 def test_floating_controls_safe_zone_at_desktop():
-    """At desktop widths (>1100px), the KPI grid (#driver-row) must have a
-    right margin creating a safe zone so the rightmost KPI card never sits
-    underneath the fixed-position chat-launcher or a2a-shell floating controls."""
+    """Desktop layout must reserve a right-hand rail for the assistant dock
+    instead of letting fixed controls sit over KPI cards."""
     css = _static_executive_css()
 
-    # There must be a desktop-width rule providing right margin to #driver-row
-    assert "#driver-row" in css, "driver-row selector must exist in CSS"
-
-    # Find the margin-right rule for #driver-row (inside a min-width query)
-    # Look for the safe-zone pattern
-    assert "margin-right" in css, "margin-right must exist for safe zone"
-
-    # The margin must use clamp() for responsive scaling
-    assert "clamp(200px" in css, (
-        "desktop safe zone must use clamp(200px, ...) to scale with viewport"
+    assert "--assistant-dock-width" in css, (
+        "Desktop layout must define a reserved assistant-dock rail width"
     )
-
-    # Verify it's scoped to a desktop media query
-    assert "@media (min-width: 1101px)" in css, (
-        "safe zone must be gated behind @media (min-width: 1101px) desktop breakpoint"
+    assert "padding-right: calc(clamp(18px, 4vw, 40px) + var(--assistant-dock-width))" in css, (
+        "Desktop page layout must reserve horizontal space for the dock instead of overlapping content"
+    )
+    assert "@media (max-width: 960px)" in css and "position: static;" in css, (
+        "Mobile/tablet layout must drop the fixed dock and return it to normal flow"
     )
 
 

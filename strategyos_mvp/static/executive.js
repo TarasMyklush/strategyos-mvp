@@ -68,6 +68,42 @@
       .join(" ");
   }
 
+  function boardActionLabel(actionKey) {
+    var key = String(actionKey || '').trim().toLowerCase();
+    var labels = {
+      prepare_board_pack: 'Prepare board pack',
+      close_challenged_cases: 'Close challenged cases',
+      capture_reviewer_decision: 'Capture reviewer decision',
+      inspect_board_pack_status: 'Inspect board pack status',
+      inspect_report_preview: 'Inspect report preview',
+      review_supplementary_questions: 'Review supplementary questions',
+      open_supplementary_rail: 'Open supplementary questions',
+      freeze_live_answers: 'Freeze live answers',
+      inspect_frozen_snapshot: 'Inspect frozen snapshot',
+      review_board_memory: 'Review board memory',
+      compare_packet_release: 'Compare packet release',
+      check_follow_up_obligations: 'Check follow-up obligations'
+    };
+    return labels[key] || humanizeToken(actionKey);
+  }
+
+  function boardActionPrompt(actionKey, board) {
+    var key = String(actionKey || '').trim().toLowerCase();
+    var boardState = String(firstDefined((board || {}).presentation_state, (board || {}).state, state.activeBoard, 'pre')).toLowerCase();
+    var boardStateLabel = statusLabel(boardState).toLowerCase();
+    var challengedCount = Number(firstDefined(((board || {}).supplementary || {}).question_count, 0)) || 0;
+    if (key === 'prepare_board_pack') {
+      return 'Help me prepare the board pack for the ' + boardStateLabel + ' stage. What needs CEO review, what evidence is missing, and what should I do next?';
+    }
+    if (key === 'close_challenged_cases') {
+      return 'Help me close challenged cases before the board meeting. Which cases are challenged, what evidence is needed, and what is my next action?' + (challengedCount ? ' I can currently see ' + challengedCount + ' challenged case' + (challengedCount === 1 ? '' : 's') + '.' : '');
+    }
+    if (key === 'capture_reviewer_decision') {
+      return 'Help me capture the reviewer decision for the ' + boardStateLabel + ' board stage. What is still open, what evidence is missing, and what should I do next?';
+    }
+    return 'Help me review ' + boardActionLabel(actionKey).toLowerCase() + ' for the ' + boardStateLabel + ' board stage. What needs review, what evidence is missing, and what should I do next?';
+  }
+
   function statusLabel(token) {
     if (!token) return "—";
     var key = String(token).toLowerCase().replace(/[_-]/g, " ").trim();
@@ -1536,6 +1572,58 @@
     if (summaryInput) window.setTimeout(function () { summaryInput.focus(); }, 0);
   }
 
+  function showProfileSettingsPanel() {
+    var existing = document.querySelector('.strategyos-profile-modal');
+    if (existing) { existing.hidden = false; return; }
+    var activePersona = getPersonaContract(state.activePersona);
+    var blueprint = getPersonaBlueprint(state.activePersona);
+    var assistantName = firstDefined(activePersona.assistant, blueprint.assistant, 'Hermes');
+    var modal = document.createElement('div');
+    modal.className = 'strategyos-profile-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-label', 'Profile and settings');
+    modal.innerHTML = [
+      '<div class="strategyos-profile-backdrop"></div>',
+      '<div class="strategyos-profile-card">',
+      '<button class="strategyos-profile-close" type="button" aria-label="Close profile and settings">&times;</button>',
+      '<h3>Profile &amp; settings</h3>',
+      '<p class="section-note">Adjust your working persona, theme, and governed run surface without leaving the board lane.</p>',
+      '<div class="strategyos-profile-list">',
+      '<div class="strategyos-profile-item"><strong>Active role</strong><span>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</span></div>',
+      '<div class="strategyos-profile-item"><strong>Assistant</strong><span>' + escapeHtml(assistantName) + ' · governed run</span></div>',
+      '<div class="strategyos-profile-item"><strong>Theme</strong><span>' + escapeHtml(state.theme === 'dark' ? 'Dark' : 'Light') + '</span></div>',
+      '</div>',
+      '<div class="strategyos-profile-actions">',
+      '<button class="strategyos-profile-btn" type="button" data-profile-action="switch">Switch persona</button>',
+      '<button class="strategyos-profile-btn" type="button" data-profile-action="theme">Toggle theme</button>',
+      '</div>',
+      '</div>'
+    ].join('');
+    document.body.appendChild(modal);
+    var close = function () { modal.remove(); };
+    var backdrop = modal.querySelector('.strategyos-profile-backdrop');
+    var closeBtn = modal.querySelector('.strategyos-profile-close');
+    var switchBtn = modal.querySelector('[data-profile-action="switch"]');
+    var themeBtn = modal.querySelector('[data-profile-action="theme"]');
+    if (backdrop) backdrop.onclick = close;
+    if (closeBtn) closeBtn.onclick = close;
+    if (switchBtn) {
+      switchBtn.onclick = function () {
+        close();
+        var btn = document.getElementById('persona-btn');
+        if (btn) btn.click();
+      };
+    }
+    if (themeBtn) {
+      themeBtn.onclick = function () {
+        state.theme = state.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', state.theme);
+        close();
+        renderTopbar();
+      };
+    }
+  }
+
   function renderTopbar() {
     var activePersona = getPersonaContract(state.activePersona);
     var blueprint = getPersonaBlueprint(state.activePersona);
@@ -1595,12 +1683,19 @@
         var feedbackAction = state.activePersona === "ceo" ? "" : '<button type="button" class="avatar-tooltip-action" data-avatar-action="feedback">Send feedback</button>';
         var tip = document.createElement('div');
         tip.className = 'strategyos-avatar-tooltip';
-        tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · governed run</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button><button type="button" class="avatar-tooltip-action" data-avatar-action="theme">' + escapeHtml(themeIcon) + ' ' + escapeHtml(themeLabel) + ' theme</button>' + feedbackAction + '</div>';
+        tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div class="avatar-tooltip-copy"><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · governed run</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button><button type="button" class="avatar-tooltip-action" data-avatar-action="theme">' + escapeHtml(themeIcon) + ' ' + escapeHtml(themeLabel) + ' theme</button>' + feedbackAction + '</div>';
         avatar.parentNode.appendChild(tip);
         var outsideClick = function (event) {
           if (!event.target.closest('#topbar-user')) { tip.remove(); document.removeEventListener('click', outsideClick); }
         };
         window.setTimeout(function () { document.addEventListener('click', outsideClick); }, 0);
+        var profileAction = tip.querySelector('[data-avatar-action="profile"]');
+        if (profileAction) {
+          profileAction.onclick = function () {
+            tip.remove();
+            showProfileSettingsPanel();
+          };
+        }
         tip.querySelector('[data-avatar-action="switch"]').onclick = function () {
           var btn = document.getElementById('persona-btn');
           if (btn) { btn.click(); tip.remove(); }
@@ -1720,8 +1815,8 @@
       card.innerHTML = [
         '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'A read on current usage, freshness, and context depth across Mizan.')) + '</p></div><span class="pill-inline ok">target ' + escapeHtml(String(firstDefined(meta.target, 80))) + '+</span></div>',
         '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(avg)) + '</strong><span>Team readiness score</span></div><div class="network-meta"><span class="pill-inline ok">Healthy</span><span class="pill-inline warn">Check-in needed</span><span class="pill-inline danger">Stale · ' + escapeHtml(String(stale)) + ' leader' + (stale !== 1 ? 's' : '') + '</span></div></div>',
-        '<div class="network-list">' + network.map(function (item) {
-          return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Mizan Group')) + '</p></div><div class="network-stats"><span><small>freshness</small>' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span><span><small>used</small>' + escapeHtml(firstDefined(item.usage, 'active')) + '</span><span><small>context</small>' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></div></div>';
+        '<div class="network-list"><div class="network-list-head"><span class="sr-only">Score</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span>Freshness</span><span>Used</span><span>Context</span></div></div>' + network.map(function (item) {
+          return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Mizan Group')) + '</p></div><div class="network-stats"><span><span class="sr-only">Freshness</span><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span><span class="sr-only">Used</span><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span><span class="sr-only">Context</span><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
         }).join('') + '</div>'
       ].join('');
     }
@@ -2689,7 +2784,7 @@
         var flags = [];
         if (item.actual) flags.push('<span class="pill-inline ok">actual</span>');
         if (item.presented) flags.push('<span class="pill-inline warn">presented</span>');
-        if (item.next_action) flags.push('<span class="pill-inline">' + escapeHtml(humanizeToken(item.next_action)) + '</span>');
+        if (item.next_action) flags.push('<span class="pill-inline board-status-chip">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</span>');
         return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Governed board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
       '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'live_packet'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
@@ -2711,11 +2806,10 @@
         askAssistant(prompt, button);
       };
     });
-    safeArray(portal.querySelectorAll('[data-board-action]')).forEach(function (button) {
+      safeArray(portal.querySelectorAll('[data-board-action]')).forEach(function (button) {
       button.onclick = function () {
         var action = button.getAttribute('data-board-action') || '';
-        var boardState = statusLabel(firstDefined(board.presentation_state, board.state, 'pre'));
-        askAssistant('I need to review and act on: ' + action + ' (current board state: ' + boardState + '). What are the next steps?', button);
+        askAssistant(boardActionPrompt(action, board), button);
       };
     });
     safeArray(portal.querySelectorAll('.snapshot-card')).forEach(function (card) {
@@ -2858,6 +2952,7 @@
       var needsApproval = approvals.filter(function (item) {
         return !state.approvedAgentIds[firstDefined(item.id, item.module_id, item.name, '')];
       }).length;
+      var sovereignLine = state.activePersona === "ceo" ? '' : '<div class="agents-sovereign"><span class="sov-dot"></span> sovereign · runs in-tenant · every action logged</div>';
       runningCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Running now</span><span class="ach-stats"><span class="agent-pulse running"></span> ' + escapeHtml(String(runningCount)) + ' running' + (needsApproval ? '<span class="ach-needs"> · ' + escapeHtml(String(needsApproval)) + ' need your attention</span>' : '') + '</span></div><div class="agents-clist">' + combined.map(function (item) {
         var id = firstDefined(item.id, item.module_id, item.name, 'agent');
         var isOpen = state.openAgentId === id;
@@ -2865,7 +2960,7 @@
         var approved = !!state.approvedAgentIds[id];
         var showBar = ['running', 'approval'].indexOf(String(firstDefined(item.status, ''))) !== -1;
         return '<div class="agent-c' + (isOpen ? ' is-open' : '') + '"><button type="button" class="agent-c-head" data-agent-toggle="' + escapeHtml(id) + '"><span class="agent-pulse ' + escapeHtml(String(firstDefined(item.status, 'running'))) + '"></span><span class="agent-name">' + escapeHtml(firstDefined(item.name, item.label, id)) + '</span><span class="agent-status s-' + escapeHtml(String(firstDefined(item.status, 'running'))) + '">' + escapeHtml(statusLabel(item, approved)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (showBar ? '<div class="agent-prog"><span class="agent-prog-bar tone-' + escapeHtml(toneClass(firstDefined(item.status, 'running'))) + '" style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></span></div>' : '') + (isOpen ? '<div class="agent-c-body"><span class="tag agent-tag">' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span><p class="agent-doing">' + escapeHtml(approved && item.status === 'approval' ? 'Approved — executing now. Audit entry written.' : firstDefined(item.doing, item.summary, 'Governed activity in progress.')) + '</p><div class="agent-c-foot"><span class="agent-by">deployed by ' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><button type="button" class="agent-log-btn' + (logOpen ? ' is-open' : '') + '" data-agent-log="' + escapeHtml(id) + '">◷ audit log <span class="agent-log-count">' + escapeHtml(String(safeArray(item.log).length)) + '</span></button></div>' + (item.status === 'approval' && !approved ? '<div class="agent-approve"><span class="agent-approve-note">⚠ This agent will <strong>act</strong> — held until you approve.</span><button type="button" class="agent-approve-btn" data-agent-approve="' + escapeHtml(id) + '">Approve &amp; let it execute</button></div>' : '') + (logOpen ? '<ol class="agent-trail">' + safeArray(item.log).map(function (entry) { return '<li class="trail-item"><span class="trail-time">' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><span class="trail-dot"></span><span class="trail-text">' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</span></li>'; }).join('') + '<li class="trail-foot">every action is logged in-tenant · tap any entry to see its evidence</li></ol>' : '') + '</div>' : '') + '</div>';
-      }).join('') + '</div><div class="agents-sovereign"><span class="sov-dot"></span> ' + (state.activePersona === "ceo" ? '' : 'sovereign \u00b7 runs in-tenant \u00b7 every action logged') + '</div>' + (subtools.length ? '<div class="subtools"><div class="subtools-label">Available tools</div><div class="subtools-grid">' + subtools.map(function (item) { return '<div class="subtool"><span class="subtool-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25a6')) + '</span><div class="subtool-meta"><span class="subtool-name">' + escapeHtml(firstDefined(item.name, 'Tool')) + '</span><span class="subtool-desc">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</span></div></div>'; }).join('') + '</div></div>' : '');
+      }).join('') + '</div>' + sovereignLine + (subtools.length ? '<div class="subtools"><div class="subtools-label">Available tools</div><div class="subtools-grid">' + subtools.map(function (item) { return '<div class="subtool"><span class="subtool-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25a6')) + '</span><div class="subtool-meta"><span class="subtool-name">' + escapeHtml(firstDefined(item.name, 'Tool')) + '</span><span class="subtool-desc">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</span></div></div>'; }).join('') + '</div></div>' : '');
       safeArray(runningCard.querySelectorAll('[data-agent-toggle]')).forEach(function (button) {
         button.onclick = function () {
           var id = button.getAttribute('data-agent-toggle') || '';
@@ -2901,10 +2996,10 @@
       }
       var renderDiscoveryGroup = function (title, items) {
         return '<div class="disco-group-label">' + escapeHtml(title) + '</div><div class="disco-list">' + items.map(function (item) {
-          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(polishAgentName(firstDefined(item.name, item.label, item.module_id, 'Agent'))) + '</span><span class="disco-src ' + escapeHtml(firstDefined(item.source, 'native')) + '">' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.source === 'native' ? 'StrategyOS' : item.by, item.connector, 'connector')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? 'Built-in' : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
+          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(polishAgentName(firstDefined(item.name, item.label, item.module_id, 'Agent'))) + '</span><span class="disco-src ' + escapeHtml(firstDefined(item.source, 'native')) + '">' + escapeHtml(state.activePersona === "ceo" ? (item.source === 'native' ? 'StrategyOS' : 'Marketplace') : firstDefined(item.source === 'native' ? 'Built-in' : item.by, item.connector, 'connector')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? (item.source === 'native' ? 'Ready in your workspace' : 'Available to add') : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
         }).join('') + '</div>';
       };
-      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">Add to your workspace</span></div><div class="disco-search"><span class="disco-search-icon">⌕</span> Search the agent universe…</div>' + renderDiscoveryGroup('Built-in', nativeAgents) + renderDiscoveryGroup('Available agents', marketAgents) + '<button type="button" class="disco-browse">Browse all agents →</button>';
+      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">Add to your workspace</span></div><div class="disco-search"><span class="disco-search-icon">⌕</span> Search the agent universe…</div>' + renderDiscoveryGroup('StrategyOS assistants', nativeAgents) + renderDiscoveryGroup('Available agents', marketAgents) + '<button type="button" class="disco-browse">Browse all agents →</button>';
       var browseBtn = discoveryCard.querySelector('.disco-browse');
       if (browseBtn) {
         browseBtn.onclick = function () {

@@ -438,7 +438,7 @@ def compose_persona_answer(
             citations=scenario_result.get("citations", []),
             suggestions=scenario_result.get("suggestions", []) or _suggested_followups(persona_key),
             trace=trace,
-            answered_by="scenario",
+            answered_by=scenario_result.get("answered_by", "scenario"),
         )
 
     # 2. Some callers need to preserve an explicit deterministic fallback

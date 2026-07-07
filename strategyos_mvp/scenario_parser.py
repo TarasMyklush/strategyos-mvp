@@ -1369,6 +1369,92 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
     board = _public_board(packet)
     persona_id = str(context.get("persona") or packet.get("persona_id") or "ceo")
 
+    supplementary_payload = board.get("supplementary") or board.get("supplementary_questions") or []
+    challenged_count = (
+        int(supplementary_payload.get("question_count") or 0)
+        if isinstance(supplementary_payload, dict)
+        else len(list(supplementary_payload or []))
+    )
+    deck_release = board.get("deck_release") or {}
+    surfaced_reports = int(deck_release.get("report_count") or 0) if isinstance(deck_release, dict) else 0
+    if not surfaced_reports:
+        surfaced_reports = len(list(board.get("decks") or []))
+
+    if "prepare the board pack" in norm or (
+        "board pack" in norm and any(token in norm for token in ("ceo review", "evidence missing", "what should i do next"))
+    ):
+        return ScenarioResult(
+            scenario_id="public_exec_board_pack_review",
+            scenario_label="Executive Surface — Board Pack Review",
+            matched=True,
+            answer=(
+                f"For the pre-board stage, keep the CEO review on the governed board pack itself, the {surfaced_reports} surfaced report"
+                f"{'' if surfaced_reports == 1 else 's'}, and the supplementary questions that still depend on challenged evidence. "
+                f"Right now the visible packet shows {challenged_count} challenged case{'' if challenged_count == 1 else 's'}, so the missing evidence is whatever keeps those questions open. "
+                "Next step: close the challenged evidence first, tighten the supplementary answers, and only then move the packet into the room."
+            ),
+            calculations=[
+                CalculationStep(
+                    step_id="board_pack_readiness",
+                    description="Read visible board-pack readiness from the public executive packet",
+                    formula="READ public board portal state + report count + challenged case count",
+                    inputs={"persona": persona_id},
+                    result=f"{surfaced_reports} surfaced report(s); {challenged_count} challenged case(s)",
+                    unit="board readiness",
+                    citations=[
+                        _public_citation("public_context_packet.board_portal.deck_release"),
+                        _public_citation("public_context_packet.board_portal.supplementary"),
+                    ],
+                )
+            ],
+            kg_context=[],
+            citations=[
+                _public_citation("public_context_packet.board_portal.state_detail"),
+                _public_citation("public_context_packet.board_portal.supplementary"),
+            ],
+            assumptions=["Public-safe answer is limited to the visible board packet and challenged-question summary."],
+            hallucination_risk=_public_risk_low("Public board-pack review prompt grounded in the executive packet."),
+            suggestions=["Help me close challenged cases before the board meeting", "Summarize the board packet in plain English"],
+            scenario_type="deterministic",
+            basis="Matched board-pack review prompt against the shared public board portal packet.",
+        )
+
+    if "close challenged cases" in norm or ("challenged" in norm and "board meeting" in norm):
+        return ScenarioResult(
+            scenario_id="public_exec_challenged_cases",
+            scenario_label="Executive Surface — Challenged Cases",
+            matched=True,
+            answer=(
+                f"Before the board meeting, close the challenged cases first. The visible packet shows {challenged_count} challenged case"
+                f"{'' if challenged_count == 1 else 's'} still tied to supplementary board questions, so the evidence you need is the proof that lets each challenge clear reviewer scrutiny. "
+                "Next action: gather the missing proof, close the reviewer challenge, and confirm the packet is still bounded before it goes live in the room."
+            ),
+            calculations=[
+                CalculationStep(
+                    step_id="challenged_case_count",
+                    description="Read challenged-case posture from the public board portal",
+                    formula="READ public supplementary question count",
+                    inputs={"persona": persona_id},
+                    result=f"{challenged_count} challenged case(s)",
+                    unit="challenged cases",
+                    citations=[_public_citation("public_context_packet.board_portal.supplementary")],
+                )
+            ],
+            kg_context=[],
+            citations=[
+                _public_citation("public_context_packet.board_portal.supplementary"),
+                _public_citation("public_context_packet.board_portal.state_detail"),
+            ],
+            assumptions=["Public-safe answer can identify the challenged-case count and review posture, but not protected case-file contents."],
+            hallucination_risk=_public_risk_low(
+                "Public challenged-case prompt grounded in the executive packet.",
+                gap="Case-level reviewer evidence remains protected outside the anonymous surface.",
+            ),
+            suggestions=["What needs CEO review before the board meeting?", "Help me prepare the board pack for the pre-board stage"],
+            scenario_type="deterministic",
+            basis="Matched challenged-cases prompt against the shared public board portal packet.",
+        )
+
     if "gap widening" in norm:
         revenue = _public_driver(packet, "revenue") or {}
         return ScenarioResult(

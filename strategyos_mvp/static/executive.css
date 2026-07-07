@@ -16,6 +16,7 @@
   --warn-soft: rgba(169, 110, 32, 0.11);
   --danger-soft: rgba(155, 52, 52, 0.09);
   --shadow: 0 12px 32px rgba(29, 28, 25, 0.06);
+  --assistant-dock-width: clamp(280px, 24vw, 360px);
 }
 
 html[data-theme="dark"] {
@@ -175,6 +176,7 @@ a { color: inherit; }
 .tb-user {
   gap: 9px;
   padding-left: 0;
+  position: relative;
 }
 
 .avatar {
@@ -407,12 +409,14 @@ a { color: inherit; }
   max-width: 1240px;
   margin: 0 auto;
   padding: clamp(20px, 3vw, 34px) clamp(18px, 4vw, 40px) 96px;
+  padding-right: calc(clamp(18px, 4vw, 40px) + var(--assistant-dock-width));
 }
 
 .composed-footer {
   max-width: 1220px;
   margin: 0 auto 52px;
   padding: 0 clamp(18px, 4vw, 40px);
+  padding-right: calc(clamp(18px, 4vw, 40px) + var(--assistant-dock-width));
   display: flex;
   gap: 12px;
   align-items: center;
@@ -527,15 +531,24 @@ a { color: inherit; }
   overflow: hidden;
 }
 
-.chat-launcher {
+.assistant-dock {
   position: fixed;
   right: clamp(18px, 4vw, 32px);
   bottom: 24px;
-  z-index: 12;
+  width: min(var(--assistant-dock-width), calc(100vw - 36px));
+  z-index: 13;
+  display: grid;
+  gap: 12px;
+  align-items: end;
+}
+
+.chat-launcher {
+  position: static;
   display: inline-flex;
   gap: 10px;
   align-items: center;
-  max-width: min(320px, calc(100vw - 36px));
+  width: 100%;
+  max-width: none;
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
   border-radius: 13px;
   background: var(--surface);
@@ -560,14 +573,8 @@ a { color: inherit; }
 }
 
 .a2a-shell {
-  position: fixed;
-  right: clamp(18px, 4vw, 32px);
-  bottom: 92px;
-  z-index: 13;
-}
-
-.page {
-  padding-bottom: 176px;
+  position: static;
+  width: 100%;
 }
 
 .a2a-fab,
@@ -615,13 +622,15 @@ a { color: inherit; }
 }
 
 .a2a-panel {
-  width: min(420px, calc(100vw - 36px));
+  width: 100%;
   margin-top: 12px;
   border: 1px solid var(--border);
   border-radius: 24px;
   background: var(--surface);
   box-shadow: 0 20px 60px rgba(29, 28, 25, 0.18);
   padding: 16px;
+  max-height: min(60vh, 560px);
+  overflow: auto;
 }
 
 .a2a-head,
@@ -865,6 +874,28 @@ a { color: inherit; }
   color: var(--muted);
 }
 
+.network-list-head {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) minmax(220px, 280px);
+  gap: 16px;
+  padding: 0 16px 8px;
+  color: var(--soft);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.network-list-head__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.network-stat-value {
+  display: block;
+  color: var(--muted);
+}
+
 .network-stats span,
 .agent-card__meta,
 .a2a-row__head,
@@ -950,6 +981,10 @@ a { color: inherit; }
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.agents-sovereign:empty {
+  display: none;
 }
 
 .sov-dot {
@@ -1602,7 +1637,8 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 @media (max-width: 960px) {
   .network-summary,
   .network-row,
-  .discovery-card {
+  .discovery-card,
+  .network-list-head {
     grid-template-columns: 1fr;
   }
 
@@ -1610,15 +1646,38 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
     grid-template-columns: 1fr;
   }
 
+  .network-list-head__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .composed-time {
     margin-left: 0;
+  }
+
+  .page {
+    padding-right: clamp(18px, 4vw, 40px);
+    padding-bottom: 96px;
+  }
+
+  .composed-footer {
+    padding-right: clamp(18px, 4vw, 40px);
+  }
+
+  .assistant-dock {
+    position: static;
+    right: auto;
+    bottom: auto;
+    width: auto;
+    padding: 0 clamp(18px, 4vw, 40px) 16px;
   }
 }
 
 @media (max-width: 720px) {
+  .assistant-dock {
+    padding: 0 18px 16px;
+  }
+
   .chat-launcher {
-    left: 18px;
-    right: 18px;
     max-width: none;
   }
 }
@@ -3884,6 +3943,141 @@ html[data-theme="dark"] .trend-axis {
   margin: 14px 0 10px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.board-status-chip {
+  background: color-mix(in srgb, var(--surface-strong) 76%, var(--border));
+  color: var(--muted);
+  border: 1px solid var(--border);
+  cursor: default;
+  font-weight: 500;
+}
+
+.strategyos-avatar-tooltip {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 240px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 20px 50px rgba(29, 28, 25, 0.16);
+  z-index: 30;
+}
+
+.avatar-tooltip-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.avatar-tooltip-copy strong,
+.avatar-tooltip-copy span {
+  display: block;
+}
+
+.avatar-tooltip-copy span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.avatar-tooltip-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.avatar-tooltip-action {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.avatar-tooltip-action[disabled] {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+.strategyos-profile-modal,
+.strategyos-feedback-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1060;
+}
+
+.strategyos-profile-backdrop,
+.strategyos-feedback-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.strategyos-profile-card,
+.strategyos-feedback-card {
+  position: relative;
+  width: min(480px, calc(100vw - 32px));
+  margin: 10vh auto 0;
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  padding: 20px;
+}
+
+.strategyos-profile-close,
+.strategyos-feedback-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.strategyos-profile-list {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.strategyos-profile-item {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--surface-strong);
+}
+
+.strategyos-profile-item strong,
+.strategyos-profile-item span {
+  display: block;
+}
+
+.strategyos-profile-item span {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.strategyos-profile-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.strategyos-profile-btn {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 10px 14px;
+  cursor: pointer;
 }
 
 .disco-card {

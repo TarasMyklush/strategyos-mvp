@@ -174,39 +174,41 @@
     <span class="composed-time">refreshed today · 06:14 · Riyadh</span>
   </footer>
 
-  <button class="chat-launcher" id="chat-launcher" type="button">
-    <span class="chat-launcher__prompt">Ask anything or run any scenario on your actual data</span>
-    <span class="chat-launcher__cta" id="chat-launcher-cta">Ask Hermes</span>
-  </button>
-
-  <div class="a2a-shell" id="a2a-shell">
-    <button class="a2a-fab" id="a2a-fab" type="button" aria-expanded="false" aria-controls="a2a-panel">
-      <span class="a2a-fab-mark" aria-hidden="true">⇄</span>
-      <span class="a2a-fab-text" id="a2a-fab-text">Hermes ↔ assistants</span>
-      <span class="a2a-fab-badge" id="a2a-fab-badge" hidden>0</span>
+  <div class="assistant-dock" id="assistant-dock">
+    <button class="chat-launcher" id="chat-launcher" type="button">
+      <span class="chat-launcher__prompt">Ask anything or run any scenario on your actual data</span>
+      <span class="chat-launcher__cta" id="chat-launcher-cta">Ask Hermes</span>
     </button>
-    <aside class="a2a-panel" id="a2a-panel" hidden aria-labelledby="a2a-panel-title">
-      <header class="a2a-head">
-        <div class="a2a-h-id">
-          <span class="a2a-h-mark" aria-hidden="true">⇄</span>
-          <div>
-            <strong class="a2a-h-title" id="a2a-panel-title">Hermes ↔ assistant network</strong>
-            <p class="a2a-h-sub" id="a2a-panel-subtitle">Your chief of staff, gathering for you · live</p>
+
+    <div class="a2a-shell" id="a2a-shell">
+      <button class="a2a-fab" id="a2a-fab" type="button" aria-expanded="false" aria-controls="a2a-panel">
+        <span class="a2a-fab-mark" aria-hidden="true">⇄</span>
+        <span class="a2a-fab-text" id="a2a-fab-text">Hermes ↔ assistants</span>
+        <span class="a2a-fab-badge" id="a2a-fab-badge" hidden>0</span>
+      </button>
+      <aside class="a2a-panel" id="a2a-panel" hidden aria-labelledby="a2a-panel-title">
+        <header class="a2a-head">
+          <div class="a2a-h-id">
+            <span class="a2a-h-mark" aria-hidden="true">⇄</span>
+            <div>
+              <strong class="a2a-h-title" id="a2a-panel-title">Hermes ↔ assistant network</strong>
+              <p class="a2a-h-sub" id="a2a-panel-subtitle">Your chief of staff, gathering for you · live</p>
+            </div>
           </div>
-        </div>
-        <button class="a2a-min" id="a2a-min" type="button" aria-label="Minimise assistant network">▾</button>
-      </header>
-      <div class="a2a-tabs" id="a2a-tabs" role="tablist" aria-label="Assistant exchanges"></div>
-      <div class="a2a-topic" id="a2a-topic"></div>
-      <div class="a2a-scroll" id="a2a-scroll"></div>
-        <div class="a2a-foot">
-          <span class="a2a-foot-note" id="a2a-foot-note">Hermes is following up automatically</span>
-          <div class="a2a-foot-actions">
-            <button class="a2a-foot-btn" id="a2a-followup" type="button">Set a follow-up task</button>
-            <button class="a2a-foot-btn a2a-foot-btn--ghost" id="a2a-report-bug" type="button">Feedback</button>
+          <button class="a2a-min" id="a2a-min" type="button" aria-label="Minimise assistant network">▾</button>
+        </header>
+        <div class="a2a-tabs" id="a2a-tabs" role="tablist" aria-label="Assistant exchanges"></div>
+        <div class="a2a-topic" id="a2a-topic"></div>
+        <div class="a2a-scroll" id="a2a-scroll"></div>
+          <div class="a2a-foot">
+            <span class="a2a-foot-note" id="a2a-foot-note">Hermes is following up automatically</span>
+            <div class="a2a-foot-actions">
+              <button class="a2a-foot-btn" id="a2a-followup" type="button">Set a follow-up task</button>
+              <button class="a2a-foot-btn a2a-foot-btn--ghost" id="a2a-report-bug" type="button">Feedback</button>
+            </div>
           </div>
-        </div>
-    </aside>
+      </aside>
+    </div>
   </div>
 
   <div class="assistant-scrim" id="assistant-scrim" hidden></div>
