@@ -181,11 +181,38 @@
     return query ? "?" + query : "";
   }
 
-  function authHeaders() {
+  function readStoredToken() {
+    try { return window.localStorage.getItem(_tokenKey) || ""; } catch (_error) { return ""; }
+  }
+
+  function clearStoredToken() {
+    state.token = "";
+    try { window.localStorage.removeItem(_tokenKey); } catch (_error) {}
+  }
+
+  function isPublicSafeAssistantBody(body) {
+    var persona = String(firstDefined(body && body.persona, state && state.activePersona, "")).toLowerCase();
+    var source = String(firstDefined(body && body.assistant_context && body.assistant_context.source, body && body.source, "")).toLowerCase();
+    var runId = String(firstDefined(body && body.run_id, "latest-public")).toLowerCase();
+    return persona === "ceo" && source === "executive_surface" && (!body || !body.run_id || runId === "latest-public");
+  }
+
+  function shouldRetryAssistantAnonymously(response, body, requestOptions, usedBearerAuth) {
+    var status = Number(firstDefined(response && response.status, 0)) || 0;
+    if (status !== 401 && status !== 403) return false;
+    if (!usedBearerAuth) return false;
+    if (!isPublicSafeAssistantBody(body)) return false;
+    if (requestOptions && requestOptions.skipAuth) return false;
+    if (requestOptions && requestOptions._anonymousRetry) return false;
+    return true;
+  }
+
+  function authHeaders(options) {
+    if (options && options.skipAuth) return {};
     var token = "";
     token = firstDefined(state && state.token, "");
     if (!token) {
-      try { token = window.localStorage.getItem(_tokenKey) || ""; } catch (_error) { token = ""; }
+      token = readStoredToken();
     }
     if (!token) return {};
     if (bootstrap.idp_enabled || token.indexOf(".") !== -1) return { Authorization: "Bearer " + token };
@@ -214,9 +241,11 @@
   }
 
   function postJson(path, body, options) {
-    var headers = authHeaders();
+    var requestOptions = options || {};
+    var headers = authHeaders({ skipAuth: requestOptions.skipAuth === true });
+    var usedBearerAuth = Boolean(headers.Authorization);
     headers["Content-Type"] = "application/json";
-    var requestId = firstDefined(options && options.requestId, body && body.trace_id, "");
+    var requestId = firstDefined(requestOptions && requestOptions.requestId, body && body.trace_id, "");
     if (requestId) headers["X-Request-ID"] = requestId;
     return fetch(path, {
       method: "POST",
@@ -224,6 +253,19 @@
       body: JSON.stringify(body || {})
     }).then(function (response) {
       return parseJsonResponse(response).then(function (payload) {
+        if (shouldRetryAssistantAnonymously(response, body, requestOptions, usedBearerAuth)) {
+          console.warn("[Hermes] clearing stale UI token after assistant auth failure", {
+            status: response.status,
+            endpoint: path,
+            requestId: requestId
+          });
+          clearStoredToken();
+          return postJson(path, body, {
+            requestId: requestId,
+            skipAuth: true,
+            _anonymousRetry: true
+          });
+        }
         var responseRequestId = firstDefined(
           response.headers.get("x-request-id"),
           payload && payload.request_id,

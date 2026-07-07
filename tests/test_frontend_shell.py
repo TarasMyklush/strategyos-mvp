@@ -223,7 +223,7 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="assistant-drawer"' in html
     assert 'id="chat-launcher"' in html
     assert "strategyos.ui.token" in js
-    assert "function authHeaders()" in js
+    assert "function authHeaders(options)" in js
     assert "token = firstDefined(state && state.token, \"\")" in js
     assert "Authorization: \"Bearer \" + token" in js
     assert "fetch(path, { headers: authHeaders() })" in js
@@ -1809,6 +1809,231 @@ def test_assistant_transport_failures_log_visible_diagnostics():
     assert 'response.headers.get("x-request-id")' in executive_js
     assert 'errorType: firstDefined(error && error.errorType, "network_error")' in executive_js or 'errorType: "network_error"' in executive_js
     assert 'errorType = response.status === 401 ? "auth_error"' in executive_js or ': "http_error";' in executive_js
+
+
+def test_assistant_invalid_ui_token_recovers_anonymously_and_replaces_failed_message():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveTestHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        '  function renderAssistantStudio() {',
+        '  function renderAssistantStudio() {\n    if (window.__TEST_MINIMAL_RENDER__) return;',
+        1,
+    )
+    harness_js = harness_js.replace(
+        '  function showToast(message) {',
+        '  function showToast(message) {\n    if (window.__TEST_MINIMAL_RENDER__) { window.__TEST_LAST_TOAST__ = message; return; }',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return {\n'
+        '    state: state,\n'
+        '    ensureThreads: ensureThreads,\n'
+        '    threadStore: threadStore,\n'
+        '    retryAssistantMessage: retryAssistantMessage\n'
+        '  };\n'
+        '}\n'
+        'module.exports = __executiveTestHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+    dump() {{ return Object.fromEntries(data.entries()); }},
+  }};
+}}
+
+const persistedThreadKey = 'ceo:invalid-token-thread';
+const storageKey = 'strategyos.chat.latest-public.ceo';
+const retryPrompt = 'What should I tell the board about Tamween recovery?';
+const failedText = 'Hermes could not reach the shared assistant service. Retry now once the service is reachable.';
+
+const bootstrapPayload = {{
+  requested_view_state: {{ persona: 'ceo', board: 'pre' }},
+  executive_entry_route: '/app',
+  assistant_public_context: {{ persona_id: 'ceo', assistant: 'Hermes', drivers: [], findings: [], developments: [], week: [] }},
+  idp_enabled: true,
+}};
+
+const persistedThreads = {{
+  [persistedThreadKey]: {{
+    key: persistedThreadKey,
+    title: 'Tamween recovery',
+    preview: 'Retry needed · What should I tell the board about Tamween recovery?',
+    route: '',
+    readOnly: false,
+    kind: 'followup',
+    assistant: 'Hermes',
+    messages: [
+      {{ role: 'user', text: retryPrompt, timestamp: '2026-07-07T00:00:00.000Z', status: 'ok' }},
+      {{ role: 'assistant', text: failedText, timestamp: '2026-07-07T00:00:01.000Z', status: 'failed', retryable: true, needsRetry: true, retryPrompt: retryPrompt, endpoint: '/assistant/chat', errorType: 'auth_error', statusCode: 401 }},
+    ],
+    lastUpdated: '2026-07-07T00:00:01.000Z',
+  }}
+}};
+
+const localStorage = makeStore({{ 'strategyos.ui.token': 'definitely-invalid-token' }});
+const sessionStorage = makeStore({{ [storageKey]: JSON.stringify(persistedThreads) }});
+const fetchCalls = [];
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [], findings: [], developments: [], week: [] }} }}, networkMeta: {{}}, network: [], a2a: [], subtools: [] }},
+  localStorage,
+  sessionStorage,
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  __TEST_MINIMAL_RENDER__: true,
+  __TEST_LAST_TOAST__: '',
+  innerWidth: 1280,
+  setTimeout(fn) {{ return setTimeout(fn, 0); }},
+  clearTimeout(id) {{ clearTimeout(id); }},
+  setInterval() {{ return 1; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  visibilityState: 'visible',
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify(bootstrapPayload) }};
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{
+    return {{
+      className: '',
+      textContent: '',
+      style: {{}},
+      hidden: false,
+      setAttribute() {{}},
+      appendChild() {{}},
+      remove() {{}},
+      querySelector() {{ return null; }},
+      querySelectorAll() {{ return []; }},
+      parentNode: {{ appendChild() {{}} }},
+    }};
+  }},
+}};
+
+global.fetch = async function(pathname, options = {{}}) {{
+  fetchCalls.push({{
+    pathname,
+    headers: options.headers || {{}},
+    body: options.body || '',
+  }});
+  if (pathname !== '/assistant/chat') throw new Error('unexpected fetch ' + pathname);
+  if (fetchCalls.length === 1) {{
+    return {{
+      ok: false,
+      status: 401,
+      headers: {{ get(name) {{ return String(name).toLowerCase() === 'x-request-id' ? 'server-req-401' : null; }} }},
+      text: async function() {{
+        return JSON.stringify({{ detail: 'A valid identity token is required.' }});
+      }},
+    }};
+  }}
+  return {{
+    ok: true,
+    status: 200,
+    headers: {{ get(name) {{ return String(name).toLowerCase() === 'x-request-id' ? 'server-req-200' : null; }} }},
+    text: async function() {{
+      return JSON.stringify({{
+        status: 'ok',
+        answer: 'Tamween recovery remains the main board item: public packet shows SAR 8.6M recovery, with clear next actions and no auth-required private context needed.',
+        mode: 'deterministic',
+        assistant_mode: 'scenario',
+        why: 'Public-safe board packet answer.',
+        run_id: 'latest-public',
+        citations: [{{ locator: 'public_context_packet.tamween', source_path: 'public_packet://latest-public' }}],
+        hallucination_risk: {{ level: 'low' }},
+      }});
+    }},
+  }};
+}};
+
+async function main() {{
+  const factory = require(tempFile);
+  const harness = factory();
+  harness.state.latestPacket = {{
+    run_id: 'latest-public',
+    chat: {{ run_id: 'latest-public', threads: [], assistant: {{ name: 'Hermes' }} }},
+    assistant_public_context: bootstrapPayload.assistant_public_context,
+    executive_modes: {{ active_persona_id: 'ceo', active_board_state: 'pre', active_driver_key: 'board_packet' }},
+  }};
+  harness.state.activePersona = 'ceo';
+  harness.state.activeThreadKey = persistedThreadKey;
+  harness.ensureThreads();
+
+  const thread = harness.threadStore()[persistedThreadKey];
+  await harness.retryAssistantMessage(persistedThreadKey, 1, null, {{ silentToast: true }});
+  const finalMessage = thread.messages[1];
+  console.log(JSON.stringify({{
+    fetchCalls,
+    finalStatus: finalMessage.status,
+    finalText: finalMessage.text,
+    finalMeta: finalMessage.meta || '',
+    hasRetryPrompt: Object.prototype.hasOwnProperty.call(finalMessage, 'retryPrompt'),
+    localStorageAfter: localStorage.dump(),
+  }}));
+}}
+
+main().catch((error) => {{
+  console.error(error);
+  process.exit(1);
+}});
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "assistant_invalid_token_recovery.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+    result = json.loads(completed.stdout.strip())
+
+    assert len(result["fetchCalls"]) == 2
+    assert result["fetchCalls"][0]["pathname"] == "/assistant/chat"
+    assert result["fetchCalls"][0]["headers"]["Authorization"] == "Bearer definitely-invalid-token"
+    assert "Authorization" not in result["fetchCalls"][1]["headers"]
+    assert result["finalStatus"] == "ok"
+    assert "SAR 8.6M recovery" in result["finalText"]
+    assert "Retry now once the service is reachable" not in result["finalText"]
+    assert result["hasRetryPrompt"] is False
+    assert "strategyos.ui.token" not in result["localStorageAfter"]
 
 
 def test_exact_fx_cta_thread_is_preserved_as_retryable_flow():
