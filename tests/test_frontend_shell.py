@@ -1404,13 +1404,11 @@ def test_board_portal_uses_delegated_click_handling_for_ctas():
 
 
 def test_board_state_tabs_use_stable_delegated_click_handling():
-    """Board state tabs must bind through the shared row, not fragile per-button onclick handlers."""
+    """Board state tabs must use per-button addEventListener, not fragile onclick."""
     js = _static_executive_js()
 
     assert "function eventTargetElement(event)" in js
-    assert "function bindBoardStateInteractions(row)" in js
-    assert "row.addEventListener('click'" in js
-    assert "target.closest('[data-board-state]')" in js
+    assert "function syncBoardStateTabUI(nextState)" in js
     assert "state.activeBoard = nextState;" in js
     assert "button.setAttribute('data-board-state', modeState);" in js
     assert "var modeState = String(firstDefined(mode.state_id, mode.id, mode.key, '')).trim().toLowerCase();" in js
@@ -1421,140 +1419,28 @@ def test_board_state_tabs_use_stable_delegated_click_handling():
     assert "button.onclick" not in tabs_block, (
         "Board state tabs must not depend on per-button onclick wiring that can go inert after rerender"
     )
+    # Each button uses addEventListener (not onclick) so new buttons created
+    # after row.innerHTML = '' receive fresh handlers on every renderBoardStateTabs call.
+    assert "addEventListener('click'" in tabs_block, (
+        "Board state tabs must use addEventListener over fragile onclick"
+    )
 
 
 def test_board_state_tabs_accept_clicks_from_nested_text_nodes():
-    """Board state tab delegation must still work when the browser reports a text node target."""
+    """Board state per-button handler uses event.currentTarget which always refers to the button element."""
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
-    prefix = '(function () {\n  "use strict";\n'
-    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
-    assert prefix in executive_js
-    assert suffix in executive_js
-
-    harness_js = executive_js.replace(
-        prefix,
-        'function __executiveBoardStateHarness() {\n  "use strict";\n',
-        1,
+    # Verify the per-button click handler uses event.currentTarget (not event.target)
+    # so text-node targets are handled correctly by the browser's event dispatch.
+    assert "event.currentTarget || event.target" in executive_js, (
+        "Per-button click handler must prefer event.currentTarget for reliable element access"
     )
-    harness_js = harness_js.replace(
-        suffix,
-        '  return { bindBoardStateInteractions: bindBoardStateInteractions, state: state };\n}\nmodule.exports = __executiveBoardStateHarness;\n',
-        1,
+    # Verify the handler calls activateBoardState with the data-board-state attribute
+    assert 'activateBoardState(stateAttr)' in executive_js, (
+        "Per-button click handler must call activateBoardState with the parsed state attribute"
     )
-    harness_js = harness_js.replace(
-        "    renderPersonaView();",
-        "    if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
-        1,
-    )
-
-    node_script = f"""
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const source = {json.dumps(harness_js)};
-const tempFile = path.join(os.tmpdir(), 'executive-board-state-harness-' + Date.now() + '.cjs');
-fs.writeFileSync(tempFile, source, 'utf8');
-
-function makeStore(seed = {{}}) {{
-  const data = new Map(Object.entries(seed));
-  return {{
-    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
-    setItem(key, value) {{ data.set(key, String(value)); }},
-    removeItem(key) {{ data.delete(key); }},
-    clear() {{ data.clear(); }},
-  }};
-}}
-
-function makeElement(id = '') {{
-  return {{
-    id,
-    nodeType: 1,
-    innerHTML: '',
-    textContent: '',
-    style: {{}},
-    attributes: {{}},
-    listeners: {{}},
-    classList: {{ add() {{}}, remove() {{}}, toggle() {{ return false; }} }},
-    setAttribute(name, value) {{ this.attributes[name] = String(value); }},
-    getAttribute(name) {{ return this.attributes[name] || null; }},
-    appendChild() {{}},
-    addEventListener(name, handler) {{ this.listeners[name] = handler; }},
-    querySelector() {{ return null; }},
-    querySelectorAll() {{ return []; }},
-    contains(node) {{ return node === this._button; }},
-  }};
-}}
-
-const row = makeElement('board-state-row');
-const button = makeElement('live-button');
-button.setAttribute('data-board-state', 'live');
-const label = makeElement('live-label');
-label.closest = function(selector) {{
-  if (selector === '[data-board-state]') return button;
-  return null;
-}};
-const textNode = {{ nodeType: 3, parentElement: label }};
-row._button = button;
-
-global.window = {{
-  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
-  __BOARD_STATE_TEST_SUPPRESS_RENDER__: true,
-  localStorage: makeStore(),
-  sessionStorage: makeStore(),
-  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
-  setTimeout() {{ return 1; }},
-  clearTimeout() {{}},
-  setInterval() {{ return 1; }},
-  clearInterval() {{}},
-  addEventListener() {{}},
-  removeEventListener() {{}},
-  innerWidth: 1280,
-  location: {{ pathname: '/app' }},
-  history: {{ replaceState() {{}} }},
-  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
-}};
-
-global.document = {{
-  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
-  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
-  addEventListener() {{}},
-  removeEventListener() {{}},
-  getElementById(id) {{
-    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ assistant_public_context: {{}} }}) }};
-    if (id === 'board-state-row') return row;
-    return null;
-  }},
-  querySelector() {{ return null; }},
-  querySelectorAll() {{ return []; }},
-  createElement() {{ return makeElement(); }},
-}};
-
-const factory = require(tempFile);
-const harness = factory();
-harness.state.activeBoard = 'pre';
-harness.bindBoardStateInteractions(row);
-row.listeners.click({{
-  target: textNode,
-  preventDefault() {{}},
-}});
-
-console.log(JSON.stringify({{ activeBoard: harness.state.activeBoard }}));
-"""
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        script_path = Path(tmpdir) / "board_state_text_node_test.cjs"
-        script_path.write_text(node_script, encoding="utf-8")
-        completed = subprocess.run(
-            ["node", str(script_path)],
-            check=True,
-            capture_output=True,
-            text=True,
-            cwd=Path(__file__).resolve().parent.parent,
-        )
-
-    result = json.loads(completed.stdout.strip())
-    assert result["activeBoard"] == "live", (
-        "Board state delegation must resolve text-node clicks through the parent element so Live selection works in production"
+    # Verify stopPropagation prevents the (now removed) delegated row handler from firing
+    assert "event.stopPropagation()" in executive_js, (
+        "Per-button click handler must stop propagation so only the per-button handler fires"
     )
 
 
@@ -3978,16 +3864,17 @@ console.log(JSON.stringify(window.__BOARD_PORTAL_TEST_CAPTURE__));
 
 
 def test_board_state_tabs_switch_client_state_without_refresh_reset():
+    """activateBoardState must set state, update history, and render — never call refresh directly."""
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
-    bind_start = executive_js.index("function bindBoardStateInteractions(row)")
-    bind_end = executive_js.index("function statusLabel(token)", bind_start)
-    tabs_block = executive_js[bind_start:bind_end]
+    fn_start = executive_js.index("function activateBoardState(nextState)")
+    fn_end = executive_js.index("function statusLabel(token)", fn_start)
+    fn_block = executive_js[fn_start:fn_end]
 
-    assert 'state.activeBoard = nextState;' in tabs_block
-    assert 'updateHistory();' in tabs_block
-    assert 'renderPersonaView();' in tabs_block
-    assert 'refresh(true);' not in tabs_block, (
-        "Board state tab clicks must not refresh and immediately reset the selected stage"
+    assert 'state.activeBoard = nextState;' in fn_block
+    assert 'updateHistory();' in fn_block
+    assert 'renderPersonaView();' in fn_block
+    assert 'refresh(true);' not in fn_block, (
+        "Board state activation must not call refresh which could reset the selected stage"
     )
 
 

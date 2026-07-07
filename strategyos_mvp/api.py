@@ -9162,6 +9162,32 @@ async def _assistant_chat_response(
                 ],
                 "basis": "Out-of-domain question detected on the public executive surface — safe refusal instead of fabricated business answer.",
             }
+        # Board-prep / board meeting guidance: return matched=true with
+        # board lifecycle guidance instead of falling through to canned
+        # revenue/margin summary.
+        if (
+            "how should i prep for the board" in norm
+            or "prep for the board" in norm
+            or "board meeting" in norm
+            or ("board" in norm and any(token in norm for token in ("prepare", "prep", "pack")))
+        ):
+            return {
+                "matched": True,
+                "answer": (
+                    "From the current board lifecycle, you are in the Pre-board stage. The recommended next steps are: "
+                    "review the CEO-approved packet materials (current decks, supplementary questions, and evidence), "
+                    "close any challenged findings before the board session, and confirm the meeting posture and timeline. "
+                    "Once the packet is clean, transition to Live to run the room on approved material only."
+                ),
+                "citations": [_public_packet_citation("board_portal", "Shared public executive packet")],
+                "suggestions": [
+                    "What is driving margin pressure this quarter?",
+                    "Show evidence for SAR 8.6M recoverable",
+                    "Risk to full-year plan?",
+                    "Should I prepare for any challenged findings before going live?",
+                ],
+                "basis": "Board-prep question detected on the public executive surface — returned board lifecycle guidance instead of canned revenue/margin summary.",
+            }
         if any(token in norm for token in ("margin", "ebitda", "profitability")):
             answer = (
                 "From the current public packet, margin pressure is coming from FX drag, hot API input cost, Healthcare occupancy below plan, and Tamween still sitting behind its recovery path. "

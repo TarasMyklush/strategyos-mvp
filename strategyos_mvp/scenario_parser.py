@@ -1439,10 +1439,15 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
         or "prepare board pack" in norm
         or "prepare for the board meeting" in norm
         or "prepare for the board" in norm
+        or "prep for the board meeting" in norm
+        or "prep for the board" in norm
+        or "prep the board pack" in norm
+        or "how should i prep" in norm
         or "board prep" in norm
         or "how should i prepare for the board meeting" in norm
         or "what should i prepare for the board" in norm
         or "what should i prepare for the board meeting" in norm
+        or "what should i prep for the board" in norm
         or (
             "board pack" in norm
             and any(

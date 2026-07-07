@@ -219,30 +219,6 @@
     });
   }
 
-  function bindBoardStateInteractions(row) {
-    if (!row || row.__boardStateInteractionsBound) return;
-    row.__boardStateInteractionsBound = true;
-    row.addEventListener('click', function (event) {
-      var target = eventTargetElement(event);
-      if (!target) return;
-      var stateButton = target.closest('[data-board-state]') || target.closest('.state-tab');
-      if (!stateButton || !row.contains(stateButton)) return;
-      var nextState = String(stateButton.getAttribute('data-board-state') || '').trim().toLowerCase();
-      if (!nextState) {
-        var btnLabel = stateButton.querySelector('strong');
-        if (btnLabel && btnLabel.textContent) {
-          var label = btnLabel.textContent.trim().toLowerCase();
-          if (label === 'pre-board') nextState = 'pre';
-          else if (label === 'live') nextState = 'live';
-          else if (label === 'closed') nextState = 'closed';
-        }
-      }
-      if (!nextState) return;
-      event.preventDefault();
-      activateBoardState(nextState);
-    });
-  }
-
   function syncBoardStateTabUI(nextState) {
     var row = $("board-state-row");
     if (!row) return;
@@ -264,23 +240,26 @@
     if (!nextState || state.activeBoard === nextState) return false;
     state._boardStateTransition = nextState;
     state.activeBoard = nextState;
+    // Sync existing buttons immediately so there is no visual lag between
+    // the click and the full render cycle completing.
     syncBoardStateTabUI(nextState);
     animateCard('board-portal');
     updateHistory();
-    renderBoardStageSurface();
+    // Render the full view once — renderPersonaView calls
+    // renderBoardStateTabs (creates new buttons) and renderBoardPortal
+    // (renders content) as part of the full surface. DO NOT call
+    // renderBoardStageSurface separately — that creates a double render
+    // window where a concurrent refresh() can land mid-cycle.
     renderPersonaView();
-    // Final sync: after all three render cycles (syncBoardStateTabUI,
-    // renderBoardStageSurface/renderBoardStateTabs, renderPersonaView/
-    // renderBoardStateTabs), force the correct aria/class on whatever
-    // tabs exist. Each renderBoardStateTabs call does innerHTML = "" +
-    // new buttons with activeBoardState from firstDefined — if any
-    // intermediate render used stale getBoardPortal().presentation_state
-    // instead of state.activeBoard, this catches it.
+    // Post-render guard: force the intended tab state on whatever buttons
+    // exist after all rendering is done. This catches any edge case where
+    // a render function read getBoardPortal().presentation_state instead
+    // of state.activeBoard (e.g. during a concurrent refresh() that
+    // replaced state.latestPacket mid-render).
     syncBoardStateTabUI(nextState);
     state._boardStateTransition = '';
-    // Defensive: if a concurrent refresh() reset activeBoard between the
-    // render calls above, re-assert the intended state. This guards against
-    // the 60s poll cycle (refresh via setInterval) landing mid-click.
+    // Re-assert guard: if a concurrent refresh() reset activeBoard during
+    // renderPersonaView, restore it. This is the final belt.
     if (state.activeBoard !== nextState) {
       state.activeBoard = nextState;
       syncBoardStateTabUI(nextState);
