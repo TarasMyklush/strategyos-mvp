@@ -3872,7 +3872,10 @@ def test_board_state_tabs_switch_client_state_without_refresh_reset():
 
     assert 'state.activeBoard = nextState;' in fn_block
     assert 'updateHistory();' in fn_block
-    assert 'renderPersonaView();' in fn_block
+    assert 'renderBoardStageSurface();' in fn_block
+    assert 'state._boardStateTransition = \'\';' in fn_block, (
+        "activateBoardState must clear _boardStateTransition after render so refresh() can update activeBoard from the server packet"
+    )
     assert 'refresh(true);' not in fn_block, (
         "Board state activation must not call refresh which could reset the selected stage"
     )

@@ -9207,21 +9207,25 @@ async def _assistant_chat_response(
             )
             basis = "Public packet risk summary synthesized from visible CEO facts."
         else:
+            # Catch-all for business-token prompts that don't match a specific handler.
+            # Return scope-boundary message + matched=False so the frontend can
+            # distinguish unmatched from deterministic answers.
             answer = (
-                "From the current public packet, revenue remains ahead while the board still needs a clean margin story: FX and API cost are pressuring EBITDA, Healthcare occupancy is below plan, and Tamween recovery still needs to convert into realized uplift."
+                "I'm Hermes, your board chief of staff. I can help with questions about Mizan Group's "
+                "board pack, governed evidence, strategic decisions, and the current board lifecycle state. "
+                "Your question appears to be outside the available board context — try asking about margin, "
+                "risk, board prep, recoverable leakage, or a specific business driver visible in the packet."
             )
-            basis = "Public packet summary synthesized from visible CEO facts."
+            basis = "Public executive surface: unmatched query caught in safety fallback — scope-boundary message returned instead of canned packet summary."
         return {
             "matched": False,
             "answer": answer,
             "citations": [_public_packet_citation("facts[0]", "Shared public executive packet")],
             "suggestions": [
-                'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
+                "What is driving margin pressure this quarter?",
+                "Help me prepare the board pack for the pre-board stage.",
                 "Show evidence for SAR 8.6M recoverable",
-                "Why is the gap widening?",
-                "Show e-Pharmacy detail",
                 "Risk to full-year plan?",
-                "Project FX hedge impact on EBITDA margin",
             ],
             "basis": basis,
         }

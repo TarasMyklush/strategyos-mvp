@@ -267,29 +267,33 @@
     syncBoardStateTabUI(nextState);
     animateCard('board-portal');
     updateHistory();
-    // Render the full view once — renderPersonaView calls
-    // renderBoardStateTabs (creates new buttons) and renderBoardPortal
-    // (renders content) as part of the full surface. DO NOT call
-    // renderBoardStageSurface separately — that creates a double render
-    // window where a concurrent refresh() can land mid-cycle.
-    renderPersonaView();
+    // Render ONLY the board surface — NOT the entire persona view.
+    // renderPersonaView is too heavy (15+ render functions including
+    // hero, drivers, metrics, agents, knowledge graph, etc.) and was
+    // causing a race: during the innerHTML replacement cycle in
+    // renderBoardStateTabs, the old tab buttons with click handlers
+    // are destroyed and new ones created. renderBoardStageSurface
+    // is scoped to exactly the board parts: tabs + portal content.
+    renderBoardStageSurface();
     // Post-render guard: force the intended tab state on whatever buttons
     // exist after all rendering is done. This catches any edge case where
     // a render function read getBoardPortal().presentation_state instead
-    // of state.activeBoard (e.g. during a concurrent refresh() that
-    // replaced state.latestPacket mid-render).
+    // of state.activeBoard.
     syncBoardStateTabUI(nextState);
     // Re-assert guard: if a concurrent refresh() reset activeBoard during
-    // renderPersonaView, restore it. This is the final belt.
+    // renderBoardStageSurface, restore it. This is the final belt.
     if (state.activeBoard !== nextState) {
       state.activeBoard = nextState;
       syncBoardStateTabUI(nextState);
     }
     // Clear the transition signal after all sync guards have run.
-    // It must remain set until after renderPersonaView so that
+    // It must remain set during renderBoardStageSurface so that
     // resolveBoardState() — used by renderBoardStateTabs and
     // renderBoardPortal — reads the intended state even if
-    // state.activeBoard is temporarily stale.
+    // state.activeBoard is temporarily stale from a concurrent refresh().
+    // After clearing, the guard in refresh() (line ~3567) can once again
+    // update state.activeBoard from the server packet when no user-driven
+    // tab switch is in flight.
     state._boardStateTransition = '';
     // Final belt: schedule one more sync after the current JS stack and
     // any CSSOM recalc / style resolution completes. Some DOM environments
