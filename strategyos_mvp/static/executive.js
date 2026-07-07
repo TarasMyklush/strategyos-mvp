@@ -227,6 +227,10 @@
       var isActive = buttonState === nextState;
       button.className = 'state-tab' + (isActive ? ' is-active' : '');
       button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      // Redundant data attribute guard: some environments strip className
+      // during hydration or CSSOM recalculation. The data attribute is a
+      // second signal the test harness and future render code can rely on.
+      button.setAttribute('data-board-state-active', isActive ? 'true' : 'false');
     });
   }
 
@@ -237,7 +241,12 @@
 
   function activateBoardState(nextState) {
     nextState = String(nextState || '').trim().toLowerCase();
-    if (!nextState || state.activeBoard === nextState) return false;
+    if (!nextState) return false;
+    // Always proceed — even if state.activeBoard matches, the DOM may not
+    // reflect it due to a concurrent refresh or incomplete render cycle.
+    // Re-rendering is idempotent and fast; the guard was causing clicks on
+    // Live/Closed to be silently swallowed when state.activeBoard appeared
+    // already set but the DOM showed Pre-board as active.
     state._boardStateTransition = nextState;
     state.activeBoard = nextState;
     // Sync existing buttons immediately so there is no visual lag between
@@ -264,6 +273,13 @@
       state.activeBoard = nextState;
       syncBoardStateTabUI(nextState);
     }
+    // Final belt: schedule one more sync after the current JS stack and
+    // any CSSOM recalc / style resolution completes. Some DOM environments
+    // (Safari, mobile browsers) defer className changes during innerHTML
+    // replacement cycles. A setTimeout at 0 lets those settle.
+    window.setTimeout(function () {
+      syncBoardStateTabUI(nextState);
+    }, 0);
     return true;
   }
 
@@ -2953,6 +2969,7 @@
       button.type = "button";
       button.className = "state-tab" + (modeState === activeBoardState ? " is-active" : "");
       button.setAttribute('data-board-state', modeState);
+      button.setAttribute('data-board-state-active', modeState === activeBoardState ? 'true' : 'false');
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", modeState === activeBoardState ? "true" : "false");
       button.innerHTML = '<span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id)) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, "")) + '</span></span>';

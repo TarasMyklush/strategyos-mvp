@@ -4167,3 +4167,300 @@ console.log(JSON.stringify({
     assert c4["liveSelected"] == "true", "Back-to-Live left aria-selected=false on Live"
     assert c4["preSelected"] == "false", "Back-to-Live left Pre-board active"
     assert c4["closedSelected"] == "false", "Back-to-Live left Closed active"
+
+
+def test_board_state_tabs_click_always_triggers_render_even_when_state_matches():
+    """activateBoardState must always proceed with re-render even if state.activeBoard already matches the target.
+
+    Regression: clicking Live when state.activeBoard is already 'live' must still sync the DOM
+    and re-render. The old guard (state.activeBoard === nextState) caused silent tab failure when
+    a concurrent refresh() set state.activeBoard = 'live' but the DOM never reflected it.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveStaleStateHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { renderBoardStateTabs: renderBoardStateTabs, state: state };\n}\nmodule.exports = __executiveStaleStateHarness;\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        "    renderPersonaView();",
+        "    if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
+        1,
+    )
+
+    # Use json.dumps to safely embed harness_js into the Node template
+    node_script = """const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+function makeStore(seed) {
+  var data = {};
+  if (seed) { Object.keys(seed).forEach(function(k) { data[k] = seed[k]; }); }
+  return {
+    getItem: function(key) { return data.hasOwnProperty(key) ? data[key] : null; },
+    setItem: function(key, value) { data[key] = String(value); },
+    removeItem: function(key) { delete data[key]; },
+    clear: function() { data = {}; },
+  };
+}
+
+var setTimeoutCalls = [];
+
+function makeButton() {
+  var attributes = {};
+  var listeners = {};
+  return {
+    tagName: 'BUTTON',
+    nodeType: 1,
+    attributes: attributes,
+    className: '',
+    innerHTML: '',
+    style: {},
+    listeners: listeners,
+    setAttribute: function(name, value) { attributes[name] = String(value); if (name === 'class') { this.className = value; } },
+    getAttribute: function(name) { return attributes[name] || null; },
+    addEventListener: function(name, handler) { listeners[name] = handler; },
+    click: function() {
+      var handler = listeners.click;
+      if (handler) {
+        handler({
+          type: 'click',
+          target: this,
+          currentTarget: this,
+          preventDefault: function() {},
+          stopPropagation: function() {},
+        });
+      }
+    },
+    closest: function(selector) { return selector === '[data-board-state]' || selector === '.state-tab' ? this : null; },
+  };
+}
+
+var boardPortalElement = {
+  id: 'board-portal',
+  tagName: 'ARTICLE',
+  innerHTML: '',
+  style: { background: 'white' },
+  classList: { add: function() {}, remove: function() {}, contains: function() { return false; } },
+  listeners: {},
+  setAttribute: function() {},
+  getAttribute: function() { return null; },
+  addEventListener: function(name, handler) { this.listeners[name] = handler; },
+  querySelector: function() { return null; },
+  querySelectorAll: function() { return []; },
+};
+
+var row = {
+  __boardStateInteractionsBound: false,
+  __id: 'board-state-row',
+  innerHTML: '',
+  buttons: [],
+  listeners: {},
+  addEventListener: function(name, handler) { this.listeners[name] = handler; },
+  appendChild: function(child) { this.buttons.push(child); return child; },
+  contains: function(target) { return this.buttons.indexOf(target) !== -1; },
+  querySelectorAll: function(selector) {
+    if (selector === '[data-board-state]') return this.buttons.slice();
+    return [];
+  },
+  querySelector: function(selector) {
+    var m = selector.match(/\[data-board-state="([^"]+)"\]/);
+    if (!m) return null;
+    for (var i = 0; i < this.buttons.length; i++) {
+      if (this.buttons[i].getAttribute('data-board-state') === m[1]) return this.buttons[i];
+    }
+    return null;
+  },
+};
+
+var note = { textContent: '' };
+
+global.window = {
+  __BOARD_STATE_TEST_SUPPRESS_RENDER__: true,
+  STRATEGYOS_EXECUTIVE_DESIGN: { personas: { ceo: { assistant: 'Hermes', threads: [] } } },
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: { threads: {}, assistants: {} },
+  setTimeout: function(fn) { setTimeoutCalls.push(fn); return 1; },
+  clearTimeout: function() {},
+  setInterval: function() { return 1; },
+  clearInterval: function() {},
+  addEventListener: function() {},
+  removeEventListener: function() {},
+  innerWidth: 1280,
+  location: { pathname: '/app' },
+  history: { replaceState: function() {} },
+  navigator: { clipboard: { writeText: function() { return Promise.resolve(); } } },
+};
+
+global.document = {
+  body: { style: {}, appendChild: function() {}, removeChild: function() {} },
+  documentElement: { getAttribute: function() { return 'light'; }, setAttribute: function() {} },
+  addEventListener: function() {},
+  removeEventListener: function() {},
+  getElementById: function(id) {
+    if (id === 'strategyos-executive-bootstrap') return { textContent: JSON.stringify({ assistant_public_context: {} }) };
+    if (id === 'board-state-row') return row;
+    if (id === 'board-state-note') return note;
+    if (id === 'board-portal') return boardPortalElement;
+    return null;
+  },
+  querySelector: function() { return null; },
+  querySelectorAll: function() { return []; },
+  createElement: function(tag) { return tag === 'button' ? makeButton() : { setAttribute: function() {}, classList: { add: function() {}, remove: function() {}, contains: function() { return false; }, toggle: function() { return false; } } }; },
+};
+
+var source = """ + json.dumps(harness_js) + """;
+var tempFile = path.join(os.tmpdir(), 'executive-stale-state-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+const factory = require(tempFile);
+const harness = factory();
+harness.state.latestPacket = {
+  board_portal: {
+    lifecycle_flow: [
+      { state_id: 'pre', label: 'Pre-board', detail: 'Prepare governed packet' },
+      { state_id: 'live', label: 'Live', detail: 'Run the room inside approved material' },
+      { state_id: 'closed', label: 'Closed', detail: 'Freeze memory after the room closes' }
+    ],
+    presentation_state: 'pre',
+  },
+};
+harness.state.activeBoard = 'live';
+harness.renderBoardStateTabs();
+
+var pre = row.querySelector('[data-board-state="pre"]');
+var live = row.querySelector('[data-board-state="live"]');
+var closed = row.querySelector('[data-board-state="closed"]');
+
+var beforeClick = {
+  activeBoard: harness.state.activeBoard,
+  preSelected: pre.getAttribute('aria-selected'),
+  preActive: pre.getAttribute('data-board-state-active'),
+  liveSelected: live.getAttribute('aria-selected'),
+  liveActive: live.getAttribute('data-board-state-active'),
+  liveClass: live.className,
+  preClass: pre.className,
+};
+
+// Click Live even though state.activeBoard is already 'live'
+live.click();
+
+var afterSameLiveClick = {
+  activeBoard: harness.state.activeBoard,
+  preSelected: pre.getAttribute('aria-selected'),
+  preActive: pre.getAttribute('data-board-state-active'),
+  liveSelected: live.getAttribute('aria-selected'),
+  liveActive: live.getAttribute('data-board-state-active'),
+  liveClass: live.className,
+  preClass: pre.className,
+  closedSelected: closed.getAttribute('aria-selected'),
+  closedActive: closed.getAttribute('data-board-state-active'),
+  setTimeoutSyncCount: setTimeoutCalls.length,
+};
+
+// Now click Closed
+closed.click();
+
+var afterClosedClick = {
+  activeBoard: harness.state.activeBoard,
+  preSelected: pre.getAttribute('aria-selected'),
+  preActive: pre.getAttribute('data-board-state-active'),
+  liveSelected: live.getAttribute('aria-selected'),
+  liveActive: live.getAttribute('data-board-state-active'),
+  closedSelected: closed.getAttribute('aria-selected'),
+  closedActive: closed.getAttribute('data-board-state-active'),
+  closedClass: closed.className,
+  liveClass: live.className,
+};
+
+// Click back to Live
+live.click();
+
+var afterBackToLive = {
+  activeBoard: harness.state.activeBoard,
+  preSelected: pre.getAttribute('aria-selected'),
+  preActive: pre.getAttribute('data-board-state-active'),
+  liveSelected: live.getAttribute('aria-selected'),
+  liveActive: live.getAttribute('data-board-state-active'),
+  closedSelected: closed.getAttribute('aria-selected'),
+  closedActive: closed.getAttribute('data-board-state-active'),
+  liveClass: live.className,
+  preClass: pre.className,
+};
+
+console.log(JSON.stringify({
+  before: beforeClick,
+  after_same_live_click: afterSameLiveClick,
+  after_closed_click: afterClosedClick,
+  after_back_to_live: afterBackToLive,
+}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_state_stale_state_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+
+    # Before: state.activeBoard is 'live' so tabs should reflect that
+    before = result["before"]
+    assert before["activeBoard"] == "live"
+    assert before["liveSelected"] == "true"
+    assert before["preSelected"] == "false"
+
+    # After clicking Live when state.activeBoard is already 'live':
+    # The fix removes the early-return guard, so re-render + sync fires anyway.
+    after = result["after_same_live_click"]
+    assert after["activeBoard"] == "live", (
+        "Clicking Live when activeBoard is already 'live' must keep 'live'"
+    )
+    assert after["liveSelected"] == "true", (
+        "Clicking Live when activeBoard is 'live' must still set aria-selected=true on Live"
+    )
+    assert after["preSelected"] == "false", (
+        "Clicking Live when activeBoard is 'live' must not activate Pre-board"
+    )
+    assert after["liveActive"] == "true", (
+        "data-board-state-active must be 'true' on Live after clicking Live"
+    )
+    assert after["preActive"] == "false", (
+        "data-board-state-active must be 'false' on Pre-board after clicking Live"
+    )
+
+    # After clicking Closed: must switch
+    c3 = result["after_closed_click"]
+    assert c3["activeBoard"] == "closed", (
+        f"Click Closed must switch to 'closed', got '{c3['activeBoard']}'"
+    )
+    assert c3["closedSelected"] == "true", "Clicked Closed but aria-selected is not true"
+    assert c3["closedActive"] == "true", "data-board-state-active must be true on Closed"
+    assert c3["liveSelected"] == "false", "Closed: Live must not still be selected"
+    assert c3["preSelected"] == "false", "Closed: Pre-board must not be selected"
+
+    # After clicking back to Live: must switch back
+    c4 = result["after_back_to_live"]
+    assert c4["activeBoard"] == "live", (
+        f"Click back to Live must switch to 'live', got '{c4['activeBoard']}'"
+    )
+    assert c4["liveSelected"] == "true", "Back to Live: aria-selected not true"
+    assert c4["liveActive"] == "true", "Back to Live: data-board-state-active not true"
+    assert c4["closedSelected"] == "false", "Back to Live: Closed still selected"
+    assert c4["preSelected"] == "false", "Back to Live: Pre-board still selected"
