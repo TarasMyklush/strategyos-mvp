@@ -1989,6 +1989,13 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 }
 
 @media (max-width: 760px) {
+  .assistant-dock {
+    left: 12px;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: auto;
+  }
+
   .chat-launcher,
   .a2a-shell {
     right: 12px;
@@ -1996,6 +2003,41 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 
   .chat-launcher {
     max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .a2a-fab {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .a2a-panel {
+    max-height: min(52dvh, 420px);
+    border-radius: 20px;
+    padding: 14px;
+  }
+
+  .a2a-head,
+  .a2a-foot,
+  .a2a-foot-actions {
+    flex-wrap: wrap;
+  }
+
+  .a2a-foot-actions {
+    width: 100%;
+  }
+
+  .a2a-foot-btn {
+    flex: 1 1 160px;
+  }
+
+  .a2a-tab {
+    max-width: 100%;
+  }
+
+  .a2a-tab-unit {
+    display: none;
   }
 
   /*

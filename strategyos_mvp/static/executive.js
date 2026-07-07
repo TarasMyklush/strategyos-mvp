@@ -104,6 +104,17 @@
     return 'Help me review ' + boardActionLabel(actionKey).toLowerCase() + ' for the ' + boardStateLabel + ' board stage. What needs review, what evidence is missing, and what should I do next?';
   }
 
+  function boardStateSupportNote(board) {
+    var boardState = String(firstDefined(state.activeBoard, (board || {}).presentation_state, (board || {}).state, 'pre')).toLowerCase();
+    if (boardState === 'pre') {
+      return 'Close evidence gaps now so the CEO sees one clean packet, then keep live answers inside released material.';
+    }
+    if (boardState === 'live') {
+      return 'Stay inside the approved packet while questions map back to challenged evidence and governed answers.';
+    }
+    return 'Keep the room on the frozen record after close so follow-up stays bounded to approved outputs.';
+  }
+
   function statusLabel(token) {
     if (!token) return "—";
     var key = String(token).toLowerCase().replace(/[_-]/g, " ").trim();
@@ -1816,7 +1827,7 @@
         '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'A read on current usage, freshness, and context depth across Mizan.')) + '</p></div><span class="pill-inline ok">target ' + escapeHtml(String(firstDefined(meta.target, 80))) + '+</span></div>',
         '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(avg)) + '</strong><span>Team readiness score</span></div><div class="network-meta"><span class="pill-inline ok">Healthy</span><span class="pill-inline warn">Check-in needed</span><span class="pill-inline danger">Stale · ' + escapeHtml(String(stale)) + ' leader' + (stale !== 1 ? 's' : '') + '</span></div></div>',
         '<div class="network-list"><div class="network-list-head"><span class="sr-only">Score</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span>Freshness</span><span>Used</span><span>Context</span></div></div>' + network.map(function (item) {
-          return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Mizan Group')) + '</p></div><div class="network-stats"><span><span class="sr-only">Freshness</span><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span><span class="sr-only">Used</span><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span><span class="sr-only">Context</span><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
+          return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Mizan Group')) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
         }).join('') + '</div>'
       ].join('');
     }
@@ -2399,7 +2410,7 @@
       {
         label: "Board lifecycle",
         value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")),
-        detail: firstDefined((boardPortal.state_detail || {}).summary, "Board-safe lifecycle stays explicit.")
+        detail: firstDefined(boardStateSupportNote(boardPortal), "Board-safe lifecycle stays explicit.")
       },
       {
         label: "Evidence closure",
@@ -2743,7 +2754,7 @@
       };
       row.appendChild(button);
     });
-    if (note) note.textContent = firstDefined((board.state_detail || {}).summary, "Board lifecycle stays explicit from pre-board preparation through frozen close.");
+    if (note) note.textContent = firstDefined(boardStateSupportNote(board), "Board lifecycle stays explicit from pre-board preparation through frozen close.");
   }
 
   function renderBoardPortal() {
@@ -2933,7 +2944,7 @@
     }
 
     if (activityCard) {
-      activityCard.innerHTML = '<div class="agent-activity' + (state.agentSummaryOpen ? ' is-open' : '') + '"><button type="button" class="agent-activity-line" data-agent-summary-toggle="true"><span class="aa-spark">✦</span><span class="aa-text">' + escapeHtml(firstDefined(activity.line, 'What is working on your data right now — and a universe more to deploy.')) + '</span><span class="aa-toggle">' + (state.agentSummaryOpen ? 'hide detail' : 'view detail') + '</span></button>' + (state.agentSummaryOpen ? '<div class="aa-detail"><div class="aa-metrics">' + safeArray(activity.metrics).map(function (item) {
+      activityCard.innerHTML = '<div class="agent-activity' + (state.agentSummaryOpen ? ' is-open' : '') + '"><button type="button" class="agent-activity-line" data-agent-summary-toggle="true"><span class="aa-text">' + escapeHtml(firstDefined(activity.line, 'What is working on your data right now — and a universe more to deploy.')) + '</span><span class="aa-toggle">' + (state.agentSummaryOpen ? 'hide detail' : 'view detail') + '</span></button>' + (state.agentSummaryOpen ? '<div class="aa-detail"><div class="aa-metrics">' + safeArray(activity.metrics).map(function (item) {
         return '<div class="aa-metric"><span class="aa-metric-v">' + escapeHtml(firstDefined(item.v, item.value, '0')) + '</span><span class="aa-metric-k">' + escapeHtml(firstDefined(item.k, item.label, 'metric')) + '</span></div>';
       }).join('') + '</div><ol class="aa-trail">' + safeArray(activity.log).map(function (item) { return '<li class="aa-trail-item"><span class="trail-time">' + escapeHtml(firstDefined(item.t, 'now')) + '</span><span class="aa-who">' + escapeHtml(firstDefined(item.who, 'agent')) + '</span><span class="aa-act">' + escapeHtml(firstDefined(item.a, 'activity')) + '</span></li>'; }).join('') + '</ol></div>' : '') + '</div>';
       var summaryToggle = activityCard.querySelector('[data-agent-summary-toggle]');

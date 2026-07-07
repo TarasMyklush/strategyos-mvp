@@ -1180,6 +1180,12 @@ def test_assistant_network_uses_header_row_not_repeated_labels():
     assert "<small>context</small>" not in network_block, (
         "Assistant rows must not repeat the visible 'context' label"
     )
+    assert '<span class="sr-only">Freshness</span><span class="network-stat-value">' not in network_block, (
+        "Assistant rows must not repeat row-level Freshness labels once the header exists"
+    )
+    assert 'aria-label="Freshness"' in network_block, (
+        "Assistant stat values should keep a single semantic label without visible row clutter"
+    )
 
 
 def test_agents_running_panel_has_no_orphan_sovereign_bullet_for_ceo():
@@ -1188,6 +1194,42 @@ def test_agents_running_panel_has_no_orphan_sovereign_bullet_for_ceo():
 
     assert "<span class=\"sov-dot\"></span> ' + (state.activePersona === \"ceo\" ? ''" not in js, (
         "CEO agents panel must not leave an orphan sovereign dot when no text follows"
+    )
+    assert '<span class="aa-spark">✦</span>' not in js, (
+        "Agents activity summary must not render a decorative star that can appear as orphan content"
+    )
+
+
+def test_board_portal_state_note_uses_unique_support_copy():
+    """Board Portal intro note must not duplicate the main card summary copy."""
+    js = _static_executive_js()
+
+    assert "function boardStateSupportNote(board)" in js, (
+        "Board Portal should derive a distinct support note for lifecycle guidance"
+    )
+    assert "Close evidence gaps now so the CEO sees one clean packet" in js, (
+        "Pre-board support note should give unique CEO guidance instead of repeating the card summary"
+    )
+    assert 'note.textContent = firstDefined(boardStateSupportNote(board)' in js, (
+        "Board state intro note must use support-note copy, not the main card summary"
+    )
+
+
+def test_mobile_assistant_overlay_stays_usable_on_narrow_viewports():
+    """Mobile Hermes/A2A dock must span the viewport safely and avoid clipped actions."""
+    css = _static_executive_css()
+
+    mobile_start = css.index("@media (max-width: 760px)")
+    mobile_block = css[mobile_start:mobile_start + 1400]
+
+    assert ".assistant-dock" in mobile_block and "left: 12px;" in mobile_block and "right: 12px;" in mobile_block, (
+        "Mobile assistant dock must anchor to both sides so the floating overlay does not clip off-screen"
+    )
+    assert ".a2a-fab" in mobile_block and "width: 100%;" in mobile_block, (
+        "Mobile A2A launcher must fill the dock width for reliable tap targets"
+    )
+    assert ".a2a-head," in mobile_block and ".a2a-foot," in mobile_block and "flex-wrap: wrap;" in mobile_block, (
+        "Mobile A2A panel header/footer must wrap instead of overflowing narrow viewports"
     )
 
 
