@@ -1610,7 +1610,7 @@ function makeButton() {{
     setAttribute(name, value) {{ this.attributes[name] = String(value); }},
     getAttribute(name) {{ return this.attributes[name] || null; }},
     addEventListener(name, handler) {{ this.listeners[name] = handler; }},
-    click() {{ if (this.listeners.click) this.listeners.click({{ preventDefault() {{}}, stopPropagation() {{}} }}); }},
+    click() {{ if (this.listeners.click) this.listeners.click({{ target: this, currentTarget: this, preventDefault() {{}}, stopPropagation() {{}} }}); }},
     closest(selector) {{ return selector === '[data-board-state]' ? this : null; }},
   }};
 }}
@@ -1759,7 +1759,7 @@ function makeButton() {{
     setAttribute(name, value) {{ this.attributes[name] = String(value); }},
     getAttribute(name) {{ return this.attributes[name] || null; }},
     addEventListener(name, handler) {{ this.listeners[name] = handler; }},
-    click() {{ if (this.listeners.click) this.listeners.click({{ preventDefault() {{}}, stopPropagation() {{}} }}); }},
+    click() {{ if (this.listeners.click) this.listeners.click({{ target: this, currentTarget: this, preventDefault() {{}}, stopPropagation() {{}} }}); }},
     closest(selector) {{ return selector === '[data-board-state]' ? this : null; }},
   }};
 }}
@@ -3994,3 +3994,289 @@ def test_board_state_tabs_switch_client_state_without_refresh_reset():
 def test_refresh_preserves_selected_board_state_over_server_default():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
     assert 'state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, "pre");' in executive_js
+
+
+def test_board_state_tabs_click_resistant_to_closure_and_rerender_cycle():
+    """Board lifecycle clicks must survive the full innerHTML replacement + activateBoardState cycle
+    in the real DOM path. This catches regression where tab buttons become inert after render."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveBoardStateCycleHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { renderBoardStateTabs: renderBoardStateTabs, renderBoardPortal: renderBoardPortal, renderBoardStageSurface: renderBoardStageSurface, state: state, syncBoardStateTabUI: syncBoardStateTabUI };\n}\nmodule.exports = __executiveBoardStateCycleHarness;\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        "    renderPersonaView();",
+        "    if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
+        1,
+    )
+
+    node_script = r"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = """ + json.dumps(harness_js) + r""";
+const tempFile = path.join(os.tmpdir(), 'executive-board-state-cycle-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeClassList() {
+  return {
+    items: [],
+    add: function(c) { this.items.push(c); },
+    remove: function(c) { this.items = this.items.filter(function(x) { return x !== c; }); },
+    contains: function(c) { return this.items.indexOf(c) >= 0; },
+  };
+}
+
+function makeStore(seed = {}) {
+  const data = new Map(Object.entries(seed));
+  return {
+    getItem(key) { return data.has(key) ? data.get(key) : null; },
+    setItem(key, value) { data.set(key, String(value)); },
+    removeItem(key) { data.delete(key); },
+    clear() { data.clear(); },
+  };
+}
+
+function makeButton(id) {
+  var button = {
+    tagName: 'BUTTON',
+    nodeType: 1,
+    id: id || '',
+    attributes: {},
+    className: '',
+    innerHTML: '',
+    textContent: '',
+    listeners: {},
+    style: {},
+    disabled: false,
+    classList: makeClassList(),
+    setAttribute: function(name, value) { this.attributes[name] = String(value); },
+    getAttribute: function(name) { return this.attributes[name] || null; },
+    addEventListener: function(name, handler) { this.listeners[name] = handler; },
+    removeEventListener: function() {},
+    dispatchEvent: function() {},
+    closest: function(selector) { return selector === '[data-board-state]' || selector === '.state-tab' ? this : null; },
+    click: function() {
+      var handler = this.listeners.click;
+      if (handler) {
+        handler({
+          type: 'click',
+          target: this,
+          currentTarget: this,
+          preventDefault: function() {},
+          stopPropagation: function() {},
+        });
+      }
+    },
+    querySelector: function(sel) {
+      if (sel === 'strong') return null;
+      return null;
+    },
+  };
+  return button;
+}
+
+var calledLive = false;
+var calledClosed = false;
+var boardPortalElement = {
+  id: 'board-portal',
+  tagName: 'ARTICLE',
+  innerHTML: '',
+  style: {},
+  classList: makeClassList(),
+  listeners: {},
+  setAttribute: function() {},
+  getAttribute: function() { return null; },
+  addEventListener: function(name, handler) { this.listeners[name] = handler; },
+  querySelector: function() { return null; },
+  querySelectorAll: function() { return []; },
+};
+
+var row = {
+  __boardStateInteractionsBound: false,
+  __id: 'board-state-row',
+  innerHTML: '',
+  buttons: [],
+  listeners: {},
+  addEventListener: function(name, handler) { this.listeners[name] = handler; },
+  appendChild: function(child) { this.buttons.push(child); return child; },
+  contains: function(target) { return this.buttons.includes(target); },
+  querySelectorAll: function(selector) {
+    if (selector === '[data-board-state]') return this.buttons.slice();
+    return [];
+  },
+  querySelector: function(selector) {
+    var match = selector.match(/\[data-board-state="([^"]+)"\]/);
+    if (!match) return null;
+    return this.buttons.find(function(b) { return b.getAttribute('data-board-state') === match[1]; }) || null;
+  },
+};
+
+var note = { textContent: '' };
+
+global.window = {
+  __BOARD_STATE_TEST_SUPPRESS_RENDER__: true,
+  STRATEGYOS_EXECUTIVE_DESIGN: { personas: { ceo: { assistant: 'Hermes', threads: [] } } },
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: { threads: {}, assistants: {} },
+  setTimeout: function() { return 1; },
+  clearTimeout: function() {},
+  setInterval: function() { return 1; },
+  clearInterval: function() {},
+  addEventListener: function() {},
+  removeEventListener: function() {},
+  innerWidth: 1280,
+  location: { pathname: '/app' },
+  history: { replaceState: function() {} },
+  navigator: { clipboard: { writeText: function() { return Promise.resolve(); } } },
+};
+
+global.document = {
+  body: { style: {}, appendChild: function() {}, removeChild: function() {} },
+  documentElement: { getAttribute: function() { return 'light'; }, setAttribute: function() {} },
+  addEventListener: function() {},
+  removeEventListener: function() {},
+  getElementById: function(id) {
+    if (id === 'strategyos-executive-bootstrap') return { textContent: JSON.stringify({ assistant_public_context: {} }) };
+    if (id === 'board-state-row') return row;
+    if (id === 'board-state-note') return note;
+    if (id === 'board-portal') return boardPortalElement;
+    return null;
+  },
+  querySelector: function() { return null; },
+  querySelectorAll: function() { return []; },
+  createElement: function(tag) { return tag === 'button' ? makeButton() : { setAttribute: function() {}, classList: makeClassList() }; },
+};
+
+const factory = require(tempFile);
+const harness = factory();
+harness.state.latestPacket = {
+  board_portal: {
+    lifecycle_flow: [
+      { state_id: 'pre', label: 'Pre-board', detail: 'Prepare governed packet' },
+      { state_id: 'live', label: 'Live', detail: 'Run the room inside approved material' },
+      { state_id: 'closed', label: 'Closed', detail: 'Freeze memory after the room closes' }
+    ],
+    presentation_state: 'pre',
+  },
+};
+harness.state.activeBoard = 'pre';
+
+// --- CYCLE 1: Initial render + click Live ---
+harness.renderBoardStateTabs();
+var liveBtn = row.querySelector('[data-board-state="live"]');
+liveBtn.click();
+var afterLiveClick = {
+  activeBoard: harness.state.activeBoard,
+  preSelected: row.buttons[0].getAttribute('aria-selected'),
+  preClass: row.buttons[0].className,
+  liveSelected: row.buttons[1].getAttribute('aria-selected'),
+  liveClass: row.buttons[1].className,
+  closedSelected: row.buttons[2].getAttribute('aria-selected'),
+  closedClass: row.buttons[2].className,
+};
+
+// --- CYCLE 2: Re-render (simulates activateBoardState's renderBoardStageSurface path) ---
+harness.renderBoardStateTabs();
+var liveBtn2 = row.querySelector('[data-board-state="live"]');
+var afterRerender = {
+  activeBoard: harness.state.activeBoard,
+  preSelected: row.buttons[0].getAttribute('aria-selected'),
+  preClass: row.buttons[0].className,
+  liveSelected: row.buttons[1].getAttribute('aria-selected'),
+  liveClass: row.buttons[1].className,
+};
+
+// --- CYCLE 3: Click Closed after re-render ---
+var closedBtn = row.querySelector('[data-board-state="closed"]');
+closedBtn.click();
+var afterClosedClick = {
+  activeBoard: harness.state.activeBoard,
+  preSelected: row.buttons[0].getAttribute('aria-selected'),
+  preClass: row.buttons[0].className,
+  liveSelected: row.buttons[1].getAttribute('aria-selected'),
+  liveClass: row.buttons[1].className,
+  closedSelected: row.buttons[2].getAttribute('aria-selected'),
+  closedClass: row.buttons[2].className,
+};
+
+// --- CYCLE 4: Click back to Live ---
+var liveBtn3 = row.querySelector('[data-board-state="live"]');
+liveBtn3.click();
+var afterBackToLive = {
+  activeBoard: harness.state.activeBoard,
+  preSelected: row.buttons[0].getAttribute('aria-selected'),
+  liveSelected: row.buttons[1].getAttribute('aria-selected'),
+  liveClass: row.buttons[1].className,
+  closedSelected: row.buttons[2].getAttribute('aria-selected'),
+};
+
+console.log(JSON.stringify({
+  cycle1_live_click: afterLiveClick,
+  cycle2_rerender: afterRerender,
+  cycle3_closed_click: afterClosedClick,
+  cycle4_back_to_live: afterBackToLive,
+}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_state_cycle_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+
+    # Cycle 1: Clicking Live must switch activeBoard and DOM
+    c1 = result["cycle1_live_click"]
+    assert c1["activeBoard"] == "live", (
+        f"Click on Live must set activeBoard to 'live', got '{c1['activeBoard']}'"
+    )
+    assert c1["liveSelected"] == "true", "Click on Live left aria-selected=false on Live"
+    assert c1["preSelected"] == "false", "Click on Live left aria-selected=true on Pre-board"
+    assert c1["liveClass"] == "state-tab is-active", "Click on Live did not add is-active to Live"
+    assert c1["preClass"] == "state-tab", "Click on Live left is-active on Pre-board"
+
+    # Cycle 2: After re-render (renderBoardStageSurface path), activeBoard must persist
+    c2 = result["cycle2_rerender"]
+    assert c2["activeBoard"] == "live", (
+        f"After re-render, activeBoard must still be 'live', got '{c2['activeBoard']}'"
+    )
+    assert c2["liveSelected"] == "true", "Re-render lost Live selection"
+    assert c2["preSelected"] == "false", "Re-render re-activated Pre-board"
+
+    # Cycle 3: Click Closed after re-render
+    c3 = result["cycle3_closed_click"]
+    assert c3["activeBoard"] == "closed", (
+        f"Click on Closed must set activeBoard to 'closed', got '{c3['activeBoard']}'"
+    )
+    assert c3["closedSelected"] == "true", "Click on Closed left aria-selected=false on Closed"
+    assert c3["closedClass"] == "state-tab is-active", "Click on Closed did not add is-active"
+    assert c3["liveSelected"] == "false", "Click on Closed left aria-selected=true on Live"
+    assert c3["preSelected"] == "false", "Click on Closed left aria-selected=true on Pre-board"
+
+    # Cycle 4: Click back to Live from Closed
+    c4 = result["cycle4_back_to_live"]
+    assert c4["activeBoard"] == "live", (
+        f"Click back to Live must set activeBoard to 'live', got '{c4['activeBoard']}'"
+    )
+    assert c4["liveSelected"] == "true", "Back-to-Live left aria-selected=false on Live"
+    assert c4["preSelected"] == "false", "Back-to-Live left Pre-board active"
+    assert c4["closedSelected"] == "false", "Back-to-Live left Closed active"

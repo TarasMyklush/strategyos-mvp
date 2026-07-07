@@ -225,9 +225,19 @@
     row.addEventListener('click', function (event) {
       var target = eventTargetElement(event);
       if (!target) return;
-      var stateButton = target.closest('[data-board-state]');
+      var stateButton = target.closest('[data-board-state]') || target.closest('.state-tab');
       if (!stateButton || !row.contains(stateButton)) return;
       var nextState = String(stateButton.getAttribute('data-board-state') || '').trim().toLowerCase();
+      if (!nextState) {
+        var btnLabel = stateButton.querySelector('strong');
+        if (btnLabel && btnLabel.textContent) {
+          var label = btnLabel.textContent.trim().toLowerCase();
+          if (label === 'pre-board') nextState = 'pre';
+          else if (label === 'live') nextState = 'live';
+          else if (label === 'closed') nextState = 'closed';
+        }
+      }
+      if (!nextState) return;
       event.preventDefault();
       activateBoardState(nextState);
     });
@@ -2952,7 +2962,10 @@
       button.innerHTML = '<span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id)) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, "")) + '</span></span>';
       button.addEventListener('click', function (event) {
         event.preventDefault();
-        activateBoardState(modeState);
+        var el = event.currentTarget || event.target;
+        var stateAttr = String(el && typeof el.getAttribute === 'function' ? el.getAttribute('data-board-state') : modeState).trim().toLowerCase();
+        if (!stateAttr) stateAttr = modeState;
+        activateBoardState(stateAttr);
       });
       row.appendChild(button);
     });
