@@ -269,6 +269,14 @@
     updateHistory();
     renderBoardStageSurface();
     renderPersonaView();
+    // Final sync: after all three render cycles (syncBoardStateTabUI,
+    // renderBoardStageSurface/renderBoardStateTabs, renderPersonaView/
+    // renderBoardStateTabs), force the correct aria/class on whatever
+    // tabs exist. Each renderBoardStateTabs call does innerHTML = "" +
+    // new buttons with activeBoardState from firstDefined — if any
+    // intermediate render used stale getBoardPortal().presentation_state
+    // instead of state.activeBoard, this catches it.
+    syncBoardStateTabUI(nextState);
     state._boardStateTransition = '';
     // Defensive: if a concurrent refresh() reset activeBoard between the
     // render calls above, re-assert the intended state. This guards against
@@ -2979,7 +2987,6 @@
       });
       row.appendChild(button);
     });
-    bindBoardStateInteractions(row);
     if (note) note.textContent = firstDefined(boardStateSupportNote(board), "Board lifecycle stays explicit from pre-board preparation through frozen close.");
   }
 
