@@ -372,14 +372,18 @@
     // deferred re-renders, and a 1000ms catch-all finalizer. Each timing
     // callback RE-READS resolveBoardState() so that a stale captured value
     // from a competing chain cannot regress the user's selection.
-    // state.activeBoard is restored as a safety net in every callback.
+    // IMPORTANT: this callback must NOT revert state.activeBoard to the
+    // captured nextState. If the user rapidly clicks multiple tabs (e.g.
+    // pre -> live -> closed in quick succession), the rAF/setTimeout
+    // callbacks from the first click (captured nextState='live') would
+    // override the user's second click (state.activeBoard='closed'),
+    // causing the UI to show the wrong active state. Instead, this
+    // callback trusts state.activeBoard as the authoritative user
+    // selection and only syncs the UI to match it.
     // renderBoardStateTabs runs BEFORE syncBoardStateTabUI so the fast-path
     // full attribute reconciliation catches any CSSOM recalc regression from
     // the portal innerHTML replacement before the lighter sync pass.
     function _boardStateReSync() {
-      if (state.activeBoard !== nextState) {
-        state.activeBoard = nextState;
-      }
       renderBoardStateTabs();
       syncBoardStateTabUI(resolveBoardState());
     }
