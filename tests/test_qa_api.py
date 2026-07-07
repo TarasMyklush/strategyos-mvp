@@ -1601,6 +1601,35 @@ def test_public_manual_board_prep_prompt_returns_board_guidance_from_drawer_inpu
         _restore_env(original)
 
 
+def test_public_manual_how_should_i_prepare_for_the_board_meeting_prompt_is_not_canned(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "How should I prepare for the board meeting?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "drawer_input", "board_state": "pre"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert payload["matched"] is True
+        assert "board" in answer
+        assert "evidence" in answer
+        assert any(token in answer for token in ("next step", "next action", "ceo review"))
+        assert "revenue remains ahead while the board still needs a clean margin story" not in answer
+        assert payload["citations"]
+    finally:
+        _restore_env(original)
+
+
 def test_public_thread_board_readiness_prompt_returns_specific_guidance_not_packet_summary(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:

@@ -114,6 +114,16 @@
     return 'Help me review ' + boardActionLabel(actionKey).toLowerCase() + ' for the ' + boardStateLabel + ' board stage. What needs review, what evidence is missing, and what should I do next?';
   }
 
+  function activateBoardPrompt(prompt, sourceEl) {
+    var cleanPrompt = String(prompt || '').trim();
+    if (!cleanPrompt) return;
+    askAssistant(cleanPrompt, sourceEl || null);
+  }
+
+  function activateBoardAction(actionKey, board, sourceEl) {
+    activateBoardPrompt(boardActionPrompt(actionKey, board), sourceEl || null);
+  }
+
   function bindBoardPortalInteractions(portal) {
     if (!portal || portal.__boardPortalInteractionsBound) return;
     portal.__boardPortalInteractionsBound = true;
@@ -218,13 +228,19 @@
       var stateButton = target.closest('[data-board-state]');
       if (!stateButton || !row.contains(stateButton)) return;
       var nextState = String(stateButton.getAttribute('data-board-state') || '').trim().toLowerCase();
-      if (!nextState || state.activeBoard === nextState) return;
       event.preventDefault();
-      state.activeBoard = nextState;
-      animateCard('board-portal');
-      updateHistory();
-      renderPersonaView();
+      activateBoardState(nextState);
     });
+  }
+
+  function activateBoardState(nextState) {
+    nextState = String(nextState || '').trim().toLowerCase();
+    if (!nextState || state.activeBoard === nextState) return false;
+    state.activeBoard = nextState;
+    animateCard('board-portal');
+    updateHistory();
+    renderPersonaView();
+    return true;
   }
 
   function statusLabel(token) {
@@ -2913,6 +2929,10 @@
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", mode.state_id === state.activeBoard ? "true" : "false");
       button.innerHTML = '<span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id)) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, "")) + '</span></span>';
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        activateBoardState(mode.state_id);
+      });
       row.appendChild(button);
     });
     bindBoardStateInteractions(row);
@@ -2975,6 +2995,20 @@
       stateSpecific
     ].join("");
     bindBoardPortalInteractions(portal);
+    safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        activateBoardPrompt(button.getAttribute('data-board-prompt') || '', button);
+      });
+    });
+    safeArray(portal.querySelectorAll('[data-board-action]')).forEach(function (button) {
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        activateBoardAction(button.getAttribute('data-board-action') || '', getBoardPortal(), button);
+      });
+    });
     safeArray(portal.querySelectorAll('.snapshot-card')).forEach(function (card) {
       card.style.cursor = 'pointer';
       card.onclick = function () {

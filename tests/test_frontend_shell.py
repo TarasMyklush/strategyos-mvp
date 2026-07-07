@@ -1441,8 +1441,8 @@ def test_board_state_tabs_accept_clicks_from_nested_text_nodes():
         1,
     )
     harness_js = harness_js.replace(
-        "      renderPersonaView();",
-        "      if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
+        "    renderPersonaView();",
+        "    if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
         1,
     )
 
@@ -1554,6 +1554,150 @@ console.log(JSON.stringify({{ activeBoard: harness.state.activeBoard }}));
     result = json.loads(completed.stdout.strip())
     assert result["activeBoard"] == "live", (
         "Board state delegation must resolve text-node clicks through the parent element so Live selection works in production"
+    )
+
+
+def test_board_state_tabs_exact_selector_click_switches_stage():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveBoardStateSelectorHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { renderBoardStateTabs: renderBoardStateTabs, state: state };\n}\nmodule.exports = __executiveBoardStateSelectorHarness;\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        "    renderPersonaView();",
+        "    if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-board-state-selector-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+function makeButton() {{
+  return {{
+    tagName: 'BUTTON',
+    nodeType: 1,
+    attributes: {{}},
+    className: '',
+    innerHTML: '',
+    listeners: {{}},
+    setAttribute(name, value) {{ this.attributes[name] = String(value); }},
+    getAttribute(name) {{ return this.attributes[name] || null; }},
+    addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+    click() {{ if (this.listeners.click) this.listeners.click({{ preventDefault() {{}}, stopPropagation() {{}} }}); }},
+    closest(selector) {{ return selector === '[data-board-state]' ? this : null; }},
+  }};
+}}
+
+const row = {{
+  __boardStateInteractionsBound: false,
+  innerHTML: '',
+  buttons: [],
+  listeners: {{}},
+  addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+  appendChild(child) {{ this.buttons.push(child); return child; }},
+  contains(target) {{ return this.buttons.includes(target); }},
+  querySelector(selector) {{
+    const match = selector.match(/\\[data-board-state="([^"]+)"\\]/);
+    if (!match) return null;
+    return this.buttons.find((button) => button.getAttribute('data-board-state') === match[1]) || null;
+  }},
+}};
+
+const note = {{ textContent: '' }};
+
+global.window = {{
+  __BOARD_STATE_TEST_SUPPRESS_RENDER__: true,
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout() {{ return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  clearInterval() {{}},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  innerWidth: 1280,
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ assistant_public_context: {{}} }}) }};
+    if (id === 'board-state-row') return row;
+    if (id === 'board-state-note') return note;
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement(tag) {{ return tag === 'button' ? makeButton() : {{}}; }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+harness.state.latestPacket = {{
+  board_portal: {{
+    lifecycle_flow: [
+      {{ state_id: 'pre', label: 'Pre-board', detail: 'Prepare governed packet' }},
+      {{ state_id: 'live', label: 'Live', detail: 'Run the room inside approved material' }},
+      {{ state_id: 'closed', label: 'Closed', detail: 'Freeze memory after the room closes' }}
+    ],
+    presentation_state: 'pre',
+  }},
+}};
+harness.state.activeBoard = 'pre';
+harness.renderBoardStateTabs();
+const live = row.querySelector('[data-board-state="live"]');
+live.click();
+console.log(JSON.stringify({{ activeBoard: harness.state.activeBoard }}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_state_selector_click_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result["activeBoard"] == "live", (
+        "Board state selector buttons must switch the client lifecycle state when clicked through the exact data-board-state selector path"
     )
 
 
@@ -3348,6 +3492,135 @@ console.log(JSON.stringify({{ prepare, challenged }}));
     assert "prepare_board_pack" not in result["prepare"]
     assert result["challenged"].startswith("Help me close challenged cases before the board meeting.")
     assert "close_challenged_cases" not in result["challenged"]
+
+
+def test_board_portal_exact_selector_click_routes_action_and_prompt_to_hermes():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveBoardPortalHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        "  async function askAssistant(prompt, sourceChip) {",
+        "  async function askAssistant(prompt, sourceChip) {\n    if (window.__BOARD_PORTAL_TEST_CAPTURE__) { window.__BOARD_PORTAL_TEST_CAPTURE__.push({ prompt: String(prompt || ''), label: sourceChip ? String(sourceChip.textContent || '') : '' }); return; }",
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { bindBoardPortalInteractions: bindBoardPortalInteractions, state: state };\n}\nmodule.exports = __executiveBoardPortalHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-board-portal-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+function makeButton(attrs, text) {{
+  return {{
+    tagName: 'BUTTON',
+    nodeType: 1,
+    textContent: text,
+    attributes: Object.assign({{}}, attrs),
+    getAttribute(name) {{ return Object.prototype.hasOwnProperty.call(this.attributes, name) ? this.attributes[name] : null; }},
+    closest(selector) {{
+      if (selector === '[data-board-action]' && this.attributes['data-board-action']) return this;
+      if (selector === '[data-board-prompt]' && this.attributes['data-board-prompt']) return this;
+      return null;
+    }},
+  }};
+}}
+
+const actionButton = makeButton({{ 'data-board-action': 'prepare_board_pack' }}, 'Review: Prepare Board Pack');
+const promptButton = makeButton({{ 'data-board-prompt': 'Why is EBITDA 20 bps under plan?' }}, 'Why is EBITDA 20 bps under plan?');
+const portal = {{
+  __boardPortalInteractionsBound: false,
+  listeners: {{}},
+  addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+  contains(target) {{ return target === actionButton || target === promptButton; }},
+}};
+
+global.window = {{
+  __BOARD_PORTAL_TEST_CAPTURE__: [],
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout() {{ return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  clearInterval() {{}},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  innerWidth: 1280,
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ assistant_public_context: {{}} }}) }};
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{ return {{}}; }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+harness.state.latestPacket = {{
+  board_portal: {{
+    presentation_state: 'pre',
+    supplementary: {{ question_count: 3 }},
+  }},
+}};
+harness.state.activeBoard = 'pre';
+harness.bindBoardPortalInteractions(portal);
+portal.listeners.click({{ target: actionButton, preventDefault() {{}}, stopPropagation() {{}} }});
+portal.listeners.click({{ target: promptButton, preventDefault() {{}}, stopPropagation() {{}} }});
+console.log(JSON.stringify(window.__BOARD_PORTAL_TEST_CAPTURE__));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_portal_selector_click_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result[0]["prompt"].startswith("Help me prepare the board materials for the pre-board stage.")
+    assert result[0]["label"] == "Review: Prepare Board Pack"
+    assert result[1]["prompt"] == "Why is EBITDA 20 bps under plan?"
 
 
 def test_board_state_tabs_switch_client_state_without_refresh_reset():

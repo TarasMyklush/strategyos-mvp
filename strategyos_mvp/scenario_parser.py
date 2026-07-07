@@ -1380,9 +1380,25 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
     if not surfaced_reports:
         surfaced_reports = len(list(board.get("decks") or []))
 
-    if "prepare the board pack" in norm or (
-        "board pack" in norm and any(token in norm for token in ("ceo review", "evidence missing", "what should i do next"))
-    ):
+    board_prep_prompt = (
+        "prepare the board pack" in norm
+        or "prepare board pack" in norm
+        or "prepare for the board meeting" in norm
+        or "prepare for the board" in norm
+        or "board prep" in norm
+        or (
+            "board pack" in norm
+            and any(
+                token in norm
+                for token in ("ceo review", "evidence missing", "what should i do next")
+            )
+        )
+        or (
+            ("board meeting" in norm or "board" in norm)
+            and any(token in norm for token in ("prepare", "prep", "ceo review", "evidence"))
+        )
+    )
+    if board_prep_prompt:
         return ScenarioResult(
             scenario_id="public_exec_board_pack_review",
             scenario_label="Executive Surface — Board Pack Review",
