@@ -4581,3 +4581,53 @@ def test_switch_view_reasserts_board_tab_ui_for_knowledge():
     assert "syncBoardStateTabUI(resolveBoardState())" in fn_body, (
         "switchView must call syncBoardStateTabUI after switching to knowledge view"
     )
+
+
+def test_render_board_portal_reasserts_tab_ui_after_innerhtml():
+    """P0-12: renderBoardPortal must call syncBoardStateTabUI after portal.innerHTML
+    replacement, AND schedule a post-paint re-assert via requestAnimationFrame.
+
+    The innerHTML replacement triggers CSSOM recalc which can discard className-based
+    styling on tab buttons outside the portal. The synchronous sync is the first guard;
+    the rAF guard catches Chrome CSSOM recalc during paint (observed on Chrome 127+).
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    fn_start = executive_js.index("function renderBoardPortal()")
+    fn_end = executive_js.index("function assistantNameForState", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+    assert "syncBoardStateTabUI(resolveBoardState())" in fn_body, (
+        "renderBoardPortal must call syncBoardStateTabUI after innerHTML replacement"
+    )
+    assert "requestAnimationFrame" in fn_body, (
+        "renderBoardPortal must have rAF guard for post-paint tab UI re-assert"
+    )
+
+
+def test_switch_view_knowledge_has_raf_fallthrough():
+    """P0-12: switchView('knowledge') must have a requestAnimationFrame fallthrough
+    in addition to the synchronous syncBoardStateTabUI call. The hidden-to-visible
+    CSSOM recalc in Chrome 127+ can discard inline style guards during paint.
+
+    This mirrors the pattern in renderBoardPortal and activateBoardState — the
+    rAF callback fires after the paint cycle, at which point the browser's CSSOM
+    has stabilized and className/inline-style/data-attribute guards will stick.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    fn_start = executive_js.index("function switchView(view)")
+    fn_end = executive_js.index("function animateCard", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+    # Must have the synchronous re-assert (already there from P0-11)
+    assert "syncBoardStateTabUI(resolveBoardState())" in fn_body, (
+        "switchView must call syncBoardStateTabUI after switching to knowledge view"
+    )
+    # Must have the rAF guard (P0-12 addition)
+    assert 'state.activeView === "knowledge"' in fn_body, (
+        "switchView must contain knowledge-view guard"
+    )
+    # Verify rAF fallthrough pattern exists — check for nested requestAnimationFrame call
+    knowledge_guard_start = fn_body.index('state.activeView === "knowledge"') if 'state.activeView === "knowledge"' in fn_body else -1
+    assert knowledge_guard_start >= 0, "Must contain knowledge guard block"
+    knowledge_block = fn_body[knowledge_guard_start:]
+    assert "requestAnimationFrame" in knowledge_block[:300], (
+        "switchView knowledge guard must include requestAnimationFrame fallthrough"
+    )

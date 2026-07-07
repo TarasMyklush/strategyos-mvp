@@ -641,6 +641,15 @@
     // and data attributes as triple-redundant fallbacks for this edge case.
     if (state.activeView === "knowledge") {
       syncBoardStateTabUI(resolveBoardState());
+      // Post-paint re-sync: the hidden→visible CSSOM recalc can fire during
+      // paint and discard inline style attributes. rAF bypasses this window.
+      if (typeof window.requestAnimationFrame === 'function') {
+        (function (snapshot) {
+          window.requestAnimationFrame(function () {
+            syncBoardStateTabUI(snapshot);
+          });
+        })(resolveBoardState());
+      }
     }
   }
 
@@ -3165,8 +3174,17 @@
     // Post-innerHTML re-sync: portal.innerHTML replacement triggers CSSOM
     // recalc which can discard className and inline style attributes on
     // tab buttons outside the portal. Re-assert the intended tab state
-    // immediately after the layout is invalidated.
+    // immediately after the layout is invalidated, then again after the
+    // paint cycle (rAF) so that any Chrome CSSOM recalc that runs during
+    // paint does not discard the triple-redundant style guards set below.
     syncBoardStateTabUI(resolveBoardState());
+    if (typeof window.requestAnimationFrame === 'function') {
+      (function (snapshot) {
+        window.requestAnimationFrame(function () {
+          syncBoardStateTabUI(snapshot);
+        });
+      })(resolveBoardState());
+    }
     bindBoardPortalInteractions(portal);
     safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
       button.addEventListener('click', function (event) {
