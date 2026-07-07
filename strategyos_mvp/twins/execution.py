@@ -12,7 +12,7 @@ from strategyos_mvp.config import StrategyOSConfig, load_config
 from . import memory as memory_module
 from . import persona as persona_module
 from . import resolution as resolution_module
-from .orchestration import CycleScheduler, TriggerEngine
+from .orchestration import CycleHistory, CycleScheduler, TriggerEngine
 from .runtime import TwinRuntime
 from .store import TwinRepositories, build_app_repositories
 
@@ -27,6 +27,7 @@ def submit_scheduled_cycle(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
+    repo_set = repositories or build_app_repositories()
     normalized_cycle = _normalize_cycle_type(cycle_type)
     if not active_config.twins_enabled:
         return _disabled_execution_response(
@@ -43,15 +44,29 @@ def submit_scheduled_cycle(
     if active_config.run_execution_mode == "hatchet":
         from strategyos_mvp.hatchet_runtime import enqueue_twin_cycle
 
+        execution_id = f"cycle-{uuid4().hex[:12]}"
+        repo_set.execution.save({
+            "execution_id": execution_id,
+            "execution_type": "scheduled_cycle",
+            "cycle_type": normalized_cycle,
+            "idempotency_key": idempotency_key,
+            "status": "queued",
+            "execution_mode": active_config.run_execution_mode,
+            "started_at": datetime.now(UTC).isoformat(),
+            "trigger": "scheduler",
+        })
+        queue_ref = enqueue_twin_cycle({"cycle_type": normalized_cycle})
+        repo_set.execution.update(execution_id, {"result": queue_ref})
         return {
             "status": "queued",
             "execution_mode": "hatchet",
             "cycle_type": normalized_cycle,
-            **enqueue_twin_cycle({"cycle_type": normalized_cycle}),
+            "execution_id": execution_id,
+            **queue_ref,
         }
     return execute_scheduled_cycle_job(
         cycle_type=normalized_cycle,
-        repositories=repositories,
+        repositories=repo_set,
         config=active_config,
         idempotency_key=idempotency_key,
     )
@@ -65,6 +80,7 @@ def submit_event_execution(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
+    repo_set = repositories or build_app_repositories()
     if not active_config.twins_enabled:
         return _disabled_execution_response(
             execution_type="event_execution",
@@ -78,14 +94,28 @@ def submit_event_execution(
     if active_config.run_execution_mode == "hatchet":
         from strategyos_mvp.hatchet_runtime import enqueue_twin_events
 
+        execution_id = f"event-{uuid4().hex[:12]}"
+        repo_set.execution.save({
+            "execution_id": execution_id,
+            "execution_type": "event_execution",
+            "idempotency_key": idempotency_key,
+            "status": "queued",
+            "execution_mode": active_config.run_execution_mode,
+            "started_at": datetime.now(UTC).isoformat(),
+            "trigger": "live_events",
+            "max_stale_hours": max_stale_hours,
+        })
+        queue_ref = enqueue_twin_events({"max_stale_hours": max_stale_hours})
+        repo_set.execution.update(execution_id, {"result": queue_ref})
         return {
             "status": "queued",
             "execution_mode": "hatchet",
-            **enqueue_twin_events({"max_stale_hours": max_stale_hours}),
+            "execution_id": execution_id,
+            **queue_ref,
         }
     return execute_event_execution_job(
         max_stale_hours=max_stale_hours,
-        repositories=repositories,
+        repositories=repo_set,
         config=active_config,
         idempotency_key=idempotency_key,
     )
@@ -117,7 +147,10 @@ def execute_scheduled_cycle_job(
         "trigger": "scheduler",
     })
     try:
-        scheduler = CycleScheduler(_build_runtime_registry(repo_set))
+        scheduler = CycleScheduler(
+            _build_runtime_registry(repo_set),
+            history=CycleHistory(repo_set.cycle_history),
+        )
         runner = {
             "daily_standup": scheduler.run_daily_standup,
             "weekly_review": scheduler.run_weekly_review,

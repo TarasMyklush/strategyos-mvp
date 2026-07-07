@@ -8,9 +8,11 @@ graph, health endpoints).
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from typing import Any
 
 from strategyos_mvp.config import load_config
+from strategyos_mvp.twins.protocol import validate_message
 from strategyos_mvp.twins.store import TwinRepositories, build_app_repositories
 from strategyos_mvp.twins.protocol import InterTwinMessage
 
@@ -91,15 +93,32 @@ def query_evidence(query: str, limit: int = 5) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def send_message(msg: InterTwinMessage) -> None:
-    """Enqueue an InterTwinMessage for delivery.
+def send_message(
+    msg: InterTwinMessage,
+    *,
+    repositories: TwinRepositories | None = None,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Persist an InterTwinMessage through the configured delivery path."""
+    errors = validate_message(msg)
+    if errors:
+        raise ValueError(f"Invalid inter-twin message: {errors}")
 
-    Currently a stub that logs the message to the console. In Phase 1+
-    this will write to a message queue / database for async delivery.
+    repo_set = repositories or build_app_repositories()
+    envelope = asdict(msg)
+    if payload:
+        envelope.update(payload)
+    envelope.setdefault("message_id", msg.message_id)
+    envelope.setdefault("sender_role", msg.sender_role)
+    envelope.setdefault("recipient_role", msg.recipient_role)
+    envelope.setdefault("message_type", msg.message_type)
+    envelope.setdefault("priority", msg.priority)
+    envelope.setdefault("subject", msg.subject)
+    envelope.setdefault("body", msg.body)
+    envelope.setdefault("created_at", msg.created_at)
+    envelope["status"] = envelope.get("status") or "delivered"
+    repo_set.inboxes.append(msg.recipient_role, envelope)
 
-    Args:
-        msg: The fully-constructed and validated message to send.
-    """
     logger.info(
         "TWIN MESSAGE [%s] %s → %s | %s | %s",
         msg.priority.upper(),
@@ -113,6 +132,7 @@ def send_message(msg: InterTwinMessage) -> None:
         f"{msg.sender_role} → {msg.recipient_role} "
         f"[{msg.message_type}] {msg.subject}"
     )
+    return envelope
 
 
 # ---------------------------------------------------------------------------

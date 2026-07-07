@@ -438,6 +438,11 @@ class KPIResolutionEngine:
                 f"Requested by {requestor_role} twin."
             ),
             evidence_citations=(),
+            metadata={
+                "kpi_node_id": kpi_node_id,
+                "gap": dict(gap),
+                "requestor_role": requestor_role,
+            },
             deadline_seconds=3600,
             created_at=datetime.now(timezone.utc).isoformat(),
             status="pending",

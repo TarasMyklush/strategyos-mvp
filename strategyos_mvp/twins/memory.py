@@ -26,7 +26,7 @@ class TwinState:
         twin_id: Unique identifier for this twin instance.
         role: The twin's role (must match a key in TWIN_CATALOG).
         active_investigations: Mapping of investigation_id → investigation context.
-        pending_requests: Mapping of message_id → status summary.
+        pending_requests: Mapping of request_message_id → lifecycle record.
         conversation_history: Chronological list of recent message dicts.
         working_memory: Free-form key-value scratchpad for the twin.
         last_wake_at: ISO-8601 timestamp of the last wake cycle, or *None*.
@@ -36,7 +36,7 @@ class TwinState:
     twin_id: str
     role: str
     active_investigations: dict[str, Any] = field(default_factory=dict)
-    pending_requests: dict[str, str] = field(default_factory=dict)
+    pending_requests: dict[str, Any] = field(default_factory=dict)
     conversation_history: list[dict[str, Any]] = field(default_factory=list)
     working_memory: dict[str, Any] = field(default_factory=dict)
     last_wake_at: str | None = None

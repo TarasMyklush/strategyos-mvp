@@ -7,7 +7,7 @@ governance gates, board packet generation, and cycle audit history.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,6 +15,7 @@ from strategyos_mvp.twins.memory import add_investigation
 from strategyos_mvp.twins.persona import lookup_persona
 from strategyos_mvp.twins.resolution import KPI_TREE, KPIResolutionEngine
 from strategyos_mvp.twins.runtime import TwinRuntime
+from strategyos_mvp.twins.store import CycleHistoryRepository, GovernanceRepository
 
 
 # ===================================================================
@@ -32,9 +33,15 @@ class CycleScheduler:
         twins: Mapping of role → :class:`TwinRuntime` instance.
     """
 
-    def __init__(self, twins: dict[str, TwinRuntime]) -> None:
+    def __init__(
+        self,
+        twins: dict[str, TwinRuntime],
+        *,
+        history: "CycleHistory | None" = None,
+    ) -> None:
         self._twins = dict(twins)
         self._scheduled_cycles: dict[str, int] = {}
+        self._history = history
 
     # ------------------------------------------------------------------
     # Review cycles
@@ -59,6 +66,7 @@ class CycleScheduler:
                 "actions": summary.get("actions"),
                 "errors": summary.get("errors"),
             }
+        self._record_cycle("daily_standup", results)
         return results
 
     def run_weekly_review(self) -> dict[str, Any]:
@@ -94,6 +102,7 @@ class CycleScheduler:
                 "errors": summary.get("errors"),
             }
 
+        self._record_cycle("weekly_review", findings)
         return findings
 
     def run_monthly_board(self) -> dict[str, Any]:
@@ -103,7 +112,9 @@ class CycleScheduler:
         Returns:
             A structured board packet (see :func:`generate_board_packet`).
         """
-        return generate_board_packet(self)
+        packet = generate_board_packet(self)
+        self._record_cycle("monthly_board", packet)
+        return packet
 
     # ------------------------------------------------------------------
     # Scheduling
@@ -117,6 +128,24 @@ class CycleScheduler:
             interval_hours: How often the cycle should run.
         """
         self._scheduled_cycles[cycle_type] = interval_hours
+
+    def _record_cycle(self, cycle_type: str, payload: dict[str, Any]) -> None:
+        if self._history is None:
+            return
+        findings = []
+        if all(isinstance(value, dict) for value in payload.values()):
+            findings = [dict(item) for item in payload.values()]
+        record = CycleRecord(
+            cycle_id=f"{cycle_type}-{uuid.uuid4().hex[:12]}",
+            cycle_type=cycle_type,
+            started_at=datetime.now(timezone.utc).isoformat(),
+            completed_at=datetime.now(timezone.utc).isoformat(),
+            participants=sorted(self._twins.keys()),
+            findings=findings,
+            decisions=[],
+            status="completed",
+        )
+        self._history.record_cycle(record)
 
 
 # ===================================================================
@@ -355,9 +384,13 @@ class GovernanceEngine:
     """
 
     def __init__(
-        self, gates: list[GovernanceGate] | None = None
+        self,
+        gates: list[GovernanceGate] | None = None,
+        *,
+        repository: GovernanceRepository | None = None,
     ) -> None:
         self._gates = list(gates) if gates else list(DEFAULT_GATES)
+        self._repository = repository
         self._audit_log: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
@@ -451,12 +484,17 @@ class GovernanceEngine:
             "approved": approved,
             "approver": approver,
         }
-        self._audit_log.append(record)
+        if self._repository is not None:
+            self._repository.save_audit_entry(record)
+        else:
+            self._audit_log.append(record)
 
     def get_audit_log(
         self, limit: int = 50
     ) -> list[dict[str, Any]]:
         """Return the most recent audit log entries."""
+        if self._repository is not None:
+            return self._repository.list_audit_entries(limit=limit)
         return list(self._audit_log[-limit:])
 
 
@@ -581,7 +619,8 @@ class CycleHistory:
     stores records in memory.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, repository: CycleHistoryRepository | None = None) -> None:
+        self._repository = repository
         self._records: dict[str, CycleRecord] = {}
 
     def record_cycle(self, record: CycleRecord) -> None:
@@ -590,6 +629,8 @@ class CycleHistory:
         Args:
             record: The :class:`CycleRecord` to store.
         """
+        if self._repository is not None:
+            self._repository.save(asdict(record))
         self._records[record.cycle_id] = record
 
     def get_recent_cycles(
@@ -604,6 +645,12 @@ class CycleHistory:
         Returns:
             A list of :class:`CycleRecord` instances.
         """
+        if self._repository is not None:
+            repo_records = [
+                CycleRecord(**record)
+                for record in self._repository.list(cycle_type=cycle_type, limit=limit)
+            ]
+            return repo_records
         records: list[CycleRecord] = list(self._records.values())
         if cycle_type:
             records = [r for r in records if r.cycle_type == cycle_type]
@@ -619,6 +666,11 @@ class CycleHistory:
         Returns:
             The :class:`CycleRecord` or *None*.
         """
+        if self._repository is not None:
+            record = self._repository.load(cycle_id)
+            if record is None:
+                return None
+            return CycleRecord(**record)
         return self._records.get(cycle_id)
 
     def to_dict(self) -> dict[str, Any]:

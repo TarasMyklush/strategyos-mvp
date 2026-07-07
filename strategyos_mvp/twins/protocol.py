@@ -17,6 +17,7 @@ from typing import Any, Literal
 
 MessageType = Literal[
     "data_request",
+    "response",
     "escalation",
     "approval",
     "notification",
@@ -26,6 +27,14 @@ MessageType = Literal[
 Priority = Literal["low", "normal", "high", "critical"]
 
 Confidence = Literal["high", "medium", "low", "unable"]
+
+RequestStatus = Literal[
+    "pending",
+    "acknowledged",
+    "fulfilled",
+    "failed",
+    "expired",
+]
 
 MessageStatus = Literal["pending", "delivered", "responded", "escalated", "expired"]
 
@@ -62,6 +71,7 @@ class InterTwinMessage:
     body: str
     evidence_citations: tuple[str, ...] = ()
     parent_message_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     deadline_seconds: int = 3600
     created_at: str = ""
     status: MessageStatus = "pending"
@@ -94,12 +104,34 @@ class TwinResponse:
     created_at: str = ""
 
 
+@dataclass(frozen=True)
+class RequestLifecycle:
+    """Requester-side lifecycle state for an inter-twin request."""
+
+    request_message_id: str
+    requester_role: str
+    responder_role: str
+    status: RequestStatus
+    created_at: str
+    updated_at: str
+    response_message_id: str | None = None
+    acknowledged_at: str | None = None
+    fulfilled_at: str | None = None
+    failed_at: str | None = None
+    expired_at: str | None = None
+    subject: str = ""
+    data_payload: dict[str, Any] = field(default_factory=dict)
+    gaps_remaining: tuple[str, ...] = ()
+    evidence_citations: tuple[str, ...] = ()
+
+
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
 _VALID_MESSAGE_TYPES: frozenset[str] = frozenset({
     "data_request",
+    "response",
     "escalation",
     "approval",
     "notification",

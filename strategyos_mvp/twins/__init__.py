@@ -24,6 +24,7 @@ from strategyos_mvp.twins.persona import (
 )
 from strategyos_mvp.twins.protocol import (
     InterTwinMessage,
+    RequestLifecycle,
     TwinResponse,
     validate_message,
     validate_response,
@@ -96,6 +97,7 @@ __all__ = [
     "REVIEWER_DATA_OWNERSHIP",
     # Protocol
     "InterTwinMessage",
+    "RequestLifecycle",
     "TwinResponse",
     "validate_message",
     "validate_response",

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import copy
+import fcntl
 import json
 import os
 import tempfile
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -53,6 +55,20 @@ class _JsonRepository:
             return copy.deepcopy(default)
         return json.loads(path.read_text(encoding="utf-8"))
 
+    def _lock_path(self, path: Path) -> Path:
+        return path.parent / f".{path.name}.lock"
+
+    @contextmanager
+    def _file_lock(self, path: Path):
+        lock_path = self._lock_path(path)
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
     def _write_file(self, path: Path, data: Any) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = path.parent / f".{path.name}.{uuid4().hex}.tmp"
@@ -61,6 +77,13 @@ class _JsonRepository:
             encoding="utf-8",
         )
         tmp_path.replace(path)
+
+    def _mutate_file(self, path: Path, default: Any, mutator: Any) -> Any:
+        with self._file_lock(path):
+            current = self._read_file(path, default)
+            updated = mutator(copy.deepcopy(current))
+            self._write_file(path, updated)
+            return copy.deepcopy(updated)
 
 
 class KpiRepository(_JsonRepository):
@@ -109,9 +132,11 @@ class TwinInboxRepository(_JsonRepository):
         return copy.deepcopy(inboxes.get(role, []))
 
     def save(self, role: str, messages: list[dict[str, Any]]) -> None:
-        inboxes = self._read_file(self._path, {})
-        inboxes[role] = _jsonable(messages)
-        self._write_file(self._path, inboxes)
+        def _save(inboxes: dict[str, Any]) -> dict[str, Any]:
+            inboxes[role] = _jsonable(messages)
+            return inboxes
+
+        self._mutate_file(self._path, {}, _save)
 
     def list(self, role: str | None = None) -> Any:
         inboxes = self._read_file(self._path, {})
@@ -120,25 +145,44 @@ class TwinInboxRepository(_JsonRepository):
         return copy.deepcopy(inboxes.get(role, []))
 
     def append(self, role: str, message: dict[str, Any]) -> None:
-        messages = self.load(role)
-        messages.append(copy.deepcopy(message))
-        self.save(role, messages)
+        def _append(inboxes: dict[str, Any]) -> dict[str, Any]:
+            messages = list(inboxes.get(role, []))
+            messages.append(copy.deepcopy(message))
+            inboxes[role] = _jsonable(messages)
+            return inboxes
+
+        self._mutate_file(self._path, {}, _append)
 
     def update(self, role: str, message_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-        messages = self.load(role)
-        for index, message in enumerate(messages):
-            if message.get("message_id") == message_id:
-                updated = copy.deepcopy(message)
-                updated.update(payload)
-                messages[index] = updated
-                self.save(role, messages)
-                return updated
-        return None
+        updated_message: dict[str, Any] | None = None
+
+        def _update(inboxes: dict[str, Any]) -> dict[str, Any]:
+            nonlocal updated_message
+            messages = list(inboxes.get(role, []))
+            for index, message in enumerate(messages):
+                if message.get("message_id") == message_id:
+                    updated = copy.deepcopy(message)
+                    updated.update(payload)
+                    messages[index] = updated
+                    updated_message = copy.deepcopy(updated)
+                    break
+            inboxes[role] = _jsonable(messages)
+            return inboxes
+
+        self._mutate_file(self._path, {}, _update)
+        return updated_message
 
     def consume(self, role: str) -> list[dict[str, Any]]:
-        messages = self.load(role)
-        self.save(role, [])
-        return messages
+        consumed: list[dict[str, Any]] = []
+
+        def _consume(inboxes: dict[str, Any]) -> dict[str, Any]:
+            nonlocal consumed
+            consumed = copy.deepcopy(inboxes.get(role, []))
+            inboxes[role] = []
+            return inboxes
+
+        self._mutate_file(self._path, {}, _consume)
+        return consumed
 
     def clear(self) -> None:
         if self._path.exists():
@@ -215,17 +259,79 @@ class TwinStateRepository(_JsonRepository):
 
     def save(self, role: str, state: Any) -> dict[str, Any]:
         payload = _jsonable(state)
-        self._write_file(self._role_path(role), payload)
+        with self._file_lock(self._role_path(role)):
+            self._write_file(self._role_path(role), payload)
         return copy.deepcopy(payload)
 
     def list(self) -> list[dict[str, Any]]:
         return [self._read_file(path, {}) for path in sorted(self.base_path.glob("*.json"))]
 
     def update(self, role: str, payload: dict[str, Any]) -> dict[str, Any]:
-        state = self.load(role) or {}
-        state.update(copy.deepcopy(payload))
-        self.save(role, state)
-        return state
+        def _update(state: dict[str, Any]) -> dict[str, Any]:
+            state.update(copy.deepcopy(payload))
+            return state
+
+        updated = self._mutate_file(self._role_path(role), {}, _update)
+        return copy.deepcopy(updated)
+
+
+class TwinRequestRepository(_JsonRepository):
+    def __init__(self, base_path: Path) -> None:
+        super().__init__(Path(base_path) / "requests")
+
+    def _role_path(self, role: str) -> Path:
+        return self.base_path / f"{role}.json"
+
+    def save(self, role: str, record: dict[str, Any]) -> dict[str, Any]:
+        request_id = str(record.get("request_message_id") or "")
+
+        def _save(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            for index, existing in enumerate(records):
+                if str(existing.get("request_message_id") or "") == request_id:
+                    records[index] = copy.deepcopy(record)
+                    return records
+            records.append(copy.deepcopy(record))
+            return records
+
+        updated = self._mutate_file(self._role_path(role), [], _save)
+        for item in updated:
+            if str(item.get("request_message_id") or "") == request_id:
+                return copy.deepcopy(item)
+        return copy.deepcopy(record)
+
+    def load(self, role: str, request_message_id: str) -> dict[str, Any] | None:
+        for record in self._read_file(self._role_path(role), []):
+            if str(record.get("request_message_id") or "") == request_message_id:
+                return copy.deepcopy(record)
+        return None
+
+    def update(self, role: str, request_message_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        current = self.load(role, request_message_id)
+        if current is None:
+            return None
+        updated = copy.deepcopy(current)
+        updated.update(copy.deepcopy(payload))
+        return self.save(role, updated)
+
+    def list(
+        self,
+        role: str,
+        status: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        records = [
+            copy.deepcopy(record)
+            for record in self._read_file(self._role_path(role), [])
+            if status is None or record.get("status") == status
+        ]
+        records.sort(key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""), reverse=True)
+        if limit is not None:
+            return records[:limit]
+        return records
+
+    def clear(self) -> None:
+        for path in self.base_path.glob("*.json"):
+            path.unlink()
 
     def clear(self) -> None:
         for path in self.base_path.glob("*.json"):
@@ -237,11 +343,14 @@ class GovernanceRepository(_JsonRepository):
         super().__init__(Path(base_path) / "governance")
         self._decisions_path = self.base_path / "decisions.json"
         self._routing_path = self.base_path / "routing.json"
+        self._audit_path = self.base_path / "audit.json"
 
     def _append_record(self, path: Path, record: dict[str, Any]) -> dict[str, Any]:
-        records = self._read_file(path, [])
-        records.append(copy.deepcopy(record))
-        self._write_file(path, records)
+        def _append(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            records.append(copy.deepcopy(record))
+            return records
+
+        self._mutate_file(path, [], _append)
         return copy.deepcopy(record)
 
     def save_decision(self, record: dict[str, Any]) -> dict[str, Any]:
@@ -249,6 +358,9 @@ class GovernanceRepository(_JsonRepository):
 
     def save_routing_event(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._append_record(self._routing_path, record)
+
+    def save_audit_entry(self, record: dict[str, Any]) -> dict[str, Any]:
+        return self._append_record(self._audit_path, record)
 
     def find_decision(
         self,
@@ -312,6 +424,19 @@ class GovernanceRepository(_JsonRepository):
         filtered.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
         if limit is not None:
             return filtered[:limit]
+        return filtered
+
+    def list_audit_entries(
+        self, role: str | None = None, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        records = self._read_file(self._audit_path, [])
+        filtered = [
+            copy.deepcopy(record)
+            for record in records
+            if role is None or record.get("role") == role
+        ]
+        if limit is not None:
+            return filtered[-limit:]
         return filtered
 
     def history(self, role: str, limit: int = 20) -> list[dict[str, Any]]:
@@ -397,9 +522,57 @@ class GovernanceRepository(_JsonRepository):
             })
 
     def clear(self) -> None:
-        for path in (self._decisions_path, self._routing_path):
+        for path in (self._decisions_path, self._routing_path, self._audit_path):
             if path.exists():
                 path.unlink()
+
+
+class CycleHistoryRepository(_JsonRepository):
+    def __init__(self, base_path: Path) -> None:
+        super().__init__(Path(base_path) / "cycles")
+        self._path = self.base_path / "history.json"
+
+    def save(self, record: dict[str, Any]) -> dict[str, Any]:
+        cycle_id = str(record.get("cycle_id") or "")
+
+        def _save(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            for index, existing in enumerate(records):
+                if str(existing.get("cycle_id") or "") == cycle_id:
+                    records[index] = copy.deepcopy(record)
+                    return records
+            records.append(copy.deepcopy(record))
+            return records
+
+        updated = self._mutate_file(self._path, [], _save)
+        for item in updated:
+            if str(item.get("cycle_id") or "") == cycle_id:
+                return copy.deepcopy(item)
+        return copy.deepcopy(record)
+
+    def load(self, cycle_id: str) -> dict[str, Any] | None:
+        for record in self._read_file(self._path, []):
+            if str(record.get("cycle_id") or "") == cycle_id:
+                return copy.deepcopy(record)
+        return None
+
+    def list(
+        self,
+        cycle_type: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        records = [
+            copy.deepcopy(record)
+            for record in self._read_file(self._path, [])
+            if cycle_type is None or record.get("cycle_type") == cycle_type
+        ]
+        records.sort(key=lambda item: str(item.get("started_at") or ""), reverse=True)
+        if limit is not None:
+            return records[:limit]
+        return records
+
+    def clear(self) -> None:
+        if self._path.exists():
+            self._path.unlink()
 
 
 class ReasoningTraceRepository(_JsonRepository):
@@ -408,15 +581,17 @@ class ReasoningTraceRepository(_JsonRepository):
         self._path = self.base_path / "traces.json"
 
     def save(self, record: dict[str, Any]) -> dict[str, Any]:
-        records = self._read_file(self._path, [])
         trace_id = str(record.get("trace_id") or "")
-        for index, existing in enumerate(records):
-            if str(existing.get("trace_id") or "") == trace_id:
-                records[index] = copy.deepcopy(record)
-                self._write_file(self._path, records)
-                return copy.deepcopy(record)
-        records.append(copy.deepcopy(record))
-        self._write_file(self._path, records)
+
+        def _save(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            for index, existing in enumerate(records):
+                if str(existing.get("trace_id") or "") == trace_id:
+                    records[index] = copy.deepcopy(record)
+                    return records
+            records.append(copy.deepcopy(record))
+            return records
+
+        self._mutate_file(self._path, [], _save)
         return copy.deepcopy(record)
 
     def load(self, trace_id: str) -> dict[str, Any] | None:
@@ -463,15 +638,17 @@ class ExecutionLogRepository(_JsonRepository):
         self._path = self.base_path / "logs.json"
 
     def save(self, record: dict[str, Any]) -> dict[str, Any]:
-        records = self._read_file(self._path, [])
         execution_id = str(record.get("execution_id") or "")
-        for index, existing in enumerate(records):
-            if str(existing.get("execution_id") or "") == execution_id:
-                records[index] = copy.deepcopy(record)
-                self._write_file(self._path, records)
-                return copy.deepcopy(record)
-        records.append(copy.deepcopy(record))
-        self._write_file(self._path, records)
+
+        def _save(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            for index, existing in enumerate(records):
+                if str(existing.get("execution_id") or "") == execution_id:
+                    records[index] = copy.deepcopy(record)
+                    return records
+            records.append(copy.deepcopy(record))
+            return records
+
+        self._mutate_file(self._path, [], _save)
         return copy.deepcopy(record)
 
     def load(self, execution_id: str) -> dict[str, Any] | None:
@@ -530,9 +707,11 @@ class ExecutionLogRepository(_JsonRepository):
 class TwinRepositories:
     kpis: KpiRepository
     inboxes: TwinInboxRepository
+    requests: TwinRequestRepository
     investigations: InvestigationRepository
     states: TwinStateRepository
     governance: GovernanceRepository
+    cycle_history: CycleHistoryRepository
     reasoning: ReasoningTraceRepository
     execution: ExecutionLogRepository
 
@@ -542,9 +721,11 @@ def build_repositories(base_path: Path | str) -> TwinRepositories:
     return TwinRepositories(
         kpis=KpiRepository(root),
         inboxes=TwinInboxRepository(root),
+        requests=TwinRequestRepository(root),
         investigations=InvestigationRepository(root),
         states=TwinStateRepository(root),
         governance=GovernanceRepository(root),
+        cycle_history=CycleHistoryRepository(root),
         reasoning=ReasoningTraceRepository(root),
         execution=ExecutionLogRepository(root),
     )

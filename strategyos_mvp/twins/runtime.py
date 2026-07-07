@@ -7,6 +7,7 @@ lifecycles.
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -20,9 +21,12 @@ from strategyos_mvp.twins.memory import (
 from strategyos_mvp.twins.persona import TwinPersona, lookup_persona
 from strategyos_mvp.twins.protocol import (
     InterTwinMessage,
+    RequestLifecycle,
+    TwinResponse,
     check_escalation,
     escalate_message,
     get_escalation_timeout,
+    validate_response,
 )
 from strategyos_mvp.twins.resolution import KPIResolutionEngine, KPI_TREE
 from strategyos_mvp.twins.reasoning import (
@@ -31,11 +35,7 @@ from strategyos_mvp.twins.reasoning import (
 )
 from strategyos_mvp.twins.store import TwinRepositories, build_runtime_repositories
 from strategyos_mvp.twins.strategyos_data import build_surface_payload, compose_investigation_payload
-from strategyos_mvp.twins.tools import (
-    escalate_to_human,
-    query_kpi,
-    send_message,
-)
+from strategyos_mvp.twins.tools import escalate_to_human, send_message
 
 # ---------------------------------------------------------------------------
 # Repository-backed message store
@@ -129,6 +129,220 @@ class TwinRuntime:
         if record is not None:
             self._repositories.investigations.save(self.state.role, record)
 
+    def _timestamp(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def _normalize_request_record(
+        self,
+        request_message_id: str,
+        payload: Any,
+        *,
+        requester_role: str | None = None,
+    ) -> dict[str, Any]:
+        if isinstance(payload, dict):
+            normalized = dict(payload)
+            normalized.setdefault("request_message_id", request_message_id)
+            normalized.setdefault("requester_role", requester_role or self.persona.role)
+            normalized.setdefault("responder_role", "unknown")
+            normalized.setdefault("status", "pending")
+            normalized.setdefault("created_at", self._timestamp())
+            normalized.setdefault("updated_at", normalized.get("created_at") or self._timestamp())
+            normalized.setdefault("response_message_id", None)
+            normalized.setdefault("acknowledged_at", None)
+            normalized.setdefault("fulfilled_at", None)
+            normalized.setdefault("failed_at", None)
+            normalized.setdefault("expired_at", None)
+            normalized.setdefault("subject", "")
+            normalized.setdefault("data_payload", {})
+            normalized.setdefault("gaps_remaining", [])
+            normalized.setdefault("evidence_citations", [])
+            return normalized
+        return asdict(
+            RequestLifecycle(
+                request_message_id=request_message_id,
+                requester_role=requester_role or self.persona.role,
+                responder_role="unknown",
+                status="pending",
+                created_at=self._timestamp(),
+                updated_at=self._timestamp(),
+                subject=str(payload or ""),
+            )
+        )
+
+    def _record_pending_request(self, msg: InterTwinMessage) -> dict[str, Any]:
+        created_at = msg.created_at or self._timestamp()
+        record = asdict(
+            RequestLifecycle(
+                request_message_id=msg.message_id,
+                requester_role=msg.sender_role,
+                responder_role=msg.recipient_role,
+                status="pending",
+                created_at=created_at,
+                updated_at=created_at,
+                subject=msg.subject,
+                evidence_citations=tuple(msg.evidence_citations),
+            )
+        )
+        self.state.pending_requests[msg.message_id] = record
+        self._repositories.requests.save(self.persona.role, record)
+        return record
+
+    def _update_request_record(
+        self,
+        request_message_id: str,
+        payload: dict[str, Any],
+        *,
+        role: str | None = None,
+    ) -> dict[str, Any] | None:
+        target_role = role or self.persona.role
+        state_payload = self.state.pending_requests.get(request_message_id)
+        if target_role != self.persona.role:
+            stored_state = self._repositories.states.load(target_role) or {}
+            state_pending = dict(stored_state.get("pending_requests") or {})
+            state_payload = state_pending.get(request_message_id)
+        if state_payload is None:
+            state_payload = self._repositories.requests.load(target_role, request_message_id)
+        if state_payload is None:
+            return None
+
+        record = self._normalize_request_record(
+            request_message_id,
+            state_payload,
+            requester_role=target_role,
+        )
+        record.update(payload)
+        record["updated_at"] = payload.get("updated_at") or self._timestamp()
+        self._repositories.requests.save(target_role, record)
+
+        if target_role == self.persona.role:
+            if record.get("status") in {"fulfilled", "failed", "expired"}:
+                self.state.pending_requests.pop(request_message_id, None)
+            else:
+                self.state.pending_requests[request_message_id] = record
+            return record
+
+        stored_state = self._repositories.states.load(target_role) or {}
+        state_pending = dict(stored_state.get("pending_requests") or {})
+        if record.get("status") in {"fulfilled", "failed", "expired"}:
+            state_pending.pop(request_message_id, None)
+        else:
+            state_pending[request_message_id] = record
+        stored_state["pending_requests"] = state_pending
+        self._repositories.states.save(target_role, stored_state)
+        return record
+
+    def _reconcile_response_message(self, message: dict[str, Any]) -> bool:
+        request_message_id = str(
+            message.get("request_message_id")
+            or message.get("parent_message_id")
+            or ""
+        )
+        if not request_message_id:
+            return False
+        if request_message_id not in self.state.pending_requests and self._repositories.requests.load(
+            self.persona.role,
+            request_message_id,
+        ) is None:
+            return False
+
+        response_payload = message.get("response") if isinstance(message.get("response"), dict) else {}
+        data_payload = response_payload.get("data_provided") if isinstance(response_payload.get("data_provided"), dict) else {}
+        gaps_remaining = list(response_payload.get("gaps_remaining") or [])
+        if data_payload:
+            status = "fulfilled"
+        elif gaps_remaining:
+            status = "failed"
+        else:
+            status = "acknowledged"
+        now_iso = str(message.get("created_at") or self._timestamp())
+        update_payload: dict[str, Any] = {
+            "status": status,
+            "response_message_id": message.get("message_id"),
+            "data_payload": data_payload,
+            "gaps_remaining": gaps_remaining,
+            "evidence_citations": list(response_payload.get("evidence_citations") or message.get("evidence_citations") or []),
+            "updated_at": now_iso,
+        }
+        if status == "acknowledged":
+            update_payload["acknowledged_at"] = now_iso
+        elif status == "fulfilled":
+            update_payload["fulfilled_at"] = now_iso
+        else:
+            update_payload["failed_at"] = now_iso
+        updated = self._update_request_record(request_message_id, update_payload)
+        if updated is None:
+            return False
+        self.state.working_memory[f"request:{request_message_id}"] = {
+            "status": status,
+            "response_message_id": message.get("message_id"),
+            "body": response_payload.get("body") or message.get("body"),
+            "data": data_payload,
+            "gaps_remaining": gaps_remaining,
+        }
+        add_to_history(
+            self.state,
+            {
+                "role": self.persona.role,
+                "action": f"request_{status}",
+                "request_message_id": request_message_id,
+                "response_message_id": message.get("message_id"),
+                "from": message.get("sender_role"),
+                "data_payload": data_payload,
+                "gaps_remaining": gaps_remaining,
+            },
+        )
+        return True
+
+    def _extract_kpi_node_id(self, message: dict[str, Any]) -> str | None:
+        metadata = message.get("metadata") if isinstance(message.get("metadata"), dict) else {}
+        kpi_node_id = metadata.get("kpi_node_id")
+        if kpi_node_id:
+            return str(kpi_node_id)
+        subject = str(message.get("subject") or "")
+        prefix = "Data request: "
+        if subject.startswith(prefix):
+            return subject[len(prefix):].split(" — ", 1)[0].strip() or None
+        return None
+
+    def _build_response_for_message(self, message: dict[str, Any]) -> TwinResponse:
+        now_iso = self._timestamp()
+        request_message_id = str(message.get("message_id") or "")
+        kpi_node_id = self._extract_kpi_node_id(message)
+        data_provided: dict[str, Any] = {}
+        gaps_remaining: list[str] = []
+        confidence = "medium"
+        body = "Received and investigating."
+        if str(message.get("message_type") or "") == "data_request" and kpi_node_id:
+            node = self._resolver.get_node(kpi_node_id)
+            if node:
+                data_provided = {
+                    "kpi_node_id": kpi_node_id,
+                    "node": node,
+                }
+            gaps_remaining = [
+                str(gap.get("detail") or gap.get("type") or "unknown_gap")
+                for gap in self._resolver.detect_gaps(kpi_node_id)
+            ]
+            if data_provided and not gaps_remaining:
+                confidence = "high"
+                body = f"Provided current data for KPI {kpi_node_id}."
+            elif data_provided:
+                confidence = "medium"
+                body = f"Provided current snapshot for KPI {kpi_node_id}; some gaps remain."
+            else:
+                confidence = "unable"
+                body = f"Could not resolve KPI {kpi_node_id}; explicit gaps remain."
+        return TwinResponse(
+            response_id=f"resp-{request_message_id}",
+            request_message_id=request_message_id,
+            responder_role=self.persona.role,
+            body=body,
+            confidence=confidence,
+            data_provided=data_provided,
+            gaps_remaining=tuple(gaps_remaining),
+            created_at=now_iso,
+        )
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -203,7 +417,11 @@ class TwinRuntime:
 
         # 2. Read inbox
         inbox_messages = _read_inbox(self.persona.role, self._repositories)
-        observations["inbox"] = inbox_messages
+        observations["inbox"] = [
+            message
+            for message in inbox_messages
+            if not self._reconcile_response_message(message)
+        ]
 
         self._cycle_summary["observations"] = observations
         return observations
@@ -283,6 +501,7 @@ class TwinRuntime:
                 "detail": f"Message from {sender}: {subject}",
                 "sender": sender,
                 "message_id": msg.get("message_id"),
+                "message": dict(msg),
                 "resolution_hint": "respond",
             })
 
@@ -374,10 +593,7 @@ class TwinRuntime:
                     "action": "respond_to_message",
                     "sender": issue.get("sender"),
                     "message_id": issue.get("message_id"),
-                    "preliminary_response": (
-                        f"Acknowledging message {issue.get('message_id')}. "
-                        f"Investigating the request."
-                    ),
+                    "message": issue.get("message") or {},
                     "decision_source": "deterministic",
                 })
 
@@ -421,12 +637,11 @@ class TwinRuntime:
                 if action_type == "send_data_request":
                     msg = dec.get("message")
                     if msg:
-                        send_message(msg)
-                        self.state.pending_requests[msg.message_id] = (
-                            f"waiting for {msg.recipient_role}"
-                        )
+                        send_message(msg, repositories=self._repositories)
+                        self._record_pending_request(msg)
                         action_record["message_id"] = msg.message_id
                         action_record["target"] = msg.recipient_role
+                        action_record["request_status"] = "pending"
                         add_to_history(
                             self.state,
                             {
@@ -437,33 +652,15 @@ class TwinRuntime:
                                 "subject": msg.subject,
                             },
                         )
-                        # Also deliver to the recipient's inbox
-                        _deliver_to_inbox(
-                            msg.recipient_role,
-                            {
-                                "message_id": msg.message_id,
-                                "sender_role": msg.sender_role,
-                                "recipient_role": msg.recipient_role,
-                                "message_type": msg.message_type,
-                                "priority": msg.priority,
-                                "subject": msg.subject,
-                                "body": msg.body,
-                                "deadline_seconds": msg.deadline_seconds,
-                                "created_at": msg.created_at,
-                                "status": msg.status,
-                            },
-                            self._repositories,
-                        )
 
                 elif action_type == "send_escalation":
                     msg = dec.get("message")
                     if msg:
-                        send_message(msg)
-                        self.state.pending_requests[msg.message_id] = (
-                            f"escalated to {msg.recipient_role}"
-                        )
+                        send_message(msg, repositories=self._repositories)
+                        self._record_pending_request(msg)
                         action_record["message_id"] = msg.message_id
                         action_record["target"] = msg.recipient_role
+                        action_record["request_status"] = "pending"
                         add_to_history(
                             self.state,
                             {
@@ -474,28 +671,36 @@ class TwinRuntime:
                                 "subject": msg.subject,
                             },
                         )
-                        _deliver_to_inbox(
-                            msg.recipient_role,
-                            {
-                                "message_id": msg.message_id,
-                                "sender_role": msg.sender_role,
-                                "recipient_role": msg.recipient_role,
-                                "message_type": msg.message_type,
-                                "priority": msg.priority,
-                                "subject": msg.subject,
-                                "body": msg.body,
-                                "deadline_seconds": msg.deadline_seconds,
-                                "created_at": msg.created_at,
-                                "status": msg.status,
-                            },
-                            self._repositories,
-                        )
 
                 elif action_type == "respond_to_message":
                     sender = dec.get("sender", "unknown")
-                    response_body = dec.get(
-                        "preliminary_response",
-                        "Received and investigating.",
+                    original_message = dec.get("message") or {}
+                    response = self._build_response_for_message(original_message)
+                    response_errors = validate_response(response)
+                    if response_errors:
+                        raise ValueError(f"Invalid twin response: {response_errors}")
+                    response_message = InterTwinMessage(
+                        message_id=response.response_id,
+                        sender_role=self.persona.role,
+                        recipient_role=sender,
+                        message_type="response",
+                        priority="normal",
+                        subject=f"Response: {original_message.get('subject') or dec.get('message_id', 'message')}",
+                        body=response.body,
+                        evidence_citations=tuple(response.evidence_citations),
+                        parent_message_id=response.request_message_id,
+                        metadata={"request_message_id": response.request_message_id},
+                        deadline_seconds=3600,
+                        created_at=response.created_at,
+                        status="responded",
+                    )
+                    send_message(
+                        response_message,
+                        repositories=self._repositories,
+                        payload={
+                            "response": asdict(response),
+                            "request_message_id": response.request_message_id,
+                        },
                     )
                     add_to_history(
                         self.state,
@@ -503,29 +708,19 @@ class TwinRuntime:
                             "role": self.persona.role,
                             "action": "acknowledged_message",
                             "to": sender,
-                            "response": response_body,
+                            "request_message_id": response.request_message_id,
+                            "response_message_id": response.response_id,
+                            "response": response.body,
+                            "data_provided": response.data_provided,
+                            "gaps_remaining": list(response.gaps_remaining),
                         },
-                    )
-                    # Deliver acknowledgment to the original sender's inbox
-                    now_iso = datetime.now(timezone.utc).isoformat()
-                    _deliver_to_inbox(
-                        sender,
-                        {
-                            "message_id": f"ack-{dec.get('message_id', 'unknown')}",
-                            "sender_role": self.persona.role,
-                            "recipient_role": sender,
-                            "message_type": "notification",
-                            "priority": "normal",
-                            "subject": f"Re: {dec.get('message_id', 'message')}",
-                            "body": response_body,
-                            "deadline_seconds": 3600,
-                            "created_at": now_iso,
-                            "status": "pending",
-                        },
-                        self._repositories,
                     )
                     action_record["target"] = sender
-                    action_record["response"] = response_body
+                    action_record["request_message_id"] = response.request_message_id
+                    action_record["response_message_id"] = response.response_id
+                    action_record["response"] = response.body
+                    action_record["data_provided"] = response.data_provided
+                    action_record["gaps_remaining"] = list(response.gaps_remaining)
 
                 elif action_type == "escalate":
                     reason = dec.get("reason", "No reason provided")
@@ -611,6 +806,16 @@ class TwinRuntime:
             if escalated_role:
                 esc_msg = escalate_message(msg, now_iso)
                 escalated.append(esc_msg)
+                self._update_request_record(
+                    msg.message_id,
+                    {
+                        "status": "expired",
+                        "expired_at": now_iso,
+                        "response_message_id": esc_msg.message_id,
+                        "updated_at": now_iso,
+                    },
+                    role=msg.sender_role,
+                )
                 expired_indices.append(idx)
 
         # Remove expired messages (reverse order to preserve indices)
