@@ -62,8 +62,16 @@ jobs:
 
       - name: Install OCR runtime
         run: |
-          sudo rm -f /etc/apt/sources.list.d/microsoft*.list 2>/dev/null || true
-          sudo apt-get update
+          # Aggressively disable ALL Microsoft/Azure apt sources — ubuntu-24.04 runner
+          # images configure azure-cli via arbitrary file paths and formats.
+          # Find any file under /etc/apt/ mentioning packages.microsoft.com and remove.
+          for f in $(sudo grep -rl 'packages.microsoft.com' /etc/apt/ 2>/dev/null || true); do
+            sudo rm -f "$f"
+          done
+          # Also nuke any remaining microsoft*/azure* source files by name glob
+          sudo find /etc/apt/ -type f \( -name '*microsoft*' -o -name '*azure*' \) -delete 2>/dev/null || true
+          # Allow insecure repos in case a stale apt cache entry still references the URL
+          sudo apt-get update -o Acquire::AllowInsecureRepositories=true
           sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-eng
 
       - name: Install package and test runner
