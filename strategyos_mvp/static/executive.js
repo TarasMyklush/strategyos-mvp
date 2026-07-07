@@ -353,27 +353,44 @@
     }
     animateCard('board-portal');
     updateHistory();
-    // Clear transition signal AFTER all side effects (animateCard, updateHistory)
-    // so that any concurrent refresh() that fires during this synchronous block
-    // (e.g. a setInterval callback queued just before the click and executed
-    // after this function returns but before the next event loop pump) still
-    // sees _boardStateTransition as truthy and preserves activeBoard.
-    state._boardStateTransition = '';
+    // Keep _boardStateTransition set throughout the re-sync window so that any
+    // concurrent refresh() (setInterval 60s) entering line 3869 sees it as
+    // truthy and preserves activeBoard instead of overriding from server state.
+    // The LAST callback in the re-sync chain (setTimeout 1000ms) is the
+    // authoritative finalizer that clears _boardStateTransition. If a new
+    // click arrives before the window expires, cancel the pending timer.
+    if (state._boardStateTransitionTimer) {
+      window.clearTimeout(state._boardStateTransitionTimer);
+      state._boardStateTransitionTimer = null;
+    }
     // Multi-timing re-sync chain: re-assert the intended tab state across
     // several timing windows to overcome any competing re-render (e.g. an
     // async refresh() response that fires during or after this function, or
     // a switchView re-sync chain that registered before this call and fires
     // a stale captured snapshot on the same timing).
     // The chain uses rAF (next paint), multiple setTimeout levels to catch
-    // deferred re-renders, and a 1000ms catch-all. Each timing callback
-    // RE-READS resolveBoardState() so that a stale captured value from a
-    // competing re-sync chain that fires after this one cannot regress the
-    // user's selection. state.activeBoard is restored as a safety net.
+    // deferred re-renders, and a 1000ms catch-all finalizer. Each timing
+    // callback RE-READS resolveBoardState() so that a stale captured value
+    // from a competing chain cannot regress the user's selection.
+    // state.activeBoard is restored as a safety net in every callback.
+    // renderBoardStateTabs runs BEFORE syncBoardStateTabUI so the fast-path
+    // full attribute reconciliation catches any CSSOM recalc regression from
+    // the portal innerHTML replacement before the lighter sync pass.
     function _boardStateReSync() {
       if (state.activeBoard !== nextState) {
         state.activeBoard = nextState;
       }
+      renderBoardStateTabs();
       syncBoardStateTabUI(resolveBoardState());
+    }
+    function _boardStateReSyncFinal() {
+      _boardStateReSync();
+      // Last callback: clear transition signal so refresh() can use the
+      // server presentation_state for a future navigation. By this point
+      // (1000ms after click), all competing re-renders have settled and
+      // state.activeBoard is the authoritative user selection.
+      state._boardStateTransition = '';
+      state._boardStateTransitionTimer = null;
     }
     if (typeof window.requestAnimationFrame === 'function') {
       window.requestAnimationFrame(_boardStateReSync);
@@ -382,7 +399,7 @@
       window.setTimeout(_boardStateReSync, 0);
       window.setTimeout(_boardStateReSync, 50);
       window.setTimeout(_boardStateReSync, 250);
-      window.setTimeout(_boardStateReSync, 1000);
+      state._boardStateTransitionTimer = window.setTimeout(_boardStateReSyncFinal, 1000);
     }
     return true;
   }
@@ -727,6 +744,7 @@
       // resolveBoardState() so that a user tab click between callbacks is not
       // overwritten by a stale captured snapshot from this chain.
       function _switchViewReSync() {
+        renderBoardStateTabs();
         syncBoardStateTabUI(resolveBoardState());
       }
       if (typeof window.requestAnimationFrame === 'function') {
@@ -3319,12 +3337,21 @@
     // Chrome CSSOM recalc or competing async re-render (e.g. refresh()
     // completing after a delayed server response) does not discard the
     // triple-redundant style guards.
+    // Use renderBoardStateTabs (full structural re-render with fast-path
+    // attribute sync) BEFORE the lighter syncBoardStateTabUI so that the
+    // fast path re-sets every button attribute and re-adds click handlers
+    // if needed. Then syncBoardStateTabUI provides the triple-redundant
+    // attribute-level fallback. This order ensures CSSOM recalc from
+    // innerHTML cannot leave a stale className without the fast-path
+    // re-render correcting it in the same synchronous window.
+    renderBoardStateTabs();
     syncBoardStateTabUI(resolveBoardState());
     // Multi-timing re-sync: each callback RE-READS resolveBoardState() so that a
     // stale snapshot from a competing chain (e.g. switchView's _switchViewReSync)
     // that fires between timing callbacks does not revert the UI.
     // Includes a 1000ms catch-all for any deferred async render completion.
     function _boardPortalReSync() {
+      renderBoardStateTabs();
       syncBoardStateTabUI(resolveBoardState());
     }
     if (typeof window.requestAnimationFrame === 'function') {
@@ -3839,6 +3866,7 @@
     // render functions) is restored. Only applies when the board portal
     // is visible (knowledge view active).
     if (state.activeView === "knowledge") {
+      renderBoardStateTabs();
       syncBoardStateTabUI(resolveBoardState());
     }
   }
@@ -3930,7 +3958,9 @@
       kgPanX: 0,
       kgPanY: 0,
       kgFocusMode: false,
-      _kgDragState: null,
+      _boardStateTransition: '',
+    _boardStateTransitionTimer: null,
+    _kgDragState: null,
       _kgDragBindingsAttached: false,
       personaOutsideListenerBound: false,
       openDriverNoteKey: "",
