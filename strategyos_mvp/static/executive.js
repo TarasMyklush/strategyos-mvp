@@ -135,7 +135,9 @@
     // would see stale state. Re-binding ensures the handler always reads the
     // current getBoardPortal() result and the latest boardActionPrompt mapping.
     if (portal.__boardPortalHandler) {
-      portal.removeEventListener('click', portal.__boardPortalHandler);
+      if (typeof portal.removeEventListener === 'function') {
+        portal.removeEventListener('click', portal.__boardPortalHandler);
+      }
       portal.__boardPortalHandler = null;
     }
     portal.__boardPortalHandler = function (event) {
