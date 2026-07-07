@@ -260,11 +260,17 @@
   // sees a mismatch (CSSOM recalc reverted className) and calls sync again.
   var _boardStateObserverSyncing = false;
   // _boardStateLastSynced tracks the last state that syncBoardStateTabUI was
-  // called with. If the observer fires and the desired state matches the last
-  // synced state, the observer skips the re-sync because any pending CSSOM
-  // recalc revert is already being handled by a higher-level render cycle
-  // (activateBoardState, refresh) that will re-assert the correct state.
+  // called with. The observer uses this to detect CSSOM-revert loops: if the
+  // desired state matches the last synced state AND there's a DOM mismatch,
+  // the observer allows up to MAX_OBSERVER_RETRIES additional syncs to fix
+  // the CSSOM revert before yielding to the higher-level render cycle.
   var _boardStateLastSynced = '';
+  // _boardStateSyncRetryCount limits observer-triggered syncs for the same
+  // desired state to prevent infinite CSSOM recalc loops. Each unique desired
+  // state resets the counter. After exceeding the limit, the observer waits
+  // for the higher-level render cycle to re-assert the correct state.
+  var _boardStateSyncRetryCount = 0;
+  var BOARD_STATE_OBSERVER_MAX_RETRIES = 5;
 
   function boardStateTabUIMismatch(nextState) {
     var row = $("board-state-row");
@@ -372,18 +378,24 @@
     // deferred re-renders, and a 1000ms catch-all finalizer. Each timing
     // callback RE-READS resolveBoardState() so that a stale captured value
     // from a competing chain cannot regress the user's selection.
-    // IMPORTANT: this callback must NOT revert state.activeBoard to the
-    // captured nextState. If the user rapidly clicks multiple tabs (e.g.
-    // pre -> live -> closed in quick succession), the rAF/setTimeout
-    // callbacks from the first click (captured nextState='live') would
-    // override the user's second click (state.activeBoard='closed'),
-    // causing the UI to show the wrong active state. Instead, this
-    // callback trusts state.activeBoard as the authoritative user
-    // selection and only syncs the UI to match it.
+    // IMPORTANT: this callback must NOT unconditionally revert
+    // state.activeBoard to the captured nextState. If the user rapidly clicks
+    // multiple tabs (e.g. pre -> live -> closed in quick succession), the
+    // rAF/setTimeout callbacks from the first click (captured nextState='live')
+    // would override the user's second click (state.activeBoard='closed'),
+    // causing the UI to show the wrong active state. Instead, this callback
+    // trusts state.activeBoard as the authoritative user selection and only
+    // syncs the UI to match it.
+    // Fallback: if state.activeBoard was cleared by a concurrent render cycle
+    // (e.g. a competing switchView re-sync or refresh that fired between
+    // timers and reset activeBoard), restore it from the captured nextState.
+    // Only do this when activeBoard is falsy so a rapid second click's state
+    // (which is truthy and different from nextState) is never overwritten.
     // renderBoardStateTabs runs BEFORE syncBoardStateTabUI so the fast-path
     // full attribute reconciliation catches any CSSOM recalc regression from
     // the portal innerHTML replacement before the lighter sync pass.
     function _boardStateReSync() {
+      if (!state.activeBoard) state.activeBoard = nextState;
       renderBoardStateTabs();
       syncBoardStateTabUI(resolveBoardState());
     }
@@ -404,6 +416,10 @@
       window.setTimeout(_boardStateReSync, 50);
       window.setTimeout(_boardStateReSync, 250);
       state._boardStateTransitionTimer = window.setTimeout(_boardStateReSyncFinal, 1000);
+      // 5000ms catch-all: as a last resort, re-assert the tab state after any
+      // deeply deferred CSSOM recalc or competing render cycle (e.g. a delayed
+      // refresh response that fires long after the initial timing chain).
+      window.setTimeout(_boardStateReSync, 5000);
     }
     return true;
   }
@@ -759,6 +775,8 @@
         window.setTimeout(_switchViewReSync, 50);
         window.setTimeout(_switchViewReSync, 250);
         window.setTimeout(_switchViewReSync, 1000);
+        // 5000ms catch-all: deeply deferred CSSOM recalc or competing render.
+        window.setTimeout(_switchViewReSync, 5000);
       }
     }
   }
@@ -3158,24 +3176,37 @@
     if (typeof window.MutationObserver !== 'function') return;
     _boardStateObserverAttached = true;
     var observer = new window.MutationObserver(function () {
-      var desiredState = state.activeBoard || resolveBoardState();
       // Guard 1: skip if a syncBoardStateTabUI call is currently in-flight.
       // Without this guard, the observer would try to re-sync while the sync
       // function is still setting attributes on buttons, causing a re-entrant
       // call that triggers yet another observer callback → infinite loop.
       if (_boardStateObserverSyncing) return;
-      // Guard 2: skip if the desired state was already applied by a recent
-      // syncBoardStateTabUI call. The observer fires asynchronously — by the
-      // time it runs, the sync function has already exited and cleared
-      // _boardStateObserverSyncing. Without this check, the observer would
-      // see a mismatch (CSSOM recalc from a sibling innerHTML replacement
-      // reverted className), call syncBoardStateTabUI, which changes
-      // className, which triggers another observer callback, which sees the
-      // mismatch again... infinite loop. Guard 2 breaks the cycle.
-      if (desiredState === _boardStateLastSynced) return;
-      // Guard 3: actual mismatch check — only sync if there's a real DOM
-      // state mismatch that was NOT caused by our own sync.
-      if (!boardStateTabUIMismatch(desiredState)) return;
+      var desiredState = state.activeBoard || resolveBoardState();
+      if (!desiredState) return;
+      // Guard 2: actual mismatch check — only sync if there's a real DOM
+      // state mismatch. This is checked BEFORE the last-synced guard so that
+      // CSSOM recalc reverts (which cause a mismatch even when desiredState
+      // matches _boardStateLastSynced) can still be fixed by the observer.
+      // The retry counter below prevents infinite CSSOM recalc loops.
+      if (!boardStateTabUIMismatch(desiredState)) {
+        _boardStateSyncRetryCount = 0;
+        return;
+      }
+      // Guard 3: CSSOM recalc loop detection. If the desired state matches
+      // the last synced state but there IS a DOM mismatch (caught by guard 2),
+      // Chrome's CSSOM recalc from a sibling innerHTML replacement has
+      // reverted className on the tab buttons. Allow up to MAX_RETRIES
+      // re-syncs to fix the revert, then yield to the higher-level render
+      // cycle (activateBoardState, renderBoardPortal multi-timing chain)
+      // which will re-assert the correct state on the next timing callback.
+      if (desiredState === _boardStateLastSynced) {
+        _boardStateSyncRetryCount++;
+        if (_boardStateSyncRetryCount > BOARD_STATE_OBSERVER_MAX_RETRIES) {
+          return;
+        }
+      } else {
+        _boardStateSyncRetryCount = 0;
+      }
       syncBoardStateTabUI(desiredState);
     });
     observer.observe(row, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-selected', 'class'] });
@@ -3366,6 +3397,8 @@
       window.setTimeout(_boardPortalReSync, 50);
       window.setTimeout(_boardPortalReSync, 250);
       window.setTimeout(_boardPortalReSync, 1000);
+      // 5000ms catch-all: deeply deferred CSSOM recalc or competing render.
+      window.setTimeout(_boardPortalReSync, 5000);
     }
     // Re-bind the delegated click handler on every render so that
     // innerHTML replacement does not lose event coverage. The portal's

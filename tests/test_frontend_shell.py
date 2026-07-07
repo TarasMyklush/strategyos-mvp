@@ -4771,7 +4771,7 @@ def test_board_state_tabs_mutation_observer_has_loop_guard():
     assert "if (_boardStateObserverSyncing) return;" in observer_block, (
         "MutationObserver callback must skip self-triggered attribute mutations"
     )
-    assert "if (!boardStateTabUIMismatch(desiredState)) return;" in observer_block, (
+    assert "!boardStateTabUIMismatch(desiredState)" in observer_block, (
         "MutationObserver callback must bail out when board tab DOM is already correct"
     )
 
