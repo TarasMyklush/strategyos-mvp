@@ -1059,6 +1059,8 @@ def test_public_ceo_margin_pressure_prompt_returns_business_answer_without_debug
         for banned in (
             "deterministic public-safe handler",
             "shared public packet",
+            "public packet",
+            "visible packet",
             "public-safe",
             "deterministic",
             "handler",
@@ -1473,8 +1475,9 @@ def test_public_board_portal_prepare_board_pack_prompt_returns_useful_packet_ans
         assert payload["run_mode"] == "public-safe"
         assert payload["answered_by"] == "packet"
         assert "prompt did not match" not in answer
-        assert "board pack" in answer or "board packet" in answer or "packet" in answer
+        assert "board" in answer
         assert "evidence" in answer
+        assert "packet" not in answer
         assert payload["citations"]
     finally:
         _restore_env(original)
@@ -1506,6 +1509,7 @@ def test_public_board_portal_close_challenged_cases_prompt_returns_useful_packet
         assert "prompt did not match" not in answer
         assert "challenged" in answer
         assert "evidence" in answer
+        assert "packet" not in answer
         assert payload["citations"]
     finally:
         _restore_env(original)

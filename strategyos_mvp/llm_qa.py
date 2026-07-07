@@ -893,8 +893,75 @@ def _clean_visible_answer(value: Any) -> str:
             return _clean_visible_answer(nested_answer)
     extracted = _extract_answer_field_from_jsonish_text(text)
     if extracted:
-        return extracted
-    return text
+        return _scrub_visible_answer_text(extracted)
+    return _scrub_visible_answer_text(text)
+
+
+def _scrub_visible_answer_text(text: str) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+
+    cleaned = re.sub(
+        r"\[[^\]]*(?:path:|run:|risk:|deterministic|public-safe|handler|llm|vector|graph)[^\]]*\]",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"(?:^|\s)(?:path|run|risk):\s*[^\n]+",
+        " ",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"\bI can answer board-safe questions[^.]*\.?",
+        " ",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    replacements = [
+        (r"\bFrom the current public packet,\s*", ""),
+        (r"\bFrom the public packet,\s*", ""),
+        (r"\bThe public packet shows\s*", "Visible facts show "),
+        (r"\bThe visible packet shows\s*", "Visible facts show "),
+        (r"\bSince last week, the visible packet shows\s*", "Since last week, visible facts show "),
+        (r"\bI do not have a standalone last-week ledger cut in the public packet, but\s*", "I do not have a standalone last-week ledger cut here, but "),
+        (r"\bshared public packet\b", "current business context"),
+        (r"\bpublic executive packet\b", "current business context"),
+        (r"\bcurrent public packet\b", "current business context"),
+        (r"\bvisible packet\b", "current business context"),
+        (r"\bpublic packet\b", "current business context"),
+        (r"\bthe packet\b", "the current view"),
+        (r"\bpacket\b", "current view"),
+        (r"\bpublic-safe\b", ""),
+        (r"\bdeterministic\b", ""),
+        (r"\bhandler\b", ""),
+        (r"\bvector\b", ""),
+        (r"\bgraph\b", ""),
+        (r"\bllm\b", "AI"),
+    ]
+    for pattern, replacement in replacements:
+        cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
+
+    parts = re.split(r"(?<=[.!?])\s+", cleaned)
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        sentence = str(part or "").strip()
+        if not sentence:
+            continue
+        normalized = re.sub(r"[^a-z0-9]+", " ", sentence.lower()).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(sentence)
+
+    cleaned = " ".join(deduped) if deduped else cleaned
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    return cleaned.strip()
 
 
 def _looks_like_broken_json_answer(raw: Any) -> bool:

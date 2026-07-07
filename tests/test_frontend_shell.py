@@ -1995,6 +1995,7 @@ main().catch((error) => {{
     assert "Authorization" not in result["fetchCalls"][1]["headers"]
     assert result["finalStatus"] == "ok"
     assert "SAR 8.6M recovery" in result["finalText"]
+    assert "packet" not in result["finalText"].lower()
     assert "Retry now once the service is reachable" not in result["finalText"]
     assert result["hasRetryPrompt"] is False
     assert "strategyos.ui.token" not in result["localStorageAfter"]
@@ -2219,6 +2220,7 @@ main().catch((error) => {{
     assert "I couldn't reach the shared assistant service just now." not in result["finalText"]
     assert "~SAR 9k weekly drag" in result["finalText"]
     assert "19.2% versus a 19.4% plan" in result["finalText"]
+    assert "packet" not in result["finalText"].lower()
 
 
 def test_assistant_css_styles_retryable_failure_state():

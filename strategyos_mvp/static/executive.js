@@ -1053,7 +1053,56 @@
       if (nested) return nested;
     }
     var extracted = extractAnswerFieldFromJsonishText(text);
-    if (extracted) return extracted;
+    if (extracted) return scrubVisibleQaAnswerText(extracted);
+    return scrubVisibleQaAnswerText(text);
+  }
+
+  function scrubVisibleQaAnswerText(text) {
+    text = String(text || '').trim();
+    if (!text) return '';
+    text = text.replace(/\[[^\]]*(?:path:|run:|risk:|deterministic|public-safe|handler|llm|vector|graph)[^\]]*\]/gi, ' ');
+    text = text.replace(/(?:^|\s)(?:path|run|risk):\s*[^\n]+/gi, ' ');
+    text = text.replace(/\bI can answer board-safe questions[^.]*\.?/gi, ' ');
+
+    [
+      [/\bFrom the current public packet,\s*/gi, ''],
+      [/\bFrom the public packet,\s*/gi, ''],
+      [/\bThe public packet shows\s*/gi, 'Visible facts show '],
+      [/\bThe visible packet shows\s*/gi, 'Visible facts show '],
+      [/\bSince last week, the visible packet shows\s*/gi, 'Since last week, visible facts show '],
+      [/\bI do not have a standalone last-week ledger cut in the public packet, but\s*/gi, 'I do not have a standalone last-week ledger cut here, but '],
+      [/\bshared public packet\b/gi, 'current business context'],
+      [/\bpublic executive packet\b/gi, 'current business context'],
+      [/\bcurrent public packet\b/gi, 'current business context'],
+      [/\bvisible packet\b/gi, 'current business context'],
+      [/\bpublic packet\b/gi, 'current business context'],
+      [/\bthe packet\b/gi, 'the current view'],
+      [/\bpacket\b/gi, 'current view'],
+      [/\bpublic-safe\b/gi, ''],
+      [/\bdeterministic\b/gi, ''],
+      [/\bhandler\b/gi, ''],
+      [/\bvector\b/gi, ''],
+      [/\bgraph\b/gi, ''],
+      [/\bllm\b/gi, 'AI']
+    ].forEach(function (entry) {
+      text = text.replace(entry[0], entry[1]);
+    });
+
+    var parts = text.split(/(?<=[.!?])\s+/);
+    var seen = {};
+    var deduped = [];
+    parts.forEach(function (part) {
+      var sentence = String(part || '').trim();
+      if (!sentence) return;
+      var normalized = sentence.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (!normalized || seen[normalized]) return;
+      seen[normalized] = true;
+      deduped.push(sentence);
+    });
+    text = (deduped.length ? deduped.join(' ') : text)
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .trim();
     return text;
   }
 
