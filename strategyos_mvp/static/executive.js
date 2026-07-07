@@ -262,12 +262,21 @@
   function activateBoardState(nextState) {
     nextState = String(nextState || '').trim().toLowerCase();
     if (!nextState || state.activeBoard === nextState) return false;
+    state._boardStateTransition = nextState;
     state.activeBoard = nextState;
     syncBoardStateTabUI(nextState);
     animateCard('board-portal');
     updateHistory();
     renderBoardStageSurface();
     renderPersonaView();
+    state._boardStateTransition = '';
+    // Defensive: if a concurrent refresh() reset activeBoard between the
+    // render calls above, re-assert the intended state. This guards against
+    // the 60s poll cycle (refresh via setInterval) landing mid-click.
+    if (state.activeBoard !== nextState) {
+      state.activeBoard = nextState;
+      syncBoardStateTabUI(nextState);
+    }
     return true;
   }
 
@@ -2962,6 +2971,7 @@
       button.innerHTML = '<span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id)) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, "")) + '</span></span>';
       button.addEventListener('click', function (event) {
         event.preventDefault();
+        event.stopPropagation();
         var el = event.currentTarget || event.target;
         var stateAttr = String(el && typeof el.getAttribute === 'function' ? el.getAttribute('data-board-state') : modeState).trim().toLowerCase();
         if (!stateAttr) stateAttr = modeState;

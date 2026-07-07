@@ -9136,6 +9136,32 @@ async def _assistant_chat_response(
                 ],
                 "basis": "Public executive surface is read-only for task creation, so the assistant must return an exact operational limitation instead of a canned packet summary.",
             }
+        # General-knowledge / out-of-domain guard: if the question contains none of
+        # the board/business tokens that the deterministic handlers know about, do NOT
+        # fabricate a business answer. Return safe "out of context" instead.
+        _BUSINESS_TOKENS = (
+            "margin", "ebitda", "profitability", "profit", "loss", "revenue", "income",
+            "risk", "plan", "year", "quarter", "board", "packet", "prep", "session",
+            "live", "closed", "tamween", "healthcare", "pharmacy", "fx", "hedge",
+            "recoverable", "recovery", "evidence", "finding", "citation", "kpi",
+            "driver", "ceo", "hermes", "assistant", "thread", "task", "follow-up",
+            "invoice", "vendor", "spend", "ap", "working capital", "cash",
+            "balance", "budget", "forecast", "scenario", "what-if", "what if",
+        )
+        is_out_of_domain = not any(token in norm for token in _BUSINESS_TOKENS)
+        if is_out_of_domain:
+            return {
+                "matched": False,
+                "answer": "I can only answer questions grounded in the current board context and packet data. That question appears to be outside the available StrategyOS board material — try asking about margin, risk, board prep, recoverable leakage, or a specific business driver visible in the packet.",
+                "citations": [],
+                "suggestions": [
+                    "What is driving margin pressure this quarter?",
+                    "Help me prepare the board pack for the pre-board stage.",
+                    "Show evidence for SAR 8.6M recoverable",
+                    "Risk to full-year plan?",
+                ],
+                "basis": "Out-of-domain question detected on the public executive surface — safe refusal instead of fabricated business answer.",
+            }
         if any(token in norm for token in ("margin", "ebitda", "profitability")):
             answer = (
                 "From the current public packet, margin pressure is coming from FX drag, hot API input cost, Healthcare occupancy below plan, and Tamween still sitting behind its recovery path. "
