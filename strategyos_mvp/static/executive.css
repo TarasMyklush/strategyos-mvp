@@ -1919,6 +1919,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 .state-tab,
 .filter-chip {
   background: transparent;
+  border-color: var(--border);
 }
 
 .reports-secondary {
@@ -1930,6 +1931,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 .state-tab.is-active,
 .filter-chip.is-active {
   border-color: var(--border-strong);
+  background: var(--accent-soft);
 }
 
 .state-tab__copy {

@@ -236,7 +236,21 @@
     ).trim().toLowerCase();
   }
 
+  // Board-state-tab observer guards.
+  // _boardStateObserverSyncing prevents re-entrant observer callbacks from
+  // triggering a second sync while the first is still in-flight. The observer
+  // callback checks this flag and returns immediately if it is true, avoiding
+  // the infinite loop: observer → syncBoardStateTabUI → className change →
+  // observer callback (blocked by flag) → observer callback queues another →
+  // ... without the flag, each sync triggers a new observer callback that
+  // sees a mismatch (CSSOM recalc reverted className) and calls sync again.
   var _boardStateObserverSyncing = false;
+  // _boardStateLastSynced tracks the last state that syncBoardStateTabUI was
+  // called with. If the observer fires and the desired state matches the last
+  // synced state, the observer skips the re-sync because any pending CSSOM
+  // recalc revert is already being handled by a higher-level render cycle
+  // (activateBoardState, refresh) that will re-assert the correct state.
+  var _boardStateLastSynced = '';
 
   function boardStateTabUIMismatch(nextState) {
     var row = $("board-state-row");
@@ -266,6 +280,7 @@
     if (!row) return;
     _boardStateObserverSyncing = true;
     try {
+      _boardStateLastSynced = nextState;
       safeArray(row.querySelectorAll('[data-board-state]')).forEach(function (button) {
         var buttonState = String(button.getAttribute('data-board-state') || '').trim().toLowerCase();
         var isActive = buttonState === nextState;
@@ -3108,7 +3123,22 @@
     _boardStateObserverAttached = true;
     var observer = new window.MutationObserver(function () {
       var desiredState = state.activeBoard || resolveBoardState();
+      // Guard 1: skip if a syncBoardStateTabUI call is currently in-flight.
+      // Without this guard, the observer would try to re-sync while the sync
+      // function is still setting attributes on buttons, causing a re-entrant
+      // call that triggers yet another observer callback → infinite loop.
       if (_boardStateObserverSyncing) return;
+      // Guard 2: skip if the desired state was already applied by a recent
+      // syncBoardStateTabUI call. The observer fires asynchronously — by the
+      // time it runs, the sync function has already exited and cleared
+      // _boardStateObserverSyncing. Without this check, the observer would
+      // see a mismatch (CSSOM recalc from a sibling innerHTML replacement
+      // reverted className), call syncBoardStateTabUI, which changes
+      // className, which triggers another observer callback, which sees the
+      // mismatch again... infinite loop. Guard 2 breaks the cycle.
+      if (desiredState === _boardStateLastSynced) return;
+      // Guard 3: actual mismatch check — only sync if there's a real DOM
+      // state mismatch that was NOT caused by our own sync.
       if (!boardStateTabUIMismatch(desiredState)) return;
       syncBoardStateTabUI(desiredState);
     });
