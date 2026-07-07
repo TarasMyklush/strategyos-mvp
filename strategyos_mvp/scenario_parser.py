@@ -1380,22 +1380,75 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
     if not surfaced_reports:
         surfaced_reports = len(list(board.get("decks") or []))
 
-    board_prep_prompt = (
+    if "close challenged cases" in norm or ("challenged" in norm and "board meeting" in norm):
+        return ScenarioResult(
+            scenario_id="public_exec_challenged_cases",
+            scenario_label="Executive Surface — Challenged Cases",
+            matched=True,
+            answer=(
+                f"Before the board meeting, close the challenged cases first. The visible packet shows {challenged_count} challenged case"
+                f"{'' if challenged_count == 1 else 's'} still tied to supplementary board questions, so the evidence you need is the proof that lets each challenge clear reviewer scrutiny. "
+                "Next action: gather the missing proof, close the reviewer challenge, and confirm the packet is still bounded before it goes live in the room."
+            ),
+            calculations=[
+                CalculationStep(
+                    step_id="challenged_case_count",
+                    description="Read challenged-case posture from the public board portal",
+                    formula="READ public supplementary question count",
+                    inputs={"persona": persona_id},
+                    result=f"{challenged_count} challenged case(s)",
+                    unit="challenged cases",
+                    citations=[_public_citation("public_context_packet.board_portal.supplementary")],
+                )
+            ],
+            kg_context=[],
+            citations=[
+                _public_citation("public_context_packet.board_portal.supplementary"),
+                _public_citation("public_context_packet.board_portal.state_detail"),
+            ],
+            assumptions=["Public-safe answer can identify the challenged-case count and review posture, but not protected case-file contents."],
+            hallucination_risk=_public_risk_low(
+                "Public challenged-case prompt grounded in the executive packet.",
+                gap="Case-level reviewer evidence remains protected outside the anonymous surface.",
+            ),
+            suggestions=["What needs CEO review before the board meeting?", "Help me prepare the board pack for the pre-board stage"],
+            scenario_type="deterministic",
+            basis="Matched challenged-cases prompt against the shared public board portal packet.",
+        )
+
+    has_explicit_business_subject = any(
+        token in norm
+        for token in (
+            "tamween",
+            "audit",
+            "sar 8.6m",
+            "sar 1.2m",
+            "e-pharmacy",
+            "healthcare",
+            "digital health",
+            "fx",
+            "hedge",
+            "margin",
+            "full-year plan",
+            "recoverable",
+        )
+    )
+
+    board_prep_prompt = not has_explicit_business_subject and (
         "prepare the board pack" in norm
         or "prepare board pack" in norm
         or "prepare for the board meeting" in norm
         or "prepare for the board" in norm
         or "board prep" in norm
+        or "how should i prepare for the board meeting" in norm
+        or "what should i prepare for the board" in norm
+        or "what should i prepare for the board meeting" in norm
         or (
             "board pack" in norm
             and any(
                 token in norm
                 for token in ("ceo review", "evidence missing", "what should i do next")
             )
-        )
-        or (
-            ("board meeting" in norm or "board" in norm)
-            and any(token in norm for token in ("prepare", "prep", "ceo review", "evidence"))
         )
     )
     if board_prep_prompt:
@@ -1433,42 +1486,6 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
             suggestions=["Help me close challenged cases before the board meeting", "Summarize the board packet in plain English"],
             scenario_type="deterministic",
             basis="Matched board-pack review prompt against the shared public board portal packet.",
-        )
-
-    if "close challenged cases" in norm or ("challenged" in norm and "board meeting" in norm):
-        return ScenarioResult(
-            scenario_id="public_exec_challenged_cases",
-            scenario_label="Executive Surface — Challenged Cases",
-            matched=True,
-            answer=(
-                f"Before the board meeting, close the challenged cases first. The visible packet shows {challenged_count} challenged case"
-                f"{'' if challenged_count == 1 else 's'} still tied to supplementary board questions, so the evidence you need is the proof that lets each challenge clear reviewer scrutiny. "
-                "Next action: gather the missing proof, close the reviewer challenge, and confirm the packet is still bounded before it goes live in the room."
-            ),
-            calculations=[
-                CalculationStep(
-                    step_id="challenged_case_count",
-                    description="Read challenged-case posture from the public board portal",
-                    formula="READ public supplementary question count",
-                    inputs={"persona": persona_id},
-                    result=f"{challenged_count} challenged case(s)",
-                    unit="challenged cases",
-                    citations=[_public_citation("public_context_packet.board_portal.supplementary")],
-                )
-            ],
-            kg_context=[],
-            citations=[
-                _public_citation("public_context_packet.board_portal.supplementary"),
-                _public_citation("public_context_packet.board_portal.state_detail"),
-            ],
-            assumptions=["Public-safe answer can identify the challenged-case count and review posture, but not protected case-file contents."],
-            hallucination_risk=_public_risk_low(
-                "Public challenged-case prompt grounded in the executive packet.",
-                gap="Case-level reviewer evidence remains protected outside the anonymous surface.",
-            ),
-            suggestions=["What needs CEO review before the board meeting?", "Help me prepare the board pack for the pre-board stage"],
-            scenario_type="deterministic",
-            basis="Matched challenged-cases prompt against the shared public board portal packet.",
         )
 
     if (

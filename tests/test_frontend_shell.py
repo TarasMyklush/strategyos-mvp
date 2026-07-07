@@ -1813,8 +1813,15 @@ harness.state.latestPacket = {{
     meeting: {{ title: 'Q2 Board Meeting', date: 'Thu 18 Jun · 14:00', room: 'Riyadh HQ + remote' }},
     kpis: [],
     decks: [],
-    actions: [{{ item: 'Ratify the 60% EUR hedge', owner: 'Group CFO', due: 'on approval' }}],
-    supplementary_questions: [{{ q: 'What is the downside if EUR strengthens after a 60% hedge?', to: 'Group CEO', status: 'sent' }}],
+    actions: [
+      {{ item: 'Ratify the 60% EUR hedge', owner: 'Group CFO', due: 'on approval' }},
+      {{ item: 'Approve GLP-1 JV signature', owner: 'Group CEO', due: 'this week' }},
+      {{ item: 'Review Tamween recovery at Q3', owner: 'Board', due: 'Q3' }}
+    ],
+    supplementary_questions: [
+      {{ q: 'What is the downside if EUR strengthens after a 60% hedge?', to: 'Group CEO', status: 'sent' }},
+      {{ q: 'Can the JV be funded fully from cash without touching the facility?', to: 'Group CFO', status: 'answered' }}
+    ],
     live_prompts: ['Why is EBITDA 20 bps under plan?'],
     lifecycle_flow: [
       {{ state_id: 'pre', label: 'Pre-board', detail: 'Prepare governed packet', presented: true }},
@@ -1854,7 +1861,169 @@ console.log(JSON.stringify({{ liveHtml, closedHtml }}));
     assert "Pre-board preparation" not in result["liveHtml"], (
         "Selected Live stage must not keep rendering pre-board header copy from the server default"
     )
+    for text in [
+        "Ratify the 60% EUR hedge",
+        "Approve GLP-1 JV signature",
+        "Review Tamween recovery at Q3",
+    ]:
+        assert text in result["liveHtml"], (
+            "Selected Live stage must preserve visible lifecycle actions instead of dropping them during rerender"
+        )
+    assert "What is the downside if EUR strengthens after a 60% hedge?" not in result["liveHtml"], (
+        "Selected Live stage must switch out the pre-board supplementary-question panel"
+    )
     assert "Closed / frozen snapshot" in result["closedHtml"]
+
+
+def test_board_portal_pre_board_preserves_visible_lifecycle_actions_and_supplementary_questions():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveBoardPreStateHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { renderBoardPortal: renderBoardPortal, state: state };\n}\nmodule.exports = __executiveBoardPreStateHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-board-pre-state-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+function makeElement(id) {{
+  return {{
+    id,
+    innerHTML: '',
+    textContent: '',
+    style: {{}},
+    disabled: false,
+    hidden: false,
+    children: [],
+    classList: {{ add() {{}}, remove() {{}} }},
+    setAttribute() {{}},
+    appendChild(child) {{ this.children.push(child); return child; }},
+    addEventListener() {{}},
+    querySelector() {{ return null; }},
+    querySelectorAll() {{ return []; }},
+    contains() {{ return true; }},
+  }};
+}}
+
+const elements = {{
+  'board-portal': makeElement('board-portal'),
+  'board-note': makeElement('board-note'),
+}};
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout() {{ return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  clearInterval() {{}},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  innerWidth: 1280,
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ assistant_public_context: {{}} }}) }};
+    return elements[id] || null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement(tag) {{ return makeElement(tag); }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+harness.state.latestPacket = {{
+  board_portal: {{
+    presentation_state: 'pre',
+    state_label: 'Pre-board',
+    state_detail: {{ state: 'pre', title: 'Pre-board preparation', summary: 'Prepare the packet.' }},
+    meeting: {{ title: 'Q2 Board Meeting', date: 'Thu 18 Jun · 14:00', room: 'Riyadh HQ + remote' }},
+    kpis: [],
+    decks: [],
+    actions: [
+      {{ item: 'Ratify the 60% EUR hedge', owner: 'Group CFO', due: 'on approval' }},
+      {{ item: 'Approve GLP-1 JV signature', owner: 'Group CEO', due: 'this week' }},
+      {{ item: 'Review Tamween recovery at Q3', owner: 'Board', due: 'Q3' }}
+    ],
+    supplementary_questions: [
+      {{ q: 'What is the downside if EUR strengthens after a 60% hedge?', to: 'Group CEO', status: 'sent' }},
+      {{ q: 'Can the JV be funded fully from cash without touching the facility?', to: 'Group CFO', status: 'answered' }}
+    ],
+    live_prompts: ['Why is EBITDA 20 bps under plan?'],
+    lifecycle_flow: [
+      {{ state_id: 'pre', label: 'Pre-board', detail: 'Prepare governed packet', presented: true }},
+      {{ state_id: 'live', label: 'Live', detail: 'Run the room inside approved material', presented: false }},
+      {{ state_id: 'closed', label: 'Closed', detail: 'Freeze memory after the room closes', presented: false }}
+    ],
+    frozen_snapshot: {{ status: 'frozen', summary: 'Frozen snapshot summary.' }},
+    board_summary: 'Board summary fallback.'
+  }}
+}};
+
+harness.state.activePersona = 'ceo';
+harness.state.activeBoard = 'pre';
+harness.renderBoardPortal();
+console.log(JSON.stringify({{ preHtml: elements['board-portal'].innerHTML }}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_pre_state_content_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    for text in [
+        "Ratify the 60% EUR hedge",
+        "Approve GLP-1 JV signature",
+        "Review Tamween recovery at Q3",
+        "What is the downside if EUR strengthens after a 60% hedge?",
+        "Can the JV be funded fully from cash without touching the facility?",
+    ]:
+        assert text in result["preHtml"], (
+            "Pre-board render must keep the visible lifecycle actions and supplementary questions that the live board path depends on"
+        )
 
 
 def test_board_portal_css_does_not_permanently_hide_second_panel():
