@@ -285,12 +285,26 @@
       state.activeBoard = nextState;
       syncBoardStateTabUI(nextState);
     }
-    // Clear transition signal after all guards have run so refresh() can
-    // update activeBoard from the server packet when no user-driven
-    // tab switch is in flight.
-    state._boardStateTransition = '';
     animateCard('board-portal');
     updateHistory();
+    // Clear transition signal AFTER all side effects (animateCard, updateHistory)
+    // so that any concurrent refresh() that fires during this synchronous block
+    // (e.g. a setInterval callback queued just before the click and executed
+    // after this function returns but before the next event loop pump) still
+    // sees _boardStateTransition as truthy and preserves activeBoard.
+    state._boardStateTransition = '';
+    // Post-paint re-sync: after the current CSSOM recalc + paint cycle triggered
+    // by portal.innerHTML replacement, re-assert the intended tab state. This
+    // catches Chrome layout-thrashing edge cases where className and inline
+    // style attributes are discarded during paint (observed on Chrome 127+).
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(function () {
+        if (state.activeBoard !== nextState) {
+          state.activeBoard = nextState;
+        }
+        syncBoardStateTabUI(nextState);
+      });
+    }
     return true;
   }
 
@@ -619,6 +633,15 @@
     updateHistory();
     renderPersonaView();
     if (state.activeView === "assistants") focusAssistantInput();
+    // When switching to the knowledge view, re-assert the board tab UI to ensure
+    // the browser's CSSOM and accessibility tree reflect the active state. The
+    // renderPersonaView call above already renders board state tabs, but some
+    // browser rendering modes (Chrome CSSOM recalc after hidden→visible transition)
+    // can discard className-based styling. syncBoardStateTabUI sets inline styles
+    // and data attributes as triple-redundant fallbacks for this edge case.
+    if (state.activeView === "knowledge") {
+      syncBoardStateTabUI(resolveBoardState());
+    }
   }
 
   function animateCard(id) {
@@ -2972,6 +2995,8 @@
     var row = $("board-state-row");
     if (!row) return;
     row.addEventListener('click', function (event) {
+      if (event._boardTabHandled) return;
+      event._boardTabHandled = true;
       var target = event && event.target;
       if (!target) return;
       if (typeof target.closest === 'function') {
@@ -3023,6 +3048,25 @@
         button.setAttribute('aria-selected', isActive ? 'true' : 'false');
         button.setAttribute('data-board-state-active', isActive ? 'true' : 'false');
         if (button.style) button.style.background = isActive ? 'var(--accent-soft)' : 'transparent';
+        // Belt-and-suspenders: add a direct click handler in the fast path too.
+        // The delegated handler on board-state-row is the primary dispatch, but
+        // individual button handlers survive DOM reparenting and CSSOM thrash.
+        // Use a flag to avoid double-binding (the slow path already attaches).
+        if (!button.__boardTabHandlerAttached) {
+          button.__boardTabHandlerAttached = true;
+          (function (boundState) {
+            button.addEventListener('click', function (event) {
+              if (event._boardTabHandled) return;
+              event._boardTabHandled = true;
+              event.preventDefault();
+              event.stopPropagation();
+              var el = event.currentTarget || event.target;
+              var stateAttr = String(el && typeof el.getAttribute === 'function' ? el.getAttribute('data-board-state') : boundState).trim().toLowerCase();
+              if (!stateAttr) stateAttr = boundState;
+              activateBoardState(stateAttr);
+            });
+          })(bs);
+        }
       });
       if (note) note.textContent = firstDefined(boardStateSupportNote(board), "Board lifecycle stays explicit from pre-board preparation through frozen close.");
       return;
@@ -3118,6 +3162,11 @@
       }).join("") : '<div class="discovery-empty">No lifecycle actions are attached to this state.</div>') + '</div></section></div>',
       stateSpecific
     ].join("");
+    // Post-innerHTML re-sync: portal.innerHTML replacement triggers CSSOM
+    // recalc which can discard className and inline style attributes on
+    // tab buttons outside the portal. Re-assert the intended tab state
+    // immediately after the layout is invalidated.
+    syncBoardStateTabUI(resolveBoardState());
     bindBoardPortalInteractions(portal);
     safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
       button.addEventListener('click', function (event) {

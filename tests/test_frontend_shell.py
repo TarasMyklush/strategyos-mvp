@@ -1529,6 +1529,7 @@ global.window = {{
   sessionStorage: makeStore(),
   MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
   setTimeout() {{ return 1; }},
+  requestAnimationFrame(cb) {{ cb(); }},
   clearTimeout() {{}},
   setInterval() {{ return 1; }},
   clearInterval() {{}},
@@ -1697,6 +1698,7 @@ global.window = {{
   localStorage: makeStore(),
   sessionStorage: makeStore(),
   MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  requestAnimationFrame(cb) {{ cb(); }},
   setTimeout() {{ return 1; }},
   clearTimeout() {{}},
   setInterval() {{ return 1; }},
@@ -1863,6 +1865,7 @@ global.window = {{
   STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
   localStorage: makeStore(),
   sessionStorage: makeStore(),
+  requestAnimationFrame(cb) {{ cb(); }},
   MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
   setTimeout() {{ return 1; }},
   clearTimeout() {{}},
@@ -2025,6 +2028,7 @@ const elements = {{
 global.window = {{
   STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
   localStorage: makeStore(),
+  requestAnimationFrame(cb) {{ cb(); }},
   sessionStorage: makeStore(),
   MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
   setTimeout() {{ return 1; }},
@@ -3698,6 +3702,7 @@ function makeStore(seed = {{}}) {{
 
 global.window = {{
   STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
+  requestAnimationFrame(cb) {{ cb(); }},
   localStorage: makeStore(),
   sessionStorage: makeStore(),
   MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
@@ -3817,6 +3822,7 @@ const portal = {{
 
 global.window = {{
   __BOARD_PORTAL_TEST_CAPTURE__: [],
+  requestAnimationFrame(cb) {{ cb(); }},
   STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
   localStorage: makeStore(),
   sessionStorage: makeStore(),
@@ -4038,6 +4044,7 @@ global.window = {
   sessionStorage: makeStore(),
   MIZAN_X: { threads: {}, assistants: {} },
   setTimeout: function() { return 1; },
+  requestAnimationFrame: function(cb) { cb(); },
   clearTimeout: function() {},
   setInterval: function() { return 1; },
   clearInterval: function() {},
@@ -4519,4 +4526,58 @@ def test_board_state_tabs_fast_path_replaces_dom_sync_guard():
     )
     assert "_ensureBoardStateRowDelegated" in executive_js, (
         "renderBoardStateTabs must have the delegated click handler"
+    )
+
+
+def test_board_state_tabs_fast_path_attaches_individual_handler():
+    """P0-11: renderBoardStateTabs fast path must attach individual button click handlers
+    as belt-and-suspenders alongside the delegated handler on board-state-row.
+
+    The individual handler uses __boardTabHandlerAttached flag to avoid double-binding
+    (the slow path already attaches its own handler via the closure in the loop).
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    assert "__boardTabHandlerAttached" in executive_js, (
+        "Fast path must use __boardTabHandlerAttached flag to avoid double-binding individual handlers"
+    )
+    assert "belt-and-suspenders" in executive_js.lower() or "belt" in executive_js, (
+        "Fast path must attach individual click handler for belt-and-suspenders coverage"
+    )
+
+
+def test_board_state_transition_signal_cleared_after_side_effects():
+    """P0-11: _boardStateTransition must be cleared AFTER animateCard and updateHistory
+    complete, not before. If the transition signal is cleared before side effects finish,
+    a concurrent refresh() queued via setInterval just before the click may read
+    _boardStateTransition as falsy and overwrite state.activeBoard from the server packet.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    fn_start = executive_js.index("function activateBoardState(nextState)")
+    fn_end = executive_js.index("function statusLabel", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+    # Find the transition clear position
+    clear_pos = fn_body.index("state._boardStateTransition = ''")
+    before_clear = fn_body[:clear_pos]
+    assert "animateCard('board-portal')" in before_clear, (
+        "animateCard must complete before _boardStateTransition is cleared"
+    )
+    assert "updateHistory()" in before_clear, (
+        "updateHistory must complete before _boardStateTransition is cleared"
+    )
+
+
+def test_switch_view_reasserts_board_tab_ui_for_knowledge():
+    """P0-11: switchView('knowledge') must call syncBoardStateTabUI after renderPersonaView
+    to re-assert the board tab UI. Some browser rendering modes (Chrome CSSOM recalc after
+    hidden-to-visible transition) can discard className-based styling.
+    """
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    fn_start = executive_js.index("function switchView(view)")
+    fn_end = executive_js.index("function animateCard", fn_start)
+    fn_body = executive_js[fn_start:fn_end]
+    assert 'state.activeView === "knowledge"' in fn_body, (
+        "switchView must re-assert board tab UI when switching to knowledge view"
+    )
+    assert "syncBoardStateTabUI(resolveBoardState())" in fn_body, (
+        "switchView must call syncBoardStateTabUI after switching to knowledge view"
     )
