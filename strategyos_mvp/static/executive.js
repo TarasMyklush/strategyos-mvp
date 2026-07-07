@@ -252,6 +252,22 @@
     renderBoardPortal();
   }
 
+  function _domSyncGuard(targetState) {
+    // Multi-phase DOM sync: setTimeout catches deferred CSSOM recalc
+    // (Safari/mobile). requestAnimationFrame catches the next paint cycle
+    // (Chrome layout thrashing during innerHTML replacement). Both fire
+    // because no single timing covers all browser rendering models.
+    window.setTimeout(function () {
+      syncBoardStateTabUI(targetState);
+      // Clear the cooldown after the first guard fires so subsequent
+      // refresh() calls can read the server packet for board state update.
+      state._boardStateTransitionCooldown = 0;
+      window.requestAnimationFrame(function () {
+        syncBoardStateTabUI(targetState);
+      });
+    }, 0);
+  }
+
   function activateBoardState(nextState) {
     nextState = String(nextState || '').trim().toLowerCase();
     if (!nextState) return false;
@@ -295,13 +311,14 @@
     // update state.activeBoard from the server packet when no user-driven
     // tab switch is in flight.
     state._boardStateTransition = '';
-    // Final belt: schedule one more sync after the current JS stack and
-    // any CSSOM recalc / style resolution completes. Some DOM environments
-    // (Safari, mobile browsers) defer className changes during innerHTML
-    // replacement cycles. A setTimeout at 0 lets those settle.
-    window.setTimeout(function () {
-      syncBoardStateTabUI(nextState);
-    }, 0);
+    // Set a brief cooldown window so refresh() does not intervene before the
+    // multi-phase DOM sync guard completes. The cooldown is cleared inside
+    // _domSyncGuard after the first setTimeout fires (end of current stack).
+    state._boardStateTransitionCooldown = Date.now() + 100;
+    // Multi-phase DOM sync guard: covers Chrome layout thrashing during
+    // innerHTML replacement (setTimeout 0) and Safari deferred CSSOM recalc
+    // during paint (requestAnimationFrame). Clears cooldown after first pass.
+    _domSyncGuard(nextState);
     return true;
   }
 
@@ -2995,14 +3012,20 @@
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", modeState === activeBoardState ? "true" : "false");
       button.innerHTML = '<span class="state-tab__copy"><strong>' + escapeHtml(firstDefined(mode.label, mode.state_id)) + '</strong><span>' + escapeHtml(firstDefined(mode.summary, mode.detail, "")) + '</span></span>';
-      button.addEventListener('click', function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        var el = event.currentTarget || event.target;
-        var stateAttr = String(el && typeof el.getAttribute === 'function' ? el.getAttribute('data-board-state') : modeState).trim().toLowerCase();
-        if (!stateAttr) stateAttr = modeState;
-        activateBoardState(stateAttr);
-      });
+      // Capture modeState in closure so the handler does not depend on DOM
+      // attributes that may be destroyed during innerHTML replacement in
+      // renderBoardStateTabs. This is the state the button was CREATED with,
+      // regardless of DOM mutations during the render cycle.
+      (function (boundState) {
+        button.addEventListener('click', function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          var el = event.currentTarget || event.target;
+          var stateAttr = String(el && typeof el.getAttribute === 'function' ? el.getAttribute('data-board-state') : boundState).trim().toLowerCase();
+          if (!stateAttr) stateAttr = boundState;
+          activateBoardState(stateAttr);
+        });
+      })(modeState);
       row.appendChild(button);
     });
     if (note) note.textContent = firstDefined(boardStateSupportNote(board), "Board lifecycle stays explicit from pre-board preparation through frozen close.");
@@ -3573,7 +3596,12 @@
       // During an active board-state transition, the packet's presentation_state
       // must not override the user's in-flight selection. _boardStateTransition
       // is set by activateBoardState and cleared after the render cycle completes.
-      if (!state._boardStateTransition) {
+      // A _boardStateTransitionCooldown timestamp provides a brief window after
+      // the transition clears during which refresh() also defers to the existing
+      // frontend state. This prevents a refresh() that fires between the
+      // _boardStateTransition clear and the multi-phase DOM sync guard (setTimeout
+      // + requestAnimationFrame) from reading a stale server presentation_state.
+      if (!state._boardStateTransition && !state._boardStateTransitionCooldown) {
         state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, "pre");
       }
       state.activeDriverKey = firstDefined((state.latestPacket.executive_modes || {}).active_driver_key, state.activeDriverKey, "board_packet");

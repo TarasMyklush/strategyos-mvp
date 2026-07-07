@@ -9097,7 +9097,10 @@ async def _assistant_chat_response(
             assistant_context=assistant_context,
             driver_context=driver_context,
         )
-        context["public_context_packet"] = dict(context.get("public_context_packet") or {})
+        packet = context.get("public_context_packet")
+        if not isinstance(packet, dict) or not packet:
+            packet = {"source": "empty_packet", "public_safe": True}
+        context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
@@ -9273,7 +9276,7 @@ async def _assistant_chat_response(
                 assistant_context=assistant_context,
             )
 
-    if public_safe and context.get("public_context_packet"):
+    if public_safe and context.get("public_context_packet") is not None:
         if mode == "llm":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
