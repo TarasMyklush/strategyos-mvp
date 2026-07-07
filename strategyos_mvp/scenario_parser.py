@@ -1455,6 +1455,55 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
             basis="Matched challenged-cases prompt against the shared public board portal packet.",
         )
 
+    if (
+        "track for the board" in norm
+        or "board on thursday" in norm
+        or ("board" in norm and "thursday" in norm)
+        or "board readiness" in norm
+    ):
+        week_items = list(packet.get("week") or [])
+        board_week = next(
+            (item for item in week_items if "board" in _normalize(item.get("title") or item.get("key") or "")),
+            {},
+        )
+        prep = str(board_week.get("prep") or "Two decisions remain open and the margin narrative still needs your line.")
+        return ScenarioResult(
+            scenario_id="public_exec_board_readiness",
+            scenario_label="Executive Surface — Board Readiness",
+            matched=True,
+            answer=(
+                "You are directionally on track for Thursday's board, but not clean yet. "
+                f"The visible packet shows {surfaced_reports} surfaced report{'' if surfaced_reports == 1 else 's'} and {challenged_count} challenged case{'' if challenged_count == 1 else 's'} still tied to supplementary review. "
+                f"The week-ahead note is explicit: {prep} "
+                "Next step: close the challenged evidence, tighten the margin narrative around FX/API cost, and walk into the room with the two open decisions already framed for approval."
+            ),
+            calculations=[
+                CalculationStep(
+                    step_id="board_readiness",
+                    description="Read visible board-readiness posture from the public executive packet",
+                    formula="READ public board packet reports + challenged cases + week-ahead prep",
+                    inputs={"persona": persona_id},
+                    result=f"{surfaced_reports} surfaced report(s); {challenged_count} challenged case(s)",
+                    unit="board readiness",
+                    citations=[
+                        _public_citation("public_context_packet.board_portal.deck_release"),
+                        _public_citation("public_context_packet.board_portal.supplementary"),
+                        _public_citation("public_context_packet.week[0]"),
+                    ],
+                )
+            ],
+            kg_context=[],
+            citations=[
+                _public_citation("public_context_packet.week[0]"),
+                _public_citation("public_context_packet.board_portal.state_detail"),
+            ],
+            assumptions=["Public-safe answer is limited to the visible board packet and week-ahead prep summary."],
+            hallucination_risk=_public_risk_low("Public board-readiness prompt grounded in the executive packet."),
+            suggestions=["Help me prepare the board pack for the pre-board stage.", "Project FX hedge impact on EBITDA margin"],
+            scenario_type="deterministic",
+            basis="Matched board-readiness prompt against the shared public executive packet.",
+        )
+
     if "gap widening" in norm:
         revenue = _public_driver(packet, "revenue") or {}
         return ScenarioResult(
@@ -1635,7 +1684,12 @@ def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> Scenario
             basis="Matched margin-pressure prompt against public executive packet.",
         )
 
-    if any(token in norm for token in ("fx", "hedge", "currency")) and any(token in norm for token in ("impact", "ebitda", "margin", "bridge")):
+    if any(token in norm for token in ("fx", "hedge", "currency", "eur")) and (
+        any(token in norm for token in ("impact", "ebitda", "margin", "bridge"))
+        or "what would" in norm
+        or "what does it save" in norm
+        or "save" in norm
+    ):
         return ScenarioResult(
             scenario_id="public_exec_fx_impact",
             scenario_label="Executive Surface — FX Hedge Impact",

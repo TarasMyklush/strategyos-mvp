@@ -1601,6 +1601,35 @@ def test_public_manual_board_prep_prompt_returns_board_guidance_from_drawer_inpu
         _restore_env(original)
 
 
+def test_public_thread_board_readiness_prompt_returns_specific_guidance_not_packet_summary(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Am I on track for the board on Thursday?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "drawer_input", "board_state": "pre"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert payload["matched"] is True
+        assert "thursday" in answer
+        assert "challenged" in answer
+        assert "next step" in answer
+        assert "revenue remains ahead while the board still needs a clean margin story" not in answer
+        assert payload["citations"]
+    finally:
+        _restore_env(original)
+
+
 def test_public_quick_prompt_regression_still_returns_grounded_answer(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
@@ -1624,6 +1653,35 @@ def test_public_quick_prompt_regression_still_returns_grounded_answer(monkeypatc
         assert payload["assistant_context"]["entrypoint"] == "quick_prompt"
         assert "fx" in answer
         assert "hedge" in answer
+        assert payload["citations"]
+    finally:
+        _restore_env(original)
+
+
+def test_public_quick_prompt_what_would_60_percent_hedge_save_returns_fx_specific_answer(monkeypatch):
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "What would a 60% EUR hedge save?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "executive_surface", "entrypoint": "driver_chip", "board_state": "pre", "driver_key": "ebitda"},
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        answer = payload["answer"].lower()
+        assert payload["status"] == "ok"
+        assert payload["matched"] is True
+        assert "hedge" in answer
+        assert "fx" in answer or "eur" in answer
+        assert "15 bps" in answer or "sar 9k" in answer
+        assert "revenue remains ahead while the board still needs a clean margin story" not in answer
         assert payload["citations"]
     finally:
         _restore_env(original)
