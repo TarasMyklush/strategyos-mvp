@@ -125,9 +125,20 @@
   }
 
   function bindBoardPortalInteractions(portal) {
-    if (!portal || portal.__boardPortalInteractionsBound) return;
-    portal.__boardPortalInteractionsBound = true;
-    portal.addEventListener('click', function (event) {
+    if (!portal) return;
+    // Remove any previously bound delegated handler before re-binding.
+    // portal.__boardPortalHandler is the stored reference. innerHTML replacement
+    // on the portal never removes event listeners on the portal element itself,
+    // so the old handler would persist across renders and continue to handle
+    // clicks correctly. However, if the board data changes between renders,
+    // the closure over boardActionPrompt(boardActionKey, getBoardPortal())
+    // would see stale state. Re-binding ensures the handler always reads the
+    // current getBoardPortal() result and the latest boardActionPrompt mapping.
+    if (portal.__boardPortalHandler) {
+      portal.removeEventListener('click', portal.__boardPortalHandler);
+      portal.__boardPortalHandler = null;
+    }
+    portal.__boardPortalHandler = function (event) {
       var target = eventTargetElement(event);
       if (!target) return;
       var promptButton = target.closest('[data-board-prompt]');
@@ -143,7 +154,8 @@
         event.stopPropagation();
         askAssistant(boardActionPrompt(actionButton.getAttribute('data-board-action') || '', getBoardPortal()), actionButton);
       }
-    });
+    };
+    portal.addEventListener('click', portal.__boardPortalHandler);
   }
 
   function isAssistantFeedbackTarget(element) {
@@ -3323,20 +3335,11 @@
       window.setTimeout(_boardPortalReSync, 1000);
     }
     bindBoardPortalInteractions(portal);
-    safeArray(portal.querySelectorAll('[data-board-prompt]')).forEach(function (button) {
-      button.addEventListener('click', function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        activateBoardPrompt(button.getAttribute('data-board-prompt') || '', button);
-      });
-    });
-    safeArray(portal.querySelectorAll('[data-board-action]')).forEach(function (button) {
-      button.addEventListener('click', function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        activateBoardAction(button.getAttribute('data-board-action') || '', getBoardPortal(), button);
-      });
-    });
+    // No individual click handlers needed for [data-board-prompt] or
+    // [data-board-action] — bindBoardPortalInteractions uses a single
+    // delegated click handler on the portal element that survives innerHTML
+    // replacement and is re-bound on each render to capture fresh closures
+    // over getBoardPortal() and boardActionPrompt().
     safeArray(portal.querySelectorAll('.snapshot-card')).forEach(function (card) {
       card.style.cursor = 'pointer';
       card.onclick = function () {
