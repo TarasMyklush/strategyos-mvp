@@ -1776,10 +1776,10 @@ def test_board_portal_refresh_preserves_user_selected_stage():
     """Refresh must not overwrite the stage a user just selected in the Board Portal."""
     js = _static_executive_js()
 
-    expected = "state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, \"pre\");"
+    expected = "if (!state._boardStateTransition) {\n        state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, \"pre\");\n      }"
     assert expected in js, (
-        "Board Portal refresh must prefer the locally selected activeBoard before packet defaults, "
-        "or Live/Closed clicks snap back to Pre-board"
+        "Board Portal refresh must guard the activeBoard assignment behind _boardStateTransition, "
+        "or Live/Closed clicks snap back to Pre-board during a concurrent refresh"
     )
 
 

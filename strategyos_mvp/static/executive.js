@@ -99,7 +99,7 @@
 
   function boardActionPrompt(actionKey, board) {
     var key = String(actionKey || '').trim().toLowerCase();
-    var boardState = String(firstDefined((board || {}).presentation_state, (board || {}).state, state.activeBoard, 'pre')).toLowerCase();
+    var boardState = resolveBoardState();
     var boardStateLabel = statusLabel(boardState).toLowerCase();
     var challengedCount = Number(firstDefined(((board || {}).supplementary || {}).question_count, 0)) || 0;
     if (key === 'prepare_board_pack') {
@@ -158,7 +158,7 @@
   function boardStateSupportNote(board) {
     var stateDetail = (board || {}).state_detail || {};
     if (stateDetail.note) return stateDetail.note;
-    var boardState = String(firstDefined(state.activeBoard, (board || {}).presentation_state, (board || {}).state, 'pre')).toLowerCase();
+    var boardState = resolveBoardState();
     if (boardState === 'pre') {
       return 'Close evidence gaps now so the CEO sees one clean board view, then keep live answers inside released material.';
     }
@@ -219,6 +219,19 @@
     });
   }
 
+  function resolveBoardState() {
+    // Priority: in-transition > locally selected > server presentation_state > default
+    return String(
+      firstDefined(
+        state._boardStateTransition,
+        state.activeBoard,
+        getBoardPortal().presentation_state,
+        getBoardPortal().state,
+        'pre'
+      )
+    ).trim().toLowerCase();
+  }
+
   function syncBoardStateTabUI(nextState) {
     var row = $("board-state-row");
     if (!row) return;
@@ -266,13 +279,18 @@
     // of state.activeBoard (e.g. during a concurrent refresh() that
     // replaced state.latestPacket mid-render).
     syncBoardStateTabUI(nextState);
-    state._boardStateTransition = '';
     // Re-assert guard: if a concurrent refresh() reset activeBoard during
     // renderPersonaView, restore it. This is the final belt.
     if (state.activeBoard !== nextState) {
       state.activeBoard = nextState;
       syncBoardStateTabUI(nextState);
     }
+    // Clear the transition signal after all sync guards have run.
+    // It must remain set until after renderPersonaView so that
+    // resolveBoardState() — used by renderBoardStateTabs and
+    // renderBoardPortal — reads the intended state even if
+    // state.activeBoard is temporarily stale.
+    state._boardStateTransition = '';
     // Final belt: schedule one more sync after the current JS stack and
     // any CSSOM recalc / style resolution completes. Some DOM environments
     // (Safari, mobile browsers) defer className changes during innerHTML
@@ -2959,7 +2977,7 @@
     var board = getBoardPortal();
     var modes = safeArray(board.lifecycle_flow).length ? safeArray(board.lifecycle_flow) : (((state.latestPacket || {}).executive_modes || {}).board_states || []);
     var note = $("board-state-note");
-    var activeBoardState = String(firstDefined(state.activeBoard, board.presentation_state, board.state, 'pre')).trim().toLowerCase();
+    var activeBoardState = resolveBoardState();
     if (!row) return;
     row.innerHTML = "";
     safeArray(modes).forEach(function (mode) {
@@ -2998,7 +3016,7 @@
     var questions = safeArray(safeArray(board.supplementary_questions).length ? board.supplementary_questions : board.supplementary).slice(0, 3);
     var deckRelease = board.deck_release || {};
     var snapshot = board.frozen_snapshot || {};
-    var boardState = String(firstDefined(state.activeBoard, board.presentation_state, board.state, 'pre')).toLowerCase();
+    var boardState = resolveBoardState();
     var stateDetail = boardStateDetailForRender(boardState, board);
     var lifecycle = boardLifecycleForRender(boardState, board);
     var livePrompts = safeArray(safeArray(board.live_prompts).length ? board.live_prompts : board.livePrompts);
@@ -3548,7 +3566,12 @@
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
       state.activePersona = firstDefined((state.latestPacket.executive_modes || {}).active_persona_id, state.activePersona, "ceo");
       if (state.activePersona === "board") state.activeView = "home";
-      state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, "pre");
+      // During an active board-state transition, the packet's presentation_state
+      // must not override the user's in-flight selection. _boardStateTransition
+      // is set by activateBoardState and cleared after the render cycle completes.
+      if (!state._boardStateTransition) {
+        state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, "pre");
+      }
       state.activeDriverKey = firstDefined((state.latestPacket.executive_modes || {}).active_driver_key, state.activeDriverKey, "board_packet");
       state.activeCompany = firstDefined((state.latestPacket.executive_modes || {}).company_id, state.activeCompany);
       state.activePortfolio = firstDefined((state.latestPacket.executive_modes || {}).portfolio_id, state.activePortfolio);
