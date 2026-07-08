@@ -416,7 +416,30 @@ def _execute_strategyos_workflow(
     summary["pointer_metadata"] = update_run_pointers(summary, summary_path)
     summary["latest_pointer"] = summary["pointer_metadata"]["latest"]
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    summary["twin_kpi_refresh"] = _refresh_twin_kpis_best_effort(summary)
     return summary, result
+
+
+def _refresh_twin_kpis_best_effort(summary: dict[str, Any]) -> dict[str, Any]:
+    """Best-effort twin KPI refresh from this run's summary.
+
+    Mirrors the Neo4j/Qdrant sync pattern above: a failure here must never
+    fail the run itself, since it is a downstream twin-dashboard concern,
+    not part of the governed finance deliverable. Every access -- including
+    reading the feature flag -- stays inside the guard for that reason.
+    """
+    try:
+        if not getattr(CONFIG, "twins_enabled", False):
+            return {"status": "skipped", "reason": "twins_enabled is False."}
+
+        from .twins.kpi_ingest import refresh_kpis_from_run
+        from .twins.store import build_app_repositories
+
+        repositories = build_app_repositories()
+        updated = refresh_kpis_from_run(repository=repositories.kpis, summary=summary)
+        return {"status": "ok", "updated_node_ids": sorted(updated.keys())}
+    except Exception as exc:  # pragma: no cover - defensive guard, mirrors neo4j/qdrant sync
+        return {"status": "failed", "reason": str(exc)}
 
 
 def attach_local_review_checkpoint(
