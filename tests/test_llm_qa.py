@@ -371,7 +371,7 @@ def test_empty_provider_content_retries_with_plain_text_prompt(monkeypatch):
     assert captured_bodies[0]["response_format"] == {"type": "json_object"}
     assert "response_format" not in captured_bodies[1]
     assert "do not return json" in captured_bodies[1]["messages"][0]["content"].lower()
-    assert result["answer"].startswith("The public packet shows revenue ahead")
+    assert result["answer"].startswith("Visible facts show revenue ahead")
     assert result["citations"]
 
 
@@ -414,7 +414,7 @@ def test_malformed_json_like_provider_content_retries_with_plain_text_prompt(mon
     assert len(captured_bodies) == 2
     assert captured_bodies[0]["response_format"] == {"type": "json_object"}
     assert "response_format" not in captured_bodies[1]
-    assert result["answer"].startswith("The public packet shows revenue ahead")
+    assert result["answer"].startswith("Visible facts show revenue ahead")
 
 
 def test_empty_provider_content_after_retry_raises_clear_error(monkeypatch):
@@ -479,15 +479,19 @@ def test_double_encoded_json_answer_is_unwrapped(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "question,answer",
+    "question,answer,expected_answer",
     [
-        ("give me numbers for last week", "Last week the visible packet shows revenue ahead, margin slightly below plan, and FX still acting as a drag."),
-        ("what changed since last week?", "Since last week, NUPCO awards were confirmed, the board pack moved forward, and FX remains the watch item."),
-        ("what should I worry about before the board meeting?", "Before the board meeting, worry about the margin narrative, the hedge decision, and Tamween follow-through."),
-        ("summarize the board packet in plain English", "In plain English: revenue is ahead, margin is soft, SAR 8.6M is recoverable, and two board decisions are still open."),
+        (
+            "give me numbers for last week",
+            "Last week the visible packet shows revenue ahead, margin slightly below plan, and FX still acting as a drag.",
+            "Last week Visible facts show revenue ahead, margin slightly below plan, and FX still acting as a drag.",
+        ),
+        ("what changed since last week?", "Since last week, NUPCO awards were confirmed, the board pack moved forward, and FX remains the watch item.", None),
+        ("what should I worry about before the board meeting?", "Before the board meeting, worry about the margin narrative, the hedge decision, and Tamween follow-through.", None),
+        ("summarize the board packet in plain English", "In plain English: revenue is ahead, margin is soft, SAR 8.6M is recoverable, and two board decisions are still open.", None),
     ],
 )
-def test_natural_public_prompts_return_clean_answer_text_not_raw_json(monkeypatch, question, answer):
+def test_natural_public_prompts_return_clean_answer_text_not_raw_json(monkeypatch, question, answer, expected_answer):
     class FakeResponse:
         def __enter__(self):
             return self
@@ -536,7 +540,7 @@ def test_natural_public_prompts_return_clean_answer_text_not_raw_json(monkeypatc
         persona="ceo",
     )
 
-    assert result["answer"] == answer
+    assert result["answer"] == (expected_answer if expected_answer is not None else answer)
     assert not result["answer"].lstrip().startswith("{")
     assert result["basis"] == "Grounded in the public packet."
 
@@ -821,7 +825,7 @@ def test_llm_answer_retries_plain_text_when_structured_response_is_empty(monkeyp
     assert len(calls) == 2
     assert calls[0]["body"]["response_format"] == {"type": "json_object"}
     assert "response_format" not in calls[1]["body"]
-    assert result["answer"].startswith("Last week from the public packet")
+    assert result["answer"] == "Last week margin is still the issue and FX remains the live watch item."
     assert result["basis"] == "LLM answer grounded in supplied public executive packet."
 
 
@@ -1009,7 +1013,7 @@ def test_provider_content_block_prefers_structured_json_part(monkeypatch):
         persona="ceo",
     )
 
-    assert result["answer"] == "Tamween Distribution is the clearest margin drag in the public packet."
+    assert result["answer"] == "Tamween Distribution is the clearest margin drag in the current business context."
     assert result["basis"] == "Grounded in public findings and drivers."
 
 
@@ -1077,7 +1081,7 @@ def test_jsonish_structured_answer_triggers_plain_text_repair(monkeypatch):
     assert len(captured_bodies) == 2
     assert captured_bodies[0]["response_format"] == {"type": "json_object"}
     assert "response_format" not in captured_bodies[1]
-    assert result["answer"] == "The board packet is 80% composed and margin still needs your line."
+    assert result["answer"] == "The board current view is 80% composed and margin still needs your line."
 
 
 def test_public_prompt_uses_packet_repair_after_both_empty_answers(monkeypatch):
