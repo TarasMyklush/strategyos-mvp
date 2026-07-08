@@ -39,10 +39,13 @@ from strategyos_mvp.twins.memory import (
     add_investigation,
     resolve_investigation,
 )
+from strategyos_mvp.twins.store import build_repositories
 from strategyos_mvp.twins.tools import (
     check_health,
     send_message,
     escalate_to_human,
+    query_evidence,
+    query_kpi,
 )
 
 
@@ -563,3 +566,128 @@ class TestTools:
         escalate_to_human("Test escalation", {"key": "value"})
         captured = capsys.readouterr()
         assert "HUMAN ESCALATION" in captured.out
+
+    def test_escalate_to_human_persists_to_the_human_inbox(self, tmp_path, capsys):
+        repositories = build_repositories(tmp_path)
+
+        envelope = escalate_to_human(
+            "Margin gap unresolved after two cycles",
+            {"kpi_node_id": "margin_q2"},
+            sender_role="cfo",
+            repositories=repositories,
+        )
+
+        assert envelope["recipient_role"] == "human"
+        assert envelope["sender_role"] == "cfo"
+        assert envelope["message_type"] == "escalation"
+        assert envelope["priority"] == "critical"
+
+        human_inbox = repositories.inboxes.load("human")
+        assert len(human_inbox) == 1
+        assert human_inbox[0]["subject"] == "Margin gap unresolved after two cycles"
+        assert human_inbox[0]["context"]["kpi_node_id"] == "margin_q2"
+
+    def test_query_kpi_resolves_a_known_node_from_the_repository(self, tmp_path):
+        repositories = build_repositories(tmp_path)
+
+        result = query_kpi("revenue_q2", repositories=repositories)
+
+        assert result["node_id"] == "revenue_q2"
+        assert result["status"] in ("current", "stale", "missing")
+        assert result["value_display"] != "—"
+        assert "gaps" in result
+
+    def test_query_kpi_returns_unresolved_for_unknown_node(self, tmp_path):
+        repositories = build_repositories(tmp_path)
+
+        result = query_kpi("no_such_kpi_node", repositories=repositories)
+
+        assert result["node_id"] == "no_such_kpi_node"
+        assert result["status"] == "unresolved"
+        assert result["value_display"] == "—"
+
+
+class TestQueryEvidence:
+    """query_evidence retrieves keyword/lexical evidence via search_run_vectors.
+
+    Not semantic search — the underlying vectors are hash-based, so this
+    verifies lexical retrieval, not embedding similarity.
+    """
+
+    def test_query_evidence_maps_search_run_vectors_results(self, monkeypatch):
+        import strategyos_mvp.twins.tools as tools_module
+
+        def fake_check_qdrant_ready():
+            return {"status": "ok"}
+
+        def fake_search_run_vectors(run_id, query, *, limit=5):
+            assert run_id == "run-123"
+            assert query == "duplicate payment"
+            return {
+                "status": "ready",
+                "run_id": run_id,
+                "results": [
+                    {
+                        "point_id": "pt-1",
+                        "score": 0.82,
+                        "summary": "Acme Co - AP_Ledger.xlsx - row 42 - duplicate invoice",
+                        "source": "AP_Ledger.xlsx",
+                    },
+                    {
+                        "point_id": "pt-2",
+                        "score": 0.5,
+                        "excerpt": "second match excerpt",
+                        "source_path": "GL_Extract.csv",
+                    },
+                ],
+            }
+
+        monkeypatch.setattr(
+            "strategyos_mvp.vector_store.check_qdrant_ready", fake_check_qdrant_ready
+        )
+        monkeypatch.setattr(
+            "strategyos_mvp.vector_store.search_run_vectors", fake_search_run_vectors
+        )
+
+        results = query_evidence("run-123", "duplicate payment", limit=5)
+
+        assert results == [
+            {
+                "id": "pt-1",
+                "content": "Acme Co - AP_Ledger.xlsx - row 42 - duplicate invoice",
+                "source": "AP_Ledger.xlsx",
+                "score": 0.82,
+            },
+            {
+                "id": "pt-2",
+                "content": "second match excerpt",
+                "source": "GL_Extract.csv",
+                "score": 0.5,
+            },
+        ]
+
+    def test_query_evidence_returns_empty_when_qdrant_not_configured(self, monkeypatch):
+        def fake_check_qdrant_ready():
+            return {"status": "skipped", "reason": "QDRANT_URL is not configured."}
+
+        monkeypatch.setattr(
+            "strategyos_mvp.vector_store.check_qdrant_ready", fake_check_qdrant_ready
+        )
+
+        assert query_evidence("run-123", "anything", limit=5) == []
+
+    def test_query_evidence_returns_empty_when_search_unavailable(self, monkeypatch):
+        def fake_check_qdrant_ready():
+            return {"status": "ok"}
+
+        def fake_search_run_vectors(run_id, query, *, limit=5):
+            return {"status": "missing", "reason": "Run ID is unavailable."}
+
+        monkeypatch.setattr(
+            "strategyos_mvp.vector_store.check_qdrant_ready", fake_check_qdrant_ready
+        )
+        monkeypatch.setattr(
+            "strategyos_mvp.vector_store.search_run_vectors", fake_search_run_vectors
+        )
+
+        assert query_evidence(None, "anything", limit=5) == []

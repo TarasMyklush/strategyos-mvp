@@ -23,32 +23,50 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def query_kpi(kpi_node_id: str) -> dict[str, Any]:
+def query_kpi(
+    kpi_node_id: str, *, repositories: TwinRepositories | None = None
+) -> dict[str, Any]:
     """Fetch a KPI node from the StrategyOS KPI substrate.
+
+    Resolves through :class:`~strategyos_mvp.twins.resolution.KPIResolutionEngine`
+    against the shared KPI repository — the same source the twin OODA loop
+    and the ``/twin/api/kpis/{role}`` dashboard endpoint use.
 
     Args:
         kpi_node_id: The node identifier for the KPI to query.
+        repositories: Optional repository set to resolve against (mainly
+            for tests). Defaults to the shared app repositories.
 
     Returns:
         A dict with at least ``node_id``, ``status``, ``value_display``,
-        and ``detail`` keys. Returns an error-shaped dict when the KPI
-        cannot be resolved.
+        and ``detail`` keys. Returns an ``"unresolved"`` shape when the
+        node id is unknown to the KPI tree.
     """
-    try:
-        from strategyos_mvp.platform_foundation import StrategyKpiNodeContract
+    from strategyos_mvp.twins.resolution import KPIResolutionEngine
 
-        # In a real implementation this would resolve from the KPI tree
-        # via graph_queries or a KPI service. Here we return a stub
-        # that can be replaced when the resolution engine is wired up.
+    repo_set = repositories or build_app_repositories()
+    engine = KPIResolutionEngine(repository=repo_set.kpis)
+    node = engine.get_node(kpi_node_id)
+    if node is None:
         return {
             "node_id": kpi_node_id,
             "status": "unresolved",
             "value_display": "—",
-            "detail": "KPI query stub — resolution engine not yet connected.",
+            "detail": f"Unknown KPI node id: {kpi_node_id!r}.",
         }
-    except ImportError:
-        logger.warning("query_kpi: platform_foundation not available")
-        return {"node_id": kpi_node_id, "status": "error", "detail": "Platform layer unavailable"}
+
+    value = node.get("value")
+    return {
+        "node_id": kpi_node_id,
+        "status": str(node.get("status") or "unknown"),
+        "value_display": "—" if value is None else str(value),
+        "value": value,
+        "label": node.get("label", kpi_node_id),
+        "owner": node.get("owner"),
+        "last_updated": node.get("last_updated"),
+        "gaps": engine.detect_gaps(kpi_node_id),
+        "detail": f"Resolved {kpi_node_id!r} from the KPI repository.",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -56,29 +74,50 @@ def query_kpi(kpi_node_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def query_evidence(query: str, limit: int = 5) -> list[dict[str, Any]]:
-    """Semantic search across the StrategyOS evidence spine.
+def query_evidence(run_id: str | None, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Keyword/lexical evidence retrieval over a run's Qdrant-indexed points.
+
+    This is lexical (token-overlap) ranking over hash-based vectors, not
+    semantic/embedding search — see ``vector_store.LEXICAL_KEYWORD_MODE``.
 
     Args:
+        run_id: The run to search evidence within. If Qdrant is unconfigured
+            or the run has no indexed points, this returns an empty list.
         query: Natural-language search string.
         limit: Maximum number of results to return.
 
     Returns:
         A list of evidence snippet dicts, each with at least ``id``,
-        ``content``, ``source``, and ``score`` keys.
+        ``content``, ``source``, and ``score`` keys. Empty when evidence
+        retrieval is unavailable (logged, not silent).
     """
     try:
-        from strategyos_mvp.vector_store import search
+        from strategyos_mvp.vector_store import check_qdrant_ready, search_run_vectors
 
-        results = search(query=query, limit=limit)
+        readiness = check_qdrant_ready()
+        if readiness.get("status") != "ok":
+            logger.info(
+                "query_evidence: Qdrant not ready (%s) — returning empty",
+                readiness.get("reason") or readiness.get("status"),
+            )
+            return []
+
+        response = search_run_vectors(run_id, query, limit=limit)
+        if response.get("status") != "ready":
+            logger.info(
+                "query_evidence: search unavailable (%s) — returning empty",
+                response.get("reason") or response.get("status"),
+            )
+            return []
+
         return [
             {
-                "id": str(r.get("id", "")),
-                "content": str(r.get("content", "")),
-                "source": str(r.get("source", "unknown")),
-                "score": float(r.get("score", 0.0)),
+                "id": str(item.get("point_id", "")),
+                "content": str(item.get("summary") or item.get("excerpt") or item.get("text") or ""),
+                "source": str(item.get("source") or item.get("source_path") or "unknown"),
+                "score": float(item.get("score", 0.0)),
             }
-            for r in results
+            for item in response.get("results", [])
         ]
     except ImportError:
         logger.warning("query_evidence: vector_store not available — returning empty")
@@ -140,22 +179,57 @@ def send_message(
 # ---------------------------------------------------------------------------
 
 
-def escalate_to_human(reason: str, context: dict[str, Any]) -> None:
+def escalate_to_human(
+    reason: str,
+    context: dict[str, Any],
+    *,
+    sender_role: str = "system",
+    repositories: TwinRepositories | None = None,
+) -> dict[str, Any]:
     """Escalate an issue to a human operator.
 
-    Stub implementation that logs the escalation. In later phases this
-    will notify via the UI, email, or Slack integration.
+    Persists the escalation as a real ``InterTwinMessage`` delivered to the
+    ``"human"`` inbox (the same recipient concept twin escalation chains
+    already terminate at — see ``persona.escalation_path`` and
+    ``protocol.escalate_message``), so it is queryable rather than a
+    console-only side effect. UI/email/Slack notification remains a
+    separate, later integration on top of this inbox record.
 
     Args:
         reason: Human-readable explanation of why escalation is needed.
         context: Supporting data (KPI node, message chain, etc.).
+        sender_role: The twin role raising the escalation.
+        repositories: Optional repository set (mainly for tests).
+
+    Returns:
+        The persisted message envelope (see :func:`send_message`).
     """
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    message = InterTwinMessage(
+        message_id=f"escalation-{uuid4().hex[:12]}",
+        sender_role=sender_role,
+        recipient_role="human",
+        message_type="escalation",
+        priority="critical",
+        subject=reason[:120],
+        body=reason,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    envelope = send_message(
+        message,
+        repositories=repositories,
+        payload={"context": {k: str(v)[:200] for k, v in context.items()}},
+    )
+
     logger.warning(
         "HUMAN ESCALATION: %s | context=%s",
         reason,
         {k: str(v)[:200] for k, v in context.items()},
     )
     print(f"\n*** HUMAN ESCALATION ***\n{reason}\nContext keys: {list(context.keys())}\n")
+    return envelope
 
 
 # ---------------------------------------------------------------------------
