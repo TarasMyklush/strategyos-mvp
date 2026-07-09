@@ -188,6 +188,13 @@ def check_quality(bundle: DataBundle) -> list[DataQualityIssue]:
         else:
             issues.append(DataQualityIssue("info", rel, f"OCR completed with {status.get('engine')} for pages {status.get('empty_pages')}."))
     for rel, (label, terms) in OCR_REQUIRED_VERIFICATIONS.items():
+        if rel not in bundle.evidence.manifest:
+            # This dataset doesn't contain the file at all (e.g. a real
+            # dataset, not the synthetic fixture these entries describe) --
+            # nothing to verify, and reporting a missing-evidence issue for
+            # a file that was never part of this dataset would be a false
+            # positive on every non-fixture run.
+            continue
         status = bundle.evidence.ocr_status.get(rel, {})
         excerpt = bundle.evidence.pdf_excerpt(rel, terms)
         if excerpt:

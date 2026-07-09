@@ -110,12 +110,14 @@ class KpiRepository(_JsonRepository):
         return [{"node_id": node_id, **copy.deepcopy(data)} for node_id, data in tree.items()]
 
     def update(self, kpi_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        tree = self.load()
-        current = copy.deepcopy(tree.get(kpi_id, {}))
-        current.update(payload)
-        tree[kpi_id] = current
-        self.save(tree)
-        return copy.deepcopy(current)
+        def _update(tree: dict[str, Any]) -> dict[str, Any]:
+            current = dict(tree.get(kpi_id, {}))
+            current.update(copy.deepcopy(payload))
+            tree[kpi_id] = current
+            return tree
+
+        updated = self._mutate_file(self._path, {}, _update)
+        return copy.deepcopy(updated.get(kpi_id, {}))
 
     def clear(self) -> None:
         if self._path.exists():
@@ -206,15 +208,17 @@ class InvestigationRepository(_JsonRepository):
         return None
 
     def save(self, role: str, record: dict[str, Any]) -> dict[str, Any]:
-        records = self.load(role)
         record_id = record.get("id")
-        for index, existing in enumerate(records):
-            if existing.get("id") == record_id:
-                records[index] = copy.deepcopy(record)
-                self._write_file(self._role_path(role), records)
-                return copy.deepcopy(record)
-        records.append(copy.deepcopy(record))
-        self._write_file(self._role_path(role), records)
+
+        def _save(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            for index, existing in enumerate(records):
+                if existing.get("id") == record_id:
+                    records[index] = copy.deepcopy(record)
+                    return records
+            records.append(copy.deepcopy(record))
+            return records
+
+        self._mutate_file(self._role_path(role), [], _save)
         return copy.deepcopy(record)
 
     def list(self, role: str | None = None) -> Any:
@@ -245,6 +249,18 @@ class InvestigationRepository(_JsonRepository):
 
 
 class TwinStateRepository(_JsonRepository):
+    """NOTE on concurrency: ``save`` locks the write itself, but a caller
+    that does an external ``load()`` -> mutate -> ``save()`` sequence (as
+    ``twins/runtime.py`` does for the OODA loop) is not protected against a
+    concurrent writer between its own load and save -- that read-modify-
+    write span is not atomic. Use ``update()`` instead of external
+    load/save when atomicity matters; it is correctly routed through
+    ``_mutate_file``. Not fixed here: doing so would mean rewriting the
+    runtime.py call sites, which is a larger change than the store.py-only
+    scope of this pass (see KpiRepository/InvestigationRepository above,
+    which had this same problem fully inside a single method and were
+    fixed directly)."""
+
     def __init__(self, base_path: Path) -> None:
         super().__init__(Path(base_path) / "state")
 

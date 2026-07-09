@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
+import threading
 from dataclasses import asdict
 from datetime import date, datetime
 from pathlib import Path
@@ -882,18 +884,16 @@ def persist_run_summary(
     artifacts: dict[str, Path] | None = None,
     audit_events: list[AuditEvent] | None = None,
 ) -> dict[str, Any]:
-    if not CONFIG.database_url:
-        return {"status": "skipped", "reason": "DATABASE_URL is not configured."}
-    try:
-        import psycopg
-    except Exception as exc:  # pragma: no cover - optional cloud dependency
-        return {"status": "skipped", "reason": f"psycopg is not installed: {exc}"}
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+    assert connection is not None
 
     findings = findings or []
     artifacts = artifacts or {}
     audit_events = audit_events or []
 
-    with psycopg.connect(CONFIG.database_url) as conn:
+    with connection as conn:
         ensure_data_schema(conn)
         with conn.cursor() as cur:
             tenant_id = upsert_tenant(cur)
@@ -940,15 +940,13 @@ def persist_run_summary(
 
 
 def data_management_status(run_id: str | None = None) -> dict[str, Any]:
-    if not CONFIG.database_url:
-        return {"status": "skipped", "reason": "DATABASE_URL is not configured."}
-    try:
-        import psycopg
-    except Exception as exc:  # pragma: no cover - optional cloud dependency
-        return {"status": "skipped", "reason": f"psycopg is not installed: {exc}"}
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+    assert connection is not None
 
     try:
-        with psycopg.connect(CONFIG.database_url) as conn:
+        with connection as conn:
             ensure_data_schema(conn)
             with conn.cursor() as cur:
                 if run_id is None:
@@ -2108,15 +2106,88 @@ def json_blob(value: Any) -> str:
     return json.dumps(value, default=json_value)
 
 
+_PG_POOL: Any | None = None
+_PG_POOL_LOCK = threading.Lock()
+_PG_POOL_DATABASE_URL: str | None = None
+
+
+def _get_pool() -> Any | None:
+    """Return the process-wide Postgres connection pool, creating it on
+    first use. Memoized on CONFIG.database_url so a config reload (e.g. in
+    tests that monkeypatch CONFIG) opens a fresh pool instead of reusing a
+    stale one pointed at a different database."""
+    global _PG_POOL, _PG_POOL_DATABASE_URL
+    if not CONFIG.database_url:
+        return None
+    if _PG_POOL is not None and _PG_POOL_DATABASE_URL == CONFIG.database_url:
+        return _PG_POOL
+    with _PG_POOL_LOCK:
+        if _PG_POOL is not None and _PG_POOL_DATABASE_URL == CONFIG.database_url:
+            return _PG_POOL
+        from psycopg_pool import ConnectionPool
+
+        if _PG_POOL is not None:
+            _PG_POOL.close()
+        _PG_POOL = ConnectionPool(
+            CONFIG.database_url,
+            min_size=CONFIG.pg_pool_min_size,
+            max_size=CONFIG.pg_pool_max_size,
+            open=True,
+            timeout=CONFIG.pg_pool_timeout_seconds,
+            name="strategyos",
+        )
+        _PG_POOL_DATABASE_URL = CONFIG.database_url
+        atexit.register(_PG_POOL.close)
+    return _PG_POOL
+
+
+class _PooledConnectionHandle:
+    """Wraps a connection checked out from the pool via ``pool.getconn()``.
+
+    psycopg3's ``Connection.__exit__`` only skips ``close()`` for a
+    pool-owned connection (``conn._pool`` is set once, permanently, at
+    connection-creation time inside psycopg_pool) -- it never calls
+    ``pool.putconn()``. Relying on ``with conn:`` alone therefore leaves
+    every checked-out connection permanently outstanding and depletes the
+    pool after ``max_size`` calls (verified empirically: a bare
+    ``pool.getconn()`` + ``with conn:`` loop raises ``PoolTimeout`` on the
+    (max_size + 1)-th iteration). This handle calls ``putconn()`` on exit
+    so the connection is genuinely returned, while preserving the exact
+    ``connection, skipped = database_connection()`` / ``with connection as
+    conn:`` contract every call site already uses -- no call-site changes.
+    """
+
+    __slots__ = ("_pool", "_conn")
+
+    def __init__(self, pool: Any, conn: Any) -> None:
+        self._pool = pool
+        self._conn = conn
+
+    def __enter__(self) -> Any:
+        self._conn.__enter__()
+        return self._conn
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+        try:
+            self._conn.__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self._pool.putconn(self._conn)
+        return False
+
+
 def database_connection() -> tuple[Any | None, dict[str, Any] | None]:
     if not CONFIG.database_url:
         return None, {"status": "skipped", "reason": "DATABASE_URL is not configured."}
     try:
-        import psycopg
+        import psycopg  # noqa: F401  (preserves the "psycopg not installed" skip path)
+        import psycopg_pool  # noqa: F401
     except Exception as exc:  # pragma: no cover - optional cloud dependency
-        return None, {"status": "skipped", "reason": f"psycopg is not installed: {exc}"}
+        return None, {"status": "skipped", "reason": f"psycopg/psycopg_pool is not installed: {exc}"}
     try:
-        return psycopg.connect(CONFIG.database_url), None
+        pool = _get_pool()
+        assert pool is not None
+        conn = pool.getconn()
+        return _PooledConnectionHandle(pool, conn), None
     except Exception as exc:
         return None, {"status": "failed", "reason": str(exc)}
 

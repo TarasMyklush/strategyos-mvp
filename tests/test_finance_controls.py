@@ -6,7 +6,12 @@ from strategyos_mvp.config import load_config
 from strategyos_mvp.ingestion import load_dataset
 from strategyos_mvp.paths import SOURCE_DATASET
 import strategyos_mvp.skills.finance_controls as finance_controls_module
-from strategyos_mvp.skills.finance_controls import compute_working_capital_drifts, run_all_finance_skills
+from strategyos_mvp.skills.finance_controls import (
+    compute_working_capital_drifts,
+    detect_fx_hedge_unapplied,
+    run_all_finance_skills,
+    vendor_name_filename_needle,
+)
 
 
 def test_finance_skills_find_core_patterns():
@@ -219,3 +224,91 @@ def test_detector_contracts_support_renamed_sources_and_column_aliases(tmp_path:
     fx = next(f for f in findings if f.pattern_type == "fx_hedge_unapplied")
     assert any(c.source_path.endswith("eur_vendor_statement.pdf") for c in fx.citations)
     assert any(c.source_path.endswith("treasury_followup.txt") for c in fx.citations)
+
+
+def test_vendor_name_filename_needle_derives_the_original_hardcoded_anchors():
+    """The evidence anchors that used to be literal strings ("BordeauxWines",
+    "GulfLogistics") must be exactly reproducible by deriving them from the
+    finding's own vendor name -- proving the generalization is a true no-op
+    on the fixture rather than a behavior change."""
+    assert vendor_name_filename_needle("Bordeaux Wines & Spirits SARL") == "BordeauxWines"
+    assert vendor_name_filename_needle("Gulf Logistics Services Co") == "GulfLogistics"
+
+
+def test_vendor_name_filename_needle_disambiguates_shared_first_words():
+    """A single-word needle is too loose: multiple vendors in this dataset
+    share a first word ("Gulf Cosmetics", "Gulf Logistics", "Gulf Trading"),
+    so a one-word needle would non-deterministically match whichever
+    "Gulf*" invoice file the manifest happens to list first. Two words
+    must disambiguate them."""
+    bundle = load_dataset(SOURCE_DATASET)
+    gulf_invoices = [
+        rel
+        for rel in bundle.evidence.manifest
+        if rel.startswith("08_Invoices/") and rel.lower().endswith(".pdf") and "gulf" in rel.lower()
+    ]
+    assert len(gulf_invoices) > 1, (
+        "expected the fixture to still contain multiple Gulf* invoices -- "
+        "if this assertion fails the fixture changed and the single-word "
+        "ambiguity this test guards against may no longer apply"
+    )
+    needle = vendor_name_filename_needle("Gulf Logistics Services Co").lower()
+    matches = [rel for rel in gulf_invoices if needle in rel.lower()]
+    assert matches == ["08_Invoices/Invoice_GulfLogistics_INV-2026-1421.pdf"]
+
+
+def test_fx_hedge_anchors_derive_from_finding_not_a_hardcoded_vendor_literal():
+    """Renaming the vendor on the one EUR/Paid AP row that produces the
+    fx_hedge_unapplied finding must change which vendor the finding (and
+    its anchor-derived citations) reference. Against the old hardcoded
+    code, this finding's vendor filter, invoice-PDF lookup, and OCR/email
+    search terms were all the literal "Bordeaux Wines"/"BordeauxWines"
+    regardless of what the underlying data said -- this test would have
+    caught that: it fails if any of those anchors are still pinned to the
+    literal instead of being derived from the finding's own vendor name."""
+    bundle = load_dataset(SOURCE_DATASET)
+    eur_paid = bundle.ap[
+        bundle.ap["Currency"].astype(str).str.upper().eq("EUR") & bundle.ap["Status"].eq("Paid")
+    ]
+    assert len(eur_paid) == 1, (
+        "expected exactly one EUR/Paid AP row in the fixture -- if this "
+        "assertion fails the fixture changed and this test's setup "
+        "(renaming that single row) needs to be revisited"
+    )
+    target_index = eur_paid.index[0]
+    original_vendor_name = str(bundle.ap.loc[target_index, "Vendor_Name"])
+    assert original_vendor_name.startswith("Bordeaux")
+
+    bundle.ap.loc[target_index, "Vendor_Name"] = "Acme Wines International"
+
+    findings = detect_fx_hedge_unapplied(bundle)
+    assert len(findings) == 1
+    finding = findings[0]
+
+    assert finding.vendor_name == "Acme Wines International"
+
+    # No hardcoded "Bordeaux"/"89,400.00 Bordeaux"-anchored citation should
+    # attach for a vendor that is no longer named Bordeaux anything -- the
+    # bank-statement page still literally says "Bordeaux Wines & Sp" (only
+    # the AP row was renamed, not the source PDF), so a genuinely
+    # vendor-derived OCR search for "Acme Wines" must correctly NOT match
+    # it, rather than falling back to a literal that still finds Bordeaux.
+    bank_citations = [
+        c for c in finding.citations if c.source_path.startswith("01_Bank_Statements/")
+    ]
+    assert bank_citations, "expected a bank-statement citation (even if only a pending/verification-required one)"
+    assert all("bordeaux" not in c.excerpt.lower() for c in bank_citations), (
+        "a bank-statement citation excerpt still references Bordeaux for a "
+        "vendor renamed to Acme Wines -- an anchor is still pinned to the "
+        "literal vendor name instead of being derived from the finding"
+    )
+
+    # The invoice-PDF lookup must not silently keep resolving to the old
+    # Bordeaux invoice file for the renamed vendor.
+    invoice_citations = [
+        c for c in finding.citations if c.source_path.startswith("08_Invoices/")
+    ]
+    assert not any("bordeaux" in c.source_path.lower() for c in invoice_citations), (
+        "an invoice citation still points at the Bordeaux invoice PDF for "
+        "a vendor renamed to Acme Wines"
+    )

@@ -170,6 +170,9 @@ class StrategyOSConfig:
     evaluation_dir: Path
     object_store: ObjectStoreConfig
     database_url: str | None
+    pg_pool_min_size: int
+    pg_pool_max_size: int
+    pg_pool_timeout_seconds: float
     redis_url: str | None
     neo4j_uri: str | None
     neo4j_user: str | None
@@ -444,6 +447,9 @@ def load_config() -> StrategyOSConfig:
             force_path_style=env_bool("STRATEGYOS_OBJECT_FORCE_PATH_STYLE", True),
         ),
         database_url=env("DATABASE_URL") or env("STRATEGYOS_DATABASE_URL"),
+        pg_pool_min_size=env_int("STRATEGYOS_PG_POOL_MIN_SIZE", 1),
+        pg_pool_max_size=env_int("STRATEGYOS_PG_POOL_MAX_SIZE", 10),
+        pg_pool_timeout_seconds=env_float("STRATEGYOS_PG_POOL_TIMEOUT_SECONDS", 30.0),
         redis_url=env("REDIS_URL") or env("STRATEGYOS_REDIS_URL"),
         neo4j_uri=env("NEO4J_URI") or env("STRATEGYOS_NEO4J_URI"),
         neo4j_user=env("NEO4J_USER") or env("STRATEGYOS_NEO4J_USER"),

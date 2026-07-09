@@ -72,6 +72,24 @@ def rel_invoice_pdf(name_contains: str, bundle: DataBundle) -> str | None:
     return None
 
 
+def vendor_name_filename_needle(vendor_name: str, *, word_count: int = 2) -> str:
+    """Derive a filename-matching needle from a vendor's legal name.
+
+    Invoice/contract PDFs in this evidence set are named from the vendor
+    name with whitespace and punctuation stripped (e.g. "Gulf Logistics
+    Services Co" -> "GulfLogistics", "Bordeaux Wines & Spirits SARL" ->
+    "BordeauxWines") -- i.e. the first couple of significant words,
+    concatenated. A single-word needle is too loose: several vendors in a
+    real dataset can share a common first word ("Gulf Cosmetics" vs "Gulf
+    Logistics" vs "Gulf Trading"), so rel_invoice_pdf's substring match
+    would non-deterministically pick whichever matching file happens to
+    come first in the manifest. Two words is specific enough to disambiguate
+    while still tolerating minor legal-suffix differences (SARL/LLC/Co).
+    """
+    words = [w for w in re.findall(r"[A-Za-z0-9]+", vendor_name) if w]
+    return "".join(words[:word_count])
+
+
 def rel_contract_pdf(name_contains: str, bundle: DataBundle) -> str | None:
     needle = name_contains.lower()
     for rel in bundle.evidence.manifest:
@@ -741,7 +759,7 @@ def detect_auto_renewal_escalation(bundle: DataBundle) -> list[Finding]:
         )
         if contract_citation is not None:
             citations.append(contract_citation)
-        invoice_pdf = rel_invoice_pdf("GulfLogistics", bundle)
+        invoice_pdf = rel_invoice_pdf(vendor_name_filename_needle(vendor_name), bundle)
         if invoice_pdf:
             invoice_citation = pdf_citation(
                 bundle,
@@ -790,24 +808,35 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     ].copy()
     if invoice_ids:
         rows = rows[rows["Invoice_ID"].astype(str).isin(invoice_ids)].copy()
-    else:
-        rows = rows[
-            rows["Vendor_Name"].astype(str).str.contains("Bordeaux Wines", case=False, na=False)
-        ].copy()
     if rows.empty:
         return findings
-    # Pick the invoice whose SAR/EUR rate diverges most from hedge rate.
+    # Pick the invoice whose SAR/EUR rate diverges most from hedge rate. When
+    # the hedge note names no specific invoice, this selection alone (across
+    # every EUR/Paid row) is the general case -- no vendor-name literal
+    # needed to narrow it down.
     rows["applied_rate"] = rows["Amount_SAR"] / rows["Amount_Original_Currency"]
     rows["rate_delta"] = rows["applied_rate"] - hedge_rate
     target = rows.sort_values("rate_delta", ascending=False).iloc[0]
     exposure = float((target["applied_rate"] - hedge_rate) * float(target["Amount_Original_Currency"]))
     if exposure <= 0:
         return findings
+    vendor_name = str(target.Vendor_Name)
+    eur_amount_text = f"{float(target.Amount_Original_Currency):,.2f}"
+    applied_rate_text = f"{float(target.applied_rate):.4f}"
+    # Two-word vendor-name prefix, e.g. "Bordeaux Wines": specific enough to
+    # anchor the OCR/email excerpt search to this vendor without needing the
+    # full legal name (which may be truncated or abbreviated in scanned bank
+    # statement text -- see vendor_name_filename_needle for the matching
+    # filename-oriented derivation).
+    vendor_prefix_words = [w for w in re.findall(r"[A-Za-z0-9]+", vendor_name) if w][:2]
+    vendor_prefix = " ".join(vendor_prefix_words)
+    bank_ocr_terms = [vendor_prefix, eur_amount_text, applied_rate_text]
+
     citations = [
         excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(target.name), f"{target.Invoice_ID}; EUR {target.Amount_Original_Currency:,.2f}; SAR {target.Amount_SAR:,.2f}; applied rate {target.applied_rate:.4f}"),
         bundle.evidence.citation(_role_source_path(bundle, "cash_forecast"), "Hedges sheet", hedge_text[:400]),
     ]
-    invoice_pdf = rel_invoice_pdf("BordeauxWines", bundle)
+    invoice_pdf = rel_invoice_pdf(vendor_name_filename_needle(vendor_name), bundle)
     if invoice_pdf:
         invoice_citation = pdf_citation(
             bundle,
@@ -821,17 +850,17 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     bank_match = None
     missing_bank_ocr = False
     if bank_rel and bank_rel in bundle.evidence.manifest:
-        missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, ["Bordeaux Wines", "89,400.00", "4.2100"])
-        bank_citation = pdf_citation(bundle, bank_rel, "OCR bank statement settlement row", ["Bordeaux Wines", "89,400.00", "4.2100"])
+        missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, bank_ocr_terms)
+        bank_citation = pdf_citation(bundle, bank_rel, "OCR bank statement settlement row", bank_ocr_terms)
         if bank_citation is not None:
             bank_match = (bank_rel, bank_citation)
     if bank_match is None:
-        bank_match = _find_pdf_by_excerpt(bundle, "01_Bank_Statements/", "OCR bank statement settlement row", ["Bordeaux Wines", "89,400.00", "4.2100"])
+        bank_match = _find_pdf_by_excerpt(bundle, "01_Bank_Statements/", "OCR bank statement settlement row", bank_ocr_terms)
     if bank_match is not None:
         bank_rel, bank_citation = bank_match
         citations.append(bank_citation)
         if not missing_bank_ocr:
-            missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, ["Bordeaux Wines", "89,400.00", "4.2100"])
+            missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, bank_ocr_terms)
     elif bank_rel and bank_rel in bundle.evidence.manifest:
         missing_bank_ocr = True
         citations.append(
@@ -839,10 +868,10 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
                 bundle,
                 bank_rel,
                 "OCR bank statement settlement row (verification pending)",
-                "OCR-required bank statement evidence pending verification for Bordeaux Wines / EUR 89,400.00 / 4.2100.",
+                f"OCR-required bank statement evidence pending verification for {vendor_prefix} / EUR {eur_amount_text} / {applied_rate_text}.",
             )
         )
-    email_citation = _find_email_text_citation(bundle, "bordeaux wines")
+    email_citation = _find_email_text_citation(bundle, vendor_prefix.lower())
     if email_citation is not None:
         citations.append(email_citation)
     confidence = "LOW" if missing_bank_ocr else "HIGH" if len(citations) >= 3 else "MEDIUM"
