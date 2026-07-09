@@ -219,6 +219,7 @@ def login_page() -> HTMLResponse:
   <title>StrategyOS test login</title>
   <style>
     :root {{ color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+    *, *::before, *::after {{ box-sizing: border-box; }}
     body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at top, #243b64, #05070d 60%); color: #f6f8ff; }}
     main {{ width: min(92vw, 520px); background: rgba(10, 16, 28, 0.88); border: 1px solid rgba(255,255,255,.14); border-radius: 28px; padding: 32px; box-shadow: 0 24px 80px rgba(0,0,0,.45); }}
     .eyebrow {{ color: #f7c873; font-size: 13px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }}
@@ -226,7 +227,7 @@ def login_page() -> HTMLResponse:
     p {{ color: #b8c2d9; line-height: 1.6; }}
     form {{ display: grid; gap: 16px; margin-top: 22px; }}
     label {{ display: grid; gap: 8px; color: #dce5ff; font-weight: 700; }}
-    input, select, button {{ font: inherit; border-radius: 14px; border: 1px solid rgba(255,255,255,.16); padding: 13px 14px; }}
+    input, select, button {{ width: 100%; font: inherit; border-radius: 14px; border: 1px solid rgba(255,255,255,.16); padding: 13px 14px; }}
     input, select {{ background: rgba(255,255,255,.08); color: #ffffff; }}
     option {{ color: #0b1220; }}
     button {{ cursor: pointer; border: 0; background: linear-gradient(135deg, #7dd3fc, #a78bfa); color: #07111f; font-weight: 900; }}
