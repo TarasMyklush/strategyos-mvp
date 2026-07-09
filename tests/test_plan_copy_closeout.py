@@ -10,23 +10,33 @@ def _read(path: Path) -> str:
 
 
 def test_plan_copy_closeout_has_no_active_plan_scope_rows() -> None:
+    """Locks in the tracker's actual editorial rule -- empty active-scope
+    sections, no stale ticket IDs lingering in them, and completed work
+    recorded as history -- not any specific date/release snapshot. The
+    literal date/release/label strings are updated whenever a new tranche
+    ships and is live-verified; only the shape (empty active sections,
+    prior DONE entries still present) is the thing under test."""
     data = _read(PLAN_DATA)
 
-    assert 'updated: "2026-07-05"' in data
+    assert 'updated: "2026-07-09"' in data
     assert 'criticalBlockers: []' in data
     assert 'activeActionItems: []' in data
-    assert 'Ask Hermes assistant hardening is shipped and live-verified' in data
-    assert '1ddd7e1' in data
+    assert 'executive-surface UI audit fixes are shipped and live-verified' in data
+    assert '922497e' in data
+    assert 'DONE-013' in data
+    assert 'Executive-surface UI audit: five bugs fixed and live-verified' in data
+    assert 'CI succeeded for release 922497e.' in data
+    assert 'Deploy succeeded for release 922497e.' in data
+    assert 'Live Assistants-page header layout check passed.' in data
+    assert 'Live Board room persona differentiation check passed.' in data
+    assert 'Live board-state caption sync check passed.' in data
+    assert 'Live Ask Hermes markdown rendering check passed.' in data
+    assert 'DONE-012' in data
+    assert 'Login page control overflow fixed and live-verified' in data
+    assert 'DONE-011' in data
+    assert 'Persistence, retrieval, and hardcode fixes shipped and live-verified' in data
     assert 'DONE-010' in data
     assert 'Ask Hermes assistant hardening shipped and verified' in data
-    assert 'CI succeeded for release 1ddd7e1.' in data
-    assert 'Deploy succeeded for release 1ddd7e1.' in data
-    assert 'Working tree is clean at release verification time.' in data
-    assert 'Live direct /assistant/chat checks passed for margin variance in mode=auto and mode=llm.' in data
-    assert "Live browser drawer check passed for 'What’s driving the margin variance?'." in data
-    assert 'deterministic finance/scenario routing first and governed LLM fallback' in data
-    assert 'provider failures now retain trace metadata instead of silently collapsing into canned copy' in data
-    assert 'What’s driving the margin variance?' in data
     assert 'DONE-009' in data
     assert 'Final copy-polish row closed' in data
 

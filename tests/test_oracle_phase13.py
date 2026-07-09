@@ -404,7 +404,7 @@ def test_phase13_plan_data_keeps_closed_leakage_phase_truthful_while_hosted_fixu
         / "plan_data.js"
     )
     text = plan_file.read_text(encoding="utf-8")
-    assert 'updated: "2026-07-05"' in text
+    assert 'updated: "2026-07-09"' in text
     assert 'Reviewed backend correctness sweep shipped' in text
     assert 'FX hedge quote direction inferred instead of assumed.' in text
     assert 'Negative-quantity inflation blocked in recoverable math.' in text
