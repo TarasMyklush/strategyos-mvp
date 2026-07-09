@@ -58,6 +58,68 @@
       .replace(/\"/g, "&quot;");
   }
 
+  // Minimal markdown-to-HTML for assistant chat replies. LLM answers
+  // routinely contain **bold**, ### headers, --- rules, and simple pipe
+  // tables; without this they rendered as literal, unparsed syntax in the
+  // chat modal. Always escapeHtml() the raw text FIRST so every transform
+  // below operates on already-safe text -- these regexes only ever ADD a
+  // fixed, hardcoded set of tags (strong/em/h3/hr/table/br), they never
+  // reintroduce anything from the source text as a tag, so this cannot
+  // reopen an XSS path through markdown syntax in untrusted evidence text.
+  function renderAssistantMarkdownToHtml(rawText) {
+    var text = escapeHtml(rawText);
+    var lines = text.split(/\r?\n/);
+    var htmlParts = [];
+    var i = 0;
+    while (i < lines.length) {
+      var line = lines[i];
+      var headerMatch = line.match(/^(#{1,6})\s+(.*)$/);
+      if (headerMatch) {
+        var level = Math.min(6, headerMatch[1].length);
+        htmlParts.push('<strong class="assistant-md-heading assistant-md-h' + level + '">' + inlineMarkdown(headerMatch[2]) + '</strong>');
+        i += 1;
+        continue;
+      }
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
+        htmlParts.push('<hr class="assistant-md-rule" />');
+        i += 1;
+        continue;
+      }
+      if (/^\s*\|.*\|\s*$/.test(line) && lines[i + 1] && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
+        var tableLines = [line];
+        var j = i + 2;
+        while (j < lines.length && /^\s*\|.*\|\s*$/.test(lines[j])) {
+          tableLines.push(lines[j]);
+          j += 1;
+        }
+        htmlParts.push(renderMarkdownTable(tableLines));
+        i = j;
+        continue;
+      }
+      htmlParts.push(inlineMarkdown(line));
+      i += 1;
+    }
+    return htmlParts.join('<br />');
+  }
+
+  function inlineMarkdown(segment) {
+    return segment
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, '$1<em>$2</em>');
+  }
+
+  function renderMarkdownTable(tableLines) {
+    var headerCells = tableLines[0].split('|').map(function (c) { return c.trim(); }).filter(function (c, idx, arr) { return !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === ''); });
+    var bodyRows = tableLines.slice(1).map(function (rowLine) {
+      return rowLine.split('|').map(function (c) { return c.trim(); }).filter(function (c, idx, arr) { return !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === ''); });
+    });
+    var head = '<thead><tr>' + headerCells.map(function (c) { return '<th>' + inlineMarkdown(c) + '</th>'; }).join('') + '</tr></thead>';
+    var body = '<tbody>' + bodyRows.map(function (row) {
+      return '<tr>' + row.map(function (c) { return '<td>' + inlineMarkdown(c) + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</tbody>';
+    return '<table class="assistant-md-table">' + head + body + '</table>';
+  }
+
   function humanizeToken(token) {
     if (!token) return "—";
     return String(token)
@@ -175,16 +237,14 @@
   }
 
   function boardStateSupportNote(board) {
-    var stateDetail = (board || {}).state_detail || {};
-    if (stateDetail.note) return stateDetail.note;
-    var boardState = resolveBoardState();
-    if (boardState === 'pre') {
-      return 'Close evidence gaps now so the CEO sees one clean board view, then keep live answers inside released material.';
-    }
-    if (boardState === 'live') {
-      return 'Stay inside the approved view while questions map back to challenged evidence and board-supported answers.';
-    }
-    return 'Keep the room on the frozen record after close so follow-up stays bounded to approved outputs.';
+    // Delegate to boardStateDetailForRender, which only trusts the server's
+    // state_detail when existing.state actually matches the currently
+    // selected boardState (see matchesSelectedState there). activateBoardState
+    // switches stages purely client-side with no re-fetch, so a stale
+    // server payload's state_detail.note would otherwise stick to whatever
+    // stage was active at the last network refresh -- e.g. clicking "Live"
+    // right after a "Closed" fetch kept showing the Closed-stage caption.
+    return boardStateDetailForRender(resolveBoardState(), board).note;
   }
 
   function boardStateDetailForRender(boardState, board) {
@@ -3838,7 +3898,10 @@
         if (role === 'assistant' && message.status === 'failed' && message.retryPrompt) {
           retryButton = '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-retry-index="' + escapeHtml(String(entry.index)) + '">Retry now</button></div>';
         }
-        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + '</span><p>' + escapeHtml(firstDefined(message.text, '')) + '</p>' + failureMeta + retryButton + '</div>';
+        var bodyHtml = role === 'assistant'
+          ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
+          : escapeHtml(firstDefined(message.text, ''));
+        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + '</span><p>' + bodyHtml + '</p>' + failureMeta + retryButton + '</div>';
       }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No messages yet</span><p>Ask a question to begin.</p></div>';
       safeArray(messages.querySelectorAll('[data-assistant-retry-index]')).forEach(function (button) {
         button.onclick = function () {
@@ -3868,7 +3931,7 @@
     if (!reportCard) return;
     reportCard.innerHTML = [
       '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Board reports' : 'Report surface') + '</p><h3 class="detail-title">' + (state.activePersona === "ceo" ? 'Board reports' : 'Previewable report routes') + '</h3></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '</span></div>',
-      '<p class="detail-copy">Overview, cases, evidence, and reports now sing as one workspace. This rail keeps the board-safe output explicit.</p>',
+      '<p class="detail-copy">Overview, cases, evidence, and reports now sit as one workspace. This rail keeps the board-safe output explicit.</p>',
       '<div class="mini-list">' + safeArray(publication.available_artifacts).slice(0, 5).map(function (item) {
         var formatLabel = function (fmt) {
           var map = { graph: 'Data relationships', audit: 'Decision trail', other: 'Overview file', json: 'Structured data', csv: 'Spreadsheet', pdf: 'PDF document', md: 'Markdown note' };

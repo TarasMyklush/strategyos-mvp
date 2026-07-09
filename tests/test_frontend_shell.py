@@ -624,7 +624,7 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert any(item["reasoning_id"] == "hold-runtime-boundary" for item in payload["strategy_substrate"]["reasoning"])
         assert payload["executive_diagnostics"]["hero"]["persona_id"] == "board"
         assert payload["executive_diagnostics"]["hero"]["board_state"] == "closed"
-        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "Hermes"
+        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "Minerva"
         assert payload["executive_diagnostics"]["board_packet"]["assistant"] == "Minerva"
         assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
         assert payload["executive_diagnostics"]["composition"]["gravity"]["sandbox"]["active_driver_key"] == "owed_upward"
@@ -1592,6 +1592,302 @@ console.log(JSON.stringify({{ activeBoard: harness.state.activeBoard }}));
     assert result["activeBoard"] == "live", (
         "Board state selector buttons must switch the client lifecycle state when clicked through the exact data-board-state selector path"
     )
+
+
+def test_board_state_note_updates_on_client_only_stage_switch():
+    """activateBoardState switches lifecycle stages purely client-side (no
+    network re-fetch — see activateBoardState's own comments). state.latestPacket
+    still holds board_portal.state_detail computed for whichever stage was
+    active at the LAST fetch. boardStateSupportNote used to trust
+    state_detail.note unconditionally, so clicking straight from a "closed"
+    fetch to "Live" left the #board-state-note caption showing the stale
+    Closed-stage text instead of the Live-stage text -- this reproduces that
+    exact click sequence and asserts the caption text is stage-correct."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveBoardStateNoteHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { activateBoardState: activateBoardState, state: state };\n}\nmodule.exports = __executiveBoardStateNoteHarness;\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        "    renderPersonaView();",
+        "    if (!window.__BOARD_STATE_TEST_SUPPRESS_RENDER__) renderPersonaView();",
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-board-state-note-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+function makeStore(seed = {{}}) {{
+  const data = new Map(Object.entries(seed));
+  return {{
+    getItem(key) {{ return data.has(key) ? data.get(key) : null; }},
+    setItem(key, value) {{ data.set(key, String(value)); }},
+    removeItem(key) {{ data.delete(key); }},
+    clear() {{ data.clear(); }},
+  }};
+}}
+
+function makeButton() {{
+  return {{
+    tagName: 'BUTTON',
+    nodeType: 1,
+    attributes: {{}},
+    className: '',
+    innerHTML: '',
+    listeners: {{}},
+    setAttribute(name, value) {{ this.attributes[name] = String(value); }},
+    getAttribute(name) {{ return this.attributes[name] || null; }},
+    addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+    click() {{ if (this.listeners.click) this.listeners.click({{ target: this, currentTarget: this, preventDefault() {{}}, stopPropagation() {{}} }}); }},
+    closest(selector) {{ return selector === '[data-board-state]' ? this : null; }},
+  }};
+}}
+
+function makeElement(id) {{
+  return {{
+    id,
+    innerHTML: '',
+    textContent: '',
+    style: {{}},
+    disabled: false,
+    hidden: false,
+    children: [],
+    classList: {{ add() {{}}, remove() {{}} }},
+    setAttribute() {{}},
+    appendChild(child) {{ this.children.push(child); return child; }},
+    addEventListener() {{}},
+    querySelector() {{ return null; }},
+    querySelectorAll() {{ return []; }},
+    contains() {{ return true; }},
+  }};
+}}
+
+const row = {{
+  __boardStateInteractionsBound: false,
+  innerHTML: '',
+  buttons: [],
+  listeners: {{}},
+  addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+  appendChild(child) {{ this.buttons.push(child); return child; }},
+  contains(target) {{ return this.buttons.includes(target); }},
+  querySelectorAll(selector) {{
+    if (selector === '[data-board-state]') return this.buttons.slice();
+    return [];
+  }},
+  querySelector(selector) {{
+    const match = selector.match(/\\[data-board-state="([^"]+)"\\]/);
+    if (!match) return null;
+    return this.buttons.find((button) => button.getAttribute('data-board-state') === match[1]) || null;
+  }},
+}};
+
+const note = {{ textContent: '' }};
+const portal = makeElement('board-portal');
+const boardNote = makeElement('board-note');
+
+global.window = {{
+  __BOARD_STATE_TEST_SUPPRESS_RENDER__: true,
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [] }} }} }},
+  localStorage: makeStore(),
+  sessionStorage: makeStore(),
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout() {{ return 1; }},
+  requestAnimationFrame(cb) {{ cb(); }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  clearInterval() {{}},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  innerWidth: 1280,
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ assistant_public_context: {{}} }}) }};
+    if (id === 'board-state-row') return row;
+    if (id === 'board-state-note') return note;
+    if (id === 'board-portal') return portal;
+    if (id === 'board-note') return boardNote;
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement(tag) {{ return tag === 'button' ? makeButton() : {{}}; }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+
+// Simulate the last network fetch having happened while "closed" was the
+// active stage -- state_detail is server data computed for "closed" only.
+harness.state.latestPacket = {{
+  board_portal: {{
+    lifecycle_flow: [
+      {{ state_id: 'pre', label: 'Pre-board', detail: 'Prepare governed packet' }},
+      {{ state_id: 'live', label: 'Live', detail: 'Run the room inside approved material' }},
+      {{ state_id: 'closed', label: 'Closed', detail: 'Freeze memory after the room closes' }}
+    ],
+    presentation_state: 'closed',
+    state_detail: {{
+      state: 'closed',
+      title: 'Closed / frozen snapshot',
+      summary: 'Keep the board memory frozen and bounded to approved outputs after the session closes.',
+      note: 'The room is closed now; preserve the frozen record and work follow-ups outside the board surface.',
+    }},
+  }},
+}};
+harness.state.activeBoard = 'closed';
+
+// Now click "Live" -- purely client-side, no re-fetch (activateBoardState's
+// own design). state.latestPacket.board_portal.state_detail is still the
+// stale "closed" payload from above.
+harness.activateBoardState('live');
+
+console.log(JSON.stringify({{
+  activeBoard: harness.state.activeBoard,
+  noteText: note.textContent,
+}}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "board_state_note_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result["activeBoard"] == "live"
+    assert "live" in result["noteText"].lower() or "approved" in result["noteText"].lower(), (
+        f"Caption must reflect the newly selected 'live' stage, not the stale "
+        f"'closed' stage carried over from the last fetch. Got: {result['noteText']!r}"
+    )
+    assert "closed" not in result["noteText"].lower(), (
+        f"Caption is still showing Closed-stage text after switching to Live -- "
+        f"the stale server state_detail.note won over the fresh client-side "
+        f"stage. Got: {result['noteText']!r}"
+    )
+
+
+def test_assistant_markdown_renders_headers_bold_rules_and_tables():
+    """Ask Hermes replies come straight from an LLM and routinely contain
+    **bold**, ### headers, --- rules, and pipe tables. The assistant message
+    renderer used to just escapeHtml() the raw text into a <p>, so all of
+    that markdown syntax showed up literally in the chat modal instead of
+    being rendered as formatted text. renderAssistantMarkdownToHtml() must
+    convert the common constructs into real tags."""
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveAssistantMarkdownHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { renderAssistantMarkdownToHtml: renderAssistantMarkdownToHtml };\n}\nmodule.exports = __executiveAssistantMarkdownHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-assistant-markdown-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  localStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}} }},
+  sessionStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}} }},
+  location: {{ pathname: '/app' }},
+}};
+global.document = {{
+  getElementById() {{ return null; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+
+const heading = harness.renderAssistantMarkdownToHtml('### Executive Summary');
+const bold = harness.renderAssistantMarkdownToHtml('**Locked Findings:** 8 items');
+const rule = harness.renderAssistantMarkdownToHtml('above\\n---\\nbelow');
+const table = harness.renderAssistantMarkdownToHtml('| ID | Vendor |\\n|----|--------|\\n| F-001 | Acme Co |');
+const injection = harness.renderAssistantMarkdownToHtml('<img src=x onerror=alert(1)> and **bold**');
+
+console.log(JSON.stringify({{ heading, bold, rule, table, injection }}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "assistant_markdown_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert "###" not in result["heading"], f"literal ### leaked through: {result['heading']!r}"
+    assert "<strong" in result["heading"] and "Executive Summary" in result["heading"]
+
+    assert "**" not in result["bold"], f"literal ** leaked through: {result['bold']!r}"
+    assert "<strong>Locked Findings:</strong>" in result["bold"]
+
+    assert "<hr" in result["rule"], f"--- did not become an <hr>: {result['rule']!r}"
+    assert "---" not in result["rule"]
+
+    assert "<table" in result["table"] and "<th>" in result["table"] and "<td>" in result["table"], (
+        f"pipe-table markdown did not become a real <table>: {result['table']!r}"
+    )
+    assert "F-001" in result["table"] and "Acme Co" in result["table"]
+    assert "|" not in result["table"], f"literal pipe syntax leaked through: {result['table']!r}"
+
+    # Escaping must still happen first -- markdown transforms must never
+    # reopen an XSS path through a literal <img>/<script> in the LLM's text.
+    assert "<img" not in result["injection"], f"raw HTML was not escaped: {result['injection']!r}"
+    assert "&lt;img" in result["injection"]
+    assert "<strong>bold</strong>" in result["injection"]
 
 
 def test_board_state_tabs_exact_selector_click_updates_dom_state_with_normalized_ids():

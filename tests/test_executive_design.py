@@ -32,7 +32,7 @@ from strategyos_mvp.executive_design import (
 # Persona existence and shape
 # ─────────────────────────────────────────────────────────────────────────────
 
-PERSONA_IDS = ("ceo", "cfo", "gm", "bucfo", "logistics")
+PERSONA_IDS = ("ceo", "cfo", "gm", "bucfo", "logistics", "board")
 
 REQUIRED_PERSONA_KEYS = {
     "health", "assistant", "assistantRole", "brief", "quote", "by",
@@ -96,6 +96,24 @@ def test_logistics_persona_shape():
     assert persona["assistantRole"] == "logistics chief of staff"
 
 
+def test_board_persona_shape():
+    """The "Board room" persona must have its own distinct blueprint --
+    previously EXECUTIVE_DESIGN["personas"] had no "board" entry at all, so
+    executive_persona_design("board") silently fell back to the CEO design
+    and the board-room dashboard was byte-for-byte identical to the CEO
+    view (headline, plan-health score, greeting, and group index cards)."""
+    persona = executive_persona_design("board")
+    missing = REQUIRED_PERSONA_KEYS - set(persona.keys())
+    assert not missing, f"Board persona missing keys: {missing}"
+    assert persona["assistant"] == "Minerva"
+    assert persona["assistantRole"] == "board chief of staff"
+    ceo = executive_persona_design("ceo")
+    assert persona["health"] != ceo["health"], (
+        "Board persona health must differ from the CEO persona health -- "
+        "identical health data means the fallback-to-CEO bug has returned."
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Health scores
 # ─────────────────────────────────────────────────────────────────────────────
@@ -143,6 +161,11 @@ GOLDEN_PROMPTS = {
         "What keeps service credibility strongest this week?",
         "Where could continuity slip before the board?",
         "Which logistics win should the board hear?",
+    ],
+    "board": [
+        "Why is EBITDA 20 bps under plan?",
+        "Show the hedge downside",
+        "Is the JV funded from cash?",
     ],
 }
 
