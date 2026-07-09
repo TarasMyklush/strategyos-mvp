@@ -17,12 +17,14 @@ import pytest
 
 from strategyos_mvp.executive_design import (
     EXECUTIVE_DESIGN,
+    PUBLIC_ASSISTANT_CONTEXT_PACKET,
     executive_persona_design,
     executive_board_design,
     executive_activity_design,
     executive_running_agents_design,
     executive_discover_agents_design,
     executive_subtools_design,
+    executive_public_assistant_packet,
 )
 
 
@@ -410,3 +412,24 @@ def test_board_design_returns_deep_copy():
     copy1["assistant"] = "HACKED"
     copy2 = executive_board_design()
     assert copy2["assistant"] == original["assistant"], "board deep copy was not returned"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Honesty contract — this data is an illustrative demo narrative, not derived
+# from a governed run. It must say so wherever it is served to a consumer,
+# rather than presenting fabricated revenue/margin/agent-activity numbers as
+# if they came from real data.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("persona_id", PERSONA_IDS)
+def test_public_assistant_packet_is_labeled_illustrative(persona_id):
+    packet = executive_public_assistant_packet(persona_id)
+    assert packet["is_illustrative"] is True
+    assert "illustrative" in packet["source_label"].lower()
+    assert "not" in packet["source_label"].lower()  # "not derived from a governed run"
+
+
+def test_public_assistant_context_packet_is_labeled_illustrative():
+    assert PUBLIC_ASSISTANT_CONTEXT_PACKET["is_illustrative"] is True
+    assert "illustrative" in PUBLIC_ASSISTANT_CONTEXT_PACKET["source_label"].lower()
+    assert PUBLIC_ASSISTANT_CONTEXT_PACKET["public_safe"] is True

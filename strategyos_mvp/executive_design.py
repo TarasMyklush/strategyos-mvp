@@ -194,6 +194,11 @@ def executive_public_assistant_packet(persona_id: str = "ceo") -> dict[str, Any]
     return {
         "packet_id": f"public-executive:{persona_id}",
         "persona_id": persona_id,
+        "is_illustrative": True,
+        "source_label": (
+            "Illustrative demo narrative (StrategyOS design fixture) -- not "
+            "derived from a governed run. See strategyos_mvp/executive_design.py."
+        ),
         "assistant": persona.get("assistant") or "Hermes",
         "health": persona.get("health") or {},
         "kpis": kpis,
@@ -234,7 +239,11 @@ def executive_public_assistant_packet(persona_id: str = "ceo") -> dict[str, Any]
 PUBLIC_ASSISTANT_CONTEXT_PACKET: dict[str, Any] = {
     "packet_id": "public-executive-context:v1",
     "source": "executive_public_packet",
-    "source_label": "StrategyOS public executive packet",
+    "source_label": (
+        "Illustrative demo narrative (StrategyOS design fixture) -- not "
+        "derived from a governed run."
+    ),
+    "is_illustrative": True,
     "public_safe": True,
     "kpis": [
         {"key": "revenue", "label": "Revenue", "value": "SAR 2.09B", "vs_plan": "+2.3% vs plan", "story": "Revenue is ahead of plan, led by e-Pharmacy and Retail while Healthcare is below plan."},
