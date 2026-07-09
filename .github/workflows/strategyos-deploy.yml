@@ -34,6 +34,10 @@ env:
   # production with a "green" pre-deploy check. Live-service e2e tests
   # self-skip (see the matching comment in strategyos-ci.yml).
   CI_TEST_TARGETS: "tests/"
+  # See the matching comment in strategyos-ci.yml -- the default dataset
+  # location is a sibling folder outside the repo that does not exist on a
+  # CI checkout; point at the vendored copy instead.
+  STRATEGYOS_SOURCE_DATASET: "${{ github.workspace }}/tests/fixtures/01_Synthetic_Dataset"
 
 jobs:
   tests:

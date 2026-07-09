@@ -1,0 +1,601 @@
+PO_ID,Vendor_ID,Vendor_Name,PO_Date,Delivery_Date,SKU,Quantity,Unit_Price,Currency,Total,Status,Approver
+PO-2026-0090,V-1186,Sulaiman Group Co LLC,2026-01-01,2026-01-21,BV-2015,3000,8.3,SAR,24900.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0398,V-1009,Bordeaux Cleaning Company,2026-01-01,2026-01-22,CM-4003,500,28.65,SAR,14325.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0045,V-1175,Desert Manufacturing Co,2026-01-02,2026-01-26,CM-4007,1500,110.57,SAR,165855.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0084,V-1201,Jamal Marketing Co,2026-01-03,2026-01-23,CM-4008,4000,26.5,SAR,106000.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0341,V-1141,Mada Industries Co,2026-01-03,2026-01-10,HH-3003,2000,81.83,SAR,163660.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0447,V-1044,Euphrates Foodstuff Group,2026-01-03,2026-01-14,FG-1023,200,81.28,SAR,16256.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0140,V-1057,Zahra Industries Group,2026-01-04,2026-01-22,BV-2008,100,10.71,SAR,1071.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0499,V-1001,Faridi Cosmetics LLC,2026-01-04,2026-01-26,FG-1002,3000,11.69,SAR,35070.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0030,V-1035,Arkan Imports Co LLC,2026-01-05,2026-01-12,FG-1029,3000,11.47,SAR,34410.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0063,V-1024,Al-Rajhi Confectionery Co,2026-01-05,2026-01-31,CM-4012,500,82.86,SAR,41430.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0136,V-1124,Tabuk Dairy Co,2026-01-05,2026-01-19,BV-2011,4000,10.49,SAR,41960.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0193,V-1051,Noor Marketing Co,2026-01-05,2026-01-14,FG-1022,2000,62.61,SAR,125220.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0251,V-1186,Sulaiman Group Co LLC,2026-01-05,2026-02-02,BV-2013,3000,7.71,SAR,23130.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0381,V-1175,Desert Manufacturing Co,2026-01-05,2026-01-25,CM-4018,3000,31.34,SAR,94020.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0403,V-1102,Quick Supply Chain Company,2026-01-05,2026-02-01,CM-4005,1000,59.53,SAR,59530.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0420,V-1203,Dar Print Services Trading LLC,2026-01-05,2026-01-26,HH-3011,500,14.98,SAR,7490.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0425,V-1146,Bordeaux Holdings Group,2026-01-05,2026-01-31,BV-2018,1000,23.12,SAR,23120.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0439,V-1017,Bin Laden Cosmetics Ltd,2026-01-05,2026-01-22,BV-2013,200,7.41,SAR,1482.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0535,V-1077,Arkan Foodstuff Ltd,2026-01-05,2026-01-24,HH-3016,1500,122.38,SAR,183570.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0009,V-1172,Amwaj Commercial Company,2026-01-06,2026-02-04,CM-4004,1500,33.08,SAR,49620.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0023,V-1133,Kayan Hygiene Co LLC,2026-01-06,2026-02-05,FG-1015,2000,17.64,SAR,35280.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0106,V-1105,Amwaj Marketing Company,2026-01-06,2026-02-03,FG-1001,200,85.35,SAR,17070.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0170,V-1079,Ibn Sina Materials Trading Ltd,2026-01-06,2026-02-05,HH-3007,1500,26.22,SAR,39330.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0185,V-1174,Riyadh Holdings LLC,2026-01-06,2026-02-02,BV-2011,200,10.32,SAR,2064.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0326,V-1205,Al-Faisal Confectionery Co LLC,2026-01-06,2026-02-03,BV-2023,2000,8.9,SAR,17800.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0533,V-1196,Khaleej Foodstuff LLC,2026-01-06,2026-01-22,BV-2004,5000,10.52,SAR,52600.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0577,V-1056,Bayt Beverages Co,2026-01-06,2026-01-25,BV-2017,1500,7.8,SAR,11700.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0007,V-1045,Tatweer Commercial LLC,2026-01-07,2026-01-17,FG-1027,3000,37.43,SAR,112290.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0082,V-1056,Bayt Beverages Co,2026-01-07,2026-01-16,FG-1007,200,45.55,SAR,9110.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0271,V-1030,Bayt Foods Company,2026-01-07,2026-02-02,CM-4005,200,66.29,SAR,13258.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0528,V-1127,Dar Marketing Group,2026-01-07,2026-01-18,CM-4002,1500,31.34,SAR,47010.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0570,V-1188,Arkan Packaging LLC,2026-01-07,2026-01-24,FG-1022,200,59.9,SAR,11980.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0125,V-1016,Najd Confectionery Co,2026-01-08,2026-01-25,HH-3024,100,34.23,SAR,3423.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0315,V-1029,Olaya Hygiene LLC,2026-01-08,2026-01-15,FG-1029,1000,13.12,SAR,13120.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0580,V-1142,Al-Rashid Trading Co LLC,2026-01-08,2026-01-30,HH-3014,200,87.16,SAR,17432.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0089,V-1070,Bayt Confectionery Co,2026-01-09,2026-01-17,FG-1008,2000,55.48,SAR,110960.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0096,V-1119,Arabian Snacks Company,2026-01-09,2026-01-29,BV-2001,4000,10.47,SAR,41880.0,Closed,omar.faridi@tamween.sa
+PO-2026-0477,V-1084,Jamal Supply Chain Co LLC,2026-01-09,2026-01-29,BV-2016,500,31.58,SAR,15790.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0483,V-1079,Ibn Sina Materials Trading Ltd,2026-01-09,2026-01-18,HH-3003,2000,90.25,SAR,180500.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0498,V-1175,Desert Manufacturing Co,2026-01-09,2026-02-05,HH-3014,5000,97.18,SAR,485900.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0578,V-1048,Tigris Confectionery Co,2026-01-09,2026-01-20,BV-2009,800,9.11,SAR,7288.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0101,V-1110,Premier Manufacturing Group,2026-01-10,2026-01-19,HH-3006,2000,127.77,SAR,255540.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0282,V-1038,Sahara Trading Co LLC,2026-01-10,2026-02-09,FG-2241,1000,35.7,SAR,35700.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0363,V-1170,Madinah Wholesale Ltd,2026-01-10,2026-01-18,FG-1018,800,92.53,SAR,74024.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0514,V-1094,Arabian Wholesale Co LLC,2026-01-10,2026-01-26,FG-1015,500,20.02,SAR,10010.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0031,V-1149,Euphrates Marketing LLC,2026-01-11,2026-01-20,CM-4001,3000,117.31,SAR,351930.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0103,V-1133,Kayan Hygiene Co LLC,2026-01-11,2026-02-05,CM-4002,1000,29.46,SAR,29460.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0156,V-1005,Arabian Confectionery Co LLC,2026-01-11,2026-02-05,BV-2015,1000,7.83,SAR,7830.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0211,V-1008,Levant Hygiene Ltd,2026-01-11,2026-01-21,FG-1008,4000,62.04,SAR,248160.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0216,V-1163,Tabuk Group Company,2026-01-11,2026-01-21,CM-4009,3000,41.56,SAR,124680.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0366,V-1065,Zahra Industries Company,2026-01-11,2026-02-07,BV-2011,200,10.68,SAR,2136.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0510,V-1030,Bayt Foods Company,2026-01-11,2026-02-03,BV-2006,500,8.96,SAR,4480.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0017,V-1110,Premier Manufacturing Group,2026-01-12,2026-01-21,CM-4010,1500,28.41,SAR,42615.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0081,V-1132,Mawared Snacks Group,2026-01-12,2026-01-21,FG-1025,4000,69.3,SAR,277200.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0128,V-1133,Kayan Hygiene Co LLC,2026-01-12,2026-02-07,HH-3017,100,31.77,SAR,3177.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0190,V-1136,Premier Cleaning Group,2026-01-12,2026-01-26,BV-2020,100,9.76,SAR,976.0,Closed,omar.faridi@tamween.sa
+PO-2026-0350,V-1185,Mada Packaging Company,2026-01-12,2026-01-24,CM-4017,1000,42.64,SAR,42640.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0430,V-1024,Al-Rajhi Confectionery Co,2026-01-12,2026-01-31,BV-2017,5000,7.46,SAR,37300.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0521,V-1148,Kayan Marketing Group,2026-01-12,2026-02-07,FG-1019,100,53.27,SAR,5327.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0525,V-1133,Kayan Hygiene Co LLC,2026-01-12,2026-01-22,CM-4006,3000,81.8,SAR,245400.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0558,V-1114,Al-Rajhi Materials Trading Ltd,2026-01-12,2026-02-08,FG-1020,5000,18.01,SAR,90050.0,Closed,omar.faridi@tamween.sa
+PO-2026-0060,V-1057,Zahra Industries Group,2026-01-13,2026-02-07,FG-1001,200,84.72,SAR,16944.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0181,V-1062,Riyadh Co Ltd,2026-01-13,2026-02-07,CM-4015,3000,83.49,SAR,250470.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0394,V-1145,Diyar Marketing Ltd,2026-01-13,2026-01-26,FG-1021,800,72.63,SAR,58104.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0070,V-1103,Maghrib Dairy Trading LLC,2026-01-14,2026-01-23,BV-2008,200,9.44,SAR,1888.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0145,V-1030,Bayt Foods Company,2026-01-14,2026-02-10,FG-1017,1000,12.85,SAR,12850.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0217,V-1008,Levant Hygiene Ltd,2026-01-14,2026-01-26,CM-4016,1000,62.56,SAR,62560.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0177,V-1149,Euphrates Marketing LLC,2026-01-15,2026-01-29,CM-4019,1500,36.5,SAR,54750.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0540,V-1163,Tabuk Group Company,2026-01-15,2026-02-03,FG-1026,500,63.96,SAR,31980.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0001,V-1101,Levant Cleaning Trading LLC,2026-01-16,2026-02-13,BV-2010,4000,29.56,SAR,118240.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0057,V-1194,Watani Manufacturing Ltd,2026-01-16,2026-02-07,HH-3006,500,117.2,SAR,58600.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0102,V-1106,Oasis Manufacturing Co,2026-01-16,2026-02-03,CM-4019,2000,32.28,SAR,64560.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0207,V-1041,Sahara Distribution Ltd,2026-01-16,2026-02-03,BV-2023,100,7.96,SAR,796.0,Closed,omar.faridi@tamween.sa
+PO-2026-0270,V-1053,Sahara Co Company,2026-01-16,2026-01-28,CM-4011,500,87.63,SAR,43815.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0511,V-1091,Falcon Distribution Trading LLC,2026-01-16,2026-02-05,HH-3004,800,32.39,SAR,25912.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0520,V-1109,Al-Faisal Foods Ltd,2026-01-16,2026-01-23,FG-1008,1000,64.45,SAR,64450.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0543,V-1079,Ibn Sina Materials Trading Ltd,2026-01-16,2026-02-08,FG-1009,1500,22.37,SAR,33555.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0015,V-1107,Faridi Marketing Trading LLC,2026-01-17,2026-01-24,HH-3023,3000,86.84,SAR,260520.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0378,V-1068,Diyar Imports Group,2026-01-17,2026-02-14,CM-4004,1500,34.04,SAR,51060.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0530,V-1172,Amwaj Commercial Company,2026-01-17,2026-01-27,HH-3001,2000,131.99,SAR,263980.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0020,V-1082,Sulaiman Enterprises Group,2026-01-18,2026-02-11,BV-2022,500,43.9,SAR,21950.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0078,V-1010,Rashid Materials Trading Group,2026-01-18,2026-01-29,FG-1022,100,63.09,SAR,6309.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0146,V-1061,Al-Rajhi Marketing LLC,2026-01-18,2026-01-27,CM-4017,500,40.01,SAR,20005.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0158,V-1141,Mada Industries Co,2026-01-18,2026-01-26,HH-3018,1500,47.22,SAR,70830.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0159,V-1010,Rashid Materials Trading Group,2026-01-18,2026-01-25,HH-3009,500,15.43,SAR,7715.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0188,V-1151,Lamar Commercial Ltd,2026-01-18,2026-02-08,BV-2004,2000,10.39,SAR,20780.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0290,V-1205,Al-Faisal Confectionery Co LLC,2026-01-18,2026-02-12,FG-1005,800,75.77,SAR,60616.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0360,V-1045,Tatweer Commercial LLC,2026-01-18,2026-01-27,BV-2001,3000,9.83,SAR,29490.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0129,V-1038,Sahara Trading Co LLC,2026-01-19,2026-02-12,FG-1019,1500,50.29,SAR,75435.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0175,V-1096,Oasis Exports Trading LLC,2026-01-19,2026-02-15,CM-4009,3000,44.51,SAR,133530.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0197,V-1140,Falcon Cosmetics LLC,2026-01-19,2026-02-08,CM-4013,3000,115.64,SAR,346920.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0210,V-1195,Asir Trading LLC,2026-01-20,2026-01-30,FG-1029,1500,11.15,SAR,16725.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0385,V-1126,Quick Wholesale LLC,2026-01-20,2026-02-16,BV-2021,200,7.72,SAR,1544.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0054,V-1177,Lamar Enterprises Group,2026-01-21,2026-02-14,FG-1024,2000,93.07,SAR,186140.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0152,V-1029,Olaya Hygiene LLC,2026-01-21,2026-01-31,BV-2004,500,9.93,SAR,4965.0,Closed,omar.faridi@tamween.sa
+PO-2026-0375,V-1062,Riyadh Co Ltd,2026-01-21,2026-02-02,CM-4004,1000,37.24,SAR,37240.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0047,V-1079,Ibn Sina Materials Trading Ltd,2026-01-22,2026-02-03,FG-1027,1500,33.91,SAR,50865.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0049,V-1179,Bayt Enterprises Co LLC,2026-01-22,2026-01-29,CM-4002,4000,26.49,SAR,105960.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0110,V-1204,Misr Confectionery Ltd,2026-01-22,2026-02-09,HH-3019,2000,131.32,SAR,262640.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0147,V-1063,Bin Laden Snacks Co LLC,2026-01-22,2026-01-31,HH-3022,3000,14.01,SAR,42030.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0169,V-1049,Mediterranean Wines & Spirits Trading LLC,2026-01-22,2026-01-29,BV-2005,1500,14.32,SAR,21480.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0392,V-1004,Bayt Supply Chain LLC,2026-01-22,2026-02-02,HH-3018,800,45.37,SAR,36296.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0413,V-1052,Tigris Exports Group,2026-01-22,2026-02-07,FG-1022,200,60.09,SAR,12018.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0187,V-1025,Oasis Solutions Trading LLC,2026-01-23,2026-02-01,FG-1028,4000,11.9,SAR,47600.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0307,V-1046,Maghrib Industries Co,2026-01-23,2026-02-22,BV-2019,3000,8.05,SAR,24150.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0544,V-1010,Rashid Materials Trading Group,2026-01-23,2026-02-08,FG-1002,1500,11.62,SAR,17430.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0011,V-1057,Zahra Industries Group,2026-01-24,2026-02-14,BV-2020,2000,9.64,SAR,19280.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0208,V-1013,Levant Co Ltd,2026-01-24,2026-02-13,FG-1009,100,22.6,SAR,2260.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0214,V-1010,Rashid Materials Trading Group,2026-01-24,2026-02-18,BV-2012,100,29.73,SAR,2973.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0273,V-1045,Tatweer Commercial LLC,2026-01-24,2026-02-22,HH-3009,1000,16.14,SAR,16140.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0149,V-1115,Watani Snacks Group,2026-01-25,2026-02-22,FG-1025,500,75.7,SAR,37850.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0151,V-1150,Oasis Enterprises Ltd,2026-01-25,2026-02-11,FG-1016,100,21.94,SAR,2194.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0331,V-1186,Sulaiman Group Co LLC,2026-01-25,2026-02-18,FG-1025,100,74.21,SAR,7421.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0183,V-1154,Maghrib Cosmetics LLC,2026-01-26,2026-02-05,FG-1005,1500,69.78,SAR,104670.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0068,V-1094,Arabian Wholesale Co LLC,2026-01-27,2026-02-24,HH-3001,100,123.91,SAR,12391.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0131,V-1113,Al-Faisal Beverages LLC,2026-01-27,2026-02-25,FG-1029,3000,11.36,SAR,34080.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0250,V-1113,Al-Faisal Beverages LLC,2026-01-27,2026-02-16,CM-4001,800,120.25,SAR,96200.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0274,V-1066,Al-Faisal Confectionery Ltd,2026-01-27,2026-02-15,BV-2020,5000,9.13,SAR,45650.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0295,V-1116,Solo Foods Ltd,2026-01-27,2026-02-18,BV-2003,800,29.51,SAR,23608.0,Closed,omar.faridi@tamween.sa
+PO-2026-0327,V-1192,Asir Co Ltd,2026-01-27,2026-02-03,BV-2017,1000,7.28,SAR,7280.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0405,V-1185,Mada Packaging Company,2026-01-27,2026-02-20,HH-3017,200,32.81,SAR,6562.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0572,V-1101,Levant Cleaning Trading LLC,2026-01-27,2026-02-23,HH-3013,1500,14.31,SAR,21465.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0466,V-1117,Tigris Industries Trading LLC,2026-01-28,2026-02-16,BV-2022,500,42.07,SAR,21035.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0488,V-1016,Najd Confectionery Co,2026-01-28,2026-02-07,FG-1007,1000,45.37,SAR,45370.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0120,V-1191,Tigris Foodstuff Ltd,2026-01-29,2026-02-08,BV-2004,100,10.59,SAR,1059.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0342,V-1102,Quick Supply Chain Company,2026-01-29,2026-02-11,FG-1013,5000,88.88,SAR,444400.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0368,V-1112,Watani Solutions Company,2026-01-29,2026-02-09,BV-2015,1500,7.57,SAR,11355.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0016,V-1195,Asir Trading LLC,2026-01-30,2026-02-08,CM-4009,500,43.61,SAR,21805.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0062,V-1177,Lamar Enterprises Group,2026-01-30,2026-02-11,BV-2014,100,14.29,SAR,1429.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0111,V-1095,Tihama Wines & Spirits LLC,2026-01-30,2026-02-21,FG-1008,2000,63.66,SAR,127320.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0176,V-1067,Bordeaux Manufacturing Group,2026-01-30,2026-02-12,BV-2019,3000,7.86,SAR,23580.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0261,V-1149,Euphrates Marketing LLC,2026-01-30,2026-02-18,FG-1024,2000,95.03,SAR,190060.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0038,V-1156,Ibn Sina Confectionery Group,2026-01-31,2026-03-01,HH-3009,1000,15.34,SAR,15340.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0286,V-1197,Bayt Supply Chain Ltd,2026-01-31,2026-02-14,BV-2024,3000,8.52,SAR,25560.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0380,V-1058,Desert Cleaning Co LLC,2026-01-31,2026-02-16,CM-4013,500,116.49,SAR,58245.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0479,V-1111,Mada Materials Trading Ltd,2026-01-31,2026-02-16,FG-1011,2000,71.14,SAR,142280.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0201,V-1158,Maghrib Commercial Ltd,2026-02-01,2026-02-18,HH-3010,2000,24.25,SAR,48500.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0258,V-1120,Premier International Group,2026-02-01,2026-02-12,BV-2023,2000,8.89,SAR,17780.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0476,V-1039,Saudi Holdings Trading LLC,2026-02-01,2026-02-26,CM-4014,200,41.23,SAR,8246.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0496,V-1191,Tigris Foodstuff Ltd,2026-02-01,2026-02-15,FG-1002,200,11.85,SAR,2370.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0592,V-1177,Lamar Enterprises Group,2026-02-01,2026-02-27,CM-4014,5000,39.64,SAR,198200.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0165,V-1204,Misr Confectionery Ltd,2026-02-02,2026-02-22,FG-1024,100,94.73,SAR,9473.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0478,V-1014,Al-Faisal Exports Co,2026-02-02,2026-02-13,CM-4011,2000,88.65,SAR,177300.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0576,V-1063,Bin Laden Snacks Co LLC,2026-02-02,2026-02-19,BV-2015,800,8.15,SAR,6520.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0597,V-1021,Quick Enterprises Company,2026-02-02,2026-02-15,CM-4013,1500,121.83,SAR,182745.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0077,V-1042,Arabian Materials Trading Co LLC,2026-02-03,2026-02-13,HH-3017,100,30.07,SAR,3007.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0164,V-1099,Tabuk Distribution Trading LLC,2026-02-03,2026-02-25,FG-1003,2000,18.45,SAR,36900.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0500,V-1029,Olaya Hygiene LLC,2026-02-03,2026-02-15,BV-2007,3000,8.19,SAR,24570.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0504,V-1071,Sulaiman Cleaning Group,2026-02-03,2026-02-21,BV-2015,1500,8.01,SAR,12015.0,Closed,omar.faridi@tamween.sa
+PO-2026-0148,V-1060,Arkan Services Co,2026-02-04,2026-02-16,FG-1002,2000,11.33,SAR,22660.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0209,V-1204,Misr Confectionery Ltd,2026-02-04,2026-02-28,HH-3005,3000,14.22,SAR,42660.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0333,V-1046,Maghrib Industries Co,2026-02-04,2026-02-24,FG-2241,800,30.9,SAR,24720.0,Closed,omar.faridi@tamween.sa
+PO-2026-0389,V-1082,Sulaiman Enterprises Group,2026-02-04,2026-02-17,FG-1004,500,58.78,SAR,29390.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0432,V-1029,Olaya Hygiene LLC,2026-02-04,2026-02-11,BV-2004,1000,11.04,SAR,11040.0,Closed,omar.faridi@tamween.sa
+PO-2026-0593,V-1189,Najd Foods Co,2026-02-04,2026-02-21,CM-4007,1000,111.94,SAR,111940.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0059,V-1095,Tihama Wines & Spirits LLC,2026-02-05,2026-02-19,CM-4018,1500,27.22,SAR,40830.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0257,V-1076,Noor Marketing Ltd,2026-02-05,2026-02-20,HH-3001,100,136.83,SAR,13683.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0320,V-1109,Al-Faisal Foods Ltd,2026-02-05,2026-02-15,FG-1004,1500,58.63,SAR,87945.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0347,V-1010,Rashid Materials Trading Group,2026-02-05,2026-02-13,HH-3019,500,115.68,SAR,57840.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0355,V-1028,Rashid Trading Co LLC,2026-02-05,2026-02-14,BV-2009,1500,9.6,SAR,14400.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0369,V-1034,Madinah Foods Co LLC,2026-02-05,2026-02-13,FG-1023,1500,87.77,SAR,131655.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0424,V-1090,Faridi Marketing Company,2026-02-05,2026-02-13,FG-1010,3000,13.07,SAR,39210.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0004,V-1101,Levant Cleaning Trading LLC,2026-02-06,2026-02-24,BV-2006,1000,7.98,SAR,7980.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0065,V-1044,Euphrates Foodstuff Group,2026-02-06,2026-02-26,HH-3018,4000,42.97,SAR,171880.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0312,V-1169,Sahara Confectionery Group,2026-02-06,2026-02-23,HH-3015,5000,25.33,SAR,126650.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0345,V-1080,Oasis Commercial Trading LLC,2026-02-06,2026-03-01,CM-4014,5000,46.63,SAR,233150.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0132,V-1002,Arabian Foods Co LLC,2026-02-07,2026-02-28,HH-3009,200,14.5,SAR,2900.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0179,V-1134,Dammam Holdings LLC,2026-02-07,2026-02-24,HH-3022,500,15.16,SAR,7580.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0349,V-1032,Tigris Snacks Group,2026-02-07,2026-02-28,CM-4008,1000,26.37,SAR,26370.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0407,V-1033,Al-Rajhi Foods Co,2026-02-07,2026-03-07,CM-4016,200,61.71,SAR,12342.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0507,V-1091,Falcon Distribution Trading LLC,2026-02-07,2026-03-09,BV-2023,1500,8.3,SAR,12450.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0002,V-1131,Maghrib Cleaning Co,2026-02-08,2026-02-16,FG-1027,1000,37.4,SAR,37400.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0010,V-1042,Arabian Materials Trading Co LLC,2026-02-08,2026-03-05,BV-2002,2000,8.49,SAR,16980.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0036,V-1056,Bayt Beverages Co,2026-02-08,2026-02-18,BV-2015,3000,8.16,SAR,24480.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0071,V-1046,Maghrib Industries Co,2026-02-08,2026-02-15,BV-2008,100,10.65,SAR,1065.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0074,V-1008,Levant Hygiene Ltd,2026-02-08,2026-03-10,HH-3009,3000,13.9,SAR,41700.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0080,V-1080,Oasis Commercial Trading LLC,2026-02-08,2026-03-04,FG-1028,4000,12.21,SAR,48840.0,Closed,omar.faridi@tamween.sa
+PO-2026-0085,V-1042,Arabian Materials Trading Co LLC,2026-02-08,2026-03-04,FG-1024,4000,90.74,SAR,362960.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0113,V-1150,Oasis Enterprises Ltd,2026-02-08,2026-03-02,CM-4006,200,78.83,SAR,15766.0,Closed,omar.faridi@tamween.sa
+PO-2026-0127,V-1020,Al-Rajhi Packaging Ltd,2026-02-09,2026-02-26,BV-2015,100,7.6,SAR,760.0,Closed,omar.faridi@tamween.sa
+PO-2026-0436,V-1031,Noor Snacks Ltd,2026-02-09,2026-02-26,HH-3019,5000,118.42,SAR,592100.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0168,V-1097,Kayan Hygiene Ltd,2026-02-10,2026-02-27,FG-1003,2000,17.53,SAR,35060.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0359,V-1107,Faridi Marketing Trading LLC,2026-02-10,2026-03-11,CM-4001,1500,107.57,SAR,161355.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0559,V-1063,Bin Laden Snacks Co LLC,2026-02-10,2026-02-28,HH-3024,800,33.25,SAR,26600.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0115,V-1030,Bayt Foods Company,2026-02-11,2026-02-23,HH-3018,500,46.6,SAR,23300.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0200,V-1072,Lamar Hygiene Trading LLC,2026-02-11,2026-03-10,FG-1015,100,18.24,SAR,1824.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0204,V-1131,Maghrib Cleaning Co,2026-02-11,2026-03-04,CM-4012,500,79.79,SAR,39895.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0019,V-1114,Al-Rajhi Materials Trading Ltd,2026-02-12,2026-03-09,FG-1029,100,12.48,SAR,1248.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0547,V-1116,Solo Foods Ltd,2026-02-12,2026-03-05,BV-2012,1000,32.62,SAR,32620.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0141,V-1031,Noor Snacks Ltd,2026-02-13,2026-03-11,FG-1008,500,60.33,SAR,30165.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0353,V-1177,Lamar Enterprises Group,2026-02-13,2026-02-28,HH-3012,500,28.88,SAR,14440.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0581,V-1116,Solo Foods Ltd,2026-02-13,2026-03-14,FG-1003,800,17.82,SAR,14256.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0588,V-1135,Misr Imports Group,2026-02-13,2026-03-08,HH-3014,3000,92.34,SAR,277020.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0480,V-1127,Dar Marketing Group,2026-02-14,2026-02-26,CM-4007,2000,103.72,SAR,207440.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0497,V-1067,Bordeaux Manufacturing Group,2026-02-14,2026-02-21,CM-4004,100,37.81,SAR,3781.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0550,V-1082,Sulaiman Enterprises Group,2026-02-14,2026-02-26,HH-3017,1000,29.9,SAR,29900.0,Closed,omar.faridi@tamween.sa
+PO-2026-0048,V-1104,Maghrib Manufacturing Co,2026-02-15,2026-03-08,HH-3003,1500,85.36,SAR,128040.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0066,V-1058,Desert Cleaning Co LLC,2026-02-15,2026-03-15,BV-2014,4000,14.02,SAR,56080.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0107,V-1001,Faridi Cosmetics LLC,2026-02-15,2026-03-06,FG-1014,100,11.64,SAR,1164.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0281,V-1028,Rashid Trading Co LLC,2026-02-15,2026-03-16,HH-3018,1500,47.78,SAR,71670.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0035,V-1174,Riyadh Holdings LLC,2026-02-16,2026-03-16,HH-3024,200,31.65,SAR,6330.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0142,V-1129,Arkan Cleaning Trading LLC,2026-02-16,2026-02-28,CM-4019,100,33.41,SAR,3341.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0172,V-1181,Gulf Hygiene Group,2026-02-16,2026-03-17,HH-3018,200,42.78,SAR,8556.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0305,V-1044,Euphrates Foodstuff Group,2026-02-16,2026-02-25,CM-4007,1000,109.51,SAR,109510.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0013,V-1007,Tatweer Holdings Co,2026-02-17,2026-03-05,BV-2012,3000,31.68,SAR,95040.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0028,V-1118,Diyar Foods LLC,2026-02-17,2026-03-10,FG-1029,4000,11.61,SAR,46440.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0400,V-1022,Faridi Cleaning Trading LLC,2026-02-17,2026-03-05,HH-3012,500,29.81,SAR,14905.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0409,V-1065,Zahra Industries Company,2026-02-17,2026-03-06,BV-2002,500,8.2,SAR,4100.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0421,V-1043,Mada Foods Co LLC,2026-02-17,2026-03-05,FG-1027,800,34.11,SAR,27288.0,Closed,omar.faridi@tamween.sa
+PO-2026-0440,V-1456,Gulf Cosmetics Co,2026-02-17,2026-03-17,FG-1026,200,54.45,SAR,10890.0,Closed,omar.faridi@tamween.sa
+PO-2026-0594,V-1032,Tigris Snacks Group,2026-02-17,2026-03-04,HH-3006,1000,124.1,SAR,124100.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0018,V-1052,Tigris Exports Group,2026-02-18,2026-03-06,HH-3003,4000,83.28,SAR,333120.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0134,V-1083,Hijaz Holdings Co LLC,2026-02-18,2026-03-03,BV-2002,1000,8.02,SAR,8020.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0285,V-1141,Mada Industries Co,2026-02-18,2026-02-26,CM-4010,3000,27.12,SAR,81360.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0365,V-1076,Noor Marketing Ltd,2026-02-18,2026-03-18,HH-3008,500,135.38,SAR,67690.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0505,V-1200,Tihama Manufacturing Ltd,2026-02-18,2026-03-13,FG-1016,1500,20.69,SAR,31035.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0591,V-1177,Lamar Enterprises Group,2026-02-18,2026-03-16,FG-1004,500,66.79,SAR,33395.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0138,V-1101,Levant Cleaning Trading LLC,2026-02-19,2026-02-28,HH-3002,1000,63.51,SAR,63510.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0157,V-1129,Arkan Cleaning Trading LLC,2026-02-19,2026-03-13,FG-1010,200,11.49,SAR,2298.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0174,V-1178,Bayt Exports LLC,2026-02-19,2026-03-05,FG-1012,1000,35.11,SAR,35110.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0397,V-1172,Amwaj Commercial Company,2026-02-19,2026-02-26,FG-1026,5000,61.28,SAR,306400.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0443,V-1007,Tatweer Holdings Co,2026-02-19,2026-03-10,FG-1003,800,17.24,SAR,13792.0,Closed,omar.faridi@tamween.sa
+PO-2026-0144,V-1033,Al-Rajhi Foods Co,2026-02-20,2026-03-09,FG-1025,2000,74.51,SAR,149020.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0155,V-1018,Jamal Trading Co LLC,2026-02-20,2026-03-13,HH-3007,3000,23.02,SAR,69060.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0178,V-1149,Euphrates Marketing LLC,2026-02-20,2026-03-11,CM-4006,4000,80.89,SAR,323560.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0468,V-1024,Al-Rajhi Confectionery Co,2026-02-20,2026-03-11,FG-1001,200,81.4,SAR,16280.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0549,V-1101,Levant Cleaning Trading LLC,2026-02-20,2026-03-11,FG-1016,1000,22.77,SAR,22770.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0553,V-1023,Misr Snacks Co LLC,2026-02-20,2026-03-03,HH-3024,1000,32.68,SAR,32680.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0555,V-1068,Diyar Imports Group,2026-02-20,2026-03-19,BV-2022,3000,48.56,SAR,145680.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0586,V-1034,Madinah Foods Co LLC,2026-02-20,2026-03-11,CM-4012,1000,86.54,SAR,86540.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0073,V-1097,Kayan Hygiene Ltd,2026-02-21,2026-02-28,CM-4009,500,41.4,SAR,20700.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0161,V-1018,Jamal Trading Co LLC,2026-02-21,2026-03-23,CM-4019,200,34.72,SAR,6944.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0383,V-1008,Levant Hygiene Ltd,2026-02-21,2026-03-17,FG-1013,100,84.14,SAR,8414.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0133,V-1040,Saudi Wines & Spirits Co LLC,2026-02-22,2026-03-02,BV-2013,3000,7.88,SAR,23640.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0416,V-1125,Saudi Exports Ltd,2026-02-22,2026-03-07,HH-3013,2000,15.41,SAR,30820.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0091,V-1047,Tihama Wines & Spirits Co,2026-02-23,2026-03-08,BV-2023,3000,8.52,SAR,25560.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0123,V-1074,Euphrates Services Ltd,2026-02-23,2026-03-18,FG-1001,100,91.08,SAR,9108.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0154,V-1156,Ibn Sina Confectionery Group,2026-02-23,2026-03-06,BV-2015,100,7.58,SAR,758.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0304,V-1151,Lamar Commercial Ltd,2026-02-23,2026-03-03,BV-2024,1000,7.81,SAR,7810.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0003,V-1172,Amwaj Commercial Company,2026-02-24,2026-03-08,CM-4014,1000,42.11,SAR,42110.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0014,V-1068,Diyar Imports Group,2026-02-24,2026-03-16,HH-3010,2000,25.63,SAR,51260.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0053,V-1011,Dammam Distribution Co,2026-02-24,2026-03-16,BV-2003,2000,29.18,SAR,58360.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0069,V-1144,Arabian Co Company,2026-02-24,2026-03-16,BV-2003,200,29.02,SAR,5804.0,Closed,omar.faridi@tamween.sa
+PO-2026-0557,V-1035,Arkan Imports Co LLC,2026-02-24,2026-03-16,BV-2009,5000,9.67,SAR,48350.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0005,V-1075,Bordeaux Enterprises Ltd,2026-02-25,2026-03-17,FG-1021,500,80.16,SAR,40080.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0121,V-1197,Bayt Supply Chain Ltd,2026-02-25,2026-03-19,HH-3006,4000,119.79,SAR,479160.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0186,V-1205,Al-Faisal Confectionery Co LLC,2026-02-25,2026-03-15,BV-2012,500,28.03,SAR,14015.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0202,V-1013,Levant Co Ltd,2026-02-25,2026-03-13,HH-3007,100,24.9,SAR,2490.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0482,V-1456,Gulf Cosmetics Co,2026-02-25,2026-03-08,CM-4012,2000,83.2,SAR,166400.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0503,V-1068,Diyar Imports Group,2026-02-26,2026-03-26,HH-3013,5000,16.2,SAR,81000.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0198,V-1184,Arkan Supply Chain Co LLC,2026-02-27,2026-03-24,HH-3015,1500,23.79,SAR,35685.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0303,V-1135,Misr Imports Group,2026-02-27,2026-03-21,BV-2013,5000,8.42,SAR,42100.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0506,V-1040,Saudi Wines & Spirits Co LLC,2026-02-27,2026-03-13,CM-4008,1500,28.59,SAR,42885.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0033,V-1070,Bayt Confectionery Co,2026-02-28,2026-03-11,HH-3024,200,30.57,SAR,6114.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0079,V-1092,Maghrib Logistics Services Co,2026-02-28,2026-03-08,CM-4013,4000,116.54,SAR,466160.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0099,V-1070,Bayt Confectionery Co,2026-02-28,2026-03-29,CM-4014,2000,38.73,SAR,77460.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0163,V-1190,Arkan Trading Trading LLC,2026-02-28,2026-03-23,FG-1028,1000,11.9,SAR,11900.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0298,V-1057,Zahra Industries Group,2026-02-28,2026-03-20,HH-3012,100,30.71,SAR,3071.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0323,V-1043,Mada Foods Co LLC,2026-02-28,2026-03-17,HH-3007,1500,26.32,SAR,39480.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0332,V-1141,Mada Industries Co,2026-02-28,2026-03-17,BV-2023,800,7.42,SAR,5936.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0387,V-1116,Solo Foods Ltd,2026-02-28,2026-03-20,HH-3020,1500,90.66,SAR,135990.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0527,V-1002,Arabian Foods Co LLC,2026-02-28,2026-03-19,HH-3019,100,116.49,SAR,11649.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0124,V-1190,Arkan Trading Trading LLC,2026-03-01,2026-03-15,FG-1016,3000,22.6,SAR,67800.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0191,V-1152,Tatweer Commercial Ltd,2026-03-01,2026-03-20,HH-3019,1000,133.19,SAR,133190.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0205,V-1167,Misr Supply Chain Ltd,2026-03-01,2026-03-13,CM-4016,500,64.68,SAR,32340.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0097,V-1172,Amwaj Commercial Company,2026-03-02,2026-03-26,FG-1021,2000,74.12,SAR,148240.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0122,V-1138,Arabian Wines & Spirits Group,2026-03-02,2026-03-29,FG-1002,1000,11.17,SAR,11170.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0012,V-1011,Dammam Distribution Co,2026-03-03,2026-04-02,BV-2022,1500,48.11,SAR,72165.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0064,V-1049,Mediterranean Wines & Spirits Trading LLC,2026-03-03,2026-03-24,CM-4013,500,105.88,SAR,52940.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0160,V-1178,Bayt Exports LLC,2026-03-03,2026-03-19,FG-1017,3000,11.31,SAR,33930.0,Closed,omar.faridi@tamween.sa
+PO-2026-0182,V-1030,Bayt Foods Company,2026-03-03,2026-03-26,HH-3009,4000,15.56,SAR,62240.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0189,V-1065,Zahra Industries Company,2026-03-03,2026-03-22,CM-4005,2000,62.36,SAR,124720.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0206,V-1105,Amwaj Marketing Company,2026-03-03,2026-03-11,CM-4014,3000,41.29,SAR,123870.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0441,V-1152,Tatweer Commercial Ltd,2026-03-03,2026-04-02,FG-2241,500,29.18,SAR,14590.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0537,V-1119,Arabian Snacks Company,2026-03-03,2026-03-28,CM-4006,5000,72.89,SAR,364450.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0026,V-1077,Arkan Foodstuff Ltd,2026-03-04,2026-03-30,FG-1007,1500,50.79,SAR,76185.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0051,V-1194,Watani Manufacturing Ltd,2026-03-04,2026-03-15,CM-4008,4000,26.66,SAR,106640.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0143,V-1126,Quick Wholesale LLC,2026-03-04,2026-03-31,CM-4014,500,45.35,SAR,22675.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0184,V-1040,Saudi Wines & Spirits Co LLC,2026-03-04,2026-03-16,FG-1002,100,12.62,SAR,1262.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0463,V-1017,Bin Laden Cosmetics Ltd,2026-03-04,2026-04-01,HH-3010,1500,22.64,SAR,33960.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0573,V-1135,Misr Imports Group,2026-03-04,2026-03-13,FG-1023,3000,96.65,SAR,289950.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0598,V-1024,Al-Rajhi Confectionery Co,2026-03-04,2026-03-20,HH-3024,1500,33.33,SAR,49995.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0600,V-1038,Sahara Trading Co LLC,2026-03-04,2026-03-26,BV-2022,800,42.56,SAR,34048.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0545,V-1014,Al-Faisal Exports Co,2026-03-05,2026-03-16,BV-2001,3000,9.86,SAR,29580.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0086,V-1154,Maghrib Cosmetics LLC,2026-03-06,2026-03-28,CM-4019,1500,37.74,SAR,56610.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0173,V-1074,Euphrates Services Ltd,2026-03-06,2026-03-14,HH-3003,4000,88.61,SAR,354440.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0291,V-1000,Arkan Snacks Co LLC,2026-03-06,2026-03-18,FG-1005,500,79.6,SAR,39800.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0379,V-1009,Bordeaux Cleaning Company,2026-03-06,2026-03-13,FG-1011,2000,72.53,SAR,145060.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0105,V-1022,Faridi Cleaning Trading LLC,2026-03-07,2026-03-22,CM-4007,2000,115.56,SAR,231120.0,Closed,omar.faridi@tamween.sa
+PO-2026-0162,V-1066,Al-Faisal Confectionery Ltd,2026-03-07,2026-03-14,FG-1030,100,78.18,SAR,7818.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0287,V-1149,Euphrates Marketing LLC,2026-03-07,2026-03-25,CM-4016,1500,57.18,SAR,85770.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0092,V-1048,Tigris Confectionery Co,2026-03-08,2026-03-19,FG-1010,100,12.69,SAR,1269.0,Closed,omar.faridi@tamween.sa
+PO-2026-0104,V-1138,Arabian Wines & Spirits Group,2026-03-08,2026-04-05,BV-2005,1000,14.45,SAR,14450.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0437,V-1109,Al-Faisal Foods Ltd,2026-03-08,2026-03-18,BV-2016,800,32.81,SAR,26248.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0462,V-1192,Asir Co Ltd,2026-03-08,2026-03-28,HH-3009,100,15.74,SAR,1574.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0536,V-1008,Levant Hygiene Ltd,2026-03-08,2026-04-01,HH-3023,2000,91.06,SAR,182120.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0022,V-1000,Arkan Snacks Co LLC,2026-03-09,2026-04-04,BV-2024,4000,8.2,SAR,32800.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0116,V-1043,Mada Foods Co LLC,2026-03-09,2026-03-26,FG-1028,200,11.6,SAR,2320.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0137,V-1122,Desert Packaging Company,2026-03-09,2026-03-31,BV-2003,200,31.53,SAR,6306.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0248,V-1456,Gulf Cosmetics Co,2026-03-09,2026-03-20,BV-2024,500,8.62,SAR,4310.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0265,V-1189,Najd Foods Co,2026-03-09,2026-04-08,HH-3004,1000,30.46,SAR,30460.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0212,V-1073,Bayt Confectionery Ltd,2026-03-10,2026-03-20,FG-1004,100,62.08,SAR,6208.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0337,V-1182,Diyar Hygiene Ltd,2026-03-10,2026-04-01,CM-4009,1000,40.49,SAR,40490.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0339,V-1140,Falcon Cosmetics LLC,2026-03-10,2026-03-26,CM-4006,3000,72.76,SAR,218280.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0595,V-1098,Jeddah Dairy Group,2026-03-10,2026-03-17,BV-2023,800,7.76,SAR,6208.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0109,V-1204,Misr Confectionery Ltd,2026-03-11,2026-04-02,BV-2010,500,27.68,SAR,13840.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0114,V-1024,Al-Rajhi Confectionery Co,2026-03-11,2026-03-22,CM-4002,2000,29.89,SAR,59780.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0266,V-1126,Quick Wholesale LLC,2026-03-11,2026-04-07,FG-1010,800,11.17,SAR,8936.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0196,V-1161,Tabuk Services Co,2026-03-12,2026-03-28,CM-4017,4000,41.96,SAR,167840.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0584,V-1133,Kayan Hygiene Co LLC,2026-03-12,2026-03-28,HH-3015,3000,24.96,SAR,74880.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0025,V-1068,Diyar Imports Group,2026-03-13,2026-04-03,FG-1002,2000,11.97,SAR,23940.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0095,V-1084,Jamal Supply Chain Co LLC,2026-03-13,2026-03-26,CM-4005,3000,56.38,SAR,169140.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0404,V-1068,Diyar Imports Group,2026-03-13,2026-03-24,BV-2017,5000,8.11,SAR,40550.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0040,V-1202,Al-Faisal Exports Co LLC,2026-03-14,2026-04-02,BV-2001,2000,9.76,SAR,19520.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0067,V-1009,Bordeaux Cleaning Company,2026-03-14,2026-03-30,HH-3016,200,118.04,SAR,23608.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0472,V-1033,Al-Rajhi Foods Co,2026-03-14,2026-04-04,HH-3018,3000,46.39,SAR,139170.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0546,V-1002,Arabian Foods Co LLC,2026-03-14,2026-04-01,FG-1026,1500,60.54,SAR,90810.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0444,V-1157,Jeddah International Group,2026-03-15,2026-03-27,FG-1017,100,11.67,SAR,1167.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0481,V-1060,Arkan Services Co,2026-03-15,2026-03-22,FG-1004,500,60.75,SAR,30375.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0034,V-1152,Tatweer Commercial Ltd,2026-03-16,2026-04-07,CM-4006,100,82.18,SAR,8218.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0130,V-1066,Al-Faisal Confectionery Ltd,2026-03-16,2026-03-23,BV-2021,4000,7.66,SAR,30640.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0167,V-1077,Arkan Foodstuff Ltd,2026-03-16,2026-03-25,FG-1009,2000,20.39,SAR,40780.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0213,V-1130,Diyar Print Services Company,2026-03-16,2026-03-31,CM-4017,4000,45.1,SAR,180400.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0406,V-1021,Quick Enterprises Company,2026-03-16,2026-03-30,BV-2009,2000,11.06,SAR,22120.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0449,V-1077,Arkan Foodstuff Ltd,2026-03-16,2026-04-04,BV-2015,1000,7.38,SAR,7380.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0450,V-1094,Arabian Wholesale Co LLC,2026-03-16,2026-04-05,CM-4010,200,31.29,SAR,6258.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0139,V-1099,Tabuk Distribution Trading LLC,2026-03-17,2026-04-16,CM-4003,4000,26.06,SAR,104240.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0199,V-1080,Oasis Commercial Trading LLC,2026-03-17,2026-04-02,BV-2009,4000,9.49,SAR,37960.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0083,V-1082,Sulaiman Enterprises Group,2026-03-18,2026-03-28,FG-1024,500,92.99,SAR,46495.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0166,V-1191,Tigris Foodstuff Ltd,2026-03-18,2026-03-25,FG-1027,4000,35.0,SAR,140000.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0526,V-1050,Solo Commercial Ltd,2026-03-18,2026-03-25,HH-3011,200,15.08,SAR,3016.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0052,V-1104,Maghrib Manufacturing Co,2026-03-19,2026-03-31,BV-2006,3000,8.44,SAR,25320.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0055,V-1125,Saudi Exports Ltd,2026-03-19,2026-04-04,CM-4013,500,108.96,SAR,54480.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0118,V-1032,Tigris Snacks Group,2026-03-19,2026-04-16,BV-2001,1000,9.62,SAR,9620.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0415,V-1160,Al-Faisal Foodstuff Co LLC,2026-03-19,2026-04-04,FG-1008,100,66.85,SAR,6685.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0566,V-1176,Jamal Services Co LLC,2026-03-19,2026-04-05,BV-2007,2000,8.43,SAR,16860.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0100,V-1131,Maghrib Cleaning Co,2026-03-20,2026-04-01,HH-3009,4000,15.21,SAR,60840.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0352,V-1031,Noor Snacks Ltd,2026-03-20,2026-04-12,HH-3013,3000,13.59,SAR,40770.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0357,V-1032,Tigris Snacks Group,2026-03-20,2026-04-01,FG-1013,200,92.58,SAR,18516.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0024,V-1047,Tihama Wines & Spirits Co,2026-03-21,2026-04-02,BV-2003,500,30.2,SAR,15100.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0046,V-1163,Tabuk Group Company,2026-03-21,2026-04-19,HH-3016,4000,117.25,SAR,469000.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0135,V-1019,Mediterranean Cleaning LLC,2026-03-21,2026-04-13,HH-3005,500,14.99,SAR,7495.0,Closed,omar.faridi@tamween.sa
+PO-2026-0455,V-1023,Misr Snacks Co LLC,2026-03-21,2026-04-08,BV-2016,3000,31.78,SAR,95340.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0501,V-1041,Sahara Distribution Ltd,2026-03-21,2026-04-13,BV-2024,1500,7.48,SAR,11220.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0539,V-1149,Euphrates Marketing LLC,2026-03-21,2026-04-09,CM-4004,1000,35.21,SAR,35210.0,Closed,omar.faridi@tamween.sa
+PO-2026-0150,V-1124,Tabuk Dairy Co,2026-03-22,2026-03-30,BV-2007,3000,7.75,SAR,23250.0,Closed,omar.faridi@tamween.sa
+PO-2026-0402,V-1099,Tabuk Distribution Trading LLC,2026-03-22,2026-04-13,BV-2021,100,7.7,SAR,770.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0471,V-1198,Euphrates Group LLC,2026-03-22,2026-04-11,FG-1024,1000,86.82,SAR,86820.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0021,V-1144,Arabian Co Company,2026-03-24,2026-04-03,CM-4011,200,84.8,SAR,16960.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0087,V-1173,Arkan Supply Chain Company,2026-03-24,2026-04-10,FG-1020,100,16.95,SAR,1695.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0126,V-1166,Noor Print Services Group,2026-03-24,2026-04-16,CM-4005,3000,59.56,SAR,178680.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0249,V-1113,Al-Faisal Beverages LLC,2026-03-24,2026-04-05,BV-2024,800,8.48,SAR,6784.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0388,V-1126,Quick Wholesale LLC,2026-03-24,2026-04-19,CM-4019,2000,32.75,SAR,65500.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0509,V-1067,Bordeaux Manufacturing Group,2026-03-24,2026-04-23,CM-4003,500,29.6,SAR,14800.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0006,V-1194,Watani Manufacturing Ltd,2026-03-25,2026-04-07,HH-3023,1000,87.09,SAR,87090.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0203,V-1034,Madinah Foods Co LLC,2026-03-25,2026-04-02,BV-2024,1500,7.45,SAR,11175.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0098,V-1047,Tihama Wines & Spirits Co,2026-03-26,2026-04-23,BV-2014,1000,14.35,SAR,14350.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0434,V-1066,Al-Faisal Confectionery Ltd,2026-03-26,2026-04-04,BV-2017,3000,7.27,SAR,21810.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0448,V-1167,Misr Supply Chain Ltd,2026-03-26,2026-04-25,HH-3019,2000,129.26,SAR,258520.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0484,V-1085,Watani Snacks Co,2026-03-26,2026-04-10,HH-3023,1500,85.77,SAR,128655.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0044,V-1049,Mediterranean Wines & Spirits Trading LLC,2026-03-27,2026-04-08,BV-2010,4000,30.2,SAR,120800.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0401,V-1062,Riyadh Co Ltd,2026-03-27,2026-04-26,BV-2005,1000,14.54,SAR,14540.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0032,V-1106,Oasis Manufacturing Co,2026-03-28,2026-04-19,FG-1028,100,11.86,SAR,1186.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0093,V-1061,Al-Rajhi Marketing LLC,2026-03-28,2026-04-17,BV-2017,500,8.5,SAR,4250.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0300,V-1136,Premier Cleaning Group,2026-03-28,2026-04-15,BV-2006,2000,7.96,SAR,15920.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0538,V-1039,Saudi Holdings Trading LLC,2026-03-28,2026-04-15,BV-2021,100,7.76,SAR,776.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0050,V-1045,Tatweer Commercial LLC,2026-03-29,2026-04-19,FG-1017,2000,12.15,SAR,24300.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0061,V-1002,Arabian Foods Co LLC,2026-03-29,2026-04-21,BV-2003,200,31.03,SAR,6206.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0112,V-1205,Al-Faisal Confectionery Co LLC,2026-03-29,2026-04-19,CM-4012,3000,84.02,SAR,252060.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0192,V-1045,Tatweer Commercial LLC,2026-03-29,2026-04-23,BV-2021,3000,8.45,SAR,25350.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0343,V-1128,Riyadh Confectionery Ltd,2026-03-29,2026-04-15,FG-1022,100,54.92,SAR,5492.0,Closed,omar.faridi@tamween.sa
+PO-2026-0354,V-1202,Al-Faisal Exports Co LLC,2026-03-29,2026-04-13,FG-1030,2000,83.2,SAR,166400.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0490,V-1129,Arkan Cleaning Trading LLC,2026-03-29,2026-04-24,BV-2016,3000,29.06,SAR,87180.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0072,V-1005,Arabian Confectionery Co LLC,2026-03-30,2026-04-19,FG-1030,1500,79.55,SAR,119325.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0117,V-1065,Zahra Industries Company,2026-03-30,2026-04-15,FG-1012,100,35.0,SAR,3500.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0119,V-1127,Dar Marketing Group,2026-03-30,2026-04-20,BV-2024,100,8.62,SAR,862.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0008,V-1205,Al-Faisal Confectionery Co LLC,2026-03-31,2026-04-08,HH-3016,3000,116.58,SAR,349740.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0037,V-1001,Faridi Cosmetics LLC,2026-03-31,2026-04-26,CM-4005,2000,59.53,SAR,119060.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0171,V-1083,Hijaz Holdings Co LLC,2026-03-31,2026-04-11,BV-2009,500,9.51,SAR,4755.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0376,V-1143,Hijaz Print Services Group,2026-03-31,2026-04-22,FG-1028,800,12.99,SAR,10392.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0560,V-1127,Dar Marketing Group,2026-03-31,2026-04-16,CM-4001,100,112.81,SAR,11281.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0042,V-1007,Tatweer Holdings Co,2026-04-01,2026-04-16,CM-4017,3000,38.69,SAR,116070.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0043,V-1098,Jeddah Dairy Group,2026-04-01,2026-04-30,FG-1003,100,18.28,SAR,1828.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0180,V-1107,Faridi Marketing Trading LLC,2026-04-01,2026-04-11,HH-3016,200,115.29,SAR,23058.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0195,V-1136,Premier Cleaning Group,2026-04-01,2026-04-20,FG-1026,500,57.14,SAR,28570.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0215,V-1179,Bayt Enterprises Co LLC,2026-04-01,2026-04-29,BV-2017,2000,8.57,SAR,17140.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0513,V-1153,Hijaz Solutions Co,2026-04-01,2026-04-14,FG-1005,3000,74.24,SAR,222720.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0523,V-1000,Arkan Snacks Co LLC,2026-04-01,2026-04-24,BV-2004,1000,10.44,SAR,10440.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0569,V-1074,Euphrates Services Ltd,2026-04-01,2026-04-18,FG-1013,800,89.06,SAR,71248.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0029,V-1190,Arkan Trading Trading LLC,2026-04-02,2026-04-11,FG-1025,1500,76.71,SAR,115065.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0306,V-1127,Dar Marketing Group,2026-04-02,2026-04-11,BV-2010,1000,29.07,SAR,29070.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0041,V-1195,Asir Trading LLC,2026-04-03,2026-04-22,CM-4019,100,34.01,SAR,3401.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0255,V-1092,Maghrib Logistics Services Co,2026-04-03,2026-04-29,BV-2017,3000,7.49,SAR,22470.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0058,V-1131,Maghrib Cleaning Co,2026-04-04,2026-04-18,FG-1025,200,71.54,SAR,14308.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0088,V-1087,Khaleej Materials Trading Co LLC,2026-04-04,2026-05-04,FG-1027,4000,36.13,SAR,144520.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0094,V-1188,Arkan Packaging LLC,2026-04-04,2026-04-22,BV-2022,1500,46.31,SAR,69465.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0427,V-1026,Olaya Materials Trading Ltd,2026-04-04,2026-05-02,FG-1012,500,33.62,SAR,16810.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0464,V-1171,Najd Imports Company,2026-04-04,2026-05-02,CM-4016,1000,67.05,SAR,67050.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0039,V-1118,Diyar Foods LLC,2026-04-05,2026-04-21,CM-4006,1000,78.09,SAR,78090.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0076,V-1047,Tihama Wines & Spirits Co,2026-04-05,2026-04-15,BV-2024,1000,7.54,SAR,7540.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0108,V-1072,Lamar Hygiene Trading LLC,2026-04-05,2026-04-30,HH-3017,4000,33.22,SAR,132880.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0194,V-1043,Mada Foods Co LLC,2026-04-05,2026-04-22,BV-2024,4000,8.35,SAR,33400.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0561,V-1099,Tabuk Distribution Trading LLC,2026-04-05,2026-04-27,BV-2022,200,42.86,SAR,8572.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0596,V-1186,Sulaiman Group Co LLC,2026-04-05,2026-04-24,FG-1023,2000,83.04,SAR,166080.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0075,V-1025,Oasis Solutions Trading LLC,2026-04-06,2026-04-30,CM-4004,3000,32.68,SAR,98040.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0153,V-1044,Euphrates Foodstuff Group,2026-04-06,2026-05-06,BV-2017,1000,7.99,SAR,7990.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0408,V-1019,Mediterranean Cleaning LLC,2026-04-06,2026-04-22,FG-1029,5000,10.94,SAR,54700.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0027,V-1157,Jeddah International Group,2026-04-07,2026-04-27,CM-4003,3000,30.19,SAR,90570.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0056,V-1091,Falcon Distribution Trading LLC,2026-04-07,2026-04-18,FG-1003,500,16.88,SAR,8440.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0412,V-1125,Saudi Exports Ltd,2026-04-07,2026-04-27,CM-4003,500,29.84,SAR,14920.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0460,V-1138,Arabian Wines & Spirits Group,2026-04-07,2026-05-07,HH-3018,1000,50.3,SAR,50300.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0218,V-1456,Gulf Cosmetics Co,2026-04-08,2026-05-07,FG-2241,4200,32.0,SAR,134400.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0362,V-1161,Tabuk Services Co,2026-04-08,2026-05-03,CM-4004,800,39.12,SAR,31296.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0344,V-1007,Tatweer Holdings Co,2026-04-09,2026-05-06,CM-4002,2000,25.27,SAR,50540.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0374,V-1130,Diyar Print Services Company,2026-04-09,2026-04-25,FG-2241,200,31.51,SAR,6302.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0563,V-1152,Tatweer Commercial Ltd,2026-04-09,2026-05-06,HH-3011,2000,15.71,SAR,31420.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0325,V-1030,Bayt Foods Company,2026-04-10,2026-05-02,HH-3011,100,14.44,SAR,1444.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0554,V-1183,Dar Co Ltd,2026-04-10,2026-04-29,CM-4007,200,115.61,SAR,23122.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0238,V-1049,Mediterranean Wines & Spirits Trading LLC,2026-04-11,2026-04-22,BV-2007,500,8.42,SAR,4210.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0340,V-1120,Premier International Group,2026-04-11,2026-04-26,CM-4006,800,79.32,SAR,63456.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0221,V-1020,Al-Rajhi Packaging Ltd,2026-04-12,2026-05-11,CM-4002,1000,29.38,SAR,29380.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0237,V-1091,Falcon Distribution Trading LLC,2026-04-12,2026-04-19,FG-1010,100,11.59,SAR,1159.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0414,V-1027,Ibn Sina Exports Group,2026-04-12,2026-04-23,FG-1029,200,12.13,SAR,2426.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0486,V-1041,Sahara Distribution Ltd,2026-04-12,2026-04-20,HH-3013,500,16.03,SAR,8015.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0219,V-1041,Sahara Distribution Ltd,2026-04-13,2026-04-27,CM-4019,100,36.68,SAR,3668.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0314,V-1105,Amwaj Marketing Company,2026-04-13,2026-04-20,FG-1013,800,86.51,SAR,69208.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0328,V-1191,Tigris Foodstuff Ltd,2026-04-13,2026-04-25,BV-2024,3000,7.97,SAR,23910.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0224,V-1058,Desert Cleaning Co LLC,2026-04-14,2026-04-21,HH-3015,1000,26.47,SAR,26470.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0243,V-1188,Arkan Packaging LLC,2026-04-14,2026-05-10,CM-4002,1000,29.22,SAR,29220.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0245,V-1018,Jamal Trading Co LLC,2026-04-14,2026-05-03,FG-1026,500,61.48,SAR,30740.0,Closed,omar.faridi@tamween.sa
+PO-2026-0465,V-1007,Tatweer Holdings Co,2026-04-14,2026-05-13,FG-1014,2000,12.78,SAR,25560.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0542,V-1008,Levant Hygiene Ltd,2026-04-14,2026-05-12,CM-4003,3000,30.42,SAR,91260.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0220,V-1014,Al-Faisal Exports Co,2026-04-15,2026-05-04,FG-1021,200,76.14,SAR,15228.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0229,V-1170,Madinah Wholesale Ltd,2026-04-15,2026-04-25,HH-3016,1000,125.67,SAR,125670.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0222,V-1014,Al-Faisal Exports Co,2026-04-16,2026-04-26,CM-4007,200,106.78,SAR,21356.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0246,V-1072,Lamar Hygiene Trading LLC,2026-04-16,2026-05-10,HH-3007,500,25.86,SAR,12930.0,Closed,omar.faridi@tamween.sa
+PO-2026-0492,V-1109,Al-Faisal Foods Ltd,2026-04-16,2026-04-30,FG-1028,5000,12.71,SAR,63550.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0518,V-1157,Jeddah International Group,2026-04-16,2026-05-13,FG-1008,100,57.18,SAR,5718.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0411,V-1028,Rashid Trading Co LLC,2026-04-17,2026-05-14,BV-2009,1000,9.46,SAR,9460.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0226,V-1141,Mada Industries Co,2026-04-18,2026-05-08,HH-3007,500,26.75,SAR,13375.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0242,V-1180,Bordeaux Foods Co,2026-04-18,2026-04-29,FG-1030,500,77.05,SAR,38525.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0256,V-1066,Al-Faisal Confectionery Ltd,2026-04-18,2026-05-15,CM-4001,1000,112.65,SAR,112650.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0452,V-1122,Desert Packaging Company,2026-04-18,2026-05-01,HH-3013,100,14.27,SAR,1427.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0230,V-1055,Noor Manufacturing Group,2026-04-19,2026-05-18,HH-3019,200,133.63,SAR,26726.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0259,V-1166,Noor Print Services Group,2026-04-19,2026-05-10,FG-1008,3000,60.84,SAR,182520.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0283,V-1180,Bordeaux Foods Co,2026-04-19,2026-04-26,BV-2017,100,8.64,SAR,864.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0410,V-1092,Maghrib Logistics Services Co,2026-04-19,2026-04-29,CM-4007,800,112.65,SAR,90120.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0223,V-1136,Premier Cleaning Group,2026-04-20,2026-05-08,HH-3012,200,33.73,SAR,6746.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0225,V-1101,Levant Cleaning Trading LLC,2026-04-20,2026-04-28,FG-1028,3000,12.74,SAR,38220.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0232,V-1123,Faridi Packaging Company,2026-04-20,2026-05-10,HH-3013,1000,14.35,SAR,14350.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0235,V-1128,Riyadh Confectionery Ltd,2026-04-20,2026-05-10,FG-1011,200,69.59,SAR,13918.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0241,V-1186,Sulaiman Group Co LLC,2026-04-20,2026-05-05,FG-1017,3000,11.71,SAR,35130.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0272,V-1126,Quick Wholesale LLC,2026-04-20,2026-05-01,FG-1030,100,73.94,SAR,7394.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0227,V-1106,Oasis Manufacturing Co,2026-04-21,2026-05-12,FG-1023,500,87.42,SAR,43710.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0228,V-1162,Tatweer Marketing Co,2026-04-21,2026-04-29,HH-3018,200,42.64,SAR,8528.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0234,V-1029,Olaya Hygiene LLC,2026-04-21,2026-05-10,BV-2012,500,29.96,SAR,14980.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0240,V-1112,Watani Solutions Company,2026-04-21,2026-05-09,FG-1006,500,64.57,SAR,32285.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0244,V-1098,Jeddah Dairy Group,2026-04-21,2026-05-17,FG-1013,500,87.32,SAR,43660.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0438,V-1079,Ibn Sina Materials Trading Ltd,2026-04-21,2026-05-01,FG-1030,800,71.47,SAR,57176.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0474,V-1190,Arkan Trading Trading LLC,2026-04-21,2026-05-06,HH-3010,1500,27.02,SAR,40530.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0579,V-1096,Oasis Exports Trading LLC,2026-04-21,2026-04-29,BV-2018,1500,24.45,SAR,36675.0,Closed,omar.faridi@tamween.sa
+PO-2026-0231,V-1132,Mawared Snacks Group,2026-04-22,2026-05-21,BV-2005,1000,14.81,SAR,14810.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0233,V-1201,Jamal Marketing Co,2026-04-22,2026-05-02,FG-1016,200,23.05,SAR,4610.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0236,V-1053,Sahara Co Company,2026-04-22,2026-05-17,FG-1013,2000,86.92,SAR,173840.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0239,V-1095,Tihama Wines & Spirits LLC,2026-04-22,2026-05-01,HH-3018,200,46.17,SAR,9234.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0247,V-1456,Gulf Cosmetics Co,2026-04-23,2026-05-09,FG-2241,3400,41.0,SAR,139400.0,Closed,omar.faridi@tamween.sa
+PO-2026-0395,V-1204,Misr Confectionery Ltd,2026-04-23,2026-05-23,FG-1028,500,10.95,SAR,5475.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0418,V-1169,Sahara Confectionery Group,2026-04-24,2026-05-11,HH-3024,3000,33.42,SAR,100260.0,Closed,omar.faridi@tamween.sa
+PO-2026-0485,V-1026,Olaya Materials Trading Ltd,2026-04-24,2026-05-06,HH-3004,200,33.91,SAR,6782.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0253,V-1098,Jeddah Dairy Group,2026-04-25,2026-05-20,FG-1015,5000,19.2,SAR,96000.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0292,V-1003,Saudi Trading Co,2026-04-25,2026-05-18,BV-2013,3000,7.48,SAR,22440.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0294,V-1113,Al-Faisal Beverages LLC,2026-04-25,2026-05-25,CM-4007,1000,112.53,SAR,112530.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0461,V-1031,Noor Snacks Ltd,2026-04-25,2026-05-10,FG-1007,5000,46.19,SAR,230950.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0583,V-1105,Amwaj Marketing Company,2026-04-25,2026-05-18,HH-3007,100,24.8,SAR,2480.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0280,V-1008,Levant Hygiene Ltd,2026-04-26,2026-05-08,HH-3007,3000,24.6,SAR,73800.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0358,V-1097,Kayan Hygiene Ltd,2026-04-26,2026-05-15,CM-4008,200,28.06,SAR,5612.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0428,V-1152,Tatweer Commercial Ltd,2026-04-26,2026-05-15,HH-3024,1500,30.63,SAR,45945.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0541,V-1086,Khaleej Confectionery Company,2026-04-26,2026-05-20,FG-1016,200,20.63,SAR,4126.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0565,V-1197,Bayt Supply Chain Ltd,2026-04-27,2026-05-24,BV-2022,200,48.32,SAR,9664.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0330,V-1050,Solo Commercial Ltd,2026-04-28,2026-05-22,BV-2012,800,32.99,SAR,26392.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0334,V-1021,Quick Enterprises Company,2026-04-28,2026-05-05,HH-3019,800,112.63,SAR,90104.0,Closed,omar.faridi@tamween.sa
+PO-2026-0454,V-1019,Mediterranean Cleaning LLC,2026-04-28,2026-05-19,CM-4019,200,32.48,SAR,6496.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0524,V-1456,Gulf Cosmetics Co,2026-04-29,2026-05-15,FG-1023,5000,96.32,SAR,481600.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0293,V-1198,Euphrates Group LLC,2026-04-30,2026-05-17,HH-3003,2000,85.05,SAR,170100.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0361,V-1099,Tabuk Distribution Trading LLC,2026-04-30,2026-05-24,BV-2023,100,7.33,SAR,733.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0446,V-1091,Falcon Distribution Trading LLC,2026-04-30,2026-05-24,CM-4002,1500,30.17,SAR,45255.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0267,V-1170,Madinah Wholesale Ltd,2026-05-01,2026-05-12,HH-3009,5000,15.36,SAR,76800.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0429,V-1029,Olaya Hygiene LLC,2026-05-01,2026-05-08,HH-3015,200,22.87,SAR,4574.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0329,V-1003,Saudi Trading Co,2026-05-02,2026-05-27,CM-4017,3000,43.75,SAR,131250.0,Closed,omar.faridi@tamween.sa
+PO-2026-0338,V-1044,Euphrates Foodstuff Group,2026-05-02,2026-05-20,HH-3020,800,81.91,SAR,65528.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0442,V-1011,Dammam Distribution Co,2026-05-02,2026-05-26,HH-3009,1500,16.51,SAR,24765.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0529,V-1073,Bayt Confectionery Ltd,2026-05-02,2026-05-12,FG-1012,100,37.96,SAR,3796.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0276,V-1172,Amwaj Commercial Company,2026-05-03,2026-05-16,HH-3008,5000,118.68,SAR,593400.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0317,V-1192,Asir Co Ltd,2026-05-03,2026-05-21,CM-4014,1500,41.61,SAR,62415.0,Closed,omar.faridi@tamween.sa
+PO-2026-0459,V-1036,Nile Marketing LLC,2026-05-03,2026-05-27,CM-4019,800,36.59,SAR,29272.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0556,V-1040,Saudi Wines & Spirits Co LLC,2026-05-03,2026-05-13,CM-4018,200,30.64,SAR,6128.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0587,V-1160,Al-Faisal Foodstuff Co LLC,2026-05-03,2026-05-29,HH-3024,1500,31.8,SAR,47700.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0422,V-1044,Euphrates Foodstuff Group,2026-05-04,2026-05-13,BV-2024,3000,7.62,SAR,22860.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0318,V-1163,Tabuk Group Company,2026-05-06,2026-05-19,FG-1005,100,82.21,SAR,8221.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0522,V-1099,Tabuk Distribution Trading LLC,2026-05-07,2026-06-05,CM-4015,500,80.1,SAR,40050.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0262,V-1024,Al-Rajhi Confectionery Co,2026-05-09,2026-06-03,FG-1028,5000,12.29,SAR,61450.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0335,V-1188,Arkan Packaging LLC,2026-05-10,2026-05-19,FG-1023,100,86.75,SAR,8675.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0516,V-1122,Desert Packaging Company,2026-05-10,2026-05-17,HH-3011,5000,16.47,SAR,82350.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0371,V-1195,Asir Trading LLC,2026-05-11,2026-06-04,FG-1024,1000,88.67,SAR,88670.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0278,V-1009,Bordeaux Cleaning Company,2026-05-12,2026-05-25,FG-1007,800,52.55,SAR,42040.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0390,V-1050,Solo Commercial Ltd,2026-05-12,2026-05-19,CM-4008,200,29.58,SAR,5916.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0313,V-1166,Noor Print Services Group,2026-05-13,2026-06-11,HH-3005,1500,14.62,SAR,21930.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0564,V-1060,Arkan Services Co,2026-05-13,2026-06-09,BV-2019,800,8.28,SAR,6624.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0386,V-1047,Tihama Wines & Spirits Co,2026-05-14,2026-06-07,BV-2006,1500,7.62,SAR,11430.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0423,V-1053,Sahara Co Company,2026-05-14,2026-06-01,FG-1005,200,80.62,SAR,16124.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0269,V-1114,Al-Rajhi Materials Trading Ltd,2026-05-15,2026-06-08,FG-1014,500,11.74,SAR,5870.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0319,V-1185,Mada Packaging Company,2026-05-15,2026-06-05,HH-3020,500,89.61,SAR,44805.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0393,V-1193,Tatweer Logistics Services LLC,2026-05-15,2026-06-07,FG-1011,500,76.71,SAR,38355.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0458,V-1163,Tabuk Group Company,2026-05-16,2026-06-14,FG-1029,2000,11.79,SAR,23580.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0260,V-1137,Kayan Dairy Co LLC,2026-05-17,2026-06-07,BV-2018,5000,22.73,SAR,113650.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0264,V-1013,Levant Co Ltd,2026-05-18,2026-06-06,BV-2022,100,43.1,SAR,4310.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0515,V-1124,Tabuk Dairy Co,2026-05-18,2026-06-09,BV-2016,3000,28.42,SAR,85260.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0567,V-1123,Faridi Packaging Company,2026-05-20,2026-06-18,HH-3020,500,97.43,SAR,48715.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0590,V-1171,Najd Imports Company,2026-05-20,2026-06-07,BV-2019,500,8.93,SAR,4465.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0351,V-1190,Arkan Trading Trading LLC,2026-05-21,2026-05-28,HH-3021,1000,13.74,SAR,13740.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0268,V-1050,Solo Commercial Ltd,2026-05-22,2026-06-14,CM-4006,2000,79.5,SAR,159000.0,Closed,omar.faridi@tamween.sa
+PO-2026-0435,V-1061,Al-Rajhi Marketing LLC,2026-05-22,2026-06-12,CM-4006,1500,72.78,SAR,109170.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0548,V-1019,Mediterranean Cleaning LLC,2026-05-22,2026-06-12,CM-4003,200,25.24,SAR,5048.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0277,V-1081,Kayan Commercial Co,2026-05-23,2026-06-01,BV-2009,500,11.04,SAR,5520.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0377,V-1133,Kayan Hygiene Co LLC,2026-05-24,2026-06-05,FG-1006,1500,66.6,SAR,99900.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0384,V-1113,Al-Faisal Beverages LLC,2026-05-24,2026-06-15,FG-1025,5000,82.77,SAR,413850.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0399,V-1106,Oasis Manufacturing Co,2026-05-25,2026-06-20,CM-4008,1500,25.95,SAR,38925.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0308,V-1198,Euphrates Group LLC,2026-05-26,2026-06-13,BV-2012,100,31.9,SAR,3190.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0457,V-1143,Hijaz Print Services Group,2026-05-26,2026-06-09,FG-1016,200,24.21,SAR,4842.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0562,V-1047,Tihama Wines & Spirits Co,2026-05-26,2026-06-18,BV-2012,1500,28.27,SAR,42405.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0370,V-1135,Misr Imports Group,2026-05-27,2026-06-11,CM-4017,500,40.33,SAR,20165.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0453,V-1107,Faridi Marketing Trading LLC,2026-05-27,2026-06-12,BV-2018,1500,20.5,SAR,30750.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0469,V-1133,Kayan Hygiene Co LLC,2026-05-27,2026-06-08,BV-2012,500,27.76,SAR,13880.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0473,V-1084,Jamal Supply Chain Co LLC,2026-05-27,2026-06-16,HH-3013,800,16.42,SAR,13136.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0495,V-1193,Tatweer Logistics Services LLC,2026-05-27,2026-06-16,BV-2003,100,32.4,SAR,3240.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0589,V-1140,Falcon Cosmetics LLC,2026-05-27,2026-06-06,CM-4017,100,41.86,SAR,4186.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0336,V-1071,Sulaiman Cleaning Group,2026-05-28,2026-06-06,CM-4018,1000,28.65,SAR,28650.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0445,V-1017,Bin Laden Cosmetics Ltd,2026-05-28,2026-06-10,BV-2018,1500,21.44,SAR,32160.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0512,V-1121,Watani Group LLC,2026-05-28,2026-06-22,HH-3011,5000,14.76,SAR,73800.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0517,V-1141,Mada Industries Co,2026-05-30,2026-06-13,BV-2009,3000,9.46,SAR,28380.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0302,V-1064,Mada Industries Trading LLC,2026-05-31,2026-06-20,HH-3012,500,29.59,SAR,14795.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0316,V-1022,Faridi Cleaning Trading LLC,2026-05-31,2026-06-10,CM-4005,3000,58.9,SAR,176700.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0571,V-1104,Maghrib Manufacturing Co,2026-05-31,2026-06-30,CM-4005,1500,54.99,SAR,82485.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0433,V-1050,Solo Commercial Ltd,2026-06-01,2026-06-19,HH-3001,1500,133.07,SAR,199605.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0289,V-1069,Amwaj Supply Chain LLC,2026-06-02,2026-06-20,CM-4013,1000,120.98,SAR,120980.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0296,V-1132,Mawared Snacks Group,2026-06-02,2026-06-17,BV-2012,1500,33.5,SAR,50250.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0364,V-1153,Hijaz Solutions Co,2026-06-04,2026-06-14,HH-3023,5000,88.46,SAR,442300.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0532,V-1143,Hijaz Print Services Group,2026-06-04,2026-06-17,BV-2021,500,8.44,SAR,4220.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0321,V-1086,Khaleej Confectionery Company,2026-06-05,2026-06-15,BV-2006,800,8.42,SAR,6736.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0487,V-1037,Premier Industries Co,2026-06-05,2026-06-14,HH-3011,200,14.1,SAR,2820.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0508,V-1036,Nile Marketing LLC,2026-06-05,2026-06-14,FG-1017,1500,12.49,SAR,18735.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0575,V-1175,Desert Manufacturing Co,2026-06-05,2026-07-03,FG-1012,5000,36.83,SAR,184150.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0310,V-1135,Misr Imports Group,2026-06-06,2026-06-27,BV-2003,3000,29.42,SAR,88260.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0417,V-1022,Faridi Cleaning Trading LLC,2026-06-06,2026-07-03,CM-4007,5000,99.35,SAR,496750.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0475,V-1191,Tigris Foodstuff Ltd,2026-06-06,2026-07-03,FG-1010,1500,12.89,SAR,19335.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0531,V-1074,Euphrates Services Ltd,2026-06-06,2026-06-25,CM-4005,1000,58.19,SAR,58190.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0551,V-1061,Al-Rajhi Marketing LLC,2026-06-06,2026-06-20,FG-1016,500,21.74,SAR,10870.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0284,V-1084,Jamal Supply Chain Co LLC,2026-06-07,2026-07-07,FG-1029,1500,12.0,SAR,18000.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0297,V-1163,Tabuk Group Company,2026-06-07,2026-06-15,FG-1028,3000,11.26,SAR,33780.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0311,V-1015,Misr Holdings Group,2026-06-07,2026-07-04,BV-2012,5000,29.55,SAR,147750.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0322,V-1178,Bayt Exports LLC,2026-06-07,2026-06-18,HH-3002,1000,61.21,SAR,61210.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0426,V-1184,Arkan Supply Chain Co LLC,2026-06-07,2026-06-27,BV-2018,200,19.8,SAR,3960.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0534,V-1084,Jamal Supply Chain Co LLC,2026-06-07,2026-07-03,HH-3005,500,16.45,SAR,8225.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0552,V-1141,Mada Industries Co,2026-06-07,2026-06-27,HH-3019,1500,137.35,SAR,206025.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0519,V-1183,Dar Co Ltd,2026-06-10,2026-06-29,BV-2017,500,8.93,SAR,4465.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0309,V-1177,Lamar Enterprises Group,2026-06-11,2026-07-06,CM-4003,500,28.53,SAR,14265.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0470,V-1078,Mediterranean Foods Trading LLC,2026-06-11,2026-06-26,FG-1028,2000,12.67,SAR,25340.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0348,V-1123,Faridi Packaging Company,2026-06-12,2026-06-24,FG-1019,500,46.9,SAR,23450.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0456,V-1133,Kayan Hygiene Co LLC,2026-06-12,2026-06-25,HH-3016,200,125.03,SAR,25006.0,Closed,fahad.albalawi@tamween.sa
+PO-2026-0346,V-1164,Mada Services Ltd,2026-06-13,2026-06-23,BV-2008,3000,10.11,SAR,30330.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0599,V-1077,Arkan Foodstuff Ltd,2026-06-13,2026-06-22,BV-2003,5000,32.37,SAR,161850.0,Closed,sara.aldosari@tamween.sa
+PO-2026-0252,V-1037,Premier Industries Co,2026-06-14,2026-06-23,FG-1009,500,24.36,SAR,12180.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0373,V-1000,Arkan Snacks Co LLC,2026-06-14,2026-07-02,FG-1021,100,82.74,SAR,8274.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0299,V-1024,Al-Rajhi Confectionery Co,2026-06-15,2026-06-22,HH-3015,800,25.99,SAR,20792.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0568,V-1054,Noor Industries Ltd,2026-06-15,2026-06-23,BV-2018,1000,23.54,SAR,23540.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0419,V-1097,Kayan Hygiene Ltd,2026-06-17,2026-06-25,BV-2018,200,20.8,SAR,4160.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0279,V-1003,Saudi Trading Co,2026-06-18,2026-07-18,FG-1020,500,19.66,SAR,9830.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0356,V-1129,Arkan Cleaning Trading LLC,2026-06-18,2026-07-18,FG-1005,1500,73.91,SAR,110865.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0288,V-1099,Tabuk Distribution Trading LLC,2026-06-20,2026-07-04,HH-3009,100,15.27,SAR,1527.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0372,V-1110,Premier Manufacturing Group,2026-06-20,2026-07-05,FG-1030,100,71.43,SAR,7143.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0493,V-1043,Mada Foods Co LLC,2026-06-20,2026-07-19,FG-1010,2000,12.37,SAR,24740.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0494,V-1120,Premier International Group,2026-06-20,2026-07-17,HH-3013,5000,15.61,SAR,78050.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0502,V-1136,Premier Cleaning Group,2026-06-20,2026-07-10,HH-3004,1000,32.11,SAR,32110.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0585,V-1192,Asir Co Ltd,2026-06-20,2026-06-30,FG-1025,3000,68.54,SAR,205620.0,Closed,noor.alshamri@tamween.sa
+PO-2026-0574,V-1119,Arabian Snacks Company,2026-06-21,2026-07-09,BV-2007,5000,8.65,SAR,43250.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0301,V-1029,Olaya Hygiene LLC,2026-06-22,2026-06-29,FG-1002,1500,12.27,SAR,18405.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0254,V-1056,Bayt Beverages Co,2026-06-23,2026-07-09,HH-3013,5000,16.78,SAR,83900.0,Closed,ahmad.alqahtani@tamween.sa
+PO-2026-0382,V-1091,Falcon Distribution Trading LLC,2026-06-24,2026-07-05,FG-1001,500,94.8,SAR,47400.0,Closed,hala.alsaud@tamween.sa
+PO-2026-0391,V-1048,Tigris Confectionery Co,2026-06-25,2026-07-14,FG-1002,1500,12.44,SAR,18660.0,Closed,omar.faridi@tamween.sa
+PO-2026-0431,V-1154,Maghrib Cosmetics LLC,2026-06-25,2026-07-17,FG-1025,3000,75.86,SAR,227580.0,Closed,layla.alotaibi@tamween.sa
+PO-2026-0451,V-1127,Dar Marketing Group,2026-06-25,2026-07-13,HH-3004,500,32.58,SAR,16290.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0467,V-1141,Mada Industries Co,2026-06-25,2026-07-09,FG-1021,100,83.78,SAR,8378.0,Closed,reem.alharbi@tamween.sa
+PO-2026-0489,V-1160,Al-Faisal Foodstuff Co LLC,2026-06-25,2026-07-25,CM-4018,800,28.46,SAR,22768.0,Closed,khalid.almutairi@tamween.sa
+PO-2026-0582,V-1103,Maghrib Dairy Trading LLC,2026-06-26,2026-07-11,FG-1009,2000,22.27,SAR,44540.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0367,V-1191,Tigris Foodstuff Ltd,2026-06-27,2026-07-24,FG-1008,200,61.3,SAR,12260.0,Closed,yousef.alsubaie@tamween.sa
+PO-2026-0491,V-1166,Noor Print Services Group,2026-06-27,2026-07-20,FG-1004,200,54.26,SAR,10852.0,Closed,omar.faridi@tamween.sa
+PO-2026-0324,V-1080,Oasis Commercial Trading LLC,2026-06-28,2026-07-17,FG-1029,500,11.11,SAR,5555.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0263,V-1070,Bayt Confectionery Co,2026-06-30,2026-07-07,CM-4016,200,65.09,SAR,13018.0,Closed,tariq.alghamdi@tamween.sa
+PO-2026-0275,V-1009,Bordeaux Cleaning Company,2026-06-30,2026-07-23,FG-1004,500,57.58,SAR,28790.0,Closed,mona.aldakhil@tamween.sa
+PO-2026-0396,V-1096,Oasis Exports Trading LLC,2026-06-30,2026-07-21,FG-1023,800,95.83,SAR,76664.0,Closed,khalid.almutairi@tamween.sa

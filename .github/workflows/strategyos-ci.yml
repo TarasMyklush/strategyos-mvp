@@ -27,6 +27,14 @@ env:
   # test_graph_queries_neo4j_e2e.py, test_graph_retrieval_neo4j_e2e.py) --
   # they do not need to be excluded here.
   CI_TEST_TARGETS: "tests/"
+  # Local dev machines resolve the default dataset from a sibling
+  # "strategy os/StrategyOS POC/01_Synthetic_Dataset" folder outside this
+  # repo (see config.py's STRATEGYOS_POC_ROOT default). That folder was
+  # never checked into git and does not exist on a fresh CI checkout, so
+  # point the default dataset at the copy vendored under tests/fixtures/
+  # instead. This does not change local dev behavior -- it only sets the
+  # override env var config.py already supports.
+  STRATEGYOS_SOURCE_DATASET: "${{ github.workspace }}/tests/fixtures/01_Synthetic_Dataset"
 
 jobs:
   tests:
