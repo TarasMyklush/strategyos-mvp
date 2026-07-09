@@ -1206,17 +1206,27 @@ def test_agents_running_panel_has_no_orphan_sovereign_bullet_for_ceo():
 
 
 def test_board_portal_state_note_uses_unique_support_copy():
-    """Board Portal intro note must not duplicate the main card summary copy."""
+    """Board Portal intro note must not duplicate the main card summary copy.
+
+    boardStateSupportNote() used to carry its own hardcoded per-stage
+    fallback strings and trusted server state_detail.note unconditionally --
+    which went stale on a purely client-side stage switch (see
+    test_board_state_note_updates_on_client_only_stage_switch in
+    test_frontend_shell.py). It now delegates to boardStateDetailForRender(),
+    which applies the same "only trust server data when its own state
+    matches the current selection" guard used elsewhere, and whose
+    per-stage `note` defaults remain distinct from the `summary` defaults
+    this test guards against duplicating."""
     js = _static_executive_js()
 
     assert "function boardStateSupportNote(board)" in js, (
         "Board Portal should derive a distinct support note for lifecycle guidance"
     )
-    assert "Close evidence gaps now so the CEO sees one clean board view" in js, (
+    assert "Keep the packet inside the executive lane until challenged evidence is closed" in js, (
         "Pre-board support note should give unique CEO guidance instead of repeating the card summary"
     )
-    assert 'note.textContent = firstDefined(boardStateSupportNote(board)' in js, (
-        "Board state intro note must use support-note copy, not the main card summary"
+    assert "return boardStateDetailForRender(resolveBoardState(), board).note;" in js, (
+        "Board state intro note must derive from boardStateDetailForRender's guarded per-stage note"
     )
 
 

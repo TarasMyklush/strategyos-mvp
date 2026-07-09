@@ -882,6 +882,7 @@ a { color: inherit; }
 }
 
 .network-list-head__stats {
+  grid-column: 3;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -1650,6 +1651,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   }
 
   .network-list-head__stats {
+    grid-column: auto;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -2716,6 +2718,40 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   margin: 0;
   font-size: 13.5px;
   line-height: 1.55;
+}
+
+.assistant-md-heading {
+  display: block;
+  margin-top: 0.6em;
+}
+
+.assistant-md-h1, .assistant-md-h2, .assistant-md-h3 {
+  font-size: 1.05em;
+}
+
+.assistant-md-rule {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.6em 0;
+}
+
+.assistant-md-table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 12.5px;
+  width: 100%;
+}
+
+.assistant-md-table th,
+.assistant-md-table td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.assistant-md-table th {
+  background: color-mix(in srgb, var(--surface-strong) 60%, transparent);
+  font-weight: 700;
 }
 
 .assistant-message--failed {
