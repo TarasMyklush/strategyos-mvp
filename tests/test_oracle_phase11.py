@@ -601,7 +601,7 @@ def test_plan_data_keeps_oracle_roadmap_complete_while_hosted_corrective_tranche
         / "plan_data.js"
     )
     text = plan_file.read_text(encoding="utf-8")
-    assert 'updated: "2026-07-05"' in text
+    assert 'updated: "2026-07-09"' in text
     assert 'id: "DONE-005"' in text
     assert 'Foundation through Oracle pilot delivery shipped' in text
     assert 'Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection.' in text
