@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from strategyos_mvp.citation_resolver import resolve_citation, validate_quantitative_claims
-from strategyos_mvp.ingestion import load_dataset
+from strategyos_mvp.ingestion import check_quality, load_dataset
 from strategyos_mvp.paths import SOURCE_DATASET
 from strategyos_mvp.quality import build_data_quality_report
 from strategyos_mvp.skills.finance_controls import run_all_finance_skills
@@ -68,6 +68,34 @@ def test_ocr_acceptance_harness_verifies_default_dataset_critical_pdfs(rel_path:
     assert verification and verification["verified"]
     assert verification["excerpt"]
     assert all(page["status"] == "ok" for page in ocr_status.get("pages", []))
+
+
+def test_check_quality_does_not_flag_ocr_verifications_for_files_absent_from_the_dataset():
+    """OCR_REQUIRED_VERIFICATIONS names two exact filenames from the synthetic
+    fixture. check_quality() used to iterate that dict unconditionally, so a
+    real dataset that simply doesn't contain a file with those exact names
+    got a spurious 'OCR-required evidence missing' issue on every run, for a
+    file that was never part of the dataset in the first place. It must only
+    check files that actually exist in the dataset's evidence manifest."""
+    bundle = load_dataset(SOURCE_DATASET)
+    bundle.evidence.manifest = {
+        rel: value
+        for rel, value in bundle.evidence.manifest.items()
+        if rel not in OCR_CRITICAL_PDFS
+    }
+    for rel in OCR_CRITICAL_PDFS:
+        bundle.evidence.pdf_text.pop(rel, None)
+        bundle.evidence.ocr_status.pop(rel, None)
+
+    issues = check_quality(bundle)
+
+    flagged_paths = {issue.source for issue in issues}
+    for rel in OCR_CRITICAL_PDFS:
+        assert rel not in flagged_paths, (
+            f"check_quality() flagged {rel!r} as missing OCR-required evidence, "
+            "but this dataset never contained that file -- OCR_REQUIRED_VERIFICATIONS "
+            "entries must be skipped when the file isn't in the dataset's manifest"
+        )
 
 
 def test_quantitative_claim_validations_pass_for_repaired_findings():
