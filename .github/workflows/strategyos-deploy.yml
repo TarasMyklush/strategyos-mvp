@@ -27,23 +27,13 @@ concurrency:
 
 env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  CI_TEST_TARGETS: >-
-    tests/test_runtime_governance.py
-    tests/test_governed_review_flow_e2e.py
-    tests/test_frontend_shell.py
-    tests/test_api_health.py
-    tests/test_api_identity_boundary.py
-    tests/test_api_security_boundary.py
-    tests/test_twins_phase10.py
-    tests/test_deploy_config_hygiene.py
-    tests/test_detector_registry.py
-    tests/test_task_registry.py
-    tests/test_source_pack.py
-    tests/test_ocr.py
-    tests/test_prompt_injection.py
-    tests/test_sensitive_ids.py
-    tests/test_data_roles.py
-    tests/test_plugins.py
+  # Full suite -- see the matching comment in strategyos-ci.yml. This is the
+  # pre-deploy gate for the live Hetzner surface; a hand-picked subset here
+  # let leakage-detection/acceptance regressions (test_qa.py,
+  # test_finance_controls.py, test_poc_acceptance.py, etc.) ship to
+  # production with a "green" pre-deploy check. Live-service e2e tests
+  # self-skip (see the matching comment in strategyos-ci.yml).
+  CI_TEST_TARGETS: "tests/"
 
 jobs:
   tests:

@@ -16,22 +16,17 @@ concurrency:
 
 env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  CI_TEST_TARGETS: >-
-    tests/test_runtime_governance.py
-    tests/test_governed_review_flow_e2e.py
-    tests/test_frontend_shell.py
-    tests/test_api_health.py
-    tests/test_api_identity_boundary.py
-    tests/test_api_security_boundary.py
-    tests/test_deploy_config_hygiene.py
-    tests/test_detector_registry.py
-    tests/test_task_registry.py
-    tests/test_source_pack.py
-    tests/test_ocr.py
-    tests/test_prompt_injection.py
-    tests/test_sensitive_ids.py
-    tests/test_data_roles.py
-    tests/test_plugins.py
+  # Full suite. Do NOT hand-pick a subset here again: a hand-picked list
+  # silently stops gating every file added after it was written, which is
+  # exactly how test_qa.py / test_llm_qa.py / test_case_file_writer.py /
+  # the Oracle phase tests / all twins tests went unguarded and main
+  # shipped red for multiple review cycles while this workflow reported
+  # green. Tests requiring live external services self-skip via
+  # pytest.ini_options markers ("integration") or an env-var skipif guard
+  # (see test_governed_review_flow_postgres_e2e.py,
+  # test_graph_queries_neo4j_e2e.py, test_graph_retrieval_neo4j_e2e.py) --
+  # they do not need to be excluded here.
+  CI_TEST_TARGETS: "tests/"
 
 jobs:
   tests:
