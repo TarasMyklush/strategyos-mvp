@@ -143,6 +143,71 @@ def test_scheduler_and_event_execution_are_retry_safe(tmp_path):
         _restore_env(original)
 
 
+def test_cycle_endpoint_requires_diagnostic_role(tmp_path):
+    original = _apply_env(_phase10_env(tmp_path))
+    try:
+        forbidden = client.post(
+            "/twin/api/cycles/daily_standup",
+            headers=_auth("executive"),
+        )
+        assert forbidden.status_code == 403
+    finally:
+        _restore_env(original)
+
+
+def test_cycle_endpoint_runs_a_real_cycle_synchronously_and_is_idempotent(tmp_path):
+    original = _apply_env(_phase10_env(tmp_path))
+    try:
+        first = client.post(
+            "/twin/api/cycles/daily_standup",
+            headers={**_auth("tenant_admin"), "Idempotency-Key": "cycle-http-1"},
+        )
+        second = client.post(
+            "/twin/api/cycles/daily_standup",
+            headers={**_auth("tenant_admin"), "Idempotency-Key": "cycle-http-1"},
+        )
+
+        assert first.status_code == 200
+        assert first.json()["status"] == "completed"
+        assert second.json()["idempotent_replay"] is True
+        assert first.json()["execution_id"] == second.json()["execution_id"]
+    finally:
+        _restore_env(original)
+
+
+def test_cycle_endpoint_accepts_short_aliases_and_rejects_unknown_types(tmp_path):
+    original = _apply_env(_phase10_env(tmp_path))
+    try:
+        weekly = client.post(
+            "/twin/api/cycles/weekly",
+            headers={**_auth("tenant_admin"), "Idempotency-Key": "cycle-http-weekly"},
+        )
+        bad = client.post(
+            "/twin/api/cycles/not_a_real_cycle",
+            headers=_auth("tenant_admin"),
+        )
+
+        assert weekly.status_code == 200
+        assert weekly.json()["status"] == "completed"
+        assert bad.status_code == 400
+    finally:
+        _restore_env(original)
+
+
+def test_cycle_endpoint_returns_503_when_twins_disabled(tmp_path):
+    env = _phase10_env(tmp_path)
+    env["STRATEGYOS_TWINS_ENABLED"] = "false"
+    original = _apply_env(env)
+    try:
+        response = client.post(
+            "/twin/api/cycles/daily_standup",
+            headers=_auth("tenant_admin"),
+        )
+        assert response.status_code == 503
+    finally:
+        _restore_env(original)
+
+
 def test_observability_surfaces_twin_runtime_health(tmp_path):
     original = _apply_env(_phase10_env(tmp_path))
     try:

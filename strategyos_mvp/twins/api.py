@@ -265,6 +265,34 @@ def twin_health(
     return twin_operational_health_payload(principal=principal)
 
 
+@router.post("/cycles/{cycle_type}")
+def twin_run_cycle(
+    cycle_type: str,
+    principal: dict[str, Any] = require_role(*TWIN_DIAGNOSTIC_ROLES),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    """Trigger a twin review cycle (daily_standup/weekly_review/monthly_board).
+
+    Runs synchronously and returns the execution record when
+    STRATEGYOS_RUN_EXECUTION_MODE is not "hatchet"; otherwise the cycle is
+    enqueued as a Hatchet task and this returns immediately with a queued
+    status and the Hatchet run reference. Idempotent on the supplied
+    Idempotency-Key: a repeated key returns the original execution record
+    rather than re-running the cycle.
+    """
+    _require_twin_mutations_enabled("run twin cycles")
+    from strategyos_mvp.twins.execution import submit_scheduled_cycle
+
+    try:
+        return submit_scheduled_cycle(
+            cycle_type,
+            repositories=_get_repositories(),
+            idempotency_key=idempotency_key,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.get("/status/{role}")
 def twin_status(
     role: str,

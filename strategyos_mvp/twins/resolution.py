@@ -1,8 +1,14 @@
 """KPI resolution engine — tree traversal, gap detection, and ownership routing.
 
-Connects twin personas to the KPI tree for Phase 1 by operating on a
-hardcoded KPI_TREE. In later phases this will be replaced by live
-Neo4j queries against the StrategyOS KPI substrate.
+Connects twin personas to the KPI tree by operating on KPI_TREE, the
+structural fallback (node ids, owners, thresholds) that seeds
+KpiRepository the first time it is empty. Node *values* are no longer
+static: strategyos_mvp.twins.kpi_ingest.refresh_kpis_from_run overwrites
+them from each governed run's real summary (challenged-findings
+adjudication, recoverable leakage, etc.), and nodes with no honest
+source in the default pipeline are marked status="unavailable" rather
+than left holding a fabricated number. See kpi_ingest.py for what is
+and is not backed by real data today.
 """
 
 from __future__ import annotations
@@ -14,7 +20,8 @@ from strategyos_mvp.twins.protocol import InterTwinMessage, check_escalation
 from strategyos_mvp.twins.store import KpiRepository
 
 # ---------------------------------------------------------------------------
-# Hardcoded KPI tree (Phase 1 — no live Neo4j yet)
+# Structural KPI tree fallback (node ids, owners, thresholds).
+# Node values are refreshed from real runs by kpi_ingest.refresh_kpis_from_run.
 # ---------------------------------------------------------------------------
 
 KPI_TREE: dict[str, dict[str, Any]] = {
@@ -55,9 +62,10 @@ KPI_TREE: dict[str, dict[str, Any]] = {
 class KPIResolutionEngine:
     """Traces KPI nodes, detects gaps, and routes data requests to owners.
 
-    Operates on the hardcoded KPI_TREE for Phase 1. Each method is
-    a pure function over the tree — the engine carries no instance
-    state so it is safe to share across twin cycles.
+    Reads through the repository (falling back to the structural KPI_TREE
+    when the repository is empty). Each method is a pure function over
+    the tree — the engine carries no instance state so it is safe to
+    share across twin cycles.
     """
 
     def __init__(

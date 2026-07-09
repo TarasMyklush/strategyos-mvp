@@ -613,10 +613,13 @@ class CycleRecord:
 
 
 class CycleHistory:
-    """In-memory cycle history with retrieval and filtering.
+    """Cycle history with retrieval and filtering.
 
-    In production this would be backed by a database. For now it
-    stores records in memory.
+    Persists through the optional ``repository`` (CycleHistoryRepository,
+    JSON-file-backed) when one is supplied -- reads and writes go through
+    it rather than the in-memory dict in that case. Falls back to
+    in-memory-only storage when no repository is given (e.g. ad hoc/test
+    use), which does not survive a process restart.
     """
 
     def __init__(self, repository: CycleHistoryRepository | None = None) -> None:
