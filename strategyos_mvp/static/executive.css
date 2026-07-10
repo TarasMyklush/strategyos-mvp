@@ -4160,21 +4160,24 @@ html[data-theme="dark"] .trend-axis {
 }
 
 .strategyos-profile-modal,
-.strategyos-feedback-modal {
+.strategyos-feedback-modal,
+.strategyos-agent-install-modal {
   position: fixed;
   inset: 0;
   z-index: 1060;
 }
 
 .strategyos-profile-backdrop,
-.strategyos-feedback-backdrop {
+.strategyos-feedback-backdrop,
+.strategyos-agent-install-backdrop {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.38);
 }
 
 .strategyos-profile-card,
-.strategyos-feedback-card {
+.strategyos-feedback-card,
+.strategyos-agent-install-card {
   position: relative;
   width: min(480px, calc(100vw - 32px));
   margin: 10vh auto 0;
@@ -4185,7 +4188,8 @@ html[data-theme="dark"] .trend-axis {
 }
 
 .strategyos-profile-close,
-.strategyos-feedback-close {
+.strategyos-feedback-close,
+.strategyos-agent-install-close {
   position: absolute;
   top: 10px;
   right: 12px;
@@ -4196,13 +4200,34 @@ html[data-theme="dark"] .trend-axis {
   cursor: pointer;
 }
 
+.strategyos-toast {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 1080;
+  width: fit-content;
+  max-width: min(520px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 92%, var(--surface));
+  color: var(--surface);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
 .strategyos-profile-list {
   display: grid;
   gap: 10px;
   margin: 16px 0;
 }
 
-.strategyos-profile-item {
+.strategyos-profile-item,
+.strategyos-agent-install-item {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 12px 14px;
@@ -4210,29 +4235,56 @@ html[data-theme="dark"] .trend-axis {
 }
 
 .strategyos-profile-item strong,
-.strategyos-profile-item span {
+.strategyos-profile-item span,
+.strategyos-agent-install-item strong,
+.strategyos-agent-install-item span {
   display: block;
 }
 
-.strategyos-profile-item span {
+.strategyos-profile-item span,
+.strategyos-agent-install-item span {
   color: var(--muted);
   font-size: 13px;
   margin-top: 4px;
 }
 
-.strategyos-profile-actions {
+.strategyos-profile-actions,
+.strategyos-agent-install-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.strategyos-profile-btn {
+.strategyos-agent-install-kicker {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.strategyos-agent-install-list {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.strategyos-profile-btn,
+.strategyos-agent-install-btn {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
   color: var(--ink);
   padding: 10px 14px;
   cursor: pointer;
+}
+
+.strategyos-agent-install-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
 }
 
 .disco-card {

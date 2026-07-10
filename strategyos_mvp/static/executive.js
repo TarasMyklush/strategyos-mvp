@@ -1374,6 +1374,63 @@
     return safeArray(modules.discoverable);
   }
 
+  function discoverableAgentId(item, index) {
+    return String(firstDefined(
+      item && item.id,
+      item && item.module_id,
+      item && item.connector,
+      item && item.route,
+      item && item.name,
+      item && item.label,
+      'agent-' + index
+    ));
+  }
+
+  function discoverableAgentSource(item) {
+    var source = String(firstDefined(item && item.source, '')).toLowerCase();
+    if (source) return source;
+    var id = String(firstDefined(item && item.id, item && item.module_id, '')).toLowerCase();
+    var by = String(firstDefined(item && item.by, '')).toLowerCase();
+    if (id.indexOf('connector-') === 0 || by === 'connector catalog') return 'market';
+    return 'native';
+  }
+
+  function discoverableAgentRoute(item) {
+    var explicitRoute = String(firstDefined(item && item.route, item && item.primary_route, ''));
+    if (explicitRoute) return explicitRoute;
+    var connector = String(firstDefined(item && item.connector, ''));
+    if (connector.charAt(0) === '/') return connector;
+    var agents = (state.latestPacket && state.latestPacket.agents) || {};
+    var discover = agents.discover || {};
+    return String(firstDefined(discover.deploy_route, '/ingestion/connectors'));
+  }
+
+  function discoverableAgentLabel(item) {
+    return String(firstDefined(item && item.name, item && item.label, item && item.module_id, 'Agent'));
+  }
+
+  function laneRouteForDiscoverableAgent(item) {
+    var lane = String(firstDefined(item && item.lane, '')).toLowerCase();
+    if (lane === 'review') return '/app?lane=review#review';
+    if (lane === 'operate' || lane === 'operator') return '/app?lane=operate';
+    if (lane === 'system' || lane === 'tenant_admin') return '/app?lane=system';
+    return '/app?lane=operate';
+  }
+
+  function navigateToRoute(route, sourceEl) {
+    var target = String(route || '').trim();
+    if (!target) return false;
+    var anchor = document.createElement('a');
+    anchor.href = target;
+    if (anchor.pathname === window.location.pathname && anchor.search === window.location.search) {
+      showToast('This workspace surface is already open.');
+      if (sourceEl && typeof sourceEl.focus === 'function') sourceEl.focus();
+      return true;
+    }
+    window.location.assign(target);
+    return true;
+  }
+
   function getApprovalAgents() {
     var modules = getAgentsModule();
     return safeArray(modules.approvals);
@@ -2143,6 +2200,78 @@
     toast.setAttribute('aria-live', 'polite');
     document.body.appendChild(toast);
     window.setTimeout(function () { toast.remove(); }, 3500);
+  }
+
+  function showAgentInstallRequest(item, sourceEl) {
+    var existing = document.querySelector('.strategyos-agent-install-modal');
+    if (existing) existing.remove();
+    var label = discoverableAgentLabel(item);
+    var lane = String(firstDefined(item && item.lane, 'operator')).toLowerCase();
+    var route = discoverableAgentRoute(item);
+    var session = state.session || {};
+    var authenticated = !!session.authenticated;
+    var role = String(firstDefined(session.display_role, session.role, 'Public CEO'));
+    var primaryRoute = authenticated ? laneRouteForDiscoverableAgent(item) : '/login';
+    var primaryLabel = authenticated ? 'Open authorized lane' : 'Sign in to add';
+    var body = authenticated
+      ? 'Your current ' + role + ' session cannot add this agent. Open the authorized workspace lane to continue.'
+      : 'Public CEO sessions can inspect the catalogue, but adding agents requires an authenticated operator, reviewer, or system role.';
+    var modal = document.createElement('div');
+    modal.className = 'strategyos-agent-install-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Add ' + label);
+    modal.innerHTML = [
+      '<div class="strategyos-agent-install-backdrop"></div>',
+      '<div class="strategyos-agent-install-card">',
+      '<button class="strategyos-agent-install-close" type="button" aria-label="Close add agent request">&times;</button>',
+      '<p class="strategyos-agent-install-kicker">Operator-gated install</p>',
+      '<h3>Add ' + escapeHtml(label) + '</h3>',
+      '<p class="section-note">' + escapeHtml(body) + '</p>',
+      '<div class="strategyos-agent-install-list">',
+      '<div class="strategyos-agent-install-item"><strong>Requested agent</strong><span>' + escapeHtml(label) + '</span></div>',
+      '<div class="strategyos-agent-install-item"><strong>Required lane</strong><span>' + escapeHtml(humanizeToken(lane)) + '</span></div>',
+      '<div class="strategyos-agent-install-item"><strong>Target route</strong><span>' + escapeHtml(route || 'Operator workspace') + '</span></div>',
+      '</div>',
+      '<div class="strategyos-agent-install-actions">',
+      '<button class="strategyos-agent-install-btn strategyos-agent-install-btn--primary" type="button" data-agent-install-primary="true">' + escapeHtml(primaryLabel) + '</button>',
+      '<button class="strategyos-agent-install-btn" type="button" data-agent-install-close="true">Close</button>',
+      '</div>',
+      '</div>'
+    ].join('');
+    document.body.appendChild(modal);
+    var previousFocus = sourceEl && typeof sourceEl.focus === 'function' ? sourceEl : document.activeElement;
+    var close = function () {
+      document.removeEventListener('keydown', onKeydown);
+      modal.remove();
+      if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+    };
+    var onKeydown = function (event) {
+      if (event.key === 'Escape') close();
+    };
+    var backdrop = modal.querySelector('.strategyos-agent-install-backdrop');
+    var closeButtons = modal.querySelectorAll('[data-agent-install-close], .strategyos-agent-install-close');
+    var primary = modal.querySelector('[data-agent-install-primary]');
+    if (backdrop) backdrop.onclick = close;
+    safeArray(closeButtons).forEach(function (button) { button.onclick = close; });
+    if (primary) {
+      primary.onclick = function () {
+        window.location.assign(primaryRoute);
+      };
+      window.setTimeout(function () { primary.focus(); }, 0);
+    }
+    document.addEventListener('keydown', onKeydown);
+  }
+
+  function handleDiscoverableAgentAction(item, sourceEl) {
+    if (!item) {
+      showToast('Agent detail is not available yet.');
+      return;
+    }
+    if (item.permitted !== false) {
+      if (navigateToRoute(discoverableAgentRoute(item), sourceEl)) return;
+    }
+    showAgentInstallRequest(item, sourceEl);
   }
 
   function showFeedbackForm() {
@@ -3753,7 +3882,12 @@
     var discoveryCard = $("discovery-panel");
     var subtoolsCard = $("subtools-panel");
     var activity = getAgentActivitySummary();
-    var discoverable = getDiscoverableAgents();
+    var discoverable = getDiscoverableAgents().map(function (item, index) {
+      var copy = Object.assign({}, item || {});
+      copy.__discoveryId = discoverableAgentId(copy, index);
+      copy.__source = discoverableAgentSource(copy);
+      return copy;
+    });
     var running = getRunningAgents();
     var approvals = getApprovalAgents();
     var subtools = getSubtools();
@@ -3837,9 +3971,24 @@
         var m = { 'Tenant runtime watch': 'System health monitor', 'Tenant Runtime Watch': 'System health monitor', 'Runtime watch': 'System health monitor' };
         return m[String(name).trim()] || name;
       }
+      function discoveryStatusText(item) {
+        if (item.permitted === false) return 'Operator approval required';
+        if (item.__source === 'native') return 'Ready in your workspace';
+        return 'Available to add';
+      }
+      function discoveryButtonText(item) {
+        if (item.permitted === false) return '+ request';
+        if (item.__source === 'native') return 'Open';
+        return '+ add';
+      }
       var renderDiscoveryGroup = function (title, items) {
+        if (!items.length) return '';
         return '<div class="disco-group-label">' + escapeHtml(title) + '</div><div class="disco-list">' + items.map(function (item) {
-          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(polishAgentName(firstDefined(item.name, item.label, item.module_id, 'Agent'))) + '</span><span class="disco-src ' + escapeHtml(firstDefined(item.source, 'native')) + '">' + escapeHtml(state.activePersona === "ceo" ? (item.source === 'native' ? 'StrategyOS' : 'Marketplace') : firstDefined(item.source === 'native' ? 'Built-in' : item.by, item.connector, 'connector')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? (item.source === 'native' ? 'Ready in your workspace' : 'Available to add') : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add">' + escapeHtml(item.source === 'native' ? '+ deploy' : '+ add') + '</button></div>';
+          var displayName = polishAgentName(firstDefined(item.name, item.label, item.module_id, 'Agent'));
+          var sourceLabel = state.activePersona === "ceo"
+            ? (item.__source === 'native' ? 'StrategyOS' : 'Marketplace')
+            : firstDefined(item.__source === 'native' ? 'Built-in' : item.by, item.connector, 'connector');
+          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(displayName) + '</span><span class="disco-src ' + escapeHtml(item.__source) + '">' + escapeHtml(sourceLabel) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? discoveryStatusText(item) : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add" data-agent-discovery-id="' + escapeHtml(item.__discoveryId) + '">' + escapeHtml(discoveryButtonText(item)) + '</button></div>';
         }).join('') + '</div>';
       };
       discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">Add to your workspace</span></div><div class="disco-search"><span class="disco-search-icon">⌕</span> Search the agent universe…</div>' + renderDiscoveryGroup('StrategyOS assistants', nativeAgents) + renderDiscoveryGroup('Available agents', marketAgents) + '<button type="button" class="disco-browse">Browse all agents →</button>';
@@ -3859,11 +4008,9 @@
       }
       safeArray(discoveryCard.querySelectorAll('.disco-add')).forEach(function (button) {
         button.onclick = function () {
-          if (state.activePersona === "ceo") {
-            showToast('Agent installation is available from the operator surface.');
-          } else {
-            showToast('Agent deployment is available from the operator or reviewer surface.');
-          }
+          var id = button.getAttribute('data-agent-discovery-id') || '';
+          var item = discoverable.find(function (candidate) { return candidate.__discoveryId === id; });
+          handleDiscoverableAgentAction(item, button);
         };
       });
     }

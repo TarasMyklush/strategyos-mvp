@@ -4581,6 +4581,7 @@ def _agent_modules_payload(
         {
             "module_id": "ceo-brief",
             "label": "CEO brief",
+            "source": "native",
             "route": "/executive?persona=ceo",
             "lane": "executive",
             "permitted": True,
@@ -4589,6 +4590,7 @@ def _agent_modules_payload(
         {
             "module_id": "board-room-memory",
             "label": "Board room memory",
+            "source": "native",
             "route": f"/executive?persona=board&board={_publication_lifecycle_mode(publication)}",
             "lane": "executive",
             "permitted": True,
@@ -4597,6 +4599,7 @@ def _agent_modules_payload(
         {
             "module_id": "reviewer-gate-console",
             "label": "Reviewer gate console",
+            "source": "native",
             "route": "/reviewer/pending-reviews",
             "lane": "review",
             "permitted": principal_has_any_role(role, "reviewer", "tenant_admin", "system"),
@@ -4605,6 +4608,7 @@ def _agent_modules_payload(
         {
             "module_id": "operator-resume-relay",
             "label": "Operator resume relay",
+            "source": "native",
             "route": "/app?lane=operate",
             "lane": "operate",
             "permitted": principal_has_any_role(role, "operator", "tenant_operator", "tenant_admin", "system"),
@@ -4613,6 +4617,7 @@ def _agent_modules_payload(
         {
             "module_id": "tenant-runtime-watch",
             "label": "System health monitor",
+            "source": "native",
             "route": "/app?lane=system",
             "lane": "system",
             "permitted": principal_has_any_role(role, "tenant_admin", "system"),

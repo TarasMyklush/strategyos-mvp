@@ -664,6 +664,30 @@ def test_ui_session_reports_environment_label_from_config():
         _restore_env(original)
 
 
+def test_discoverable_agent_modules_are_native_strategyos_surfaces():
+    payload = api_module._agent_modules_payload(
+        None,
+        [],
+        None,
+        {"role": "executive", "authenticated": False},
+    )
+
+    assert payload["discoverable"]
+    assert {item["source"] for item in payload["discoverable"]} == {"native"}
+
+
+def test_discovery_add_buttons_open_request_flow_not_toast_only():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    executive_css = Path("strategyos_mvp/static/executive.css").read_text(encoding="utf-8")
+
+    assert "data-agent-discovery-id" in executive_js
+    assert "handleDiscoverableAgentAction(item, button)" in executive_js
+    assert "showAgentInstallRequest(item, sourceEl)" in executive_js
+    assert "Agent installation is available from the operator surface" not in executive_js
+    assert ".strategyos-agent-install-modal" in executive_css
+    assert ".strategyos-toast" in executive_css
+
+
 def test_workspace_contract_accepts_design_persona_ids_and_legacy_aliases(monkeypatch):
     monkeypatch_summary = {
         "run_id": "run-77",
