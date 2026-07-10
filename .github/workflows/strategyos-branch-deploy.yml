@@ -3,17 +3,6 @@ name: StrategyOS Branch Deploy
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: Branch to deploy
-        required: true
-        type: string
-      target_environment:
-        description: GitHub environment to deploy to
-        required: true
-        type: choice
-        default: hetzner-branch
-        options:
-          - hetzner-branch
       run_smoke:
         description: Start one protected /runs smoke request after readiness passes
         required: false
@@ -26,7 +15,7 @@ permissions:
   deployments: write
 
 concurrency:
-  group: strategyos-branch-deploy-${{ inputs.target_environment }}
+  group: strategyos-branch-deploy-hetzner-branch
   cancel-in-progress: false
 
 env:
@@ -41,7 +30,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -69,7 +58,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
 
       - name: Set image name
         id: image
@@ -92,7 +81,7 @@ jobs:
           images: ${{ steps.image.outputs.name }}
           tags: |
             type=sha,format=long,prefix=sha-
-            type=raw,value=branch-${{ inputs.branch }}
+            type=raw,value=branch-${{ github.ref_name }}
             type=raw,value=manual-${{ github.run_number }}
 
       - name: Build and push image
@@ -120,7 +109,7 @@ jobs:
     needs: image
     timeout-minutes: 30
     environment:
-      name: ${{ inputs.target_environment }}
+      name: hetzner-branch
       url: ${{ vars.STRATEGYOS_PUBLIC_URL }}
     env:
       TARGET_HOST: ${{ vars.HETZNER_USER }}@${{ vars.HETZNER_HOST }}
@@ -181,7 +170,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref_name }}
 
       - name: Prepare SSH
         env:
@@ -352,7 +341,7 @@ jobs:
 
       - name: Validate deploy boundary
         env:
-          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+          TARGET_ENVIRONMENT: hetzner-branch
           TARGET_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
           TARGET_DEPLOY_USER: ${{ vars.HETZNER_USER }}
         run: |
