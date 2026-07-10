@@ -176,6 +176,8 @@ jobs:
       HATCHET_POSTGRES_USER: ${{ vars.HATCHET_POSTGRES_USER || 'hatchet' }}
       HATCHET_DASHBOARD_PORT: ${{ vars.HATCHET_DASHBOARD_PORT || '18888' }}
       HATCHET_GRPC_PORT: ${{ vars.HATCHET_GRPC_PORT || '17077' }}
+      STRATEGYOS_IDP_HTTP_PORT: ${{ vars.STRATEGYOS_IDP_HTTP_PORT || '8090' }}
+      POSTGRES_PORT: ${{ vars.POSTGRES_PORT || '55433' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -259,8 +261,10 @@ jobs:
               "STRATEGYOS_HATCHET_DASHBOARD_URL": os.environ["STRATEGYOS_HATCHET_DASHBOARD_URL"],
               "HATCHET_POSTGRES_DB": os.environ["HATCHET_POSTGRES_DB"],
               "HATCHET_POSTGRES_USER": os.environ["HATCHET_POSTGRES_USER"],
-              "HATCHET_DASHBOARD_PORT": os.environ["HATCHET_DASHBOARD_PORT"],
-               "HATCHET_GRPC_PORT": os.environ["HATCHET_GRPC_PORT"],
+               "HATCHET_DASHBOARD_PORT": os.environ["HATCHET_DASHBOARD_PORT"],
+                "HATCHET_GRPC_PORT": os.environ["HATCHET_GRPC_PORT"],
+                "STRATEGYOS_IDP_HTTP_PORT": os.environ["STRATEGYOS_IDP_HTTP_PORT"],
+                "POSTGRES_PORT": os.environ["POSTGRES_PORT"],
            }
 
           public_url = os.environ.get("STRATEGYOS_PUBLIC_URL", "").strip()
