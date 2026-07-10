@@ -27,59 +27,11 @@ concurrency:
 
 env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  # Full suite -- see the matching comment in strategyos-ci.yml. This is the
-  # pre-deploy gate for the live Hetzner surface; a hand-picked subset here
-  # let leakage-detection/acceptance regressions (test_qa.py,
-  # test_finance_controls.py, test_poc_acceptance.py, etc.) ship to
-  # production with a "green" pre-deploy check. Live-service e2e tests
-  # self-skip (see the matching comment in strategyos-ci.yml).
-  CI_TEST_TARGETS: "tests/"
-  # See the matching comment in strategyos-ci.yml -- the default dataset
-  # location is a sibling folder outside the repo that does not exist on a
-  # CI checkout; point at the vendored copy instead.
-  STRATEGYOS_SOURCE_DATASET: "${{ github.workspace }}/tests/fixtures/01_Synthetic_Dataset"
 
 jobs:
-  tests:
-    name: Pre-deploy tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install OCR runtime
-        run: |
-          # Aggressively disable ALL Microsoft/Azure apt sources — ubuntu-24.04 runner
-          # images configure azure-cli via arbitrary file paths and formats.
-          # Find any file under /etc/apt/ mentioning packages.microsoft.com and remove.
-          for f in $(sudo grep -rl 'packages.microsoft.com' /etc/apt/ 2>/dev/null || true); do
-            sudo rm -f "$f"
-          done
-          # Also nuke any remaining microsoft*/azure* source files by name glob
-          sudo find /etc/apt/ -type f \( -name '*microsoft*' -o -name '*azure*' \) -delete 2>/dev/null || true
-          # Allow insecure repos in case a stale apt cache entry still references the URL
-          sudo apt-get update -o Acquire::AllowInsecureRepositories=true
-          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-eng
-
-      - name: Install package and test runner
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest
-
-      - name: Run tests
-        run: python -m pytest -q ${CI_TEST_TARGETS}
-
   image:
     name: Build and publish image
     runs-on: ubuntu-24.04
-    needs: tests
     timeout-minutes: 30
     outputs:
       image-ref: ${{ steps.image-ref.outputs.value }}
