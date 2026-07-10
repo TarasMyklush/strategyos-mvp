@@ -3010,7 +3010,7 @@ const bootstrapPayload = {{
 }};
 
 const nodes = {{
-  'assistant-network-card': {{ innerHTML: '', hidden: false }},
+  'assistant-network-card': {{ innerHTML: '', hidden: false, querySelectorAll: () => [], querySelector: () => null, closest: () => null }},
   'strategyos-executive-bootstrap': {{ textContent: JSON.stringify(bootstrapPayload) }},
 }};
 
