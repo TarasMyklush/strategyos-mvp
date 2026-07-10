@@ -376,6 +376,14 @@ jobs:
           echo "=== Host disk usage ==="
           ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h / && echo '---' && du -sh /var/lib/docker/* 2>/dev/null | sort -rh | head -20 || true"
 
+          echo "=== Tearing down previous branch deployment ==="
+          compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml deploy/docker-compose.branch.yml}"
+          compose_args=()
+          for compose_file in ${compose_files}; do
+            compose_args+=(-f "${compose_file}")
+          done
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose ${compose_args[*]} --project-name strategyos-branch --env-file deploy/.env --env-file deploy/.env.secrets down || true"
+
           echo "=== Docker system prune (unused images, containers, networks, build cache) ==="
           ssh ${SSH_OPTS} "${TARGET_HOST}" "docker system prune -af --volumes || true"
 
