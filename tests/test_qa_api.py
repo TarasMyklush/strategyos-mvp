@@ -434,10 +434,15 @@ def test_assistant_chat_golden_prompt_works_without_completed_run(monkeypatch):
         payload = response.json()
         assert payload["scenario_id"] == "digital_health_eoy_flat"
         assert payload["matched"] is True
+        assert payload["scenario_type"] == "missing_data"
         assert payload["prompt_contracts"]["role"]["prompt_id"] == "role:ceo:v1"
-        assert payload["hallucination_risk"]["level"] == "high"
-        assert payload["citations"], "golden prompt must return top-level evidence citations"
-        assert payload["assumptions"], "golden prompt must return top-level assumptions"
+        assert payload["hallucination_risk"]["level"] == "none"
+        assert "Illustrative external benchmarks are disabled" in payload["answer"]
+        assert payload["calculations"][0]["step_id"] == "scenario_validation"
+        assert "digital_health_baseline" in payload["calculations"][0]["inputs"]["missing_inputs"]
+        assert "Enable illustrative mode for external benchmark exploration" in payload["suggestions"]
+        assert payload["citations"] == []
+        assert payload["assumptions"] == []
         assert payload["run_mode"] == "no-run"
     finally:
         _restore_env(original)
