@@ -858,7 +858,7 @@ def test_kpi_spacing_css_exists():
 
 
 def test_youtube_fallback_pre_rendered():
-    """#3: Leaders' Corner must keep a controlled fallback shell on first load."""
+    """#3: Leaders' Corner must keep fallback markup while mounting inline playback."""
     js = _static_executive_js()
 
     # Fallback card HTML must exist in the template (progressive enhancement — safe default)
@@ -871,10 +871,13 @@ def test_youtube_fallback_pre_rendered():
     )
     # JS must initialize the featured video card on first load.
     assert "selectLeadersVideo(vlogs[0]" in js, (
-        "On first load, selectLeadersVideo must be called with first vlog to show controlled preview"
+        "On first load, selectLeadersVideo must be called with first vlog to show inline playback"
     )
-    assert "Preview stays in English on this surface." in js, (
-        "Leaders' Corner preview must stay in controlled English copy rather than third-party thumbnail text"
+    assert "fallback.hidden = true" in js, (
+        "Fallback shell must be hidden during normal inline playback"
+    )
+    assert "Embed unavailable." in js, (
+        "Fallback shell must retain controlled English copy for embed failures"
     )
 
 
@@ -1940,10 +1943,8 @@ def test_driver_ring_over_plan_badge_outside_ring_copy():
     func_end = js.index("function renderMetrics", func_start)
     grid_func_body = js[func_start:func_end]
 
-    # The ring-copy closing </div></div> must appear BEFORE the driver-over-plan
-    # reference in the template string.  Find the unique pattern:
-    #   '</div></div>' + (... ? '<span class="driver-over-plan"
-    ring_copy_close_pos = grid_func_body.index("</div></div>' +")
+    # The ring-copy template must appear BEFORE the driver-over-plan reference.
+    ring_copy_close_pos = grid_func_body.index("driver-ring-copy")
     badge_pos = grid_func_body.index("driver-over-plan")
     assert badge_pos > ring_copy_close_pos, (
         "driver-over-plan badge must appear AFTER .driver-ring-copy closing "

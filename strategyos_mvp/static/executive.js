@@ -3091,6 +3091,9 @@
     if (iframe) {
       iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(item.id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1';
       iframe.title = item.title;
+      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen');
+      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      iframe.allowFullscreen = true;
     }
     if (fallback) {
       fallback.hidden = true;
