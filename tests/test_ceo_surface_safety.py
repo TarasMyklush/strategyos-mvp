@@ -1977,15 +1977,26 @@ def test_driver_ring_over_plan_badge_has_outside_pill_css():
 
 
 def test_floating_controls_safe_zone_at_desktop():
-    """Desktop layout must reserve a right-hand rail for the assistant dock
-    instead of letting fixed controls sit over KPI cards."""
+    """Desktop layout must keep the assistant dock compact without stealing a
+    full right-hand page column."""
     css = _static_executive_css()
 
     assert "--assistant-dock-width" in css, (
-        "Desktop layout must define a reserved assistant-dock rail width"
+        "Desktop layout must define a bounded assistant-dock width"
     )
-    assert "padding-right: calc(clamp(18px, 4vw, 40px) + var(--assistant-dock-width))" in css, (
-        "Desktop page layout must reserve horizontal space for the dock instead of overlapping content"
+    assert "--assistant-dock-width: clamp(220px, 18vw, 300px)" in css, (
+        "Assistant dock must stay compact on desktop"
+    )
+    page_start = css.index(".page {")
+    page_end = css.index("}", page_start)
+    assert "padding-right: calc(" not in css[page_start:page_end], (
+        "Desktop page layout must not reserve a large right-hand column for the fixed dock"
+    )
+    dock_start = css.index(".assistant-dock {")
+    dock_end = css.index("}", dock_start)
+    dock_block = css[dock_start:dock_end]
+    assert "display: flex" in dock_block and "max-width: min(460px" in dock_block, (
+        "Desktop dock must be a compact horizontal control, not a tall stacked rail"
     )
     assert "@media (max-width: 960px)" in css and "position: static;" in css, (
         "Mobile/tablet layout must drop the fixed dock and return it to normal flow"

@@ -9320,6 +9320,49 @@ def _sanitize_assistant_visible_text(value: Any) -> str:
     return str(text or "").strip()
 
 
+_ASSISTANT_BUSINESS_TOKENS = (
+    "margin", "ebitda", "profitability", "profit", "loss", "revenue", "income",
+    "risk", "plan", "year", "quarter", "board", "packet", "prep", "session",
+    "run", "summary", "summarize", "analysis", "diagnostic", "diagnostics",
+    "live", "closed", "tamween", "healthcare", "pharmacy", "fx", "hedge",
+    "recoverable", "recovery", "evidence", "finding", "citation", "kpi",
+    "driver", "ceo", "hermes", "assistant", "thread", "task", "follow-up",
+    "invoice", "vendor", "spend", "ap", "working capital", "cash",
+    "balance", "budget", "forecast", "scenario", "what-if", "what if",
+)
+
+
+def _assistant_question_has_business_scope(question: str) -> bool:
+    norm = " ".join(str(question or "").lower().split())
+    if not norm:
+        return False
+    for token in _ASSISTANT_BUSINESS_TOKENS:
+        if " " in token:
+            if token in norm:
+                return True
+        elif re.search(r"\b" + re.escape(token) + r"\b", norm):
+            return True
+    return False
+
+
+def _public_safe_general_answer(question: str) -> dict[str, Any] | None:
+    norm = " ".join(str(question or "").lower().split())
+    direct_answers = {
+        "capital of france": "Paris is the capital of France.",
+        "capital city of france": "Paris is the capital of France.",
+    }
+    for needle, answer in direct_answers.items():
+        if needle in norm:
+            return {
+                "matched": True,
+                "answer": f"{answer} That is a general-knowledge answer and is not drawn from the current StrategyOS board packet.",
+                "citations": [],
+                "suggestions": ["What should I prepare for the board?", "What is driving margin pressure?", "Which challenged items need closure?"],
+                "basis": "Deterministic public-safe general-knowledge answer; no model call used.",
+            }
+    return None
+
+
 def _supplemental_grounding_payload(
     *,
     graph_result: dict[str, Any] | None = None,
@@ -9463,13 +9506,10 @@ async def _assistant_chat_response(
                     governed_suggestions.append(f"Why does “{title}” matter for the board?")
             governed_suggestions.append("What should I prepare for the board?")
         if "capital of france" in norm:
-            return {
-                "matched": True,
-                "answer": "Paris is the capital of France. That sits outside the current StrategyOS board context, but the direct answer is Paris.",
-                "citations": [],
-                "suggestions": governed_suggestions[:4] or ["What should I prepare for the board?"],
-                "basis": "Direct safe answer for an out-of-domain general-knowledge prompt on the public executive surface.",
-            }
+            general_answer = _public_safe_general_answer(question_text)
+            if general_answer is not None:
+                general_answer["suggestions"] = governed_suggestions[:4] or general_answer.get("suggestions") or ["What should I prepare for the board?"]
+                return general_answer
         if governed_packet.get("is_illustrative") is False:
             return {
                 "matched": False,
@@ -9502,30 +9542,15 @@ async def _assistant_chat_response(
                 ],
                 "basis": "Public executive surface is read-only for task creation, so the assistant must return an exact operational limitation instead of a canned packet summary.",
             }
-        # General-knowledge / out-of-domain guard: if the question contains none of
-        # the board/business tokens that the deterministic handlers know about, do NOT
-        # fabricate a business answer. Return safe "out of context" instead.
-        # Use word-boundary matching so short tokens like "ap" don't accidentally
-        # match inside unrelated words ("capital", "map", "gap"). Multi-word tokens
-        # like "working capital" are checked as exact substring phrases.
-        def _is_business_token(text: str, token: str) -> bool:
-            if " " in token:
-                return token in text
-            return bool(re.search(r"\b" + re.escape(token) + r"\b", text))
-        _BUSINESS_TOKENS = (
-            "margin", "ebitda", "profitability", "profit", "loss", "revenue", "income",
-            "risk", "plan", "year", "quarter", "board", "packet", "prep", "session",
-            "live", "closed", "tamween", "healthcare", "pharmacy", "fx", "hedge",
-            "recoverable", "recovery", "evidence", "finding", "citation", "kpi",
-            "driver", "ceo", "hermes", "assistant", "thread", "task", "follow-up",
-            "invoice", "vendor", "spend", "ap", "working capital", "cash",
-            "balance", "budget", "forecast", "scenario", "what-if", "what if",
-        )
-        is_out_of_domain = not any(_is_business_token(norm, token) for token in _BUSINESS_TOKENS)
+        is_out_of_domain = not _assistant_question_has_business_scope(question_text)
         if is_out_of_domain:
+            general_answer = _public_safe_general_answer(question_text)
+            if general_answer is not None:
+                general_answer["suggestions"] = governed_suggestions[:4] or general_answer.get("suggestions") or []
+                return general_answer
             return {
                 "matched": False,
-                "answer": "I can only answer questions grounded in the current board context and packet data. That question appears to be outside the available StrategyOS board material — try asking about margin, risk, board prep, recoverable leakage, or a specific business driver visible in the packet.",
+                "answer": "I can answer general questions with the model after you sign in. On this public board-safe surface, I can only answer from the current StrategyOS board packet. Try asking about margin, risk, board prep, recoverable leakage, or a specific business driver visible in the packet.",
                 "citations": [],
                 "suggestions": [
                     "What is driving margin pressure this quarter?",
@@ -9533,7 +9558,7 @@ async def _assistant_chat_response(
                     "Show evidence for SAR 8.6M recoverable",
                     "Risk to full-year plan?",
                 ],
-                "basis": "Out-of-domain question detected on the public executive surface — safe refusal instead of fabricated business answer.",
+                "basis": "Out-of-domain question detected on the public executive surface — no LLM call is allowed for anonymous/public-safe users.",
             }
         # Board-prep / board meeting guidance: return matched=true with
         # board lifecycle guidance instead of falling through to canned
@@ -9627,6 +9652,44 @@ async def _assistant_chat_response(
         finding.__dict__ if hasattr(finding, "__dict__") else finding
         for finding in context["findings"]
     ]
+
+    if not public_safe and mode in {"auto", "llm"} and not _assistant_question_has_business_scope(question):
+        general_status = llm_qa.chat_status(CONFIG)
+        if general_status.get("enabled"):
+            general_result = await asyncio.get_running_loop().run_in_executor(
+                _LLM_PROVIDER_EXECUTOR,
+                lambda: llm_qa.answer_general_question(
+                    question,
+                    config=CONFIG,
+                    persona=persona,
+                ),
+            )
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                llm_result={**general_result, "assistant_mode": "llm", "answered_by": "llm"},
+                driver_context=driver_context,
+            )
+            payload = _assistant_response_payload(
+                response_mode="llm",
+                question=question,
+                context=context,
+                requested_mode=mode,
+                persona=persona,
+                orchestrated=orchestrated,
+                base_result=general_result,
+                llm_status=general_result.get("llm_status") or general_status,
+                assistant_context=assistant_context,
+            )
+            payload["mode"] = "llm"
+            payload["llm_fallback_attempted"] = True
+            payload["llm_general_answer"] = True
+            return payload
+        if mode == "llm":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=general_status.get("reason") or "LLM chat is not configured.",
+            )
 
     scenario_result = None
     if mode in {"auto", "deterministic"}:

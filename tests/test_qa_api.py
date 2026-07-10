@@ -353,6 +353,68 @@ def test_assistant_chat_llm_mode_sanitizes_raw_json_answer(monkeypatch):
         _restore_env(original)
 
 
+def test_authenticated_assistant_general_question_uses_llm(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_RUN_POLICY": "external-approved",
+            "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+            "STRATEGYOS_LLM_API_KEY": "test-key",
+            "STRATEGYOS_LLM_MODEL": "gpt-test",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {"run_id": "run-1"},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_general_question",
+            lambda question, *, config, persona=None: {
+                "matched": True,
+                "answer": "Paris is the capital of France.",
+                "basis": "General assistant answer.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": config.llm_model},
+            },
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("general prompt should use answer_general_question")),
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "What is the capital of France?", "persona": "ceo", "mode": "auto"},
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mode"] == "llm"
+        assert payload["answered_by"] == "llm"
+        assert payload["llm_general_answer"] is True
+        assert "Paris" in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
 def test_assistant_chat_golden_prompt_works_without_completed_run(monkeypatch):
     original, client = _client_with_auth()
     try:
@@ -500,6 +562,7 @@ def test_assistant_chat_public_auto_unmatched_does_not_call_llm_when_enabled(mon
             raise AssertionError("public-safe route must not call llm_qa.answer_question")
 
         monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
+        monkeypatch.setattr(api_module.llm_qa, "answer_general_question", fake_answer)
 
         response = client.post(
             "/assistant/chat",
@@ -554,6 +617,11 @@ def test_assistant_chat_public_llm_mode_returns_403_and_never_calls_llm_when_ena
             api_module.llm_qa,
             "answer_question",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("public-safe route must not call llm_qa.answer_question")),
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_general_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("public-safe route must not call llm_qa.answer_general_question")),
         )
 
         response = client.post(
@@ -1609,6 +1677,11 @@ def test_public_manual_out_of_domain_prompt_is_answered_not_replaced_with_packet
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_general_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("public-safe out-of-domain prompt must not call LLM")),
+        )
 
         response = client.post(
             "/assistant/chat",
@@ -1625,8 +1698,10 @@ def test_public_manual_out_of_domain_prompt_is_answered_not_replaced_with_packet
         answer = payload["answer"].lower()
         assert payload["status"] == "ok"
         assert "paris" in answer
+        assert "general-knowledge answer" in answer
         assert "revenue remains ahead while the board still needs a clean margin story" not in answer
         assert payload["run_mode"] == "public-safe"
+        assert payload["llm_fallback_attempted"] is False
     finally:
         _restore_env(original)
 

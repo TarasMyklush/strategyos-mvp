@@ -1257,6 +1257,108 @@ def test_driver_grid_renders_governed_metric_when_percent_is_absent():
     assert "driver-pct--metric" in css
 
 
+def test_ceo_driver_copy_polishes_internal_governed_artifact_keys():
+    js = _static_executive_js()
+
+    assert "GOVERNED_MEASURE_LABELS" in js
+    for internal_key, public_label in {
+        "bounded_finance_snapshot": "Finance recovery snapshot",
+        "case_worklist": "Governed case list",
+        "evidence_chain": "Citation evidence chain",
+        "review_attention": "Reviewer attention queue",
+    }.items():
+        assert internal_key in js
+        assert public_label in js
+
+    render_start = js.index("function renderDriverGrid()")
+    render_end = js.index("function renderMetrics()")
+    render_body = js[render_start:render_end]
+    assert "driverSubLabel(driver)" in render_body
+    assert "firstDefined(driver.sub, \"current measure\")" not in render_body
+    assert "firstDefined(driver.sub, 'current measure')" not in render_body
+
+    drill_start = js.index("function renderDriverDrillFidelity()")
+    drill_end = js.index("function renderBoardStateTabs()")
+    drill_body = js[drill_start:drill_end]
+    assert "driverSubLabel(driver)" in drill_body
+    assert "firstDefined(driver.sub, 'current measure')" not in drill_body
+
+
+def test_governed_measure_hint_replaces_percent_copy_when_driver_pct_absent():
+    js = _static_executive_js()
+
+    start = js.index("function renderHomeComposition()")
+    end = js.index("function renderAssistantNetwork()")
+    body = js[start:end]
+    assert "hasPercentDrivers" in body
+    assert "All figures: current governed measures" in body
+    assert "All figures: % of plan" in body
+
+
+def test_assistant_dock_does_not_reserve_desktop_page_column():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    page_start = css.index(".page {")
+    page_end = css.index("}", page_start)
+    page_block = css[page_start:page_end]
+    footer_start = css.index(".composed-footer {")
+    footer_end = css.index("}", footer_start)
+    footer_block = css[footer_start:footer_end]
+    dock_start = css.index(".assistant-dock {")
+    dock_end = css.index("}", dock_start)
+    dock_block = css[dock_start:dock_end]
+    launcher_prompt_start = css.index(".chat-launcher__prompt {")
+    launcher_prompt_end = css.index("}", launcher_prompt_start)
+    launcher_prompt_block = css[launcher_prompt_start:launcher_prompt_end]
+    a2a_text_start = css.index(".a2a-fab-text {")
+    a2a_text_end = css.index("}", a2a_text_start)
+    a2a_text_block = css[a2a_text_start:a2a_text_end]
+
+    assert "--assistant-dock-width: clamp(220px" in css
+    assert "padding-right: calc(" not in page_block
+    assert "padding-right: calc(" not in footer_block
+    assert "display: flex" in dock_block
+    assert "max-width: min(460px" in dock_block
+    assert "display: none" in launcher_prompt_block
+    assert "display: none" in a2a_text_block
+
+
+def test_assistant_drawer_and_messages_are_bounded_to_prevent_cropped_chat():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    drawer_start = css.index(".assistant-drawer {")
+    drawer_end = css.index("}", drawer_start)
+    drawer_block = css[drawer_start:drawer_end]
+    message_start = css.index(".assistant-message {")
+    message_end = css.index("}", message_start)
+    message_block = css[message_start:message_end]
+    user_start = css.index(".assistant-message--user {")
+    user_end = css.index("}", user_start)
+    user_block = css[user_start:user_end]
+
+    assert "width: min(560px" in drawer_block
+    assert "max-width: 560px" in drawer_block
+    assert "max-width: min(86%" in message_block
+    assert "overflow-wrap: anywhere" in message_block
+    assert "max-width: min(78%" in user_block
+
+
+def test_leaders_corner_thumbnail_grid_is_responsive_not_four_column_crammed():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    grid_start = css.index(".leaders-thumb-grid {")
+    grid_end = css.index("}", grid_start)
+    grid_block = css[grid_start:grid_end]
+    thumb_start = css.index(".leaders-thumb {")
+    thumb_end = css.index("}", thumb_start)
+    thumb_block = css[thumb_start:thumb_end]
+
+    assert "repeat(auto-fit, minmax(150px, 1fr))" in grid_block
+    assert "repeat(4, minmax(0, 1fr))" not in grid_block
+    assert "grid-template-columns: minmax(48px, 72px) minmax(0, 1fr)" in thumb_block
+    assert "min-width: 0" in thumb_block
+
+
 def test_assistant_drawer_mutual_exclusion_video_modal():
     """openVideoModal must close assistant drawer before opening modal."""
     js = _static_executive_js()

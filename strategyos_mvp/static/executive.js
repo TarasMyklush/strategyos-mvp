@@ -128,6 +128,20 @@
       .join(" ");
   }
 
+  var GOVERNED_MEASURE_LABELS = {
+    bounded_finance_snapshot: "Finance recovery snapshot",
+    case_worklist: "Governed case list",
+    evidence_chain: "Citation evidence chain",
+    review_attention: "Reviewer attention queue"
+  };
+
+  function governedMeasureLabel(value) {
+    var raw = String(value || "").trim();
+    if (!raw) return "Current governed measure";
+    var key = raw.toLowerCase();
+    return GOVERNED_MEASURE_LABELS[key] || humanizeToken(raw);
+  }
+
   function eventTargetElement(event) {
     var target = event && event.target;
     if (!target) return null;
@@ -1444,6 +1458,10 @@
     return firstDefined(driver && driver.metric, 'Current governed value');
   }
 
+  function driverSubLabel(driver) {
+    return governedMeasureLabel(firstDefined(driver && driver.sub, driver && driver.trend_hint, 'Current governed measure'));
+  }
+
   function qaAnswerText(payload) {
     if (!payload) return "I could not reach the Q&A service. Try again from an authenticated session.";
     var answer = cleanVisibleQaAnswer(firstDefined(payload.answer, ""));
@@ -2309,8 +2327,10 @@
     var driverHeading = $("driver-heading");
     var driverHint = $("driver-hint");
     var lowerHeading = $("lower-rail-heading");
+    var drivers = getVisibleDrivers();
+    var hasPercentDrivers = drivers.some(function (driver) { return driverHasPercent(driver); });
     if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
-    if (driverHint) driverHint.textContent = "All figures: % of plan";
+    if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current governed measures";
     if (lowerHeading) lowerHeading.textContent = "What matters now";
     var footer = $("composed-footer");
     if (footer) footer.hidden = false;
@@ -2882,7 +2902,7 @@
       tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
       tile.innerHTML = [
         '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
-        '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(firstDefined(driver.sub, "current measure")) + '</span></div></div>'
+        '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(driverSubLabel(driver)) + '</span></div></div>'
       ].join("");
       tile.onclick = function () {
         state.activeDriverKey = key;
@@ -2971,7 +2991,7 @@
         .concat(dragging.map(function (item) { return { tone: 'down', glyph: '↘', item: item }; }));
       drillCard.innerHTML = [
         '<div class="drill-surface">',
-        '<div class="drill-headline"><div><h3 class="detail-title">What\'s driving ' + escapeHtml(firstDefined(driver.label, 'it')) + '</h3><p class="section-note">' + escapeHtml(driverMeasureLabel(driver) + ' · ' + firstDefined(driver.sub, 'current measure')) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work</button></div>',
+        '<div class="drill-headline"><div><h3 class="detail-title">What\'s driving ' + escapeHtml(firstDefined(driver.label, 'it')) + '</h3><p class="section-note">' + escapeHtml(driverMeasureLabel(driver) + ' · ' + driverSubLabel(driver)) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work</button></div>',
         '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, 'Awaiting drill detail.')) + '</p>',
         '<div class="drill-grid-v2"><div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual <span class="lg plan"></span> plan</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" role="img" aria-label="' + escapeHtml(firstDefined(driver.label, 'Driver')) + ' trend: actual versus plan over the last ' + String(actualSeries.length) + ' weeks">' + yTicks.map(function (tick) { var y = chartHeight - (((tick - minSeries) / spanSeries) * 120 + 18); return '<line class="trend-gridline" x1="0" x2="320" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"></line><text class="trend-axis" x="4" y="' + Math.max(10, y - 4).toFixed(1) + '">' + escapeHtml(String(Math.round(tick * 10) / 10)) + '</text>'; }).join('') + '<path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path>' + actualPoints.map(function (pair, idx) { return '<circle class="trend-point actual" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="3"><title>Actual ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(actualSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + planPoints.map(function (pair, idx) { return '<circle class="trend-point plan" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="2.5"><title>Plan ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(planSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + xLabels.map(function (label, idx) { var point = actualPoints[idx]; return '<text class="trend-axis" x="' + point[0].toFixed(1) + '" y="150" text-anchor="middle">' + escapeHtml(label) + '</text>'; }).join('') + '</svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div><div class="drill-movers-panel"><div class="mini-head">What moved it</div><div class="movers-flat">' + (moverRows.length ? moverRows.map(function (entry) {
           var item = entry.item || {};
