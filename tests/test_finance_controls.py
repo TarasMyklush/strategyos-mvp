@@ -231,12 +231,12 @@ def test_vendor_name_filename_needle_derives_the_original_hardcoded_anchors():
     finding's own vendor name -- proving the generalization is a true no-op
     on the fixture rather than a behavior change."""
     assert vendor_name_filename_needle("Bordeaux Wines & Spirits SARL") == "BordeauxWines"
-    assert vendor_name_filename_needle("Gulf Cold-Chain Logistics Co") == "GulfCold"
+    assert vendor_name_filename_needle("Gulf Logistics Services Co") == "GulfLogistics"
 
 
 def test_vendor_name_filename_needle_disambiguates_shared_first_words():
     """A single-word needle is too loose: multiple vendors in this dataset
-    share a first word ("Gulf BioPharma", "Gulf Cold-Chain"),
+    share a first word ("Gulf Cosmetics", "Gulf Logistics"),
     so a one-word needle would non-deterministically match whichever
     "Gulf*" invoice file the manifest happens to list first. Two words
     must disambiguate them."""
@@ -251,9 +251,9 @@ def test_vendor_name_filename_needle_disambiguates_shared_first_words():
         "if this assertion fails the fixture changed and the single-word "
         "ambiguity this test guards against may no longer apply"
     )
-    needle = vendor_name_filename_needle("Gulf Cold-Chain Logistics Co").lower()
+    needle = vendor_name_filename_needle("Gulf Logistics Services Co").lower()
     matches = [rel for rel in gulf_invoices if needle in rel.lower()]
-    assert matches == ["08_Invoices/Invoice_GulfColdChain_INV-2026-1421.pdf"]
+    assert matches == ["08_Invoices/Invoice_GulfLogistics_INV-2026-1421.pdf"]
 
 
 def test_fx_hedge_anchors_derive_from_finding_not_a_hardcoded_vendor_literal():
@@ -276,7 +276,7 @@ def test_fx_hedge_anchors_derive_from_finding_not_a_hardcoded_vendor_literal():
     )
     target_index = eur_paid.index[0]
     original_vendor_name = str(bundle.ap.loc[target_index, "Vendor_Name"])
-    assert original_vendor_name.startswith("Servier")
+    assert original_vendor_name.startswith("Bordeaux")
     original_needle = vendor_name_filename_needle(original_vendor_name).lower()
 
     bundle.ap.loc[target_index, "Vendor_Name"] = "Acme Wines International"

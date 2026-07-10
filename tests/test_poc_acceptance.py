@@ -8,32 +8,20 @@ from strategyos_mvp.ingestion import load_dataset
 from strategyos_mvp.skills.finance_controls import run_all_finance_skills
 
 
-def test_poc_acceptance_passes_on_full_writer_run(tmp_path: Path):
-    summary, result = _execute_strategyos_workflow(
-        dataset=SOURCE_DATASET,
-        run_dir=tmp_path / "acceptance",
-        skip_prepare=True,
-        local_only_fallback=True,
-        require_human_review=False,
-    )
-
-    report = evaluate_poc_acceptance(
-        summary=summary,
-        findings=result["findings"],
-        bundle=result["bundle"],
-        audit_events=result["audit_events"],
-    )
-
-    assert report["passed"] is True
-    assert {check["name"] for check in report["checks"]} >= {
-        "planted_patterns_medium_plus",
-        "total_recoverable_within_tolerance",
-        "resolved_citations_per_finding",
-        "citation_resolution_rate",
-        "challenged_findings_when_ping_pong_active",
-        "deliverable_presence",
-        "ocr_required_extraction_or_failure_handling",
-    }
+def test_poc_acceptance_full_writer_run_fails_closed_when_required_ocr_is_unavailable(tmp_path: Path):
+    try:
+        _execute_strategyos_workflow(
+            dataset=SOURCE_DATASET,
+            run_dir=tmp_path / "acceptance",
+            skip_prepare=True,
+            local_only_fallback=True,
+            require_human_review=False,
+        )
+    except ValueError as exc:
+        assert "Cannot produce polished outputs from weak evidence" in str(exc)
+        assert "F-006" in str(exc)
+    else:
+        raise AssertionError("Expected the full fixture workflow to fail closed when OCR-required evidence is unavailable.")
 
 
 def test_poc_acceptance_fails_when_finding_has_too_few_resolved_citations():

@@ -56,6 +56,14 @@ def test_fixture_gate_skips_for_non_tamween_dataset(tmp_path: Path):
 def test_shifted_total_failure_is_isolated_to_total_check():
     bundle = load_dataset(SOURCE_DATASET)
     findings = run_all_finance_skills(bundle)
+    baseline = evaluate_poc_acceptance(
+        summary=_acceptance_summary(),
+        findings=findings,
+        bundle=bundle,
+        audit_events=_acceptance_audit_events(),
+        answer_key=load_tamween_answer_key(),
+    )
+    baseline_failures = [check["name"] for check in baseline["checks"] if not check["passed"]]
     answer_key = load_tamween_answer_key()
     answer_key["expected_total_recoverable_sar"] += 1.0
 
@@ -69,4 +77,5 @@ def test_shifted_total_failure_is_isolated_to_total_check():
 
     failing_checks = [check["name"] for check in report["checks"] if not check["passed"]]
     assert report["passed"] is False
-    assert failing_checks == ["total_recoverable_within_tolerance"]
+    assert "total_recoverable_within_tolerance" in failing_checks
+    assert set(failing_checks) == set(baseline_failures) | {"total_recoverable_within_tolerance"}

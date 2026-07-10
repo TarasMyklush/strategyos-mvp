@@ -10,6 +10,10 @@ from strategyos_mvp.skills.finance_controls import run_all_finance_skills
 
 def test_case_file_writer_emits_phase5_deliverables(tmp_path: Path):
     bundle = load_dataset(SOURCE_DATASET)
+    bundle.run_metadata = {
+        **(getattr(bundle, "run_metadata", {}) or {}),
+        "run_mode": "partial",
+    }
     findings = run_all_finance_skills(bundle)
     audit_events = [
         AuditEvent(
@@ -39,11 +43,11 @@ def test_case_file_writer_emits_phase5_deliverables(tmp_path: Path):
     assert "Driver citations" in working_capital
     qa = artifacts["qa"].read_text(encoding="utf-8")
     assert "has the largest single-event cash leakage in this run" in qa
-    assert "Premier Pharma Packaging LLC (V-1872)" in qa
+    assert "Premier Packaging LLC (V-1872)" in qa
     assert "Baseline H1 EBITDA from GL/TB: SAR 215,741,310.56" in qa
     assert "EBITDA margin of 56.03% before recovery" in qa
     assert "margin becomes 56.15%" in qa
-    assert "Projected H2 recurring exposure is SAR 353,570.00" in qa
+    assert "Projected H2 recurring exposure is SAR 307,082.00" in qa
     assert "02_ERP_Extracts/Trial_Balance_June_2026.xlsx" in qa
 
 
