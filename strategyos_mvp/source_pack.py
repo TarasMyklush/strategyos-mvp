@@ -662,7 +662,59 @@ def _text_role_score(text: str, patterns: tuple[str, ...]) -> int:
     return sum(1 for pattern in patterns if re.search(pattern, text, re.I))
 
 
+def _document_folder_role(relative_path: str) -> tuple[str, str] | None:
+    """Return the document role implied by a canonical source folder.
+
+    Browser uploads commonly arrive with a wrapper folder such as
+    ``01_Synthetic_Dataset/08_Invoices/foo.pdf`` while workspace-path staging
+    arrives as ``08_Invoices/foo.pdf``.  For document sources, the canonical
+    folder is stronger evidence than weak text keywords: pharma invoices,
+    credit notes, and contracts can contain generic words like "statement" or
+    "account", and root-level README files can mention every source group.
+    """
+
+    parts = PurePosixPath(str(relative_path or "")).parts
+    if not parts:
+        return None
+    for role, folder in DOCUMENT_TARGET_FOLDERS.items():
+        folder_parts = PurePosixPath(folder).parts
+        if not folder_parts:
+            continue
+        for index in range(0, len(parts) - len(folder_parts) + 1):
+            if parts[index : index + len(folder_parts)] == folder_parts:
+                filename = parts[-1]
+                normalized_rel_path = PurePosixPath(*folder_parts, filename).as_posix()
+                return role, normalized_rel_path
+    return None
+
+
 def _classify_document_source(path: Path, item: dict[str, Any]) -> dict[str, Any]:
+    folder_role = _document_folder_role(str(item.get("relative_path") or path.name))
+    if folder_role is not None:
+        role, normalized_rel_path = folder_role
+        return _classified_entry(
+            status_value="classified",
+            role=role,
+            confidence=1.0,
+            basis=(
+                f"Source path is inside the canonical {ROLE_LABELS[role].lower()} "
+                "folder; folder routing overrides weak document text heuristics."
+            ),
+            normalized_rel_path=normalized_rel_path,
+        )
+
+    if path.name.strip().lower().startswith("readme"):
+        return _classified_entry(
+            status_value="unclassified",
+            role=None,
+            confidence=0.0,
+            basis=(
+                "Source-pack README files are treated as intake metadata, not "
+                "business evidence for the governed run."
+            ),
+            issues=["README metadata is retained in the source pack but excluded from run evidence normalization."],
+        )
+
     text_extraction = item.get("text_extraction") or {}
     text = raw_document_text(text_extraction)
     error = None

@@ -231,6 +231,85 @@ def test_source_pack_upload_expands_canonical_dataset_zip(tmp_path: Path):
         _restore_env(original)
 
 
+def test_source_pack_upload_routes_canonical_document_folders_before_text_heuristics(tmp_path: Path):
+    source_dir = tmp_path / "01_Synthetic_Dataset"
+    (source_dir / "01_Bank_Statements").mkdir(parents=True)
+    (source_dir / "04_Contracts").mkdir(parents=True)
+    (source_dir / "06_Email_Correspondence").mkdir(parents=True)
+    (source_dir / "08_Invoices").mkdir(parents=True)
+    (source_dir / "README.md").write_text(
+        "This README mentions bank statements, contracts, invoices, and email correspondence.",
+        encoding="utf-8",
+    )
+    (source_dir / "01_Bank_Statements" / "bank.txt").write_text(
+        "Invoice number INV-1 amount due SAR 100", encoding="utf-8"
+    )
+    (source_dir / "04_Contracts" / "contract.txt").write_text(
+        "Bank statement account balance text should not win over folder routing.",
+        encoding="utf-8",
+    )
+    (source_dir / "06_Email_Correspondence" / "mail.txt").write_text(
+        "Contract agreement effective date payment terms.", encoding="utf-8"
+    )
+    (source_dir / "08_Invoices" / "invoice.txt").write_text(
+        "Statement account balance wording should still remain an invoice document.",
+        encoding="utf-8",
+    )
+
+    archive_buffer = BytesIO()
+    with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(source_dir.rglob("*")):
+            if path.is_file():
+                archive.write(path, f"01_Synthetic_Dataset/{path.relative_to(source_dir).as_posix()}")
+    archive_buffer.seek(0)
+
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_WORKSPACE_ROOT": str(tmp_path / "workspace"),
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+
+        response = client.post(
+            "/source-packs",
+            headers=_auth_header("operator-secret"),
+            files=[
+                (
+                    "files",
+                    (
+                        "01_Synthetic_Dataset.zip",
+                        archive_buffer.getvalue(),
+                        "application/zip",
+                    ),
+                )
+            ],
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        manifest_by_path = {item["relative_path"]: item for item in payload["manifest"]}
+
+        assert manifest_by_path["01_Synthetic_Dataset/01_Bank_Statements/bank.txt"]["classification"]["role"] == "bank_statement"
+        assert manifest_by_path["01_Synthetic_Dataset/01_Bank_Statements/bank.txt"]["classification"]["normalized_rel_path"] == "01_Bank_Statements/bank.txt"
+        assert manifest_by_path["01_Synthetic_Dataset/04_Contracts/contract.txt"]["classification"]["role"] == "contract"
+        assert manifest_by_path["01_Synthetic_Dataset/06_Email_Correspondence/mail.txt"]["classification"]["role"] == "email_correspondence"
+        assert manifest_by_path["01_Synthetic_Dataset/08_Invoices/invoice.txt"]["classification"]["role"] == "invoice_document"
+        assert manifest_by_path["01_Synthetic_Dataset/README.md"]["classification"]["status"] != "classified"
+
+        normalized_root = Path(payload["normalized_dataset_root"])
+        assert (normalized_root / "01_Bank_Statements" / "bank.txt").exists()
+        assert (normalized_root / "04_Contracts" / "contract.txt").exists()
+        assert (normalized_root / "06_Email_Correspondence" / "mail.txt").exists()
+        assert (normalized_root / "08_Invoices" / "invoice.txt").exists()
+    finally:
+        _restore_env(original)
+
+
 def test_ingestion_connectors_endpoint_surfaces_tenant_scoped_catalog(tmp_path: Path):
     original = _apply_env(
         {
