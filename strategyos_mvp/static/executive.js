@@ -799,6 +799,14 @@
     var threadKey = currentThreadKey();
     pushThreadMessage("user", cleanPrompt);
     var pending = pushThreadMessage("assistant", "Checking the board data\u2026");
+    // Bug 7 fix: attach a pulsing progress indicator to the pending message
+    // so the user sees activity during the 5-10s wait for buildAssistantReply.
+    if (pending && pending.element) {
+      var spinner = document.createElement("span");
+      spinner.className = "msg-loading-spinner";
+      spinner.innerHTML = '<span class="dot-pulse"></span>';
+      pending.element.appendChild(spinner);
+    }
     openAssistantDrawer(validChip);
     // Show loading state in the input area when no source chip provides feedback
     var form = $("assistant-form");
@@ -3196,6 +3204,10 @@
         renderDriverGrid();
         renderDriverDrillFidelity();
         renderSummary();
+        // Bug 2 fix: scroll the drill-down panel into view so the user
+        // sees a visible response when clicking a driver tile.
+        var drill = $("driver-drill");
+        if (drill) { drill.scrollIntoView({ behavior: "smooth", block: "start" }); }
       };
       grid.appendChild(tile);
     });

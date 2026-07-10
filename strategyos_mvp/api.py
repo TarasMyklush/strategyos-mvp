@@ -789,6 +789,9 @@ def _build_public_safe_assistant_packet(
         },
     ]
 
+    # Bug 8: strip infrastructure/internal findings that aren't relevant to CEO audience.
+    findings = [f for f in findings if f.get("title") != "Database backing status"]
+
     next_action = str((publication.get("approval") or {}).get("next_action") or "inspect_board_pack_status")
     week = [
         {
