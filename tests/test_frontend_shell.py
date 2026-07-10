@@ -1240,6 +1240,22 @@ def test_assistant_drawer_shared_state_guard():
     assert "focusAssistantInput();" in already_open_block
 
 
+def test_driver_grid_renders_governed_metric_when_percent_is_absent():
+    js = _static_executive_js()
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert "function driverCenterMarkup(driver)" in js
+    assert "function driverMeasureLabel(driver)" in js
+    assert "driverCenterMarkup(driver)" in js
+    assert "driverMeasureLabel(driver) + ' · '" in js
+
+    render_start = js.index("function renderDriverGrid()")
+    render_end = js.index("function renderMetrics()")
+    render_body = js[render_start:render_end]
+    assert "firstDefined(driver.pct, '—')" not in render_body
+    assert "driver-pct--metric" in css
+
+
 def test_assistant_drawer_mutual_exclusion_video_modal():
     """openVideoModal must close assistant drawer before opening modal."""
     js = _static_executive_js()

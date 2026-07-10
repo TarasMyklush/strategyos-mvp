@@ -1422,6 +1422,28 @@
     return '<svg class="driver-ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="driver-ring__track" cx="18" cy="18" r="15"></circle><circle class="driver-ring__value" cx="18" cy="18" r="15" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 18 18)"></circle></svg>';
   }
 
+  function driverHasPercent(driver) {
+    return driver && driver.pct !== null && driver.pct !== undefined && driver.pct !== "" && Number.isFinite(Number(driver.pct));
+  }
+
+  function driverCenterMarkup(driver) {
+    if (driverHasPercent(driver)) {
+      return '<div class="driver-pct">' + escapeHtml(driver.pct) + '<span class="pct-sign">%</span></div>';
+    }
+    var metric = String(firstDefined(driver && driver.metric, '—')).trim();
+    var parts = metric.split(/\s+/);
+    var main = parts.shift() || '—';
+    var rest = parts.join(' ');
+    return '<div class="driver-pct driver-pct--metric"><span class="driver-pct__main">' + escapeHtml(main) + '</span>' + (rest ? '<span class="driver-pct__unit">' + escapeHtml(rest) + '</span>' : '') + '</div>';
+  }
+
+  function driverMeasureLabel(driver) {
+    if (driverHasPercent(driver)) {
+      return String(firstDefined(driver.pct, '—')) + '% of plan';
+    }
+    return firstDefined(driver && driver.metric, 'Current governed value');
+  }
+
   function qaAnswerText(payload) {
     if (!payload) return "I could not reach the Q&A service. Try again from an authenticated session.";
     var answer = cleanVisibleQaAnswer(firstDefined(payload.answer, ""));
@@ -2859,7 +2881,7 @@
       tile.type = "button";
       tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
       tile.innerHTML = [
-        '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy"><div class="driver-pct">' + escapeHtml(firstDefined(driver.pct, '—')) + '<span class="pct-sign">%</span></div></div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
+        '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
         '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(firstDefined(driver.sub, "current measure")) + '</span></div></div>'
       ].join("");
       tile.onclick = function () {
@@ -2949,7 +2971,7 @@
         .concat(dragging.map(function (item) { return { tone: 'down', glyph: '↘', item: item }; }));
       drillCard.innerHTML = [
         '<div class="drill-surface">',
-        '<div class="drill-headline"><div><h3 class="detail-title">What\'s driving ' + escapeHtml(firstDefined(driver.label, 'it')) + '</h3><p class="section-note">' + escapeHtml(String(firstDefined(driver.pct, '—')) + '% of plan · ' + firstDefined(driver.metric, '—') + ' · ' + firstDefined(driver.sub, 'current measure')) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work</button></div>',
+        '<div class="drill-headline"><div><h3 class="detail-title">What\'s driving ' + escapeHtml(firstDefined(driver.label, 'it')) + '</h3><p class="section-note">' + escapeHtml(driverMeasureLabel(driver) + ' · ' + firstDefined(driver.sub, 'current measure')) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work</button></div>',
         '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, 'Awaiting drill detail.')) + '</p>',
         '<div class="drill-grid-v2"><div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual <span class="lg plan"></span> plan</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" role="img" aria-label="' + escapeHtml(firstDefined(driver.label, 'Driver')) + ' trend: actual versus plan over the last ' + String(actualSeries.length) + ' weeks">' + yTicks.map(function (tick) { var y = chartHeight - (((tick - minSeries) / spanSeries) * 120 + 18); return '<line class="trend-gridline" x1="0" x2="320" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"></line><text class="trend-axis" x="4" y="' + Math.max(10, y - 4).toFixed(1) + '">' + escapeHtml(String(Math.round(tick * 10) / 10)) + '</text>'; }).join('') + '<path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path>' + actualPoints.map(function (pair, idx) { return '<circle class="trend-point actual" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="3"><title>Actual ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(actualSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + planPoints.map(function (pair, idx) { return '<circle class="trend-point plan" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="2.5"><title>Plan ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(planSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + xLabels.map(function (label, idx) { var point = actualPoints[idx]; return '<text class="trend-axis" x="' + point[0].toFixed(1) + '" y="150" text-anchor="middle">' + escapeHtml(label) + '</text>'; }).join('') + '</svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div><div class="drill-movers-panel"><div class="mini-head">What moved it</div><div class="movers-flat">' + (moverRows.length ? moverRows.map(function (entry) {
           var item = entry.item || {};
@@ -2973,7 +2995,7 @@
       });
       safeArray(drillCard.querySelectorAll('[data-driver-chip]')).forEach(function (button) {
         button.onclick = function () {
-          var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '\u2014') + '% of plan): ' + (button.getAttribute('data-driver-chip') || '');
+          var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + driverMeasureLabel(driver) + '): ' + (button.getAttribute('data-driver-chip') || '');
           askAssistant(prompt, button);
         };
       });
@@ -2993,7 +3015,7 @@
           event.preventDefault();
           var message = String(input.value || '').trim();
           if (!message) return;
-          var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + firstDefined(driver.pct, '—') + '% of plan): ' + message;
+          var prompt = 'On ' + firstDefined(driver.label, 'this driver') + ' (' + driverMeasureLabel(driver) + '): ' + message;
           askAssistant(prompt, composer);
           openAssistantDrawer();
           input.value = '';
