@@ -857,6 +857,26 @@ a { color: inherit; }
   gap: 16px;
   padding: 16px;
   align-items: center;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+/* Bug 3 fix: network rows are interactive — hover matches driver-tile pattern */
+.network-row:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+.network-row:active {
+  transform: translateY(0);
+}
+/* Bug 4 fix: collapsed module list */
+.network-list.is-collapsed {
+  display: none;
+}
+/* Bug 4 fix: filtered-out rows are dimmed */
+.network-row.is-filtered-out {
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 .network-score-badge {
@@ -2379,6 +2399,18 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   padding: 6px 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+/* Bug 4 fix: module toggle pill is interactive */
+.network-module-toggle {
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+.network-module-toggle:hover {
+  opacity: 0.8;
+}
+.network-module-toggle::after {
+  content: " ▾";
+  font-size: 10px;
 }
 
 .pill-inline.ok { background: var(--ok-soft); }

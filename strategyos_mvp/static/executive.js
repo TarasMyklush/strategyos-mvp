@@ -1612,6 +1612,11 @@
     var riskLevel = cleanMetaText(firstDefined(risk.level, ""));
     var scenarioType = cleanMetaText(firstDefined(payload.scenario_type, ""));
 
+    // Bug 5 fix: derive grounding level from actual evidence when the backend
+    // reports "none" but citations exist — these are contradictory signals.
+    if (riskLevel === "none" && citations.length > 0) {
+      riskLevel = citations.length >= 3 ? "strong" : "partial";
+    }
     if (basis) parts.push("Basis - " + basis);
     if (calculations.length) parts.push("Formula steps - " + calculations.length);
     if (citations.length) parts.push("Evidence sources - " + citations.length);
@@ -2581,12 +2586,58 @@
       var pendingCount = network.filter(function (item) { return Number(item.statusRank) === 1; }).length;
       var blockedCount = network.filter(function (item) { return Number(item.statusRank) >= 2; }).length;
       card.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'Governed assistant modules attached to the latest run.')) + '</p></div><span class="pill-inline ok">' + escapeHtml(String(network.length)) + ' module' + (network.length === 1 ? '' : 's') + '</span></div>',
-        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? runningCount : '—')) + '</strong><span>Modules running</span></div><div class="network-meta"><span class="pill-inline ok">' + escapeHtml(String(runningCount)) + ' running</span><span class="pill-inline warn">' + escapeHtml(String(pendingCount)) + ' pending</span><span class="pill-inline danger">' + escapeHtml(String(blockedCount)) + ' blocked / idle</span></div></div>',
-        '<div class="network-list"><div class="network-list-head"><span class="sr-only">Status</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">Freshness</span><span class="network-list-head__stat">Used</span><span class="network-list-head__stat">Context</span></div></div>' + network.map(function (item) {
-          return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(statusLabel(item.tone)) + '"><strong>●</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
+        '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'Governed assistant modules attached to the latest run.')) + '</p></div><button type="button" class="pill-inline ok network-module-toggle" id="network-module-toggle">' + escapeHtml(String(network.length)) + ' module' + (network.length === 1 ? '' : 's') + '</button></div>',
+        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? runningCount : '—')) + '</strong><span>Modules running</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="running">' + escapeHtml(String(runningCount)) + ' running</span><span class="pill-inline warn" data-network-filter="pending">' + escapeHtml(String(pendingCount)) + ' pending</span><span class="pill-inline danger" data-network-filter="blocked">' + escapeHtml(String(blockedCount)) + ' blocked / idle</span></div></div>',
+        '<div class="network-list" id="network-module-list"><div class="network-list-head"><span class="sr-only">Status</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">Freshness</span><span class="network-list-head__stat">Used</span><span class="network-list-head__stat">Context</span></div></div>' + network.map(function (item, index) {
+          return '<div class="network-row" data-network-idx="' + index + '" data-network-status="' + escapeHtml(Number(item.statusRank) === 0 ? 'running' : Number(item.statusRank) === 1 ? 'pending' : 'blocked') + '" role="button" tabindex="0" title="Ask ' + escapeHtml(firstDefined(item.assistant, 'this assistant')) + ' about its current work"><div class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(statusLabel(item.tone)) + '"><strong>●</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
         }).join('') + (!network.length ? '<div class="network-row"><div class="network-score-badge tone-warn"><strong>—</strong></div><div class="network-row__main"><div class="network-row__head"><strong>Awaiting module telemetry</strong><span>· Governed runtime</span></div><p class="list-copy">No assistant module feed is available for this packet yet.</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">awaiting</span></span><span aria-label="Used"><span class="network-stat-value">—</span></span><span aria-label="Context"><span class="network-stat-value">governed</span></span></div></div>' : '') + '</div>'
       ].join('');
+      // Bug 3 fix: bind click handlers to network rows so they open the
+      // Hermes drawer with a contextual prompt about the clicked module.
+      safeArray(card.querySelectorAll('.network-row[data-network-idx]')).forEach(function (row) {
+        var handler = function () {
+          var idx = Number(row.getAttribute('data-network-idx') || 0);
+          var moduleItem = network[idx];
+          if (!moduleItem) return;
+          var moduleName = firstDefined(moduleItem.assistant, 'this assistant');
+          var moduleWho = firstDefined(moduleItem.who, '');
+          var moduleStatus = firstDefined(moduleItem.status, moduleItem.tone, '');
+          var prompt = 'Tell me about the "' + moduleName + '" module' + (moduleWho ? ' (led by ' + moduleWho + ')' : '') + ': what is it doing right now, is it blocked, and what does it need from me?';
+          askAssistant(prompt, row);
+        };
+        row.onclick = handler;
+        row.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } };
+      });
+      // Bug 4 fix: the module toggle pill collapses/expands the module list.
+      var toggleBtn = $("network-module-toggle");
+      if (toggleBtn) {
+        toggleBtn.onclick = function () {
+          var list = $("network-module-list");
+          if (!list) return;
+          var collapsed = list.classList.toggle('is-collapsed');
+          toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        };
+      }
+      // Bug 4 fix: status filter pills highlight matching rows.
+      safeArray(card.querySelectorAll('[data-network-filter]')).forEach(function (pill) {
+        pill.style.cursor = 'pointer';
+        pill.onclick = function () {
+          var filterKey = pill.getAttribute('data-network-filter') || '';
+          var list = $("network-module-list");
+          if (!list) return;
+          var rows = safeArray(list.querySelectorAll('.network-row[data-network-status]'));
+          // If already filtering this status, clear the filter
+          if (list.getAttribute('data-active-filter') === filterKey) {
+            list.removeAttribute('data-active-filter');
+            rows.forEach(function (r) { r.classList.remove('is-filtered-out'); });
+            return;
+          }
+          list.setAttribute('data-active-filter', filterKey);
+          rows.forEach(function (r) {
+            r.classList.toggle('is-filtered-out', r.getAttribute('data-network-status') !== filterKey);
+          });
+        };
+      });
     }
   }
 
@@ -3867,7 +3918,25 @@
       });
       safeArray(weekPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
-          askAssistant(button.getAttribute("data-chat-prompt") || "", button);
+          // Bug 6 fix: "Request missing data" buttons get enriched context
+          // so Hermes can answer from the board data already loaded in the dashboard.
+          var rawPrompt = button.getAttribute("data-chat-prompt") || "";
+          var enrichedPrompt = rawPrompt;
+          if (rawPrompt.indexOf("missing") !== -1 && activeEvent) {
+            var eventContext = firstDefined(activeEvent.title, "this event");
+            var prepNotes = firstDefined(activeEvent.prep, activeEvent.foot, "");
+            var eventWhen = firstDefined(activeEvent.when, "");
+            var boardState = state.activeBoard || "pre";
+            var activeDriver = getActiveDriver();
+            var driverLabel = activeDriver ? firstDefined(activeDriver.label, activeDriver.driver_key, "") : "";
+            var driverMetric = activeDriver ? firstDefined(activeDriver.metric, activeDriver.value, "") : "";
+            enrichedPrompt = 'For the upcoming board event "' + eventContext + '"' + (eventWhen ? ' (' + eventWhen + ')' : '') + ': what data am I missing and who should I request it from?'
+              + ' The current board state is "' + boardState + '".'
+              + (driverLabel ? ' The active driver focus is "' + driverLabel + '"' + (driverMetric ? ' (current metric: ' + driverMetric + ')' : '') + '.' : '')
+              + (prepNotes ? ' Prep context: "' + prepNotes.slice(0, 300) + '"' : '')
+              + ' Use the data already available on this dashboard to identify gaps, not generic advice.';
+          }
+          askAssistant(enrichedPrompt, button);
         };
       });
       var weekComposer = weekPanel.querySelector('#week-composer');
@@ -3941,8 +4010,8 @@
       var sovereignLine = state.activePersona === "ceo" ? '' : '<div class="agents-sovereign"><span class="sov-dot"></span> sovereign · runs in-tenant · every action logged</div>';
       runningCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Running now</span><span class="ach-stats"><span class="agent-pulse running"></span> ' + escapeHtml(String(runningCount)) + ' running' + (needsApproval ? '<span class="ach-needs"> · ' + escapeHtml(String(needsApproval)) + ' need your attention</span>' : '') + '</span></div><div class="agents-clist">' + combined.map(function (item) {
         var id = firstDefined(item.id, item.module_id, item.name, 'agent');
-        var isOpen = state.openAgentId === id;
-        var logOpen = state.openAgentLogId === id;
+      var isOpen = false; // per-row state managed via data-expanded in toggle handler
+      var logOpen = false; // per-row state managed via is-open class in toggle handler
         var approved = !!state.approvedAgentIds[id];
         var showBar = ['running', 'approval'].indexOf(String(firstDefined(item.status, ''))) !== -1;
         return '<div class="agent-c' + (isOpen ? ' is-open' : '') + '"><button type="button" class="agent-c-head" data-agent-toggle="' + escapeHtml(id) + '"><span class="agent-pulse ' + escapeHtml(String(firstDefined(item.status, 'running'))) + '"></span><span class="agent-name">' + escapeHtml(firstDefined(item.name, item.label, id)) + '</span><span class="agent-status s-' + escapeHtml(String(firstDefined(item.status, 'running'))) + '">' + escapeHtml(statusLabel(item, approved)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (showBar ? '<div class="agent-prog"><span class="agent-prog-bar tone-' + escapeHtml(toneClass(firstDefined(item.status, 'running'))) + '" style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></span></div>' : '') + (isOpen ? '<div class="agent-c-body"><span class="tag agent-tag">' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span><p class="agent-doing">' + escapeHtml(approved && item.status === 'approval' ? 'Approved — executing now. Audit entry written.' : firstDefined(item.doing, item.summary, 'Governed activity in progress.')) + '</p><div class="agent-c-foot"><span class="agent-by">deployed by ' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><button type="button" class="agent-log-btn' + (logOpen ? ' is-open' : '') + '" data-agent-log="' + escapeHtml(id) + '">◷ audit log <span class="agent-log-count">' + escapeHtml(String(safeArray(item.log).length)) + '</span></button></div>' + (item.status === 'approval' && !approved ? '<div class="agent-approve"><span class="agent-approve-note">⚠ This agent will <strong>act</strong> — held until you approve.</span><button type="button" class="agent-approve-btn" data-agent-approve="' + escapeHtml(id) + '">Approve &amp; let it execute</button></div>' : '') + (logOpen ? '<ol class="agent-trail">' + safeArray(item.log).map(function (entry) { return '<li class="trail-item"><span class="trail-time">' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><span class="trail-dot"></span><span class="trail-text">' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</span></li>'; }).join('') + '<li class="trail-foot">every action is logged in-tenant · tap any entry to see its evidence</li></ol>' : '') + '</div>' : '') + '</div>';
@@ -3950,18 +4019,27 @@
       safeArray(runningCard.querySelectorAll('[data-agent-toggle]')).forEach(function (button) {
         button.onclick = function () {
           var id = button.getAttribute('data-agent-toggle') || '';
-          state.openAgentId = state.openAgentId === id ? '' : id;
-          if (state.openAgentId !== id) state.openAgentLogId = '';
-          renderAgentsDiscovery();
+          var row = button.closest('.agent-c');
+          if (row) {
+            var currentlyExpanded = row.getAttribute('data-expanded') === 'true';
+            row.setAttribute('data-expanded', currentlyExpanded ? 'false' : 'true');
+            row.classList.toggle('is-open', !currentlyExpanded);
+          }
         };
       });
       safeArray(runningCard.querySelectorAll('[data-agent-log]')).forEach(function (button) {
         button.onclick = function (event) {
           event.stopPropagation();
-          var id = button.getAttribute('data-agent-log') || '';
-          state.openAgentLogId = state.openAgentLogId === id ? '' : id;
-          state.openAgentId = id;
-          renderAgentsDiscovery();
+          var row = button.closest('.agent-c');
+          if (row) {
+            var logBtn = row.querySelector('[data-agent-log]');
+            if (logBtn) {
+              var logOpen = logBtn.classList.contains('is-open');
+              logBtn.classList.toggle('is-open', !logOpen);
+            }
+            row.setAttribute('data-expanded', 'true');
+            row.classList.add('is-open');
+          }
         };
       });
       safeArray(runningCard.querySelectorAll('[data-agent-approve]')).forEach(function (button) {
@@ -3969,7 +4047,11 @@
           event.stopPropagation();
           var id = button.getAttribute('data-agent-approve') || '';
           state.approvedAgentIds[id] = true;
-          state.openAgentId = id;
+          var row = button.closest('.agent-c');
+          if (row) {
+            row.setAttribute('data-expanded', 'true');
+            row.classList.add('is-open');
+          }
           renderAgentsDiscovery();
         };
       });
