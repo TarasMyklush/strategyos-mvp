@@ -29,10 +29,53 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
+  # Pre-deploy gate: this workflow deliberately does not re-run the test
+  # suite (the same SHA already ran the FULL suite on push -- see
+  # strategyos-ci.yml), but it MUST NOT deploy a commit whose CI did not
+  # succeed. This gate has been weakened/deleted twice (2026-07-09 subset
+  # gate, 2026-07-10 full removal); tests/test_deploy_workflow_gate.py
+  # locks it in place. Fail-closed: no CI run found for the SHA => blocked.
+  verify-ci:
+    name: Verify CI succeeded for this commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Require a successful StrategyOS CI run for this exact SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Verifying StrategyOS CI status for ${GITHUB_SHA} (${GITHUB_REF_NAME})"
+          for attempt in $(seq 1 20); do
+            run_json=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/strategyos-ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=1" \
+              --jq '{status: (.workflow_runs[0].status // "absent"), conclusion: (.workflow_runs[0].conclusion // "absent")}' \
+              || echo '{"status":"api-error","conclusion":"api-error"}')
+            status=$(echo "${run_json}" | jq -r '.status')
+            conclusion=$(echo "${run_json}" | jq -r '.conclusion')
+            echo "attempt ${attempt}: status=${status} conclusion=${conclusion}"
+            if [ "${conclusion}" = "success" ]; then
+              echo "CI succeeded for ${GITHUB_SHA} -- deploy may proceed."
+              exit 0
+            fi
+            if [ "${status}" = "queued" ] || [ "${status}" = "in_progress" ] || [ "${status}" = "api-error" ]; then
+              sleep 30
+              continue
+            fi
+            echo "::error::StrategyOS CI for ${GITHUB_SHA} is '${conclusion}' (status '${status}'). Refusing to deploy a commit without a green CI run."
+            exit 1
+          done
+          echo "::error::Timed out waiting for StrategyOS CI to finish for ${GITHUB_SHA}. Refusing to deploy unverified code."
+          exit 1
+
   image:
     name: Build and publish image
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    needs: verify-ci
     outputs:
       image-ref: ${{ steps.image-ref.outputs.value }}
     steps:

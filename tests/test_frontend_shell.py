@@ -3048,7 +3048,7 @@ const exchanges = harness.getAssistantExchanges();
 harness.renderAssistantNetwork();
 console.log(JSON.stringify({{
   networkCount: network.length,
-  scores: network.map((item) => item.score),
+  statusRanks: network.map((item) => item.statusRank),
   metaHint: harness.getAssistantNetworkMeta().hint,
   exchangeCount: exchanges.length,
   html: nodes['assistant-network-card'].innerHTML,
@@ -3069,11 +3069,28 @@ console.log(JSON.stringify({{
     result = json.loads(completed.stdout.strip())
     assert result["networkCount"] == 4
     assert result["exchangeCount"] == 4
-    assert min(result["scores"]) > 0
     assert "4 active module" in result["metaHint"]
-    assert "Team readiness score" in result["html"]
-    assert "<strong>0</strong><span>Team readiness score" not in result["html"]
     assert "Cash recovery watch" in result["html"]
+    # Honesty contract: every number on the card is a count of real module
+    # states. The old card fabricated per-module "readiness scores"
+    # (status -> 92/76/62/45/70) and a target of 80 that existed nowhere in
+    # the data model.
+    assert "Team readiness score" not in result["html"]
+    assert "target 80" not in result["html"]
+    assert "Modules running" in result["html"]
+    # Fixture: running + protected = 2 running; preview_only = 1 pending;
+    # blocked = 1 blocked/idle.
+    assert "2 running" in result["html"]
+    assert "1 pending" in result["html"]
+    assert "1 blocked / idle" in result["html"]
+    for fabricated in ("92", "76", "62", "45"):
+        assert ">" + fabricated + "<" not in result["html"], (
+            f"fabricated readiness score {fabricated} leaked back into the card"
+        )
+    executive_js_now = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    assert "assistantModuleScore" not in executive_js_now, (
+        "the fabricated per-status score table must stay deleted"
+    )
 
 
 def test_assistant_transport_failures_are_retryable_not_final_answers():
