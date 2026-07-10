@@ -717,8 +717,12 @@
     if (state.videoModalOpen) closeVideoModal();
     /* Guard: close A2A panel if open — only one surface at a time */
     if (state.a2aOpen) { state.a2aOpen = false; renderA2APanel(); }
-    /* Guard: no-op if drawer already open — avoid redundant renders */
-    if (state.drawerOpen) return;
+    /* Guard: if already open, keep the visible conversation in sync. */
+    if (state.drawerOpen) {
+      renderAssistantStudio();
+      focusAssistantInput();
+      return;
+    }
     state.drawerOpen = true;
     state.drawerReturnFocusEl = returnFocusEl || null;
     document.body.style.overflow = 'hidden';

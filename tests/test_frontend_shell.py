@@ -1227,10 +1227,17 @@ def test_assistant_drawer_shared_state_guard():
         "Must check a2aOpen before opening drawer"
     )
 
-    # No redundant open
-    assert "if (state.drawerOpen) return" in open_fn_body, (
+    # Already-open drawer must still re-render so submitted prompts show a
+    # visible user message and pending assistant state immediately.
+    assert "if (state.drawerOpen)" in open_fn_body, (
         "Must guard against redundant drawer opening"
     )
+    already_open_block = open_fn_body[
+        open_fn_body.index("if (state.drawerOpen)"):
+        open_fn_body.index("state.drawerOpen = true;")
+    ]
+    assert "renderAssistantStudio();" in already_open_block
+    assert "focusAssistantInput();" in already_open_block
 
 
 def test_assistant_drawer_mutual_exclusion_video_modal():
