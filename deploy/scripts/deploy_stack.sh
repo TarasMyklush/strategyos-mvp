@@ -23,7 +23,7 @@ done
 
 PROJECT_NAME_ARG=""
 if [ -n "${COMPOSE_PROJECT_NAME}" ]; then
-  PROJECT_NAME_ARG="--project-name ${COMPOSE_PROJECT_NAME}"
+  PROJECT_NAME_ARG=" --project-name ${COMPOSE_PROJECT_NAME}"
 fi
 
 RSYNC_SSH_ARGS=()
