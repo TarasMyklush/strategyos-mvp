@@ -229,7 +229,6 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 _EXECUTIVE_ASSET_REV_FILES = (
     "executive.css",
     "executive.js",
-    "executive_design_data.js",
 )
 
 
@@ -3550,12 +3549,15 @@ def _executive_modes_payload(
     ]
     for item in personas:
         blueprint = executive_persona_design(str(item.get("persona_id") or "ceo"))
+        # Only persona NAMING (assistant name/role, index label) comes from the
+        # design module -- it is product copy. Narrative quotes and fixture
+        # prompt/thread inventories stay out of governed payloads entirely.
         item["assistant_role"] = blueprint.get("assistantRole")
         item["index_label"] = blueprint.get("indexLabel")
-        item["quote"] = blueprint.get("quote")
-        item["quoted_by"] = blueprint.get("by")
-        item["prompt_count"] = len(list(blueprint.get("prompts") or []))
-        item["thread_count"] = len(list(blueprint.get("threads") or []))
+        item["quote"] = ""
+        item["quoted_by"] = ""
+        item["prompt_count"] = 0
+        item["thread_count"] = 0
     requested_persona = str(view_state.get("persona") or "").strip().lower() or "ceo"
     if requested_persona not in {item["persona_id"] for item in personas}:
         requested_persona = "ceo"
@@ -4142,10 +4144,6 @@ def _chat_threads_payload(
     board_portal: dict[str, Any],
     publication: dict[str, Any],
 ) -> dict[str, Any]:
-    def _humanize_chat_token(value: str) -> str:
-        text = str(value or "").replace("_", " ").replace("-", " ").strip()
-        return " ".join(part.capitalize() for part in text.split()) if text else ""
-
     persona_id = str(executive_modes.get("active_persona_id") or "ceo")
     persona_label = next(
         (
@@ -4176,19 +4174,27 @@ def _chat_threads_payload(
     challenged_count = int(publication.get("challenged_cases") or 0)
     run_id = str((summary or {}).get("run_id") or "latest")
     active_driver_key = str(executive_modes.get("active_driver_key") or "board_packet")
+    # Starter threads derive from the latest governed run's actual findings --
+    # never from the design-fixture narrative (which suggested prompts about
+    # deals and meetings that exist only in the demo storyline). Scrub titles
+    # to the board-safe form for principals on the public-safe surface.
+    starter_rows = _finding_rows_from_summary(summary or {})
+    if _principal_prefers_public_safe_surface(principal):
+        starter_rows = _anonymous_public_finding_payloads(starter_rows)
     starter_threads: list[dict[str, Any]] = []
-    for index, item in enumerate(list(persona_blueprint.get("threads") or [])[:3], start=1):
-        thread_key = str(item.get("key") or f"thread-{index}")
+    for index, row in enumerate(starter_rows[:3], start=1):
+        row_title = str(row.get("title") or f"Finding {index}")
+        starter_prompt = f"What is driving “{row_title}” and what should we do next?"
         starter_threads.append(
             {
-                "thread_id": f"{persona_id}:{thread_key}",
+                "thread_id": f"{persona_id}:finding-{index}",
                 "kind": "starter_prompt",
                 "persona_id": persona_id,
                 "persona_label": persona_label,
                 "assistant": assistant_name,
-                "title": item.get("title") or _humanize_chat_token(thread_key),
-                "preview": item.get("preview") or "Open this board thread.",
-                "starter_prompt": item.get("preview") or item.get("title") or "",
+                "title": row_title,
+                "preview": starter_prompt,
+                "starter_prompt": starter_prompt,
                 "message_count": 0,
                 "read_only": False,
                 "route": _build_executive_route(

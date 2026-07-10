@@ -918,11 +918,16 @@
     return firstDefined(POLISHED_LABELS[personaId], contract.label, humanizeToken(personaId), "Group CEO");
   }
 
+  function sessionDisplayName() {
+    var session = state.session || {};
+    if (!session.authenticated) return "";
+    return String(firstDefined(session.display_name, session.display_subject, "")).trim();
+  }
+
   function executiveIdentityInitials(personaId) {
-    var networkEntry = getAssistantNetwork().find(function (item) {
-      return item && item.persona === personaId;
-    }) || {};
-    var fullName = String(firstDefined(networkEntry.who, "")).trim();
+    // Identity comes from the authenticated session, never from a fixture
+    // person -- there is no real person behind a persona in the data model.
+    var fullName = sessionDisplayName();
     var initials = fullName
       .split(/\s+/)
       .filter(Boolean)
@@ -938,7 +943,6 @@
       .slice(0, 2)
       .join("");
 
-    if (personaId === "ceo") return "KA";
     return fallbackInitials || "GC";
   }
 
@@ -2750,8 +2754,7 @@
     var publication = getPublication();
     var boardPortal = getBoardPortal();
     var agents = getAgentsModule();
-    var networkEntry = getAssistantNetwork().find(function (item) { return item && item.persona === state.activePersona; }) || {};
-    var fullName = String(firstDefined(networkEntry.who, state.activePersona === "ceo" ? "Khalid Al-Rashed" : "")).trim();
+    var fullName = sessionDisplayName();
     var firstName = fullName ? fullName.split(/\s+/)[0] : getPersonaLabel(state.activePersona);
     var preferredHero = blueprint.health || {};
     var score = Number(firstDefined(hero.score, 0));

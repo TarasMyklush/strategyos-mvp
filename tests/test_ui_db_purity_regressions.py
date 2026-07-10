@@ -112,6 +112,161 @@ def test_executive_static_js_does_not_reference_design_fixture_or_prefer_design_
     assert "designDrivers.length ? designDrivers : packetDrivers" not in js
 
 
+def test_executive_js_has_no_hardcoded_identity_fixtures():
+    """The greeting and avatar initials must come from the authenticated
+    session (/ui/session display_name), never from the fixture person that
+    only exists in the demo storyline."""
+    js = TestClient(api_module.app).get("/static/executive.js").text
+
+    assert "Khalid" not in js
+    assert '"KA"' not in js
+    assert "sessionDisplayName" in js
+
+
+def test_executive_design_data_fixture_file_is_deleted():
+    fixture_path = Path(api_module.__file__).parent / "static" / "executive_design_data.js"
+    assert not fixture_path.exists(), (
+        "executive_design_data.js must stay deleted -- the executive surface "
+        "must not ship a client-side design fixture"
+    )
+
+
+_FIXTURE_THREAD_MARKERS = (
+    "EUR hedge",
+    "Thursday board readiness",
+    "e-Pharmacy",
+    "Am I on track for the board",
+)
+
+
+def test_chat_starter_threads_derive_from_governed_findings_not_fixture_narrative(monkeypatch):
+    """Chat starter threads used to be seeded from the design fixture's
+    narrative prompts ('Model a 60% EUR hedge...'). They must derive from the
+    latest governed run's actual findings, and disappear when there are none."""
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_latest_summary",
+            lambda: {
+                "run_id": "run-governed",
+                "run_dir": "/tmp/run-governed",
+                "approval_status": "approved",
+                "current_stage": "awaiting_review",
+                "requires_human_review": False,
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_load_knowledge_graph_artifact",
+            lambda summary: (
+                None,
+                {
+                    "nodes": [
+                        {
+                            "id": "Finding:F-001",
+                            "label": "Finding",
+                            "properties": {
+                                "finding_id": "F-001",
+                                "title": "Duplicate payment for INV-9001",
+                                "pattern_type": "duplicate_payment",
+                                "recoverable_sar": 1000.0,
+                            },
+                        }
+                    ],
+                    "edges": [],
+                },
+            ),
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        payload = TestClient(api_module.app).get("/public/runs/latest").json()
+        threads = (payload.get("chat") or {}).get("threads") or []
+        starter_threads = [t for t in threads if t.get("kind") == "starter_prompt"]
+        thread_text = "\n".join(_collect_strings(threads))
+
+        assert all(marker not in thread_text for marker in _FIXTURE_THREAD_MARKERS), (
+            f"chat threads still carry fixture narrative: {thread_text!r}"
+        )
+        assert starter_threads, "expected starter threads derived from the run's findings"
+        # One thread per finding, keyed finding-N. On the public-safe surface
+        # the scrubber replaces raw titles with board-safe labels -- that is
+        # governed data (derived + scrubbed), not fixture narrative.
+        assert len(starter_threads) == 1
+        assert starter_threads[0].get("thread_id", "").endswith("finding-1"), (
+            f"starter threads must derive from the governed findings, got: {starter_threads!r}"
+        )
+    finally:
+        _restore_env(original)
+
+
+def test_chat_starter_threads_absent_when_run_has_no_findings(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_latest_summary",
+            lambda: {
+                "run_id": "run-governed",
+                "run_dir": "/tmp/run-governed",
+                "approval_status": "approved",
+                "current_stage": "awaiting_review",
+                "requires_human_review": False,
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_load_knowledge_graph_artifact",
+            lambda summary: (None, {"nodes": [], "edges": []}),
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        payload = TestClient(api_module.app).get("/public/runs/latest").json()
+        threads = (payload.get("chat") or {}).get("threads") or []
+        starter_threads = [t for t in threads if t.get("kind") == "starter_prompt"]
+
+        assert starter_threads == [], (
+            "with no findings in the governed run there is nothing to suggest -- "
+            f"fixture-narrative starter threads must not reappear, got: {starter_threads!r}"
+        )
+    finally:
+        _restore_env(original)
+
+
+def test_executive_modes_personas_carry_no_fixture_narrative_quotes(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_latest_summary",
+            lambda: {
+                "run_id": "run-governed",
+                "run_dir": "/tmp/run-governed",
+                "approval_status": "approved",
+                "current_stage": "awaiting_review",
+                "requires_human_review": False,
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_load_knowledge_graph_artifact",
+            lambda summary: (None, {"nodes": [], "edges": []}),
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        payload = TestClient(api_module.app).get("/public/runs/latest").json()
+        personas = (payload.get("executive_modes") or {}).get("personas") or []
+
+        assert personas, "expected persona metadata in executive_modes"
+        for item in personas:
+            assert not item.get("quote"), (
+                f"persona {item.get('persona_id')!r} still carries a fixture narrative quote: {item.get('quote')!r}"
+            )
+            assert not item.get("quoted_by")
+    finally:
+        _restore_env(original)
+
+
 def test_executive_static_js_uses_authenticated_governed_route_not_public_demo_route():
     js = TestClient(api_module.app).get("/static/executive.js").text
 
