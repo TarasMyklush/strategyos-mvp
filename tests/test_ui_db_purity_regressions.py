@@ -57,6 +57,8 @@ _FIXTURE_MARKERS = (
     "Illustrative demo narrative",
     "SAR 2.09B",
     "SAR 8.6M",
+    "Mizan Group",
+    "Khalid",
 )
 
 
@@ -123,6 +125,18 @@ def test_executive_js_has_no_hardcoded_identity_fixtures():
     assert "sessionDisplayName" in js
 
 
+def test_executive_shell_has_no_hardcoded_org_identity_or_legacy_namespace():
+    client = TestClient(api_module.app)
+    html = client.get("/app").text
+    js = client.get("/static/executive.js").text
+
+    for marker in ("Mizan", "Khalid", ">KA<", "window.MIZAN", "MIZAN_X"):
+        assert marker not in html
+        assert marker not in js
+    assert "tenantDisplayName" in js
+    assert "window.STRATEGYOS_X" in js
+
+
 def test_executive_design_data_fixture_file_is_deleted():
     fixture_path = Path(api_module.__file__).parent / "static" / "executive_design_data.js"
     assert not fixture_path.exists(), (
@@ -183,7 +197,7 @@ def test_chat_starter_threads_derive_from_governed_findings_not_fixture_narrativ
         payload = TestClient(api_module.app).get("/public/runs/latest").json()
         threads = (payload.get("chat") or {}).get("threads") or []
         starter_threads = [t for t in threads if t.get("kind") == "starter_prompt"]
-        thread_text = "\n".join(_collect_strings(threads))
+        thread_text = "\n".join(_collect_strings(payload.get("chat") or {}))
 
         assert all(marker not in thread_text for marker in _FIXTURE_THREAD_MARKERS), (
             f"chat threads still carry fixture narrative: {thread_text!r}"
@@ -196,6 +210,9 @@ def test_chat_starter_threads_derive_from_governed_findings_not_fixture_narrativ
         assert starter_threads[0].get("thread_id", "").endswith("finding-1"), (
             f"starter threads must derive from the governed findings, got: {starter_threads!r}"
         )
+        assert (payload.get("chat") or {}).get("starter_prompts") == [
+            starter_threads[0]["starter_prompt"]
+        ]
     finally:
         _restore_env(original)
 
@@ -229,6 +246,7 @@ def test_chat_starter_threads_absent_when_run_has_no_findings(monkeypatch):
             "with no findings in the governed run there is nothing to suggest -- "
             f"fixture-narrative starter threads must not reappear, got: {starter_threads!r}"
         )
+        assert (payload.get("chat") or {}).get("starter_prompts") == []
     finally:
         _restore_env(original)
 
@@ -263,8 +281,70 @@ def test_executive_modes_personas_carry_no_fixture_narrative_quotes(monkeypatch)
                 f"persona {item.get('persona_id')!r} still carries a fixture narrative quote: {item.get('quote')!r}"
             )
             assert not item.get("quoted_by")
+            assert all(
+                person not in str(item.get("detail") or "")
+                for person in ("Khalid", "Sara", "Lina", "Yusuf")
+            )
     finally:
         _restore_env(original)
+
+
+def test_governed_public_assistant_refuses_missing_fixture_scenario_values(monkeypatch):
+    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "false"})
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_latest_summary",
+            lambda: {
+                "run_id": "run-governed",
+                "run_dir": "/tmp/run-governed",
+                "approval_status": "approved",
+                "current_stage": "awaiting_review",
+                "requires_human_review": False,
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_load_knowledge_graph_artifact",
+            lambda summary: (None, {"nodes": [], "edges": []}),
+        )
+        monkeypatch.setattr(api_module, "_load_summary_artifact_json", lambda summary, key: None)
+
+        response = TestClient(api_module.app).post(
+            "/assistant/chat",
+            json={
+                "question": "Tell me the downside of the EUR hedge",
+                "persona": "ceo",
+                "mode": "deterministic",
+            },
+        )
+        payload = response.json()
+        answer_text = "\n".join(
+            _collect_strings(
+                {
+                    "answer": payload.get("answer"),
+                    "basis": payload.get("basis"),
+                    "suggestions": payload.get("suggestions"),
+                }
+            )
+        )
+
+        assert response.status_code == 200
+        assert "does not expose a quantified currency or hedge scenario" in payload["answer"]
+        assert all(marker not in answer_text for marker in _FIXTURE_THREAD_MARKERS)
+        assert "19.2%" not in answer_text
+        assert "SAR 9k" not in answer_text
+    finally:
+        _restore_env(original)
+
+
+def test_client_migrates_retired_fixture_threads_and_never_falls_back_to_design_threads():
+    js = TestClient(api_module.app).get("/static/executive.js").text
+
+    assert "function isRetiredFixtureThread" in js
+    assert "if (isRetiredFixtureThread(key, persisted[key])) return;" in js
+    assert "var seededThreads = safeArray(chat.threads);" in js
+    assert "safeArray(blueprint.threads).map" not in js
 
 
 def test_executive_static_js_uses_authenticated_governed_route_not_public_demo_route():

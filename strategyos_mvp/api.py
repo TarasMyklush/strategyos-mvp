@@ -1678,10 +1678,10 @@ def _display_subject(subject: str, role: str) -> str:
         return _display_role(role)
     if raw.startswith("api-key:"):
         return f"{_display_role(role)} API key"
+    if raw.startswith("oidc:"):
+        raw = raw.removeprefix("oidc:")
     if "://" in raw:
         raw = raw.rsplit(":", 1)[-1]
-    if raw.endswith(".local"):
-        raw = raw[: -len(".local")]
     return raw.replace("_", " ").replace(".", " ").strip().title() or _display_role(
         role
     )
@@ -1689,18 +1689,15 @@ def _display_subject(subject: str, role: str) -> str:
 
 def _display_name_for_principal(role: str, subject: str) -> str:
     normalized_role = role.strip().lower()
-    if normalized_role in {
-        "operator",
-        "reviewer",
-        "analyst",
-        "auditor",
-        "executive",
-        "tenant_operator",
-        "tenant_admin",
-        "system",
-    }:
+    normalized_subject = subject.strip()
+    if (
+        not normalized_subject
+        or normalized_subject in {"anonymous", "auth-disabled"}
+        or normalized_subject.startswith("demo-role:")
+        or normalized_subject.startswith("api-key:")
+    ):
         return _display_role(normalized_role)
-    return _display_subject(subject, normalized_role)
+    return _display_subject(normalized_subject, normalized_role)
 
 
 def _role_altitude(role: str) -> str:
@@ -3495,7 +3492,7 @@ def _executive_modes_payload(
         {
             "persona_id": "ceo",
             "label": "Group CEO",
-            "detail": "Khalid · value, release, board brief",
+            "detail": "Value, release, board brief",
             "summary": "Frames plan-health, value capture, and board-safe release posture as bounded executive action.",
             "default_driver_key": "board_packet",
             "default_board_state": "pre",
@@ -3504,7 +3501,7 @@ def _executive_modes_payload(
         {
             "persona_id": "cfo",
             "label": "Group CFO",
-            "detail": "Sara · margin, hedge, cash",
+            "detail": "Margin, controls, cash",
             "summary": "Focuses on cash pulse, hedge discipline, and release posture without overstating strategy authority.",
             "default_driver_key": "cash_pulse",
             "default_board_state": "pre",
@@ -3513,7 +3510,7 @@ def _executive_modes_payload(
         {
             "persona_id": "gm",
             "label": "BU GM",
-            "detail": "Lina · growth, service, capacity",
+            "detail": "Growth, service, capacity",
             "summary": "Keeps the governed packet tied to BU growth, service quality, and capacity signal already present in the finance slice.",
             "default_driver_key": "cash_pulse",
             "default_board_state": "pre",
@@ -3522,7 +3519,7 @@ def _executive_modes_payload(
         {
             "persona_id": "bucfo",
             "label": "BU CFO",
-            "detail": "Yusuf · leakage, controls, exposure",
+            "detail": "Leakage, controls, exposure",
             "summary": "Frames governed leakage, controls, and exposure posture for the BU finance slice.",
             "default_driver_key": "owed_upward",
             "default_board_state": "pre",
@@ -4253,7 +4250,11 @@ def _chat_threads_payload(
         },
         "active_thread_id": threads[0]["thread_id"] if threads else None,
         "threads": threads,
-        "starter_prompts": list(persona_blueprint.get("prompts") or [])[:3],
+        "starter_prompts": [
+            str(thread.get("starter_prompt") or "")
+            for thread in starter_threads
+            if str(thread.get("starter_prompt") or "").strip()
+        ],
         "a2a": {
             "enabled": True,
             "mode": "derived_handoff_only",
@@ -9443,17 +9444,42 @@ async def _assistant_chat_response(
 
     def _public_safe_unmatched_result(question_text: str, reason: str | None = None) -> dict[str, Any]:
         norm = " ".join(str(question_text or "").lower().split())
+        governed_packet = context.get("public_context_packet")
+        if not isinstance(governed_packet, dict):
+            governed_packet = {}
+        governed_suggestions: list[str] = []
+        if governed_packet.get("is_illustrative") is False:
+            for item in list(governed_packet.get("drivers") or [])[:2]:
+                if not isinstance(item, dict):
+                    continue
+                label = str(item.get("label") or item.get("key") or "").strip()
+                if label:
+                    governed_suggestions.append(f"Explain the current {label} signal")
+            for item in list(governed_packet.get("findings") or [])[:1]:
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title") or "").strip()
+                if title:
+                    governed_suggestions.append(f"Why does “{title}” matter for the board?")
+            governed_suggestions.append("What should I prepare for the board?")
         if "capital of france" in norm:
             return {
                 "matched": True,
                 "answer": "Paris is the capital of France. That sits outside the current StrategyOS board context, but the direct answer is Paris.",
                 "citations": [],
-                "suggestions": [
-                    "Help me prepare the board pack for the pre-board stage.",
-                    "What is driving margin pressure this quarter?",
-                    "Set a follow-up task for Iris on fulfilment capacity",
-                ],
+                "suggestions": governed_suggestions[:4] or ["What should I prepare for the board?"],
                 "basis": "Direct safe answer for an out-of-domain general-knowledge prompt on the public executive surface.",
+            }
+        if governed_packet.get("is_illustrative") is False:
+            return {
+                "matched": False,
+                "answer": (
+                    "I could not match that question to a quantified scenario in the current governed run. "
+                    "No illustrative values were substituted; ask about a visible driver, finding, or board-state item."
+                ),
+                "citations": [],
+                "suggestions": governed_suggestions[:4],
+                "basis": "Governed packet fallback refused to substitute illustrative scenario values.",
             }
         if (
             "follow-up task" in norm
@@ -9578,7 +9604,7 @@ async def _assistant_chat_response(
             # Return scope-boundary message + matched=False so the frontend can
             # distinguish unmatched from deterministic answers.
             answer = (
-                "I'm Hermes, your board chief of staff. I can help with questions about Mizan Group's "
+                "I'm Hermes, your board chief of staff. I can help with questions about the organization's "
                 "board pack, governed evidence, strategic decisions, and the current board lifecycle state. "
                 "Your question appears to be outside the available board context — try asking about margin, "
                 "risk, board prep, recoverable leakage, or a specific business driver visible in the packet."

@@ -160,10 +160,12 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     # 22.06 top bar / nav parity
     assert 'id="view-nav"' in html
     assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
-    assert "Mizan Group" in html
+    assert "Mizan Group" not in html
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
-    assert ">KA<" in html
+    assert ">KA<" not in html
+    assert 'id="brand-org">StrategyOS<' in html
+    assert 'id="topbar-avatar">—<' in html
     # Hero banner
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="hero-head"' in html or 'class="hero-title"' in html
@@ -209,10 +211,10 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'class="brand"' in html
     assert 'id="view-nav"' in html
     assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
-    assert "Mizan Group" in html
+    assert "Mizan Group" not in html
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
-    assert ">KA<" in html
+    assert ">KA<" not in html
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="hero-score"' in html or 'class="hero-score__value"' in html
     assert 'id="hero-head"' in html or 'class="hero-title"' in html
@@ -270,10 +272,10 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert 'class="brand"' in html
     assert 'id="view-nav"' in html
     assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
-    assert "Mizan Group" in html
+    assert "Mizan Group" not in html
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
-    assert ">KA<" in html
+    assert ">KA<" not in html
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
     assert "The group index" in html
@@ -736,8 +738,8 @@ def test_ui_session_returns_clean_display_identity_for_idp_subject(monkeypatch):
         assert payload["role"] == "operator"
         assert payload["subject"] == "http://localhost:8089:operator.local"
         assert payload["display_role"] == "Operator"
-        assert payload["display_subject"] == "Operator"
-        assert payload["display_name"] == "Operator"
+        assert payload["display_subject"] == "Operator Local"
+        assert payload["display_name"] == "Operator Local"
         assert "localhost" not in payload["display_name"]
         assert "localhost" not in payload["display_subject"]
     finally:
@@ -781,14 +783,15 @@ def test_public_executive_shell_ceo_prompt_succeeds_without_session_token(monkey
         assert response.status_code == 200
         payload = response.json()
         assert payload["status"] == "ok"
-        assert payload["scenario_id"] == "digital_health_eoy_flat"
+        assert payload["scenario_id"] == "public_exec_governed_packet"
         assert payload["matched"] is True
         assert payload["mode"] == "deterministic"
         assert payload["assistant_mode"] == "scenario"
         assert payload["trace"]
         assert payload["audit_trail_id"]
-        assert payload["hallucination_risk"]["level"] == "high"
+        assert payload["hallucination_risk"]["level"] == "low"
         assert payload["prompt_contracts"]["role"]["prompt_id"] == "role:ceo:v1"
+        assert "current governed" in payload["answer"].lower()
         assert "I couldn't reach the shared assistant service just now." not in payload["answer"]
     finally:
         _restore_env(original)

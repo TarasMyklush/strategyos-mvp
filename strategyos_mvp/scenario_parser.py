@@ -1368,10 +1368,223 @@ def _parse_generic(prompt: str, context: dict[str, Any]) -> ScenarioResult:
     )
 
 
+def _governed_public_suggestions(packet: dict[str, Any]) -> list[str]:
+    suggestions: list[str] = []
+    for item in list(packet.get("drivers") or [])[:2]:
+        label = str(item.get("label") or item.get("key") or "").strip()
+        if label:
+            suggestions.append(f"Explain the current {label} signal")
+    for item in list(packet.get("findings") or [])[:1]:
+        title = str(item.get("title") or "").strip()
+        if title:
+            suggestions.append(f"Why does “{title}” matter for the board?")
+    suggestions.append("What should I prepare for the board?")
+    return suggestions[:4]
+
+
+def _governed_public_item_text(item: dict[str, Any]) -> str:
+    return " ".join(
+        str(item.get(key) or "").strip()
+        for key in ("label", "title", "metric", "value", "status", "detail", "story", "tag")
+        if str(item.get(key) or "").strip()
+    )
+
+
+def _parse_governed_public_exec_surface(
+    prompt: str,
+    context: dict[str, Any],
+    packet: dict[str, Any],
+) -> ScenarioResult | None:
+    """Answer public executive prompts only from the current governed packet.
+
+    The legacy illustrative packet has richer demo scenarios. A governed packet
+    must never inherit those values when a topic is absent; it returns an exact
+    data-boundary answer instead.
+    """
+    norm = _normalize(prompt)
+    if (
+        "follow-up task" in norm
+        or "follow up task" in norm
+        or "set a task" in norm
+        or "create a task" in norm
+        or ("set" in norm and "task" in norm)
+    ):
+        return ScenarioResult(
+            scenario_id="public_exec_governed_packet",
+            scenario_label="Executive Surface — Governed Packet",
+            matched=True,
+            answer=(
+                "The public executive surface cannot create or assign tasks. Use the authenticated "
+                "operator workflow to set the owner, due date, governed evidence link, and escalation path."
+            ),
+            calculations=[],
+            kg_context=[],
+            citations=[],
+            assumptions=["The public executive surface is read-only."],
+            hallucination_risk=_public_risk_low("Returned the public surface's task-creation boundary."),
+            suggestions=_governed_public_suggestions(packet),
+            scenario_type="deterministic",
+            basis="Task mutation is unavailable on the governed public executive surface.",
+        )
+    business_tokens = (
+        "board",
+        "challenged",
+        "risk",
+        "plan",
+        "year",
+        "quarter",
+        "margin",
+        "ebitda",
+        "profit",
+        "loss",
+        "revenue",
+        "cash",
+        "working capital",
+        "recoverable",
+        "recovery",
+        "evidence",
+        "finding",
+        "citation",
+        "kpi",
+        "driver",
+        "hedge",
+        "currency",
+        "eur",
+        "fx",
+        "healthcare",
+        "pharmacy",
+        "capacity",
+        "jv",
+        "joint venture",
+    )
+    if not any(token in norm for token in business_tokens):
+        return ScenarioResult(
+            scenario_id="public_exec_governed_packet",
+            scenario_label="Executive Surface — Governed Packet",
+            matched=False,
+            answer=(
+                "I can only answer questions grounded in the current governed executive packet. "
+                "Try asking about a visible driver, finding, recovery signal, or board posture."
+            ),
+            calculations=[],
+            kg_context=[],
+            citations=[],
+            assumptions=["No illustrative scenario or fixture narrative was consulted."],
+            hallucination_risk=_public_risk_low(
+                "No governed packet topic matched the question.",
+                gap="The requested topic is absent from the current governed executive packet.",
+            ),
+            suggestions=_governed_public_suggestions(packet),
+            scenario_type="unmatched",
+            basis="Question did not match a topic present on the governed executive surface.",
+        )
+
+    drivers = [item for item in list(packet.get("drivers") or []) if isinstance(item, dict)]
+    findings = [item for item in list(packet.get("findings") or []) if isinstance(item, dict)]
+    public_facts = packet.get("public_facts") if isinstance(packet.get("public_facts"), dict) else {}
+    board = _public_board(packet)
+    suggestions = _governed_public_suggestions(packet)
+    citations: list[dict[str, Any]] = []
+
+    topic_tokens = [
+        token
+        for token in ("hedge", "currency", "eur", "fx", "margin", "ebitda", "revenue", "cash", "jv", "joint venture", "recoverable", "recovery", "evidence")
+        if token in norm
+    ]
+    related: list[tuple[str, int, dict[str, Any]]] = []
+    for source_name, items in (("drivers", drivers), ("findings", findings)):
+        for index, item in enumerate(items):
+            item_text = _governed_public_item_text(item).lower()
+            if topic_tokens and any(token in item_text for token in topic_tokens):
+                related.append((source_name, index, item))
+
+    if any(token in norm for token in ("hedge", "currency", "eur", "fx")) and not related:
+        answer = (
+            "The current governed run does not expose a quantified currency or hedge scenario, "
+            "so StrategyOS cannot calculate hedge impact from this packet. No illustrative hedge "
+            "assumptions have been substituted."
+        )
+        basis = "Governed packet contains no matching currency or hedge driver/finding."
+    elif any(token in norm for token in ("jv", "joint venture", "joint-venture")) and not related:
+        answer = (
+            "The current governed run does not expose a quantified JV funding or liquidity scenario, "
+            "so StrategyOS cannot determine how the JV is funded from this packet. No illustrative "
+            "funding assumptions have been substituted."
+        )
+        basis = "Governed packet contains no matching JV funding or liquidity driver/finding."
+    elif related:
+        fragments = []
+        for source_name, index, item in related[:3]:
+            fragments.append(_governed_public_item_text(item))
+            citations.append(_public_citation(f"public_context_packet.{source_name}[{index}]"))
+        answer = "Current governed evidence: " + "; ".join(fragment for fragment in fragments if fragment) + "."
+        basis = "Matched the question to current governed driver/finding text."
+    elif "board" in norm or "challenged" in norm:
+        challenged = public_facts.get("challenged_count")
+        report_count = public_facts.get("report_count")
+        state = str(board.get("presentation_state") or board.get("state") or "current").replace("_", " ")
+        answer = f"The current board posture is {state}."
+        if isinstance(challenged, (int, float)):
+            answer += f" {int(challenged)} challenged item(s) remain."
+        if isinstance(report_count, (int, float)):
+            answer += f" {int(report_count)} report artifact(s) are surfaced."
+        if "evidence" in norm:
+            answer += " The public packet does not expose case-level missing-evidence details."
+        if any(token in norm for token in ("prepare", "prep", "next")):
+            answer += " Next step: review the surfaced reports and their governed evidence, then close any challenged items before the board session."
+        basis = "Read current board state and counts from the governed packet."
+        citations.append(_public_citation("public_context_packet.board_portal"))
+    elif any(token in norm for token in ("recoverable", "recovery", "evidence", "finding", "citation")):
+        total = public_facts.get("total_recoverable_sar")
+        finding_titles = [str(item.get("title") or "").strip() for item in findings[:3] if str(item.get("title") or "").strip()]
+        fragments = []
+        if isinstance(total, (int, float)):
+            fragments.append(f"recoverable value {_sar(float(total))}")
+        if finding_titles:
+            fragments.append("current findings: " + "; ".join(finding_titles))
+            citations.extend(_public_citation(f"public_context_packet.findings[{index}]") for index in range(min(3, len(finding_titles))))
+        answer = (
+            "The current governed packet shows " + ", ".join(fragments) + "."
+            if fragments
+            else "The current governed packet contains no public finding or recovery detail for that question."
+        )
+        basis = "Summarized only current governed public facts and findings."
+    else:
+        visible = [_governed_public_item_text(item) for item in drivers[:3]]
+        visible = [item for item in visible if item]
+        answer = (
+            "Current governed drivers: " + "; ".join(visible) + "."
+            if visible
+            else "The current governed packet does not contain a quantified driver for that question."
+        )
+        basis = "Summarized only current governed driver cards."
+        citations.extend(_public_citation(f"public_context_packet.drivers[{index}]") for index in range(min(3, len(visible))))
+
+    return ScenarioResult(
+        scenario_id="public_exec_governed_packet",
+        scenario_label="Executive Surface — Governed Packet",
+        matched=True,
+        answer=answer,
+        calculations=[],
+        kg_context=[],
+        citations=citations,
+        assumptions=["No illustrative scenario values are used when the governed packet lacks the requested metric."],
+        hallucination_risk=_public_risk_low(
+            basis,
+            gap="Protected case-level evidence and absent scenario inputs remain outside the public surface.",
+        ),
+        suggestions=suggestions,
+        scenario_type="deterministic",
+        basis=basis,
+    )
+
+
 def _parse_public_exec_surface(prompt: str, context: dict[str, Any]) -> ScenarioResult | None:
     packet = _public_packet(context)
     if not packet:
         return None
+    if packet.get("is_illustrative") is False:
+        return _parse_governed_public_exec_surface(prompt, context, packet)
     norm = _normalize(prompt)
     board = _public_board(packet)
     persona_id = str(context.get("persona") or packet.get("persona_id") or "ceo")
@@ -1835,6 +2048,13 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
             scenario_type="unmatched",
             basis="Empty prompt — no scenario to parse.",
         )
+
+    # Governed public surfaces are an exclusive routing boundary. They must not
+    # fall through to the legacy illustrative scenario families registered below.
+    public_packet = _public_packet(context)
+    if public_packet.get("is_illustrative") is False:
+        result = _parse_governed_public_exec_surface(prompt, context, public_packet)
+        return _hydrate_scenario_result(result)
 
     families = sorted(SCENARIO_FAMILIES, key=lambda f: f.priority)
     for family in families:
