@@ -1469,7 +1469,32 @@
   }
 
   function qaAnswerMeta(payload) {
-    return "";
+    if (!payload || typeof payload !== 'object') return "";
+    var parts = [];
+    var basis = cleanMetaText(firstDefined(payload.basis, payload.trace && payload.trace.basis));
+    var calculations = safeArray(payload.calculations);
+    var citations = safeArray(payload.citations);
+    var risk = payload.hallucination_risk || (payload.risk_metadata && payload.risk_metadata.hallucination_risk) || {};
+    var riskLevel = cleanMetaText(firstDefined(risk.level, ""));
+    var scenarioType = cleanMetaText(firstDefined(payload.scenario_type, ""));
+
+    if (basis) parts.push("Basis - " + basis);
+    if (calculations.length) parts.push("Formula steps - " + calculations.length);
+    if (citations.length) parts.push("Evidence sources - " + citations.length);
+    if (scenarioType && scenarioType !== "deterministic") parts.push("Scenario status - " + scenarioType.replace(/_/g, " "));
+    if (riskLevel) parts.push("Grounding level - " + riskLevel);
+    return parts.join(" · ");
+  }
+
+  function cleanMetaText(value) {
+    var text = String(value || "").trim();
+    if (!text) return "";
+    text = text.replace(/\b(?:llm|vector|graph)\b/gi, "assistant");
+    text = text.replace(/\b(?:run|path|risk):\s*[^\n]+/gi, " ");
+    text = text.replace(/\b(?:run_artifacts|public_packet|neo4j|qdrant|external):\/\/[^\s,;]+/gi, "source");
+    text = text.replace(/\[[^\]]+\]/g, " ");
+    text = text.replace(/\s+/g, " ").trim();
+    return text.slice(0, 180);
   }
 
   function cleanVisibleQaAnswer(value) {
