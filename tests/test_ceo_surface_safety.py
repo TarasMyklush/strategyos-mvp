@@ -1385,19 +1385,17 @@ def test_leaders_corner_single_youtube_link_per_card():
     )
 
 
-def test_leaders_corner_does_not_auto_mount_youtube_player_before_user_choice():
-    """Leaders' Corner must keep the initial surface fully controlled until a user picks a video.
-
-    This prevents third-party localized YouTube chrome from leaking into the first paint.
-    """
+def test_leaders_corner_mounts_playable_inline_youtube_player():
+    """Leaders' Corner must mount the featured video inline and keep fallback only for errors."""
     js = _static_executive_js()
 
     block_start = js.index("function selectLeadersVideo(")
     block_end = js.index("function buildVideoModalHtml(", block_start)
     block = js[block_start:block_end]
-    assert "frameWrapper.hidden = true" in block
-    assert "iframe.src = ''" in block
-    assert "Preview stays in English on this surface." in block
+    assert "frameWrapper.hidden = false" in block
+    assert "youtube-nocookie.com/embed" in block
+    assert "fallback.hidden = true" in block
+    assert "Embed unavailable." in block
 
 
 def test_assistants_tab_no_ai_adoption_wording():

@@ -1167,14 +1167,15 @@ def test_leaders_corner_first_load_initializes_iframe():
 
 
 def test_leaders_corner_single_featured_surface():
-    """Featured surface must stay controlled and English-first on the card."""
+    """Featured surface must be an inline playable embed with fallback preserved."""
     js = _static_executive_js()
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
 
     assert "leaders-featured-fallback" in js, "Fallback card element must exist"
     assert "leaders-featured-iframe" in js, "Featured iframe element must exist"
-    assert "Preview stays in English on this surface." in js
-    assert "iframe.src = ''" in js, "Card preview must clear inline iframe src"
+    assert "youtube-nocookie.com/embed" in js, "Featured card must mount a playable inline embed"
+    assert "frameWrapper.hidden = false" in js
+    assert "fallback.hidden = true" in js
     assert "Watch in player" in js, "Card preview must offer controlled playback CTA"
     assert ".leaders-fallback-card[hidden]" in css, (
         "CSS must preserve hidden override for the fallback shell"

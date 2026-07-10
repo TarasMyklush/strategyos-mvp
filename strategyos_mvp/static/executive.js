@@ -3087,11 +3087,14 @@
       window.clearTimeout(_leadersFallbackTimer);
       _leadersFallbackTimer = null;
     }
-    if (frameWrapper) frameWrapper.hidden = true;
-    if (iframe) iframe.src = '';
+    if (frameWrapper) frameWrapper.hidden = false;
+    if (iframe) {
+      iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(item.id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1';
+      iframe.title = item.title;
+    }
     if (fallback) {
-      fallback.hidden = false;
-      fallback.innerHTML = '<p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Preview stays in English on this surface.</p><p class="leaders-fallback-detail">' + escapeHtml(item.title) + ' — ' + escapeHtml(item.speaker) + '</p><div class="leaders-fallback-actions"><button class="leaders-fallback-watch" type="button">Watch in player</button><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+      fallback.hidden = true;
+      fallback.innerHTML = '<p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Embed unavailable.</p><p class="leaders-fallback-detail">' + escapeHtml(item.title) + ' — ' + escapeHtml(item.speaker) + '</p><div class="leaders-fallback-actions"><button class="leaders-fallback-watch" type="button">Watch in player</button><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
       var watchBtn = fallback.querySelector('.leaders-fallback-watch');
       if (watchBtn) {
         watchBtn.onclick = function () {
