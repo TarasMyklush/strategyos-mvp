@@ -9494,7 +9494,7 @@ def _authenticated_app_help_result(question: str, *, role: str) -> dict[str, Any
         "To process new files in StrategyOS: "
         f"{role_sentence} "
         "Open the operator lane at /app?lane=operate, then use Prepare source pack / Start analysis. "
-        "Upload a .zip source pack or choose a folder from your machine. "
+        "Upload a ZIP source pack or choose a folder from your machine. "
         "StrategyOS stages the files through /source-packs, validates readability, classifies finance roles, "
         "and asks you to confirm spreadsheet column mappings when needed. "
         "When the pack is ready, click Start analysis; if required files are missing, upload the missing files "
