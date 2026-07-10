@@ -6,8 +6,9 @@ COMPOSE_PROFILES="${COMPOSE_PROFILES:-hatchet}"
 ENV_FILE="${ENV_FILE:-deploy/.env}"
 SECRETS_FILE="${SECRETS_FILE:-deploy/.env.secrets}"
 SERVICE="${HATCHET_WORKER_SERVICE:-strategyos-worker}"
-ATTEMPTS="${HATCHET_WORKER_CHECK_ATTEMPTS:-12}"
+ATTEMPTS="${HATCHET_WORKER_CHECK_ATTEMPTS:-24}"
 SLEEP_SECONDS="${HATCHET_WORKER_CHECK_SLEEP_SECONDS:-5}"
+STABILITY_SECONDS="${HATCHET_WORKER_STABILITY_SECONDS:-45}"
 LOG_TAIL="${HATCHET_WORKER_CHECK_LOG_TAIL:-160}"
 
 compose_args=()
@@ -27,6 +28,7 @@ check_logs_for_auth_error() {
 }
 
 last_state=""
+stable_since=""
 for ((attempt = 1; attempt <= ATTEMPTS; attempt += 1)); do
   container_id="$(docker compose "${compose_args[@]}" ps -q "${SERVICE}" 2>/dev/null || true)"
   if [ -z "${container_id}" ]; then
@@ -43,8 +45,17 @@ for ((attempt = 1; attempt <= ATTEMPTS; attempt += 1)); do
     fi
 
     if [ "${status}" = "running" ] && [ "${restart_count}" = "0" ]; then
-      echo "Hatchet worker is running; restart_count=0; no auth-registration errors in recent logs."
-      exit 0
+      if [ -z "${stable_since}" ]; then
+        stable_since="${SECONDS}"
+      fi
+
+      stable_for=$((SECONDS - stable_since))
+      if [ "${stable_for}" -ge "${STABILITY_SECONDS}" ]; then
+        echo "Hatchet worker is running; restart_count=0; stable_for=${stable_for}s; no auth-registration errors in recent logs."
+        exit 0
+      fi
+    else
+      stable_since=""
     fi
   fi
 
