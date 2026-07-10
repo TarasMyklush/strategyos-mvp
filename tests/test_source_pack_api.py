@@ -367,7 +367,7 @@ def test_source_pack_classification_and_run_creation_execute_end_to_end(tmp_path
             assert float(run_payload["total_recoverable_sar"]) > 0
         else:
             assert "Cannot produce polished outputs from weak evidence" in str(run_payload)
-            assert "F-006" in str(run_payload)
+            assert "OCR verification insufficient" in str(run_payload)
     finally:
         _restore_env(original)
 
