@@ -20,6 +20,7 @@ import math
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Callable
 
 from .models import (
@@ -108,6 +109,9 @@ SCENARIO_LABELS: dict[str, str] = {
     "digital_health_roi": "Digital Health — ROI / Investment",
     "digital_health_trend": "Digital Health — Trend & Adoption",
     "digital_health_regulatory": "Digital Health — Regulatory Impact",
+    "recovery_realization": "Finance — Recovery Realization",
+    "fx_hedge": "Finance — FX Hedge",
+    "ebitda_scenario": "Finance — EBITDA Scenario",
     "finance_leakage": "Finance — Leakage & Recovery",
     "finance_working_capital": "Finance — Working Capital",
     "finance_invoice": "Finance — Invoice Analysis",
@@ -136,6 +140,11 @@ def _expand_domain_synonyms(text: str) -> str:
 
 def _sar(value: float) -> str:
     return f"SAR {value:,.2f}"
+
+
+def _sar_decimal(value: Decimal) -> str:
+    rounded = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"SAR {rounded:,.2f}"
 
 
 def _usd(value: float) -> str:
@@ -206,6 +215,277 @@ def _risk_high(basis: str, gap: str) -> HallucinationRisk:
         ],
         verification_path=basis,
     )
+
+
+_SCENARIO_INTENT_RE = re.compile(
+    r"\b(if|assume|assuming|scenario|simulate|model|project|increase|decrease|"
+    r"recover|realize|collect|hedge|change by|what would happen|what happens|"
+    r"impact of|falls?|rises?|flat by|by end of year|eoy)\b",
+    re.IGNORECASE,
+)
+
+_NUMBER_RE = re.compile(
+    r"(?P<prefix>\b(?:sar|usd|eur|aed|gbp)\s*)?"
+    r"(?P<value>[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
+    r"\s*(?P<scale>[kmb])?"
+    r"\s*(?P<suffix>%|\b(?:sar|usd|eur|aed|gbp)\b)?",
+    re.IGNORECASE,
+)
+
+
+def _has_scenario_intent(prompt: str) -> bool:
+    return bool(_SCENARIO_INTENT_RE.search(prompt or ""))
+
+
+def _parse_numeric_tokens(prompt: str) -> list[dict[str, Any]]:
+    tokens: list[dict[str, Any]] = []
+    for match in _NUMBER_RE.finditer(prompt or ""):
+        raw_value = match.group("value")
+        try:
+            value = Decimal(raw_value.replace(",", ""))
+        except (InvalidOperation, AttributeError):
+            continue
+        scale = (match.group("scale") or "").strip().lower()
+        if scale == "k":
+            value *= Decimal("1000")
+        elif scale == "m":
+            value *= Decimal("1000000")
+        elif scale == "b":
+            value *= Decimal("1000000000")
+        prefix = (match.group("prefix") or "").strip().upper()
+        suffix = (match.group("suffix") or "").strip().upper()
+        unit = "%" if suffix == "%" else (prefix or suffix or "")
+        tokens.append(
+            {
+                "raw": match.group(0).strip(),
+                "value": value,
+                "unit": unit,
+                "span": match.span(),
+            }
+        )
+    return tokens
+
+
+def _serialized_prompt_numbers(prompt_numbers: list[dict[str, Any]]) -> list[dict[str, str]]:
+    return [
+        {"raw": str(n["raw"]), "value": str(n["value"]), "unit": str(n["unit"])}
+        for n in prompt_numbers
+    ]
+
+
+def _select_recovery_amount(prompt: str, prompt_numbers: list[dict[str, Any]]) -> dict[str, Any] | None:
+    amount_candidates = [
+        token for token in prompt_numbers
+        if token["unit"] in {"", "SAR"} and token["value"] > 0
+    ]
+    if not amount_candidates:
+        return None
+    for token in amount_candidates:
+        start, end = token["span"]
+        window = _normalize((prompt[max(0, start - 32):start] + " " + prompt[end:end + 24]))
+        if re.search(r"\b(recover|recovery|realize|realise|collect)\b", window):
+            return token
+    return amount_candidates[0]
+
+
+def _scenario_missing_data_result(
+    scenario_id: str,
+    scenario_label: str,
+    answer: str,
+    missing_inputs: list[str],
+    prompt_numbers: list[dict[str, Any]],
+    suggestions: list[str] | None = None,
+) -> ScenarioResult:
+    return ScenarioResult(
+        scenario_id=scenario_id,
+        scenario_label=scenario_label,
+        matched=True,
+        answer=answer,
+        calculations=[
+            CalculationStep(
+                step_id="scenario_validation",
+                description="Scenario request validation failed closed because governed inputs are missing",
+                formula="VALIDATE(required_inputs) before calculation",
+                inputs={
+                    "missing_inputs": missing_inputs,
+                    "prompt_numbers": _serialized_prompt_numbers(prompt_numbers),
+                },
+                result="missing_governed_inputs",
+                unit=None,
+                citations=[],
+            )
+        ],
+        kg_context=[],
+        citations=[],
+        assumptions=[],
+        hallucination_risk=HallucinationRisk(
+            level=HallucinationRiskLevel.NONE,
+            score=0.0,
+            factors=[{"name": "fail_closed", "detail": "No unsupported financial calculation was generated."}],
+            traceable=True,
+            mitigations=["Load the missing governed inputs, then rerun the scenario."],
+            verification_path="Scenario validation stopped before calculation.",
+        ),
+        suggestions=suggestions or ["Load governed baseline inputs", "Ask about recoverable leakage using current findings"],
+        scenario_type="missing_data",
+        basis="Recognized numeric scenario intent, but required governed inputs were unavailable.",
+    )
+
+
+def _recoverable_total_from_findings(findings: list[Any]) -> Decimal:
+    total = Decimal("0")
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        raw = finding.get("recoverable_sar", finding.get("recoverable", 0)) or 0
+        try:
+            total += Decimal(str(raw))
+        except (InvalidOperation, ValueError):
+            continue
+    return total
+
+
+def _parse_recovery_realization(prompt: str, context: dict[str, Any]) -> ScenarioResult | None:
+    if _public_packet(context):
+        return None
+    norm = _normalize(prompt)
+    if not _has_scenario_intent(prompt):
+        return None
+    if not any(token in norm for token in ("recover", "recovery", "realize", "collect", "remaining", "remains")):
+        return None
+
+    prompt_numbers = _parse_numeric_tokens(prompt)
+    recovery_amount = _select_recovery_amount(prompt, prompt_numbers)
+    if recovery_amount is None:
+        return _scenario_missing_data_result(
+            scenario_id="recovery_realization",
+            scenario_label="Finance - Recovery Realization",
+            answer=(
+                "I can model recovery only after the recovery amount is explicit. "
+                "Ask for example: if we recover SAR 400,000, what remains?"
+            ),
+            missing_inputs=["realized_recovery_amount_sar"],
+            prompt_numbers=prompt_numbers,
+            suggestions=["If we recover SAR 400,000, what remains?"],
+        )
+
+    findings = context.get("findings") or []
+    baseline = _recoverable_total_from_findings(findings)
+    if baseline <= 0:
+        return _scenario_missing_data_result(
+            scenario_id="recovery_realization",
+            scenario_label="Finance - Recovery Realization",
+            answer=(
+                "I cannot calculate the recovery scenario because the current governed run "
+                "does not expose a recoverable-value baseline."
+            ),
+            missing_inputs=["baseline_recoverable_sar"],
+            prompt_numbers=prompt_numbers,
+            suggestions=["Run governed finance analysis", "Show current recoverable leakage"],
+        )
+
+    realized = recovery_amount["value"]
+    remaining = max(Decimal("0"), baseline - realized)
+    capped_realized = min(realized, baseline)
+    realization_rate = capped_realized / baseline if baseline else Decimal("0")
+    over_recovery = realized > baseline
+
+    citations = [{"source_path": "run_artifacts://findings", "locator": "recoverable_sar aggregation", "excerpt": ""}]
+    calculations = [
+        CalculationStep(
+            step_id="baseline_recoverable",
+            description="Current governed recoverable-value baseline",
+            formula="SUM(recoverable_sar) over current run findings",
+            inputs={"finding_count": len([f for f in findings if isinstance(f, dict)])},
+            result=_sar_decimal(baseline),
+            unit="SAR",
+            citations=citations,
+        ),
+        CalculationStep(
+            step_id="remaining_recoverable",
+            description="Recoverable value remaining after user-provided realization",
+            formula="remaining_recoverable = baseline_recoverable - realized_amount",
+            inputs={
+                "baseline_recoverable_sar": str(baseline),
+                "realized_amount_sar": str(realized),
+                "prompt_amount": recovery_amount["raw"],
+                "prompt_numbers": _serialized_prompt_numbers(prompt_numbers),
+            },
+            result=_sar_decimal(remaining),
+            unit="SAR",
+            citations=citations,
+            assumptions=["Recovery realization changes value remaining; it does not automatically clear evidence challenges or board approvals."],
+        ),
+        CalculationStep(
+            step_id="realization_rate",
+            description="Share of current recoverable value realized by the scenario",
+            formula="realization_rate = min(realized_amount, baseline_recoverable) / baseline_recoverable",
+            inputs={"capped_realized_sar": str(capped_realized), "baseline_recoverable_sar": str(baseline)},
+            result=_percent(float(realization_rate), 2),
+            unit="ratio",
+            citations=citations,
+        ),
+    ]
+    answer = (
+        f"If SAR {realized:,.2f} is recovered, remaining recoverable value falls from "
+        f"{_sar_decimal(baseline)} to {_sar_decimal(remaining)}. "
+        f"That realizes {_percent(float(realization_rate), 2)} of the current recoverable baseline. "
+        "Board readiness does not automatically clear: evidence status, challenges, approvals, and collection proof still need to be closed separately."
+    )
+    if over_recovery:
+        answer += " The requested recovery amount is above the current baseline, so the remaining value is capped at SAR 0.00."
+
+    return ScenarioResult(
+        scenario_id="recovery_realization",
+        scenario_label="Finance - Recovery Realization",
+        matched=True,
+        answer=answer,
+        calculations=calculations,
+        kg_context=[],
+        citations=citations,
+        assumptions=["User-provided recovery amount is treated as a scenario assumption, not an actual collection event."],
+        hallucination_risk=_risk_none("Deterministic recovery realization from current run findings and explicit user amount."),
+        suggestions=["Show calculation trace", "What evidence still blocks board readiness?", "Show top recoverable findings"],
+        scenario_type="deterministic",
+        basis="Scenario parser matched recovery realization and applied the user-provided amount to current run findings.",
+    )
+
+
+def _parse_financial_what_if_guard(prompt: str, context: dict[str, Any]) -> ScenarioResult | None:
+    if _public_packet(context):
+        return None
+    norm = _normalize(prompt)
+    if not _has_scenario_intent(prompt):
+        return None
+
+    prompt_numbers = _parse_numeric_tokens(prompt)
+    if any(token in norm for token in ("hedge", "eur", "euro", "fx", "currency")):
+        return _scenario_missing_data_result(
+            scenario_id="fx_hedge",
+            scenario_label="Finance - FX Hedge",
+            answer=(
+                "I cannot calculate the hedge scenario from the current governed run because EUR exposure, "
+                "FX movement or hedge-rate assumptions, hedge cost, and period are not all available."
+            ),
+            missing_inputs=["eur_exposure", "fx_rate_change_or_forward_rate", "hedge_cost", "scenario_period"],
+            prompt_numbers=prompt_numbers,
+            suggestions=["Load EUR exposure and FX assumptions", "Ask for current FX risk evidence"],
+        )
+
+    if any(token in norm for token in ("revenue", "cost", "costs", "ebitda", "margin", "opex", "cogs")):
+        return _scenario_missing_data_result(
+            scenario_id="ebitda_scenario",
+            scenario_label="Finance - EBITDA Scenario",
+            answer=(
+                "I cannot calculate the EBITDA scenario from the current governed run because revenue, "
+                "cost baseline, compatible period, and scope are not all available."
+            ),
+            missing_inputs=["baseline_revenue", "baseline_costs", "period", "scope"],
+            prompt_numbers=prompt_numbers,
+            suggestions=["Load income-statement baselines", "Ask about recoverable leakage in the current run"],
+        )
+
+    return None
 
 
 def _kg_evidence(bundle: Any, role: str, locator: str) -> dict[str, Any]:
@@ -510,7 +790,7 @@ def _parse_digital_health_eoy_flat(
                 confidence=0.72,
             )
         ]
-    else:
+    elif bool(context.get("illustrative_mode")):
         # No Digital Health data — return explicit "no data" with synthetic fallback
         calcs.append(CalculationStep(
             step_id="dh_no_data",
@@ -581,6 +861,26 @@ def _parse_digital_health_eoy_flat(
                 confidence=0.3,
             )
         ]
+    else:
+        return _scenario_missing_data_result(
+            scenario_id="digital_health_eoy_flat",
+            scenario_label=SCENARIO_LABELS["digital_health_eoy_flat"],
+            answer=(
+                "I cannot model Digital Health flat-by-EOY from the current governed run because "
+                "no Digital Health time-series, adoption, revenue, or initiative baseline is available. "
+                "Illustrative external benchmarks are disabled unless illustrative mode is explicitly selected."
+            ),
+            missing_inputs=[
+                "digital_health_baseline",
+                "digital_health_period",
+                "digital_health_actuals_or_time_series",
+            ],
+            prompt_numbers=_parse_numeric_tokens(prompt),
+            suggestions=[
+                "Load Digital Health revenue or adoption actuals",
+                "Enable illustrative mode for external benchmark exploration",
+            ],
+        )
 
     return ScenarioResult(
         scenario_id=scenario_id,
@@ -2000,6 +2300,9 @@ class ScenarioFamily:
 
 
 SCENARIO_FAMILIES: tuple[ScenarioFamily, ...] = (
+    # Governed numeric scenarios must run before legacy factual packet handlers.
+    ScenarioFamily("recovery_realization", _parse_recovery_realization, priority=0),
+    ScenarioFamily("financial_what_if_guard", _parse_financial_what_if_guard, priority=0),
     # Digital Health families (higher priority — check before generic finance)
     ScenarioFamily("digital_health_eoy_flat", _parse_digital_health_eoy_flat, priority=1),
     ScenarioFamily("digital_health_market", _parse_digital_health_market, priority=2),

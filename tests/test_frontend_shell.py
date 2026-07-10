@@ -3807,7 +3807,8 @@ console.log(JSON.stringify({{
     result = json.loads(completed.stdout.strip())
     assert result["answerText"].startswith("Since last week, NUPCO awards were confirmed")
     assert '"matched"' not in result["answerText"]
-    assert result["answerMeta"] == ""
+    assert "Basis - outer wrapper" in result["answerMeta"]
+    assert "Evidence sources - 1" in result["answerMeta"]
 
 
 def test_qa_answer_text_extracts_answer_from_truncated_jsonish_payload_behaviorally():
