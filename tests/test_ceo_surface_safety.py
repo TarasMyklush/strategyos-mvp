@@ -1407,15 +1407,12 @@ def test_assistants_tab_no_ai_adoption_wording():
     html = _ceo_executive_html()
     design_path = Path(__file__).resolve().parent.parent / \
         "strategyos_mvp" / "static" / "executive_design_data.js"
-    design = design_path.read_text()
 
-    # Design data must not contain 'AI adoption'
-    assert "AI adoption" not in design, (
-        "executive_design_data.js must not contain 'AI adoption' wording"
-    )
-    # Design data must use 'team readiness' 
-    assert "team readiness" in design, (
-        "executive_design_data.js must use 'team readiness' wording"
+    # The client-side design fixture was deleted outright (UI DB-purity):
+    # its absence is the strongest guarantee no fixture wording can render.
+    assert not design_path.exists(), (
+        "executive_design_data.js must stay deleted -- the executive surface "
+        "must not ship a client-side design fixture"
     )
 
     # Served HTML static subtitle must not contain old wording

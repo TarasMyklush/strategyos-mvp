@@ -918,11 +918,28 @@
     return firstDefined(POLISHED_LABELS[personaId], contract.label, humanizeToken(personaId), "Group CEO");
   }
 
+  function sessionDisplayName() {
+    var session = state.session || {};
+    if (!session.authenticated) return "";
+    return String(firstDefined(session.display_name, session.display_subject, "")).trim();
+  }
+
+  function tenantDisplayName() {
+    var sessionTenant = (state.session || {}).tenant_context || {};
+    var packetTenant = (state.latestPacket || {}).tenant_context || {};
+    var modes = (state.latestPacket || {}).executive_modes || {};
+    return String(firstDefined(
+      sessionTenant.tenant_name,
+      packetTenant.tenant_name,
+      modes.company_label,
+      "StrategyOS"
+    )).trim();
+  }
+
   function executiveIdentityInitials(personaId) {
-    var networkEntry = getAssistantNetwork().find(function (item) {
-      return item && item.persona === personaId;
-    }) || {};
-    var fullName = String(firstDefined(networkEntry.who, "")).trim();
+    // Identity comes from the authenticated session, never from a fixture
+    // person -- there is no real person behind a persona in the data model.
+    var fullName = sessionDisplayName();
     var initials = fullName
       .split(/\s+/)
       .filter(Boolean)
@@ -938,7 +955,6 @@
       .slice(0, 2)
       .join("");
 
-    if (personaId === "ceo") return "KA";
     return fallbackInitials || "GC";
   }
 
@@ -1292,9 +1308,8 @@
 
   function getHeroPrompts() {
     var gravity = getDrilldown().gravity || {};
-    var blueprint = getPersonaBlueprint(state.activePersona);
     var chatPrompts = safeArray(getChatContract().starter_prompts);
-    return safeArray(gravity.prompts).length ? safeArray(gravity.prompts) : (chatPrompts.length ? chatPrompts : safeArray(blueprint.prompts));
+    return safeArray(gravity.prompts).length ? safeArray(gravity.prompts) : chatPrompts;
   }
 
   function storageArea() {
@@ -1815,12 +1830,16 @@
   }
 
   function threadStore() {
-    window.MIZAN_X = window.MIZAN_X || { threads: {}, assistants: {} };
-    return window.MIZAN_X.threads;
+    window.STRATEGYOS_X = window.STRATEGYOS_X || { threads: {}, assistants: {} };
+    return window.STRATEGYOS_X.threads;
   }
 
   function currentThreadKey() {
-    return state.activeThreadKey || (state.activePersona + ":briefing");
+    return state.activeThreadKey || firstDefined(getChatContract().active_thread_id, state.activePersona + ":new");
+  }
+
+  function isRetiredFixtureThread(key) {
+    return /:(?:briefing|hedge|recognition)$/.test(String(key || ""));
   }
 
   function ensureThreads() {
@@ -1831,6 +1850,7 @@
     var persisted = loadStoredThreads();
     Object.keys(persisted).forEach(function (key) {
       if (threadStore()[key]) return;
+      if (isRetiredFixtureThread(key, persisted[key])) return;
       // CEO persona: filter out stale threads that would pollute context
       if (state.activePersona === "ceo") {
         var thread = persisted[key];
@@ -1848,16 +1868,7 @@
       threadStore()[key] = persisted[key];
       markThreadTransportFailuresRetryable(threadStore()[key]);
     });
-    var seededThreads = safeArray(chat.threads).length ? safeArray(chat.threads) : safeArray(blueprint.threads).map(function (thread, index) {
-      return {
-        thread_id: state.activePersona + ":" + firstDefined(thread.key, "thread-" + (index + 1)),
-        title: firstDefined(thread.title, "Thread"),
-        preview: firstDefined(thread.preview, blueprint.brief, "Board-safe follow-up"),
-        starter_prompt: firstDefined(thread.preview, thread.title, ""),
-        read_only: false,
-        kind: "starter"
-      };
-    });
+    var seededThreads = safeArray(chat.threads);
     seededThreads.forEach(function (thread, index) {
       var key = firstDefined(thread.thread_id, state.activePersona + ":" + firstDefined(thread.key, "thread-" + (index + 1)));
       if (!threadStore()[key]) {
@@ -2118,7 +2129,7 @@
     var assistantGlyph = firstDefined(activePersona.assistant_glyph, blueprint.assistantGlyph, "◆");
     var initials = executiveIdentityInitials(state.activePersona);
 
-    if (org) org.textContent = "Mizan Group";
+    if (org) org.textContent = tenantDisplayName();
     // Logo click → reset to home view
     var brandEl = document.querySelector('.brand');
     if (brandEl) {
@@ -2289,10 +2300,10 @@
       var avg = network.length ? Math.round(network.reduce(function (sum, item) { return sum + Number(item.score || 0); }, 0) / network.length) : 0;
       var stale = network.filter(function (item) { return Number(item.score || 0) < 70; }).length;
       card.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'A read on current usage, freshness, and context depth across Mizan.')) + '</p></div><span class="pill-inline ok">target ' + escapeHtml(String(firstDefined(meta.target, 80))) + '+</span></div>',
+        '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'A read on current usage, freshness, and context depth across your organization.')) + '</p></div><span class="pill-inline ok">target ' + escapeHtml(String(firstDefined(meta.target, 80))) + '+</span></div>',
         '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(avg)) + '</strong><span>Team readiness score</span></div><div class="network-meta"><span class="pill-inline ok">Healthy</span><span class="pill-inline warn">Check-in needed</span><span class="pill-inline danger">Stale · ' + escapeHtml(String(stale)) + ' leader' + (stale !== 1 ? 's' : '') + '</span></div></div>',
         '<div class="network-list"><div class="network-list-head"><span class="sr-only">Score</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">Freshness</span><span class="network-list-head__stat">Used</span><span class="network-list-head__stat">Context</span></div></div>' + network.map(function (item) {
-          return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Mizan Group')) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
+          return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
         }).join('') + '</div>'
       ].join('');
     }
@@ -2341,7 +2352,7 @@
 
     tabs.innerHTML = exchanges.map(function (exchange) {
       var status = String(firstDefined(exchange.status, "active"));
-      return '<button type="button" class="a2a-tab' + (exchange.id === active.id ? ' is-active' : '') + '" data-a2a-id="' + escapeHtml(exchange.id) + '"><span class="a2a-dot ' + escapeHtml(status.toLowerCase()) + '"></span>' + escapeHtml(firstDefined(exchange.with, 'Assistant')) + '<span class="a2a-tab-unit"> · ' + escapeHtml(firstDefined(exchange.unit, 'Mizan lane')) + '</span></button>';
+      return '<button type="button" class="a2a-tab' + (exchange.id === active.id ? ' is-active' : '') + '" data-a2a-id="' + escapeHtml(exchange.id) + '"><span class="a2a-dot ' + escapeHtml(status.toLowerCase()) + '"></span>' + escapeHtml(firstDefined(exchange.with, 'Assistant')) + '<span class="a2a-tab-unit"> · ' + escapeHtml(firstDefined(exchange.unit, 'governed lane')) + '</span></button>';
     }).join('');
     safeArray(tabs.querySelectorAll("[data-a2a-id]")).forEach(function (button) {
       button.onclick = function () {
@@ -2750,8 +2761,7 @@
     var publication = getPublication();
     var boardPortal = getBoardPortal();
     var agents = getAgentsModule();
-    var networkEntry = getAssistantNetwork().find(function (item) { return item && item.persona === state.activePersona; }) || {};
-    var fullName = String(firstDefined(networkEntry.who, state.activePersona === "ceo" ? "Khalid Al-Rashed" : "")).trim();
+    var fullName = sessionDisplayName();
     var firstName = fullName ? fullName.split(/\s+/)[0] : getPersonaLabel(state.activePersona);
     var preferredHero = blueprint.health || {};
     var score = Number(firstDefined(hero.score, 0));

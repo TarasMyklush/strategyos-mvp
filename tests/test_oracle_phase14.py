@@ -36,33 +36,30 @@ def test_phase14_cfo_surface_is_oracle_first() -> None:
 
 
 def test_phase14_ceo_surface_reflects_oracle_backed_finance_rings() -> None:
+    # executive_design_data.js was deleted (UI DB-purity): the executive
+    # surface no longer ships a client-side fixture, so only the twins CEO
+    # page assertions remain meaningful here.
     ceo_text = _read("strategyos_mvp", "twins", "static", "ceo.html")
-    executive_data = _read("strategyos_mvp", "static", "executive_design_data.js")
 
     assert "Oracle-backed financial rings" in ceo_text
     assert "deterministic Oracle pilot outputs" in ceo_text
     assert "Revenue attainment ring" in ceo_text
     assert "EBITDA margin ring" in ceo_text
-    assert "Oracle-backed finance rings now drive the CEO surface" in executive_data
-    assert "Oracle-backed · deterministic" in executive_data
 
 
 def test_phase14_operational_items_are_marked_manual_or_deferred() -> None:
     ceo_text = _read("strategyos_mvp", "twins", "static", "ceo.html")
     cfo_text = _read("strategyos_mvp", "twins", "static", "cfo.html")
-    executive_data = _read("strategyos_mvp", "static", "executive_design_data.js")
 
     for expected in ["Cold-chain", "e-Rx", "LfL", "occupancy"]:
-        assert expected in ceo_text or expected in cfo_text or expected in executive_data
+        assert expected in ceo_text or expected in cfo_text
     assert "manual / deferred" in ceo_text
     assert "manual / deferred" in cfo_text
-    assert "manual / deferred" in executive_data
 
 
 def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     plan_html = _read("strategyos_mvp", "static", "plan.html")
     executive_html = _read("strategyos_mvp", "static", "executive.html")
-    executive_data = _read("strategyos_mvp", "static", "executive_design_data.js")
 
     assert "Live tracker" in plan_html
     assert "Loading governed execution tracker truth" in plan_html
@@ -70,7 +67,6 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     assert "/static/plan_data.js" not in plan_html
     assert "Group CEO Diagnostics" in executive_html
     assert "window payload as execution truth" in _plan_data()
-    assert "Twin-platform history remains visible" in executive_data
     assert "Diagnostics" in executive_html
     assert "Assistants" in executive_html
     assert "Knowledge" in executive_html

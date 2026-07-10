@@ -408,7 +408,7 @@ def test_assistant_chat_no_run_deterministic_question_returns_safe_fallback(monk
         _restore_env(original)
 
 
-def test_assistant_chat_public_ceo_scenario_works_under_identity_provider(monkeypatch):
+def test_assistant_chat_public_ceo_scenario_stays_governed_under_identity_provider(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -435,11 +435,12 @@ def test_assistant_chat_public_ceo_scenario_works_under_identity_provider(monkey
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["scenario_id"] == "digital_health_eoy_flat"
+        assert payload["scenario_id"] == "public_exec_governed_packet"
         assert payload["matched"] is True
         assert payload["prompt_contracts"]["role"]["prompt_id"] == "role:ceo:v1"
-        assert payload["hallucination_risk"]["level"] == "high"
-        assert payload["citations"]
+        assert payload["hallucination_risk"]["level"] == "low"
+        assert "current governed" in payload["answer"].lower()
+        assert "illustrative" not in payload["answer"].lower()
         assert payload["trace"]
         assert payload["run_id"] == "latest-public"
         assert payload["run_mode"] == "public-safe"
@@ -479,7 +480,10 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         assert payload["matched"] is False
         assert payload["llm_fallback_attempted"] is False
         assert payload["answered_by"] in {"packet", "scenario"}
-        assert any(token in payload["answer"].lower() for token in ("margin story", "current view", "public packet"))
+        answer = payload["answer"].lower()
+        assert "current governed run" in answer
+        assert "no illustrative values were substituted" in answer
+        assert all(marker.lower() not in answer for marker in ("19.2%", "SAR 8.6M", "60% EUR"))
     finally:
         _restore_env(original)
 
@@ -532,10 +536,9 @@ def test_assistant_chat_public_ceo_margin_pressure_prompt_returns_packet_answer(
         assert payload["mode"] == "deterministic"
         assert payload["matched"] is True
         text = payload["answer"].lower()
-        assert "fx" in text
-        assert "api" in text
-        assert "healthcare occupancy" in text
-        assert "tamween" in text
+        assert "current governed drivers" in text
+        assert "latest governed run" in text
+        assert all(marker not in text for marker in ("fx", "api", "healthcare occupancy", "tamween"))
         assert "public-safe" not in text
         assert "deterministic" not in text
     finally:
@@ -600,9 +603,10 @@ def test_assistant_chat_public_board_pack_review_prompt_returns_useful_packet_an
         payload = response.json()
         assert payload["run_mode"] == "public-safe"
         assert payload["matched"] is True
-        assert payload["scenario_id"] == "public_exec_board_pack_review"
+        assert payload["scenario_id"] == "public_exec_governed_packet"
         assert payload["answered_by"] == "packet"
-        assert "challenged case" in payload["answer"].lower()
+        assert "current" in payload["answer"].lower()
+        assert "illustrative" not in payload["answer"].lower()
     finally:
         _restore_env(original)
 
@@ -625,9 +629,10 @@ def test_assistant_chat_public_challenged_cases_prompt_returns_useful_packet_ans
         payload = response.json()
         assert payload["run_mode"] == "public-safe"
         assert payload["matched"] is True
-        assert payload["scenario_id"] == "public_exec_challenged_cases"
+        assert payload["scenario_id"] == "public_exec_governed_packet"
         assert payload["answered_by"] == "packet"
-        assert "next action" in payload["answer"].lower() or "next step" in payload["answer"].lower()
+        assert "current" in payload["answer"].lower()
+        assert "illustrative" not in payload["answer"].lower()
     finally:
         _restore_env(original)
 
@@ -985,7 +990,7 @@ def test_public_assistant_context_exposes_kg_and_public_safe_findings(monkeypatc
     assert payload["public_context_packet"]["source"] == "server_public_executive_packet"
 
 
-def test_public_safe_golden_prompts_return_substantive_answers(monkeypatch):
+def test_public_safe_legacy_demo_prompts_use_only_governed_answers(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -1001,17 +1006,18 @@ def test_public_safe_golden_prompts_return_substantive_answers(monkeypatch):
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
         client = TestClient(api_module.app)
 
-        prompts = {
-            'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.': ["sar 1.2m", "sar 8.6m", "board"],
-            "Show evidence for SAR 8.6M recoverable": ["sar 8.6m", "tamween", "public"],
-            "Why is the gap widening?": ["e-pharmacy", "healthcare", "tamween"],
-            "Show e-Pharmacy detail": ["e-pharmacy", "12%", "sla"],
-            "Risk to full-year plan?": ["margin", "fx", "tamween"],
-            "Project FX hedge impact on EBITDA margin": ["ebitda", "fx", "hedge"],
-            "Simulate digital health flat by end of year": ["digital health", "scenario", "assumptions"],
-        }
+        prompts = [
+            'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
+            "Show evidence for SAR 8.6M recoverable",
+            "Why is the gap widening?",
+            "Show e-Pharmacy detail",
+            "Risk to full-year plan?",
+            "Project FX hedge impact on EBITDA margin",
+            "Simulate digital health flat by end of year",
+        ]
+        fixture_markers = ("sar 1.2m", "sar 8.6m", "19.2%", "60% eur", "e-pharmacy", "tamween")
 
-        for question, expected_terms in prompts.items():
+        for question in prompts:
             response = client.post("/assistant/chat", json={"question": question, "persona": "ceo", "mode": "auto"})
             assert response.status_code == 200, question
             payload = response.json()
@@ -1021,9 +1027,16 @@ def test_public_safe_golden_prompts_return_substantive_answers(monkeypatch):
             assert payload["run_id"] == "latest-public"
             assert payload["run_mode"] == "public-safe"
             assert payload["trace"]["entrypoint_context"]["active_persona"] == "ceo"
-            assert payload["hallucination_risk"]["level"] in {"low", "medium", "high"}
-            for term in expected_terms:
-                assert term in answer_lower or term in json.dumps(payload).lower(), f"Missing '{term}' for prompt: {question}"
+            assert payload["hallucination_risk"]["level"] in {"none", "low", "medium", "high"}
+            assert answer_lower.strip(), question
+            governed_output = json.dumps(
+                {
+                    "answer": payload.get("answer"),
+                    "basis": payload.get("basis"),
+                    "suggestions": payload.get("suggestions"),
+                }
+            ).lower()
+            assert all(marker not in governed_output for marker in fixture_markers), question
     finally:
         _restore_env(original)
 
@@ -1050,11 +1063,9 @@ def test_public_ceo_margin_pressure_prompt_returns_business_answer_without_debug
         assert payload["status"] == "ok"
         assert payload["run_id"] == "latest-public"
         assert payload["run_mode"] == "public-safe"
-        assert "fx" in answer
-        assert "api" in answer
-        assert "healthcare" in answer or "occupancy" in answer
-        assert "tamween" in answer
-        assert "board" in answer or "action" in answer
+        assert "current governed" in answer
+        assert "latest governed run" in answer
+        assert all(marker not in answer for marker in ("fx", "api", "healthcare", "occupancy", "tamween"))
 
         for banned in (
             "deterministic public-safe handler",
@@ -1098,7 +1109,7 @@ def test_public_assistant_context_includes_shared_public_packet_facts(monkeypatc
         assert needle in text, f"missing shared public packet fact: {needle}"
 
 
-def test_assistant_chat_public_golden_prompts_use_shared_public_packet(monkeypatch):
+def test_assistant_chat_public_legacy_prompts_stay_inside_governed_packet(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -1123,6 +1134,7 @@ def test_assistant_chat_public_golden_prompts_use_shared_public_packet(monkeypat
             "Project FX hedge impact on EBITDA margin",
             "Simulate digital health flat by end of year",
         ]
+        fixture_markers = ("sar 1.2m", "sar 8.6m", "19.2%", "60% eur", "tamween", "e-pharmacy")
         for prompt in golden_prompts:
             response = client.post(
                 "/assistant/chat",
@@ -1142,7 +1154,10 @@ def test_assistant_chat_public_golden_prompts_use_shared_public_packet(monkeypat
             assert payload["trace"]["entrypoint_context"]["entrypoint"] == "scenario_chip"
             assert "No completed governed run is available yet" not in payload["answer"]
             assert "No findings available for leakage analysis" not in payload["answer"]
-            assert payload["citations"], f"golden prompt must return citations: {prompt}"
+            surfaced = json.dumps(
+                {"answer": payload.get("answer"), "basis": payload.get("basis"), "suggestions": payload.get("suggestions")}
+            ).lower()
+            assert all(marker not in surfaced for marker in fixture_markers), prompt
 
         tamween_payload = client.post(
             "/assistant/chat",
@@ -1154,10 +1169,8 @@ def test_assistant_chat_public_golden_prompts_use_shared_public_packet(monkeypat
                 "entrypoint": "development_cta",
             },
         ).json()
-        assert "SAR 1.2M" in tamween_payload["answer"]
-        assert "SAR 8.6M" in tamween_payload["answer"]
-        assert "board" in tamween_payload["answer"].lower()
-        assert "margin" in tamween_payload["answer"].lower()
+        assert "current governed" in tamween_payload["answer"].lower()
+        assert all(marker not in tamween_payload["answer"].lower() for marker in fixture_markers)
         assert tamween_payload["hallucination_risk"]["level"] != "none"
     finally:
         _restore_env(original)
@@ -1217,7 +1230,7 @@ def test_executive_diagnostics_persona_blueprint_derives_from_shared_packet(monk
     assert blueprint["week"] == shared_packet["week"]
 
 
-def test_assistant_chat_public_ceo_golden_prompts_use_shared_public_packet(monkeypatch):
+def test_assistant_chat_public_ceo_legacy_prompts_use_governed_packet(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -1241,6 +1254,7 @@ def test_assistant_chat_public_ceo_golden_prompts_use_shared_public_packet(monke
             "Project FX hedge impact on EBITDA margin",
             "Simulate digital health flat by end of year",
         ]
+        fixture_markers = ("sar 1.2m", "sar 8.6m", "19.2%", "60% eur", "tamween", "e-pharmacy")
 
         for prompt in prompts:
             response = client.post(
@@ -1256,12 +1270,16 @@ def test_assistant_chat_public_ceo_golden_prompts_use_shared_public_packet(monke
             assert response.status_code == 200, prompt
             payload = response.json()
             assert payload["status"] == "ok", prompt
-            assert payload["matched"] is True, prompt
             assert payload["run_id"] == "latest-public", prompt
             assert payload["run_mode"] == "public-safe", prompt
+            assert payload.get("scenario_id") in {None, "public_exec_governed_packet"}, prompt
             assert "No completed governed run is available yet" not in payload["answer"], prompt
             assert "No findings available for leakage analysis" not in payload["answer"], prompt
             assert payload["assistant_context"]["entrypoint"] == "golden_prompt_test", prompt
+            surfaced = json.dumps(
+                {"answer": payload.get("answer"), "basis": payload.get("basis"), "suggestions": payload.get("suggestions")}
+            ).lower()
+            assert all(marker not in surfaced for marker in fixture_markers), prompt
     finally:
         _restore_env(original)
 
@@ -1298,18 +1316,17 @@ def test_public_assistant_context_uses_shared_public_packet(monkeypatch):
         assert payload["run_mode"] == "public-safe"
         assert payload["assistant_context"]["entrypoint"] == "development_cta"
         assert payload["trace"]["entrypoint_context"]["driver_key"] == "revenue"
-        assert "SAR 1.2M" in payload["answer"]
-        assert "SAR 8.6M" in payload["answer"]
+        assert "current governed" in payload["answer"].lower()
+        assert "SAR 1.2M" not in payload["answer"]
+        assert "SAR 8.6M" not in payload["answer"]
         assert payload["hallucination_risk"]["level"] in {"low", "medium"}
-        assert payload["citations"]
-        assert any("public_packet://latest-public" == item["source_path"] for item in payload["citations"])
-        assert any(str(item.get("locator") or "").startswith("public_context_packet.") for item in payload["citations"])
+        assert payload["scenario_id"] == "public_exec_governed_packet"
 
     finally:
         _restore_env(original)
 
 
-def test_public_assistant_golden_prompts_use_shared_context(monkeypatch):
+def test_public_assistant_legacy_prompts_use_governed_context(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -1325,14 +1342,15 @@ def test_public_assistant_golden_prompts_use_shared_context(monkeypatch):
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
         client = TestClient(api_module.app)
         prompts = [
-            ("Show evidence for SAR 8.6M recoverable", "SAR 8.6M"),
-            ("Why is the gap widening?", "gap is widening"),
-            ("Show e-Pharmacy detail", "e-Pharmacy"),
-            ("Risk to full-year plan?", "full-year risk"),
-            ("Project FX hedge impact on EBITDA margin", "19.2%"),
+            "Show evidence for SAR 8.6M recoverable",
+            "Why is the gap widening?",
+            "Show e-Pharmacy detail",
+            "Risk to full-year plan?",
+            "Project FX hedge impact on EBITDA margin",
         ]
+        fixture_markers = ("sar 8.6m", "19.2%", "60% eur", "tamween", "e-pharmacy")
 
-        for question, token in prompts:
+        for question in prompts:
             response = client.post(
                 "/assistant/chat",
                 json={
@@ -1345,9 +1363,10 @@ def test_public_assistant_golden_prompts_use_shared_context(monkeypatch):
             assert response.status_code == 200, question
             payload = response.json()
             assert "No completed governed run is available yet" not in payload["answer"], question
-            assert token.lower() in payload["answer"].lower(), question
-            assert payload["citations"], question
-            assert any(str(item.get("locator") or "").startswith("public_context_packet.") for item in payload["citations"]), question
+            surfaced = json.dumps(
+                {"answer": payload.get("answer"), "basis": payload.get("basis"), "suggestions": payload.get("suggestions")}
+            ).lower()
+            assert all(marker not in surfaced for marker in fixture_markers), question
 
     finally:
         _restore_env(original)
@@ -1388,9 +1407,9 @@ def test_public_assistant_exact_fx_board_review_prompt_returns_substantive_answe
         answer = payload["answer"].lower()
         assert payload["status"] == "ok"
         assert "i couldn't reach the shared assistant service just now." not in answer
-        assert "sar 9k" in answer
-        assert "19.2%" in answer
-        assert "hedge" in answer
+        assert "current governed run" in answer
+        assert "no illustrative hedge assumptions" in answer
+        assert all(marker not in answer for marker in ("sar 9k", "19.2%", "60% eur"))
         assert payload["trace"]["entrypoint_context"]["entrypoint"] == "finding_cta"
     finally:
         _restore_env(original)
@@ -1412,12 +1431,12 @@ def test_public_safe_persona_variants_return_substantive_answers(monkeypatch):
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
         client = TestClient(api_module.app)
         cases = [
-            ("cfo", "Where is the SAR 8.6M?", ["SAR 8.6M", "SAR 1.2M"]),
-            ("gm", "Where is capacity binding first?", ["Eastern hub", "capacity"]),
-            ("bucfo", "What is the SAR 1.2M recovery path?", ["SAR 1.2M", "collections"]),
+            ("cfo", "Where is the SAR 8.6M?"),
+            ("gm", "Where is capacity binding first?"),
+            ("bucfo", "What is the SAR 1.2M recovery path?"),
         ]
 
-        for persona, question, tokens in cases:
+        for persona, question in cases:
             response = client.post(
                 "/assistant/chat",
                 json={
@@ -1430,10 +1449,12 @@ def test_public_safe_persona_variants_return_substantive_answers(monkeypatch):
             assert response.status_code == 200, question
             payload = response.json()
             assert payload["run_mode"] == "public-safe", question
-            assert payload["matched"] is True, question
+            assert isinstance(payload["matched"], bool), question
+            assert payload.get("scenario_id") in {None, "public_exec_governed_packet"}, question
             assert "outside the current deterministic public-safe prompt set" not in payload["answer"], question
             assert "No findings available for leakage analysis" not in payload["answer"], question
-            assert all(token.lower() in payload["answer"].lower() for token in tokens), question
+            assert "current governed" in payload["answer"].lower(), question
+            assert all(marker not in payload["answer"].lower() for marker in ("sar 8.6m", "sar 1.2m", "eastern hub")), question
 
         bucfo_payload = client.post(
             "/assistant/chat",
@@ -1444,7 +1465,7 @@ def test_public_safe_persona_variants_return_substantive_answers(monkeypatch):
                 "assistant_context": {"source": "executive_surface", "entrypoint": "scenario_chip"},
             },
         ).json()
-        assert "SAR 20.8M" not in bucfo_payload["answer"]
+        assert all(marker not in bucfo_payload["answer"].lower() for marker in ("sar 20.8m", "sar 1.2m"))
     finally:
         _restore_env(original)
 
@@ -1539,11 +1560,12 @@ def test_public_board_portal_hedge_downside_prompt_returns_hedge_answer_not_gene
         # Must NOT return the canned board catch-all
         assert "chief of staff" not in answer
         assert "outside the available" not in answer
-        # Must mention hedge
+        # Must state the governed data boundary instead of inserting demo values.
         assert "hedge" in answer
-        # Must mention FX drag or EUR
-        assert any(token in answer for token in ("fx", "eur", "60%", "hedge"))
-        assert payload["citations"]
+        assert "current governed run" in answer
+        assert "no illustrative hedge assumptions" in answer
+        assert all(marker not in answer for marker in ("60%", "15 bps", "sar 9k"))
+        assert not payload["citations"]
     finally:
         _restore_env(original)
 
@@ -1574,9 +1596,11 @@ def test_public_board_portal_jv_funded_from_cash_prompt_returns_jv_answer_not_ge
         # Must NOT return the canned board catch-all
         assert "chief of staff" not in answer
         assert "outside the available" not in answer
-        # Must mention JV or funding or cash
+        # Must state the governed data boundary instead of inserting demo values.
         assert any(token in answer for token in ("jv", "joint venture", "fund", "cash", "liquidity"))
-        assert payload["citations"]
+        assert "current governed run" in answer
+        assert "no illustrative funding assumptions" in answer
+        assert not payload["citations"]
     finally:
         _restore_env(original)
 
@@ -1627,8 +1651,8 @@ def test_public_manual_task_prompt_returns_exact_limitation_not_packet_summary(m
         answer = payload["answer"].lower()
         assert payload["status"] == "ok"
         assert "cannot create or assign tasks" in answer
-        assert "iris" in answer
-        assert "fulfilment capacity" in answer
+        assert "operator workflow" in answer
+        assert "iris" not in answer
         assert "revenue remains ahead while the board still needs a clean margin story" not in answer
         assert payload["run_mode"] == "public-safe"
     finally:
@@ -1713,9 +1737,9 @@ def test_public_thread_board_readiness_prompt_returns_specific_guidance_not_pack
         answer = payload["answer"].lower()
         assert payload["status"] == "ok"
         assert payload["matched"] is True
-        assert "thursday" in answer
+        assert "current board posture" in answer
         assert "challenged" in answer
-        assert "next step" in answer
+        assert "thursday" not in answer
         assert "revenue remains ahead while the board still needs a clean margin story" not in answer
         assert payload["citations"]
     finally:
@@ -1743,9 +1767,9 @@ def test_public_quick_prompt_regression_still_returns_grounded_answer(monkeypatc
         assert payload["status"] == "ok"
         assert payload["matched"] is True
         assert payload["assistant_context"]["entrypoint"] == "quick_prompt"
-        assert "fx" in answer
-        assert "hedge" in answer
-        assert payload["citations"]
+        assert "current governed run" in answer
+        assert "no illustrative hedge assumptions" in answer
+        assert all(marker not in answer for marker in ("19.2%", "15 bps", "sar 9k", "60% eur"))
     finally:
         _restore_env(original)
 
@@ -1770,11 +1794,10 @@ def test_public_quick_prompt_what_would_60_percent_hedge_save_returns_fx_specifi
         answer = payload["answer"].lower()
         assert payload["status"] == "ok"
         assert payload["matched"] is True
-        assert "hedge" in answer
-        assert "fx" in answer or "eur" in answer
-        assert "15 bps" in answer or "sar 9k" in answer
+        assert "current governed run" in answer
+        assert "no illustrative hedge assumptions" in answer
+        assert all(marker not in answer for marker in ("60%", "15 bps", "sar 9k"))
         assert "revenue remains ahead while the board still needs a clean margin story" not in answer
-        assert payload["citations"]
     finally:
         _restore_env(original)
 

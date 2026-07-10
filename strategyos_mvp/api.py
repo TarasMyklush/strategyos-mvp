@@ -229,7 +229,6 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 _EXECUTIVE_ASSET_REV_FILES = (
     "executive.css",
     "executive.js",
-    "executive_design_data.js",
 )
 
 
@@ -1679,10 +1678,10 @@ def _display_subject(subject: str, role: str) -> str:
         return _display_role(role)
     if raw.startswith("api-key:"):
         return f"{_display_role(role)} API key"
+    if raw.startswith("oidc:"):
+        raw = raw.removeprefix("oidc:")
     if "://" in raw:
         raw = raw.rsplit(":", 1)[-1]
-    if raw.endswith(".local"):
-        raw = raw[: -len(".local")]
     return raw.replace("_", " ").replace(".", " ").strip().title() or _display_role(
         role
     )
@@ -1690,18 +1689,15 @@ def _display_subject(subject: str, role: str) -> str:
 
 def _display_name_for_principal(role: str, subject: str) -> str:
     normalized_role = role.strip().lower()
-    if normalized_role in {
-        "operator",
-        "reviewer",
-        "analyst",
-        "auditor",
-        "executive",
-        "tenant_operator",
-        "tenant_admin",
-        "system",
-    }:
+    normalized_subject = subject.strip()
+    if (
+        not normalized_subject
+        or normalized_subject in {"anonymous", "auth-disabled"}
+        or normalized_subject.startswith("demo-role:")
+        or normalized_subject.startswith("api-key:")
+    ):
         return _display_role(normalized_role)
-    return _display_subject(subject, normalized_role)
+    return _display_subject(normalized_subject, normalized_role)
 
 
 def _role_altitude(role: str) -> str:
@@ -3496,7 +3492,7 @@ def _executive_modes_payload(
         {
             "persona_id": "ceo",
             "label": "Group CEO",
-            "detail": "Khalid · value, release, board brief",
+            "detail": "Value, release, board brief",
             "summary": "Frames plan-health, value capture, and board-safe release posture as bounded executive action.",
             "default_driver_key": "board_packet",
             "default_board_state": "pre",
@@ -3505,7 +3501,7 @@ def _executive_modes_payload(
         {
             "persona_id": "cfo",
             "label": "Group CFO",
-            "detail": "Sara · margin, hedge, cash",
+            "detail": "Margin, controls, cash",
             "summary": "Focuses on cash pulse, hedge discipline, and release posture without overstating strategy authority.",
             "default_driver_key": "cash_pulse",
             "default_board_state": "pre",
@@ -3514,7 +3510,7 @@ def _executive_modes_payload(
         {
             "persona_id": "gm",
             "label": "BU GM",
-            "detail": "Lina · growth, service, capacity",
+            "detail": "Growth, service, capacity",
             "summary": "Keeps the governed packet tied to BU growth, service quality, and capacity signal already present in the finance slice.",
             "default_driver_key": "cash_pulse",
             "default_board_state": "pre",
@@ -3523,7 +3519,7 @@ def _executive_modes_payload(
         {
             "persona_id": "bucfo",
             "label": "BU CFO",
-            "detail": "Yusuf · leakage, controls, exposure",
+            "detail": "Leakage, controls, exposure",
             "summary": "Frames governed leakage, controls, and exposure posture for the BU finance slice.",
             "default_driver_key": "owed_upward",
             "default_board_state": "pre",
@@ -3550,12 +3546,15 @@ def _executive_modes_payload(
     ]
     for item in personas:
         blueprint = executive_persona_design(str(item.get("persona_id") or "ceo"))
+        # Only persona NAMING (assistant name/role, index label) comes from the
+        # design module -- it is product copy. Narrative quotes and fixture
+        # prompt/thread inventories stay out of governed payloads entirely.
         item["assistant_role"] = blueprint.get("assistantRole")
         item["index_label"] = blueprint.get("indexLabel")
-        item["quote"] = blueprint.get("quote")
-        item["quoted_by"] = blueprint.get("by")
-        item["prompt_count"] = len(list(blueprint.get("prompts") or []))
-        item["thread_count"] = len(list(blueprint.get("threads") or []))
+        item["quote"] = ""
+        item["quoted_by"] = ""
+        item["prompt_count"] = 0
+        item["thread_count"] = 0
     requested_persona = str(view_state.get("persona") or "").strip().lower() or "ceo"
     if requested_persona not in {item["persona_id"] for item in personas}:
         requested_persona = "ceo"
@@ -4142,10 +4141,6 @@ def _chat_threads_payload(
     board_portal: dict[str, Any],
     publication: dict[str, Any],
 ) -> dict[str, Any]:
-    def _humanize_chat_token(value: str) -> str:
-        text = str(value or "").replace("_", " ").replace("-", " ").strip()
-        return " ".join(part.capitalize() for part in text.split()) if text else ""
-
     persona_id = str(executive_modes.get("active_persona_id") or "ceo")
     persona_label = next(
         (
@@ -4176,19 +4171,27 @@ def _chat_threads_payload(
     challenged_count = int(publication.get("challenged_cases") or 0)
     run_id = str((summary or {}).get("run_id") or "latest")
     active_driver_key = str(executive_modes.get("active_driver_key") or "board_packet")
+    # Starter threads derive from the latest governed run's actual findings --
+    # never from the design-fixture narrative (which suggested prompts about
+    # deals and meetings that exist only in the demo storyline). Scrub titles
+    # to the board-safe form for principals on the public-safe surface.
+    starter_rows = _finding_rows_from_summary(summary or {})
+    if _principal_prefers_public_safe_surface(principal):
+        starter_rows = _anonymous_public_finding_payloads(starter_rows)
     starter_threads: list[dict[str, Any]] = []
-    for index, item in enumerate(list(persona_blueprint.get("threads") or [])[:3], start=1):
-        thread_key = str(item.get("key") or f"thread-{index}")
+    for index, row in enumerate(starter_rows[:3], start=1):
+        row_title = str(row.get("title") or f"Finding {index}")
+        starter_prompt = f"What is driving “{row_title}” and what should we do next?"
         starter_threads.append(
             {
-                "thread_id": f"{persona_id}:{thread_key}",
+                "thread_id": f"{persona_id}:finding-{index}",
                 "kind": "starter_prompt",
                 "persona_id": persona_id,
                 "persona_label": persona_label,
                 "assistant": assistant_name,
-                "title": item.get("title") or _humanize_chat_token(thread_key),
-                "preview": item.get("preview") or "Open this board thread.",
-                "starter_prompt": item.get("preview") or item.get("title") or "",
+                "title": row_title,
+                "preview": starter_prompt,
+                "starter_prompt": starter_prompt,
                 "message_count": 0,
                 "read_only": False,
                 "route": _build_executive_route(
@@ -4247,7 +4250,11 @@ def _chat_threads_payload(
         },
         "active_thread_id": threads[0]["thread_id"] if threads else None,
         "threads": threads,
-        "starter_prompts": list(persona_blueprint.get("prompts") or [])[:3],
+        "starter_prompts": [
+            str(thread.get("starter_prompt") or "")
+            for thread in starter_threads
+            if str(thread.get("starter_prompt") or "").strip()
+        ],
         "a2a": {
             "enabled": True,
             "mode": "derived_handoff_only",
@@ -9437,17 +9444,42 @@ async def _assistant_chat_response(
 
     def _public_safe_unmatched_result(question_text: str, reason: str | None = None) -> dict[str, Any]:
         norm = " ".join(str(question_text or "").lower().split())
+        governed_packet = context.get("public_context_packet")
+        if not isinstance(governed_packet, dict):
+            governed_packet = {}
+        governed_suggestions: list[str] = []
+        if governed_packet.get("is_illustrative") is False:
+            for item in list(governed_packet.get("drivers") or [])[:2]:
+                if not isinstance(item, dict):
+                    continue
+                label = str(item.get("label") or item.get("key") or "").strip()
+                if label:
+                    governed_suggestions.append(f"Explain the current {label} signal")
+            for item in list(governed_packet.get("findings") or [])[:1]:
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title") or "").strip()
+                if title:
+                    governed_suggestions.append(f"Why does “{title}” matter for the board?")
+            governed_suggestions.append("What should I prepare for the board?")
         if "capital of france" in norm:
             return {
                 "matched": True,
                 "answer": "Paris is the capital of France. That sits outside the current StrategyOS board context, but the direct answer is Paris.",
                 "citations": [],
-                "suggestions": [
-                    "Help me prepare the board pack for the pre-board stage.",
-                    "What is driving margin pressure this quarter?",
-                    "Set a follow-up task for Iris on fulfilment capacity",
-                ],
+                "suggestions": governed_suggestions[:4] or ["What should I prepare for the board?"],
                 "basis": "Direct safe answer for an out-of-domain general-knowledge prompt on the public executive surface.",
+            }
+        if governed_packet.get("is_illustrative") is False:
+            return {
+                "matched": False,
+                "answer": (
+                    "I could not match that question to a quantified scenario in the current governed run. "
+                    "No illustrative values were substituted; ask about a visible driver, finding, or board-state item."
+                ),
+                "citations": [],
+                "suggestions": governed_suggestions[:4],
+                "basis": "Governed packet fallback refused to substitute illustrative scenario values.",
             }
         if (
             "follow-up task" in norm
@@ -9572,7 +9604,7 @@ async def _assistant_chat_response(
             # Return scope-boundary message + matched=False so the frontend can
             # distinguish unmatched from deterministic answers.
             answer = (
-                "I'm Hermes, your board chief of staff. I can help with questions about Mizan Group's "
+                "I'm Hermes, your board chief of staff. I can help with questions about the organization's "
                 "board pack, governed evidence, strategic decisions, and the current board lifecycle state. "
                 "Your question appears to be outside the available board context — try asking about margin, "
                 "risk, board prep, recoverable leakage, or a specific business driver visible in the packet."
