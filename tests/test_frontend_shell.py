@@ -2939,6 +2939,119 @@ def test_executive_surface_prefers_shared_assistant_packet_for_visible_facts():
     assert "if (safeArray(shared.kg_nodes).length)" in executive_js
 
 
+def test_assistant_network_uses_live_agent_modules_instead_of_zero_score():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+    assert prefix in executive_js
+    assert suffix in executive_js
+
+    harness_js = executive_js.replace(
+        prefix,
+        'function __executiveNetworkHarness() {\n  "use strict";\n',
+        1,
+    )
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { state: state, getAssistantNetwork: getAssistantNetwork, getAssistantNetworkMeta: getAssistantNetworkMeta, getAssistantExchanges: getAssistantExchanges, renderAssistantNetwork: renderAssistantNetwork };\n'
+        '}\n'
+        'module.exports = __executiveNetworkHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-network-harness-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+const bootstrapPayload = {{
+  requested_view_state: {{ persona: 'ceo', board: 'pre' }},
+  assistant_public_context: {{
+    persona_id: 'ceo',
+    assistant: 'Hermes',
+    agent_activity: {{
+      line: '4 active module(s) · 5 discoverable · 3 approval gate(s)'
+    }},
+    running_agents: [
+      {{ module_id: 'cash-recovery-watch', label: 'Cash recovery watch', status: 'running', lane: 'executive', summary: 'Tracks recoverable value across 8 governed cases.', output_metric: 'SAR 794K', approval_dependency: 'none' }},
+      {{ module_id: 'evidence-closure-monitor', label: 'Evidence closure monitor', status: 'blocked', lane: 'review', summary: 'Watches citation resolution and challenged cases.', output_metric: '39 / 24', approval_dependency: 'reviewer_release' }},
+      {{ module_id: 'board-pack-compiler', label: 'Board-pack compiler', status: 'preview_only', lane: 'executive', summary: 'Builds the board-safe packet.', output_metric: '3 report surfaces', approval_dependency: 'close_challenged_cases' }},
+      {{ module_id: 'runtime-guardrail', label: 'Runtime guardrail', status: 'protected', lane: 'system', summary: 'Keeps tenant runtime boundaries protected.', output_metric: 'langgraph', approval_dependency: 'system_boundary' }},
+    ],
+  }},
+}};
+
+const nodes = {{
+  'assistant-network-card': {{ innerHTML: '', hidden: false }},
+  'strategyos-executive-bootstrap': {{ textContent: JSON.stringify(bootstrapPayload) }},
+}};
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [], findings: [], developments: [], week: [] }} }}, networkMeta: {{}}, network: [], a2a: [], subtools: [] }},
+  localStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }},
+  sessionStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }},
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  innerWidth: 1280,
+  setTimeout(fn) {{ fn(); return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{ return nodes[id] || null; }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{ return {{ setAttribute() {{}}, appendChild() {{}}, style: {{}}, classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }} }}; }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+const network = harness.getAssistantNetwork();
+const exchanges = harness.getAssistantExchanges();
+harness.renderAssistantNetwork();
+console.log(JSON.stringify({{
+  networkCount: network.length,
+  scores: network.map((item) => item.score),
+  metaHint: harness.getAssistantNetworkMeta().hint,
+  exchangeCount: exchanges.length,
+  html: nodes['assistant-network-card'].innerHTML,
+}}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "assistant_network_harness.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    assert result["networkCount"] == 4
+    assert result["exchangeCount"] == 4
+    assert min(result["scores"]) > 0
+    assert "4 active module" in result["metaHint"]
+    assert "Team readiness score" in result["html"]
+    assert "<strong>0</strong><span>Team readiness score" not in result["html"]
+    assert "Cash recovery watch" in result["html"]
+
+
 def test_assistant_transport_failures_are_retryable_not_final_answers():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
     assert 'function markThreadTransportFailuresRetryable' in executive_js

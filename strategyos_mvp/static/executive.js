@@ -997,15 +997,87 @@
   }
 
   function getAssistantNetworkMeta() {
-    return {};
+    var modules = getAgentsModule();
+    var summary = modules.summary || {};
+    var activity = getAgentActivitySummary();
+    var runningCount = Number(firstDefined(summary.running_count, safeArray(getRunningAgents()).length, 0)) || 0;
+    var discoverableCount = Number(firstDefined(summary.discoverable_count, safeArray(modules.discoverable).length, 0)) || 0;
+    var approvalCount = Number(firstDefined(summary.approval_count, safeArray(modules.approvals).length, 0)) || 0;
+    return {
+      label: "Governed Assistant Network",
+      hint: firstDefined(
+        activity.line,
+        runningCount ? runningCount + " active module" + (runningCount === 1 ? "" : "s") + " · " + discoverableCount + " discoverable · " + approvalCount + " approval gate" + (approvalCount === 1 ? "" : "s") : "",
+        "Awaiting governed assistant module telemetry."
+      ),
+      target: 80
+    };
+  }
+
+  function assistantModuleScore(item) {
+    var status = String(firstDefined(item && item.status, "")).toLowerCase();
+    if (/(running|ready|ok|healthy|live|protected)/.test(status)) return 92;
+    if (/(preview|pending|waiting|draft|queued)/.test(status)) return 76;
+    if (/(blocked|challenged|review|held)/.test(status)) return 62;
+    if (/(idle|missing|unavailable)/.test(status)) return 45;
+    return 70;
   }
 
   function getAssistantNetwork() {
-    return [];
+    var modules = getAgentsModule();
+    var running = safeArray(getRunningAgents());
+    if (!running.length) running = safeArray(modules.running);
+    return running.map(function (item, index) {
+      var status = firstDefined(item && item.status, "running");
+      var lane = firstDefined(item && item.lane, item && item.tag, "governed");
+      return {
+        score: assistantModuleScore(item),
+        tone: status,
+        assistant: firstDefined(item && item.label, item && item.name, item && item.module_id, "Assistant module " + (index + 1)),
+        who: humanizeToken(lane),
+        unit: firstDefined(item && item.summary, item && item.doing, item && item.output_metric, tenantDisplayName()),
+        freshness: firstDefined(statusLabel(status), status, "current"),
+        usage: firstDefined(item && item.output_metric, statusLabel(status), "active"),
+        depth: firstDefined(item && item.approval_dependency, item && item.route, "governed"),
+        route: firstDefined(item && item.route, "")
+      };
+    });
   }
 
   function getAssistantExchanges() {
-    return [];
+    var modules = getAgentsModule();
+    var running = safeArray(getRunningAgents());
+    if (!running.length) running = safeArray(modules.running);
+    var exchanges = running.map(function (item, index) {
+      var name = firstDefined(item && item.label, item && item.name, item && item.module_id, "Assistant module " + (index + 1));
+      var status = firstDefined(item && item.status, "active");
+      return {
+        id: firstDefined(item && item.module_id, item && item.id, "module-" + index),
+        with: name,
+        unit: humanizeToken(firstDefined(item && item.lane, item && item.tag, "governed lane")),
+        status: status,
+        topic: firstDefined(item && item.summary, item && item.doing, "Governed module activity"),
+        messages: [
+          { from: "StrategyOS", text: firstDefined(item && item.summary, item && item.doing, "Module is active in the governed runtime.") },
+          { from: name, text: firstDefined(item && item.output_metric, statusLabel(status), "Current") }
+        ]
+      };
+    });
+    if (exchanges.length) return exchanges;
+    return safeArray(modules.approvals).map(function (item, index) {
+      var label = firstDefined(item && item.label, item && item.approval_id, "Approval gate " + (index + 1));
+      return {
+        id: firstDefined(item && item.approval_id, "approval-" + index),
+        with: label,
+        unit: "Approval",
+        status: firstDefined(item && item.status, "pending"),
+        topic: firstDefined(item && item.next_action, "Approval gate"),
+        messages: [
+          { from: "StrategyOS", text: "Approval gate is visible in the governed runtime." },
+          { from: label, text: firstDefined(item && item.next_action, item && item.status, "pending") }
+        ]
+      };
+    });
   }
 
   function normalizeKgCategory(value) {
@@ -2368,14 +2440,14 @@
       return Number(right.score || 0) - Number(left.score || 0);
     });
     if (card) {
-      var avg = network.length ? Math.round(network.reduce(function (sum, item) { return sum + Number(item.score || 0); }, 0) / network.length) : 0;
+      var avg = network.length ? Math.round(network.reduce(function (sum, item) { return sum + Number(item.score || 0); }, 0) / network.length) : "—";
       var stale = network.filter(function (item) { return Number(item.score || 0) < 70; }).length;
       card.innerHTML = [
         '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'A read on current usage, freshness, and context depth across your organization.')) + '</p></div><span class="pill-inline ok">target ' + escapeHtml(String(firstDefined(meta.target, 80))) + '+</span></div>',
         '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(avg)) + '</strong><span>Team readiness score</span></div><div class="network-meta"><span class="pill-inline ok">Healthy</span><span class="pill-inline warn">Check-in needed</span><span class="pill-inline danger">Stale · ' + escapeHtml(String(stale)) + ' leader' + (stale !== 1 ? 's' : '') + '</span></div></div>',
         '<div class="network-list"><div class="network-list-head"><span class="sr-only">Score</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">Freshness</span><span class="network-list-head__stat">Used</span><span class="network-list-head__stat">Context</span></div></div>' + network.map(function (item) {
           return '<div class="network-row"><div class="network-score-badge tone-' + toneClass(item.tone) + '"><strong>' + escapeHtml(String(firstDefined(item.score, 0))) + '</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
-        }).join('') + '</div>'
+        }).join('') + (!network.length ? '<div class="network-row"><div class="network-score-badge tone-warn"><strong>—</strong></div><div class="network-row__main"><div class="network-row__head"><strong>Awaiting module telemetry</strong><span>· Governed runtime</span></div><p class="list-copy">No assistant module feed is available for this packet yet.</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">awaiting</span></span><span aria-label="Used"><span class="network-stat-value">—</span></span><span aria-label="Context"><span class="network-stat-value">governed</span></span></div></div>' : '') + '</div>'
       ].join('');
     }
   }
