@@ -9460,6 +9460,71 @@ def _public_safe_general_answer(question: str) -> dict[str, Any] | None:
     return None
 
 
+def _assistant_question_is_app_help(question: str) -> bool:
+    norm = " ".join(str(question or "").lower().split())
+    if not norm:
+        return False
+    file_terms = (
+        "file", "files", "dataset", "data set", "source pack", "sources",
+        "zip", "folder", "spreadsheet", "invoice", "ledger",
+    )
+    workflow_terms = (
+        "process", "upload", "ingest", "load", "add", "import", "stage",
+        "run", "analyse", "analyze", "start analysis", "new analysis",
+        "through the app", "in the app", "using the app",
+    )
+    if "source pack" in norm or "start analysis" in norm or "new analysis" in norm:
+        return True
+    return any(term in norm for term in file_terms) and any(term in norm for term in workflow_terms)
+
+
+def _authenticated_app_help_result(question: str, *, role: str) -> dict[str, Any] | None:
+    if not _assistant_question_is_app_help(question):
+        return None
+    role_name = str(role or "anonymous").strip().lower() or "anonymous"
+    can_operate = principal_has_any_role(role_name, "operator")
+    if can_operate:
+        role_sentence = "Your current role can start this workflow."
+    else:
+        role_sentence = (
+            f"Your current role is {role_name}; it can ask Hermes and view governed outputs, "
+            "but file upload and run launch require operator, tenant_operator, tenant_admin, or system access."
+        )
+    answer = (
+        "To process new files in StrategyOS: "
+        f"{role_sentence} "
+        "Open the operator lane at /app?lane=operate, then use Prepare source pack / Start analysis. "
+        "Upload a .zip source pack or choose a folder from your machine. "
+        "StrategyOS stages the files through /source-packs, validates readability, classifies finance roles, "
+        "and asks you to confirm spreadsheet column mappings when needed. "
+        "When the pack is ready, click Start analysis; if required files are missing, upload the missing files "
+        "or enable partial analysis in Advanced settings. "
+        "The run then goes to human review; a reviewer approves or rejects it. "
+        "After approval, an operator resumes/publishes the run, and the CEO/executive pages read the latest governed run."
+    )
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Authenticated StrategyOS app workflow help; this is product/runtime guidance, not board-pack evidence.",
+        "citations": [
+            {
+                "source_path": "strategyos://app",
+                "locator": "/app?lane=operate -> /source-packs -> /runs -> /reviewer/runs/{run_id}/approve -> /operator/runs/{run_id}/resume",
+                "excerpt": "Operator source-pack upload, validation, run launch, review, and publish workflow.",
+            }
+        ],
+        "suggestions": [
+            "Which role do I need to upload files?",
+            "What files should be in a complete source pack?",
+            "What happens after I start analysis?",
+        ],
+        "assistant_mode": "app_help",
+        "answered_by": "app_help",
+        "intent": "app_file_processing_help",
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _supplemental_grounding_payload(
     *,
     graph_result: dict[str, Any] | None = None,
@@ -9505,6 +9570,7 @@ async def _assistant_chat_response(
     request: AssistantChatRequest | QaRequest,
     *,
     public_safe: bool = False,
+    authenticated_role: str | None = None,
 ) -> dict[str, Any]:
     question = (request.question or "").strip()
     if not question:
@@ -9749,6 +9815,35 @@ async def _assistant_chat_response(
         finding.__dict__ if hasattr(finding, "__dict__") else finding
         for finding in context["findings"]
     ]
+
+    app_help_result = (
+        None
+        if public_safe
+        else _authenticated_app_help_result(
+            question,
+            role=authenticated_role or str(assistant_context.get("role") or "authenticated"),
+        )
+    )
+    if app_help_result is not None:
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=app_help_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=app_help_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     if not public_safe and mode in {"auto", "llm"} and not _assistant_question_has_business_scope(question):
         general_status = llm_qa.chat_status(CONFIG)
@@ -10547,7 +10642,7 @@ async def assistant_chat(
             detail="This identity is not permitted for this endpoint.",
         )
 
-    return await _assistant_chat_response(request, public_safe=False)
+    return await _assistant_chat_response(request, public_safe=False, authenticated_role=role)
 
 
 @app.post("/inputs/prepare")

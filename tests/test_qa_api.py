@@ -415,6 +415,85 @@ def test_authenticated_assistant_general_question_uses_llm(monkeypatch):
         _restore_env(original)
 
 
+def test_authenticated_assistant_explains_file_processing_workflow(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: None)
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_general_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("app workflow help must not depend on general LLM fallback")
+            ),
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("app workflow help must not depend on board-pack LLM fallback")
+            ),
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "I want to process new files through the app, how do I do this?",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["matched"] is True
+        assert payload["answered_by"] == "app_help"
+        assert payload["assistant_mode"] == "app_help"
+        assert payload["llm_fallback_attempted"] is False
+        assert "/app?lane=operate" in payload["answer"]
+        assert "/source-packs" in payload["answer"]
+        assert "Start analysis" in payload["answer"]
+        assert "reviewer approves" in payload["answer"]
+        assert "latest governed run" in payload["answer"]
+        assert payload["hallucination_risk"]["level"] == "none"
+    finally:
+        _restore_env(original)
+
+
+def test_authenticated_executive_app_help_calls_out_operator_role(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-key",
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        monkeypatch.setattr(api_module, "_latest_summary", lambda: None)
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "How can I upload and process new files in the app?",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+            headers={"X-API-Key": "executive"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["matched"] is True
+        assert payload["answered_by"] == "app_help"
+        assert "current role is executive" in payload["answer"]
+        assert "require operator, tenant_operator, tenant_admin, or system access" in payload["answer"]
+        assert "/app?lane=operate" in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
 def test_assistant_chat_golden_prompt_works_without_completed_run(monkeypatch):
     original, client = _client_with_auth()
     try:
