@@ -390,13 +390,24 @@ jobs:
 
       - name: Check Hatchet worker health
         run: |
+          compose_profiles="${STRATEGYOS_COMPOSE_PROFILES:-}"
           if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then
-            echo "Skipping Hatchet worker health check because STRATEGYOS_RUN_EXECUTION_MODE=${STRATEGYOS_RUN_EXECUTION_MODE}."
+            case " ${compose_profiles} " in
+              *" hatchet "*) ;;
+              *)
+                echo "Skipping Hatchet worker health check because STRATEGYOS_RUN_EXECUTION_MODE=${STRATEGYOS_RUN_EXECUTION_MODE} and STRATEGYOS_COMPOSE_PROFILES=${compose_profiles:-<empty>}."
+                exit 0
+                ;;
+            esac
+          fi
+
+          if [ -z "${compose_profiles}" ]; then
+            echo "Skipping Hatchet worker health check because STRATEGYOS_COMPOSE_PROFILES is empty."
             exit 0
           fi
 
           compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml}"
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && COMPOSE_FILES='${compose_files}' COMPOSE_PROFILES='${STRATEGYOS_COMPOSE_PROFILES:-}' bash deploy/scripts/check_hatchet_worker.sh"
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && COMPOSE_FILES='${compose_files}' COMPOSE_PROFILES='${compose_profiles}' bash deploy/scripts/check_hatchet_worker.sh"
 
       - name: Check protected readiness
         id: health
