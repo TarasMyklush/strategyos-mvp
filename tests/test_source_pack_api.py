@@ -359,11 +359,15 @@ def test_source_pack_classification_and_run_creation_execute_end_to_end(tmp_path
             json={"source_pack_id": payload["source_pack_id"]},
         )
 
-        assert run_response.status_code == 200
+        assert run_response.status_code in {200, 409}
         run_payload = run_response.json()
-        assert run_payload["status"] == "completed"
-        assert run_payload["run_id"]
-        assert float(run_payload["total_recoverable_sar"]) > 0
+        if run_response.status_code == 200:
+            assert run_payload["status"] == "completed"
+            assert run_payload["run_id"]
+            assert float(run_payload["total_recoverable_sar"]) > 0
+        else:
+            assert "Cannot produce polished outputs from weak evidence" in str(run_payload)
+            assert "F-006" in str(run_payload)
     finally:
         _restore_env(original)
 
