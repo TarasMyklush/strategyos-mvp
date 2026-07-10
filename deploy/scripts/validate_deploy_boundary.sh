@@ -104,6 +104,7 @@ secret_only_keys = set(
     required_secret_keys
     + [
         "STRATEGYOS_LLM_API_KEY",
+        "HATCHET_CLIENT_TOKEN",
         "HATCHET_POSTGRES_PASSWORD",
         "STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET",
         "OAUTH2_PROXY_CLIENT_SECRET",
@@ -132,7 +133,9 @@ if run_execution_mode == "hatchet":
     hatchet_password = secrets.get("HATCHET_POSTGRES_PASSWORD", "")
     require(bool(hatchet_password), "HATCHET_POSTGRES_PASSWORD must be populated in hatchet execution mode.")
     require("__CHANGE_ME_" not in hatchet_password, "HATCHET_POSTGRES_PASSWORD still contains a placeholder value.")
-    require(bool(str(merged.get("HATCHET_CLIENT_TOKEN", "")).strip()), "HATCHET_CLIENT_TOKEN must be populated when STRATEGYOS_RUN_EXECUTION_MODE=hatchet.")
+    hatchet_token = secrets.get("HATCHET_CLIENT_TOKEN", "")
+    require(bool(str(hatchet_token).strip()), "HATCHET_CLIENT_TOKEN must be populated in deploy secrets when STRATEGYOS_RUN_EXECUTION_MODE=hatchet.")
+    require("__CHANGE_ME_" not in hatchet_token, "HATCHET_CLIENT_TOKEN still contains a placeholder value.")
 
 model_provider_enabled = bool_is_true(merged.get("STRATEGYOS_MODEL_PROVIDER_ENABLED"))
 llm_chat_enabled = bool_is_true(merged.get("STRATEGYOS_LLM_CHAT_ENABLED"))
