@@ -320,6 +320,28 @@ def _find_pdf_by_excerpt(bundle: DataBundle, prefix: str, label: str, terms: Ite
     return None
 
 
+def _find_pdf_by_anchor(
+    bundle: DataBundle,
+    prefix: str,
+    label: str,
+    required_terms: Iterable[str],
+    preferred_terms: Iterable[str] = (),
+) -> tuple[str, Citation] | None:
+    for rel in sorted(bundle.evidence.manifest):
+        if not rel.startswith(prefix) or not rel.lower().endswith(".pdf"):
+            continue
+        citation = pdf_citation_with_anchor(
+            bundle,
+            rel,
+            label,
+            required_terms,
+            preferred_terms,
+        )
+        if citation is not None:
+            return rel, citation
+    return None
+
+
 def run_all_finance_skills(bundle: DataBundle) -> list[Finding]:
     load_configured_plugins()
     refresh_role_path_defaults()
@@ -820,6 +842,7 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     exposure = float((target["applied_rate"] - hedge_rate) * float(target["Amount_Original_Currency"]))
     if exposure <= 0:
         return findings
+    invoice_id = str(target.Invoice_ID)
     vendor_name = str(target.Vendor_Name)
     eur_amount_text = f"{float(target.Amount_Original_Currency):,.2f}"
     applied_rate_text = f"{float(target.applied_rate):.4f}"
@@ -830,7 +853,8 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     # filename-oriented derivation).
     vendor_prefix_words = [w for w in re.findall(r"[A-Za-z0-9]+", vendor_name) if w][:2]
     vendor_prefix = " ".join(vendor_prefix_words)
-    bank_ocr_terms = [vendor_prefix, eur_amount_text, applied_rate_text]
+    bank_required_terms = [invoice_id, applied_rate_text]
+    bank_preferred_terms = [term for term in (vendor_prefix, eur_amount_text, applied_rate_text) if term]
 
     citations = [
         excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(target.name), f"{target.Invoice_ID}; EUR {target.Amount_Original_Currency:,.2f}; SAR {target.Amount_SAR:,.2f}; applied rate {target.applied_rate:.4f}"),
@@ -850,17 +874,29 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     bank_match = None
     missing_bank_ocr = False
     if bank_rel and bank_rel in bundle.evidence.manifest:
-        missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, bank_ocr_terms)
-        bank_citation = pdf_citation(bundle, bank_rel, "OCR bank statement settlement row", bank_ocr_terms)
+        missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, bank_required_terms)
+        bank_citation = pdf_citation_with_anchor(
+            bundle,
+            bank_rel,
+            "OCR bank statement settlement row",
+            bank_required_terms,
+            bank_preferred_terms,
+        )
         if bank_citation is not None:
             bank_match = (bank_rel, bank_citation)
     if bank_match is None:
-        bank_match = _find_pdf_by_excerpt(bundle, "01_Bank_Statements/", "OCR bank statement settlement row", bank_ocr_terms)
+        bank_match = _find_pdf_by_anchor(
+            bundle,
+            "01_Bank_Statements/",
+            "OCR bank statement settlement row",
+            bank_required_terms,
+            bank_preferred_terms,
+        )
     if bank_match is not None:
         bank_rel, bank_citation = bank_match
         citations.append(bank_citation)
         if not missing_bank_ocr:
-            missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, bank_ocr_terms)
+            missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, bank_required_terms)
     elif bank_rel and bank_rel in bundle.evidence.manifest:
         missing_bank_ocr = True
         citations.append(
@@ -868,10 +904,12 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
                 bundle,
                 bank_rel,
                 "OCR bank statement settlement row (verification pending)",
-                f"OCR-required bank statement evidence pending verification for {vendor_prefix} / EUR {eur_amount_text} / {applied_rate_text}.",
+                f"OCR-required bank statement evidence pending verification for {invoice_id} / {vendor_prefix} / EUR {eur_amount_text} / {applied_rate_text}.",
             )
         )
-    email_citation = _find_email_text_citation(bundle, vendor_prefix.lower())
+    email_citation = _find_email_text_citation(bundle, invoice_id.lower())
+    if email_citation is None and vendor_prefix:
+        email_citation = _find_email_text_citation(bundle, vendor_prefix.lower())
     if email_citation is not None:
         citations.append(email_citation)
     confidence = "LOW" if missing_bank_ocr else "HIGH" if len(citations) >= 3 else "MEDIUM"

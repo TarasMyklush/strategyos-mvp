@@ -429,9 +429,6 @@ def test_phase12_plan_data_keeps_completed_oracle_phases_truthful_during_hosted_
         / "plan_data.js"
     )
     text = plan_file.read_text(encoding="utf-8")
-    assert 'updated: "2026-07-09"' in text
-    assert 'Foundation through Oracle pilot delivery shipped' in text
-    assert 'Oracle EBS ingestion, deterministic KPI calculation, and cash-leakage detection.' in text
-    assert 'id: "DONE-007"' in text
-    assert 'Earlier live deploy tranche landed and was re-verified' in text
-    assert 'Hosted /public/runs/latest/audit-summary now returns the sanitized public-safe payload' in text
+    assert "window.STRATEGYOS_PLAN" not in text
+    assert "window payload as execution truth" in text
+    assert "Hosted /public/runs/latest/audit-summary" not in text

@@ -88,7 +88,8 @@ def test_refresh_marks_unmapped_oracle_shaped_nodes_as_unavailable_not_fabricate
     repository = _repository(tmp_path)
     # Seed the hardcoded structural fallback first, as the real KPIResolutionEngine does.
     repository.ensure_seeded(KPI_TREE)
-    assert repository.load("revenue_q2")["value"] == 2_100_000_000  # the old fixture value
+    assert repository.load("revenue_q2")["value"] is None
+    assert repository.load("revenue_q2")["status"] == "current"
 
     refresh_kpis_from_run(repository=repository, summary={"run_id": "run-abc"})
 
@@ -122,9 +123,8 @@ def test_refresh_is_a_noop_when_no_run_exists(tmp_path, monkeypatch):
     updated = refresh_kpis_from_run(repository=repository, summary=None)
 
     assert updated == {}
-    # Existing (seeded) values are left untouched, not overwritten with a
-    # blanket "unavailable" -- there's no run to make that verdict from.
-    assert repository.load("revenue_q2")["value"] == 2_100_000_000
+    assert repository.load("revenue_q2")["value"] is None
+    assert repository.load("revenue_q2")["status"] == "current"
 
 
 def test_refresh_is_a_noop_when_summary_status_is_missing(tmp_path):

@@ -9,8 +9,6 @@
   var _tokenKey = "strategyos.ui.token";
   var ASSISTANT_ENDPOINT = "/assistant/chat";
   var ASSISTANT_TRANSPORT_FALLBACK = "I couldn't reach the shared assistant service just now.";
-  var DESIGN = (window.STRATEGYOS_EXECUTIVE_DESIGN && window.STRATEGYOS_EXECUTIVE_DESIGN.personas) || {};
-  var DESIGN_GLOBAL = window.STRATEGYOS_EXECUTIVE_DESIGN || {};
   var BOOTSTRAP_ASSISTANT_CONTEXT = bootstrap.assistant_public_context || {};
   var _leadersFallbackTimer = null;
 
@@ -597,6 +595,12 @@
     });
   }
 
+  function latestRunRouteForSession(session) {
+    if (session && session.api_auth_enabled === false) return "/runs/latest";
+    if (session && session.authenticated) return "/runs/latest";
+    return "/public/runs/latest";
+  }
+
   function parseJsonResponse(response) {
     return response.text().then(function (text) {
       if (!text) return null;
@@ -891,7 +895,7 @@
     if (diagnostics.persona_blueprint && firstDefined(diagnostics.persona_blueprint.assistant, "")) {
       return diagnostics.persona_blueprint;
     }
-    return DESIGN[personaId] || DESIGN.ceo || {};
+    return {};
   }
 
   function getSharedAssistantContext() {
@@ -947,7 +951,7 @@
   }
 
   function getBoardDesign() {
-    return getSharedAssistantContext().board_portal || DESIGN_GLOBAL.board || {};
+    return getSharedAssistantContext().board_portal || {};
   }
 
   function getChatContract() {
@@ -959,15 +963,15 @@
   }
 
   function getAssistantNetworkMeta() {
-    return DESIGN_GLOBAL.networkMeta || {};
+    return {};
   }
 
   function getAssistantNetwork() {
-    return safeArray(DESIGN_GLOBAL.network);
+    return [];
   }
 
   function getAssistantExchanges() {
-    return safeArray(DESIGN_GLOBAL.a2a);
+    return [];
   }
 
   function normalizeKgCategory(value) {
@@ -1232,7 +1236,7 @@
         })
       });
     }
-    return buildKnowledgeUniverse(DESIGN_GLOBAL.graph || { questions: [], nodes: [], edges: [] });
+    return buildKnowledgeUniverse({ questions: [], nodes: [], edges: [] });
   }
 
   function getPlanHealth() {
@@ -1249,19 +1253,19 @@
 
   function getAgentActivitySummary() {
     var shared = getSharedAssistantContext();
-    return shared.agent_activity || DESIGN_GLOBAL.activity || {};
+    return shared.agent_activity || {};
   }
 
   function getRunningAgents() {
     var shared = getSharedAssistantContext();
     var modules = getAgentsModule();
     if (safeArray(shared.running_agents).length) return safeArray(shared.running_agents);
-    return safeArray(modules.running).length ? safeArray(modules.running) : safeArray(DESIGN_GLOBAL.runningAgents);
+    return safeArray(modules.running);
   }
 
   function getDiscoverableAgents() {
     var modules = getAgentsModule();
-    return safeArray(modules.discoverable).length ? safeArray(modules.discoverable) : safeArray(DESIGN_GLOBAL.discoverAgents);
+    return safeArray(modules.discoverable);
   }
 
   function getApprovalAgents() {
@@ -1270,30 +1274,12 @@
   }
 
   function getSubtools() {
-    return safeArray(DESIGN_GLOBAL.subtools);
+    return [];
   }
 
   function getVisibleDrivers() {
-    var blueprint = getPersonaBlueprint(state.activePersona);
-    var designDrivers = safeArray(blueprint.drivers).map(function (item) {
-      return {
-        driver_key: item.key,
-        label: item.label,
-        metric: item.value,
-        status: item.vsPlan,
-        detail: item.story,
-        pct: item.pct,
-        tone: item.tone,
-        sub: item.sub,
-        chips: safeArray(item.chips),
-        movers: item.movers || {},
-        trend: item.trend || {},
-        trendLabel: item.trendLabel,
-        unit: item.unit
-      };
-    });
     var packetDrivers = safeArray(getExecutiveDiagnostics().driver_grid);
-    return (designDrivers.length ? designDrivers : packetDrivers).slice(0, 4);
+    return packetDrivers.slice(0, 4);
   }
 
   function getActiveDriver() {
@@ -4004,13 +3990,11 @@
         animateCard("board-portal");
       }
       var params = currentViewParams();
-      var response = await Promise.all([
-        fetchJson("/public/runs/latest" + buildQuery(params)),
-        fetchJson("/ui/session")
-      ]);
+      var session = await fetchJson("/ui/session") || {};
+      var latestPacket = await fetchJson(latestRunRouteForSession(session) + buildQuery(params));
 
-      state.latestPacket = response[0] || {};
-      state.session = response[1] || {};
+      state.latestPacket = latestPacket || {};
+      state.session = session;
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
       state.activePersona = firstDefined((state.latestPacket.executive_modes || {}).active_persona_id, state.activePersona, "ceo");

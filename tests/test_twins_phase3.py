@@ -185,12 +185,9 @@ class TestTriggerEngineThresholds:
     """TriggerEngine.check_thresholds detects breached KPIs."""
 
     def test_no_breach_when_values_above_threshold(self):
-        """With current KPI_TREE, revenue_q2 (2.1B) is above threshold
-        (2.0B), so no breach."""
+        """Unavailable structural nodes should not fire threshold breaches."""
         engine = TriggerEngine(KPI_TREE, {})
         breached = engine.check_thresholds()
-        # revenue_q2 is above threshold, and no other KPI with threshold
-        # has a value set (margin_q2 has value=None)
         assert len(breached) == 0
 
     def test_breach_detected_with_custom_tree(self):
@@ -293,8 +290,8 @@ class TestTriggerEngineStaleness:
         assert "cogs_q2" in stale_ids
         assert "raw_materials_q2" in stale_ids
 
-    def test_current_kpi_not_stale(self):
-        """revenue_q2 has status='current', should not be stale."""
+    def test_unavailable_kpi_not_reported_as_stale(self):
+        """Unavailable structural nodes are explicit boundaries, not stale truth."""
         engine = TriggerEngine(KPI_TREE, {})
         stale = engine.check_staleness()
         stale_ids = [s["node_id"] for s in stale]

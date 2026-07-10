@@ -509,12 +509,8 @@ def test_phase15_plan_and_public_copy_mark_final_oracle_completion() -> None:
     plan_data = (ROOT / "strategyos_mvp" / "static" / "plan_data.js").read_text(encoding="utf-8")
     plan_html = (ROOT / "strategyos_mvp" / "static" / "plan.html").read_text(encoding="utf-8")
 
-    assert 'updated: "2026-07-09"' in plan_data
-    assert "criticalBlockers: []" in plan_data
-    assert "activeActionItems: []" in plan_data
-    assert "Ask Hermes assistant hardening shipped and verified" in plan_data
-    assert "1ddd7e1" in plan_data
-    assert "Foundation through Oracle pilot delivery shipped" in plan_data
-    assert "CEO/CFO pilot alignment, production validation, and pilot readiness work" in plan_data
-    assert "No active scope remains" in plan_html
+    assert "window.STRATEGYOS_PLAN" not in plan_data
+    assert "window payload as execution truth" in plan_data
+    assert "fetch('/api/plan/latest')" in plan_html
+    assert "/static/plan_data.js" not in plan_html
     assert "Hosted tracker reflects the active tranche and direct verification" in plan_html

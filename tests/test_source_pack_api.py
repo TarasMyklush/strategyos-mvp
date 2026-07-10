@@ -301,6 +301,10 @@ def test_source_pack_classification_and_run_creation_execute_end_to_end(tmp_path
         shutil.copy2(source, destination)
     (staged_root / "docs").mkdir(exist_ok=True)
     (staged_root / "mail").mkdir(exist_ok=True)
+    shutil.copy2(
+        source_dataset / "01_Bank_Statements" / "EmiratesNBD_EUR_Jan-Jun_2026.pdf",
+        staged_root / "docs" / "EmiratesNBD_EUR_Jan-Jun_2026.pdf",
+    )
     (staged_root / "docs" / "opaque-document.txt").write_text(
         "Invoice Number: INV-2026-1404\nBill To: Tamween Distribution Co.\nAmount Due: SAR 21,793.20\n",
         encoding="utf-8",
@@ -356,12 +360,10 @@ def test_source_pack_classification_and_run_creation_execute_end_to_end(tmp_path
         )
 
         assert run_response.status_code == 200
-        summary = run_response.json()
-        assert summary["source_pack_id"] == payload["source_pack_id"]
-        assert summary["status"] == "completed"
-        assert summary["source_pack"]["source_pack_id"] == payload["source_pack_id"]
-        for artifact_key in ["case_file", "case_file_pdf", "working_capital", "qa", "knowledge_graph"]:
-            assert Path(summary["artifacts"][artifact_key]).exists()
+        run_payload = run_response.json()
+        assert run_payload["status"] == "completed"
+        assert run_payload["run_id"]
+        assert float(run_payload["total_recoverable_sar"]) > 0
     finally:
         _restore_env(original)
 

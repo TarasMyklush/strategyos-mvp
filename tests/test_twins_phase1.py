@@ -207,9 +207,8 @@ class TestKPIResolutionEngine:
         types = {g["type"] for g in gaps}
         assert "missing_data" in types
 
-    def test_detect_gaps_revenue_q2_has_no_gaps(self):
+    def test_detect_gaps_revenue_q2_unavailable_is_not_silent_fabrication(self):
         gaps = self.engine.detect_gaps("revenue_q2")
-        # revenue is current with a value — no gaps
         assert len(gaps) == 0
 
     def test_detect_gaps_unknown_node(self):
@@ -224,7 +223,7 @@ class TestKPIResolutionEngine:
         assert "margin_q2" in gap_kpis
         assert "cogs_q2" in gap_kpis
         assert "raw_materials_q2" in gap_kpis
-        # revenue_q2 has no gaps, so it shouldn't appear
+        # revenue_q2 remains structural-only and should not silently route.
         assert "revenue_q2" not in gap_kpis
 
     def test_route_request_returns_inter_twin_message(self):
@@ -526,9 +525,9 @@ class TestInboxDelivery:
 class TestKPITreeIntegrity:
     """KPI_TREE content is internally consistent."""
 
-    def test_revenue_q2_is_current(self):
+    def test_revenue_q2_has_no_seeded_value(self):
         assert KPI_TREE["revenue_q2"]["status"] == "current"
-        assert KPI_TREE["revenue_q2"]["value"] == 2_100_000_000
+        assert KPI_TREE["revenue_q2"]["value"] is None
 
     def test_margin_q2_is_stale(self):
         assert KPI_TREE["margin_q2"]["status"] == "stale"

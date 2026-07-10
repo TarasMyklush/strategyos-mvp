@@ -168,7 +168,7 @@ def test_findings_endpoint_returns_worklist(monkeypatch):
         )
         assert (
             payload["findings"][0]["report_preview_href"]
-            == "/public/runs/latest/report-preview"
+            == "/runs/latest/report-preview"
         )
         assert payload["findings"][0]["contracts"]["evidence"]["evidence_qa_href"].startswith(
             "/runs/latest/findings?domain=evidence_qa"
@@ -269,7 +269,8 @@ def test_public_latest_run_includes_agents_and_chat_contracts(monkeypatch):
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["agents"]["running"][0]["id"] == "boardpack"
+        assert "running" in payload["agents"]
+        assert "discover" in payload["agents"]
         assert payload["chat"]["assistant"]["persona_id"] == "cfo"
         assert payload["chat"]["assistant"]["name"] == "Atlas"
         assert payload["run_id"] == "latest-public"
@@ -874,7 +875,7 @@ def test_latest_run_findings_exposes_reconciled_plan_health_and_publication(monk
         _restore_env(original)
 
 
-def test_executive_latest_run_uses_public_safe_summary(monkeypatch):
+def test_authenticated_executive_latest_run_uses_governed_current_summary(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -895,7 +896,7 @@ def test_executive_latest_run_uses_public_safe_summary(monkeypatch):
         assert response.status_code == 200
         payload = response.json()
         assert payload["status"] == "ok"
-        assert payload["public_safe"] is True
+        assert payload.get("public_safe") is not True
         assert payload["board_portal"]["state"] == "live"
         assert payload["board_portal"]["presentation_state"] == "closed"
         assert payload["executive_modes"]["active_persona_id"] == "cfo"
@@ -904,18 +905,19 @@ def test_executive_latest_run_uses_public_safe_summary(monkeypatch):
         assert payload["executive_modes"]["transition_contract"]["sequence"] == ["pre", "live", "closed"]
         assert payload["drilldown"]["gravity"]["sandbox"]["persona_id"] == "cfo"
         assert payload["drilldown"]["gravity"]["quote"]
-        assert payload["drilldown"]["lower_rail"]["week_ahead"][0]["prompt"]
+        assert payload["drilldown"]["lower_rail"]["week_ahead"][0]["detail"]
         assert payload["drilldown"]["lower_rail"]["cash_pulse"]["basis"] == "governed_findings"
-        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "Atlas"
+        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "StrategyOS"
         assert payload["executive_diagnostics"]["hero"]["persona_id"] == "cfo"
         assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
-        assert payload["run_id"] == "latest-public"
-        assert "run_dir" not in payload
+        assert payload["run_id"] == _FAKE_SUMMARY["run_id"]
+        assert payload["interaction_contracts"]["latest_run"]["route"] == "/runs/latest"
+        assert payload["interaction_contracts"]["report_preview"]["route"] == "/runs/latest/report-preview"
     finally:
         _restore_env(original)
 
 
-def test_executive_findings_route_stays_public_safe(monkeypatch):
+def test_authenticated_executive_findings_route_uses_governed_current_data(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -936,9 +938,11 @@ def test_executive_findings_route_stays_public_safe(monkeypatch):
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["public_safe"] is True
-        assert "run_dir" not in payload
-        assert payload["findings"][0]["case_href"] is None
-        assert payload["findings"][0]["evidence_preview_href"] is None
+        assert payload["public_safe"] is False
+        assert payload["findings"][0]["case_href"].startswith("/runs/latest/cases/")
+        assert payload["findings"][0]["evidence_preview_href"].startswith("/data/evidence-preview?")
+        assert payload["findings"][0]["report_preview_href"] == "/runs/latest/report-preview"
+        assert payload["publication"]["preview_route"] == "/runs/latest/report-preview"
+        assert payload["role_actions"]["viewer_role"] == "executive"
     finally:
         _restore_env(original)

@@ -404,10 +404,6 @@ def test_phase13_plan_data_keeps_closed_leakage_phase_truthful_while_hosted_fixu
         / "plan_data.js"
     )
     text = plan_file.read_text(encoding="utf-8")
-    assert 'updated: "2026-07-09"' in text
-    assert 'Reviewed backend correctness sweep shipped' in text
-    assert 'FX hedge quote direction inferred instead of assumed.' in text
-    assert 'Negative-quantity inflation blocked in recoverable math.' in text
-    assert 'id: "DONE-007"' in text
-    assert 'Hosted /public/runs/latest/audit-summary now returns the sanitized public-safe payload' in text
-    assert 'hosted findings remain scrubbed to board-safe signal labels.' in text
+    assert "window.STRATEGYOS_PLAN" not in text
+    assert "window payload as execution truth" in text
+    assert "hosted findings remain scrubbed to board-safe signal labels." not in text

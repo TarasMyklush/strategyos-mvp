@@ -79,6 +79,17 @@ def test_executive_assistant_uses_governed_qa_not_fake_captured_reply():
     assert "Prompt captured" not in js
 
 
+def test_executive_static_js_switches_latest_run_route_by_session_mode():
+    js = _static_executive_js()
+
+    assert 'function latestRunRouteForSession(session)' in js
+    assert 'if (session && session.api_auth_enabled === false) return "/runs/latest";' in js
+    assert 'if (session && session.authenticated) return "/runs/latest";' in js
+    assert 'return "/public/runs/latest";' in js
+    assert 'var session = await fetchJson("/ui/session") || {};' in js
+    assert 'var latestPacket = await fetchJson(latestRunRouteForSession(session) + buildQuery(params));' in js
+
+
 def test_workspace_chat_defaults_to_auto_qa_mode():
     workspace_html = (Path(api_module.STATIC_DIR) / "index.html").read_text(encoding="utf-8")
     js = TestClient(api_module.app).get("/static/app.js").text
@@ -370,7 +381,6 @@ def test_app_entry_uses_content_hashed_executive_assets():
     asset_rev = api_module._executive_asset_revision()
 
     assert f'/static/executive.css?v={asset_rev}' in html
-    assert f'/static/executive_design_data.js?v={asset_rev}' in html
     assert f'/static/executive.js?v={asset_rev}' in html
     assert "__EXECUTIVE_ASSET_REV__" not in html
 
@@ -493,7 +503,8 @@ def test_ui_session_reports_bu_role_with_read_only_review_capabilities():
         assert contract_payload["drilldown"]["gravity"]["rails"][1] in {"pre", "live", "closed"}
         assert contract_payload["drilldown"]["lower_rail"]["week_ahead"][0]["event_id"] == "prep"
         assert contract_payload["interaction_contracts"]["pending_reviews"]["route"] == "/bu/pending-reviews"
-        assert contract_payload["agents"]["discover"]["native"][0]["id"] == "native-covenant"
+        assert contract_payload["agents"]["discover"]["native"] == []
+        assert contract_payload["agents"]["discover"]["marketplace"]
         assert contract_payload["agent_modules"]["summary"]["running_count"] >= 4
         assert contract_payload["tenant_admin_system"]["connector_posture"]["count"] >= 3
         assert contract_payload["tenant_admin_system"]["workflow_posture"]["review_queue_route"] == "/reviewer/pending-reviews"
@@ -506,7 +517,7 @@ def test_ui_session_reports_bu_role_with_read_only_review_capabilities():
         _restore_env(original)
 
 
-def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypatch):
+def test_ui_session_and_workspace_contract_use_governed_routes_for_authenticated_executive(monkeypatch):
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -577,7 +588,7 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         payload = contract.json()
         assert payload["principal"]["altitude"] == "executive"
         cases_surface = next(item for item in payload["surfaces"] if item["surface_id"] == "cases")
-        assert cases_surface["primary_route"] == "/public/runs/latest/findings"
+        assert cases_surface["primary_route"] == "/runs/latest/findings"
         assert payload["evidence"]["preview_route"] == "/public/data/evidence-preview"
         assert payload["plan_health"]["root_label"] == "Governed plan posture"
         assert payload["domain_tree"]["nodes"][0]["domain_id"] == "finance"
@@ -596,36 +607,39 @@ def test_ui_session_and_workspace_contract_support_executive_demo_role(monkeypat
         assert payload["board_portal"]["presentation_state"] == "closed"
         assert payload["board_portal"]["lifecycle_flow"][2]["presented"] is True
         assert payload["board_portal"]["state_detail"]["state"] == "closed"
-        assert payload["board_portal"]["meeting"]["design_title"] == "Q2 Board Meeting"
-        assert payload["board_portal"]["kpis"][0]["key"] == "revenue"
-        assert payload["board_portal"]["decks"][0]["status"] == "approved"
-        assert "default_case_id" not in payload["drilldown"]
+        assert payload["board_portal"]["meeting"]["design_title"] is None
+        assert payload["board_portal"]["kpis"][0]["key"] == "recoverable_value"
+        assert payload["board_portal"]["decks"] == []
+        assert payload["drilldown"]["default_case_id"] is None
         assert payload["drilldown"]["cash_pulse"]["basis"] == "governed_findings"
         assert payload["drilldown"]["gravity"]["prompts"]
-        assert payload["drilldown"]["gravity"]["assistant"] == "Minerva"
+        assert payload["drilldown"]["gravity"]["assistant"] == "StrategyOS"
         assert payload["drilldown"]["gravity"]["sandbox"]["board_state"] == "closed"
         assert payload["drilldown"]["lower_rail"]["board_state"]["presentation_state"] == "closed"
-        assert payload["drilldown"]["lower_rail"]["week_ahead"][0]["prompt"]
-        assert payload["drilldown"]["lower_rail"]["owed_upward"]["items"]
-        assert payload["interaction_contracts"]["latest_run"]["route"] == "/public/runs/latest"
+        assert payload["drilldown"]["lower_rail"]["week_ahead"][0]["detail"]
+        assert payload["drilldown"]["lower_rail"]["owed_upward"]["items"] == []
+        assert payload["interaction_contracts"]["latest_run"]["route"] == "/runs/latest"
+        assert payload["interaction_contracts"]["report_preview"]["route"] == "/runs/latest/report-preview"
         assert payload["chat"]["assistant"]["persona_id"] == "board"
         assert payload["chat"]["assistant"]["board_state"] == "closed"
         assert payload["chat"]["store"]["mode"] == "client_session"
-        assert payload["chat"]["threads"][0]["thread_id"] == "system:latest-public"
-        assert payload["agents"]["running"][0]["id"] == "boardpack"
+        assert payload["chat"]["threads"][0]["thread_id"] == "system:run-42"
+        assert payload["agents"]["running"] == []
+        assert payload["agents"]["discover"]["marketplace"]
         assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
         assert payload["tenant_admin_system"]["managed_data"]["reports"]["report_count"] == 2
         assert payload["tenant_admin_system"]["trend"]["truth_basis"] == "reconciled_governed_metrics"
         assert payload["role_actions"]["viewer_role"] == "executive"
-        assert "node_id" not in str(payload["strategy_substrate"])
+        assert "Illustrative demo narrative" not in json.dumps(payload)
+        assert "SAR 2.09B" not in json.dumps(payload)
         assert payload["strategy_substrate"]["value_drivers"][0]["driver_id"] == "cash_recovery"
         assert any(driver["driver_id"] == "board_pack_readiness_driver" for driver in payload["strategy_substrate"]["value_drivers"])
         assert any(item["portfolio_id"] == "release-readiness" for item in payload["strategy_substrate"]["portfolio_views"])
         assert any(item["reasoning_id"] == "hold-runtime-boundary" for item in payload["strategy_substrate"]["reasoning"])
         assert payload["executive_diagnostics"]["hero"]["persona_id"] == "board"
         assert payload["executive_diagnostics"]["hero"]["board_state"] == "closed"
-        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "Minerva"
-        assert payload["executive_diagnostics"]["board_packet"]["assistant"] == "Minerva"
+        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "StrategyOS"
+        assert "assistant" not in payload["executive_diagnostics"]["board_packet"]
         assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
         assert payload["executive_diagnostics"]["composition"]["gravity"]["sandbox"]["active_driver_key"] == "owed_upward"
         assert any(item["option_id"] == "release-readiness" for item in payload["portfolio_switcher"]["options"])
@@ -773,7 +787,7 @@ def test_public_executive_shell_ceo_prompt_succeeds_without_session_token(monkey
         assert payload["assistant_mode"] == "scenario"
         assert payload["trace"]
         assert payload["audit_trail_id"]
-        assert payload["hallucination_risk"]["level"] == "low"
+        assert payload["hallucination_risk"]["level"] == "high"
         assert payload["prompt_contracts"]["role"]["prompt_id"] == "role:ceo:v1"
         assert "I couldn't reach the shared assistant service just now." not in payload["answer"]
     finally:
@@ -2790,9 +2804,9 @@ def test_executive_surface_prefers_shared_assistant_packet_for_visible_facts():
     assert "BOOTSTRAP_ASSISTANT_CONTEXT = bootstrap.assistant_public_context || {}" in executive_js
     assert "function getSharedAssistantContext()" in executive_js
     assert "state.latestPacket && state.latestPacket.assistant_public_context" in executive_js
-    assert "return getSharedAssistantContext().board_portal || DESIGN_GLOBAL.board || {}" in executive_js
+    assert "return getSharedAssistantContext().board_portal || {}" in executive_js
     assert "if ((shared.persona_id || \"ceo\") === personaId)" in executive_js
-    assert "return shared.agent_activity || DESIGN_GLOBAL.activity || {}" in executive_js
+    assert "return shared.agent_activity || {}" in executive_js
     assert "if (safeArray(shared.kg_nodes).length)" in executive_js
 
 

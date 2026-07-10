@@ -43,7 +43,7 @@ def test_invoice_totals_counts_and_party_breakdowns_are_exact(qa_context):
     top_vendors = qa.answer_question(
         "top 5 vendors by spend", bundle=bundle, findings=findings
     )
-    assert top_vendors["value"][0]["name"] == "Saudi Trading Co"
+    assert top_vendors["value"][0]["name"] == "Saudi Pharma Suppliers Co"
 
 
 def test_recoverable_findings_and_unmatched_questions(qa_context):
@@ -107,7 +107,7 @@ def test_colloquial_phrasing_routes_to_the_right_intent(qa_context):
         "top 5 suppliers by spend", bundle=bundle, findings=findings
     )
     assert top_suppliers["intent"] == "top_parties"
-    assert top_suppliers["value"][0]["name"] == "Saudi Trading Co"
+    assert top_suppliers["value"][0]["name"] == "Saudi Pharma Suppliers Co"
 
     # Colloquial ranking phrasing ("biggest suppliers") also reaches top_parties.
     biggest = qa.answer_question("who are our biggest suppliers?", bundle=bundle, findings=findings)
@@ -129,10 +129,10 @@ def test_colloquial_phrasing_routes_to_the_right_intent(qa_context):
     # a named-vendor lookup should still parse the real name and not be polluted
     # by injected canonical tokens.
     named = qa.answer_question(
-        "how much did we pay Saudi Trading Co?", bundle=bundle, findings=findings
+        "how much did we pay Saudi Pharma Suppliers Co?", bundle=bundle, findings=findings
     )
     assert named["matched"] is True
-    assert "Saudi Trading Co" in named["answer"]
+    assert "Saudi Pharma Suppliers Co" in named["answer"]
 
     # A genuinely unrelated question still falls through to suggestions.
     no_match = qa.answer_question("what is the weather today?", bundle=bundle, findings=findings)

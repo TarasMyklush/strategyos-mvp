@@ -112,11 +112,7 @@ def require_twin_dashboard_access(role: str):
 
 
 def _get_repositories() -> TwinRepositories:
-    repositories = build_app_repositories()
-    repositories.kpis.ensure_seeded(resolution.KPI_TREE)
-    for seed_role in ("ceo", "cfo", "group_manager"):
-        repositories.governance.seed_demo_history(seed_role)
-    return repositories
+    return build_app_repositories()
 
 
 def _load_or_create_state(role: str, repositories: TwinRepositories) -> memory.TwinState:
@@ -181,13 +177,18 @@ def _fallback_kpis(role: str, twin_persona: persona.TwinPersona, repositories: T
     for kpi_id in twin_persona.kpis_owned:
         gaps = eng.detect_gaps(kpi_id)
         node = eng.get_node(kpi_id) or {}
+        node_status = str(node.get("status") or "unknown")
+        if node_status == "unavailable" or node.get("value") is None:
+            health = "critical"
+        else:
+            health = "healthy" if not gaps else ("warning" if len(gaps) == 1 else "critical")
         results[kpi_id] = {
             "label": node.get("label", kpi_id),
             "value": node.get("value"),
-            "status": node.get("status", "unknown"),
+            "status": node_status,
             "gaps": gaps,
-            "health": "healthy" if not gaps else ("warning" if len(gaps) == 1 else "critical"),
-            "source": "twin_repository",
+            "health": health,
+            "source": "twin_repository_structure",
         }
     return results
 
@@ -348,6 +349,7 @@ def twin_kpis(
         "canonical_role": canonical_role,
         "display_name": twin_persona.display_name,
         "data_source": surface["data_source"],
+        "source_status": surface["source_status"],
         "bounded_fallback": surface["bounded_fallback"],
         "kpis": surface["kpis"],
         "run_context": surface["run_context"],
@@ -462,6 +464,7 @@ def twin_investigate(
         "run_context": strategyos_payload["run_context"],
         "consistency": strategyos_payload["consistency"],
         "data_source": strategyos_payload["data_source"],
+        "source_status": strategyos_payload["source_status"],
         "bounded_fallback": strategyos_payload["bounded_fallback"],
         "governance": _governance_payload(canonical_role, repositories, principal=principal),
     }

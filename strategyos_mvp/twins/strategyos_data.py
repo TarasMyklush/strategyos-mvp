@@ -354,6 +354,7 @@ def build_surface_payload(role: str, fallback_kpis: dict[str, Any] | None = None
     if surface is None:
         return {
             "data_source": "twin_repository_fallback",
+            "source_status": "missing",
             "bounded_fallback": True,
             "kpis": fallback_kpis or {},
             "run_context": build_run_context(None),
@@ -369,6 +370,7 @@ def build_surface_payload(role: str, fallback_kpis: dict[str, Any] | None = None
     evidence = select_evidence_records(payload.get("findings") or [], "", limit=3)
     return {
         "data_source": "strategyos",
+        "source_status": "current_run",
         "bounded_fallback": False,
         "kpis": kpis,
         "run_context": build_run_context(surface),
@@ -386,6 +388,7 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
     if surface is None:
         return {
             "data_source": "twin_repository_fallback",
+            "source_status": "missing",
             "bounded_fallback": True,
             "response": {
                 "summary": "No governed StrategyOS run is available yet. The twin remains bounded to persisted local state until a real run lands.",
@@ -417,6 +420,7 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
     )
     return {
         "data_source": "strategyos",
+        "source_status": "current_run",
         "bounded_fallback": False,
         "response": {
             "summary": (

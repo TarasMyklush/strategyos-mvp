@@ -36,7 +36,7 @@ KPI_TREE: dict[str, dict[str, Any]] = {
     },
     "revenue_q2": {
         "owner": "group_manager",
-        "value": 2_100_000_000,
+        "value": None,
         "status": "current",
         "threshold": 2_000_000_000,
         "alert_below": 1_950_000_000,
@@ -242,7 +242,9 @@ class KPIResolutionEngine:
                 ),
                 "owner": owner,
             })
-        if value is None and status not in ("missing", "stale", "current"):
+        if status == "unavailable":
+            return gaps
+        if value is None and status not in ("missing", "stale", "current", "unavailable"):
             gaps.append({
                 "kpi_node_id": kpi_node_id,
                 "type": "missing_value",

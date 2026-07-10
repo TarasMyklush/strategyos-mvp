@@ -273,10 +273,9 @@ class TestResolveMultiHop:
         messages = resolve_multi_hop(self.engine, "raw_materials_q2", "group_manager")
         assert len(messages) >= 1
 
-    def test_resolved_node_returns_no_messages(self):
-        """revenue_q2 has no gaps, so no messages should be produced."""
+    def test_unavailable_structural_node_returns_no_messages(self):
+        """Unavailable structural metadata should not invent a routing chase."""
         messages = resolve_multi_hop(self.engine, "revenue_q2", "ceo")
-        # revenue_q2 is current with no gaps
         assert len(messages) == 0
 
 

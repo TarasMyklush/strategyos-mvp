@@ -828,7 +828,7 @@ p:last-child { margin-bottom: 0; }
     <span class="hero__badge">Six required sections</span>
   </div>
   <h1>Execution tracker</h1>
-  <p>No active scope remains. The final copy pass is closed, and verified behavior work stays in shipped history.</p>
+  <p id="plan-hero-copy">Loading governed execution tracker truth…</p>
   <div class="hero__caption">strategyos.live/plan</div>
 </section>
 
@@ -845,13 +845,47 @@ p:last-child { margin-bottom: 0; }
 
 </section>
 
-<!-- ═══════════ Data ═══════════ -->
-<script src="/static/plan_data.js"></script>
-
 <script>
 (function () {
-  const PLAN = window.STRATEGYOS_PLAN;
-  if (!PLAN) { console.error("STRATEGYOS_PLAN not found"); return; }
+  var PLAN = null;
+
+  function planUnavailable(reason) {
+    return {
+      updated: 'Unavailable',
+      liveStatus: {
+        state: 'Tracker truth unavailable',
+        lastVerified: 'Unavailable',
+        note: reason || 'No governed plan payload was returned.'
+      },
+      criticalBlockers: [
+        {
+          id: 'PLAN-UNAVAILABLE',
+          title: 'Plan truth is unavailable',
+          detail: reason || 'No governed plan payload was returned.',
+          status: 'open'
+        }
+      ],
+      activeActionItems: [],
+      hostedVerificationState: {
+        summary: 'Unavailable — /plan did not receive a governed payload.',
+        lastChecked: 'Unavailable',
+        checks: [{ label: 'Plan API payload', result: 'fail', note: reason || 'No governed plan payload was returned.' }]
+      },
+      backlog: {
+        title: 'Later hardening / backlog',
+        summary: 'Only real remaining work belongs here.',
+        rows: []
+      },
+      completedHistory: []
+    };
+  }
+
+  function renderHero() {
+    var hero = document.getElementById('plan-hero-copy');
+    if (!hero) return;
+    var liveStatus = (PLAN && PLAN.liveStatus) || {};
+    hero.textContent = liveStatus.note || liveStatus.state || 'Governed plan tracker loaded.';
+  }
 
   function renderLiveStatus() {
     var el = document.getElementById("plan-live-status");
@@ -966,13 +1000,29 @@ p:last-child { margin-bottom: 0; }
     return div.innerHTML;
   }
 
-  /* ─── Init ─── */
-  renderLiveStatus();
-  renderCriticalBlockers();
-  renderActiveActionItems();
-  renderVerificationState();
-  renderBacklog();
-  renderHistory();
+  function renderAll() {
+    renderHero();
+    renderLiveStatus();
+    renderCriticalBlockers();
+    renderActiveActionItems();
+    renderVerificationState();
+    renderBacklog();
+    renderHistory();
+  }
+
+  fetch('/api/plan/latest')
+    .then(function (response) {
+      if (!response.ok) throw new Error('Plan API returned ' + response.status);
+      return response.json();
+    })
+    .then(function (payload) {
+      PLAN = payload || planUnavailable('Plan API returned an empty payload.');
+      renderAll();
+    })
+    .catch(function (error) {
+      PLAN = planUnavailable(error && error.message ? error.message : 'Failed to load governed plan payload.');
+      renderAll();
+    });
 
 })();
 </script>
