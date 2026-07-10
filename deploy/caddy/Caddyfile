@@ -1,3 +1,19 @@
+new.strategyos.live {
+    encode gzip
+    header {
+        -Server
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src https://www.youtube-nocookie.com https://www.youtube.com; connect-src 'self' https:; font-src 'self'"
+    }
+    reverse_proxy host.docker.internal:8080 {
+        header_down -Server
+    }
+}
+
 {$STRATEGYOS_SITE_ADDRESS} {
     encode gzip
     header {

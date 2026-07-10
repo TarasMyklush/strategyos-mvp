@@ -1,0 +1,515 @@
+name: StrategyOS Branch Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy
+        required: true
+        type: string
+      target_environment:
+        description: GitHub environment to deploy to
+        required: true
+        type: choice
+        default: hetzner-branch
+        options:
+          - hetzner-branch
+      run_smoke:
+        description: Start one protected /runs smoke request after readiness passes
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+
+concurrency:
+  group: strategyos-branch-deploy-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  tests:
+    name: Run test suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: |
+          python -m pytest ${{ vars.CI_TEST_TARGETS || 'tests/' }} -v --tb=short
+
+  image:
+    name: Build and publish image
+    runs-on: ubuntu-24.04
+    needs: tests
+    timeout-minutes: 30
+    outputs:
+      image-ref: ${{ steps.image-ref.outputs.value }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Set image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=sha,format=long,prefix=sha-
+            type=raw,value=branch-${{ inputs.branch }}
+            type=raw,value=manual-${{ github.run_number }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            POPPLER_UTILS_VERSION=25.03.0-5+deb13u3
+
+      - name: Export digest image ref
+        id: image-ref
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "value=${IMAGE_NAME}@${IMAGE_DIGEST}" >> "${GITHUB_OUTPUT}"
+
+  deploy:
+    name: Deploy branch to Hetzner
+    runs-on: ubuntu-24.04
+    needs: image
+    timeout-minutes: 30
+    environment:
+      name: ${{ inputs.target_environment }}
+      url: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+    env:
+      TARGET_HOST: ${{ vars.HETZNER_USER }}@${{ vars.HETZNER_HOST }}
+      TARGET_DIR: ${{ vars.TARGET_DIR || '/opt/strategyos-branch' }}
+      STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+      STRATEGYOS_API_IMAGE: ${{ needs.image.outputs.image-ref }}
+      STRATEGYOS_COMPOSE_FILES: ${{ vars.STRATEGYOS_COMPOSE_FILES }}
+      STRATEGYOS_COMPOSE_PROFILES: ${{ vars.STRATEGYOS_COMPOSE_PROFILES || 'hatchet' }}
+      HETZNER_USER: ${{ vars.HETZNER_USER }}
+      STRATEGYOS_HTTP_PORT: ${{ vars.STRATEGYOS_HTTP_PORT || '8080' }}
+      STRATEGYOS_HTTPS_PORT: ${{ vars.STRATEGYOS_HTTPS_PORT || '8443' }}
+      STRATEGYOS_SITE_ADDRESS: ${{ vars.STRATEGYOS_SITE_ADDRESS || ':8080' }}
+      STRATEGYOS_ENVIRONMENT_LABEL: ${{ vars.STRATEGYOS_ENVIRONMENT_LABEL || 'branch-preview' }}
+      STRATEGYOS_AUTH_MODE: ${{ vars.STRATEGYOS_AUTH_MODE || 'identity_provider' }}
+      STRATEGYOS_TRUST_PROXY_AUTH: ${{ vars.STRATEGYOS_TRUST_PROXY_AUTH || 'false' }}
+      STRATEGYOS_OPERATOR_EMAILS: ${{ vars.STRATEGYOS_OPERATOR_EMAILS || '' }}
+      STRATEGYOS_REVIEWER_EMAILS: ${{ vars.STRATEGYOS_REVIEWER_EMAILS || '' }}
+      STRATEGYOS_IDP_ISSUER: ${{ vars.STRATEGYOS_IDP_ISSUER || vars.STRATEGYOS_PUBLIC_URL }}
+      STRATEGYOS_TENANT_SLUG: ${{ vars.STRATEGYOS_TENANT_SLUG || 'strategyos-branch' }}
+      STRATEGYOS_TENANT_NAME: ${{ vars.STRATEGYOS_TENANT_NAME || 'StrategyOS Branch Preview' }}
+      STRATEGYOS_IDP_OPERATOR_USERNAME: ${{ vars.STRATEGYOS_IDP_OPERATOR_USERNAME || 'operator.hosted' }}
+      STRATEGYOS_IDP_REVIEWER_USERNAME: ${{ vars.STRATEGYOS_IDP_REVIEWER_USERNAME || 'reviewer.hosted' }}
+      STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: 'false'
+      STRATEGYOS_PUBLIC_HEALTH_ENABLED: ${{ vars.STRATEGYOS_PUBLIC_HEALTH_ENABLED || 'false' }}
+      STRATEGYOS_REQUIRE_HUMAN_REVIEW: 'true'
+      STRATEGYOS_TWINS_ENABLED: ${{ vars.STRATEGYOS_TWINS_ENABLED || 'true' }}
+      STRATEGYOS_TWINS_MUTATIONS_ENABLED: ${{ vars.STRATEGYOS_TWINS_MUTATIONS_ENABLED || 'true' }}
+      STRATEGYOS_TWINS_SCHEDULER_ENABLED: ${{ vars.STRATEGYOS_TWINS_SCHEDULER_ENABLED || 'true' }}
+      STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS: ${{ vars.STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS || 'false' }}
+      STRATEGYOS_SYNC_ARTIFACTS: ${{ vars.STRATEGYOS_SYNC_ARTIFACTS || 'true' }}
+      OAUTH2_PROXY_PROVIDER: ${{ vars.OAUTH2_PROXY_PROVIDER || 'oidc' }}
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${{ vars.OAUTH2_PROXY_OIDC_ISSUER_URL || '' }}
+      OAUTH2_PROXY_CLIENT_ID: ${{ vars.OAUTH2_PROXY_CLIENT_ID || '' }}
+      OAUTH2_PROXY_REDIRECT_URL: ${{ vars.OAUTH2_PROXY_REDIRECT_URL || '' }}
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${{ vars.OAUTH2_PROXY_EMAIL_DOMAINS || '*' }}
+      OAUTH2_PROXY_SCOPE: ${{ vars.OAUTH2_PROXY_SCOPE || 'openid email profile' }}
+      OAUTH2_PROXY_COOKIE_SECURE: ${{ vars.OAUTH2_PROXY_COOKIE_SECURE || 'true' }}
+      STRATEGYOS_RUNTIME_BACKEND: ${{ vars.STRATEGYOS_RUNTIME_BACKEND || 'langgraph' }}
+      STRATEGYOS_RUN_EXECUTION_MODE: ${{ vars.STRATEGYOS_RUN_EXECUTION_MODE || 'sync' }}
+      STRATEGYOS_RUN_POLICY: ${{ vars.STRATEGYOS_RUN_POLICY || 'sovereign' }}
+      STRATEGYOS_APPROVED_EXTERNAL_MODES: ${{ vars.STRATEGYOS_APPROVED_EXTERNAL_MODES || '' }}
+      STRATEGYOS_MODEL_PROVIDER_ENABLED: ${{ vars.STRATEGYOS_MODEL_PROVIDER_ENABLED || 'false' }}
+      STRATEGYOS_LLM_CHAT_ENABLED: ${{ vars.STRATEGYOS_LLM_CHAT_ENABLED || 'false' }}
+      STRATEGYOS_LLM_PROVIDER: ${{ vars.STRATEGYOS_LLM_PROVIDER || 'deepseek' }}
+      STRATEGYOS_LLM_BASE_URL: ${{ vars.STRATEGYOS_LLM_BASE_URL || 'https://api.deepseek.com' }}
+      STRATEGYOS_LLM_MODEL: ${{ vars.STRATEGYOS_LLM_MODEL || 'deepseek-v4-pro' }}
+      STRATEGYOS_LLM_TIMEOUT_SECONDS: ${{ vars.STRATEGYOS_LLM_TIMEOUT_SECONDS || '30' }}
+      HATCHET_CLIENT_TLS_STRATEGY: ${{ vars.HATCHET_CLIENT_TLS_STRATEGY || 'none' }}
+      HATCHET_CLIENT_HOST_PORT: ${{ vars.HATCHET_CLIENT_HOST_PORT || 'hatchet-lite:7077' }}
+      STRATEGYOS_HATCHET_WORKER_NAME: ${{ vars.STRATEGYOS_HATCHET_WORKER_NAME || 'strategyos-worker' }}
+      STRATEGYOS_HATCHET_WORKER_SLOTS: ${{ vars.STRATEGYOS_HATCHET_WORKER_SLOTS || '1' }}
+      STRATEGYOS_HATCHET_DASHBOARD_URL: ${{ vars.STRATEGYOS_HATCHET_DASHBOARD_URL || 'http://localhost:18888' }}
+      HATCHET_POSTGRES_DB: ${{ vars.HATCHET_POSTGRES_DB || 'hatchet' }}
+      HATCHET_POSTGRES_USER: ${{ vars.HATCHET_POSTGRES_USER || 'hatchet' }}
+      HATCHET_DASHBOARD_PORT: ${{ vars.HATCHET_DASHBOARD_PORT || '18888' }}
+      HATCHET_GRPC_PORT: ${{ vars.HATCHET_GRPC_PORT || '17077' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Prepare SSH
+        env:
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          HETZNER_KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
+        run: |
+          test -n "${HETZNER_SSH_KEY}"
+          test -n "${HETZNER_KNOWN_HOSTS}"
+          install -m 700 -d "${HOME}/.ssh"
+          printf '%s\n' "${HETZNER_SSH_KEY}" > "${HOME}/.ssh/strategyos_deploy"
+          chmod 600 "${HOME}/.ssh/strategyos_deploy"
+          printf '%s\n' "${HETZNER_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          echo "SSH_OPTS=-i ${HOME}/.ssh/strategyos_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" >> "${GITHUB_ENV}"
+
+      - name: Render deploy config
+        run: |
+          cp deploy/.env.example deploy/.env.ci
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          from urllib.parse import urlparse
+
+          env_path = Path("deploy/.env.ci")
+          values = {}
+          order = []
+          for line in env_path.read_text(encoding="utf-8").splitlines():
+              if line and not line.startswith("#") and "=" in line:
+                  key, value = line.split("=", 1)
+                  values[key] = value
+                  order.append(key)
+
+          overrides = {
+               "STRATEGYOS_API_IMAGE": os.environ["STRATEGYOS_API_IMAGE"],
+               "STRATEGYOS_HTTP_PORT": os.environ["STRATEGYOS_HTTP_PORT"],
+               "STRATEGYOS_HTTPS_PORT": os.environ["STRATEGYOS_HTTPS_PORT"],
+               "STRATEGYOS_SITE_ADDRESS": os.environ["STRATEGYOS_SITE_ADDRESS"],
+               "STRATEGYOS_ENVIRONMENT_LABEL": os.environ["STRATEGYOS_ENVIRONMENT_LABEL"],
+               "STRATEGYOS_AUTH_MODE": os.environ["STRATEGYOS_AUTH_MODE"],
+               "STRATEGYOS_TRUST_PROXY_AUTH": os.environ["STRATEGYOS_TRUST_PROXY_AUTH"],
+               "STRATEGYOS_OPERATOR_EMAILS": os.environ["STRATEGYOS_OPERATOR_EMAILS"],
+               "STRATEGYOS_REVIEWER_EMAILS": os.environ["STRATEGYOS_REVIEWER_EMAILS"],
+               "STRATEGYOS_IDP_ISSUER": os.environ["STRATEGYOS_IDP_ISSUER"],
+               "STRATEGYOS_TENANT_SLUG": os.environ["STRATEGYOS_TENANT_SLUG"],
+               "STRATEGYOS_TENANT_NAME": os.environ["STRATEGYOS_TENANT_NAME"],
+               "STRATEGYOS_IDP_OPERATOR_USERNAME": os.environ["STRATEGYOS_IDP_OPERATOR_USERNAME"],
+               "STRATEGYOS_IDP_REVIEWER_USERNAME": os.environ["STRATEGYOS_IDP_REVIEWER_USERNAME"],
+               "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": os.environ["STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED"],
+               "STRATEGYOS_PUBLIC_HEALTH_ENABLED": os.environ["STRATEGYOS_PUBLIC_HEALTH_ENABLED"],
+               "STRATEGYOS_REQUIRE_HUMAN_REVIEW": os.environ["STRATEGYOS_REQUIRE_HUMAN_REVIEW"],
+               "STRATEGYOS_TWINS_ENABLED": os.environ["STRATEGYOS_TWINS_ENABLED"],
+               "STRATEGYOS_TWINS_MUTATIONS_ENABLED": os.environ["STRATEGYOS_TWINS_MUTATIONS_ENABLED"],
+               "STRATEGYOS_TWINS_SCHEDULER_ENABLED": os.environ["STRATEGYOS_TWINS_SCHEDULER_ENABLED"],
+               "STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS": os.environ["STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS"],
+               "STRATEGYOS_SYNC_ARTIFACTS": os.environ["STRATEGYOS_SYNC_ARTIFACTS"],
+               "OAUTH2_PROXY_PROVIDER": os.environ["OAUTH2_PROXY_PROVIDER"],
+               "OAUTH2_PROXY_OIDC_ISSUER_URL": os.environ["OAUTH2_PROXY_OIDC_ISSUER_URL"],
+               "OAUTH2_PROXY_CLIENT_ID": os.environ["OAUTH2_PROXY_CLIENT_ID"],
+               "OAUTH2_PROXY_REDIRECT_URL": os.environ["OAUTH2_PROXY_REDIRECT_URL"],
+               "OAUTH2_PROXY_EMAIL_DOMAINS": os.environ["OAUTH2_PROXY_EMAIL_DOMAINS"],
+               "OAUTH2_PROXY_SCOPE": os.environ["OAUTH2_PROXY_SCOPE"],
+               "OAUTH2_PROXY_COOKIE_SECURE": os.environ["OAUTH2_PROXY_COOKIE_SECURE"],
+               "STRATEGYOS_RUNTIME_BACKEND": os.environ["STRATEGYOS_RUNTIME_BACKEND"],
+               "STRATEGYOS_RUN_EXECUTION_MODE": os.environ["STRATEGYOS_RUN_EXECUTION_MODE"],
+              "STRATEGYOS_RUN_POLICY": os.environ["STRATEGYOS_RUN_POLICY"],
+              "STRATEGYOS_APPROVED_EXTERNAL_MODES": os.environ["STRATEGYOS_APPROVED_EXTERNAL_MODES"],
+              "STRATEGYOS_MODEL_PROVIDER_ENABLED": os.environ["STRATEGYOS_MODEL_PROVIDER_ENABLED"],
+              "STRATEGYOS_LLM_CHAT_ENABLED": os.environ["STRATEGYOS_LLM_CHAT_ENABLED"],
+              "STRATEGYOS_LLM_PROVIDER": os.environ["STRATEGYOS_LLM_PROVIDER"],
+              "STRATEGYOS_LLM_BASE_URL": os.environ["STRATEGYOS_LLM_BASE_URL"],
+              "STRATEGYOS_LLM_MODEL": os.environ["STRATEGYOS_LLM_MODEL"],
+              "STRATEGYOS_LLM_TIMEOUT_SECONDS": os.environ["STRATEGYOS_LLM_TIMEOUT_SECONDS"],
+              "HATCHET_CLIENT_TLS_STRATEGY": os.environ["HATCHET_CLIENT_TLS_STRATEGY"],
+              "HATCHET_CLIENT_HOST_PORT": os.environ["HATCHET_CLIENT_HOST_PORT"],
+              "STRATEGYOS_HATCHET_WORKER_NAME": os.environ["STRATEGYOS_HATCHET_WORKER_NAME"],
+              "STRATEGYOS_HATCHET_WORKER_SLOTS": os.environ["STRATEGYOS_HATCHET_WORKER_SLOTS"],
+              "STRATEGYOS_HATCHET_DASHBOARD_URL": os.environ["STRATEGYOS_HATCHET_DASHBOARD_URL"],
+              "HATCHET_POSTGRES_DB": os.environ["HATCHET_POSTGRES_DB"],
+              "HATCHET_POSTGRES_USER": os.environ["HATCHET_POSTGRES_USER"],
+              "HATCHET_DASHBOARD_PORT": os.environ["HATCHET_DASHBOARD_PORT"],
+               "HATCHET_GRPC_PORT": os.environ["HATCHET_GRPC_PORT"],
+           }
+
+          public_url = os.environ.get("STRATEGYOS_PUBLIC_URL", "").strip()
+          site_address = str(overrides.get("STRATEGYOS_SITE_ADDRESS") or "").strip()
+          parsed_public_url = urlparse(public_url)
+          public_url_host = parsed_public_url.hostname or ""
+          public_url_port = parsed_public_url.port
+          if site_address in {"", ":80"} and parsed_public_url.scheme == "https" and public_url_host:
+              overrides["STRATEGYOS_SITE_ADDRESS"] = (
+                  f"{public_url_host}:{public_url_port}"
+                  if public_url_port and public_url_port != 443
+                  else public_url_host
+              )
+
+          for key, value in overrides.items():
+              if "\n" in value:
+                  raise SystemExit(f"{key} contains a newline")
+              values[key] = value
+              if key not in order:
+                  order.append(key)
+
+          env_path.write_text("\n".join(f"{key}={values[key]}" for key in order) + "\n", encoding="utf-8")
+          PY
+
+      - name: Render deploy secrets
+        env:
+          STRATEGYOS_ENV_SECRETS: ${{ secrets.STRATEGYOS_ENV_SECRETS }}
+          STRATEGYOS_LLM_API_KEY: ${{ secrets.STRATEGYOS_LLM_API_KEY }}
+          STRATEGYOS_IDP_TEST_USERS: ${{ secrets.STRATEGYOS_IDP_TEST_USERS }}
+          STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET: ${{ secrets.STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET }}
+          OAUTH2_PROXY_CLIENT_SECRET: ${{ secrets.OAUTH2_PROXY_CLIENT_SECRET }}
+          OAUTH2_PROXY_COOKIE_SECRET: ${{ secrets.OAUTH2_PROXY_COOKIE_SECRET }}
+        run: |
+          test -n "${STRATEGYOS_ENV_SECRETS}"
+          printf '%s\n' "${STRATEGYOS_ENV_SECRETS}" > deploy/.env.secrets.ci
+          python - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path("deploy/.env.secrets.ci")
+          lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+          def upsert(key: str, value: str) -> None:
+              global lines
+              lines = [line for line in lines if not line.startswith(f"{key}=")]
+              if value:
+                  lines.append(f"{key}={value}")
+
+          upsert("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET", os.environ.get("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET", ""))
+          upsert("OAUTH2_PROXY_CLIENT_SECRET", os.environ.get("OAUTH2_PROXY_CLIENT_SECRET", ""))
+          upsert("OAUTH2_PROXY_COOKIE_SECRET", os.environ.get("OAUTH2_PROXY_COOKIE_SECRET", ""))
+          upsert("STRATEGYOS_LLM_API_KEY", os.environ.get("STRATEGYOS_LLM_API_KEY", ""))
+          upsert("STRATEGYOS_IDP_TEST_USERS", os.environ.get("STRATEGYOS_IDP_TEST_USERS", ""))
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+          if [ -n "${STRATEGYOS_LLM_API_KEY}" ]; then
+            python - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path("deploy/.env.secrets.ci")
+          secret = os.environ["STRATEGYOS_LLM_API_KEY"]
+          lines = [
+              line
+              for line in path.read_text(encoding="utf-8").splitlines()
+              if not line.startswith("STRATEGYOS_LLM_API_KEY=")
+          ]
+          lines.append(f"STRATEGYOS_LLM_API_KEY={secret}")
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+          fi
+          grep -q '^POSTGRES_PASSWORD=' deploy/.env.secrets.ci
+          grep -q '^STRATEGYOS_IDP_CLIENT_SECRET=' deploy/.env.secrets.ci
+          ! grep -q '__CHANGE_ME_' deploy/.env.secrets.ci
+
+      - name: Validate release compose config
+        run: |
+          compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml deploy/docker-compose.branch.yml}"
+          compose_args=()
+          for compose_file in ${compose_files}; do
+            compose_args+=(-f "${compose_file}")
+          done
+          profile_args=()
+          for profile in ${STRATEGYOS_COMPOSE_PROFILES:-}; do
+            profile_args+=(--profile "${profile}")
+          done
+          docker compose "${compose_args[@]}" "${profile_args[@]}" --env-file deploy/.env.ci --env-file deploy/.env.secrets.ci config -q
+
+      - name: Validate deploy boundary
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+          TARGET_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+          TARGET_DEPLOY_USER: ${{ vars.HETZNER_USER }}
+        run: |
+          ENV_FILE=deploy/.env.ci \
+          SECRETS_FILE=deploy/.env.secrets.ci \
+          TARGET_ENVIRONMENT="${TARGET_ENVIRONMENT}" \
+          TARGET_PUBLIC_URL="${TARGET_PUBLIC_URL}" \
+          TARGET_DEPLOY_USER="${TARGET_DEPLOY_USER}" \
+          bash deploy/scripts/validate_deploy_boundary.sh
+
+      - name: Log remote host in to GHCR
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: printf '%s' "${GHCR_TOKEN}" | ssh ${SSH_OPTS} "${TARGET_HOST}" "docker login ghcr.io -u '${GITHUB_ACTOR}' --password-stdin"
+
+      - name: Pre-deploy host repair
+        run: |
+          echo "=== Host disk usage ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h / && echo '---' && du -sh /var/lib/docker/* 2>/dev/null | sort -rh | head -20 || true"
+
+          echo "=== Docker system prune (unused images, containers, networks, build cache) ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker system prune -af --volumes || true"
+
+          echo "=== Disk usage after cleanup ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h /"
+
+          echo "=== Checking branch hatchet-postgres health ==="
+          HEALTH=$(ssh ${SSH_OPTS} "${TARGET_HOST}" "docker inspect strategyos-branch-hatchet-postgres-1 --format '{{.State.Health.Status}}' 2>/dev/null || echo 'no-container'")
+          echo "hatchet-postgres health: ${HEALTH}"
+
+          echo "=== hatchet-postgres logs (last 30 lines) ==="
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-branch-hatchet-postgres-1 --tail 30 2>&1 || true"
+
+          if [ "${HEALTH}" != "healthy" ]; then
+            echo "=== hatchet-postgres is not healthy (status: ${HEALTH}) — resetting hatchet volumes ==="
+            compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml deploy/docker-compose.branch.yml}"
+            compose_args=()
+            for compose_file in ${compose_files}; do
+              compose_args+=(-f "${compose_file}")
+            done
+            profile_args=()
+            for profile in ${STRATEGYOS_COMPOSE_PROFILES:-}; do
+              profile_args+=(--profile "${profile}")
+            done
+            ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose ${compose_args[*]} ${profile_args[*]} --project-name strategyos-branch --env-file deploy/.env --env-file deploy/.env.secrets down -v hatchet-postgres hatchet-lite || true"
+            echo "=== Hatchet volumes reset complete ==="
+          else
+            echo "=== hatchet-postgres is healthy — no reset needed ==="
+          fi
+
+      - name: Deploy compose stack
+        id: deploy
+        run: |
+          compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml deploy/docker-compose.branch.yml}"
+          TARGET_HOST="${TARGET_HOST}" \
+          TARGET_DIR="${TARGET_DIR}" \
+          SSH_OPTS="${SSH_OPTS}" \
+          LOCAL_ENV=deploy/.env.ci \
+          LOCAL_SECRETS_ENV=deploy/.env.secrets.ci \
+          COMPOSE_FILES="${compose_files}" \
+          COMPOSE_PROFILES="${STRATEGYOS_COMPOSE_PROFILES:-}" \
+          COMPOSE_PROJECT_NAME=strategyos-branch \
+          bash deploy/scripts/deploy_stack.sh
+
+      - name: Check Hatchet worker health
+        run: |
+          compose_profiles="${STRATEGYOS_COMPOSE_PROFILES:-}"
+          if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then
+            case " ${compose_profiles} " in
+              *" hatchet "*) ;;
+              *)
+                echo "Skipping Hatchet worker health check because STRATEGYOS_RUN_EXECUTION_MODE=${STRATEGYOS_RUN_EXECUTION_MODE} and STRATEGYOS_COMPOSE_PROFILES=${compose_profiles:-<empty>}."
+                exit 0
+                ;;
+            esac
+          fi
+
+          if [ -z "${compose_profiles}" ]; then
+            echo "Skipping Hatchet worker health check because STRATEGYOS_COMPOSE_PROFILES is empty."
+            exit 0
+          fi
+
+          compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml deploy/docker-compose.branch.yml}"
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && COMPOSE_FILES='${compose_files}' COMPOSE_PROFILES='${compose_profiles}' COMPOSE_PROJECT_NAME=strategyos-branch bash deploy/scripts/check_hatchet_worker.sh"
+
+      - name: Check protected readiness
+        id: health
+        env:
+          STRATEGYOS_READINESS_AUTH_HEADER: ${{ secrets.STRATEGYOS_READINESS_AUTH_HEADER }}
+        run: |
+          if [ "${STRATEGYOS_AUTH_MODE}" = "proxy_oidc" ]; then
+            test -n "${STRATEGYOS_READINESS_AUTH_HEADER}"
+            READINESS_AUTH_HEADER="${STRATEGYOS_READINESS_AUTH_HEADER}" \
+            TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
+            bash deploy/scripts/check_health.sh
+          else
+            token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
+            echo "::add-mask::${token}"
+            READINESS_AUTH_HEADER="Authorization: Bearer ${token}" \
+            TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
+            bash deploy/scripts/check_health.sh
+          fi
+
+      - name: Verify governed cloud surface
+        env:
+          STRATEGYOS_OPERATOR_AUTH_HEADER: ${{ secrets.STRATEGYOS_OPERATOR_AUTH_HEADER }}
+          STRATEGYOS_REVIEWER_AUTH_HEADER: ${{ secrets.STRATEGYOS_REVIEWER_AUTH_HEADER }}
+        run: |
+          if [ "${STRATEGYOS_AUTH_MODE}" = "proxy_oidc" ]; then
+            test -n "${STRATEGYOS_OPERATOR_AUTH_HEADER}"
+            test -n "${STRATEGYOS_REVIEWER_AUTH_HEADER}"
+            python deploy/scripts/verify_cloud_surface.py \
+              --base-url "${STRATEGYOS_PUBLIC_URL}" \
+              --operator-auth-header "${STRATEGYOS_OPERATOR_AUTH_HEADER}" \
+              --reviewer-auth-header "${STRATEGYOS_REVIEWER_AUTH_HEADER}"
+          else
+            operator_token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
+            reviewer_token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=reviewer bash deploy/scripts/remote_idp_token.sh)"
+            echo "::add-mask::${operator_token}"
+            echo "::add-mask::${reviewer_token}"
+            python deploy/scripts/verify_cloud_surface.py \
+              --base-url "${STRATEGYOS_PUBLIC_URL}" \
+              --operator-auth-header "Authorization: Bearer ${operator_token}" \
+              --reviewer-auth-header "Authorization: Bearer ${reviewer_token}"
+          fi
+
+      - name: Validate public edge headers
+        run: |
+          TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
+          bash deploy/scripts/validate_public_edge.sh
+
+      - name: Optional smoke run
+        if: ${{ inputs.run_smoke }}
+        env:
+          STRATEGYOS_RUN_AUTH_HEADER: ${{ secrets.STRATEGYOS_RUN_AUTH_HEADER }}
+        run: |
+          if [ "${STRATEGYOS_AUTH_MODE}" = "proxy_oidc" ]; then
+            test -n "${STRATEGYOS_RUN_AUTH_HEADER}"
+            RUN_AUTH_HEADER="${STRATEGYOS_RUN_AUTH_HEADER}" \
+            TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
+            bash deploy/scripts/run_remote_workflow.sh
+          else
+            token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
+            echo "::add-mask::${token}"
+            RUN_AUTH_HEADER="Authorization: Bearer ${token}" \
+            TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
+            bash deploy/scripts/run_remote_workflow.sh
+          fi
+
+      - name: Roll back if post-deploy check fails
+        if: ${{ failure() && steps.deploy.outcome == 'success' }}
+        run: |
+          compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml deploy/docker-compose.branch.yml}"
+          TARGET_HOST="${TARGET_HOST}" \
+          TARGET_DIR="${TARGET_DIR}" \
+          SSH_OPTS="${SSH_OPTS}" \
+          COMPOSE_FILES="${compose_files}" \
+          COMPOSE_PROFILES="${STRATEGYOS_COMPOSE_PROFILES:-}" \
+          COMPOSE_PROJECT_NAME=strategyos-branch \
+          bash deploy/scripts/rollback_stack.sh

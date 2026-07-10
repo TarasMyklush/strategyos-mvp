@@ -1,0 +1,24 @@
+# Branch preview stack override.
+# Pairs with --project-name strategyos-branch so Docker Compose automatically
+# prefixes all volume/network names, avoiding collisions with the production stack.
+# Used together with hetzner-qa.yml for host-port isolation on the shared Hetzner host.
+services:
+  caddy:
+    ports: !override
+      - "${STRATEGYOS_HTTP_PORT:-8080}:80"
+      - "${STRATEGYOS_HTTPS_PORT:-8443}:443"
+    environment:
+      STRATEGYOS_SITE_ADDRESS: ${STRATEGYOS_SITE_ADDRESS:-:8080}
+
+  postgres:
+    ports: !override
+      - "127.0.0.1:${POSTGRES_PORT:-55433}:5432"
+
+  strategyos-idp:
+    ports: !override
+      - "127.0.0.1:${STRATEGYOS_IDP_HTTP_PORT:-8090}:9000"
+
+  hatchet-lite:
+    ports: !override
+      - "127.0.0.1:${HATCHET_DASHBOARD_PORT:-18888}:8888"
+      - "127.0.0.1:${HATCHET_GRPC_PORT:-17077}:7077"

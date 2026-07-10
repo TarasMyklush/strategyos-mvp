@@ -9,6 +9,7 @@ LOCAL_SECRETS_ENV="${LOCAL_SECRETS_ENV:-deploy/.env.secrets}"
 COMPOSE_FILES="${COMPOSE_FILES:-deploy/docker-compose.yml}"
 COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
 COMPOSE_WAIT_TIMEOUT_SECONDS="${COMPOSE_WAIT_TIMEOUT_SECONDS:-180}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
 
 COMPOSE_FILE_ARGS=""
 for compose_file in ${COMPOSE_FILES}; do
@@ -19,6 +20,11 @@ COMPOSE_PROFILE_ARGS=""
 for compose_profile in ${COMPOSE_PROFILES}; do
   COMPOSE_PROFILE_ARGS="${COMPOSE_PROFILE_ARGS} --profile ${compose_profile}"
 done
+
+PROJECT_NAME_ARG=""
+if [ -n "${COMPOSE_PROJECT_NAME}" ]; then
+  PROJECT_NAME_ARG="--project-name ${COMPOSE_PROJECT_NAME}"
+fi
 
 RSYNC_SSH_ARGS=()
 if [ -n "${SSH_OPTS}" ]; then
@@ -60,11 +66,11 @@ rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_SECRETS_ENV}" "${TARGET_HOST}:${TARGET
 
 if [ -n "${STRATEGYOS_API_IMAGE:-}" ]; then
   ssh ${SSH_OPTS} "${TARGET_HOST}" "docker pull '${STRATEGYOS_API_IMAGE}'"
-  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
 else
-  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
 fi
 
-ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-deps --force-recreate caddy && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --env-file deploy/.env --env-file deploy/.env.secrets exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
+ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-deps --force-recreate caddy && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
 
 echo "Deployment complete. Run: TARGET_HOST=${TARGET_HOST} deploy/scripts/check_health.sh"
