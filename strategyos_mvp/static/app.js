@@ -351,6 +351,7 @@
     dataCountsKv: byId("data-counts-kv"),
     dataSystemsKv: byId("data-systems-kv"),
     dataPayloadPreview: byId("data-payload-preview"),
+    kgOverview: byId("kg-overview"),
     kgSummary: byId("kg-summary"),
     kgGraph: byId("kg-graph"),
     kgDetail: byId("kg-detail"),
@@ -3039,6 +3040,7 @@
         source: String(edge.source || ""),
         target: String(edge.target || ""),
         label: String(edge.label || ""),
+        display_label: String(edge.display_label || edge.label || ""),
         payload: edge,
       },
     })));
@@ -3132,7 +3134,7 @@
           "target-arrow-color": "#768393",
           "target-arrow-shape": "triangle",
           "width": 1.4,
-          "label": "data(label)",
+          "label": "data(display_label)",
           "font-size": 7,
           "color": "#d7e3ee",
           "text-rotation": "autorotate",
@@ -3185,13 +3187,14 @@
     els.kgDetail.innerHTML = `
       <strong>${escapeHtml(selected.display || selected.id)}</strong>
       <div>${chips}</div>
-      <div class="muted">${escapeHtml(selected.sublabel || selected.id || "")}</div>
-      <pre class="code-block">${escapeHtml(compactJson(selected.properties || {}))}</pre>`;
+      <div class="muted">${escapeHtml(selected.sublabel || "")}</div>
+      ${selected.narrative ? `<div class="kg-narrative">${escapeHtml(selected.narrative)}</div>` : ""}`;
   }
 
   function renderKnowledgeGraph() {
     if (!isAuthed()) {
       destroyKnowledgeGraph();
+      els.kgOverview.hidden = true;
       els.kgSummary.textContent = "Connect a session to inspect the evidence map.";
       els.kgGraph.classList.add("empty");
       els.kgGraph.textContent = "Authentication required.";
@@ -3205,16 +3208,27 @@
     const meta = payload.meta || {};
     const loading = state.kgLoading ? `${statusPill("warn", "loading")} ` : "";
     els.kgRefresh.disabled = state.kgLoading;
-    els.kgSummary.innerHTML = [
+    const businessSummary = [
       loading + statusPill(payload.status || "missing"),
-      `${formatCount(meta.view_node_count ?? nodes.length)} view nodes`,
-      `${formatCount(meta.view_edge_count ?? edges.length)} view edges`,
-      `${formatCount(meta.source_node_count ?? meta.node_count ?? "--")} source nodes`,
+      meta.total_findings != null ? `${formatCount(meta.total_findings)} findings` : `${formatCount(meta.view_node_count ?? nodes.length)} view nodes`,
+      meta.total_recoverable_sar != null ? `${formatSar(meta.total_recoverable_sar)} recoverable` : "",
+      meta.total_evidence_documents != null ? `${formatCount(meta.total_evidence_documents)} evidence documents` : "",
+      meta.total_vendors != null ? `${formatCount(meta.total_vendors)} vendors` : `${formatCount(meta.view_edge_count ?? edges.length)} view edges`,
       payload.expansion?.truncated ? `${formatCount(payload.expansion.truncated)} expansion results hidden by cap` : "",
-    ].filter(Boolean).join(" - ");
+    ].filter(Boolean).join(" · ");
+    els.kgSummary.innerHTML = businessSummary;
+
+    if (meta.narrative_summary) {
+      els.kgOverview.hidden = false;
+      els.kgOverview.textContent = meta.narrative_summary;
+    } else {
+      els.kgOverview.hidden = true;
+      els.kgOverview.textContent = "";
+    }
 
     if (payload.status !== "ok" || !nodes.length || !edges.length) {
       destroyKnowledgeGraph();
+      els.kgOverview.hidden = true;
       els.kgGraph.classList.add("empty");
       els.kgGraph.textContent = payload.reason || "No graph payload is available for the latest run.";
       renderKnowledgeGraphDetail();

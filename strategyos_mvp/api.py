@@ -270,6 +270,16 @@ KNOWLEDGE_GRAPH_VISIBLE_EDGE_LABELS = (
     | KNOWLEDGE_GRAPH_EXPAND_EDGE_LABELS
     | {"MATCHES_PO"}
 )
+EDGE_LABEL_DISPLAY_MAP: dict[str, str] = {
+    "SUPPORTED_BY": "Supported by evidence",
+    "INVOLVES_VENDOR": "Involves vendor",
+    "HAS_CONTRACT": "Under contract",
+    "SAME_BANK_ACCOUNT_AS": "Shared bank account",
+    "SAME_TAX_ID_AS": "Shared tax ID",
+    "ISSUED_INVOICE": "Issued invoice",
+    "ISSUED_PO": "Issued purchase order",
+    "MATCHES_PO": "Matches purchase order",
+}
 RESTRICTED_ARTIFACT_KEYS = {
     "case_file",
     "case_file_pdf",
@@ -6439,35 +6449,75 @@ def _kg_display_for_node(
     properties = _kg_node_properties(node)
     display = node_id
     sublabel = label
+    narrative = ""
     if label == "Finding":
         display = str(properties.get("finding_id") or node_id.removeprefix("Finding:"))
         sublabel = str(properties.get("title") or properties.get("pattern_type") or "Finding")
+        sar = _kg_amount(properties.get("recoverable_sar"))
+        pattern = properties.get("pattern_type") or "unknown pattern"
+        evidence_count = properties.get("evidence_count") or properties.get("document_count") or 0
+        sar_part = f"Recoverable SAR: {sar:,.0f}" if sar else "Recoverable SAR: pending"
+        evidence_part = f"Source: {evidence_count} documents" if evidence_count else ""
+        parts = [sar_part, f"Pattern: {pattern}"]
+        if evidence_part:
+            parts.append(evidence_part)
+        narrative = " | ".join(parts)
     elif label == "Vendor":
         display = str(properties.get("vendor_name") or properties.get("vendor_id") or node_id.removeprefix("Vendor:"))
         invoice_count = invoice_counts.get(node_id, 0)
         vendor_id = properties.get("vendor_id") or node_id.removeprefix("Vendor:")
         sublabel = f"{vendor_id} - {invoice_count:,} invoices" if invoice_count else str(vendor_id)
+        contract_count = properties.get("contract_count", 0)
+        finding_count = properties.get("finding_count", 0)
+        parts = []
+        if invoice_count:
+            parts.append(f"{invoice_count} invoices")
+        if contract_count:
+            parts.append(f"{contract_count} contracts")
+        if finding_count:
+            parts.append(f"{finding_count} findings linked")
+        narrative = " | ".join(parts) if parts else f"Vendor {vendor_id}"
     elif label == "Evidence":
         source_path = str(properties.get("source_path") or node_id.removeprefix("Evidence:"))
         display = Path(source_path).name or source_path
         sublabel = source_path
+        file_ext = Path(source_path).suffix.lower() if source_path else ""
+        file_type = properties.get("document_type") or properties.get("file_type") or file_ext.lstrip(".") or "document"
+        purpose = properties.get("purpose") or properties.get("role") or ""
+        narrative = f"{file_type} evidence" + (f" — {purpose}" if purpose else "")
     elif label == "Contract":
         source_path = str(properties.get("source_path") or node_id.removeprefix("Contract:"))
         display = str(properties.get("contract_reference") or Path(source_path).name or "Contract")
         sublabel = str(properties.get("vendor_id") or source_path)
+        ref = properties.get("contract_reference") or ""
+        vendor = properties.get("vendor_id") or ""
+        narrative = f"Contract {ref}" + (f" — vendor {vendor}" if vendor else "") if ref else f"Contract linked to {vendor}" if vendor else "Contract"
     elif label == "Invoice":
         display = str(properties.get("invoice_id") or node_id.removeprefix("Invoice:"))
         amount = _kg_amount(properties.get("amount_sar"))
         sublabel = f"SAR {amount:,.0f}" if amount else str(properties.get("status") or "Invoice")
+        status = properties.get("status") or "unknown status"
+        vendor = properties.get("vendor_id") or ""
+        parts = [f"SAR {amount:,.0f}" if amount else "Amount pending", status]
+        if vendor:
+            parts.append(f"vendor {vendor}")
+        narrative = " | ".join(parts)
     elif label == "PurchaseOrder":
         display = str(properties.get("po_id") or node_id.removeprefix("PurchaseOrder:"))
         amount = _kg_amount(properties.get("total"))
         sublabel = f"SAR {amount:,.0f}" if amount else str(properties.get("status") or "Purchase order")
+        status = properties.get("status") or "unknown status"
+        vendor = properties.get("vendor_id") or ""
+        parts = [f"SAR {amount:,.0f}" if amount else "Total pending", status]
+        if vendor:
+            parts.append(f"vendor {vendor}")
+        narrative = " | ".join(parts)
     return {
         "id": node_id,
         "label": label,
         "display": display,
         "sublabel": sublabel,
+        "narrative": narrative,
         "properties": properties,
         "recoverable_sar": _kg_amount(properties.get("recoverable_sar")),
         "invoice_count": invoice_counts.get(node_id, 0),
@@ -6484,6 +6534,7 @@ def _kg_edge_view(edge: dict[str, Any]) -> dict[str, Any]:
         "source": source,
         "target": target,
         "label": label,
+        "display_label": EDGE_LABEL_DISPLAY_MAP.get(label, label),
         "properties": properties if isinstance(properties, dict) else {},
     }
 
@@ -6648,6 +6699,38 @@ def _knowledge_graph_payload(
         if node_id in nodes_by_id
     ]
     graph_meta = graph.get("meta") if isinstance(graph.get("meta"), dict) else {}
+
+    # Compute narrative summary from raw graph data
+    finding_nodes = [n for n in raw_nodes if _kg_node_label(n) == "Finding"]
+    vendor_nodes = [n for n in raw_nodes if _kg_node_label(n) == "Vendor"]
+    evidence_nodes = [n for n in raw_nodes if _kg_node_label(n) == "Evidence"]
+    total_findings = len(finding_nodes)
+    total_vendors = len(vendor_nodes)
+    total_evidence = len(evidence_nodes)
+    total_recoverable = sum(
+        _kg_amount(_kg_node_properties(n).get("recoverable_sar")) for n in finding_nodes
+    )
+    most_significant = ""
+    if finding_nodes:
+        best = max(
+            finding_nodes,
+            key=lambda n: _kg_amount(_kg_node_properties(n).get("recoverable_sar")),
+        )
+        best_props = _kg_node_properties(best)
+        best_sar = _kg_amount(best_props.get("recoverable_sar"))
+        best_id = best_props.get("finding_id") or _kg_node_id(best)
+        most_significant = f"{best_id} (SAR {best_sar:,.0f})" if best_sar else str(best_id)
+
+    narrative_parts = [
+        f"{total_findings} finding{'s' if total_findings != 1 else ''} identified",
+        f"across {total_evidence} evidence document{'s' if total_evidence != 1 else ''}",
+        f"involving {total_vendors} vendor{'s' if total_vendors != 1 else ''}",
+        f"with SAR {total_recoverable:,.0f} total recoverable exposure",
+    ]
+    narrative_summary = " ".join(narrative_parts)
+    if most_significant:
+        narrative_summary += f". Most significant: {most_significant}"
+
     return {
         "status": "ok",
         "run_id": summary.get("run_id"),
@@ -6665,6 +6748,12 @@ def _knowledge_graph_payload(
             "view_node_count": len(selected_nodes),
             "view_edge_count": len(selected_edges),
             "view_truncated": view_truncated,
+            "narrative_summary": narrative_summary,
+            "total_findings": total_findings,
+            "total_vendors": total_vendors,
+            "total_evidence_documents": total_evidence,
+            "total_recoverable_sar": total_recoverable,
+            "most_significant_finding": most_significant,
         },
         "expansion": expansion,
     }
