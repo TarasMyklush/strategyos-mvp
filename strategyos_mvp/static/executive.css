@@ -4230,13 +4230,6 @@ html[data-theme="dark"] .trend-axis {
 }
 
 @media (min-width: 1101px) {
-  /* Safe zone for floating assistant controls — prevent horizontal overlap
-     with the rightmost KPI card.  chat-launcher + a2a-shell sit at ~right:32px
-     with max button widths ~320px; reserve ~380px right margin as buffer. */
-  #driver-row {
-    margin-right: clamp(200px, 22vw, 400px);
-  }
-
   /* Reserve a lighter safe lane for the floating Hermes/A2A controls so the
      lower-right graph cluster remains clickable without entering focus mode. */
   #knowledge-graph-card {
