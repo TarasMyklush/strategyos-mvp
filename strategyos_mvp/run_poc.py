@@ -39,6 +39,33 @@ HOSTED_OCR_ENGINES = {
 }
 
 
+def _persist_run_summary_best_effort(
+    summary: dict[str, Any],
+    *,
+    run_id: str | None,
+    bundle: Any,
+    findings: list[Any],
+    artifacts: dict[str, Path],
+    audit_events: list[AuditEvent],
+) -> dict[str, Any]:
+    try:
+        return persist_run_summary(
+            summary,
+            run_id=run_id,
+            bundle=bundle,
+            findings=findings,
+            artifacts=artifacts,
+            audit_events=audit_events,
+        )
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "run_id": run_id,
+            "reason": str(exc),
+            "error_type": type(exc).__name__,
+        }
+
+
 def _normalize_json(value):
     if is_dataclass(value):
         return {key: _normalize_json(item) for key, item in asdict(value).items()}
@@ -389,7 +416,7 @@ def _execute_strategyos_workflow(
     )
     summary["audit_event_count"] = len(result.get("audit_events", []))
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    summary["state_store"] = persist_run_summary(
+    summary["state_store"] = _persist_run_summary_best_effort(
         summary,
         run_id=result.get("run_id"),
         bundle=result.get("bundle"),

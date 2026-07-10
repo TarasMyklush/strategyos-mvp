@@ -209,6 +209,84 @@ def test_run_strategyos_workflow_uses_immutable_run_dir_and_latest_pointer(
     assert summary["pointer_metadata"]["latest"]["pointer_type"] == "latest"
 
 
+def test_run_strategyos_workflow_does_not_fail_when_persistence_fails(
+    monkeypatch, tmp_path: Path
+):
+    output_root = tmp_path / "outputs"
+    pointer_path = output_root / "latest_run_pointer.json"
+    run_poc_module.CONFIG = SimpleNamespace(
+        require_human_review=True,
+        database_url="postgresql://example/db",
+        sync_artifacts=False,
+        object_store=SimpleNamespace(enabled=False),
+        run_policy=RunPolicyConfig(mode="sovereign", approved_external_modes=()),
+        model_provider_enabled=False,
+        batch_apis_enabled=False,
+        hosted_ocr_vision_enabled=False,
+        ocr_engine="tesseract",
+        tenant_slug="test-tenant",
+        output_root=output_root,
+    )
+    run_registry_module.CONFIG = run_poc_module.CONFIG
+
+    class FakeGovernance:
+        def __init__(self, *, dataset_root, source_pack_id=None, run_dir, requires_human_review):
+            self.dataset_root = dataset_root
+            self.source_pack_id = source_pack_id
+            self.run_dir = run_dir
+            self.requires_human_review = requires_human_review
+            self.checkpoint = lambda stage, state: state
+            self.stop_before_writer = True
+
+        def initial_state(self):
+            return {
+                "dataset_root": self.dataset_root,
+                "run_dir": self.run_dir,
+                "run_id": "run-persist-fails",
+                "workflow_status": "awaiting_review",
+                "current_stage": "awaiting_review",
+                "requires_human_review": self.requires_human_review,
+                "approval_status": "pending",
+                "checkpoints": [],
+            }
+
+    class FakeWorkflow:
+        runtime_metadata = {"actual_backend": "local"}
+
+        def invoke(self, state):
+            return {
+                **state,
+                "artifacts": {},
+                "findings": [],
+                "audit_events": [],
+                "audit_verification": {},
+                "bundle": None,
+            }
+
+    def fail_persistence(*_args, **_kwargs):
+        raise RuntimeError("database constraint failed")
+
+    monkeypatch.setattr(run_poc_module, "RuntimeGovernance", FakeGovernance)
+    monkeypatch.setattr(run_poc_module, "build_workflow", lambda **_: FakeWorkflow())
+    monkeypatch.setattr(run_poc_module, "persist_run_summary", fail_persistence)
+    monkeypatch.setattr(run_poc_module, "sync_knowledge_graph", lambda **_: {"status": "skipped"})
+    monkeypatch.setattr(
+        run_poc_module, "sync_findings_vector_store", lambda **_: {"status": "skipped"}
+    )
+
+    summary = run_poc_module.run_strategyos_workflow(
+        dataset=tmp_path,
+        run_dir=output_root / "StrategyOS MVP Run",
+        skip_prepare=True,
+    )
+
+    assert summary["run_id"] == "run-persist-fails"
+    assert summary["state_store"]["status"] == "failed"
+    assert summary["state_store"]["error_type"] == "RuntimeError"
+    assert "database constraint failed" in summary["state_store"]["reason"]
+    assert pointer_path.exists()
+
+
 def test_run_strategyos_workflow_gates_object_storage_sync_until_policy_approval(
     monkeypatch, tmp_path: Path
 ):
