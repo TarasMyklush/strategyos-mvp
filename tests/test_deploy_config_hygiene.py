@@ -150,6 +150,16 @@ def test_branch_deploy_normalizes_hatchet_profile_for_execution_mode() -> None:
     )
 
 
+def test_branch_deploy_probes_the_isolated_branch_port() -> None:
+    workflow = (
+        REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
+    ).read_text(encoding="utf-8")
+    assert "STRATEGYOS_PROBE_URL: ${{ vars.STRATEGYOS_PROBE_URL || '' }}" in workflow
+    assert 'probe_url="http://${public_host}:${STRATEGYOS_HTTP_PORT}"' in workflow
+    assert workflow.count('TARGET_URL="${STRATEGYOS_PROBE_URL}"') >= 4
+    assert workflow.count('--base-url "${STRATEGYOS_PROBE_URL}"') == 2
+
+
 def test_compose_passes_runtime_backend_to_api_and_worker() -> None:
     compose = (REPO_ROOT / "deploy/docker-compose.yml").read_text(encoding="utf-8")
     assert compose.count(
