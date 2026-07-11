@@ -208,6 +208,7 @@ def test_hatchet_token_bootstrap_is_explicit_and_non_destructive() -> None:
     assert "HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET" in script
     assert "HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET" in script
     assert "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET" in script
+    assert 'lines.append(f"HATCHET_CLIENT_TOKEN=' in script
 
 
 def test_branch_deploy_probes_the_isolated_branch_listener() -> None:

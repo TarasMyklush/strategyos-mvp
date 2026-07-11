@@ -85,6 +85,18 @@ if [ -z "${token}" ]; then
   exit 1
 fi
 
+HATCHET_CLIENT_TOKEN="${token}" python3 - "${SECRETS_FILE}" <<'PY'
+from pathlib import Path
+import os
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+lines = [line for line in lines if not line.startswith("HATCHET_CLIENT_TOKEN=")]
+lines.append(f"HATCHET_CLIENT_TOKEN={os.environ['HATCHET_CLIENT_TOKEN']}")
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+
 # The token is deliberately the only stdout output so callers can pipe it
 # directly into a secret manager without writing it to disk.
 printf '%s' "${token}"
