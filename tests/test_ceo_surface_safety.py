@@ -911,15 +911,17 @@ def test_week_ahead_toggle_behavior():
 
 
 def test_browse_all_agents_opens_assistant():
-    """#6: CEO Browse All Agents must open assistant drawer, not just toast."""
+    """#6: CEO Browse All Agents must open a catalogue, not submit a chat prompt."""
     js = _static_executive_js()
 
-    # CEO path for browse must trigger assistant interaction, not just toast
     assert "switchView('assistants')" in js, (
         "CEO Browse All Agents must switch to assistants view"
     )
-    assert "Show me the agent catalogue" in js, (
-        "CEO Browse All Agents must send catalogue prompt to assistant"
+    assert "assistantCatalogueOpen" in js, (
+        "CEO Browse All Agents must open the assistant catalogue state"
+    )
+    assert "Show me the agent catalogue" not in js, (
+        "CEO Browse All Agents must not submit a canned assistant prompt"
     )
 
 
@@ -1749,7 +1751,8 @@ def test_cta_enum_assistant_form():
 def test_cta_enum_agents_browse():
     """CTA 17: Agents discovery 'Browse all agents'."""
     js = _static_executive_js()
-    assert "Show me the agent catalogue" in js
+    assert "assistantCatalogueOpen" in js
+    assert "Show me the agent catalogue" not in js
 
 def test_cta_enum_new_conversation_threads():
     """CTA 18: New conversation buttons call openAssistantDrawer."""

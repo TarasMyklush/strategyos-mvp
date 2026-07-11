@@ -1685,7 +1685,7 @@ def _governed_public_suggestions(packet: dict[str, Any]) -> list[str]:
 def _governed_public_item_text(item: dict[str, Any]) -> str:
     return " ".join(
         str(item.get(key) or "").strip()
-        for key in ("label", "title", "metric", "value", "status", "detail", "story", "tag")
+        for key in ("label", "title", "metric", "value", "status", "meta", "detail", "impact", "story", "tag")
         if str(item.get(key) or "").strip()
     )
 
@@ -1743,6 +1743,11 @@ def _parse_governed_public_exec_surface(
         "recoverable",
         "recovery",
         "evidence",
+        "data",
+        "database",
+        "missing",
+        "status",
+        "failure",
         "finding",
         "citation",
         "kpi",
@@ -1781,10 +1786,63 @@ def _parse_governed_public_exec_surface(
 
     drivers = [item for item in list(packet.get("drivers") or []) if isinstance(item, dict)]
     findings = [item for item in list(packet.get("findings") or []) if isinstance(item, dict)]
+    developments = [item for item in list(packet.get("developments") or []) if isinstance(item, dict)]
     public_facts = packet.get("public_facts") if isinstance(packet.get("public_facts"), dict) else {}
+    data_sources = packet.get("data_sources") if isinstance(packet.get("data_sources"), dict) else {}
+    assistant_context = context.get("assistant_context") if isinstance(context.get("assistant_context"), dict) else {}
+    entrypoint = str(assistant_context.get("entrypoint") or "").lower()
     board = _public_board(packet)
     suggestions = _governed_public_suggestions(packet)
     citations: list[dict[str, Any]] = []
+
+    wants_database = any(token in norm for token in ("database", "db ", "backing", "status", "failure", "failed"))
+    wants_missing_data = (
+        "missing data" in norm
+        or "what data am i missing" in norm
+        or ("missing" in norm and "data" in norm)
+        or entrypoint in {"scenario_chip", "week_composer", "missing_data_cta"} and "missing" in norm
+    )
+    wants_board_safety = (
+        "board-safe" in norm
+        or "board safe" in norm
+        or "safe for board" in norm
+        or ("board" in norm and any(token in norm for token in ("safe", "release", "publish", "closed", "live")))
+    )
+
+    if wants_database:
+        database = data_sources.get("database") if isinstance(data_sources.get("database"), dict) else {}
+        db_state = str(database.get("status") or "unavailable").replace("_", " ")
+        db_reason = str(database.get("reason") or "Database backing status is temporarily unavailable.")
+        answer = f"Database backing status is {db_state}. {db_reason}"
+        citations.append(_public_citation("public_context_packet.data_sources.database"))
+        basis = "Answered from the public-safe database status field."
+    elif wants_missing_data:
+        displayed = public_facts.get("displayed_finding_count")
+        total = public_facts.get("total_finding_count")
+        challenged = public_facts.get("challenged_count")
+        answer = "The public packet does not expose case-level missing-data owners or protected evidence files."
+        if isinstance(displayed, (int, float)) and isinstance(total, (int, float)) and int(total) > int(displayed):
+            answer += f" It shows the top {int(displayed)} of {int(total)} governed findings, so request the protected case detail for the remaining governed findings from the operator/reviewer workspace."
+        elif findings:
+            answer += " Use the visible findings as the request list and ask the operator/reviewer workspace for protected evidence gaps."
+        if isinstance(challenged, (int, float)):
+            answer += f" {int(challenged)} challenged item(s) should be closed before board release."
+        citations.append(_public_citation("public_context_packet.public_facts"))
+        basis = "Explained public-surface missing-data limits and visible governed counts."
+    elif wants_board_safety:
+        challenged = public_facts.get("challenged_count")
+        report_count = public_facts.get("report_count")
+        state = str(board.get("presentation_state") or board.get("state") or "current").replace("_", " ")
+        answer = f"Board safety posture is {state}."
+        if isinstance(report_count, (int, float)):
+            answer += f" {int(report_count)} report artifact(s) are surfaced."
+        if isinstance(challenged, (int, float)):
+            answer += f" {int(challenged)} challenged item(s) remain visible as release constraints."
+        citations.append(_public_citation("public_context_packet.board_portal"))
+        basis = "Answered board-safety posture from board state, reports, and challenged counts."
+    else:
+        answer = ""
+        basis = ""
 
     topic_tokens = [
         token
@@ -1798,7 +1856,23 @@ def _parse_governed_public_exec_surface(
             if topic_tokens and any(token in item_text for token in topic_tokens):
                 related.append((source_name, index, item))
 
-    if any(token in norm for token in ("hedge", "currency", "eur", "fx")) and not related:
+    if answer:
+        pass
+    elif entrypoint == "development_cta" and developments:
+        fragments = []
+        for index, item in enumerate(developments[:3]):
+            fragments.append(_governed_public_item_text(item))
+            citations.append(_public_citation(f"public_context_packet.developments[{index}]"))
+        answer = "Current governed development impact: " + "; ".join(fragment for fragment in fragments if fragment) + "."
+        basis = "Matched a development CTA to current governed developments."
+    elif entrypoint == "finding_cta" and findings:
+        fragments = []
+        for index, item in enumerate(findings[:3]):
+            fragments.append(_governed_public_item_text(item))
+            citations.append(_public_citation(f"public_context_packet.findings[{index}]"))
+        answer = "This matters because the current governed findings are: " + "; ".join(fragment for fragment in fragments if fragment) + "."
+        basis = "Matched a finding CTA to current governed findings."
+    elif any(token in norm for token in ("hedge", "currency", "eur", "fx")) and not related:
         answer = (
             "The current governed run does not expose a quantified currency or hedge scenario, "
             "so StrategyOS cannot calculate hedge impact from this packet. No illustrative hedge "

@@ -940,6 +940,12 @@ def persist_run_summary(
 
 
 def data_management_status(run_id: str | None = None) -> dict[str, Any]:
+    normalized_run_id = uuid_value(run_id) if run_id is not None else None
+    if run_id is not None and normalized_run_id is None:
+        return {
+            "status": "invalid_run_id",
+            "reason": "Database backing status is unavailable for this public run reference.",
+        }
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -959,7 +965,10 @@ def data_management_status(run_id: str | None = None) -> dict[str, Any]:
                             "status": "missing",
                             "reason": "No StrategyOS run has been persisted.",
                         }
-                    run_id = str(row[0])
+                    normalized_run_id = uuid_value(row[0])
+                    run_id = str(normalized_run_id or row[0])
+                else:
+                    run_id = normalized_run_id
                 cur.execute(
                     """
                     select ib.id, t.id, t.slug, ss.name, ib.dataset_root
@@ -970,7 +979,7 @@ def data_management_status(run_id: str | None = None) -> dict[str, Any]:
                     order by ib.completed_at desc
                     limit 1
                     """,
-                    (run_id,),
+                    (normalized_run_id,),
                 )
                 batch = cur.fetchone()
                 if batch is None:
@@ -1048,8 +1057,11 @@ def data_management_status(run_id: str | None = None) -> dict[str, Any]:
                     "counts": counts,
                     "artifacts": artifact_paths,
                 }
-    except Exception as exc:
-        return {"status": "failed", "reason": str(exc)}
+    except Exception:
+        return {
+            "status": "failed",
+            "reason": "Database backing status is temporarily unavailable.",
+        }
 
 
 def ensure_data_schema(conn: Any) -> None:
@@ -2188,8 +2200,11 @@ def database_connection() -> tuple[Any | None, dict[str, Any] | None]:
         assert pool is not None
         conn = pool.getconn()
         return _PooledConnectionHandle(pool, conn), None
-    except Exception as exc:
-        return None, {"status": "failed", "reason": str(exc)}
+    except Exception:
+        return None, {
+            "status": "failed",
+            "reason": "Database backing status is temporarily unavailable.",
+        }
 
 
 def fetchone_dict(cur: Any) -> dict[str, Any] | None:
