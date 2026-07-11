@@ -252,6 +252,8 @@ def test_branch_deploy_probes_the_isolated_branch_listener() -> None:
     assert "STRATEGYOS_HTTPS_PORT: '8443'" in workflow
     assert "HETZNER_HOST: ${{ vars.HETZNER_HOST }}" in workflow
     assert "STRATEGYOS_SITE_ADDRESS: ':80'" in workflow
+    assert "if not site_address and parsed_public_url.scheme == \"https\"" in workflow
+    assert 'site_address in {"", ":80"}' not in workflow
     assert 'probe_url="http://${HETZNER_HOST}:${STRATEGYOS_HTTP_PORT}"' in workflow
     assert workflow.count('TARGET_URL="${STRATEGYOS_PROBE_URL}"') >= 4
     assert workflow.count('--base-url "${STRATEGYOS_PROBE_URL}"') == 2

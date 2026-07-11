@@ -308,7 +308,11 @@ jobs:
           parsed_public_url = urlparse(public_url)
           public_url_host = parsed_public_url.hostname or ""
           public_url_port = parsed_public_url.port
-          if site_address in {"", ":80"} and parsed_public_url.scheme == "https" and public_url_host:
+          # An explicit :80 is intentional for the isolated branch listener.
+          # Only infer a hostname when no site address was supplied at all;
+          # otherwise Caddy enables automatic HTTPS and the direct HTTP probe
+          # is redirected with 308 before protected readiness can be checked.
+          if not site_address and parsed_public_url.scheme == "https" and public_url_host:
               overrides["STRATEGYOS_SITE_ADDRESS"] = (
                   f"{public_url_host}:{public_url_port}"
                   if public_url_port and public_url_port != 443
