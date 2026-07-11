@@ -151,13 +151,14 @@ def test_branch_deploy_normalizes_hatchet_profile_for_execution_mode() -> None:
     )
 
 
-def test_branch_deploy_probes_the_isolated_branch_port() -> None:
+def test_branch_deploy_probes_the_public_url_when_configured() -> None:
     workflow = (
         REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
     ).read_text(encoding="utf-8")
     assert "STRATEGYOS_PROBE_URL: ${{ vars.STRATEGYOS_PROBE_URL || '' }}" in workflow
     assert "HETZNER_HOST: ${{ vars.HETZNER_HOST }}" in workflow
     assert "STRATEGYOS_SITE_ADDRESS: ':80'" in workflow
+    assert 'probe_url="${STRATEGYOS_PUBLIC_URL}"' in workflow
     assert 'probe_url="http://${HETZNER_HOST}:${STRATEGYOS_HTTP_PORT}"' in workflow
     assert workflow.count('TARGET_URL="${STRATEGYOS_PROBE_URL}"') >= 4
     assert workflow.count('--base-url "${STRATEGYOS_PROBE_URL}"') == 2
@@ -169,7 +170,7 @@ def test_branch_deploy_probes_the_isolated_branch_port() -> None:
     branch_caddyfile = (REPO_ROOT / "deploy/caddy/Caddyfile.branch").read_text(
         encoding="utf-8"
     )
-    assert branch_caddyfile.startswith(":80 {")
+    assert branch_caddyfile.startswith("{$STRATEGYOS_SITE_ADDRESS} {")
     assert "new.strategyos.live" not in branch_caddyfile
     assert "reverse_proxy strategyos-api:8000" in branch_caddyfile
     assert "reverse_proxy @idp strategyos-idp:9000" in branch_caddyfile
