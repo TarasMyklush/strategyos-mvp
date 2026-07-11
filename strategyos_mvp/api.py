@@ -122,6 +122,7 @@ ANONYMOUS_PUBLIC_BANNED_KEYS = {
     "source_path",
     "node_id",
     "owner",
+    "_backing_run_id",
 }
 
 
@@ -356,10 +357,46 @@ def _principal_prefers_public_safe_surface(principal: dict[str, Any] | None) -> 
 
 
 def _data_management_status_for_run(run_id: str | None = None) -> dict[str, Any]:
+    if run_id is not None:
+        try:
+            run_id = str(UUID(str(run_id)))
+        except (TypeError, ValueError):
+            return _executive_safe_data_management_status(
+                {"status": "invalid_run_id"}
+            )
     try:
-        return data_management_status(run_id)
+        status = data_management_status(run_id)
     except TypeError:
-        return data_management_status()
+        status = data_management_status()
+    return _executive_safe_data_management_status(status)
+
+
+def _executive_safe_data_management_status(status: dict[str, Any] | None) -> dict[str, Any]:
+    payload = dict(status or {})
+    raw_status = str(payload.get("status") or "unavailable").strip().lower()
+    if raw_status in {"ready", "ok", "persisted"}:
+        payload["status"] = "ready"
+        payload["reason"] = payload.get("reason") or "Governed data is backed by the configured state store."
+        return payload
+    if raw_status in {"skipped", "not_configured"}:
+        return {
+            "status": "not_configured",
+            "reason": "Database backing is not configured for this environment.",
+        }
+    if raw_status in {"missing", "no_backing_record"}:
+        return {
+            "status": "no_backing_record",
+            "reason": "No database backing record is available for the latest governed run.",
+        }
+    if raw_status in {"invalid_run_id"}:
+        return {
+            "status": "unavailable",
+            "reason": "Database backing status is unavailable for this public run reference.",
+        }
+    return {
+        "status": "unavailable",
+        "reason": "Database backing status is temporarily unavailable.",
+    }
 
 
 def _humanize_pattern_label(pattern_type: Any) -> str:
@@ -650,6 +687,8 @@ def _anonymous_public_summary(summary: dict[str, Any] | None) -> dict[str, Any] 
     if not isinstance(summary, dict):
         return None
     payload = dict(summary)
+    if payload.get("run_id"):
+        payload["_backing_run_id"] = payload.get("run_id")
     payload["run_id"] = ANONYMOUS_PUBLIC_RUN_ID
     payload.pop("run_dir", None)
     return payload
@@ -716,7 +755,10 @@ def _build_public_safe_assistant_packet(
     agent_modules: dict[str, Any],
 ) -> dict[str, Any]:
     persona_key = str(persona_id or "ceo").strip().lower() or "ceo"
-    db_status = _data_management_status_for_run(str((summary or {}).get("run_id") or "") or None)
+    db_run_id = (summary or {}).get("_backing_run_id") or (summary or {}).get("run_id")
+    if str(db_run_id or "") == ANONYMOUS_PUBLIC_RUN_ID:
+        db_run_id = None
+    db_status = _data_management_status_for_run(str(db_run_id or "") or None)
     metrics = _governed_metrics_payload(summary, finding_rows, audit_summary)
     plan_health = _bounded_plan_health_payload(summary, finding_rows, audit_summary)
     kpi_cards = _kpi_card_payloads(summary, finding_rows, audit_summary)
@@ -750,6 +792,21 @@ def _build_public_safe_assistant_packet(
         for card in kpi_cards[:4]
     ]
 
+    display_rows = list(finding_rows or [])[:3]
+    displayed_recoverable = round(
+        sum(float(row.get("recoverable_sar") or 0.0) for row in display_rows),
+        2,
+    )
+    total_recoverable = float(metrics.get("total_recoverable_sar") or 0.0)
+    remaining_recoverable = round(max(0.0, total_recoverable - displayed_recoverable), 2)
+    reconciliation = {
+        "total_recoverable_sar": total_recoverable,
+        "displayed_recoverable_sar": displayed_recoverable,
+        "remaining_recoverable_sar": remaining_recoverable,
+        "total_finding_count": int(metrics.get("finding_count") or len(finding_rows or [])),
+        "displayed_finding_count": len(display_rows),
+    }
+
     findings = [
         {
             "title": row.get("title") or row.get("pattern_label") or "Governed signal",
@@ -765,7 +822,7 @@ def _build_public_safe_assistant_packet(
             ).strip(),
             "tone": "flat" if row.get("challenged") else "up",
         }
-        for row in list(finding_rows or [])[:3]
+        for row in display_rows
     ]
 
     developments = [
@@ -894,12 +951,17 @@ def _build_public_safe_assistant_packet(
         "running_agents": running_agents,
         "public_facts": {
             "total_recoverable_sar": metrics.get("total_recoverable_sar"),
+            "displayed_recoverable_sar": reconciliation["displayed_recoverable_sar"],
+            "remaining_recoverable_sar": reconciliation["remaining_recoverable_sar"],
+            "total_finding_count": reconciliation["total_finding_count"],
+            "displayed_finding_count": reconciliation["displayed_finding_count"],
             "citation_count": metrics.get("citation_count"),
             "resolved_count": metrics.get("resolved_count"),
             "challenged_count": metrics.get("challenged_count"),
             "report_count": publication.get("report_count"),
             "source_boundary": plan_health.get("boundary"),
         },
+        "findings_reconciliation": reconciliation,
         "facts": facts,
         "kg_nodes": kg_nodes,
         "kg_edges": kg_edges,
@@ -2079,6 +2141,53 @@ def _bounded_plan_health_payload(
         ),
     )
     return artifact_contracts_payload(contract)
+
+
+def _lifecycle_hero_contract(
+    *,
+    persona_id: str,
+    persona_label: str,
+    board_portal: dict[str, Any],
+    plan_health: dict[str, Any],
+    publication: dict[str, Any],
+    challenged_count: int,
+) -> dict[str, str]:
+    board_state = str(
+        board_portal.get("presentation_state") or board_portal.get("state") or "pre"
+    ).lower()
+    report_count = int(publication.get("report_count") or 0)
+    persona = "CFO" if persona_id in {"cfo", "bucfo"} else persona_label or "executive"
+    health_label = str(plan_health.get("label") or "Governed plan posture")
+    health_badge = str(plan_health.get("badge") or plan_health.get("status") or "governed")
+    if board_state == "closed":
+        return {
+            "headline": "Board packet is closed and frozen",
+            "body": (
+                f"{persona} view is now a frozen board-session snapshot with {report_count} report artifact(s). "
+                f"{challenged_count} challenged item(s) remain as follow-up constraints, not pre-board prep."
+            ),
+            "score_note": f"closed session · {health_badge}",
+            "secondary_fact": health_label,
+        }
+    if board_state == "live":
+        return {
+            "headline": "Board session is live on governed material",
+            "body": (
+                f"{persona} view is operating from the approved board packet. "
+                f"{challenged_count} unresolved item(s) are visible as live constraints for the room."
+            ),
+            "score_note": f"live session · {health_badge}",
+            "secondary_fact": health_label,
+        }
+    return {
+        "headline": str(plan_health.get("label") or "Board preparation is active"),
+        "body": str(
+            plan_health.get("summary")
+            or f"{challenged_count} challenged item(s) need reviewer closure before the board packet goes live."
+        ),
+        "score_note": f"pre-board · {health_badge}",
+        "secondary_fact": health_label,
+    }
 
 
 def _multi_domain_tree_payload(
@@ -4038,6 +4147,14 @@ def _executive_diagnostics_payload(
         "week": list(public_packet.get("week") or []),
     }
     board_design = dict(public_packet.get("board_portal") or {})
+    lifecycle_hero = _lifecycle_hero_contract(
+        persona_id=persona_id,
+        persona_label=str(persona_label or ""),
+        board_portal=board_portal,
+        plan_health=plan_health,
+        publication=publication,
+        challenged_count=challenged_count,
+    )
     driver_tiles = []
     persona_drivers = list(persona_blueprint.get("drivers") or [])
     for item in persona_drivers[:4] or list(executive_modes.get("driver_focus") or [])[:4]:
@@ -4061,10 +4178,10 @@ def _executive_diagnostics_payload(
             "score": hero_score,
             "status": plan_health.get("status"),
             "label": plan_health.get("label"),
-            "summary": persona_blueprint.get("health", {}).get("headline")
-            or plan_health.get("summary"),
-            "body": persona_blueprint.get("health", {}).get("body"),
-            "score_note": persona_blueprint.get("health", {}).get("scoreNote"),
+            "summary": lifecycle_hero.get("headline"),
+            "body": lifecycle_hero.get("body"),
+            "score_note": lifecycle_hero.get("score_note"),
+            "secondary_fact": lifecycle_hero.get("secondary_fact"),
             "quote": persona_blueprint.get("quote"),
             "quoted_by": persona_blueprint.get("by"),
             "active_driver_key": active_driver_key,
@@ -6021,7 +6138,7 @@ def _check_run_execution() -> dict[str, Any]:
     try:
         from .hatchet_runtime import hatchet_dependency_status
 
-        status_payload = hatchet_dependency_status(CONFIG)
+        status_payload = hatchet_dependency_status(CONFIG, verify_connection=True)
     except Exception as exc:
         return _health_check("failed", execution_mode="hatchet", reason=str(exc))
     if status_payload.get("status") != "ok":
@@ -9897,6 +10014,8 @@ async def _assistant_chat_response(
                 "run_id": context["run_id"],
                 "run_mode": context["run_mode"],
                 "persona": persona,
+                "assistant_context": assistant_context,
+                "driver_context": driver_context,
             },
         )
         scenario_result = parsed.as_dict()

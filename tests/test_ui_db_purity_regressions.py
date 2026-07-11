@@ -374,7 +374,8 @@ def test_plan_api_reports_unavailable_when_database_is_not_configured(monkeypatc
     payload = TestClient(api_module.app).get("/api/plan/latest").json()
 
     assert payload["criticalBlockers"][0]["id"] == "DB-UNAVAILABLE"
-    assert "DATABASE_URL is not configured" in payload["criticalBlockers"][0]["detail"]
+    assert payload["criticalBlockers"][0]["detail"] == "Database backing is not configured for this environment."
+    assert "DATABASE_URL" not in payload["criticalBlockers"][0]["detail"]
     assert payload["hostedVerificationState"]["checks"][0]["result"] == "fail"
 
 

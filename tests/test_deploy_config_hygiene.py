@@ -98,7 +98,8 @@ def test_deploy_release_image_path_does_not_build_on_server() -> None:
 
 def test_deploy_reloads_caddy_after_bind_mounted_config_changes() -> None:
     script = (REPO_ROOT / "deploy/scripts/deploy_stack.sh").read_text(encoding="utf-8")
-    assert "up -d --no-deps --force-recreate caddy" in script
+    assert "up -d --no-deps caddy" in script
+    assert "--force-recreate caddy" not in script
     assert "exec -T caddy caddy reload --config /etc/caddy/Caddyfile" in script
 
 
@@ -117,6 +118,157 @@ def test_deploy_scripts_forward_compose_profiles() -> None:
     assert 'COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"' in rollback_script
     assert "STRATEGYOS_COMPOSE_PROFILES" in workflow
     assert 'COMPOSE_PROFILES="${STRATEGYOS_COMPOSE_PROFILES:-}" \\' in workflow
+
+
+def test_rollback_forwards_compose_project_name() -> None:
+    script = (REPO_ROOT / "deploy/scripts/rollback_stack.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"' in script
+    assert 'PROJECT_NAME_ARG=" --project-name ${COMPOSE_PROJECT_NAME}"' in script
+    assert "${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG}" in script
+
+
+def test_branch_deploy_normalizes_hatchet_profile_for_execution_mode() -> None:
+    workflow = (
+        REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
+    ).read_text(encoding="utf-8")
+    assert "- name: Normalize compose profiles for execution mode" in workflow
+    assert "STRATEGYOS_COMPOSE_PROFILES: 'hatchet'" in workflow
+    assert "STRATEGYOS_RUN_EXECUTION_MODE: 'hatchet'" in workflow
+    assert (
+        'if [ "${profile}" = "hatchet" ] && '
+        '[ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then'
+        in workflow
+    )
+    assert 'echo "STRATEGYOS_COMPOSE_PROFILES=${normalized_profiles}"' in workflow
+    assert (
+        'if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then'
+        in workflow
+    )
+    assert "--profile '*' --project-name strategyos-branch" in workflow
+    assert (
+        'if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" = "hatchet" ]; then'
+        in workflow
+    )
+
+
+def test_hatchet_deploy_preserves_state_and_uses_dedicated_token_secret() -> None:
+    branch_workflow = (
+        REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
+    ).read_text(encoding="utf-8")
+    release_workflow = (
+        REPO_ROOT / ".github/workflows/strategyos-deploy.yml"
+    ).read_text(encoding="utf-8")
+    for workflow in [branch_workflow, release_workflow]:
+        assert "HATCHET_CLIENT_TOKEN: ${{ secrets.HATCHET_CLIENT_TOKEN }}" in workflow
+        assert 'upsert("HATCHET_CLIENT_TOKEN"' in workflow
+        for key in [
+            "HATCHET_SERVER_AUTH_COOKIE_SECRETS",
+            "HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET",
+            "HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET",
+            "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET",
+        ]:
+            assert f"{key}: ${{{{ secrets.{key} }}}}" in workflow
+            assert f'upsert("{key}"' in workflow
+        assert "docker system prune -af --volumes" not in workflow
+        assert "down -v hatchet-postgres hatchet-lite" not in workflow
+        assert "Destructive recovery is never part of a normal deploy" in workflow
+
+
+def test_hatchet_components_and_runtime_contract_are_pinned() -> None:
+    compose = (REPO_ROOT / "deploy/docker-compose.yml").read_text(encoding="utf-8")
+    assert compose.count(
+        "STRATEGYOS_TWINS_DATA_DIR: "
+        "${STRATEGYOS_TWINS_DATA_DIR:-/app/workspace/.strategyos_mvp_data/twins}"
+    ) == 2
+    project = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert (
+        "ghcr.io/hatchet-dev/hatchet/hatchet-lite@sha256:"
+        "35b107931bd0fd8960f13d3e66860b7d1d806043ab5f86c3e627e95a8f8b1cdb"
+        in compose
+    )
+    assert "hatchet-lite:latest" not in compose
+    assert '"hatchet-sdk==1.33.10;' in project
+    assert sum(
+        line.strip().startswith("HATCHET_CLIENT_SERVER_URL:")
+        for line in compose.splitlines()
+    ) == 2
+    assert 'condition: service_healthy' in compose
+    assert "SERVER_ENCRYPTION_MASTER_KEYSET:" in compose
+    assert "SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET:" in compose
+    assert "SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET:" in compose
+    assert "SERVER_AUTH_COOKIE_SECRETS:" in compose
+
+
+def test_actions_workflows_reuse_dependency_and_image_caches() -> None:
+    ci = (REPO_ROOT / ".github/workflows/strategyos-ci.yml").read_text(encoding="utf-8")
+    branch = (
+        REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
+    ).read_text(encoding="utf-8")
+    deploy = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+
+    for workflow in (ci, branch):
+        assert "cache: pip" in workflow
+        assert "cache-dependency-path: pyproject.toml" in workflow
+    for workflow in (ci, branch, deploy):
+        assert "cache-from: type=gha,scope=strategyos-runtime" in workflow
+        assert (
+            "cache-to: type=gha,mode=max,scope=strategyos-runtime,ignore-error=true"
+            in workflow
+        )
+
+
+def test_ci_skips_only_non_runtime_documentation_changes() -> None:
+    ci = (REPO_ROOT / ".github/workflows/strategyos-ci.yml").read_text(encoding="utf-8")
+    assert ci.count("paths-ignore:") == 2
+    for ignored_path in ("README.md", "deploy/README.md", "docs/**"):
+        assert ci.count(f'- "{ignored_path}"') == 2
+    assert "tests/fixtures/**" not in ci
+
+
+def test_hatchet_token_bootstrap_is_explicit_and_non_destructive() -> None:
+    script = (REPO_ROOT / "deploy/scripts/bootstrap_hatchet_token.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'ALLOW_HATCHET_TOKEN_BOOTSTRAP:-false' in script
+    assert "/hatchet-admin --config /config token create" in script
+    assert "down -v" not in script
+    assert "printf '%s' \"${token}\"" in script
+    assert "HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET" in script
+    assert "HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET" in script
+    assert "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET" in script
+    assert 'lines.append(f"HATCHET_CLIENT_TOKEN=' in script
+
+
+def test_branch_deploy_probes_the_isolated_branch_listener() -> None:
+    workflow = (
+        REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
+    ).read_text(encoding="utf-8")
+    assert "STRATEGYOS_PROBE_URL: ''" in workflow
+    assert "STRATEGYOS_HTTP_PORT: '8080'" in workflow
+    assert "STRATEGYOS_HTTPS_PORT: '8443'" in workflow
+    assert "HETZNER_HOST: ${{ vars.HETZNER_HOST }}" in workflow
+    assert "STRATEGYOS_SITE_ADDRESS: ':80'" in workflow
+    assert "if not site_address and parsed_public_url.scheme == \"https\"" in workflow
+    assert 'site_address in {"", ":80"}' not in workflow
+    assert 'probe_url="http://${HETZNER_HOST}:${STRATEGYOS_HTTP_PORT}"' in workflow
+    assert workflow.count('TARGET_URL="${STRATEGYOS_PROBE_URL}"') >= 4
+    assert workflow.count('--base-url "${STRATEGYOS_PROBE_URL}"') == 2
+    branch_compose = (REPO_ROOT / "deploy/docker-compose.branch.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "STRATEGYOS_SITE_ADDRESS: ${STRATEGYOS_SITE_ADDRESS:-:80}" in branch_compose
+    assert "Caddyfile.branch:/etc/caddy/Caddyfile:ro" in branch_compose
+    branch_caddyfile = (REPO_ROOT / "deploy/caddy/Caddyfile.branch").read_text(
+        encoding="utf-8"
+    )
+    assert branch_caddyfile.startswith("{$STRATEGYOS_SITE_ADDRESS} {")
+    assert "new.strategyos.live" not in branch_caddyfile
+    assert "reverse_proxy strategyos-api:8000" in branch_caddyfile
+    assert "reverse_proxy @idp strategyos-idp:9000" in branch_caddyfile
 
 
 def test_compose_passes_runtime_backend_to_api_and_worker() -> None:
@@ -681,6 +833,10 @@ def test_validate_deploy_boundary_rejects_hatchet_mode_without_runtime_secrets(
     assert result.returncode == 1
     assert "HATCHET_POSTGRES_PASSWORD" in result.stderr
     assert "HATCHET_CLIENT_TOKEN" in result.stderr
+    assert "HATCHET_SERVER_AUTH_COOKIE_SECRETS" in result.stderr
+    assert "HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET" in result.stderr
+    assert "HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET" in result.stderr
+    assert "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET" in result.stderr
 
 
 def test_validate_deploy_boundary_rejects_llm_chat_without_external_approval(

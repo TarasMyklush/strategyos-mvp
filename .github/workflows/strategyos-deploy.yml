@@ -112,10 +112,12 @@ jobs:
           context: .
           file: deploy/Dockerfile
           push: true
+          cache-from: type=gha,scope=strategyos-runtime
+          cache-to: type=gha,mode=max,scope=strategyos-runtime,ignore-error=true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            POPPLER_UTILS_VERSION=25.03.0-5+deb13u3
+            POPPLER_UTILS_VERSION=25.03.0-5+deb13u4
 
       - name: Export digest image ref
         id: image-ref
@@ -142,11 +144,17 @@ jobs:
       STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
       STRATEGYOS_API_IMAGE: ${{ needs.image.outputs.image-ref }}
       STRATEGYOS_COMPOSE_FILES: ${{ vars.STRATEGYOS_COMPOSE_FILES }}
-      STRATEGYOS_COMPOSE_PROFILES: ${{ vars.STRATEGYOS_COMPOSE_PROFILES || 'hatchet' }}
+      STRATEGYOS_COMPOSE_PROFILES: ${{ vars.STRATEGYOS_COMPOSE_PROFILES || '' }}
       HETZNER_USER: ${{ vars.HETZNER_USER }}
       STRATEGYOS_HTTP_PORT: ${{ vars.STRATEGYOS_HTTP_PORT || '80' }}
       STRATEGYOS_HTTPS_PORT: ${{ vars.STRATEGYOS_HTTPS_PORT || '443' }}
       STRATEGYOS_SITE_ADDRESS: ${{ vars.STRATEGYOS_SITE_ADDRESS || ':80' }}
+      # When a shared edge proxy terminates public TLS in front of this stack,
+      # the app's own Caddy must stay on plain HTTP and NOT try to obtain a
+      # certificate for the public hostname (it would race the edge for the
+      # same cert and never be reachable on its high host port). Set the repo
+      # var to 'true' whenever the stack is deployed behind deploy/edge.
+      STRATEGYOS_EDGE_TLS_TERMINATION: ${{ vars.STRATEGYOS_EDGE_TLS_TERMINATION || 'false' }}
       STRATEGYOS_ENVIRONMENT_LABEL: ${{ vars.STRATEGYOS_ENVIRONMENT_LABEL || inputs.target_environment }}
       STRATEGYOS_AUTH_MODE: ${{ vars.STRATEGYOS_AUTH_MODE || 'identity_provider' }}
       STRATEGYOS_TRUST_PROXY_AUTH: ${{ vars.STRATEGYOS_TRUST_PROXY_AUTH || 'false' }}
@@ -187,6 +195,7 @@ jobs:
       STRATEGYOS_LLM_TIMEOUT_SECONDS: ${{ vars.STRATEGYOS_LLM_TIMEOUT_SECONDS || '30' }}
       HATCHET_CLIENT_TLS_STRATEGY: ${{ vars.HATCHET_CLIENT_TLS_STRATEGY || 'none' }}
       HATCHET_CLIENT_HOST_PORT: ${{ vars.HATCHET_CLIENT_HOST_PORT || 'hatchet-lite:7077' }}
+      HATCHET_CLIENT_SERVER_URL: ${{ vars.HATCHET_CLIENT_SERVER_URL || 'http://hatchet-lite:8888' }}
       STRATEGYOS_HATCHET_WORKER_NAME: ${{ vars.STRATEGYOS_HATCHET_WORKER_NAME || 'strategyos-worker' }}
       STRATEGYOS_HATCHET_WORKER_SLOTS: ${{ vars.STRATEGYOS_HATCHET_WORKER_SLOTS || '1' }}
       STRATEGYOS_HATCHET_DASHBOARD_URL: ${{ vars.STRATEGYOS_HATCHET_DASHBOARD_URL || 'http://localhost:8888' }}
@@ -210,6 +219,24 @@ jobs:
           chmod 600 "${HOME}/.ssh/strategyos_deploy"
           printf '%s\n' "${HETZNER_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
           echo "SSH_OPTS=-i ${HOME}/.ssh/strategyos_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" >> "${GITHUB_ENV}"
+
+      - name: Normalize compose profiles for execution mode
+        run: |
+          normalized_profiles=""
+          for profile in ${STRATEGYOS_COMPOSE_PROFILES:-}; do
+            if [ "${profile}" = "hatchet" ] && [ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then
+              continue
+            fi
+            normalized_profiles="${normalized_profiles:+${normalized_profiles} }${profile}"
+          done
+          if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" = "hatchet" ]; then
+            case " ${normalized_profiles} " in
+              *" hatchet "*) ;;
+              *) normalized_profiles="${normalized_profiles:+${normalized_profiles} }hatchet" ;;
+            esac
+          fi
+          echo "STRATEGYOS_COMPOSE_PROFILES=${normalized_profiles}" >> "${GITHUB_ENV}"
+          echo "Using compose profiles: ${normalized_profiles:-<none>}"
 
       - name: Render deploy config
         run: |
@@ -270,6 +297,7 @@ jobs:
               "STRATEGYOS_LLM_TIMEOUT_SECONDS": os.environ["STRATEGYOS_LLM_TIMEOUT_SECONDS"],
               "HATCHET_CLIENT_TLS_STRATEGY": os.environ["HATCHET_CLIENT_TLS_STRATEGY"],
               "HATCHET_CLIENT_HOST_PORT": os.environ["HATCHET_CLIENT_HOST_PORT"],
+              "HATCHET_CLIENT_SERVER_URL": os.environ["HATCHET_CLIENT_SERVER_URL"],
               "STRATEGYOS_HATCHET_WORKER_NAME": os.environ["STRATEGYOS_HATCHET_WORKER_NAME"],
               "STRATEGYOS_HATCHET_WORKER_SLOTS": os.environ["STRATEGYOS_HATCHET_WORKER_SLOTS"],
               "STRATEGYOS_HATCHET_DASHBOARD_URL": os.environ["STRATEGYOS_HATCHET_DASHBOARD_URL"],
@@ -281,10 +309,13 @@ jobs:
 
           public_url = os.environ.get("STRATEGYOS_PUBLIC_URL", "").strip()
           site_address = str(overrides.get("STRATEGYOS_SITE_ADDRESS") or "").strip()
+          edge_tls = os.environ.get("STRATEGYOS_EDGE_TLS_TERMINATION", "").strip().lower() in {"1", "true", "yes"}
           parsed_public_url = urlparse(public_url)
           public_url_host = parsed_public_url.hostname or ""
           public_url_port = parsed_public_url.port
-          if site_address in {"", ":80"} and parsed_public_url.scheme == "https" and public_url_host:
+          # Behind a shared edge proxy the app Caddy stays plain-HTTP; only take
+          # over TLS for the public hostname when nothing else terminates it.
+          if not edge_tls and site_address in {"", ":80"} and parsed_public_url.scheme == "https" and public_url_host:
               overrides["STRATEGYOS_SITE_ADDRESS"] = (
                   f"{public_url_host}:{public_url_port}"
                   if public_url_port and public_url_port != 443
@@ -304,6 +335,11 @@ jobs:
       - name: Render deploy secrets
         env:
           STRATEGYOS_ENV_SECRETS: ${{ secrets.STRATEGYOS_ENV_SECRETS }}
+          HATCHET_CLIENT_TOKEN: ${{ secrets.HATCHET_CLIENT_TOKEN }}
+          HATCHET_SERVER_AUTH_COOKIE_SECRETS: ${{ secrets.HATCHET_SERVER_AUTH_COOKIE_SECRETS }}
+          HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET: ${{ secrets.HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET }}
+          HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET: ${{ secrets.HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET }}
+          HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET: ${{ secrets.HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET }}
           STRATEGYOS_LLM_API_KEY: ${{ secrets.STRATEGYOS_LLM_API_KEY }}
           STRATEGYOS_IDP_TEST_USERS: ${{ secrets.STRATEGYOS_IDP_TEST_USERS }}
           STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET: ${{ secrets.STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET }}
@@ -326,6 +362,11 @@ jobs:
                   lines.append(f"{key}={value}")
 
           upsert("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET", os.environ.get("STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET", ""))
+          upsert("HATCHET_CLIENT_TOKEN", os.environ.get("HATCHET_CLIENT_TOKEN", ""))
+          upsert("HATCHET_SERVER_AUTH_COOKIE_SECRETS", os.environ.get("HATCHET_SERVER_AUTH_COOKIE_SECRETS", ""))
+          upsert("HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET", os.environ.get("HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET", ""))
+          upsert("HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET", os.environ.get("HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET", ""))
+          upsert("HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET", os.environ.get("HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET", ""))
           upsert("OAUTH2_PROXY_CLIENT_SECRET", os.environ.get("OAUTH2_PROXY_CLIENT_SECRET", ""))
           upsert("OAUTH2_PROXY_COOKIE_SECRET", os.environ.get("OAUTH2_PROXY_COOKIE_SECRET", ""))
           upsert("STRATEGYOS_LLM_API_KEY", os.environ.get("STRATEGYOS_LLM_API_KEY", ""))
@@ -389,34 +430,12 @@ jobs:
           ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h / && echo '---' && du -sh /var/lib/docker/* 2>/dev/null | sort -rh | head -20 || true"
 
           echo "=== Docker system prune (unused images, containers, networks, build cache) ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker system prune -af --volumes || true"
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker system prune -af || true"
 
           echo "=== Disk usage after cleanup ==="
           ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h /"
 
-          echo "=== Checking hatchet-postgres health ==="
-          HEALTH=$(ssh ${SSH_OPTS} "${TARGET_HOST}" "docker inspect strategyos-hatchet-postgres-1 --format '{{.State.Health.Status}}' 2>/dev/null || echo 'no-container'")
-          echo "hatchet-postgres health: ${HEALTH}"
-
-          echo "=== hatchet-postgres logs (last 30 lines) ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-hatchet-postgres-1 --tail 30 2>&1 || true"
-
-          if [ "${HEALTH}" != "healthy" ]; then
-            echo "=== hatchet-postgres is not healthy (status: ${HEALTH}) — resetting hatchet volumes ==="
-            compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml}"
-            compose_args=()
-            for compose_file in ${compose_files}; do
-              compose_args+=(-f "${compose_file}")
-            done
-            profile_args=()
-            for profile in ${STRATEGYOS_COMPOSE_PROFILES:-}; do
-              profile_args+=(--profile "${profile}")
-            done
-            ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose ${compose_args[*]} ${profile_args[*]} --env-file deploy/.env --env-file deploy/.env.secrets down -v hatchet-postgres hatchet-lite || true"
-            echo "=== Hatchet volumes reset complete ==="
-          else
-            echo "=== hatchet-postgres is healthy — no reset needed ==="
-          fi
+          echo "Hatchet named volumes are preserved. Destructive recovery is never part of a normal deploy."
 
       - name: Deploy compose stack
         id: deploy
@@ -435,13 +454,8 @@ jobs:
         run: |
           compose_profiles="${STRATEGYOS_COMPOSE_PROFILES:-}"
           if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then
-            case " ${compose_profiles} " in
-              *" hatchet "*) ;;
-              *)
-                echo "Skipping Hatchet worker health check because STRATEGYOS_RUN_EXECUTION_MODE=${STRATEGYOS_RUN_EXECUTION_MODE} and STRATEGYOS_COMPOSE_PROFILES=${compose_profiles:-<empty>}."
-                exit 0
-                ;;
-            esac
+            echo "Skipping Hatchet worker health check because STRATEGYOS_RUN_EXECUTION_MODE=${STRATEGYOS_RUN_EXECUTION_MODE}."
+            exit 0
           fi
 
           if [ -z "${compose_profiles}" ]; then
@@ -498,8 +512,8 @@ jobs:
           TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
           bash deploy/scripts/validate_public_edge.sh
 
-      - name: Optional smoke run
-        if: ${{ inputs.run_smoke }}
+      - name: Verify queued execution
+        if: ${{ inputs.run_smoke || env.STRATEGYOS_RUN_EXECUTION_MODE == 'hatchet' }}
         env:
           STRATEGYOS_RUN_AUTH_HEADER: ${{ secrets.STRATEGYOS_RUN_AUTH_HEADER }}
         run: |

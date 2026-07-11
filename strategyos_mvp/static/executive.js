@@ -785,6 +785,7 @@
   }
 
   async function askAssistant(prompt, sourceChip) {
+    var hiddenContext = arguments.length > 2 ? arguments[2] : null;
     var cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) return;
     // openAssistantDrawer(validChip) is the single shared drawer-opening path.
@@ -816,7 +817,7 @@
       input.placeholder = 'Thinking\u2026';
       form.classList.add('assistant-form--loading');
     }
-    var result = await buildAssistantReply(cleanPrompt, validChip);
+    var result = await buildAssistantReply(cleanPrompt, validChip, hiddenContext);
     // Clear loading state
     if (!validChip && form && input) {
       input.disabled = false;
@@ -1568,9 +1569,12 @@
   }
 
   function driverRingMarkup(driver) {
-    var pct = Math.max(0, Number(firstDefined(driver.pct, 0)) || 0);
     var radius = 15;
     var circumference = 2 * Math.PI * radius;
+    if (!driverHasPercent(driver)) {
+      return '<svg class="driver-ring driver-ring--neutral" viewBox="0 0 36 36" aria-hidden="true"><circle class="driver-ring__track" cx="18" cy="18" r="15"></circle></svg>';
+    }
+    var pct = Math.max(0, Number(driver.pct) || 0);
     // Full circle = 100% of plan. Values above 100% cap at full ring;
     // the over-plan amount is shown as a badge outside the ring.
     var frac = Math.max(0.02, Math.min(pct, 100) / 100);
@@ -1964,6 +1968,7 @@
   }
 
   async function buildAssistantReply(message, sourceEl) {
+    var hiddenContext = arguments.length > 2 ? arguments[2] : null;
     var cleanMessage = String(message || "").trim();
     if (!cleanMessage) {
       return { ok: false, answer: "Please ask a question for the assistant.", retryable: false, needsRetry: false, errorType: "empty_prompt", endpoint: "/assistant/chat" };
@@ -1980,7 +1985,11 @@
     var apiQuestion = normalizeTypos(cleanMessage);
 
     var body = { question: apiQuestion, mode: "auto", persona: state.activePersona || "ceo" };
-    var entrypointCtx = assistantEntrypointContext(sourceEl);
+    var entrypointCtx = Object.assign(
+      {},
+      assistantEntrypointContext(sourceEl),
+      hiddenContext && typeof hiddenContext === "object" ? hiddenContext : {}
+    );
     body.assistant_context = entrypointCtx;
     // Board portal prompts must NOT carry hero/revenue driver_context, because
     // the board entrypoint_context already identifies board state/lifecycle and
@@ -2593,19 +2602,33 @@
       var runningCount = network.filter(function (item) { return Number(item.statusRank) === 0; }).length;
       var pendingCount = network.filter(function (item) { return Number(item.statusRank) === 1; }).length;
       var blockedCount = network.filter(function (item) { return Number(item.statusRank) >= 2; }).length;
+      var activeFilter = state.networkStatusFilter || "all";
+      var filterLabels = { all: "All modules", running: "Running", pending: "Pending", blocked: "Blocked / idle" };
+      function networkStatusKey(item) {
+        return Number(item.statusRank) === 0 ? "running" : Number(item.statusRank) === 1 ? "pending" : "blocked";
+      }
+      var filteredNetwork = activeFilter === "all"
+        ? network
+        : network.filter(function (item) { return networkStatusKey(item) === activeFilter; });
+      var catalogueAgents = getDiscoverableAgents();
+      var catalogueHtml = state.assistantCatalogueOpen
+        ? '<div class="assistant-catalogue" id="assistant-catalogue"><div class="agents-col-head"><span class="ach-title">Agent catalogue</span><span class="ach-hint">' + escapeHtml(String(catalogueAgents.length)) + ' available</span></div><div class="disco-list">' + catalogueAgents.map(function (item, index) {
+            return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent ' + (index + 1))) + '</span><span class="disco-src native">' + escapeHtml(firstDefined(item.connector, item.source, 'StrategyOS')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div></div></div>';
+          }).join('') + '</div></div>'
+        : '';
       card.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'Governed assistant modules attached to the latest run.')) + '</p></div><button type="button" class="pill-inline ok network-module-toggle" id="network-module-toggle">' + escapeHtml(String(network.length)) + ' module' + (network.length === 1 ? '' : 's') + '</button></div>',
+        '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'Governed assistant modules attached to the latest run.')) + '</p></div><div class="network-filter-wrap"><button type="button" class="pill-inline ok network-module-toggle" id="network-module-toggle" aria-haspopup="menu" aria-expanded="' + (state.networkFilterMenuOpen ? 'true' : 'false') + '">' + escapeHtml(filterLabels[activeFilter] || 'All modules') + ' · ' + escapeHtml(String(filteredNetwork.length)) + '</button>' + (state.networkFilterMenuOpen ? '<div class="network-filter-menu" role="menu" aria-label="Filter assistant modules"><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'all' ? 'true' : 'false') + '" data-network-menu-filter="all">All modules</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'running' ? 'true' : 'false') + '" data-network-menu-filter="running">Running</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'pending' ? 'true' : 'false') + '" data-network-menu-filter="pending">Pending</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'blocked' ? 'true' : 'false') + '" data-network-menu-filter="blocked">Blocked / idle</button></div>' : '') + '</div></div>',
         '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? runningCount : '—')) + '</strong><span>Modules running</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="running">' + escapeHtml(String(runningCount)) + ' running</span><span class="pill-inline warn" data-network-filter="pending">' + escapeHtml(String(pendingCount)) + ' pending</span><span class="pill-inline danger" data-network-filter="blocked">' + escapeHtml(String(blockedCount)) + ' blocked / idle</span></div></div>',
-        '<div class="network-list" id="network-module-list"><div class="network-list-head"><span class="sr-only">Status</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">Freshness</span><span class="network-list-head__stat">Used</span><span class="network-list-head__stat">Context</span></div></div>' + network.map(function (item, index) {
-          return '<div class="network-row" data-network-idx="' + index + '" data-network-status="' + escapeHtml(Number(item.statusRank) === 0 ? 'running' : Number(item.statusRank) === 1 ? 'pending' : 'blocked') + '" role="button" tabindex="0" title="Ask ' + escapeHtml(firstDefined(item.assistant, 'this assistant')) + ' about its current work"><div class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(statusLabel(item.tone)) + '"><strong>●</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
-        }).join('') + (!network.length ? '<div class="network-row"><div class="network-score-badge tone-warn"><strong>—</strong></div><div class="network-row__main"><div class="network-row__head"><strong>Awaiting module telemetry</strong><span>· Governed runtime</span></div><p class="list-copy">No assistant module feed is available for this packet yet.</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">awaiting</span></span><span aria-label="Used"><span class="network-stat-value">—</span></span><span aria-label="Context"><span class="network-stat-value">governed</span></span></div></div>' : '') + '</div>'
+        '<div class="network-list" id="network-module-list" data-active-filter="' + escapeHtml(activeFilter) + '"><div class="network-list-head"><span class="sr-only">Status</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">Freshness</span><span class="network-list-head__stat">Used</span><span class="network-list-head__stat">Context</span></div></div>' + filteredNetwork.map(function (item, index) {
+          return '<div class="network-row" data-network-idx="' + index + '" data-network-status="' + escapeHtml(networkStatusKey(item)) + '" role="button" tabindex="0" title="Ask ' + escapeHtml(firstDefined(item.assistant, 'this assistant')) + ' about its current work"><div class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(statusLabel(item.tone)) + '"><strong>●</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
+        }).join('') + (!network.length ? '<div class="network-row"><div class="network-score-badge tone-warn"><strong>—</strong></div><div class="network-row__main"><div class="network-row__head"><strong>Awaiting module telemetry</strong><span>· Governed runtime</span></div><p class="list-copy">No assistant module feed is available for this packet yet.</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">awaiting</span></span><span aria-label="Used"><span class="network-stat-value">—</span></span><span aria-label="Context"><span class="network-stat-value">governed</span></span></div></div>' : '') + (network.length && !filteredNetwork.length ? '<div class="network-empty">No modules match this filter.</div>' : '') + '</div>' + catalogueHtml
       ].join('');
       // Bug 3 fix: bind click handlers to network rows so they open the
       // Hermes drawer with a contextual prompt about the clicked module.
       safeArray(card.querySelectorAll('.network-row[data-network-idx]')).forEach(function (row) {
         var handler = function () {
           var idx = Number(row.getAttribute('data-network-idx') || 0);
-          var moduleItem = network[idx];
+          var moduleItem = filteredNetwork[idx];
           if (!moduleItem) return;
           var moduleName = firstDefined(moduleItem.assistant, 'this assistant');
           var moduleWho = firstDefined(moduleItem.who, '');
@@ -2616,34 +2639,35 @@
         row.onclick = handler;
         row.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } };
       });
-      // Bug 4 fix: the module toggle pill collapses/expands the module list.
       var toggleBtn = $("network-module-toggle");
       if (toggleBtn) {
-        toggleBtn.onclick = function () {
-          var list = $("network-module-list");
-          if (!list) return;
-          var collapsed = list.classList.toggle('is-collapsed');
-          toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        toggleBtn.onclick = function (event) {
+          event.stopPropagation();
+          state.networkFilterMenuOpen = !state.networkFilterMenuOpen;
+          renderAssistantNetwork();
+        };
+        toggleBtn.onkeydown = function (event) {
+          if (event.key === "Escape") {
+            state.networkFilterMenuOpen = false;
+            renderAssistantNetwork();
+          }
         };
       }
-      // Bug 4 fix: status filter pills highlight matching rows.
+      safeArray(card.querySelectorAll('[data-network-menu-filter]')).forEach(function (button) {
+        button.onclick = function (event) {
+          event.stopPropagation();
+          state.networkStatusFilter = button.getAttribute('data-network-menu-filter') || 'all';
+          state.networkFilterMenuOpen = false;
+          renderAssistantNetwork();
+        };
+      });
       safeArray(card.querySelectorAll('[data-network-filter]')).forEach(function (pill) {
         pill.style.cursor = 'pointer';
         pill.onclick = function () {
           var filterKey = pill.getAttribute('data-network-filter') || '';
-          var list = $("network-module-list");
-          if (!list) return;
-          var rows = safeArray(list.querySelectorAll('.network-row[data-network-status]'));
-          // If already filtering this status, clear the filter
-          if (list.getAttribute('data-active-filter') === filterKey) {
-            list.removeAttribute('data-active-filter');
-            rows.forEach(function (r) { r.classList.remove('is-filtered-out'); });
-            return;
-          }
-          list.setAttribute('data-active-filter', filterKey);
-          rows.forEach(function (r) {
-            r.classList.toggle('is-filtered-out', r.getAttribute('data-network-status') !== filterKey);
-          });
+          state.networkStatusFilter = state.networkStatusFilter === filterKey ? "all" : filterKey;
+          state.networkFilterMenuOpen = false;
+          renderAssistantNetwork();
         };
       });
     }
@@ -3103,7 +3127,7 @@
     var agents = getAgentsModule();
     var fullName = sessionDisplayName();
     var firstName = fullName ? fullName.split(/\s+/)[0] : getPersonaLabel(state.activePersona);
-    var preferredHero = blueprint.health || {};
+    var preferredHero = hero && (hero.summary || hero.body || hero.score_note) ? hero : (blueprint.health || {});
     var score = Number(firstDefined(hero.score, 0));
     if (preferredHero && preferredHero.score !== undefined && preferredHero.score !== null && preferredHero.score !== "") {
       score = Number(preferredHero.score);
@@ -3122,10 +3146,10 @@
     $("hero-eyebrow").textContent = state.activePersona === "board"
       ? "Board portal · current board posture"
       : "Good morning, " + firstName;
-    $("hero-head").textContent = firstDefined(preferredHero.headline, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
+    $("hero-head").textContent = firstDefined(preferredHero.headline, preferredHero.summary, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
     $("hero-score").textContent = String(clampedScore || 0);
-    $("hero-cap").textContent = firstDefined(preferredHero.scoreNote, hero.score_note, getPlanHealth().badge, "plan health");
+    $("hero-cap").textContent = firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
     var byline = $("hero-byline");
     if (byline) {
       var bylineText = firstDefined(blueprint.by, "");
@@ -3880,6 +3904,14 @@
     var findings = safeArray(blueprint.findings).slice(0, 3);
     var developments = safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3);
     var weekAhead = safeArray(blueprint.week).length ? safeArray(blueprint.week).slice(0, 3) : safeArray(lowerRail.week_ahead).slice(0, 3);
+    var reconciliation = getSharedAssistantContext().findings_reconciliation || {};
+    var remainingRecoverable = Number(firstDefined(reconciliation.remaining_recoverable_sar, 0)) || 0;
+    var totalFindingCount = Number(firstDefined(reconciliation.total_finding_count, findings.length)) || findings.length;
+    var displayedFindingCount = Number(firstDefined(reconciliation.displayed_finding_count, findings.length)) || findings.length;
+    var reconciliationHtml = '';
+    if (totalFindingCount > displayedFindingCount || remainingRecoverable > 0) {
+      reconciliationHtml = '<div class="rail-reconcile"><span>Top ' + escapeHtml(String(displayedFindingCount)) + ' of ' + escapeHtml(String(totalFindingCount)) + ' cases: ' + escapeHtml(formatSar(reconciliation.displayed_recoverable_sar)) + '</span>' + (remainingRecoverable > 0 ? '<span>' + escapeHtml(String(totalFindingCount - displayedFindingCount)) + ' other governed cases: ' + escapeHtml(formatSar(remainingRecoverable)) + '</span>' : '') + '<strong>Total recoverable value: ' + escapeHtml(formatSar(reconciliation.total_recoverable_sar)) + '</strong></div>';
+    }
     var renderToggleList = function (items, kind) {
       return items.map(function (item, index) {
         var key = kind + ':' + index;
@@ -3893,7 +3925,7 @@
     };
 
     if (findingsPanel) {
-      findingsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Findings &amp; concerns</h3></div></div><div class="rail-toggle-list">' + renderToggleList(findings, 'finding') + '</div>';
+      findingsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Findings &amp; concerns</h3></div></div><div class="rail-toggle-list">' + renderToggleList(findings, 'finding') + '</div>' + reconciliationHtml;
     }
 
     if (developmentsPanel) {
@@ -3930,10 +3962,8 @@
       });
       safeArray(weekPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () {
-          // Bug 6 fix: "Request missing data" buttons get enriched context
-          // so Hermes can answer from the board data already loaded in the dashboard.
           var rawPrompt = button.getAttribute("data-chat-prompt") || "";
-          var enrichedPrompt = rawPrompt;
+          var hiddenContext = null;
           if (rawPrompt.indexOf("missing") !== -1 && activeEvent) {
             var eventContext = firstDefined(activeEvent.title, "this event");
             var prepNotes = firstDefined(activeEvent.prep, activeEvent.foot, "");
@@ -3942,13 +3972,18 @@
             var activeDriver = getActiveDriver();
             var driverLabel = activeDriver ? firstDefined(activeDriver.label, activeDriver.driver_key, "") : "";
             var driverMetric = activeDriver ? firstDefined(activeDriver.metric, activeDriver.value, "") : "";
-            enrichedPrompt = 'For the upcoming board event "' + eventContext + '"' + (eventWhen ? ' (' + eventWhen + ')' : '') + ': what data am I missing and who should I request it from?'
-              + ' The current board state is "' + boardState + '".'
-              + (driverLabel ? ' The active driver focus is "' + driverLabel + '"' + (driverMetric ? ' (current metric: ' + driverMetric + ')' : '') + '.' : '')
-              + (prepNotes ? ' Prep context: "' + prepNotes.slice(0, 300) + '"' : '')
-              + ' Use the data already available on this dashboard to identify gaps, not generic advice.';
+            hiddenContext = {
+              entrypoint: "missing_data_cta",
+              event_title: eventContext,
+              event_when: eventWhen,
+              board_state: boardState,
+              driver_label: driverLabel,
+              driver_metric: driverMetric,
+              prep_context: prepNotes.slice(0, 300),
+              guidance: "identify dashboard-backed gaps"
+            };
           }
-          askAssistant(enrichedPrompt, button);
+          askAssistant(rawPrompt, button, hiddenContext);
         };
       });
       var weekComposer = weekPanel.querySelector('#week-composer');
@@ -3985,8 +4020,23 @@
       var order = { approval: 0, running: 1, standing: 2, queued: 3, done: 4 };
       return Number(firstDefined(order[left && left.status], 9)) - Number(firstDefined(order[right && right.status], 9));
     });
-    var nativeAgents = discoverable.filter(function (item) { return item.source === 'native'; });
-    var marketAgents = discoverable.filter(function (item) { return item.source !== 'native'; });
+    var query = String(state.discoveryQuery || "").trim().toLowerCase();
+    function matchesDiscoveryQuery(item) {
+      if (!query) return true;
+      return [
+        item && item.name,
+        item && item.label,
+        item && item.desc,
+        item && item.summary,
+        item && item.connector,
+        item && item.route,
+        item && item.__source,
+        safeArray(item && item.capabilities).join(" ")
+      ].join(" ").toLowerCase().indexOf(query) !== -1;
+    }
+    var filteredDiscoverable = discoverable.filter(matchesDiscoveryQuery);
+    var nativeAgents = filteredDiscoverable.filter(function (item) { return item.__source === 'native'; });
+    var marketAgents = filteredDiscoverable.filter(function (item) { return item.__source !== 'native'; });
 
     function statusLabel(item, approved) {
       var status = String(firstDefined(item && item.status, 'running'));
@@ -4022,36 +4072,27 @@
       var sovereignLine = state.activePersona === "ceo" ? '' : '<div class="agents-sovereign"><span class="sov-dot"></span> sovereign · runs in-tenant · every action logged</div>';
       runningCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Running now</span><span class="ach-stats"><span class="agent-pulse running"></span> ' + escapeHtml(String(runningCount)) + ' running' + (needsApproval ? '<span class="ach-needs"> · ' + escapeHtml(String(needsApproval)) + ' need your attention</span>' : '') + '</span></div><div class="agents-clist">' + combined.map(function (item) {
         var id = firstDefined(item.id, item.module_id, item.name, 'agent');
-      var isOpen = false; // per-row state managed via data-expanded in toggle handler
-      var logOpen = false; // per-row state managed via is-open class in toggle handler
+        var isOpen = state.openAgentId === id;
+        var logOpen = state.openAgentLogId === id;
         var approved = !!state.approvedAgentIds[id];
         var showBar = ['running', 'approval'].indexOf(String(firstDefined(item.status, ''))) !== -1;
-        return '<div class="agent-c' + (isOpen ? ' is-open' : '') + '"><button type="button" class="agent-c-head" data-agent-toggle="' + escapeHtml(id) + '"><span class="agent-pulse ' + escapeHtml(String(firstDefined(item.status, 'running'))) + '"></span><span class="agent-name">' + escapeHtml(firstDefined(item.name, item.label, id)) + '</span><span class="agent-status s-' + escapeHtml(String(firstDefined(item.status, 'running'))) + '">' + escapeHtml(statusLabel(item, approved)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (showBar ? '<div class="agent-prog"><span class="agent-prog-bar tone-' + escapeHtml(toneClass(firstDefined(item.status, 'running'))) + '" style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></span></div>' : '') + (isOpen ? '<div class="agent-c-body"><span class="tag agent-tag">' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span><p class="agent-doing">' + escapeHtml(approved && item.status === 'approval' ? 'Approved — executing now. Audit entry written.' : firstDefined(item.doing, item.summary, 'Governed activity in progress.')) + '</p><div class="agent-c-foot"><span class="agent-by">deployed by ' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><button type="button" class="agent-log-btn' + (logOpen ? ' is-open' : '') + '" data-agent-log="' + escapeHtml(id) + '">◷ audit log <span class="agent-log-count">' + escapeHtml(String(safeArray(item.log).length)) + '</span></button></div>' + (item.status === 'approval' && !approved ? '<div class="agent-approve"><span class="agent-approve-note">⚠ This agent will <strong>act</strong> — held until you approve.</span><button type="button" class="agent-approve-btn" data-agent-approve="' + escapeHtml(id) + '">Approve &amp; let it execute</button></div>' : '') + (logOpen ? '<ol class="agent-trail">' + safeArray(item.log).map(function (entry) { return '<li class="trail-item"><span class="trail-time">' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><span class="trail-dot"></span><span class="trail-text">' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</span></li>'; }).join('') + '<li class="trail-foot">every action is logged in-tenant · tap any entry to see its evidence</li></ol>' : '') + '</div>' : '') + '</div>';
+        return '<div class="agent-c' + (isOpen ? ' is-open' : '') + '"><button type="button" class="agent-c-head" data-agent-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="agent-pulse ' + escapeHtml(String(firstDefined(item.status, 'running'))) + '"></span><span class="agent-name">' + escapeHtml(firstDefined(item.name, item.label, id)) + '</span><span class="agent-status s-' + escapeHtml(String(firstDefined(item.status, 'running'))) + '">' + escapeHtml(statusLabel(item, approved)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (showBar ? '<div class="agent-prog"><span class="agent-prog-bar tone-' + escapeHtml(toneClass(firstDefined(item.status, 'running'))) + '" style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></span></div>' : '') + (isOpen ? '<div class="agent-c-body"><span class="tag agent-tag">' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span><p class="agent-doing">' + escapeHtml(approved && item.status === 'approval' ? 'Approved — executing now. Audit entry written.' : firstDefined(item.doing, item.summary, 'No additional runtime detail is available for this module.')) + '</p><div class="agent-c-foot"><span class="agent-by">deployed by ' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><button type="button" class="agent-log-btn' + (logOpen ? ' is-open' : '') + '" data-agent-log="' + escapeHtml(id) + '" aria-expanded="' + (logOpen ? 'true' : 'false') + '">◷ audit log <span class="agent-log-count">' + escapeHtml(String(safeArray(item.log).length)) + '</span></button></div>' + (item.status === 'approval' && !approved ? '<div class="agent-approve"><span class="agent-approve-note">⚠ This agent will <strong>act</strong> — held until you approve.</span><button type="button" class="agent-approve-btn" data-agent-approve="' + escapeHtml(id) + '">Approve &amp; let it execute</button></div>' : '') + (logOpen ? '<ol class="agent-trail">' + (safeArray(item.log).length ? safeArray(item.log).map(function (entry) { return '<li class="trail-item"><span class="trail-time">' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><span class="trail-dot"></span><span class="trail-text">' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</span></li>'; }).join('') : '<li class="trail-item"><span class="trail-time">now</span><span class="trail-dot"></span><span class="trail-text">No audit entries are available yet.</span></li>') + '<li class="trail-foot">every action is logged in-tenant · tap any entry to see its evidence</li></ol>' : '') + '</div>' : '') + '</div>';
       }).join('') + '</div>' + sovereignLine + (subtools.length ? '<div class="subtools"><div class="subtools-label">Available tools</div><div class="subtools-grid">' + subtools.map(function (item) { return '<div class="subtool"><span class="subtool-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25a6')) + '</span><div class="subtool-meta"><span class="subtool-name">' + escapeHtml(firstDefined(item.name, 'Tool')) + '</span><span class="subtool-desc">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</span></div></div>'; }).join('') + '</div></div>' : '');
       safeArray(runningCard.querySelectorAll('[data-agent-toggle]')).forEach(function (button) {
         button.onclick = function () {
           var id = button.getAttribute('data-agent-toggle') || '';
-          var row = button.closest('.agent-c');
-          if (row) {
-            var currentlyExpanded = row.getAttribute('data-expanded') === 'true';
-            row.setAttribute('data-expanded', currentlyExpanded ? 'false' : 'true');
-            row.classList.toggle('is-open', !currentlyExpanded);
-          }
+          state.openAgentId = state.openAgentId === id ? '' : id;
+          if (state.openAgentId !== id) state.openAgentLogId = '';
+          renderAgentsDiscovery();
         };
       });
       safeArray(runningCard.querySelectorAll('[data-agent-log]')).forEach(function (button) {
         button.onclick = function (event) {
           event.stopPropagation();
-          var row = button.closest('.agent-c');
-          if (row) {
-            var logBtn = row.querySelector('[data-agent-log]');
-            if (logBtn) {
-              var logOpen = logBtn.classList.contains('is-open');
-              logBtn.classList.toggle('is-open', !logOpen);
-            }
-            row.setAttribute('data-expanded', 'true');
-            row.classList.add('is-open');
-          }
+          var id = button.getAttribute('data-agent-log') || '';
+          state.openAgentId = id;
+          state.openAgentLogId = state.openAgentLogId === id ? '' : id;
+          renderAgentsDiscovery();
         };
       });
       safeArray(runningCard.querySelectorAll('[data-agent-approve]')).forEach(function (button) {
@@ -4059,11 +4100,7 @@
           event.stopPropagation();
           var id = button.getAttribute('data-agent-approve') || '';
           state.approvedAgentIds[id] = true;
-          var row = button.closest('.agent-c');
-          if (row) {
-            row.setAttribute('data-expanded', 'true');
-            row.classList.add('is-open');
-          }
+          state.openAgentId = id;
           renderAgentsDiscovery();
         };
       });
@@ -4094,19 +4131,32 @@
           return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(displayName) + '</span><span class="disco-src ' + escapeHtml(item.__source) + '">' + escapeHtml(sourceLabel) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? discoveryStatusText(item) : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add" data-agent-discovery-id="' + escapeHtml(item.__discoveryId) + '">' + escapeHtml(discoveryButtonText(item)) + '</button></div>';
         }).join('') + '</div>';
       };
-      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">Add to your workspace</span></div><div class="disco-search"><span class="disco-search-icon">⌕</span> Search the agent universe…</div>' + renderDiscoveryGroup('StrategyOS assistants', nativeAgents) + renderDiscoveryGroup('Available agents', marketAgents) + '<button type="button" class="disco-browse">Browse all agents →</button>';
+      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">Add to your workspace</span></div><label class="disco-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search the agent universe</span><input id="agent-discovery-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search the agent universe…" autocomplete="off" /></label>' + renderDiscoveryGroup('StrategyOS assistants', nativeAgents) + renderDiscoveryGroup('Available agents', marketAgents) + (filteredDiscoverable.length ? '' : '<div class="network-empty">No agents match this search.</div>') + '<button type="button" class="disco-browse">Browse all agents →</button>';
+      var searchInput = discoveryCard.querySelector('#agent-discovery-search');
+      if (searchInput) {
+        searchInput.oninput = function () {
+          state.discoveryQuery = searchInput.value || '';
+          renderAgentsDiscovery();
+          var nextInput = $("agent-discovery-search");
+          if (nextInput) {
+            nextInput.focus();
+            if (typeof nextInput.setSelectionRange === "function") {
+              var length = nextInput.value.length;
+              nextInput.setSelectionRange(length, length);
+            }
+          }
+        };
+      }
       var browseBtn = discoveryCard.querySelector('.disco-browse');
       if (browseBtn) {
         browseBtn.onclick = function () {
-          if (state.activePersona === "ceo") {
-            switchView('assistants');
-            window.setTimeout(function () {
-              askAssistant("Show me the agent catalogue available for my role and what each one does", browseBtn);
-            }, 300);
-          } else {
-            state.discoveryFilter = state.discoveryFilter === 'all' ? 'native' : 'all';
-            renderAgentsDiscovery();
-          }
+          state.assistantCatalogueOpen = true;
+          switchView('assistants');
+          window.setTimeout(function () {
+            renderAssistantNetwork();
+            var catalogue = $("assistant-catalogue");
+            if (catalogue && typeof catalogue.scrollIntoView === "function") catalogue.scrollIntoView({ block: "start", behavior: "smooth" });
+          }, 0);
         };
       }
       safeArray(discoveryCard.querySelectorAll('.disco-add')).forEach(function (button) {
@@ -4470,6 +4520,10 @@
       videoModalOpen: false,
       theme: document.documentElement.getAttribute("data-theme") || "light",
       discoveryFilter: "all",
+      discoveryQuery: "",
+      assistantCatalogueOpen: false,
+      networkStatusFilter: "all",
+      networkFilterMenuOpen: false,
       selectedAgentModuleKey: "",
       knowledgeQuestionIndex: 0,
       kgDensityMode: window.innerWidth <= 640 ? "compact" : "dense",

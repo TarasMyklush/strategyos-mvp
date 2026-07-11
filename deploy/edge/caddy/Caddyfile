@@ -1,0 +1,20 @@
+{
+	email {$STRATEGYOS_EDGE_ACME_EMAIL}
+}
+
+# Shared public edge for the Hetzner host.
+# Owns host ports 80/443, terminates TLS via Let's Encrypt, and routes
+# by hostname to each StrategyOS stack over host.docker.internal, using the
+# host ports those stacks publish. The edge is decoupled from every stack's
+# docker network and lifecycle: redeploying a branch or production never
+# touches this proxy, and this proxy never re-terminates their internal TLS.
+
+# Production -> strategyos stack (published on host port 8081).
+strategyos.live, www.strategyos.live {
+	reverse_proxy host.docker.internal:{$STRATEGYOS_PROD_UPSTREAM_PORT:8081}
+}
+
+# Latest branch preview -> strategyos-branch stack (published on host port 8080).
+new.strategyos.live {
+	reverse_proxy host.docker.internal:{$STRATEGYOS_BRANCH_UPSTREAM_PORT:8080}
+}

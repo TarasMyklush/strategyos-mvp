@@ -8,7 +8,11 @@ services:
       - "${STRATEGYOS_HTTP_PORT:-8080}:80"
       - "${STRATEGYOS_HTTPS_PORT:-8443}:443"
     environment:
-      STRATEGYOS_SITE_ADDRESS: ${STRATEGYOS_SITE_ADDRESS:-:8080}
+      STRATEGYOS_SITE_ADDRESS: ${STRATEGYOS_SITE_ADDRESS:-:80}
+    volumes: !override
+      - ./caddy/Caddyfile.branch:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
 
   postgres:
     ports: !override

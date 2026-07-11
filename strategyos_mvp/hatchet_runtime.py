@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,9 @@ from .run_poc import run_strategyos_workflow
 RUN_TASK_NAME = "strategyos.run.execute"
 TWIN_CYCLE_TASK_NAME = "strategyos.twins.cycle.execute"
 TWIN_EVENTS_TASK_NAME = "strategyos.twins.events.execute"
+HATCHET_EXECUTION_TIMEOUT = timedelta(minutes=30)
+HATCHET_SCHEDULE_TIMEOUT = timedelta(minutes=15)
+HATCHET_RETRIES = 0
 _HATCHET_IMPORT_ERROR: Exception | None = None
 hatchet: Any | None = None
 
@@ -64,6 +68,8 @@ class TwinEventsOutput(BaseModel):
 
 def hatchet_dependency_status(
     config: StrategyOSConfig | None = None,
+    *,
+    verify_connection: bool = False,
 ) -> dict[str, Any]:
     active_config = config or CONFIG
     if active_config.run_execution_mode != "hatchet":
@@ -84,13 +90,60 @@ def hatchet_dependency_status(
             "execution_mode": active_config.run_execution_mode,
             "reason": "HATCHET_CLIENT_TOKEN or STRATEGYOS_HATCHET_CLIENT_TOKEN is required.",
         }
-    return {
+    payload = {
         "status": "ok",
         "execution_mode": active_config.run_execution_mode,
         "worker_name": active_config.hatchet_worker_name,
         "worker_slots": active_config.hatchet_worker_slots,
         "tls_strategy": active_config.hatchet_client_tls_strategy,
         "dashboard_url": active_config.hatchet_dashboard_url,
+    }
+    if not verify_connection:
+        return payload
+    if hatchet is None:
+        return {
+            **payload,
+            "status": "failed",
+            "reason": "Hatchet client was not initialized.",
+        }
+    try:
+        worker_list = hatchet.workers.list()
+    except Exception as exc:
+        return {
+            **payload,
+            "status": "failed",
+            "reason": f"Hatchet engine probe failed: {type(exc).__name__}: {exc}",
+        }
+    workers = list(getattr(worker_list, "rows", None) or [])
+    matching_workers = [
+        worker
+        for worker in workers
+        if (
+            str(getattr(worker, "name", "")) == active_config.hatchet_worker_name
+            or str(getattr(worker, "name", "")).endswith(
+                f"{active_config.hatchet_worker_name}"
+            )
+        )
+        and str(
+            getattr(getattr(worker, "status", None), "value", None)
+            or getattr(worker, "status", "")
+        ).upper()
+        == "ACTIVE"
+    ]
+    if not matching_workers:
+        return {
+            **payload,
+            "status": "failed",
+            "reason": (
+                "Hatchet engine is reachable, but the configured StrategyOS worker "
+                "is not registered."
+            ),
+            "registered_worker_count": len(workers),
+        }
+    return {
+        **payload,
+        "connection_verified": True,
+        "registered_worker_count": len(matching_workers),
     }
 
 
@@ -228,17 +281,35 @@ def execute_twin_events_job(task_input: TwinEventsInput, ctx: Any | None = None)
 
 if hatchet is not None:  # pragma: no cover - requires external Hatchet SDK/server.
 
-    @hatchet.task(name=RUN_TASK_NAME, input_validator=StrategyOSRunInput)
+    @hatchet.task(
+        name=RUN_TASK_NAME,
+        input_validator=StrategyOSRunInput,
+        execution_timeout=HATCHET_EXECUTION_TIMEOUT,
+        schedule_timeout=HATCHET_SCHEDULE_TIMEOUT,
+        retries=HATCHET_RETRIES,
+    )
     def execute_strategyos_run(
         input: StrategyOSRunInput, ctx: Context
     ) -> StrategyOSRunOutput:
         return execute_strategyos_run_job(input, ctx)
 
-    @hatchet.task(name=TWIN_CYCLE_TASK_NAME, input_validator=TwinCycleInput)
+    @hatchet.task(
+        name=TWIN_CYCLE_TASK_NAME,
+        input_validator=TwinCycleInput,
+        execution_timeout=HATCHET_EXECUTION_TIMEOUT,
+        schedule_timeout=HATCHET_SCHEDULE_TIMEOUT,
+        retries=HATCHET_RETRIES,
+    )
     def execute_twin_cycle(input: TwinCycleInput, ctx: Context) -> TwinCycleOutput:
         return execute_twin_cycle_job(input, ctx)
 
-    @hatchet.task(name=TWIN_EVENTS_TASK_NAME, input_validator=TwinEventsInput)
+    @hatchet.task(
+        name=TWIN_EVENTS_TASK_NAME,
+        input_validator=TwinEventsInput,
+        execution_timeout=HATCHET_EXECUTION_TIMEOUT,
+        schedule_timeout=HATCHET_SCHEDULE_TIMEOUT,
+        retries=HATCHET_RETRIES,
+    )
     def execute_twin_events(input: TwinEventsInput, ctx: Context) -> TwinEventsOutput:
         return execute_twin_events_job(input, ctx)
 

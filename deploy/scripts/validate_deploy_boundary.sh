@@ -136,6 +136,15 @@ if run_execution_mode == "hatchet":
     hatchet_token = secrets.get("HATCHET_CLIENT_TOKEN", "")
     require(bool(str(hatchet_token).strip()), "HATCHET_CLIENT_TOKEN must be populated in deploy secrets when STRATEGYOS_RUN_EXECUTION_MODE=hatchet.")
     require("__CHANGE_ME_" not in hatchet_token, "HATCHET_CLIENT_TOKEN still contains a placeholder value.")
+    for key in (
+        "HATCHET_SERVER_AUTH_COOKIE_SECRETS",
+        "HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET",
+        "HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET",
+        "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET",
+    ):
+        value = str(secrets.get(key, "") or "").strip()
+        require(bool(value), f"{key} must be populated in deploy secrets when STRATEGYOS_RUN_EXECUTION_MODE=hatchet.")
+        require("__CHANGE_ME_" not in value, f"{key} still contains a placeholder value.")
 
 model_provider_enabled = bool_is_true(merged.get("STRATEGYOS_MODEL_PROVIDER_ENABLED"))
 llm_chat_enabled = bool_is_true(merged.get("STRATEGYOS_LLM_CHAT_ENABLED"))
