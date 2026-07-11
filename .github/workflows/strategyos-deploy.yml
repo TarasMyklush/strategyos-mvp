@@ -112,6 +112,8 @@ jobs:
           context: .
           file: deploy/Dockerfile
           push: true
+          cache-from: type=gha,scope=strategyos-runtime
+          cache-to: type=gha,mode=max,scope=strategyos-runtime,ignore-error=true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |

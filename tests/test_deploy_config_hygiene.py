@@ -201,6 +201,34 @@ def test_hatchet_components_and_runtime_contract_are_pinned() -> None:
     assert "SERVER_AUTH_COOKIE_SECRETS:" in compose
 
 
+def test_actions_workflows_reuse_dependency_and_image_caches() -> None:
+    ci = (REPO_ROOT / ".github/workflows/strategyos-ci.yml").read_text(encoding="utf-8")
+    branch = (
+        REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
+    ).read_text(encoding="utf-8")
+    deploy = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+
+    for workflow in (ci, branch):
+        assert "cache: pip" in workflow
+        assert "cache-dependency-path: pyproject.toml" in workflow
+    for workflow in (ci, branch, deploy):
+        assert "cache-from: type=gha,scope=strategyos-runtime" in workflow
+        assert (
+            "cache-to: type=gha,mode=max,scope=strategyos-runtime,ignore-error=true"
+            in workflow
+        )
+
+
+def test_ci_skips_only_non_runtime_documentation_changes() -> None:
+    ci = (REPO_ROOT / ".github/workflows/strategyos-ci.yml").read_text(encoding="utf-8")
+    assert ci.count("paths-ignore:") == 2
+    for ignored_path in ("README.md", "deploy/README.md", "docs/**"):
+        assert ci.count(f'- "{ignored_path}"') == 2
+    assert "tests/fixtures/**" not in ci
+
+
 def test_hatchet_token_bootstrap_is_explicit_and_non_destructive() -> None:
     script = (REPO_ROOT / "deploy/scripts/bootstrap_hatchet_token.sh").read_text(
         encoding="utf-8"
