@@ -125,7 +125,7 @@ jobs:
       TARGET_HOST: ${{ vars.HETZNER_USER }}@${{ vars.HETZNER_HOST }}
       TARGET_DIR: ${{ vars.TARGET_DIR || '/opt/strategyos-branch' }}
       STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
-      STRATEGYOS_PROBE_URL: ${{ vars.STRATEGYOS_PROBE_URL || '' }}
+      STRATEGYOS_PROBE_URL: ''
       STRATEGYOS_API_IMAGE: ${{ needs.image.outputs.image-ref }}
       STRATEGYOS_COMPOSE_FILES: ${{ vars.STRATEGYOS_COMPOSE_FILES }}
       # Branch preview is the Hatchet acceptance environment. Keep these pinned
@@ -134,8 +134,8 @@ jobs:
       STRATEGYOS_COMPOSE_PROFILES: 'hatchet'
       HETZNER_HOST: ${{ vars.HETZNER_HOST }}
       HETZNER_USER: ${{ vars.HETZNER_USER }}
-      STRATEGYOS_HTTP_PORT: ${{ vars.STRATEGYOS_HTTP_PORT || '8080' }}
-      STRATEGYOS_HTTPS_PORT: ${{ vars.STRATEGYOS_HTTPS_PORT || '8443' }}
+      STRATEGYOS_HTTP_PORT: '8080'
+      STRATEGYOS_HTTPS_PORT: '8443'
       STRATEGYOS_SITE_ADDRESS: ':80'
       STRATEGYOS_ENVIRONMENT_LABEL: ${{ vars.STRATEGYOS_ENVIRONMENT_LABEL || 'branch-preview' }}
       STRATEGYOS_AUTH_MODE: ${{ vars.STRATEGYOS_AUTH_MODE || 'identity_provider' }}
@@ -224,14 +224,8 @@ jobs:
           echo "STRATEGYOS_COMPOSE_PROFILES=${normalized_profiles}" >> "${GITHUB_ENV}"
           echo "Using compose profiles: ${normalized_profiles:-<none>}"
 
-          probe_url="${STRATEGYOS_PROBE_URL:-}"
-          if [ -z "${probe_url}" ] && [ -n "${STRATEGYOS_PUBLIC_URL:-}" ]; then
-            probe_url="${STRATEGYOS_PUBLIC_URL}"
-          fi
-          if [ -z "${probe_url}" ]; then
-            test -n "${HETZNER_HOST}"
-            probe_url="http://${HETZNER_HOST}:${STRATEGYOS_HTTP_PORT}"
-          fi
+          test -n "${HETZNER_HOST}"
+          probe_url="http://${HETZNER_HOST}:${STRATEGYOS_HTTP_PORT}"
           echo "STRATEGYOS_PROBE_URL=${probe_url%/}" >> "${GITHUB_ENV}"
           echo "Using branch probe URL: ${probe_url%/}"
 

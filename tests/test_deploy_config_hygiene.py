@@ -195,14 +195,15 @@ def test_hatchet_token_bootstrap_is_explicit_and_non_destructive() -> None:
     assert "printf '%s' \"${token}\"" in script
 
 
-def test_branch_deploy_probes_the_public_url_when_configured() -> None:
+def test_branch_deploy_probes_the_isolated_branch_listener() -> None:
     workflow = (
         REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
     ).read_text(encoding="utf-8")
-    assert "STRATEGYOS_PROBE_URL: ${{ vars.STRATEGYOS_PROBE_URL || '' }}" in workflow
+    assert "STRATEGYOS_PROBE_URL: ''" in workflow
+    assert "STRATEGYOS_HTTP_PORT: '8080'" in workflow
+    assert "STRATEGYOS_HTTPS_PORT: '8443'" in workflow
     assert "HETZNER_HOST: ${{ vars.HETZNER_HOST }}" in workflow
     assert "STRATEGYOS_SITE_ADDRESS: ':80'" in workflow
-    assert 'probe_url="${STRATEGYOS_PUBLIC_URL}"' in workflow
     assert 'probe_url="http://${HETZNER_HOST}:${STRATEGYOS_HTTP_PORT}"' in workflow
     assert workflow.count('TARGET_URL="${STRATEGYOS_PROBE_URL}"') >= 4
     assert workflow.count('--base-url "${STRATEGYOS_PROBE_URL}"') == 2
