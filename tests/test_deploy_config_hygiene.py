@@ -178,6 +178,10 @@ def test_hatchet_deploy_preserves_state_and_uses_dedicated_token_secret() -> Non
 
 def test_hatchet_components_and_runtime_contract_are_pinned() -> None:
     compose = (REPO_ROOT / "deploy/docker-compose.yml").read_text(encoding="utf-8")
+    assert compose.count(
+        "STRATEGYOS_TWINS_DATA_DIR: "
+        "${STRATEGYOS_TWINS_DATA_DIR:-/app/workspace/.strategyos_mvp_data/twins}"
+    ) == 2
     project = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert (
         "ghcr.io/hatchet-dev/hatchet/hatchet-lite@sha256:"
