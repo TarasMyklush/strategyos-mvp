@@ -135,9 +135,18 @@ docker compose --profile hatchet \
   up -d --build
 ```
 
-3. Open the internal Hatchet dashboard at `http://localhost:${HATCHET_DASHBOARD_PORT:-8888}`, create or copy the client token, set `HATCHET_CLIENT_TOKEN` in `deploy/.env.secrets`, and restart the API and worker containers.
+3. Bootstrap a token once for the persisted Hatchet tenant, store it in the environment secret manager as `HATCHET_CLIENT_TOKEN`, and restart the API and worker containers. Normal deploys must preserve the Hatchet Postgres and config volumes and must never regenerate the token:
 
-For non-interactive local proof runs, Hatchet Lite also includes `hatchet-admin token create`; use the generated tenant id from Hatchet Lite startup logs and store only the resulting token in `deploy/.env.secrets`.
+```bash
+ALLOW_HATCHET_TOKEN_BOOTSTRAP=true \
+COMPOSE_PROFILES=hatchet \
+bash deploy/scripts/bootstrap_hatchet_token.sh \
+  | gh secret set HATCHET_CLIENT_TOKEN --env hetzner-branch
+```
+
+The bootstrap command emits only the token on stdout; operational messages go to stderr. Destructive volume recovery is a separate, explicitly authorized operation and is not part of deployment.
+
+For a non-default Hatchet tenant, set `HATCHET_TENANT_ID` explicitly before running the bootstrap script.
 
 If Docker volumes already exist from an older local stack, do not mix those persisted volumes with a newly generated secrets file unless you intentionally reset the volumes. Align `deploy/.env.secrets` with the passwords used to initialize the existing Postgres, Neo4j, and MinIO volumes, or run the proof under a fresh compose project/volume set.
 

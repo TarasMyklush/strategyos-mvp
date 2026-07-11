@@ -5,6 +5,57 @@ import strategyos_mvp.hatchet_runtime as hatchet_runtime
 import strategyos_mvp.run_executor as run_executor
 
 
+def test_hatchet_dependency_probe_requires_active_worker(monkeypatch):
+    active_worker = SimpleNamespace(name="strategyos-worker", status=SimpleNamespace(value="ACTIVE"))
+    fake_hatchet = SimpleNamespace(
+        workers=SimpleNamespace(list=lambda: SimpleNamespace(rows=[active_worker]))
+    )
+    monkeypatch.setattr(hatchet_runtime, "hatchet", fake_hatchet)
+    monkeypatch.setattr(hatchet_runtime, "_HATCHET_IMPORT_ERROR", None)
+
+    status = hatchet_runtime.hatchet_dependency_status(
+        SimpleNamespace(
+            run_execution_mode="hatchet",
+            hatchet_client_token="token",
+            hatchet_worker_name="strategyos-worker",
+            hatchet_worker_slots=1,
+            hatchet_client_tls_strategy="none",
+            hatchet_dashboard_url="http://hatchet-lite:8888",
+        ),
+        verify_connection=True,
+    )
+
+    assert status["status"] == "ok"
+    assert status["connection_verified"] is True
+    assert status["registered_worker_count"] == 1
+
+
+def test_hatchet_dependency_probe_rejects_missing_active_worker(monkeypatch):
+    inactive_worker = SimpleNamespace(
+        name="strategyos-worker", status=SimpleNamespace(value="INACTIVE")
+    )
+    fake_hatchet = SimpleNamespace(
+        workers=SimpleNamespace(list=lambda: SimpleNamespace(rows=[inactive_worker]))
+    )
+    monkeypatch.setattr(hatchet_runtime, "hatchet", fake_hatchet)
+    monkeypatch.setattr(hatchet_runtime, "_HATCHET_IMPORT_ERROR", None)
+
+    status = hatchet_runtime.hatchet_dependency_status(
+        SimpleNamespace(
+            run_execution_mode="hatchet",
+            hatchet_client_token="token",
+            hatchet_worker_name="strategyos-worker",
+            hatchet_worker_slots=1,
+            hatchet_client_tls_strategy="none",
+            hatchet_dashboard_url="http://hatchet-lite:8888",
+        ),
+        verify_connection=True,
+    )
+
+    assert status["status"] == "failed"
+    assert "not registered" in status["reason"]
+
+
 def test_sync_execution_mode_delegates_to_existing_runner(tmp_path: Path):
     calls = {}
 

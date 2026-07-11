@@ -74,6 +74,7 @@ services:
       HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN:-}
       HATCHET_CLIENT_TLS_STRATEGY: ${HATCHET_CLIENT_TLS_STRATEGY:-none}
       HATCHET_CLIENT_HOST_PORT: ${HATCHET_CLIENT_HOST_PORT:-hatchet-lite:7077}
+      HATCHET_CLIENT_SERVER_URL: ${HATCHET_CLIENT_SERVER_URL:-http://hatchet-lite:8888}
       STRATEGYOS_HATCHET_WORKER_NAME: ${STRATEGYOS_HATCHET_WORKER_NAME:-strategyos-worker}
       STRATEGYOS_HATCHET_WORKER_SLOTS: ${STRATEGYOS_HATCHET_WORKER_SLOTS:-1}
       STRATEGYOS_HATCHET_DASHBOARD_URL: ${STRATEGYOS_HATCHET_DASHBOARD_URL:-http://localhost:8888}
@@ -149,6 +150,7 @@ services:
       HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN:-}
       HATCHET_CLIENT_TLS_STRATEGY: ${HATCHET_CLIENT_TLS_STRATEGY:-none}
       HATCHET_CLIENT_HOST_PORT: ${HATCHET_CLIENT_HOST_PORT:-hatchet-lite:7077}
+      HATCHET_CLIENT_SERVER_URL: ${HATCHET_CLIENT_SERVER_URL:-http://hatchet-lite:8888}
       STRATEGYOS_HATCHET_WORKER_NAME: ${STRATEGYOS_HATCHET_WORKER_NAME:-strategyos-worker}
       STRATEGYOS_HATCHET_WORKER_SLOTS: ${STRATEGYOS_HATCHET_WORKER_SLOTS:-1}
       STRATEGYOS_HATCHET_DASHBOARD_URL: ${STRATEGYOS_HATCHET_DASHBOARD_URL:-http://localhost:8888}
@@ -162,7 +164,7 @@ services:
       minio-create-bucket:
         condition: service_completed_successfully
       hatchet-lite:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - strategyos-workspace:/app/workspace
     restart: unless-stopped
@@ -248,7 +250,7 @@ services:
 
   hatchet-lite:
     profiles: ["hatchet"]
-    image: ghcr.io/hatchet-dev/hatchet/hatchet-lite:latest
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-lite@sha256:35b107931bd0fd8960f13d3e66860b7d1d806043ab5f86c3e627e95a8f8b1cdb
     depends_on:
       hatchet-postgres:
         condition: service_healthy
@@ -269,6 +271,11 @@ services:
     ports:
       - "127.0.0.1:${HATCHET_DASHBOARD_PORT:-8888}:8888"
       - "127.0.0.1:${HATCHET_GRPC_PORT:-7077}:7077"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8888/api/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     restart: unless-stopped
 
   neo4j:

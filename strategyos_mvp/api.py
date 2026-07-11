@@ -6138,7 +6138,7 @@ def _check_run_execution() -> dict[str, Any]:
     try:
         from .hatchet_runtime import hatchet_dependency_status
 
-        status_payload = hatchet_dependency_status(CONFIG)
+        status_payload = hatchet_dependency_status(CONFIG, verify_connection=True)
     except Exception as exc:
         return _health_check("failed", execution_mode="hatchet", reason=str(exc))
     if status_payload.get("status") != "ok":

@@ -151,6 +151,48 @@ def test_branch_deploy_normalizes_hatchet_profile_for_execution_mode() -> None:
     )
 
 
+def test_hatchet_deploy_preserves_state_and_uses_dedicated_token_secret() -> None:
+    branch_workflow = (
+        REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
+    ).read_text(encoding="utf-8")
+    release_workflow = (
+        REPO_ROOT / ".github/workflows/strategyos-deploy.yml"
+    ).read_text(encoding="utf-8")
+    for workflow in [branch_workflow, release_workflow]:
+        assert "HATCHET_CLIENT_TOKEN: ${{ secrets.HATCHET_CLIENT_TOKEN }}" in workflow
+        assert 'upsert("HATCHET_CLIENT_TOKEN"' in workflow
+        assert "docker system prune -af --volumes" not in workflow
+        assert "down -v hatchet-postgres hatchet-lite" not in workflow
+        assert "Destructive recovery is never part of a normal deploy" in workflow
+
+
+def test_hatchet_components_and_runtime_contract_are_pinned() -> None:
+    compose = (REPO_ROOT / "deploy/docker-compose.yml").read_text(encoding="utf-8")
+    project = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert (
+        "ghcr.io/hatchet-dev/hatchet/hatchet-lite@sha256:"
+        "35b107931bd0fd8960f13d3e66860b7d1d806043ab5f86c3e627e95a8f8b1cdb"
+        in compose
+    )
+    assert "hatchet-lite:latest" not in compose
+    assert '"hatchet-sdk==1.33.10;' in project
+    assert sum(
+        line.strip().startswith("HATCHET_CLIENT_SERVER_URL:")
+        for line in compose.splitlines()
+    ) == 2
+    assert 'condition: service_healthy' in compose
+
+
+def test_hatchet_token_bootstrap_is_explicit_and_non_destructive() -> None:
+    script = (REPO_ROOT / "deploy/scripts/bootstrap_hatchet_token.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'ALLOW_HATCHET_TOKEN_BOOTSTRAP:-false' in script
+    assert "/hatchet-admin --config /config token create" in script
+    assert "down -v" not in script
+    assert "printf '%s' \"${token}\"" in script
+
+
 def test_branch_deploy_probes_the_public_url_when_configured() -> None:
     workflow = (
         REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
