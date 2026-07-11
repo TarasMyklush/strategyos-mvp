@@ -98,7 +98,8 @@ def test_deploy_release_image_path_does_not_build_on_server() -> None:
 
 def test_deploy_reloads_caddy_after_bind_mounted_config_changes() -> None:
     script = (REPO_ROOT / "deploy/scripts/deploy_stack.sh").read_text(encoding="utf-8")
-    assert "up -d --no-deps --force-recreate caddy" in script
+    assert "up -d --no-deps caddy" in script
+    assert "--force-recreate caddy" not in script
     assert "exec -T caddy caddy reload --config /etc/caddy/Caddyfile" in script
 
 
