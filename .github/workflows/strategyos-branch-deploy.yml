@@ -107,7 +107,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            POPPLER_UTILS_VERSION=25.03.0-5+deb13u3
+            POPPLER_UTILS_VERSION=25.03.0-5+deb13u4
 
       - name: Export digest image ref
         id: image-ref

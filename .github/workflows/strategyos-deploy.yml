@@ -117,7 +117,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            POPPLER_UTILS_VERSION=25.03.0-5+deb13u3
+            POPPLER_UTILS_VERSION=25.03.0-5+deb13u4
 
       - name: Export digest image ref
         id: image-ref
@@ -149,6 +149,12 @@ jobs:
       STRATEGYOS_HTTP_PORT: ${{ vars.STRATEGYOS_HTTP_PORT || '80' }}
       STRATEGYOS_HTTPS_PORT: ${{ vars.STRATEGYOS_HTTPS_PORT || '443' }}
       STRATEGYOS_SITE_ADDRESS: ${{ vars.STRATEGYOS_SITE_ADDRESS || ':80' }}
+      # When a shared edge proxy terminates public TLS in front of this stack,
+      # the app's own Caddy must stay on plain HTTP and NOT try to obtain a
+      # certificate for the public hostname (it would race the edge for the
+      # same cert and never be reachable on its high host port). Set the repo
+      # var to 'true' whenever the stack is deployed behind deploy/edge.
+      STRATEGYOS_EDGE_TLS_TERMINATION: ${{ vars.STRATEGYOS_EDGE_TLS_TERMINATION || 'false' }}
       STRATEGYOS_ENVIRONMENT_LABEL: ${{ vars.STRATEGYOS_ENVIRONMENT_LABEL || inputs.target_environment }}
       STRATEGYOS_AUTH_MODE: ${{ vars.STRATEGYOS_AUTH_MODE || 'identity_provider' }}
       STRATEGYOS_TRUST_PROXY_AUTH: ${{ vars.STRATEGYOS_TRUST_PROXY_AUTH || 'false' }}
@@ -303,10 +309,13 @@ jobs:
 
           public_url = os.environ.get("STRATEGYOS_PUBLIC_URL", "").strip()
           site_address = str(overrides.get("STRATEGYOS_SITE_ADDRESS") or "").strip()
+          edge_tls = os.environ.get("STRATEGYOS_EDGE_TLS_TERMINATION", "").strip().lower() in {"1", "true", "yes"}
           parsed_public_url = urlparse(public_url)
           public_url_host = parsed_public_url.hostname or ""
           public_url_port = parsed_public_url.port
-          if site_address in {"", ":80"} and parsed_public_url.scheme == "https" and public_url_host:
+          # Behind a shared edge proxy the app Caddy stays plain-HTTP; only take
+          # over TLS for the public hostname when nothing else terminates it.
+          if not edge_tls and site_address in {"", ":80"} and parsed_public_url.scheme == "https" and public_url_host:
               overrides["STRATEGYOS_SITE_ADDRESS"] = (
                   f"{public_url_host}:{public_url_port}"
                   if public_url_port and public_url_port != 443
