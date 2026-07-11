@@ -3570,6 +3570,23 @@ def test_assistant_css_styles_retryable_failure_state():
     assert '.assistant-tool-chip--action' in executive_css
 
 
+def test_executive_ux_layout_contracts_are_guarded():
+    executive_css = Path("strategyos_mvp/static/executive.css").read_text()
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+
+    assert ".hero-score__label" in executive_css
+    assert "max-width: 112px" in executive_css
+    assert ".hero-score__caption" in executive_css
+    assert "overflow-wrap: anywhere" in executive_css
+    assert ".section:has(.agents-row)" in executive_css
+    assert "max-height: none" in executive_css
+    assert ".disco-footer" in executive_css
+    assert '<div class="disco-footer"><button type="button" class="disco-browse"' in executive_js
+    assert ".leaders-card .video-frame-wrapper" in executive_css
+    assert "max-height: clamp(220px, 34vh, 360px)" in executive_css
+    assert "padding-bottom: max(112px" in executive_css
+
+
 def test_assistant_success_messages_render_metadata_behaviorally():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
     prefix = '(function () {\n  "use strict";\n'
@@ -3866,6 +3883,109 @@ console.log(JSON.stringify({{ meta }}));
         assert banned not in meta, f"unexpected debug metadata leak: {banned}"
 
 
+def test_public_ceo_finance_answer_uses_executive_labels_behaviorally():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    prefix = '(function () {\n  "use strict";\n'
+    suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
+
+    harness_js = executive_js.replace(prefix, 'function __executiveQaHarness() {\n  "use strict";\n', 1)
+    harness_js = harness_js.replace(
+        suffix,
+        '  return { qaAnswerText: qaAnswerText, qaAnswerMeta: qaAnswerMeta };\n}\nmodule.exports = __executiveQaHarness;\n',
+        1,
+    )
+
+    node_script = f"""
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const source = {json.dumps(harness_js)};
+const tempFile = path.join(os.tmpdir(), 'executive-qa-finance-labels-' + Date.now() + '.cjs');
+fs.writeFileSync(tempFile, source, 'utf8');
+
+global.window = {{
+  STRATEGYOS_EXECUTIVE_DESIGN: {{ personas: {{ ceo: {{ assistant: 'Hermes', threads: [], findings: [], developments: [], week: [] }} }}, networkMeta: {{}}, network: [], a2a: [], subtools: [] }},
+  localStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }},
+  sessionStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}}, clear() {{}} }},
+  MIZAN_X: {{ threads: {{}}, assistants: {{}} }},
+  setTimeout(fn) {{ fn(); return 1; }},
+  clearTimeout() {{}},
+  setInterval() {{ return 1; }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  location: {{ pathname: '/app' }},
+  history: {{ replaceState() {{}} }},
+  navigator: {{ clipboard: {{ writeText() {{ return Promise.resolve(); }} }} }},
+}};
+
+global.document = {{
+  body: {{ style: {{}}, appendChild() {{}}, removeChild() {{}} }},
+  documentElement: {{ getAttribute() {{ return 'light'; }}, setAttribute() {{}} }},
+  addEventListener() {{}},
+  removeEventListener() {{}},
+  getElementById(id) {{
+    if (id === 'strategyos-executive-bootstrap') return {{ textContent: JSON.stringify({{ requested_view_state: {{ persona: 'ceo', board: 'pre' }}, assistant_public_context: {{ persona_id: 'ceo' }} }}) }};
+    return null;
+  }},
+  querySelector() {{ return null; }},
+  querySelectorAll() {{ return []; }},
+  createElement() {{ return {{ setAttribute() {{}}, appendChild() {{}}, style: {{}}, classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }} }}; }},
+}};
+
+const factory = require(tempFile);
+const harness = factory();
+const payload = {{
+  answer: 'Total recoverable leakage: SAR 794,108.00 across 8 findings. Breakdown: auto_renewal_escalation: SAR 250,416.00; duplicate_payment: SAR 177,188.00; dormant_credit_balance: SAR 128,000.00; entity_resolution_duplicate: SAR 104,750.00; missed_early_pay_discount: SAR 56,666.00.',
+  basis: "Scenario parser matched 'finance_leakage'; computed from run findings.",
+  calculations: [1, 2, 3, 4, 5, 6],
+  citations: [{{ source_path: 'public_packet://latest-public', locator: 'findings' }}],
+  hallucination_risk: {{ level: 'partial' }},
+}};
+console.log(JSON.stringify({{
+  answerText: harness.qaAnswerText(payload),
+  answerMeta: harness.qaAnswerMeta(payload),
+}}));
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / "assistant_qa_finance_labels_test.cjs"
+        script_path.write_text(node_script, encoding="utf-8")
+        completed = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+
+    result = json.loads(completed.stdout.strip())
+    combined = f"{result['answerText']} {result['answerMeta']}"
+
+    assert "Total recoverable value" in result["answerText"]
+    assert "Auto-renewal escalation" in result["answerText"]
+    assert "Duplicate payment" in result["answerText"]
+    assert "Dormant supplier credit" in result["answerText"]
+    assert "Duplicate supplier identity" in result["answerText"]
+    assert "Missed early-payment discount" in result["answerText"]
+    assert "Evidence basis: Calculated from current governed findings" in result["answerMeta"]
+    assert "Calculation: 6 governed checks reconciled" in result["answerMeta"]
+    assert "Evidence confidence: Partial" in result["answerMeta"]
+    for banned in (
+        "auto_renewal_escalation",
+        "duplicate_payment",
+        "dormant_credit_balance",
+        "entity_resolution_duplicate",
+        "missed_early_pay_discount",
+        "finance_leakage",
+        "Scenario parser",
+        "Formula steps",
+        "Grounding level",
+        "recoverable leakage",
+    ):
+        assert banned.lower() not in combined.lower()
+
+
 def test_qa_answer_text_unwraps_raw_json_payload_behaviorally():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
     prefix = '(function () {\n  "use strict";\n'
@@ -3961,8 +4081,8 @@ console.log(JSON.stringify({{
     result = json.loads(completed.stdout.strip())
     assert result["answerText"].startswith("Since last week, NUPCO awards were confirmed")
     assert '"matched"' not in result["answerText"]
-    assert "Basis - outer wrapper" in result["answerMeta"]
-    assert "Evidence sources - 1" in result["answerMeta"]
+    assert "Evidence basis: outer wrapper" in result["answerMeta"]
+    assert "Evidence: 1 source checked" in result["answerMeta"]
 
 
 def test_qa_answer_text_extracts_answer_from_truncated_jsonish_payload_behaviorally():
