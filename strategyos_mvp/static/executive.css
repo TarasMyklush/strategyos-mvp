@@ -2,8 +2,10 @@
   --bg: #f4f2ed;
   --surface: #ffffff;
   --surface-strong: #fbfaf7;
+  --surface-glass: color-mix(in srgb, var(--surface-strong) 82%, transparent);
   --ink: #1d1c19;
   --accent: #25335c;
+  --accent-ink: #ffffff;
   --accent-2: #8c6a3d;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --serif: "Newsreader", Georgia, "Times New Roman", serif;
@@ -25,6 +27,7 @@ html[data-theme="dark"] {
   --surface-strong: #262929;
   --ink: #f2ede4;
   --accent: #d8c8a5;
+  --accent-ink: #171919;
   --accent-2: #d5b783;
   --border: rgba(242, 237, 228, 0.12);
   --border-strong: rgba(216, 200, 165, 0.26);
@@ -1506,7 +1509,7 @@ a { color: inherit; }
   width: 100%;
   padding: 12px 16px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border: none;
   border-radius: 12px;
   font: inherit;
@@ -1769,7 +1772,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.82);
+  background: var(--surface-glass);
   text-decoration: none;
   color: var(--muted);
   font-size: 13px;
@@ -2374,7 +2377,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 .detail-card,
 .board-portal,
 .summary {
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(251,250,247,0.98));
+  background: linear-gradient(180deg, var(--surface), var(--surface-strong));
 }
 
 .detail-head,
@@ -2512,7 +2515,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 16px;
-  background: rgba(255,255,255,0.8);
+  background: var(--surface-strong);
 }
 
 .board-kpi__label {
@@ -2544,7 +2547,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 18px;
-  background: rgba(255,255,255,0.72);
+  background: var(--surface-strong);
 }
 
 .timeline-chip {
@@ -2648,7 +2651,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   padding: 11px 12px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.78);
+  background: var(--surface-strong);
   text-align: left;
   cursor: pointer;
 }
@@ -2729,7 +2732,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   bottom: 0;
   height: 18px;
   display: block;
-  background: linear-gradient(to bottom, rgba(255,255,255,0), color-mix(in srgb, var(--surface) 94%, transparent));
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--surface) 94%, transparent));
   pointer-events: none;
 }
 
@@ -2740,7 +2743,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   padding: 10px 13px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.9);
+  background: var(--surface-strong);
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -2750,12 +2753,12 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   justify-self: end;
   max-width: min(78%, 440px);
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border-color: transparent;
 }
 
 .assistant-message--user .assistant-message__role {
-  color: rgba(255,255,255,0.76);
+  color: color-mix(in srgb, var(--accent-ink) 76%, transparent);
 }
 
 .assistant-message--empty {
@@ -2808,7 +2811,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 
 .assistant-message--failed {
   border-color: color-mix(in srgb, #b42318 28%, var(--border));
-  background: color-mix(in srgb, #b42318 6%, rgba(255,255,255,0.94));
+  background: color-mix(in srgb, #b42318 6%, var(--surface));
 }
 
 .assistant-message--pending {
@@ -2872,7 +2875,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   border: 1px solid transparent;
   border-radius: 10px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   min-width: 36px;
   height: 36px;
   padding: 0 12px;
@@ -3054,7 +3057,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 .agent-detail-card,
 .assistant-tool-chip {
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.76);
+  background: var(--surface-strong);
 }
 
 .board-state-card,
@@ -3081,7 +3084,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.72);
+  background: var(--surface-strong);
 }
 
 .lifecycle-step.is-presented {
@@ -3110,7 +3113,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.76);
+  background: var(--surface-strong);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
@@ -3170,7 +3173,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 .frozen-panel {
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: rgba(255,255,255,0.72);
+  background: var(--surface-strong);
 }
 
 .trend-chain__card {
@@ -3285,7 +3288,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   right: -6px;
   font-size: 10px;
   font-weight: 600;
-  color: #fff;
+  color: var(--accent-ink);
   background: var(--accent, #1a6e54);
   padding: 2px 7px;
   border-radius: 999px;
@@ -3407,7 +3410,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   height: 156px;
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: rgba(255,255,255,0.72);
+  background: var(--surface-strong);
   padding: 8px;
 }
 
@@ -3460,7 +3463,7 @@ html[data-theme="dark"] .trend-axis {
 .drill-ledger {
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: rgba(255,255,255,0.72);
+  background: var(--surface-strong);
   padding: 14px 16px;
 }
 
@@ -3567,7 +3570,7 @@ html[data-theme="dark"] .trend-axis {
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 16px;
-  background: rgba(255,255,255,0.72);
+  background: var(--surface-strong);
 }
 
 .drill-evidence[hidden] {
@@ -3582,7 +3585,7 @@ html[data-theme="dark"] .trend-axis {
 .leaders-card {
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: rgba(255,255,255,0.72);
+  background: var(--surface-strong);
   padding: 16px;
 }
 
@@ -3638,7 +3641,7 @@ html[data-theme="dark"] .trend-axis {
   margin-top: 14px;
   border: 1px solid var(--border);
   border-radius: 16px;
-  background: rgba(255,255,255,0.72);
+  background: var(--surface-strong);
   padding: 14px 16px;
 }
 
@@ -3656,7 +3659,7 @@ html[data-theme="dark"] .trend-axis {
 .operating-model__lane {
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: rgba(255,255,255,0.72);
+  background: var(--surface-strong);
   padding: 16px;
 }
 
@@ -4475,7 +4478,7 @@ html[data-theme="dark"] .trend-axis {
 .video-modal-summary { margin: 0 0 14px; line-height: 1.6; color: var(--ink); }
 .video-modal-body details { margin-bottom: 18px; font-size: 14px; color: var(--muted); }
 .video-modal-body details summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
-.video-modal-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-weight: 600; font-size: 14px;   cursor: pointer;
+.video-modal-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background: var(--accent); color: var(--accent-ink); border: none; border-radius: 12px; font-weight: 600; font-size: 14px;   cursor: pointer;
 }
 
 /* Bug 7: loading spinner for Hermes "Checking the board data…" message */
@@ -4499,7 +4502,7 @@ html[data-theme="dark"] .trend-axis {
 .video-modal-cta:hover { opacity: 0.9; }
 .video-fallback { padding: 24px; text-align: center; background: var(--warn-soft); border-radius: 12px; margin-top: 12px; }
 .video-fallback[hidden] { display: none; }
-.video-fallback-link { display: inline-block; margin-top: 8px; padding: 10px 20px; background: var(--accent); color: #fff; border-radius: 12px; text-decoration: none; font-weight: 600; }
+.video-fallback-link { display: inline-block; margin-top: 8px; padding: 10px 20px; background: var(--accent); color: var(--accent-ink); border-radius: 12px; text-decoration: none; font-weight: 600; }
 .video-fallback-link:hover { opacity: 0.9; }
 
 /* theme tag inside leader-row replaces old dur badge */
@@ -4582,7 +4585,7 @@ html[data-theme="dark"] .trend-axis {
 .leaders-hermes-cta {
   padding: 9px 16px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border: none;
   border-radius: 12px;
   font-weight: 600;
@@ -4637,7 +4640,7 @@ html[data-theme="dark"] .trend-axis {
   display: inline-block;
   padding: 12px 24px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border-radius: 12px;
   text-decoration: none;
   font-weight: 600;
@@ -4761,7 +4764,7 @@ html[data-theme="dark"] .trend-axis {
 .strategyos-feedback-card button[type="submit"] {
   padding: 12px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border: none;
   border-radius: 8px;
   font-weight: 600;
