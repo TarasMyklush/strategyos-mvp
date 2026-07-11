@@ -128,7 +128,10 @@ jobs:
       STRATEGYOS_PROBE_URL: ${{ vars.STRATEGYOS_PROBE_URL || '' }}
       STRATEGYOS_API_IMAGE: ${{ needs.image.outputs.image-ref }}
       STRATEGYOS_COMPOSE_FILES: ${{ vars.STRATEGYOS_COMPOSE_FILES }}
-      STRATEGYOS_COMPOSE_PROFILES: ${{ vars.STRATEGYOS_COMPOSE_PROFILES || '' }}
+      # Branch preview is the Hatchet acceptance environment. Keep these pinned
+      # so an inherited or concurrently edited variable cannot silently fall
+      # back to synchronous execution.
+      STRATEGYOS_COMPOSE_PROFILES: 'hatchet'
       HETZNER_HOST: ${{ vars.HETZNER_HOST }}
       HETZNER_USER: ${{ vars.HETZNER_USER }}
       STRATEGYOS_HTTP_PORT: ${{ vars.STRATEGYOS_HTTP_PORT || '8080' }}
@@ -160,7 +163,7 @@ jobs:
       OAUTH2_PROXY_SCOPE: ${{ vars.OAUTH2_PROXY_SCOPE || 'openid email profile' }}
       OAUTH2_PROXY_COOKIE_SECURE: ${{ vars.OAUTH2_PROXY_COOKIE_SECURE || 'true' }}
       STRATEGYOS_RUNTIME_BACKEND: ${{ vars.STRATEGYOS_RUNTIME_BACKEND || 'langgraph' }}
-      STRATEGYOS_RUN_EXECUTION_MODE: ${{ vars.STRATEGYOS_RUN_EXECUTION_MODE || 'sync' }}
+      STRATEGYOS_RUN_EXECUTION_MODE: 'hatchet'
       STRATEGYOS_RUN_POLICY: ${{ vars.STRATEGYOS_RUN_POLICY || 'sovereign' }}
       STRATEGYOS_APPROVED_EXTERNAL_MODES: ${{ vars.STRATEGYOS_APPROVED_EXTERNAL_MODES || '' }}
       STRATEGYOS_MODEL_PROVIDER_ENABLED: ${{ vars.STRATEGYOS_MODEL_PROVIDER_ENABLED || 'false' }}
