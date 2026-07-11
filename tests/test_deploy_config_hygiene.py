@@ -155,9 +155,15 @@ def test_branch_deploy_probes_the_isolated_branch_port() -> None:
         REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
     ).read_text(encoding="utf-8")
     assert "STRATEGYOS_PROBE_URL: ${{ vars.STRATEGYOS_PROBE_URL || '' }}" in workflow
-    assert 'probe_url="http://${public_host}:${STRATEGYOS_HTTP_PORT}"' in workflow
+    assert "HETZNER_HOST: ${{ vars.HETZNER_HOST }}" in workflow
+    assert "STRATEGYOS_SITE_ADDRESS: ${{ vars.STRATEGYOS_SITE_ADDRESS || ':80' }}" in workflow
+    assert 'probe_url="http://${HETZNER_HOST}:${STRATEGYOS_HTTP_PORT}"' in workflow
     assert workflow.count('TARGET_URL="${STRATEGYOS_PROBE_URL}"') >= 4
     assert workflow.count('--base-url "${STRATEGYOS_PROBE_URL}"') == 2
+    branch_compose = (REPO_ROOT / "deploy/docker-compose.branch.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "STRATEGYOS_SITE_ADDRESS: ${STRATEGYOS_SITE_ADDRESS:-:80}" in branch_compose
 
 
 def test_compose_passes_runtime_backend_to_api_and_worker() -> None:
