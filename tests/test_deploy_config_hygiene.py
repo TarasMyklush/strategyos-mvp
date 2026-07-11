@@ -119,6 +119,37 @@ def test_deploy_scripts_forward_compose_profiles() -> None:
     assert 'COMPOSE_PROFILES="${STRATEGYOS_COMPOSE_PROFILES:-}" \\' in workflow
 
 
+def test_rollback_forwards_compose_project_name() -> None:
+    script = (REPO_ROOT / "deploy/scripts/rollback_stack.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"' in script
+    assert 'PROJECT_NAME_ARG=" --project-name ${COMPOSE_PROJECT_NAME}"' in script
+    assert "${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG}" in script
+
+
+def test_branch_deploy_normalizes_hatchet_profile_for_execution_mode() -> None:
+    workflow = (
+        REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
+    ).read_text(encoding="utf-8")
+    assert "- name: Normalize compose profiles for execution mode" in workflow
+    assert (
+        'if [ "${profile}" = "hatchet" ] && '
+        '[ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then'
+        in workflow
+    )
+    assert 'echo "STRATEGYOS_COMPOSE_PROFILES=${normalized_profiles}"' in workflow
+    assert (
+        'if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then'
+        in workflow
+    )
+    assert "--profile '*' --project-name strategyos-branch" in workflow
+    assert (
+        'if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" = "hatchet" ]; then'
+        in workflow
+    )
+
+
 def test_compose_passes_runtime_backend_to_api_and_worker() -> None:
     compose = (REPO_ROOT / "deploy/docker-compose.yml").read_text(encoding="utf-8")
     assert compose.count(

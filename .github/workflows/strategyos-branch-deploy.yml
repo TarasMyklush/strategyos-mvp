@@ -197,6 +197,27 @@ jobs:
           printf '%s\n' "${HETZNER_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
           echo "SSH_OPTS=-i ${HOME}/.ssh/strategyos_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" >> "${GITHUB_ENV}"
 
+      - name: Normalize compose profiles for execution mode
+        run: |
+          normalized_profiles=""
+          for profile in ${STRATEGYOS_COMPOSE_PROFILES:-}; do
+            if [ "${profile}" = "hatchet" ] && [ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then
+              echo "Ignoring the Hatchet compose profile because execution mode is ${STRATEGYOS_RUN_EXECUTION_MODE}."
+              continue
+            fi
+            normalized_profiles="${normalized_profiles:+${normalized_profiles} }${profile}"
+          done
+
+          if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" = "hatchet" ]; then
+            case " ${normalized_profiles} " in
+              *" hatchet "*) ;;
+              *) normalized_profiles="${normalized_profiles:+${normalized_profiles} }hatchet" ;;
+            esac
+          fi
+
+          echo "STRATEGYOS_COMPOSE_PROFILES=${normalized_profiles}" >> "${GITHUB_ENV}"
+          echo "Using compose profiles: ${normalized_profiles:-<none>}"
+
       - name: Render deploy config
         run: |
           cp deploy/.env.example deploy/.env.ci
@@ -382,7 +403,7 @@ jobs:
           for compose_file in ${compose_files}; do
             compose_args+=(-f "${compose_file}")
           done
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose ${compose_args[*]} --project-name strategyos-branch --env-file deploy/.env --env-file deploy/.env.secrets down || true"
+          ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose ${compose_args[*]} --profile '*' --project-name strategyos-branch --env-file deploy/.env --env-file deploy/.env.secrets down || true"
 
           echo "=== Docker system prune (unused images, containers, networks, build cache) ==="
           ssh ${SSH_OPTS} "${TARGET_HOST}" "docker system prune -af --volumes || true"
@@ -390,28 +411,32 @@ jobs:
           echo "=== Disk usage after cleanup ==="
           ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h /"
 
-          echo "=== Checking branch hatchet-postgres health ==="
-          HEALTH=$(ssh ${SSH_OPTS} "${TARGET_HOST}" "docker inspect strategyos-branch-hatchet-postgres-1 --format '{{.State.Health.Status}}' 2>/dev/null || echo 'no-container'")
-          echo "hatchet-postgres health: ${HEALTH}"
+          if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" = "hatchet" ]; then
+            echo "=== Checking branch hatchet-postgres health ==="
+            HEALTH=$(ssh ${SSH_OPTS} "${TARGET_HOST}" "docker inspect strategyos-branch-hatchet-postgres-1 --format '{{.State.Health.Status}}' 2>/dev/null || echo 'no-container'")
+            echo "hatchet-postgres health: ${HEALTH}"
 
-          echo "=== hatchet-postgres logs (last 30 lines) ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-branch-hatchet-postgres-1 --tail 30 2>&1 || true"
+            echo "=== hatchet-postgres logs (last 30 lines) ==="
+            ssh ${SSH_OPTS} "${TARGET_HOST}" "docker logs strategyos-branch-hatchet-postgres-1 --tail 30 2>&1 || true"
 
-          if [ "${HEALTH}" != "healthy" ]; then
-            echo "=== hatchet-postgres is not healthy (status: ${HEALTH}) — resetting hatchet volumes ==="
-            compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml deploy/docker-compose.branch.yml}"
-            compose_args=()
-            for compose_file in ${compose_files}; do
-              compose_args+=(-f "${compose_file}")
-            done
-            profile_args=()
-            for profile in ${STRATEGYOS_COMPOSE_PROFILES:-}; do
-              profile_args+=(--profile "${profile}")
-            done
-            ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose ${compose_args[*]} ${profile_args[*]} --project-name strategyos-branch --env-file deploy/.env --env-file deploy/.env.secrets down -v hatchet-postgres hatchet-lite || true"
-            echo "=== Hatchet volumes reset complete ==="
+            if [ "${HEALTH}" != "healthy" ]; then
+              echo "=== hatchet-postgres is not healthy (status: ${HEALTH}) — resetting hatchet volumes ==="
+              compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml deploy/docker-compose.branch.yml}"
+              compose_args=()
+              for compose_file in ${compose_files}; do
+                compose_args+=(-f "${compose_file}")
+              done
+              profile_args=()
+              for profile in ${STRATEGYOS_COMPOSE_PROFILES:-}; do
+                profile_args+=(--profile "${profile}")
+              done
+              ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose ${compose_args[*]} ${profile_args[*]} --project-name strategyos-branch --env-file deploy/.env --env-file deploy/.env.secrets down -v hatchet-postgres hatchet-lite || true"
+              echo "=== Hatchet volumes reset complete ==="
+            else
+              echo "=== hatchet-postgres is healthy — no reset needed ==="
+            fi
           else
-            echo "=== hatchet-postgres is healthy — no reset needed ==="
+            echo "=== Skipping Hatchet database repair in ${STRATEGYOS_RUN_EXECUTION_MODE} execution mode ==="
           fi
 
       - name: Deploy compose stack
@@ -432,13 +457,8 @@ jobs:
         run: |
           compose_profiles="${STRATEGYOS_COMPOSE_PROFILES:-}"
           if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then
-            case " ${compose_profiles} " in
-              *" hatchet "*) ;;
-              *)
-                echo "Skipping Hatchet worker health check because STRATEGYOS_RUN_EXECUTION_MODE=${STRATEGYOS_RUN_EXECUTION_MODE} and STRATEGYOS_COMPOSE_PROFILES=${compose_profiles:-<empty>}."
-                exit 0
-                ;;
-            esac
+            echo "Skipping Hatchet worker health check because STRATEGYOS_RUN_EXECUTION_MODE=${STRATEGYOS_RUN_EXECUTION_MODE}."
+            exit 0
           fi
 
           if [ -z "${compose_profiles}" ]; then
