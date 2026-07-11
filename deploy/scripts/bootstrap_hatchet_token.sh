@@ -33,6 +33,46 @@ if [ -z "${container_id}" ]; then
   exit 1
 fi
 
+config_value() {
+  local key="${1}"
+  docker exec "${container_id}" sh -lc \
+    "grep -m1 '^[[:space:]]*${key}:' /config/server.yaml | sed 's/^[^:]*: //'"
+}
+
+hatchet_cookie_secrets="$(config_value secrets)"
+hatchet_master_keyset="$(config_value masterKeyset)"
+hatchet_private_keyset="$(config_value privateJWTKeyset)"
+hatchet_public_keyset="$(config_value publicJWTKeyset)"
+if [ -z "${hatchet_cookie_secrets}" ] \
+  || [ -z "${hatchet_master_keyset}" ] \
+  || [ -z "${hatchet_private_keyset}" ] \
+  || [ -z "${hatchet_public_keyset}" ]; then
+  echo "Hatchet generated config did not contain the required persistent key material." >&2
+  exit 1
+fi
+
+HATCHET_SERVER_AUTH_COOKIE_SECRETS="${hatchet_cookie_secrets}" \
+HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET="${hatchet_master_keyset}" \
+HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET="${hatchet_private_keyset}" \
+HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET="${hatchet_public_keyset}" \
+python3 - "${SECRETS_FILE}" <<'PY'
+from pathlib import Path
+import os
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+keys = (
+    "HATCHET_SERVER_AUTH_COOKIE_SECRETS",
+    "HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET",
+    "HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET",
+    "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET",
+)
+lines = [line for line in lines if not any(line.startswith(f"{key}=") for key in keys)]
+lines.extend(f"{key}={os.environ[key]}" for key in keys)
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+
 token="$(
   docker exec "${container_id}" /hatchet-admin --config /config token create \
     --tenant-id "${HATCHET_TENANT_ID}" \

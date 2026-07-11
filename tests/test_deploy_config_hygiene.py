@@ -163,6 +163,14 @@ def test_hatchet_deploy_preserves_state_and_uses_dedicated_token_secret() -> Non
     for workflow in [branch_workflow, release_workflow]:
         assert "HATCHET_CLIENT_TOKEN: ${{ secrets.HATCHET_CLIENT_TOKEN }}" in workflow
         assert 'upsert("HATCHET_CLIENT_TOKEN"' in workflow
+        for key in [
+            "HATCHET_SERVER_AUTH_COOKIE_SECRETS",
+            "HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET",
+            "HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET",
+            "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET",
+        ]:
+            assert f"{key}: ${{{{ secrets.{key} }}}}" in workflow
+            assert f'upsert("{key}"' in workflow
         assert "docker system prune -af --volumes" not in workflow
         assert "down -v hatchet-postgres hatchet-lite" not in workflow
         assert "Destructive recovery is never part of a normal deploy" in workflow
@@ -183,6 +191,10 @@ def test_hatchet_components_and_runtime_contract_are_pinned() -> None:
         for line in compose.splitlines()
     ) == 2
     assert 'condition: service_healthy' in compose
+    assert "SERVER_ENCRYPTION_MASTER_KEYSET:" in compose
+    assert "SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET:" in compose
+    assert "SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET:" in compose
+    assert "SERVER_AUTH_COOKIE_SECRETS:" in compose
 
 
 def test_hatchet_token_bootstrap_is_explicit_and_non_destructive() -> None:
@@ -193,6 +205,9 @@ def test_hatchet_token_bootstrap_is_explicit_and_non_destructive() -> None:
     assert "/hatchet-admin --config /config token create" in script
     assert "down -v" not in script
     assert "printf '%s' \"${token}\"" in script
+    assert "HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET" in script
+    assert "HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET" in script
+    assert "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET" in script
 
 
 def test_branch_deploy_probes_the_isolated_branch_listener() -> None:
@@ -783,6 +798,10 @@ def test_validate_deploy_boundary_rejects_hatchet_mode_without_runtime_secrets(
     assert result.returncode == 1
     assert "HATCHET_POSTGRES_PASSWORD" in result.stderr
     assert "HATCHET_CLIENT_TOKEN" in result.stderr
+    assert "HATCHET_SERVER_AUTH_COOKIE_SECRETS" in result.stderr
+    assert "HATCHET_SERVER_ENCRYPTION_MASTER_KEYSET" in result.stderr
+    assert "HATCHET_SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET" in result.stderr
+    assert "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET" in result.stderr
 
 
 def test_validate_deploy_boundary_rejects_llm_chat_without_external_approval(

@@ -144,7 +144,7 @@ bash deploy/scripts/bootstrap_hatchet_token.sh \
   | gh secret set HATCHET_CLIENT_TOKEN --env hetzner-branch
 ```
 
-The bootstrap command emits only the token on stdout; operational messages go to stderr. Destructive volume recovery is a separate, explicitly authorized operation and is not part of deployment.
+The bootstrap command persists Hatchet's generated cookie, master-encryption, and JWT keysets in the local secrets file, then emits only the client token on stdout; operational messages go to stderr. Hosted deployments must store those four `HATCHET_SERVER_*` values in dedicated environment secrets alongside `HATCHET_CLIENT_TOKEN`. Destructive volume recovery is a separate, explicitly authorized operation and is not part of deployment.
 
 For a non-default Hatchet tenant, set `HATCHET_TENANT_ID` explicitly before running the bootstrap script.
 
