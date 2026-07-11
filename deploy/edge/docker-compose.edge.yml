@@ -1,0 +1,40 @@
+name: strategyos-edge
+
+# Shared public TLS edge for the shared Hetzner host.
+#
+# This is the ONLY thing bound to host ports 80/443. It fronts every
+# StrategyOS stack by hostname and forwards to the plain-HTTP port each
+# stack already publishes on the host loopback/bridge. Because it talks to
+# the stacks over host.docker.internal (the docker host gateway) rather than
+# joining their compose networks, it stays up and unchanged across any
+# individual stack redeploy.
+#
+# Contract with the app stacks:
+#   - Production (project "strategyos")      publishes HTTP on host :8081
+#   - Latest branch ("strategyos-branch")    publishes HTTP on host :8080
+# Each app stack keeps its own inner Caddy (security headers, IdP routing);
+# this edge only terminates public TLS and routes by Host.
+
+services:
+  edge-caddy:
+    image: caddy:2-alpine
+    container_name: strategyos-edge-caddy
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      STRATEGYOS_EDGE_ACME_EMAIL: ${STRATEGYOS_EDGE_ACME_EMAIL:?set the ACME contact email}
+      STRATEGYOS_PROD_UPSTREAM_PORT: ${STRATEGYOS_PROD_UPSTREAM_PORT:-8081}
+      STRATEGYOS_BRANCH_UPSTREAM_PORT: ${STRATEGYOS_BRANCH_UPSTREAM_PORT:-8080}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - edge-caddy-data:/data
+      - edge-caddy-config:/config
+
+volumes:
+  edge-caddy-data:
+  edge-caddy-config:

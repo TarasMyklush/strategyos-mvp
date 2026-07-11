@@ -513,9 +513,19 @@ jobs:
               --reviewer-auth-header "Authorization: Bearer ${reviewer_token}"
           fi
 
-      - name: Validate public edge headers
+      - name: Validate internal app edge headers
         run: |
           TARGET_URL="${STRATEGYOS_PROBE_URL}" \
+          bash deploy/scripts/validate_public_edge.sh
+
+      # The internal probe above only proves the app answers on its host port.
+      # It cannot catch a broken public edge (missing TLS proxy, DNS, or an
+      # unroutable hostname), which is exactly how a deploy can go "green" while
+      # the site shows nothing. Assert the real public URL actually serves.
+      - name: Validate public HTTPS edge
+        if: ${{ env.STRATEGYOS_PUBLIC_URL != '' }}
+        run: |
+          TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
           bash deploy/scripts/validate_public_edge.sh
 
       - name: Verify queued execution
