@@ -165,6 +165,14 @@ def test_branch_deploy_probes_the_isolated_branch_port() -> None:
         encoding="utf-8"
     )
     assert "STRATEGYOS_SITE_ADDRESS: ${STRATEGYOS_SITE_ADDRESS:-:80}" in branch_compose
+    assert "Caddyfile.branch:/etc/caddy/Caddyfile:ro" in branch_compose
+    branch_caddyfile = (REPO_ROOT / "deploy/caddy/Caddyfile.branch").read_text(
+        encoding="utf-8"
+    )
+    assert branch_caddyfile.startswith(":80 {")
+    assert "new.strategyos.live" not in branch_caddyfile
+    assert "reverse_proxy strategyos-api:8000" in branch_caddyfile
+    assert "reverse_proxy @idp strategyos-idp:9000" in branch_caddyfile
 
 
 def test_compose_passes_runtime_backend_to_api_and_worker() -> None:
