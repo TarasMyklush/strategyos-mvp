@@ -128,6 +128,44 @@
       .join(" ");
   }
 
+  var EXECUTIVE_FINANCE_LABELS = {
+    auto_renewal_escalation: "Auto-renewal escalation",
+    duplicate_payment: "Duplicate payment",
+    dormant_credit_balance: "Dormant supplier credit",
+    entity_resolution_duplicate: "Duplicate supplier identity",
+    missed_early_pay_discount: "Missed early-payment discount",
+    finance_leakage: "recoverable value"
+  };
+
+  function executiveLabelForToken(token) {
+    var raw = String(token || "").trim();
+    if (!raw) return "";
+    var key = raw.toLowerCase();
+    return EXECUTIVE_FINANCE_LABELS[key] || humanizeToken(raw);
+  }
+
+  function scrubExecutiveTechnicalLanguage(text) {
+    text = String(text || "").trim();
+    if (!text) return "";
+    Object.keys(EXECUTIVE_FINANCE_LABELS).forEach(function (key) {
+      var pattern = new RegExp("\\b" + key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "gi");
+      text = text.replace(pattern, EXECUTIVE_FINANCE_LABELS[key]);
+    });
+    text = text.replace(/\b([a-z][a-z0-9]+(?:_[a-z0-9]+)+)\b/g, function (match) {
+      return executiveLabelForToken(match);
+    });
+    return text
+      .replace(/\bScenario parser matched ['"]?[^'";.]+['"]?;?\s*/gi, "")
+      .replace(/\brecoverable leakage\b/gi, "recoverable value")
+      .replace(/\bcomputed from run findings\b/gi, "calculated from governed findings")
+      .replace(/\brun findings\b/gi, "governed findings")
+      .replace(/\bformula steps\b/gi, "calculation checks")
+      .replace(/\bgrounding level\b/gi, "evidence confidence")
+      .replace(/\s+/g, " ")
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .trim();
+  }
+
   var GOVERNED_MEASURE_LABELS = {
     bounded_finance_snapshot: "Finance recovery snapshot",
     case_worklist: "Governed case list",
@@ -1610,8 +1648,28 @@
 
   function qaAnswerText(payload) {
     if (!payload) return "I could not reach the Q&A service. Try again from an authenticated session.";
-    var answer = cleanVisibleQaAnswer(firstDefined(payload.answer, ""));
+    var answer = scrubExecutiveTechnicalLanguage(cleanVisibleQaAnswer(firstDefined(payload.answer, "")));
     return answer || "No answer returned at this time.";
+  }
+
+  function executiveEvidenceBasis(basis) {
+    var raw = String(basis || "");
+    if (/\bscenario parser\b/i.test(raw) || /\bparser\b/i.test(raw) || /\bfinance_leakage\b/i.test(raw) || /\brun findings\b/i.test(raw)) {
+      return "Calculated from current governed findings";
+    }
+    var text = scrubExecutiveTechnicalLanguage(cleanMetaText(basis));
+    if (!text) return "";
+    return text;
+  }
+
+  function executiveEvidenceConfidence(level, citations) {
+    var clean = String(level || "").trim().toLowerCase();
+    if (!clean) return citations > 0 ? "Evidence-backed" : "";
+    if (clean === "none") return citations > 0 ? "Partial" : "Not yet grounded";
+    if (clean === "low" || clean === "strong") return "Strong";
+    if (clean === "medium" || clean === "partial") return "Partial";
+    if (clean === "high") return "Needs review";
+    return humanizeToken(clean);
   }
 
   function qaAnswerMeta(payload) {
@@ -1629,11 +1687,13 @@
     if (riskLevel === "none" && citations.length > 0) {
       riskLevel = citations.length >= 3 ? "strong" : "partial";
     }
-    if (basis) parts.push("Basis - " + basis);
-    if (calculations.length) parts.push("Formula steps - " + calculations.length);
-    if (citations.length) parts.push("Evidence sources - " + citations.length);
-    if (scenarioType && scenarioType !== "deterministic") parts.push("Scenario status - " + scenarioType.replace(/_/g, " "));
-    if (riskLevel) parts.push("Grounding level - " + riskLevel);
+    var executiveBasis = executiveEvidenceBasis(basis);
+    var confidence = executiveEvidenceConfidence(riskLevel, citations.length);
+    if (executiveBasis) parts.push("Evidence basis: " + executiveBasis);
+    if (calculations.length) parts.push("Calculation: " + calculations.length + " governed check" + (calculations.length === 1 ? "" : "s") + " reconciled");
+    if (citations.length) parts.push("Evidence: " + citations.length + " source" + (citations.length === 1 ? "" : "s") + " checked");
+    if (scenarioType && scenarioType !== "deterministic") parts.push("Scenario status: " + humanizeToken(scenarioType).toLowerCase());
+    if (confidence) parts.push("Evidence confidence: " + confidence);
     return parts.join(" · ");
   }
 
@@ -1717,7 +1777,7 @@
       .replace(/\s+/g, ' ')
       .replace(/\s+([,.;:!?])/g, '$1')
       .trim();
-    return text;
+    return scrubExecutiveTechnicalLanguage(text);
   }
 
   function maybeParseQaJson(text) {
@@ -4131,7 +4191,7 @@
           return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(displayName) + '</span><span class="disco-src ' + escapeHtml(item.__source) + '">' + escapeHtml(sourceLabel) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? discoveryStatusText(item) : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add" data-agent-discovery-id="' + escapeHtml(item.__discoveryId) + '">' + escapeHtml(discoveryButtonText(item)) + '</button></div>';
         }).join('') + '</div>';
       };
-      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">Add to your workspace</span></div><label class="disco-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search the agent universe</span><input id="agent-discovery-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search the agent universe…" autocomplete="off" /></label>' + renderDiscoveryGroup('StrategyOS assistants', nativeAgents) + renderDiscoveryGroup('Available agents', marketAgents) + (filteredDiscoverable.length ? '' : '<div class="network-empty">No agents match this search.</div>') + '<button type="button" class="disco-browse">Browse all agents →</button>';
+      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">Add to your workspace</span></div><label class="disco-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search the agent universe</span><input id="agent-discovery-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search the agent universe…" autocomplete="off" /></label>' + renderDiscoveryGroup('StrategyOS assistants', nativeAgents) + renderDiscoveryGroup('Available agents', marketAgents) + (filteredDiscoverable.length ? '' : '<div class="network-empty">No agents match this search.</div>') + '<div class="disco-footer"><button type="button" class="disco-browse">Browse all agents →</button></div>';
       var searchInput = discoveryCard.querySelector('#agent-discovery-search');
       if (searchInput) {
         searchInput.oninput = function () {

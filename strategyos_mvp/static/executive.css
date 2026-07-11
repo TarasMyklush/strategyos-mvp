@@ -4816,6 +4816,116 @@ html[data-theme="dark"] .trend-axis {
   flex-direction: column;
   gap: 14px;
 }
+
+/* ===== Executive UX fit-and-finish fixes ===== */
+body {
+  padding-bottom: max(112px, calc(92px + env(safe-area-inset-bottom, 0px)));
+}
+
+.hero-score__label {
+  width: min(112px, 68%);
+  max-width: 112px;
+  justify-self: center;
+  align-self: center;
+  margin: auto;
+  place-content: center;
+}
+
+.hero-score__caption {
+  max-width: 112px;
+  margin: 8px auto 0;
+  line-height: 1.18;
+  letter-spacing: 0.025em;
+  overflow-wrap: anywhere;
+}
+
+.section:has(.agents-row) {
+  max-height: none;
+  overflow: visible;
+}
+
+#discovery-panel {
+  overflow: visible;
+}
+
+.disco-footer {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 16px;
+  padding-top: 2px;
+}
+
+.disco-browse {
+  position: static;
+  flex: 0 0 auto;
+}
+
+.leaders-card {
+  min-width: 0;
+}
+
+.leaders-featured {
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.leaders-card .video-frame-wrapper {
+  width: 100%;
+  max-height: clamp(220px, 34vh, 360px);
+  padding-bottom: min(56.25%, 360px);
+}
+
+.leaders-video-info {
+  min-width: 0;
+}
+
+.leaders-video-ctas {
+  display: grid;
+  grid-template-columns: minmax(220px, max-content) repeat(2, max-content);
+  align-items: center;
+}
+
+.leaders-hermes-cta,
+.leaders-video-open,
+.leaders-yt-link {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.leaders-thumb-grid {
+  align-items: stretch;
+}
+
+.leaders-thumb {
+  min-height: 86px;
+}
+
+.leaders-thumb__title {
+  -webkit-line-clamp: 2;
+}
+
+.assistant-dock {
+  bottom: max(24px, env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 980px) {
+  .leaders-card .video-frame-wrapper {
+    max-height: none;
+    padding-bottom: 56.25%;
+  }
+
+  .leaders-video-ctas {
+    grid-template-columns: 1fr;
+  }
+
+  .leaders-hermes-cta,
+  .leaders-video-open,
+  .leaders-yt-link {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+}
 .strategyos-feedback-card label {
   font-size: 13px;
   font-weight: 600;
