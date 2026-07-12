@@ -252,6 +252,11 @@ def process_conversation_message(
         idempotency_key=idempotency_key,
         conversation_id=conversation_id,
         input=task_input,
+        # requested_by_role is the "user" leg of the effective-authority
+        # intersection (design principle 8): workflows.py reads this back
+        # at execution time to compute resolve_effective_authority() rather
+        # than minting a capability token from the agent's full tool set.
+        context_manifest={"requested_by_role": principal_role},
         initial_status=TaskStatus.PROPOSED,
     )
     if not policy_decision.requires_approval and task["status"] == TaskStatus.PROPOSED.value:

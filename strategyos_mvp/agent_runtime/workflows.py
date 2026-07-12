@@ -33,7 +33,7 @@ from ..state_store import database_connection, fetchall_dicts
 from . import repository
 from .capability_tokens import issue_capability_token, verify_capability_token
 from .models import HandoffStatus, TaskStatus
-from .policy import check_handoff_budget, resolve_risk_class
+from .policy import check_handoff_budget, resolve_effective_authority, resolve_risk_class
 from .registry import AGENT_DEFINITIONS_BY_KEY, resolve_agent_for_capability
 from .tools import ToolExecutionContext
 from .workers import HandlerInputInvalid, run_handler
@@ -125,6 +125,22 @@ def execute_agent_task_job(
             detail_public="No registered agent is installed for this task.",
         )
 
+    # design principle 8: "Authority never increases through delegation.
+    # Effective permission is the intersection of the user, agent, tenant,
+    # and task policy." requested_by_role is stamped onto context_manifest
+    # by coordinator.py at task-creation time (the "user" leg); a task
+    # created some other way (e.g. directly via the API without going
+    # through coordinator.py) has no recorded role, and the intersection
+    # conservatively falls back to read_only rather than trusting an absent
+    # role as unbounded.
+    requested_by_role = (running_task.get("context_manifest_json") or {}).get("requested_by_role") or "read_only"
+    effective_authority = resolve_effective_authority(
+        agent_definition=agent_definition,
+        requesting_role=requested_by_role,
+        installation_active=bool(installation and installation.get("active", True)),
+        task_risk_class=running_task.get("risk_class", "read_only"),
+    )
+
     capability_claims = None
     if CONFIG.agent_capability_token_secret:
         # Issued and immediately re-verified in the same process rather
@@ -132,14 +148,16 @@ def execute_agent_task_job(
         # carries is exactly what a real cross-process worker would
         # receive and validate, not a shortcut. Never written into the
         # task's input_json/result_json or passed to a handler's LLM call
-        # -- it only ever lives on tool_ctx.capability_claims.
+        # -- it only ever lives on tool_ctx.capability_claims. Minted from
+        # effective_authority (the intersection), NOT agent_definition.tool_keys
+        # directly -- see the effective_authority comment above.
         token = issue_capability_token(
             tenant_id=tenant_id,
             task_id=task_id,
             attempt_no=1,
             agent_installation_id=running_task["agent_installation_id"],
-            allowed_tool_keys=agent_definition.tool_keys,
-            max_risk_class=running_task.get("risk_class", "read_only"),
+            allowed_tool_keys=effective_authority.allowed_tool_keys,
+            max_risk_class=effective_authority.max_risk_class,
         )
         capability_claims = verify_capability_token(token)
 
@@ -294,14 +312,17 @@ def _get_installation(tenant_id: str, installation_id: str) -> dict[str, Any] | 
     with connection as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "select agent_key from strategyos_agent_installations where id = %s and tenant_id = %s",
+                "select agent_key, active from strategyos_agent_installations where id = %s and tenant_id = %s",
                 (installation_id, tenant_id),
             )
             row = cur.fetchone()
         conn.commit()
     if row is None:
         return None
-    return {"agent_key": row[0]}
+    # `active` must be read from the real column, not defaulted true by a
+    # caller -- resolve_effective_authority()'s tenant leg depends on this
+    # being the actual installation state, not an assumption.
+    return {"agent_key": row[0], "active": bool(row[1])}
 
 
 def enqueue_agent_task(tenant_id: str, task_id: str) -> dict[str, Any]:
