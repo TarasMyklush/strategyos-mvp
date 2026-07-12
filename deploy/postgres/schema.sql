@@ -481,3 +481,240 @@ create index if not exists idx_strategyos_cutover_metrics_tenant_metric on strat
 create index if not exists idx_strategyos_finding_citations_run on strategyos_finding_citations(run_id);
 create index if not exists idx_strategyos_kg_nodes_label on strategyos_kg_nodes(label);
 create index if not exists idx_strategyos_kg_edges_label on strategyos_kg_edges(label);
+
+-- Agents layer (docs/agent-layer/agents-layer-design.md section 6).
+-- strategyos_agent_events (above) is the pre-existing finding-audit table
+-- with run-specific columns; it is kept as-is for backward compatibility.
+-- The tables below are the normalized agents schema and are intentionally
+-- separate from it.
+
+create table if not exists strategyos_agent_definitions (
+    id uuid primary key default gen_random_uuid(),
+    agent_key text not null,
+    version integer not null,
+    display_name text not null,
+    purpose text not null,
+    handler_key text not null,
+    input_schema text not null,
+    output_schema text not null,
+    tool_keys jsonb not null default '[]'::jsonb,
+    allowed_roles jsonb not null default '[]'::jsonb,
+    max_handoff_depth integer not null default 3,
+    default_timeout_seconds integer not null default 300,
+    enabled boolean not null default true,
+    created_at timestamptz not null default now(),
+    unique (agent_key, version)
+);
+
+create table if not exists strategyos_agent_installations (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    agent_key text not null,
+    agent_definition_version integer not null,
+    active boolean not null default true,
+    config_json jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create unique index if not exists uq_strategyos_agent_installations_active_tenant_key
+    on strategyos_agent_installations(tenant_id, agent_key)
+    where active;
+
+create table if not exists strategyos_agent_conversations (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    created_by_subject text not null,
+    persona text,
+    run_id uuid references strategyos_runs(id) on delete set null,
+    finding_id text,
+    board_state text,
+    classification text not null default 'restricted' check (classification in ('public_safe', 'restricted')),
+    archived_at timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create table if not exists strategyos_agent_participants (
+    id uuid primary key default gen_random_uuid(),
+    conversation_id uuid not null references strategyos_agent_conversations(id) on delete cascade,
+    participant_type text not null check (participant_type in ('user', 'agent')),
+    participant_id text not null,
+    joined_at timestamptz not null default now(),
+    unique (conversation_id, participant_type, participant_id)
+);
+
+create table if not exists strategyos_agent_messages (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    conversation_id uuid not null references strategyos_agent_conversations(id) on delete cascade,
+    sequence_no integer not null,
+    author_type text not null check (author_type in ('user', 'agent', 'system', 'tool')),
+    author_id text not null,
+    body text not null,
+    metadata_json jsonb not null default '{}'::jsonb,
+    task_id uuid,
+    created_at timestamptz not null default now(),
+    unique (conversation_id, sequence_no)
+);
+
+create table if not exists strategyos_agent_tasks (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    conversation_id uuid references strategyos_agent_conversations(id) on delete set null,
+    parent_task_id uuid references strategyos_agent_tasks(id) on delete set null,
+    agent_installation_id uuid not null references strategyos_agent_installations(id) on delete restrict,
+    agent_definition_version integer not null,
+    task_type text not null,
+    objective text not null,
+    input_json jsonb not null default '{}'::jsonb,
+    context_manifest_json jsonb not null default '{}'::jsonb,
+    risk_class text not null check (risk_class in ('read_only', 'prepare', 'write', 'restricted')),
+    status text not null check (status in (
+        'proposed', 'waiting_for_approval', 'queued', 'running', 'waiting_for_input',
+        'succeeded', 'failed', 'cancelled', 'timed_out'
+    )),
+    requested_by_type text not null check (requested_by_type in ('user', 'agent', 'system')),
+    requested_by_id text not null,
+    idempotency_key text not null,
+    deadline_at timestamptz,
+    result_json jsonb,
+    failure_code text,
+    failure_detail_public text,
+    aggregate_version integer not null default 1,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    started_at timestamptz,
+    finished_at timestamptz,
+    unique (tenant_id, idempotency_key)
+);
+
+create table if not exists strategyos_agent_task_attempts (
+    id uuid primary key default gen_random_uuid(),
+    task_id uuid not null references strategyos_agent_tasks(id) on delete cascade,
+    attempt_no integer not null,
+    worker_id text,
+    model_provider text,
+    model_name text,
+    prompt_version text,
+    context_manifest_hash text,
+    status text not null check (status in ('running', 'succeeded', 'failed', 'timed_out', 'cancelled')),
+    error_code text,
+    error_detail_restricted text,
+    started_at timestamptz not null default now(),
+    finished_at timestamptz,
+    unique (task_id, attempt_no)
+);
+
+create table if not exists strategyos_agent_handoffs (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    source_task_id uuid not null references strategyos_agent_tasks(id) on delete cascade,
+    child_task_id uuid not null references strategyos_agent_tasks(id) on delete cascade,
+    from_agent_installation_id uuid not null references strategyos_agent_installations(id) on delete restrict,
+    to_agent_installation_id uuid not null references strategyos_agent_installations(id) on delete restrict,
+    reason text not null,
+    requested_capability text not null,
+    input_json jsonb not null default '{}'::jsonb,
+    expected_output_schema text not null,
+    status text not null check (status in (
+        'proposed', 'accepted', 'in_progress', 'completed', 'rejected', 'escalated', 'expired'
+    )),
+    deadline_at timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    check (from_agent_installation_id <> to_agent_installation_id),
+    check (source_task_id <> child_task_id)
+);
+
+create table if not exists strategyos_agent_approval_requests (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    task_id uuid not null references strategyos_agent_tasks(id) on delete cascade,
+    linked_approval_id uuid references strategyos_approvals(id) on delete set null,
+    effect_hash text not null,
+    risk_class text not null check (risk_class in ('read_only', 'prepare', 'write', 'restricted')),
+    public_explanation text not null,
+    status text not null check (status in ('pending', 'approved', 'rejected', 'expired', 'cancelled')),
+    decided_by_subject text,
+    decided_by_role text,
+    decision_comment text,
+    created_at timestamptz not null default now(),
+    decided_at timestamptz,
+    expires_at timestamptz
+);
+
+create table if not exists strategyos_agent_tool_invocations (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    task_id uuid not null references strategyos_agent_tasks(id) on delete cascade,
+    task_attempt_id uuid references strategyos_agent_task_attempts(id) on delete set null,
+    tool_key text not null,
+    tool_version text not null,
+    input_hash text not null,
+    output_hash text,
+    effect_key text,
+    status text not null check (status in ('pending', 'succeeded', 'failed')),
+    error_code text,
+    created_at timestamptz not null default now(),
+    completed_at timestamptz,
+    unique (tenant_id, effect_key)
+);
+
+create table if not exists strategyos_agent_artifact_links (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    task_id uuid references strategyos_agent_tasks(id) on delete cascade,
+    message_id uuid references strategyos_agent_messages(id) on delete cascade,
+    reference_type text not null,
+    reference_id text not null,
+    created_at timestamptz not null default now(),
+    check (task_id is not null or message_id is not null)
+);
+
+create table if not exists strategyos_agent_events_v2 (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    aggregate_type text not null,
+    aggregate_id uuid not null,
+    aggregate_version integer not null,
+    event_type text not null,
+    occurred_at timestamptz not null default now(),
+    actor_json jsonb not null default '{}'::jsonb,
+    correlation_id uuid not null,
+    causation_id uuid,
+    trace_id text,
+    payload_json jsonb not null default '{}'::jsonb,
+    public_projection_json jsonb not null default '{}'::jsonb,
+    unique (aggregate_type, aggregate_id, aggregate_version)
+);
+
+create table if not exists strategyos_agent_outbox (
+    id uuid primary key default gen_random_uuid(),
+    event_id uuid not null references strategyos_agent_events_v2(id) on delete cascade,
+    destination text not null default 'hatchet',
+    publish_attempts integer not null default 0,
+    published_at timestamptz,
+    last_error text,
+    created_at timestamptz not null default now(),
+    unique (event_id, destination)
+);
+
+create index if not exists idx_strategyos_agent_installations_tenant on strategyos_agent_installations(tenant_id);
+create index if not exists idx_strategyos_agent_conversations_tenant_updated on strategyos_agent_conversations(tenant_id, updated_at desc);
+create index if not exists idx_strategyos_agent_participants_conversation on strategyos_agent_participants(conversation_id);
+create index if not exists idx_strategyos_agent_messages_conversation_sequence on strategyos_agent_messages(conversation_id, sequence_no);
+create index if not exists idx_strategyos_agent_tasks_tenant_status on strategyos_agent_tasks(tenant_id, status);
+create index if not exists idx_strategyos_agent_tasks_conversation on strategyos_agent_tasks(conversation_id);
+create index if not exists idx_strategyos_agent_tasks_parent on strategyos_agent_tasks(parent_task_id);
+create index if not exists idx_strategyos_agent_task_attempts_task on strategyos_agent_task_attempts(task_id);
+create index if not exists idx_strategyos_agent_handoffs_source on strategyos_agent_handoffs(source_task_id);
+create index if not exists idx_strategyos_agent_handoffs_child on strategyos_agent_handoffs(child_task_id);
+create index if not exists idx_strategyos_agent_handoffs_status on strategyos_agent_handoffs(tenant_id, status);
+create index if not exists idx_strategyos_agent_approval_requests_status on strategyos_agent_approval_requests(tenant_id, status);
+create index if not exists idx_strategyos_agent_approval_requests_task on strategyos_agent_approval_requests(task_id);
+create index if not exists idx_strategyos_agent_tool_invocations_task on strategyos_agent_tool_invocations(task_id);
+create index if not exists idx_strategyos_agent_artifact_links_task on strategyos_agent_artifact_links(task_id);
+create index if not exists idx_strategyos_agent_events_v2_aggregate on strategyos_agent_events_v2(aggregate_type, aggregate_id, aggregate_version);
+create index if not exists idx_strategyos_agent_events_v2_tenant_occurred on strategyos_agent_events_v2(tenant_id, occurred_at desc);
+create index if not exists idx_strategyos_agent_outbox_unpublished on strategyos_agent_outbox(published_at) where published_at is null;
