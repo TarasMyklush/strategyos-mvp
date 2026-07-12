@@ -142,6 +142,7 @@ def _findings(read_model: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict
         challenged = bool(_claim_value(item.get("challenged"), False))
         rows.append(
             {
+                "finding_id": _claim_value(item.get("finding_id"), ""),
                 "title": _claim_value(item.get("title"), "Governed finance finding"),
                 "tag": _claim_value(item.get("pattern_label"), "Governed Finance Finding"),
                 "detail": (

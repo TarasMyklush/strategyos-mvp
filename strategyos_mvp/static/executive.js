@@ -1961,6 +1961,7 @@
       message.text = result.answer;
       message.meta = firstDefined(result.metadata, "");
       message.payload = result.responsePayload || null;
+      message.caseLinks = safeArray(result.responsePayload && result.responsePayload.case_links);
       message.timestamp = new Date().toISOString();
       message.status = "ok";
       message.retryable = false;
@@ -1976,6 +1977,7 @@
       message.text = result.answer;
       message.meta = "";
       message.payload = null;
+      message.caseLinks = [];
       message.timestamp = new Date().toISOString();
       message.status = "failed";
       message.retryable = result.retryable !== false;
@@ -1990,6 +1992,28 @@
     }
     thread.lastUpdated = new Date().toISOString();
     recalcThreadPreview(thread);
+  }
+
+  function openAssistantCase(findingId, sourceEl) {
+    var targetId = String(findingId || '').trim();
+    var findings = safeArray(((getExecutiveDiagnostics().sections || {}).findings || {}).items);
+    var index = findings.findIndex(function (item) {
+      return String(firstDefined(item && item.finding_id, '')) === targetId;
+    });
+    if (index < 0) {
+      showToast('That case is no longer available in the current governed run.');
+      return;
+    }
+    state.openDriverNoteKey = 'finding:' + index;
+    _closeHermesDrawer();
+    switchView('home');
+    window.setTimeout(function () {
+      var caseControl = document.querySelector('[data-finding-id="' + targetId.replace(/"/g, '\\"') + '"]');
+      if (caseControl && typeof caseControl.scrollIntoView === 'function') {
+        caseControl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+      if (sourceEl && typeof sourceEl.focus === 'function') sourceEl.focus();
+    }, 0);
   }
 
   function assistantEntrypointContext(sourceEl) {
@@ -3992,7 +4016,8 @@
           ? 'Project the impact of “' + firstDefined(item.title, 'this development') + '” on the current plan and what I should prepare for the board.'
           : 'Explain why “' + firstDefined(item.title, 'this finding') + '” matters for the board review and what action I should consider.';
         var actionLabel = kind === 'development' ? 'Project impact on plan' : 'Ask why this matters';
-        return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span><span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + '<div class="rail-toggle__actions"><button type="button" class="rail-inline-action" data-rail-prompt="' + escapeHtml(actionPrompt) + '">' + escapeHtml(actionLabel) + '</button></div></div>' : '');
+        var findingId = kind === 'finding' ? String(firstDefined(item.finding_id, '')) : '';
+        return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '"' + (findingId ? ' data-finding-id="' + escapeHtml(findingId) + '"' : '') + ' aria-expanded="' + (open ? 'true' : 'false') + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span><span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + '<div class="rail-toggle__actions"><button type="button" class="rail-inline-action" data-rail-prompt="' + escapeHtml(actionPrompt) + '">' + escapeHtml(actionLabel) + '</button></div></div>' : '');
       }).join('');
     };
 
@@ -4419,14 +4444,28 @@
         if (role === 'assistant' && message.status === 'failed' && message.retryPrompt) {
           retryButton = '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-retry-index="' + escapeHtml(String(entry.index)) + '">Retry now</button></div>';
         }
+        var caseLinks = '';
+        if (role === 'assistant' && message.status === 'ok' && safeArray(message.caseLinks).length) {
+          caseLinks = '<div class="assistant-message__actions">' + safeArray(message.caseLinks).map(function (caseLink) {
+            var caseId = String(firstDefined(caseLink && caseLink.finding_id, '')).trim();
+            var label = String(firstDefined(caseLink && caseLink.title, caseId)).trim();
+            if (!caseId || !label) return '';
+            return '<button type="button" class="assistant-retry-button" data-assistant-case-id="' + escapeHtml(caseId) + '">Open case: ' + escapeHtml(label) + '</button>';
+          }).join('') + '</div>';
+        }
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));
-        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + '</span><p>' + bodyHtml + '</p>' + failureMeta + retryButton + '</div>';
+        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + '</span><p>' + bodyHtml + '</p>' + failureMeta + retryButton + caseLinks + '</div>';
       }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No messages yet</span><p>Ask a question to begin.</p></div>';
       safeArray(messages.querySelectorAll('[data-assistant-retry-index]')).forEach(function (button) {
         button.onclick = function () {
           retryAssistantMessage(current.key, Number(button.getAttribute('data-assistant-retry-index') || '-1'), button);
+        };
+      });
+      safeArray(messages.querySelectorAll('[data-assistant-case-id]')).forEach(function (button) {
+        button.onclick = function () {
+          openAssistantCase(button.getAttribute('data-assistant-case-id') || '', button);
         };
       });
       messages.scrollTop = messages.scrollHeight;

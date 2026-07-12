@@ -344,6 +344,53 @@ def _handle_named_finding_board_question(
     }
 
 
+def _handle_governed_case_links(
+    question: str,
+    bundle: _DataBundle,
+    findings: list[_Finding],
+) -> dict[str, _Any]:
+    if not findings:
+        return {
+            "matched": True,
+            "answer": "There are no governed cases available in the current run to link.",
+            "value": [],
+            "unit": "cases",
+            "basis": "The current governed run contains no findings.",
+            "citations": [],
+            "available": True,
+            "case_links": [],
+        }
+    requested = _parse_top_n(question, default=3)
+    selected = sorted(findings, key=lambda finding: float(finding.recoverable_sar), reverse=True)[:requested]
+    labels = "; ".join(
+        f"{finding.finding_id} — {finding.title} ({_sar(float(finding.recoverable_sar))})"
+        for finding in selected
+    )
+    return {
+        "matched": True,
+        "answer": (
+            f"Here are the {len(selected)} highest-value governed cases in the current run: {labels}. "
+            "Use the case links below to open each finding on the dashboard."
+        ),
+        "value": [
+            {
+                "finding_id": finding.finding_id,
+                "title": finding.title,
+                "recoverable_sar": round(float(finding.recoverable_sar), 2),
+            }
+            for finding in selected
+        ],
+        "unit": "cases",
+        "basis": f"Top {len(selected)} governed findings sorted by persisted recoverable amount.",
+        "citations": _finding_citations(selected),
+        "available": True,
+        "case_links": [
+            {"finding_id": finding.finding_id, "title": finding.title}
+            for finding in selected
+        ],
+    }
+
+
 def _handle_distinct_parties(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     if _has_any(question, "customer"):
         role, frame, col, label = "ar_ledger", bundle.ar, "Customer_ID", "customers"
@@ -496,6 +543,11 @@ def _handle_overdue(question: str, bundle: _DataBundle, findings: list[_Finding]
 # ---------------------------------------------------------------------------
 
 INTENTS: tuple[_Intent, ...] = (
+    _Intent(
+        "governed_case_links",
+        lambda q: _has_any(q, "link", "links") and _has_any(q, "case", "cases", "finding", "findings"),
+        _handle_governed_case_links,
+    ),
     _Intent(
         "named_finding_board_question",
         lambda q: bool(_FINDING_REFERENCE.search(q))

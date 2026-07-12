@@ -118,6 +118,20 @@ def test_named_governed_finding_board_question_is_not_routed_as_supplier_lookup(
     assert "No vendor matching" not in result["answer"]
 
 
+def test_governed_case_link_request_returns_current_cases_only():
+    result = qa_engine.answer_question(
+        "give links to 3 specific cases",
+        bundle=_bundle(),
+        findings=[_finding(), _dormant_credit_finding()],
+    )
+
+    assert result["matched"] is True
+    assert result["intent"] == "governed_case_links"
+    assert [item["finding_id"] for item in result["case_links"]] == ["F-003", "F-001"]
+    assert "Open case" not in result["answer"]
+    assert "SAR 128,000.00" in result["answer"]
+
+
 def test_llm_chat_status_requires_policy_and_key():
     assert llm_qa.chat_status(_config(llm_chat_enabled=False))["enabled"] is False
     assert llm_qa.chat_status(_config(model_provider_enabled=False))["enabled"] is False
