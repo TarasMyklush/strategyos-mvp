@@ -60,8 +60,15 @@ def test_mizan_style_presentation_uses_database_claims_only():
     assert presentation["mode"] == "live"
     assert presentation["source"] == "database"
     assert presentation["run_id"] == "2bb5fdeb-ed53-4953-9f5a-55b2959c5a43"
-    assert presentation["driver_grid"][0]["label"] == "Cash recovery opportunity"
-    assert presentation["driver_grid"][0]["metric"] == "SAR 305K"
+    assert [card["label"] for card in presentation["driver_grid"]] == [
+        "Revenue",
+        "EBITDA margin",
+        "Operating cost",
+        "Cash vs floor",
+    ]
+    assert presentation["driver_grid"][0]["metric"] == "Not available"
+    assert presentation["driver_grid"][0]["availability"] == "unavailable"
+    assert "will not estimate" in presentation["driver_grid"][0]["detail"]
     assert presentation["sections"]["developments"]["items"] == []
     assert presentation["sections"]["week_ahead"]["items"] == []
     assert presentation["provenance_summary"]["all_claims_validated"] is True
@@ -133,7 +140,7 @@ def test_unknown_public_citation_resolution_stays_unknown():
 
     assert citation_claim["value"] == {"resolved": None, "total": 2}
     assert citation_claim["provenance"]["complete"] is False
-    assert presentation["driver_grid"][2]["metric"] == "--"
+    assert presentation["driver_grid"][2]["metric"] == "Not available"
     assert presentation["hero"]["readiness_operands"]["citation_resolved"] is None
 
 
@@ -151,7 +158,7 @@ def test_citation_ratio_uses_audit_total_and_rejects_impossible_counts():
         "resolved": 5,
         "total": 5,
     }
-    assert presentation["driver_grid"][2]["metric"] == "5 / 5"
+    assert presentation["driver_grid"][2]["metric"] == "Not available"
     assert presentation["hero"]["score_note"] == "Governed artifact board readiness"
 
     impossible = build_executive_read_model(
@@ -163,7 +170,73 @@ def test_citation_ratio_uses_audit_total_and_rejects_impossible_counts():
     )
     impossible_presentation = build_executive_presentation(impossible)
     assert impossible["metrics"]["citation_resolution"]["provenance"]["complete"] is False
-    assert impossible_presentation["driver_grid"][2]["metric"] == "--"
+    assert impossible_presentation["driver_grid"][2]["metric"] == "Not available"
+
+
+def test_ceo_kpi_contract_uses_only_authoritative_deterministic_finance_inputs():
+    read_model = build_executive_read_model(
+        {
+            "run_id": "oracle-run",
+            "created_at": "2026-07-12T09:00:00+00:00",
+            "oracle_kpi": {
+                "derived_from": "deterministic_oracle_kpi_engine",
+                "authoritative": True,
+                "reporting_period_key": "2026-06",
+                "components": {
+                    "revenue_actual": "1200000",
+                    "revenue_plan": "1000000",
+                    "ebitda_actual": "240000",
+                    "ebitda_plan": "180000",
+                    "operating_cost_actual": "630000",
+                    "operating_cost_plan": "600000",
+                    "cash_balance": "500000",
+                    "board_floor": "400000",
+                },
+            },
+        },
+        [],
+        {},
+        {"report_count": 0},
+        {},
+    )
+
+    cards = build_executive_presentation(read_model)["driver_grid"]
+
+    assert [card["key"] for card in cards] == [
+        "revenue",
+        "ebitda_margin",
+        "operating_cost",
+        "cash_vs_floor",
+    ]
+    assert cards[0]["metric"] == "SAR 1.2M"
+    assert cards[0]["pct"] == 120.0
+    assert cards[1]["metric"] == "20.0%"
+    assert cards[1]["comparison"] == "+200 bps vs plan"
+    assert cards[2]["pct"] == 105.0
+    assert cards[3]["comparison"] == "SAR 100K above floor"
+    assert all(card["availability"] == "verified" for card in cards)
+    assert all(card["trend"] == {"actual": [], "plan": []} for card in cards)
+
+
+def test_ceo_kpi_contract_refuses_untrusted_oracle_shaped_payload():
+    read_model = build_executive_read_model(
+        {
+            "run_id": "untrusted-run",
+            "oracle_kpi": {
+                "derived_from": "spreadsheet",
+                "authoritative": False,
+                "components": {"revenue_actual": "999999999"},
+            },
+        },
+        [],
+        {},
+        {},
+        {},
+    )
+
+    card = build_executive_presentation(read_model)["driver_grid"][0]
+    assert card["metric"] == "Not available"
+    assert card["availability"] == "unavailable"
 
 
 def test_api_prefers_database_snapshot_and_labels_artifact_fallback(monkeypatch):

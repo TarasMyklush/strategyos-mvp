@@ -1930,6 +1930,114 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   padding: 24px;
 }
 
+.kpi-inline-drill {
+  display: grid;
+  gap: 18px;
+}
+
+.kpi-inline-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kpi-inline-facts > div,
+.kpi-inline-coverage,
+.kpi-inline-trend,
+.kpi-inline-chat {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 14px;
+}
+
+.kpi-inline-facts span,
+.kpi-inline-coverage strong,
+.kpi-inline-trend strong,
+.kpi-missing-inputs strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.kpi-inline-facts strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 1.45;
+}
+
+.chip--static {
+  cursor: default;
+}
+
+.kpi-missing-inputs {
+  margin-top: 14px;
+  color: var(--warning, var(--muted));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.kpi-missing-inputs.is-complete {
+  color: var(--muted);
+}
+
+.kpi-inline-trend {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.kpi-inline-trend strong {
+  margin: 0;
+  color: var(--ink);
+}
+
+.kpi-inline-chat {
+  display: grid;
+  gap: 12px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-2));
+}
+
+.kpi-inline-chat p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.kpi-inline-composer {
+  display: flex;
+  gap: 8px;
+}
+
+.kpi-inline-composer input {
+  min-width: 0;
+  flex: 1;
+}
+
+.kpi-inline-answer {
+  min-height: 20px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.kpi-inline-answer.is-loading {
+  color: var(--muted);
+}
+
+.kpi-inline-answer.is-error {
+  color: var(--down);
+}
+
 #gravity-panel,
 #findings-panel,
 #developments-panel,
@@ -2020,6 +2128,18 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
     border-bottom: 1px solid var(--border);
     padding-right: 0;
     padding-bottom: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .kpi-inline-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-inline-trend,
+  .kpi-inline-composer {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

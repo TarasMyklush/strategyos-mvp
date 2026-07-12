@@ -2319,3 +2319,66 @@ def test_qa_context_resolves_explicit_run_id_from_state_store(monkeypatch, tmp_p
     assert context["run_mode"] == "partial"
     assert captured == {"path": dataset_root, "strict": False}
     assert context["findings"] == ["finding"]
+
+
+def test_inline_ceo_kpi_chat_uses_server_resolved_contract_and_never_llm(monkeypatch):
+    original, client = _client_with_auth()
+    api_module._QA_CONTEXT_CACHE.clear()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {
+                    "run_id": "oracle-run",
+                    "oracle_kpi": {
+                        "derived_from": "deterministic_oracle_kpi_engine",
+                        "authoritative": True,
+                        "reporting_period_key": "2026-06",
+                        "components": {
+                            "revenue_actual": "1200000",
+                            "revenue_plan": "1000000",
+                            "ebitda_actual": "240000",
+                            "ebitda_plan": "180000",
+                            "operating_cost_actual": "630000",
+                            "operating_cost_plan": "600000",
+                            "cash_balance": "500000",
+                            "board_floor": "400000",
+                        },
+                    },
+                },
+                "run_id": "oracle-run",
+                "run_mode": "full",
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "Explain this KPI",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "source": "executive_surface",
+                    "entrypoint": "ceo_kpi_inline",
+                    "kpi_key": "revenue",
+                    # A client value must not become the assistant's value.
+                    "metric": "SAR 999.0B",
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_kpi"
+        assert payload["llm_fallback_attempted"] is False
+        assert "SAR 1.2M" in payload["answer"]
+        assert "SAR 999.0B" not in payload["answer"]
+        assert payload["assistant_context"]["kpi_key"] == "revenue"
+    finally:
+        _restore_env(original)

@@ -1273,6 +1273,34 @@ def test_driver_grid_renders_governed_metric_when_percent_is_absent():
     assert "driver-pct--metric" in css
 
 
+def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
+    js = _static_executive_js()
+    html = (Path(api_module.STATIC_DIR) / "executive.html").read_text(encoding="utf-8")
+
+    render_start = js.index("function renderDriverGrid()")
+    render_end = js.index("function renderMetrics()")
+    render_body = js[render_start:render_end]
+    assert "scrollIntoView" not in render_body
+    assert "aria-pressed" in render_body
+    assert 'data-driver-key' in render_body
+    assert 'function renderInlineKpiDrill(driver, drillCard)' in js
+    assert 'entrypoint: "ceo_kpi_inline"' in js
+    assert "kpi_key:" in js
+    assert 'id="driver-drill"' in html
+    assert html.index('id="driver-row"') < html.index('id="driver-drill"')
+
+
+def test_inline_kpi_chat_does_not_open_the_detached_assistant_drawer():
+    js = _static_executive_js()
+    drill_start = js.index("function renderInlineKpiDrill(driver, drillCard)")
+    drill_end = js.index("function renderDriverDrillFidelity()")
+    drill_body = js[drill_start:drill_end]
+
+    assert "buildAssistantReply(question, null" in drill_body
+    assert "openAssistantDrawer" not in drill_body
+    assert "Hermes starts from this KPI" in drill_body
+
+
 def test_ceo_driver_copy_polishes_internal_governed_artifact_keys():
     js = _static_executive_js()
 

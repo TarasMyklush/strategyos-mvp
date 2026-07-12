@@ -81,6 +81,239 @@ def _metric_card(
     }
 
 
+_CEO_KPI_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "key": "revenue",
+        "label": "Revenue",
+        "actual": "revenue_actual",
+        "comparator": "revenue_plan",
+        "formula": "Revenue = sum of scoped revenue-account balances for the selected period.",
+        "inputs": ("Scoped revenue facts", "Approved revenue plan"),
+        "unit": "SAR",
+    },
+    {
+        "key": "ebitda_margin",
+        "label": "EBITDA margin",
+        "actual": "ebitda_actual",
+        "denominator": "revenue_actual",
+        "plan_numerator": "ebitda_plan",
+        "plan_denominator": "revenue_plan",
+        "formula": "EBITDA margin = EBITDA ÷ Revenue; variance to plan is shown in basis points.",
+        "inputs": ("Scoped EBITDA facts", "Scoped revenue facts", "Approved EBITDA plan", "Approved revenue plan"),
+        "unit": "percent",
+    },
+    {
+        "key": "operating_cost",
+        "label": "Operating cost",
+        "actual": "operating_cost_actual",
+        "comparator": "operating_cost_plan",
+        "formula": "Operating cost = sum of scoped operating-expense balances for the selected period.",
+        "inputs": ("Scoped operating-cost facts", "Approved operating-cost plan"),
+        "unit": "SAR",
+        "inverse": True,
+    },
+    {
+        "key": "cash_vs_floor",
+        "label": "Cash vs floor",
+        "actual": "cash_balance",
+        "comparator": "board_floor",
+        "formula": "Cash vs floor = latest scoped cash and cash-equivalent balance ÷ approved board cash floor.",
+        "inputs": ("Latest scoped cash balance", "Approved board cash floor"),
+        "unit": "SAR",
+    },
+)
+
+
+def _number_or_none(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _percent_display(value: float | None) -> str:
+    return "--" if value is None else f"{value:.1f}%"
+
+
+def _basis_points_display(value: float | None) -> str:
+    if value is None:
+        return "Plan comparison unavailable"
+    rounded = round(value)
+    return f"{rounded:+d} bps vs plan"
+
+
+def _oracle_kpi_payload(read_model: Mapping[str, Any]) -> dict[str, Any]:
+    payload = read_model.get("oracle_kpi")
+    if not isinstance(payload, Mapping):
+        return {}
+    # The CEO page accepts figures only from the deterministic engine.  A
+    # similarly shaped, hand-authored summary is not sufficient evidence.
+    if payload.get("derived_from") != "deterministic_oracle_kpi_engine":
+        return {}
+    if payload.get("authoritative") is not True:
+        return {}
+    return dict(payload)
+
+
+def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, list[float]]:
+    trend = payload.get("trend")
+    item = trend.get(key) if isinstance(trend, Mapping) else None
+    if not isinstance(item, Mapping):
+        return {"actual": [], "plan": []}
+
+    def values(name: str) -> list[float]:
+        result: list[float] = []
+        for value in list(item.get(name) or []):
+            number = _number_or_none(value)
+            if number is None:
+                return []
+            result.append(number)
+        return result
+
+    actual = values("actual")
+    plan = values("plan")
+    return {"actual": actual, "plan": plan} if actual and plan and len(actual) == len(plan) else {"actual": [], "plan": []}
+
+
+def _unavailable_ceo_kpi(spec: Mapping[str, Any], *, reason: str) -> dict[str, Any]:
+    missing = list(spec["inputs"])
+    return {
+        "kpi_contract": True,
+        "driver_key": spec["key"],
+        "key": spec["key"],
+        "label": spec["label"],
+        "metric": "Not available",
+        "value": "Not available",
+        "pct": None,
+        "status": "Not available",
+        "sub": "Cannot be calculated from the current processed dataset",
+        "detail": reason,
+        "story": reason,
+        "formula": spec["formula"],
+        "inputs": list(spec["inputs"]),
+        "missing_inputs": missing,
+        "availability": "unavailable",
+        "comparison": "No comparison is shown because the required governed inputs are missing.",
+        "chips": [],
+        "movers": {"lifting": [], "dragging": []},
+        "trend": {"actual": [], "plan": []},
+        "trend_status": "Historical governed periods are not available.",
+        "provenance": {
+            "source": "current processed dataset",
+            "complete": False,
+            "reason": reason,
+        },
+    }
+
+
+def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
+    oracle_payload = _oracle_kpi_payload(read_model)
+    components = oracle_payload.get("components") if isinstance(oracle_payload.get("components"), Mapping) else {}
+    period = str(oracle_payload.get("reporting_period_key") or "the selected period")
+    provenance = {
+        "source": "deterministic Oracle finance snapshot",
+        "complete": bool(oracle_payload),
+        "reporting_period_key": oracle_payload.get("reporting_period_key"),
+        "computation_boundary": oracle_payload.get("computation_boundary"),
+    }
+    cards: list[dict[str, Any]] = []
+
+    for spec in _CEO_KPI_SPECS:
+        if not oracle_payload:
+            cards.append(
+                _unavailable_ceo_kpi(
+                    spec,
+                    reason=(
+                        "This run contains governed findings and evidence, but no reconciled "
+                        "Oracle finance snapshot for this KPI. StrategyOS will not estimate it."
+                    ),
+                )
+            )
+            continue
+
+        actual = _number_or_none(components.get(spec["actual"]))
+        denominator_key = spec.get("denominator")
+        denominator = _number_or_none(components.get(denominator_key)) if denominator_key else None
+        if actual is None or (denominator_key and (denominator is None or denominator == 0)):
+            missing_keys = [spec["actual"]]
+            if denominator_key:
+                missing_keys.append(denominator_key)
+            cards.append(
+                _unavailable_ceo_kpi(
+                    spec,
+                    reason=(
+                        f"Cannot calculate {spec['label']} for {period}: missing "
+                        + ", ".join(missing_keys)
+                        + " in the reconciled finance snapshot."
+                    ),
+                )
+            )
+            continue
+
+        comparator_key = spec.get("comparator")
+        comparator = _number_or_none(components.get(comparator_key)) if comparator_key else None
+        if denominator_key:
+            plan_numerator = _number_or_none(components.get(spec["plan_numerator"]))
+            plan_denominator = _number_or_none(components.get(spec["plan_denominator"]))
+            actual_margin = (actual / denominator) * 100
+            plan_margin = (plan_numerator / plan_denominator) * 100 if plan_numerator is not None and plan_denominator not in {None, 0} else None
+            pct = (actual_margin / plan_margin) * 100 if plan_margin not in {None, 0} else None
+            variance_bps = (actual_margin - plan_margin) * 100 if plan_margin is not None else None
+            metric = _percent_display(actual_margin)
+            comparison = _basis_points_display(variance_bps)
+            missing_inputs = [] if plan_margin is not None else ["Approved EBITDA plan", "Approved revenue plan"]
+        else:
+            pct = (actual / comparator) * 100 if comparator not in {None, 0} else None
+            metric = _format_sar(actual)
+            if comparator is None:
+                comparison = "Plan or floor comparison unavailable"
+                missing_inputs = ["Approved plan" if spec["key"] != "cash_vs_floor" else "Approved board cash floor"]
+            else:
+                delta = actual - comparator
+                if spec["key"] == "cash_vs_floor":
+                    comparison = f"{_format_sar(delta)} {'above' if delta >= 0 else 'below'} floor"
+                else:
+                    comparison = f"{pct:.1f}% of plan"
+                missing_inputs = []
+
+        availability = "verified" if not missing_inputs else "partial"
+        status = "Verified" if availability == "verified" else "Partial — comparator unavailable"
+        sub = comparison
+        detail = (
+            f"Calculated for {period} from the deterministic finance snapshot. {comparison}."
+            if availability == "verified"
+            else f"Calculated for {period}; {comparison.lower()}. No comparator has been inferred."
+        )
+        cards.append(
+            {
+                "kpi_contract": True,
+                "driver_key": spec["key"],
+                "key": spec["key"],
+                "label": spec["label"],
+                "metric": metric,
+                "value": metric,
+                "pct": round(pct, 1) if pct is not None else None,
+                "status": status,
+                "sub": sub,
+                "detail": detail,
+                "story": detail,
+                "formula": spec["formula"],
+                "inputs": list(spec["inputs"]),
+                "missing_inputs": missing_inputs,
+                "availability": availability,
+                "comparison": comparison,
+                "chips": [],
+                "movers": {"lifting": [], "dragging": []},
+                "trend": _safe_trend(oracle_payload, str(spec["key"])),
+                "trend_status": "Historical governed periods are not available.",
+                "provenance": dict(provenance),
+            }
+        )
+    return cards
+
+
 def _hero(read_model: Mapping[str, Any]) -> dict[str, Any]:
     metrics = read_model.get("metrics") or {}
     lifecycle = read_model.get("lifecycle") or {}
@@ -203,53 +436,8 @@ def _case_index(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
-    metrics = read_model.get("metrics") or {}
     hero = _hero(read_model)
-    drivers = [
-        _metric_card(
-            "cash_recovery_opportunity",
-            "Cash recovery opportunity",
-            metrics.get("recoverable_total") or {},
-            formatter="sar",
-            detail=(
-                "Current governed run; latest governed run cash boundary: recoverable "
-                "value is summed from persisted governed findings."
-            ),
-            sub="Current governed value",
-        ),
-        _metric_card(
-            "cases_in_view",
-            "Cases in view",
-            metrics.get("finding_count") or {},
-            detail=(
-                "Board review scope from the latest governed run: finding rows persisted "
-                "for the selected run."
-            ),
-            sub="Governed cases",
-        ),
-        _metric_card(
-            "evidence_readiness",
-            "Evidence readiness: challenged CEO review and next action",
-            metrics.get("citation_resolution") or {},
-            formatter="ratio",
-            detail=(
-                "Board evidence posture from the latest governed run: challenged items, "
-                "CEO review, and next action depend on resolved citations over total "
-                "persisted citations."
-            ),
-            sub="Citation chain",
-        ),
-        _metric_card(
-            "items_needing_closure",
-            "Items needing closure",
-            metrics.get("challenged_count") or {},
-            detail=(
-                "Challenged board items from the latest governed run: persisted challenged "
-                "items still visible in the review posture."
-            ),
-            sub="Reviewer attention",
-        ),
-    ]
+    drivers = _ceo_kpi_cards(read_model)
     findings, reconciliation = _findings(read_model)
     developments = list((read_model.get("developments") or {}).get("items") or [])
     week = list((read_model.get("week_ahead") or {}).get("items") or [])

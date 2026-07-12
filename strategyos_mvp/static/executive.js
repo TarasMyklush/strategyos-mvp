@@ -1587,6 +1587,9 @@
   }
 
   function driverCenterMarkup(driver) {
+    if (driver && driver.availability === "unavailable") {
+      return '<div class="driver-pct driver-pct--metric"><span class="driver-pct__main">—</span><span class="driver-pct__unit">data gap</span></div>';
+    }
     if (driverHasPercent(driver)) {
       return '<div class="driver-pct">' + escapeHtml(driver.pct) + '<span class="pct-sign">%</span></div>';
     }
@@ -1598,6 +1601,9 @@
   }
 
   function driverMeasureLabel(driver) {
+    if (driver && driver.availability === "unavailable") {
+      return "Not calculated";
+    }
     if (driverHasPercent(driver)) {
       return String(firstDefined(driver.pct, '—')) + '% of plan';
     }
@@ -2709,8 +2715,13 @@
     var lowerHeading = $("lower-rail-heading");
     var drivers = getVisibleDrivers();
     var hasPercentDrivers = drivers.some(function (driver) { return driverHasPercent(driver); });
-    if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
-    if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current governed measures";
+    if (state.activePersona === "ceo") {
+      if (driverHeading) driverHeading.textContent = "The group index";
+      if (driverHint) driverHint.textContent = "Four governed CEO indicators. Percent of plan is the headline when an approved comparator is available. Select a KPI to inspect its calculation inline.";
+    } else {
+      if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
+      if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current governed measures";
+    }
     if (lowerHeading) lowerHeading.textContent = "What matters now";
     var footer = $("composed-footer");
     if (footer) footer.hidden = false;
@@ -3365,6 +3376,8 @@
       var tile = document.createElement("button");
       tile.type = "button";
       tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
+      tile.setAttribute("data-driver-key", key);
+      tile.setAttribute("aria-pressed", activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? "true" : "false");
       tile.innerHTML = [
         '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
         '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(driverSubLabel(driver)) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
@@ -3375,10 +3388,8 @@
         renderDriverGrid();
         renderDriverDrillFidelity();
         renderSummary();
-        // Bug 2 fix: scroll the drill-down panel into view so the user
-        // sees a visible response when clicking a driver tile.
-        var drill = $("driver-drill");
-        if (drill) { drill.scrollIntoView({ behavior: "smooth", block: "start" }); }
+        // KPI detail is deliberately inline below the strip. Selecting a tile
+        // must never move the executive's reading position.
       };
       grid.appendChild(tile);
     });
@@ -3422,6 +3433,56 @@
     }).join("");
   }
 
+  function renderInlineKpiDrill(driver, drillCard) {
+    var label = firstDefined(driver.label, "this KPI");
+    var availability = String(firstDefined(driver.availability, "unavailable"));
+    var missingInputs = safeArray(driver.missing_inputs);
+    var inputs = safeArray(driver.inputs);
+    var evidenceLabel = availability === "verified"
+      ? "Verified from the deterministic finance snapshot"
+      : availability === "partial"
+        ? "Partially calculated — a comparator is unavailable"
+        : "Not calculated — required finance inputs are unavailable";
+    drillCard.innerHTML = [
+      '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(firstDefined(driver.driver_key, driver.key, "")) + '">',
+      '<div class="drill-headline"><div><p class="detail-eyebrow">Inline KPI detail</p><h3 class="detail-title">What drives ' + escapeHtml(label) + '</h3><p class="section-note">' + escapeHtml(evidenceLabel) + '</p></div>' + groundingBadgeMarkup(driver.provenance, { status: availability === "verified" ? "grounded" : "needs_evidence", source: (driver.provenance || {}).source }) + '</div>',
+      '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, "No governed calculation is available.")) + '</p>',
+      '<div class="kpi-inline-facts"><div><span>Formula</span><strong>' + escapeHtml(firstDefined(driver.formula, "No governed formula is available.")) + '</strong></div><div><span>Current comparison</span><strong>' + escapeHtml(firstDefined(driver.comparison, driver.sub, "Unavailable")) + '</strong></div></div>',
+      '<div class="kpi-inline-coverage"><div><strong>Data required</strong><div class="chips">' + inputs.map(function (item) { return '<span class="chip chip--static">' + escapeHtml(item) + '</span>'; }).join("") + '</div></div>' + (missingInputs.length ? '<div class="kpi-missing-inputs"><strong>Not present in this run</strong><span>' + escapeHtml(missingInputs.join(" · ")) + '</span></div>' : '<div class="kpi-missing-inputs is-complete"><strong>Calculation coverage</strong><span>All required governed inputs are present.</span></div>') + '</div>',
+      '<div class="kpi-inline-trend"><strong>Historical trend</strong><span>' + escapeHtml(safeArray((driver.trend || {}).actual).length ? "Governed actual and plan series are available." : firstDefined(driver.trend_status, "Historical governed periods are not available.")) + '</span></div>',
+      '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div><strong>Continue with Hermes</strong><p>Hermes starts from this KPI’s formula and governed data boundary.</p></div><form class="kpi-inline-composer" data-kpi-inline-composer="true"><label class="sr-only" for="kpi-inline-input">Ask Hermes about ' + escapeHtml(label) + '</label><input id="kpi-inline-input" type="text" placeholder="Ask about ' + escapeHtml(label.toLowerCase()) + '…" autocomplete="off" /><button type="submit">Ask Hermes</button></form><div class="kpi-inline-answer" aria-live="polite">Select Ask Hermes to start a KPI-specific conversation.</div></section>',
+      '</div>'
+    ].join("");
+
+    var composer = drillCard.querySelector("[data-kpi-inline-composer]");
+    var input = drillCard.querySelector("#kpi-inline-input");
+    var answer = drillCard.querySelector(".kpi-inline-answer");
+    if (!composer || !input || !answer) return;
+    composer.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var question = String(input.value || "").trim() || ("Explain the calculation, current data coverage, and governed drivers for " + label + ".");
+      var button = composer.querySelector("button");
+      input.disabled = true;
+      if (button) button.disabled = true;
+      answer.className = "kpi-inline-answer is-loading";
+      answer.textContent = "Hermes is checking the governed KPI context…";
+      var result = await buildAssistantReply(question, null, {
+        entrypoint: "ceo_kpi_inline",
+        source: "executive_surface",
+        kpi_key: firstDefined(driver.driver_key, driver.key, ""),
+        kpi_label: label,
+        kpi_availability: availability,
+        active_view: "home"
+      });
+      answer.className = "kpi-inline-answer" + (result && result.ok ? "" : " is-error");
+      answer.textContent = firstDefined(result && result.answer, "Hermes could not return a KPI-specific answer. Please retry.");
+      input.disabled = false;
+      if (button) button.disabled = false;
+      input.value = "";
+      input.focus();
+    });
+  }
+
   function renderDriverDrillFidelity() {
     var driver = getActiveDriver() || {};
     var drillCard = $("driver-drill");
@@ -3432,7 +3493,9 @@
     var movers = driver.movers || {};
     var lifting = safeArray(movers.lifting);
     var dragging = safeArray(movers.dragging);
-    if (drillCard) {
+    if (driver.kpi_contract && drillCard) {
+      renderInlineKpiDrill(driver, drillCard);
+    } else if (drillCard) {
       var trendSeries = driver.trend || driverTrendSeries(driver);
       var actualSeries = safeArray(trendSeries.actual).length ? safeArray(trendSeries.actual) : [92, 96, 99, 101, 100, 102];
       var planSeries = safeArray(trendSeries.plan).length ? safeArray(trendSeries.plan) : actualSeries.map(function (value) { return value * 0.98; });

@@ -785,7 +785,53 @@ def _build_public_safe_assistant_packet(
         }
     )
 
-    drivers = list(executive_presentation_payload.get("driver_grid") or [])
+    # The conversational public packet is evidence-oriented, not a mirror of
+    # the CEO's finance-ring surface.  Keeping these cards separate prevents a
+    # missing Oracle finance snapshot from turning unrelated board questions
+    # into an unavailable-KPI response.  Every value below is still a direct
+    # aggregate of the current governed findings/audit data.
+    drivers = [
+        {
+            "driver_key": "cash_recovery_opportunity",
+            "key": "cash_recovery_opportunity",
+            "label": "Cash recovery opportunity",
+            "metric": _format_sar_brief(metrics.get("total_recoverable_sar")),
+            "value": _format_sar_brief(metrics.get("total_recoverable_sar")),
+            "sub": "Current governed value",
+            "status": "Current governed value",
+            "detail": "Current governed run; latest governed run cash boundary: recoverable value is summed from persisted governed findings.",
+        },
+        {
+            "driver_key": "cases_in_view",
+            "key": "cases_in_view",
+            "label": "Cases in view",
+            "metric": str(int(metrics.get("finding_count") or 0)),
+            "value": str(int(metrics.get("finding_count") or 0)),
+            "sub": "Governed cases",
+            "status": "Governed cases",
+            "detail": "Board review scope from the latest governed run: finding rows persisted for the selected run.",
+        },
+        {
+            "driver_key": "evidence_readiness",
+            "key": "evidence_readiness",
+            "label": "Evidence readiness: challenged CEO review and next action",
+            "metric": _format_ratio_display(metrics.get("resolved_count"), metrics.get("citation_count")),
+            "value": _format_ratio_display(metrics.get("resolved_count"), metrics.get("citation_count")),
+            "sub": "Citation chain",
+            "status": "Citation chain",
+            "detail": "Board evidence posture from the latest governed run: challenged items, CEO review, and next action depend on resolved citations over total persisted citations.",
+        },
+        {
+            "driver_key": "items_needing_closure",
+            "key": "items_needing_closure",
+            "label": "Items needing closure",
+            "metric": str(int(metrics.get("challenged_count") or 0)),
+            "value": str(int(metrics.get("challenged_count") or 0)),
+            "sub": "Reviewer attention",
+            "status": "Reviewer attention",
+            "detail": "Challenged board items from the latest governed run: persisted challenged items still visible in the review posture.",
+        },
+    ]
 
     display_rows = list(finding_rows or [])[:3]
     displayed_recoverable = round(
@@ -4348,6 +4394,7 @@ def _executive_diagnostics_payload(
     for item in persona_drivers[:4] or list(executive_modes.get("driver_focus") or [])[:4]:
         driver_tiles.append(
             {
+                "kpi_contract": bool(item.get("kpi_contract")),
                 "driver_key": item.get("key") or item.get("driver_key"),
                 "label": item.get("label"),
                 "metric": item.get("value") or item.get("metric"),
@@ -4358,6 +4405,13 @@ def _executive_diagnostics_payload(
                 "pct": item.get("pct"),
                 "sub": item.get("sub"),
                 "provenance": item.get("provenance"),
+                "availability": item.get("availability"),
+                "formula": item.get("formula"),
+                "inputs": item.get("inputs"),
+                "missing_inputs": item.get("missing_inputs"),
+                "comparison": item.get("comparison"),
+                "trend": item.get("trend"),
+                "trend_status": item.get("trend_status"),
             }
         )
     presentation_hero = dict(executive_presentation_payload.get("hero") or {})
@@ -10076,6 +10130,82 @@ def _authenticated_challenge_closure_result(
     }
 
 
+def _ceo_kpi_inline_result(
+    context: Mapping[str, Any],
+    *,
+    kpi_key: str,
+    public_safe: bool,
+) -> dict[str, Any]:
+    """Answer the inline CEO KPI conversation from server-resolved truth only.
+
+    The browser supplies a KPI key, never an authoritative KPI value.  Rebuild
+    the presentation contract from the resolved run so a stale or manipulated
+    browser state cannot change the number Hermes describes.
+    """
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    read_model = _executive_read_model_from_available_truth(
+        dict(summary),
+        [],
+        {},
+        {"report_count": 0},
+        {},
+        public_safe=public_safe,
+    )
+    cards = list(build_executive_presentation(read_model).get("driver_grid") or [])
+    card = next(
+        (item for item in cards if str(item.get("key") or item.get("driver_key") or "") == kpi_key),
+        None,
+    )
+    if not isinstance(card, Mapping):
+        return {
+            "matched": True,
+            "answer": "That KPI is not part of the governed CEO KPI set. Choose Revenue, EBITDA margin, Operating cost, or Cash vs floor.",
+            "basis": "The inline CEO KPI route accepts only the four governed KPI keys.",
+            "citations": [],
+            "suggestions": ["Explain Revenue", "Explain EBITDA margin", "Explain Operating cost", "Explain Cash vs floor"],
+            "answered_by": "governed_kpi",
+            "grounding_status": "needs_evidence",
+            "_orchestrator_force_answer": True,
+        }
+
+    label = str(card.get("label") or "this KPI")
+    availability = str(card.get("availability") or "unavailable")
+    missing = [str(item) for item in list(card.get("missing_inputs") or []) if str(item)]
+    if availability == "unavailable":
+        answer = (
+            f"{label} cannot be calculated from the current processed dataset. "
+            f"{card.get('detail') or 'The required governed finance inputs are unavailable.'} "
+            "I will not estimate or substitute a value."
+        )
+        grounding = "needs_evidence"
+    else:
+        answer = (
+            f"{label} is {card.get('metric') or 'available'} for the selected period. "
+            f"{card.get('comparison') or card.get('sub') or ''} "
+            f"Formula: {card.get('formula') or 'governed KPI calculation.'}"
+        )
+        if missing:
+            answer += " The calculation is partial because " + ", ".join(missing) + " is unavailable; no comparator was inferred."
+            grounding = "needs_evidence"
+        else:
+            grounding = "grounded"
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Server-resolved deterministic CEO KPI contract; the browser provided only the KPI key.",
+        "citations": [],
+        "suggestions": [
+            f"What data is required to calculate {label}?",
+            f"Show the formula for {label}",
+        ],
+        "answered_by": "governed_kpi",
+        "grounding_status": grounding,
+        "missing_inputs": missing,
+        "kpi": dict(card),
+        "_orchestrator_force_answer": True,
+    }
+
+
 async def _assistant_chat_response(
     request: AssistantChatRequest | QaRequest,
     *,
@@ -10188,6 +10318,32 @@ async def _assistant_chat_response(
         context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    if str(assistant_context.get("entrypoint") or "") == "ceo_kpi_inline":
+        kpi_result = _ceo_kpi_inline_result(
+            context,
+            kpi_key=str(assistant_context.get("kpi_key") or ""),
+            public_safe=public_safe,
+        )
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result={**kpi_result, "assistant_mode": "governed_kpi"},
+            driver_context={"key": assistant_context.get("kpi_key"), "label": assistant_context.get("kpi_label")},
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=kpi_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     def _public_safe_unmatched_result(question_text: str, reason: str | None = None) -> dict[str, Any]:
         norm = " ".join(str(question_text or "").lower().split())

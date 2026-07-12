@@ -315,6 +315,16 @@ def build_executive_read_model(
             ),
         },
         "metrics": metrics,
+        # This payload is optional because the governed findings run and the
+        # Oracle finance snapshot can arrive independently.  The presentation
+        # layer accepts it only when it identifies the deterministic Oracle
+        # engine; otherwise the CEO KPI cards deliberately render unavailable
+        # states rather than borrowing values from a different dataset.
+        "oracle_kpi": (
+            dict((summary or {}).get("oracle_kpi") or {})
+            if isinstance((summary or {}).get("oracle_kpi"), Mapping)
+            else {}
+        ),
         "findings": _finding_claims(
             rows,
             run_id=run_id,
