@@ -613,6 +613,7 @@
   }
 
   function isPublicSafeAssistantBody(body) {
+    if (bootstrap.login_required) return false;
     var persona = String(firstDefined(body && body.persona, state && state.activePersona, "")).toLowerCase();
     var source = String(firstDefined(body && body.assistant_context && body.assistant_context.source, body && body.source, "")).toLowerCase();
     var runId = String(firstDefined(body && body.run_id, "latest-public")).toLowerCase();
@@ -650,6 +651,7 @@
   function latestRunRouteForSession(session) {
     if (session && session.api_auth_enabled === false) return "/runs/latest";
     if (session && session.authenticated) return "/runs/latest";
+    if (bootstrap.login_required) return "/runs/latest";
     return "/public/runs/latest";
   }
 

@@ -127,6 +127,8 @@ resolved_auth_mode = auth_mode or (
 require(bool_is_true(merged.get("STRATEGYOS_API_AUTH_ENABLED")), "STRATEGYOS_API_AUTH_ENABLED must remain true for deployable environments.")
 require(bool_is_true(merged.get("STRATEGYOS_REQUIRE_HUMAN_REVIEW")), "STRATEGYOS_REQUIRE_HUMAN_REVIEW must remain true for deployable environments.")
 require(not bool_is_true(merged.get("STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED")), "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED=true is local-only and must not be deployed externally.")
+if target_environment == "hetzner-branch":
+    require(bool_is_true(merged.get("STRATEGYOS_LOGIN_REQUIRED")), "Branch preview must require login before serving application surfaces.")
 
 run_execution_mode = str(merged.get("STRATEGYOS_RUN_EXECUTION_MODE", "sync") or "sync").strip().lower()
 if run_execution_mode == "hatchet":

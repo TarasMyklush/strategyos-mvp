@@ -224,7 +224,15 @@ from .twins.api import (
     twin_operational_health_payload,
 )
 
-app = FastAPI(title="StrategyOS MVP API", version="0.1.0")
+app = FastAPI(
+    title="StrategyOS MVP API",
+    version="0.1.0",
+    # A hosted login-only surface must not publish an API catalogue to
+    # unauthenticated visitors. Local development keeps the normal docs.
+    docs_url=None if CONFIG.login_required else "/docs",
+    redoc_url=None if CONFIG.login_required else "/redoc",
+    openapi_url=None if CONFIG.login_required else "/openapi.json",
+)
 STATIC_DIR = Path(__file__).with_name("static")
 TWINS_STATIC_DIR = Path(__file__).parent / "twins" / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -6563,6 +6571,33 @@ def _ui_environment_label() -> str:
     return CONFIG.environment_label.strip() or "Local development"
 
 
+def _require_login_if_enabled(principal: dict[str, Any]) -> None:
+    """Fail closed on hosted surfaces without changing local fixture behavior."""
+    if not CONFIG.login_required:
+        return
+    if not principal.get("authenticated"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in is required.",
+        )
+    role = str(principal.get("role") or "")
+    if not principal_has_any_role(role, *PRODUCT_READ_ROLES, "tenant_admin", "system"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This identity is not permitted for this endpoint.",
+        )
+
+
+def _login_or_authorized_html(principal: dict[str, Any]) -> RedirectResponse | None:
+    """Return the only anonymous HTML surface for the hosted deployment."""
+    if not CONFIG.login_required:
+        return None
+    if not principal.get("authenticated"):
+        return RedirectResponse(url="/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    _require_login_if_enabled(principal)
+    return None
+
+
 def _ui_bootstrap(
     *,
     view_state: dict[str, str | None] | None = None,
@@ -6593,6 +6628,7 @@ def _ui_bootstrap(
         "output_root": str(CONFIG.output_root),
         "auth_mode": CONFIG.auth_mode,
         "api_auth_enabled": CONFIG.api_auth_enabled,
+        "login_required": CONFIG.login_required,
         "idp_enabled": CONFIG.idp_enabled,
         "require_human_review": CONFIG.require_human_review,
         "public_health_enabled": CONFIG.public_health_enabled,
@@ -6609,7 +6645,7 @@ def _ui_bootstrap(
         },
         "executive_route_base": "/app",
         "executive_entry_route": entry_route,
-        "assistant_public_context": _build_public_safe_assistant_packet(
+        "assistant_public_context": {} if CONFIG.login_required else _build_public_safe_assistant_packet(
             summary,
             persona_id=public_packet_persona,
             finding_rows=rows,
@@ -6626,8 +6662,8 @@ def _ui_bootstrap(
             "dashboard": "/dashboard",
             "executive": "/executive",
             "workspace_contract": "/ui/workspace-contract/latest",
-            "public_latest_run": "/public/runs/latest",
-            "public_report_preview": "/public/runs/latest/report-preview",
+            "public_latest_run": "/runs/latest" if CONFIG.login_required else "/public/runs/latest",
+            "public_report_preview": "/runs/latest/report-preview" if CONFIG.login_required else "/public/runs/latest/report-preview",
             "ui_session": "/ui/session",
             "qa": "/qa",
             "view_state_query_keys": {
@@ -7353,6 +7389,9 @@ def homepage(
     agent: str | None = None,
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> Any:
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
     view_state = _requested_executive_view_state(
         persona=persona,
         board=board,
@@ -7378,7 +7417,11 @@ def dashboard(
     portfolio: str | None = None,
     week: str | None = None,
     agent: str | None = None,
-) -> str:
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
     return _executive_html(
         view_state=_requested_executive_view_state(
             persona=persona,
@@ -7402,7 +7445,11 @@ def dashboard_alias(
     portfolio: str | None = None,
     week: str | None = None,
     agent: str | None = None,
-) -> str:
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
     return _executive_html(
         view_state=_requested_executive_view_state(
             persona=persona,
@@ -7426,7 +7473,11 @@ def executive_cockpit(
     portfolio: str | None = None,
     week: str | None = None,
     agent: str | None = None,
-) -> str:
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
     return _executive_html(
         view_state=_requested_executive_view_state(
             persona=persona,
@@ -7442,22 +7493,37 @@ def executive_cockpit(
 
 
 @app.get("/architecture", response_class=HTMLResponse)
-def architecture_page() -> HTMLResponse:
+def architecture_page(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
     """Serve the architecture evolution page."""
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
     template_path = STATIC_DIR / "architecture.html"
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
 
 
 @app.get("/guide", response_class=HTMLResponse)
-def guide_page() -> HTMLResponse:
+def guide_page(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
     """Serve the non-technical StrategyOS user guide."""
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
     template_path = STATIC_DIR / "guide.html"
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
 
 
 @app.get("/plan", response_class=HTMLResponse)
-def plan_page() -> HTMLResponse:
+def plan_page(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
     """Serve the Digital Twin execution plan page."""
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
     template_path = STATIC_DIR / "plan.html"
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
 
@@ -7563,7 +7629,10 @@ def _plan_tracker_payload() -> dict[str, Any]:
 
 
 @app.get("/api/plan/latest")
-def latest_plan_tracker() -> dict[str, Any]:
+def latest_plan_tracker(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
     return _plan_tracker_payload()
 
 
@@ -7595,6 +7664,7 @@ def twin_gm_dashboard(
 def ui_session(
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
     authenticated = bool(principal.get("authenticated"))
     role = str(principal.get("role") or "anonymous")
     subject = str(principal.get("subject") or "anonymous")
@@ -7637,6 +7707,7 @@ def latest_workspace_contract(
     agent: str | None = None,
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
     return _workspace_surface_contract_payload(
         _latest_summary(),
         principal,
@@ -7661,7 +7732,9 @@ def public_latest_run(
     portfolio: str | None = None,
     week: str | None = None,
     agent: str | None = None,
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
     return _latest_run_public_payload(
         _latest_summary(),
         view_state=_requested_executive_view_state(
@@ -7677,7 +7750,10 @@ def public_latest_run(
 
 
 @app.get("/public/runs/latest/audit-summary")
-def public_latest_run_audit_summary() -> dict[str, Any]:
+def public_latest_run_audit_summary(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
     return _public_latest_run_audit_summary_payload(_latest_summary())
 
 
@@ -9138,7 +9214,9 @@ def public_latest_run_findings(
     portfolio: str | None = None,
     week: str | None = None,
     agent: str | None = None,
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
     return _latest_run_findings_payload(
         _latest_summary(),
         include_run_dir=False,
@@ -9169,7 +9247,11 @@ def latest_run_case(
 
 
 @app.get("/public/runs/latest/cases/{case_id}")
-def public_latest_run_case(case_id: str) -> dict[str, Any]:
+def public_latest_run_case(
+    case_id: str,
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
     return _latest_case_payload(_latest_summary(), case_id, public_safe=True)
 
 
@@ -9453,7 +9535,9 @@ def public_evidence_preview(
     finding_id: str | None = None,
     source_hash: str | None = None,
     locator: str | None = None,
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
     return _public_evidence_preview_payload(
         run_id=run_id,
         finding_id=finding_id,
@@ -9472,7 +9556,9 @@ def public_report_preview(
     portfolio: str | None = None,
     week: str | None = None,
     agent: str | None = None,
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
     return _public_report_preview_payload(
         artifact_key,
         view_state=_requested_executive_view_state(
@@ -11326,6 +11412,13 @@ async def assistant_chat(
 ) -> dict[str, Any]:
     role = str(principal.get("role") or "anonymous")
     authenticated = bool(principal.get("authenticated"))
+    if CONFIG.login_required:
+        _require_login_if_enabled(principal)
+        return await _assistant_chat_response(
+            request,
+            public_safe=False,
+            authenticated_role=role,
+        )
     persona = (request.persona or "ceo").strip().lower() or "ceo"
     if not authenticated:
         if persona not in EXECUTIVE_PERSONA_IDS:

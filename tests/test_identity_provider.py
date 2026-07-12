@@ -101,8 +101,8 @@ def test_login_page_is_human_friendly_and_security_tagged():
         assert "operator.tester" in response.text
         assert "executive.tester" in response.text
         assert "operator.local" not in response.text
-        assert "strategyos.ui.token" in response.text
-        assert "localStorage.setItem" in response.text
+        assert "secure browser cookie" in response.text
+        assert "localStorage.removeItem" in response.text
     finally:
         _restore_env(original)
 
@@ -140,6 +140,11 @@ def test_auth_login_issues_tokens_for_every_test_role():
             assert payload["role"] == role
             assert payload["subject"] == username
             assert payload["redirect"] == redirect
+            set_cookie = response.headers["set-cookie"].lower()
+            assert "strategyos_session=" in set_cookie
+            assert "httponly" in set_cookie
+            assert "secure" in set_cookie
+            assert "samesite=lax" in set_cookie
     finally:
         _restore_env(original)
 

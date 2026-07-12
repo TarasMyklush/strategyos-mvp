@@ -30,6 +30,7 @@ ROLE_LABELS = {
     "system": "System — full system verification",
 }
 ROLE_REDIRECTS = {"executive": "/executive"}
+SESSION_COOKIE_NAME = "strategyos_session"
 
 
 def _now() -> datetime:
@@ -252,9 +253,8 @@ def login_page() -> HTMLResponse:
       </label>
       <button id="submit" type="submit">Sign in</button>
       <div id="error" class="error" role="alert" aria-live="polite"></div>
-      <div class="hint">Token is stored in this browser as <code>strategyos.ui.token</code>. Use Log out from the app or clear site data to switch roles.</div>
+      <div class="hint">Your authenticated session is kept in a secure browser cookie. Clear site data to switch roles.</div>
     </form>
-    <div class="links"><a href="/guide">Guide</a><a href="/executive">Executive view</a><a href="/app">App</a></div>
   </main>
   <script>
     const form = document.getElementById('login-form');
@@ -274,7 +274,7 @@ def login_page() -> HTMLResponse:
         }});
         const payload = await response.json().catch(() => ({{}}));
         if (!response.ok) throw new Error(payload.detail || 'Invalid credentials for this role.');
-        localStorage.setItem('strategyos.ui.token', payload.access_token);
+        localStorage.removeItem('strategyos.ui.token');
         window.location.assign(payload.redirect || '/app');
       }} catch (err) {{
         error.textContent = err.message || 'Invalid credentials for this role.';
@@ -319,7 +319,7 @@ async def login(request: Request) -> JSONResponse:
         raise
     role = str(payload.get("role") or "")
     payload["redirect"] = ROLE_REDIRECTS.get(role, "/app")
-    return JSONResponse(
+    response = JSONResponse(
         payload,
         headers={
             "Content-Security-Policy": LOGIN_CSP,
@@ -327,6 +327,16 @@ async def login(request: Request) -> JSONResponse:
             "Cache-Control": "no-store",
         },
     )
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=str(payload["access_token"]),
+        max_age=CONFIG.idp_token_ttl_seconds,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+    return response
 
 
 @app.post("/oauth/token")

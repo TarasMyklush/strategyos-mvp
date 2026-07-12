@@ -6,7 +6,7 @@ from urllib import error, parse, request
 from typing import Any
 
 try:
-    from fastapi import Depends, Header, HTTPException, status
+    from fastapi import Cookie, Depends, Header, HTTPException, status
 except Exception as exc:  # pragma: no cover - optional cloud dependency
     raise RuntimeError(
         "FastAPI is required to run the StrategyOS auth boundary."
@@ -201,6 +201,7 @@ def authenticate_request(
     x_forwarded_email: str | None = Header(default=None, alias="X-Forwarded-Email"),
     x_forwarded_user: str | None = Header(default=None, alias="X-Forwarded-User"),
     x_strategyos_proxy_auth: str | None = Header(default=None, alias=TRUSTED_PROXY_HEADER_NAME),
+    strategyos_session: str | None = Cookie(default=None, alias="strategyos_session"),
 ) -> dict[str, Any]:
     if not CONFIG.api_auth_enabled:
         return {
@@ -226,7 +227,9 @@ def authenticate_request(
             detail="A trusted proxy identity is required.",
         )
     if CONFIG.idp_enabled or CONFIG.auth_mode == "identity_provider":
-        token = extract_bearer_token(authorization=authorization)
+        # The hosted login issues this HttpOnly cookie. Header-based bearer
+        # credentials remain supported for service calls and deploy probes.
+        token = extract_bearer_token(authorization=authorization) or strategyos_session
         if getattr(CONFIG, "demo_role_login_enabled", False):
             demo_role = demo_role_for_token(
                 extract_api_key(x_api_key=x_api_key, authorization=authorization)
@@ -276,6 +279,7 @@ def authenticate_optional_request(
     x_forwarded_email: str | None = Header(default=None, alias="X-Forwarded-Email"),
     x_forwarded_user: str | None = Header(default=None, alias="X-Forwarded-User"),
     x_strategyos_proxy_auth: str | None = Header(default=None, alias=TRUSTED_PROXY_HEADER_NAME),
+    strategyos_session: str | None = Cookie(default=None, alias="strategyos_session"),
 ) -> dict[str, Any]:
     if not CONFIG.api_auth_enabled:
         return {
@@ -296,7 +300,7 @@ def authenticate_optional_request(
             x_strategyos_proxy_auth,
         )
     )
-    if not x_api_key and not authorization and not has_proxy_identity:
+    if not x_api_key and not authorization and not has_proxy_identity and not strategyos_session:
         return {
             "role": "anonymous",
             "subject": "anonymous",
@@ -304,16 +308,30 @@ def authenticate_optional_request(
             "authenticated": False,
             "auth_disabled": False,
         }
-    principal = authenticate_request(
-        x_api_key=x_api_key,
-        authorization=authorization,
-        x_auth_request_email=x_auth_request_email,
-        x_auth_request_user=x_auth_request_user,
-        x_auth_request_preferred_username=x_auth_request_preferred_username,
-        x_forwarded_email=x_forwarded_email,
-        x_forwarded_user=x_forwarded_user,
-        x_strategyos_proxy_auth=x_strategyos_proxy_auth,
-    )
+    try:
+        principal = authenticate_request(
+            x_api_key=x_api_key,
+            authorization=authorization,
+            x_auth_request_email=x_auth_request_email,
+            x_auth_request_user=x_auth_request_user,
+            x_auth_request_preferred_username=x_auth_request_preferred_username,
+            x_forwarded_email=x_forwarded_email,
+            x_forwarded_user=x_forwarded_user,
+            x_strategyos_proxy_auth=x_strategyos_proxy_auth,
+            strategyos_session=strategyos_session,
+        )
+    except HTTPException:
+        # An expired browser session should return the visitor to the login
+        # screen. Explicit API credentials still fail with their real 401/403.
+        if strategyos_session and not x_api_key and not authorization and not has_proxy_identity:
+            return {
+                "role": "anonymous",
+                "subject": "anonymous",
+                "tenant_id": CONFIG.tenant_slug,
+                "authenticated": False,
+                "auth_disabled": False,
+            }
+        raise
     return {
         **principal,
         "authenticated": True,

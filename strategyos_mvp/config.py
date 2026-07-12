@@ -180,6 +180,7 @@ class StrategyOSConfig:
     qdrant_url: str | None
     auth_mode: str
     api_auth_enabled: bool
+    login_required: bool
     demo_role_login_enabled: bool
     idp_enabled: bool
     idp_issuer: str | None
@@ -457,6 +458,7 @@ def load_config() -> StrategyOSConfig:
         qdrant_url=env("QDRANT_URL") or env("STRATEGYOS_QDRANT_URL"),
         auth_mode=_auth_mode(),
         api_auth_enabled=env_bool("STRATEGYOS_API_AUTH_ENABLED", False),
+        login_required=env_bool("STRATEGYOS_LOGIN_REQUIRED", False),
         demo_role_login_enabled=env_bool("STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED", False),
         idp_enabled=env_bool("STRATEGYOS_IDP_ENABLED", False),
         idp_issuer=env("STRATEGYOS_IDP_ISSUER"),
