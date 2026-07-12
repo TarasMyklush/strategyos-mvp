@@ -1865,7 +1865,7 @@ def _kpi_card_payloads(
         },
         {
             "card_id": "challenged_cases",
-            "label": "Challenged cases",
+            "label": "Open challenged cases",
             "value": challenged_count,
             "unit": "count",
             "trend_hint": "review_attention",
@@ -1971,7 +1971,17 @@ def _format_sar_brief(value: Any) -> str:
 def _format_ratio_display(resolved: int | None, total: int | None) -> str:
     if total in (None, 0):
         return "--"
+    if resolved is None or int(resolved) < 0 or int(resolved) > int(total):
+        return "Needs reconciliation"
     return f"{int(resolved or 0)} / {int(total)}"
+
+
+def _format_resolution_display(resolved: int | None, total: int | None) -> str:
+    if total in (None, 0) or resolved is None:
+        return "Resolution unavailable"
+    if int(resolved) < 0 or int(resolved) > int(total):
+        return "Resolution needs reconciliation"
+    return f"{int(resolved)} of {int(total)} citations resolved"
 
 
 def _governed_metrics_payload(
@@ -1983,7 +1993,13 @@ def _governed_metrics_payload(
 ) -> dict[str, Any]:
     all_rows = list(rows or [])
     view_rows = list(filtered_rows) if filtered_rows is not None else list(all_rows)
-    citation_count = sum(int(row.get("citation_count") or 0) for row in all_rows)
+    row_citation_count = sum(int(row.get("citation_count") or 0) for row in all_rows)
+    audited_citation_count = (audit_summary or {}).get("citation_count")
+    citation_count = (
+        int(audited_citation_count)
+        if audited_citation_count is not None
+        else row_citation_count
+    )
     filtered_citation_count = sum(int(row.get("citation_count") or 0) for row in view_rows)
     challenged_count = sum(1 for row in all_rows if row.get("challenged"))
     filtered_challenged_count = sum(1 for row in view_rows if row.get("challenged"))
@@ -2017,6 +2033,81 @@ def _governed_metrics_payload(
         "artifact_count": len((summary or {}).get("artifacts") or {})
         if isinstance(summary, dict)
         else 0,
+    }
+
+
+def _board_reconciliation_payload(
+    summary: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+    audit_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    governed_rows = list(rows or [])
+    computed_recoverable = round(
+        sum(float(row.get("recoverable_sar") or 0.0) for row in governed_rows),
+        2,
+    )
+    stated_raw = (summary or {}).get("total_recoverable_sar")
+    stated_recoverable = round(float(stated_raw), 2) if stated_raw is not None else None
+    recoverable_delta = (
+        round(computed_recoverable - stated_recoverable, 2)
+        if stated_recoverable is not None
+        else None
+    )
+    recoverable_passed = (
+        stated_recoverable is not None and abs(recoverable_delta or 0.0) <= 0.01
+    )
+
+    citation_total = (audit_summary or {}).get("citation_count")
+    citation_resolved = (audit_summary or {}).get("resolved_count")
+    citation_passed = (
+        citation_total is not None
+        and citation_resolved is not None
+        and 0 <= int(citation_resolved) <= int(citation_total)
+    )
+
+    row_ids = {
+        str(row.get("finding_id")) for row in governed_rows if row.get("finding_id")
+    }
+    open_challenge_ids = {
+        str(item)
+        for item in ((audit_summary or {}).get("challenged_finding_ids") or [])
+        if item
+    }
+    row_challenge_ids = {
+        str(row.get("finding_id"))
+        for row in governed_rows
+        if row.get("finding_id") and row.get("challenged")
+    }
+    challenge_passed = bool(
+        (audit_summary or {}).get("status") == "ok"
+    ) and open_challenge_ids.issubset(row_ids) and row_challenge_ids == open_challenge_ids
+    checks = [
+        {
+            "key": "recoverable_arithmetic",
+            "status": "passed" if recoverable_passed else "failed",
+            "stated_sar": stated_recoverable,
+            "computed_sar": computed_recoverable,
+            "delta_sar": recoverable_delta,
+        },
+        {
+            "key": "citation_arithmetic",
+            "status": "passed" if citation_passed else "failed",
+            "resolved": citation_resolved,
+            "total": citation_total,
+        },
+        {
+            "key": "open_challenge_traceability",
+            "status": "passed" if challenge_passed else "failed",
+            "open_count": len(open_challenge_ids),
+            "finding_ids": sorted(open_challenge_ids),
+            "finding_row_ids": sorted(row_challenge_ids),
+        },
+    ]
+    passed = all(check["status"] == "passed" for check in checks)
+    return {
+        "status": "passed" if passed else "blocked",
+        "publish_gate_passed": passed,
+        "checks": checks,
     }
 
 
@@ -3209,11 +3300,12 @@ def _summary_publication_payload(
     public_safe: bool = False,
 ) -> dict[str, Any]:
     role = str(principal_role or "anonymous")
-    metrics = _governed_metrics_payload(
-        summary,
-        _finding_rows_from_summary(summary) if isinstance(summary, dict) else [],
-        _latest_run_audit_summary_payload(summary) if isinstance(summary, dict) else None,
+    finding_rows = _finding_rows_from_summary(summary) if isinstance(summary, dict) else []
+    audit_summary = (
+        _latest_run_audit_summary_payload(summary) if isinstance(summary, dict) else None
     )
+    metrics = _governed_metrics_payload(summary, finding_rows, audit_summary)
+    reconciliation = _board_reconciliation_payload(summary, finding_rows, audit_summary)
     report_contracts = _summary_report_contracts(summary)
     reports = list(report_contracts.get("reports") or [])
     evidence = list(report_contracts.get("evidence") or [])
@@ -3239,6 +3331,8 @@ def _summary_publication_payload(
         release_status = "awaiting_review"
     else:
         release_status = "draft"
+    if reports and not reconciliation["publish_gate_passed"]:
+        release_status = "blocked_reconciliation"
     if public_safe or principal_has_any_role(role, "executive"):
         allowed_actions = ("view_board_safe_preview",)
     elif principal_has_any_role(role, "bu"):
@@ -3266,7 +3360,9 @@ def _summary_publication_payload(
     else:
         allowed_actions = ("view_report_preview",)
     board_pack_status = (
-        "published"
+        "blocked_reconciliation"
+        if reports and not reconciliation["publish_gate_passed"]
+        else "published"
         if release_status == "published"
         else "ready"
         if release_status == "approved_for_release" and len(reports) > 1
@@ -3295,7 +3391,10 @@ def _summary_publication_payload(
         "preview_route": "/public/runs/latest/report-preview"
         if public_safe
         else "/runs/latest/report-preview",
-        "publish_ready": approval_status == "approved" and bool(reports),
+        "publish_ready": approval_status == "approved"
+        and bool(reports)
+        and reconciliation["publish_gate_passed"],
+        "reconciliation": reconciliation,
         "available_artifacts": visible_reports,
         "allowed_actions": allowed_actions,
         "approval": {
@@ -3306,14 +3405,16 @@ def _summary_publication_payload(
             and current_stage == "awaiting_review",
             "next_action": _governed_next_action(
                 summary,
-                _finding_rows_from_summary(summary) if isinstance(summary, dict) else [],
-                _latest_run_audit_summary_payload(summary) if isinstance(summary, dict) else None,
+                finding_rows,
+                audit_summary,
             ),
         },
         "board_pack": {
             "status": board_pack_status,
             "safe_for_board": bool(reports)
-            and release_status in {"approved_for_release", "published"},
+            and release_status in {"approved_for_release", "published"}
+            and reconciliation["publish_gate_passed"],
+            "reconciliation": reconciliation,
             "preview_route": board_pack_route,
             "detail_route": board_pack_route,
             "report_count": len(reports),
@@ -3367,9 +3468,7 @@ def _board_portal_payload(
     state = "pre"
     if publication.get("status") == "published":
         state = "closed"
-    elif publication.get("status") == "approved_for_release" or publication.get(
-        "approval_status"
-    ) == "approved":
+    elif publication.get("status") == "approved_for_release":
         state = "live"
     presentation_state = (
         str(requested_state or "").strip().lower() if requested_state else ""
@@ -3386,12 +3485,22 @@ def _board_portal_payload(
     report_count = int(publication.get("report_count") or 0)
     challenged_count = int(publication.get("challenged_cases") or 0)
     next_action = str((publication.get("approval") or {}).get("next_action") or "")
+    pre_summary = (
+        "Prepare one board-safe packet for CEO review by resolving open challenged evidence, tightening supplementary answers, and confirming the release posture."
+        if challenged_count
+        else "Prepare one board-safe packet for CEO review by confirming the reconciled evidence and release posture."
+    )
+    pre_note = (
+        "Keep the packet inside the executive lane until open challenged evidence is closed and supplementary answers are board-ready."
+        if challenged_count
+        else "No open challenged cases are recorded; keep the packet bounded to the reconciled evidence and approval lane."
+    )
     state_detail = {
         "pre": {
             "state": "pre",
             "title": "Pre-board preparation",
-            "summary": "Prepare one board-safe packet for CEO review by resolving challenged evidence, tightening supplementary answers, and confirming the release posture.",
-            "note": "Keep the packet inside the executive lane until challenged evidence is closed and supplementary answers are board-ready.",
+            "summary": pre_summary,
+            "note": pre_note,
             "primary_actions": ["prepare_board_pack", next_action or "capture_reviewer_decision"],
             "secondary_actions": ["inspect_report_preview", "review_supplementary_questions"],
         },
@@ -3460,13 +3569,17 @@ def _board_portal_payload(
             "allowed_actions": list(board_pack.get("allowed_actions") or ()),
         },
         "supplementary": {
-            "status": "open" if state == "pre" else "governed" if state == "live" else "frozen",
+            "status": "open" if challenged_count else "clear" if state == "pre" else "governed" if state == "live" else "frozen",
             "question_count": challenged_count,
             "next_action": next_action,
             "route": "/reviewer/pending-reviews"
             if principal_has_any_role(role, "bu", "reviewer", "operator", "tenant_admin", "system")
             else "/executive?panel=supplementary",
-            "summary": "Supplementary board questions stay bounded to challenged evidence and governed review posture.",
+            "summary": (
+                "Supplementary board questions stay bounded to open challenged evidence and governed review posture."
+                if challenged_count
+                else "No open challenged-case questions are recorded for this packet."
+            ),
         },
         "frozen_snapshot": {
             "status": "frozen" if state == "closed" else "live_packet",
@@ -3477,7 +3590,7 @@ def _board_portal_payload(
         "session_chips": [
             state_label,
             str(publication.get("publish_state") or "draft").replace("_", " "),
-            f"{challenged_count} challenged",
+            f"{challenged_count} open challenge{'s' if challenged_count != 1 else ''}",
         ],
         "lifecycle_flow": lifecycle_flow,
         "state_detail": {
@@ -3500,18 +3613,42 @@ def _board_portal_payload(
                 "label": "Recoverable value",
                 "value": _format_sar_brief((summary or {}).get("total_recoverable_sar")),
                 "sub": "latest governed run",
+                "grounding": {
+                    "status": (
+                        "grounded"
+                        if next(
+                            (
+                                check.get("status")
+                                for check in ((publication.get("reconciliation") or {}).get("checks") or [])
+                                if check.get("key") == "recoverable_arithmetic"
+                            ),
+                            "failed",
+                        )
+                        == "passed"
+                        else "needs_evidence"
+                    ),
+                    "source": "governed findings reconciliation",
+                },
             },
             {
                 "key": "challenged_cases",
-                "label": "Challenged cases",
+                "label": "Open challenged cases",
                 "value": challenged_count,
-                "sub": "review gate",
+                "sub": "current audit state",
+                "grounding": {
+                    "status": "grounded" if (audit_summary or {}).get("status") == "ok" else "needs_evidence",
+                    "source": "governed audit log",
+                },
             },
             {
                 "key": "report_count",
                 "label": "Board packet reports",
                 "value": report_count,
                 "sub": "surfaced artifacts",
+                "grounding": {
+                    "status": "grounded" if report_count else "needs_evidence",
+                    "source": "governed artifact registry",
+                },
             },
         ],
         "decks": [],
@@ -4708,7 +4845,19 @@ def _agent_modules_payload(
     )
     workflow = _record_workflow_summary(summary or {})
     challenged_count = sum(1 for row in rows if row.get("challenged"))
-    citation_count = sum(int(row.get("citation_count") or 0) for row in rows)
+    row_citation_count = sum(int(row.get("citation_count") or 0) for row in rows)
+    audit_citation_count = (audit_summary or {}).get("citation_count")
+    citation_count = (
+        int(audit_citation_count)
+        if audit_citation_count is not None
+        else row_citation_count
+    )
+    resolved_count = (
+        int((audit_summary or {}).get("resolved_count"))
+        if (audit_summary or {}).get("resolved_count") is not None
+        else None
+    )
+    resolution_display = _format_resolution_display(resolved_count, citation_count)
     modules = [
         {
             "module_id": "cash-recovery-watch",
@@ -4725,9 +4874,9 @@ def _agent_modules_payload(
             "label": "Evidence closure monitor",
             "status": "blocked" if challenged_count else "running" if citation_count else "idle",
             "lane": "review",
-            "summary": f"Watches citation resolution ({_format_ratio_display(int((audit_summary or {}).get('resolved_count') or 0), citation_count)}) and {challenged_count} challenged case{'s' if challenged_count != 1 else ''}.",
+            "summary": f"Watches {resolution_display.lower()} and {challenged_count} open challenged case{'s' if challenged_count != 1 else ''}.",
             "route": "/runs/latest/findings?domain=evidence_qa",
-            "output_metric": _format_ratio_display(int((audit_summary or {}).get("resolved_count") or 0), citation_count),
+            "output_metric": resolution_display,
             "approval_dependency": "reviewer_release",
         },
         {
@@ -5655,17 +5804,24 @@ def _latest_run_audit_summary_payload(summary: dict[str, Any] | None) -> dict[st
     acceptance = summary.get("acceptance") if isinstance(summary.get("acceptance"), dict) else {}
     audit_payload = _load_summary_artifact_json(summary, "audit_log")
     challenged_ids = _challenged_finding_ids_from_audit_log(audit_payload)
+    historical_challenged_ids = _historically_challenged_finding_ids_from_audit_log(
+        audit_payload
+    )
     verification = summary.get("audit_verification")
-    if not challenged_ids and isinstance(verification, dict):
+    if not historical_challenged_ids and isinstance(verification, dict):
         raw_ids = verification.get("challenged_finding_ids") or []
         if isinstance(raw_ids, list):
-            challenged_ids = sorted(str(item) for item in raw_ids if item)
+            historical_challenged_ids = sorted(str(item) for item in raw_ids if item)
 
     return {
         "status": "ok",
         "run_id": summary.get("run_id"),
         "run_dir": summary.get("run_dir"),
         "challenged_finding_ids": challenged_ids,
+        "historical_challenged_finding_ids": historical_challenged_ids,
+        "closed_challenge_count": max(
+            0, len(historical_challenged_ids) - len(challenged_ids)
+        ),
         "citation_count": citation_summary.get(
             "citation_count", acceptance.get("citation_count")
         ),
@@ -6936,12 +7092,41 @@ def _challenged_finding_ids_from_audit_log(
             continue
         action = str(item.get("action") or "").lower()
         status_value = str(item.get("status") or "").lower()
-        if action != "challenge" and status_value != "challenged":
-            continue
         finding_id = item.get("finding_id")
-        if finding_id:
-            challenged.add(str(finding_id))
+        if not finding_id:
+            continue
+        normalized_id = str(finding_id)
+        if action == "challenge" or status_value == "challenged":
+            challenged.add(normalized_id)
+        elif action in {"response", "lock", "close", "resolve"} or status_value in {
+            "responded",
+            "locked",
+            "closed",
+            "resolved",
+        }:
+            challenged.discard(normalized_id)
     return sorted(challenged)
+
+
+def _historically_challenged_finding_ids_from_audit_log(
+    payload: dict[str, Any] | list[dict[str, Any]] | None,
+) -> list[str]:
+    if isinstance(payload, dict):
+        events = payload.get("events") or payload.get("records") or payload.get("items") or []
+    else:
+        events = payload or []
+    return sorted(
+        {
+            str(item.get("finding_id"))
+            for item in events
+            if isinstance(item, dict)
+            and item.get("finding_id")
+            and (
+                str(item.get("action") or "").lower() == "challenge"
+                or str(item.get("status") or "").lower() == "challenged"
+            )
+        }
+    )
 
 
 def readiness_payload() -> dict[str, Any]:
@@ -8287,11 +8472,6 @@ def _finding_rows_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
 
     audit_payload = _load_summary_artifact_json(summary, "audit_log")
     challenged_ids = set(_challenged_finding_ids_from_audit_log(audit_payload))
-    verification = summary.get("audit_verification")
-    if isinstance(verification, dict):
-        for item in verification.get("challenged_finding_ids") or []:
-            if item:
-                challenged_ids.add(str(item))
 
     rows: list[dict[str, Any]] = []
     for node in raw_nodes:
@@ -8315,7 +8495,8 @@ def _finding_rows_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "owner": vendor_by_finding.get(node_id, ""),
                 "citation_count": citation_counts.get(node_id, 0),
                 "node_id": node_id,
-                "challenged": finding_id in challenged_ids,
+                "challenged": finding_id in challenged_ids
+                or str(props.get("status") or "").lower() == "challenged",
             }
         )
     rows.sort(key=lambda row: row["recoverable_sar"], reverse=True)
@@ -9727,6 +9908,135 @@ async def _llm_answer_question_async(*args: Any, **kwargs: Any) -> dict[str, Any
         )
 
 
+def _assistant_question_is_challenge_closure(question: str) -> bool:
+    norm = " ".join(str(question or "").lower().split())
+    return (
+        "close challenged cases" in norm
+        or "close challenge cases" in norm
+        or ("challenged" in norm and "evidence" in norm and "next action" in norm)
+    )
+
+
+def _authenticated_challenge_closure_result(
+    summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {
+            "matched": True,
+            "answer": "No governed run is available, so there is no supported challenged-case count to close.",
+            "basis": "No governed run or audit log is available.",
+            "citations": [],
+            "suggestions": ["What should I prepare for the board?"],
+            "intent": "challenged_case_closure",
+            "grounding_status": "needs_evidence",
+            "_orchestrator_force_answer": True,
+        }
+
+    rows = _finding_rows_from_summary(summary)
+    rows_by_id = {
+        str(row.get("finding_id")): row for row in rows if row.get("finding_id")
+    }
+    audit_payload = _load_summary_artifact_json(summary, "audit_log")
+    audit_summary = _latest_run_audit_summary_payload(summary)
+    open_ids = [str(item) for item in audit_summary.get("challenged_finding_ids") or []]
+    historical_ids = [
+        str(item)
+        for item in audit_summary.get("historical_challenged_finding_ids") or []
+    ]
+    events = audit_payload if isinstance(audit_payload, list) else (
+        (audit_payload or {}).get("events")
+        or (audit_payload or {}).get("records")
+        or (audit_payload or {}).get("items")
+        or []
+    )
+    challenge_detail: dict[str, str] = {}
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        finding_id = str(event.get("finding_id") or "")
+        if finding_id and str(event.get("action") or "").lower() == "challenge":
+            challenge_detail[finding_id] = str(
+                event.get("detail") or event.get("challenge") or "Reviewer evidence challenge."
+            )
+
+    citations = [
+        {
+            "source_path": "governed_audit://audit_log",
+            "locator": f"finding_id={finding_id}; action=challenge",
+            "excerpt": challenge_detail.get(finding_id) or "Challenge recorded in the governed audit log.",
+            "finding_id": finding_id,
+        }
+        for finding_id in (open_ids or historical_ids)
+    ]
+    reconciliation = {
+        "open_challenge_count": len(open_ids),
+        "open_finding_row_count": sum(1 for finding_id in open_ids if finding_id in rows_by_id),
+        "historical_challenge_count": len(historical_ids),
+        "status": (
+            "passed"
+            if all(finding_id in rows_by_id for finding_id in open_ids)
+            else "blocked"
+        ),
+    }
+
+    if not open_ids:
+        answer = (
+            "There are no open challenged cases in the current governed audit state. "
+            f"The audit history records {len(historical_ids)} case"
+            f"{'s' if len(historical_ids) != 1 else ''} that were challenged, but their latest recorded states are responded, locked, closed, or resolved. "
+            "No challenge-closure action is required now; confirm the packet reconciliation and current approval decision before release."
+        )
+        suggestions = [
+            "Show the current packet reconciliation",
+            "What still needs reviewer approval?",
+        ]
+    else:
+        lines = []
+        case_links = []
+        for finding_id in open_ids:
+            row = rows_by_id.get(finding_id) or {}
+            title = str(row.get("title") or finding_id)
+            citation_count = int(row.get("citation_count") or 0)
+            needed = challenge_detail.get(finding_id) or "Close the reviewer evidence challenge."
+            lines.append(
+                f"{finding_id} — {title}: {citation_count} linked citation"
+                f"{'s' if citation_count != 1 else ''}; evidence needed: {needed}"
+            )
+            case_links.append({"finding_id": finding_id, "title": title})
+        answer = (
+            f"There are {len(open_ids)} open challenged case"
+            f"{'s' if len(open_ids) != 1 else ''} in the governed audit state. "
+            + " ".join(lines)
+            + " Next action: open each case, confirm the cited proof resolves the recorded challenge, then record the reviewer closure before release."
+        )
+        suggestions = ["Open the challenged cases", "Show the current packet reconciliation"]
+        return {
+            "matched": True,
+            "answer": answer,
+            "basis": "Current open challenge state derived from the governed audit log and reconciled to governed finding rows.",
+            "citations": citations,
+            "suggestions": suggestions,
+            "intent": "challenged_case_closure",
+            "case_links": case_links,
+            "grounding_status": "grounded" if reconciliation["status"] == "passed" else "needs_evidence",
+            "reconciliation": reconciliation,
+            "_orchestrator_force_answer": True,
+        }
+
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Current open challenge state derived from the governed audit log; historical challenges are reported separately from open items.",
+        "citations": citations,
+        "suggestions": suggestions,
+        "intent": "challenged_case_closure",
+        "case_links": [],
+        "grounding_status": "grounded",
+        "reconciliation": reconciliation,
+        "_orchestrator_force_answer": True,
+    }
+
+
 async def _assistant_chat_response(
     request: AssistantChatRequest | QaRequest,
     *,
@@ -9765,6 +10075,37 @@ async def _assistant_chat_response(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported assistant persona '{persona}'.",
         )
+
+    if not public_safe and _assistant_question_is_challenge_closure(question):
+        summary = _latest_summary()
+        result = _authenticated_challenge_closure_result(summary)
+        challenge_context = {
+            "run_id": (summary or {}).get("run_id"),
+            "run_mode": str((summary or {}).get("run_mode") or "full"),
+        }
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result={
+                **result,
+                "assistant_mode": "governed_audit",
+                "answered_by": "governed_audit",
+            },
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=challenge_context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=result,
+            llm_status=llm_qa.chat_status(CONFIG),
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     try:
         context = (

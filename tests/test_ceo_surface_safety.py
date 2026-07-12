@@ -976,11 +976,11 @@ def test_feedback_form_css_layout():
 
 
 def test_knowledge_graph_subtitle_grammar():
-    """#10: Knowledge graph subtitle must use correct grammar."""
+    """#10: Knowledge graph subtitle must disclose persisted-only data."""
     js = _static_executive_js()
 
-    assert "reasons across your evidence" in js, (
-        "Knowledge graph subtitle must say 'reasons across your evidence'"
+    assert "Only persisted governed nodes and relationships are shown" in js, (
+        "Knowledge graph subtitle must explain that the graph is persisted-only"
     )
     # Old wording must NOT appear
     assert "proof the system" not in js, (

@@ -190,7 +190,7 @@ def _finding_claims(
                     claim_class=_claim_class(truth_source, "fact"),
                     run_id=run_id,
                     as_of=as_of,
-                    source=_source(truth_source, "strategyos_agent_events.action", "governed_artifact.audit_log.action"),
+                    source=_source(truth_source, "strategyos_findings.status", "governed_artifact.audit_log.current_state"),
                     complete=True,
                 ),
             }
@@ -273,7 +273,7 @@ def build_executive_read_model(
             claim_class=_claim_class(truth_source, "aggregate"),
             run_id=run_id,
             as_of=as_of,
-            source=_source(truth_source, "strategyos_agent_events.action", "governed_artifact.audit_log.action"),
+            source=_source(truth_source, "strategyos_findings.status", "governed_artifact.audit_log.current_state"),
             record_count=len(rows),
             derivation="count(challenged findings)",
             complete=bool(summary),

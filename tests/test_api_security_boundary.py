@@ -238,7 +238,9 @@ def test_tenant_admin_can_reach_connector_and_runtime_surfaces(monkeypatch):
         assert ready.status_code == 200
         assert live.status_code == 200
         assert report_preview.status_code == 200
-        assert report_preview.json()["publication"]["status"] == "approved_for_release"
+        publication = report_preview.json()["publication"]
+        assert publication["status"] == "blocked_reconciliation"
+        assert publication["reconciliation"]["publish_gate_passed"] is False
     finally:
         _restore_env(original)
 

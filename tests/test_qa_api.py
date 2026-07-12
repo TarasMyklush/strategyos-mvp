@@ -789,6 +789,110 @@ def test_assistant_chat_public_challenged_cases_prompt_returns_useful_packet_ans
         _restore_env(original)
 
 
+def test_authenticated_challenge_closure_uses_current_audit_state_without_qa_reload(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_latest_summary",
+            lambda: {"run_id": "run-1", "run_mode": "full"},
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_finding_rows_from_summary",
+            lambda summary: [
+                {
+                    "finding_id": "F-001",
+                    "title": "Duplicate payment",
+                    "citation_count": 2,
+                    "recoverable_sar": 100,
+                }
+            ],
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_load_summary_artifact_json",
+            lambda summary, key: [
+                {"action": "challenge", "finding_id": "F-001", "detail": "Attach invoice proof."},
+                {"action": "response", "finding_id": "F-001"},
+                {"action": "lock", "finding_id": "F-001"},
+            ] if key == "audit_log" else None,
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_latest_run_audit_summary_payload",
+            lambda summary: {
+                "status": "ok",
+                "challenged_finding_ids": [],
+                "historical_challenged_finding_ids": ["F-001"],
+                "closed_challenge_count": 1,
+                "citation_count": 2,
+                "resolved_count": 2,
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: (_ for _ in ()).throw(AssertionError("challenge closure must not reload raw QA context")),
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "Help me close challenged cases before the board meeting. Which cases are challenged, what evidence is needed, and what is my next action?",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_audit"
+        assert payload["llm_fallback_attempted"] is False
+        assert payload["grounding_status"] == "grounded"
+        assert payload["reconciliation"]["open_challenge_count"] == 0
+        assert payload["reconciliation"]["historical_challenge_count"] == 1
+        assert "no open challenged cases" in payload["answer"].lower()
+        assert payload["case_links"] == []
+    finally:
+        _restore_env(original)
+
+
+def test_authenticated_challenge_closure_returns_links_for_every_open_case(monkeypatch):
+    monkeypatch.setattr(
+        api_module,
+        "_finding_rows_from_summary",
+        lambda summary: [
+            {"finding_id": "F-001", "title": "Case one", "citation_count": 1},
+            {"finding_id": "F-002", "title": "Case two", "citation_count": 2},
+        ],
+    )
+    monkeypatch.setattr(
+        api_module,
+        "_load_summary_artifact_json",
+        lambda summary, key: [
+            {"action": "challenge", "finding_id": "F-001", "detail": "Proof one"},
+            {"action": "challenge", "finding_id": "F-002", "detail": "Proof two"},
+        ] if key == "audit_log" else None,
+    )
+    monkeypatch.setattr(
+        api_module,
+        "_latest_run_audit_summary_payload",
+        lambda summary: {
+            "status": "ok",
+            "challenged_finding_ids": ["F-001", "F-002"],
+            "historical_challenged_finding_ids": ["F-001", "F-002"],
+        },
+    )
+
+    result = api_module._authenticated_challenge_closure_result({"run_id": "run-1"})
+
+    assert result["grounding_status"] == "grounded"
+    assert [item["finding_id"] for item in result["case_links"]] == ["F-001", "F-002"]
+    assert result["reconciliation"]["open_finding_row_count"] == 2
+
+
 def test_assistant_chat_authenticated_graph_route_returns_graph_provenance(monkeypatch):
     original, client = _client_with_auth()
     try:
@@ -2003,9 +2107,26 @@ def test_latest_run_audit_summary_reads_citation_and_audit_artifacts(monkeypatch
         assert response.status_code == 200
         assert response.json()["citation_count"] == 7
         assert response.json()["resolved_count"] == 6
-        assert response.json()["challenged_finding_ids"] == ["F-001", "F-002"]
+        assert response.json()["challenged_finding_ids"] == ["F-001"]
+        assert response.json()["historical_challenged_finding_ids"] == ["F-001", "F-002"]
+        assert response.json()["closed_challenge_count"] == 1
     finally:
         _restore_env(original)
+
+
+def test_challenged_case_state_closes_after_response_or_lock():
+    events = [
+        {"action": "challenge", "finding_id": "F-001"},
+        {"action": "response", "finding_id": "F-001"},
+        {"action": "lock", "finding_id": "F-001"},
+        {"action": "challenge", "finding_id": "F-002"},
+    ]
+
+    assert api_module._challenged_finding_ids_from_audit_log(events) == ["F-002"]
+    assert api_module._historically_challenged_finding_ids_from_audit_log(events) == [
+        "F-001",
+        "F-002",
+    ]
 
 
 def test_latest_run_knowledge_graph_returns_findings_view_and_vendor_expansion(monkeypatch, tmp_path):

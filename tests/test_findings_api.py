@@ -135,11 +135,57 @@ def test_finding_rows_assembled_from_knowledge_graph(monkeypatch):
     assert first["recoverable_sar"] == 177188
     assert first["citation_count"] == 2  # two SUPPORTED_BY edges
     assert first["owner"] == "Premier Packaging LLC"
-    assert first["challenged"] is True  # from audit_verification
+    assert first["challenged"] is False  # historical audit verification is not current state
     assert rows[1]["pattern_label"] == "FX hedge not applied"
     assert rows[1]["challenged"] is False
     # No raw snake_case pattern_type leaks into the human label.
     assert all("_" not in r["pattern_label"] for r in rows)
+
+
+def test_evidence_monitor_never_displays_an_impossible_resolution_fraction():
+    agents = api_module._agent_modules_payload(
+        _FAKE_SUMMARY,
+        [{"finding_id": "F-001", "citation_count": 2}],
+        {
+            "status": "ok",
+            "citation_count": 25,
+            "resolved_count": 40,
+            "challenged_finding_ids": [],
+        },
+        {"role": "operator", "authenticated": True},
+    )
+    monitor = next(
+        item for item in agents["running"] if item["module_id"] == "evidence-closure-monitor"
+    )
+
+    assert monitor["output_metric"] == "Resolution needs reconciliation"
+    assert "40 / 25" not in monitor["summary"]
+
+
+def test_board_reconciliation_gate_checks_arithmetic_citations_and_open_case_links():
+    audit = {
+        "status": "ok",
+        "citation_count": 2,
+        "resolved_count": 2,
+        "challenged_finding_ids": ["F-001"],
+    }
+    passed = api_module._board_reconciliation_payload(
+        {"total_recoverable_sar": 100},
+        [{"finding_id": "F-001", "recoverable_sar": 100, "challenged": True}],
+        audit,
+    )
+    mismatched = api_module._board_reconciliation_payload(
+        {"total_recoverable_sar": 177},
+        [{"finding_id": "F-001", "recoverable_sar": 100, "challenged": True}],
+        audit,
+    )
+
+    assert passed["publish_gate_passed"] is True
+    assert mismatched["publish_gate_passed"] is False
+    arithmetic = next(
+        check for check in mismatched["checks"] if check["key"] == "recoverable_arithmetic"
+    )
+    assert arithmetic["delta_sar"] == -77.0
 
 
 def test_findings_endpoint_returns_worklist(monkeypatch):
@@ -648,19 +694,20 @@ def test_authenticated_bu_report_preview_returns_governed_publication_posture(mo
         payload = response.json()
         assert payload["status"] == "ok"
         assert payload["public_safe"] is False
-        assert payload["publication"]["status"] == "approved_for_release"
+        assert payload["publication"]["status"] == "blocked_reconciliation"
         assert payload["publication"]["report_count"] == 2
         assert payload["publication"]["restricted_report_count"] == 1
         assert payload["publication"]["allowed_actions"] == [
             "view_governed_report_status",
             "view_report_preview",
         ]
-        assert payload["publication"]["board_pack"]["status"] == "ready"
+        assert payload["publication"]["board_pack"]["status"] == "blocked_reconciliation"
+        assert payload["publication"]["reconciliation"]["publish_gate_passed"] is False
         assert payload["publication"]["board_pack"]["allowed_actions"] == [
             "view_board_pack_preview",
             "inspect_board_pack_status",
         ]
-        assert payload["board_portal"]["deck_release"]["status"] == "ready"
+        assert payload["board_portal"]["deck_release"]["status"] == "blocked_reconciliation"
         assert payload["board_portal"]["supplementary"]["next_action"] == "prepare_board_pack"
         assert payload["agent_modules"]["summary"]["running_count"] >= 4
         reviewer_actions = next(
@@ -819,16 +866,17 @@ def test_data_status_includes_workflow_and_publication_posture(monkeypatch):
         assert payload["workflow"]["pending_reviews"] == 1
         assert payload["workflow"]["recent_runs"] == 1
         assert payload["publication"]["report_count"] == 1
-        assert payload["board_pack"]["status"] == "preview_only"
+        assert payload["board_pack"]["status"] == "blocked_reconciliation"
+        assert payload["publication"]["reconciliation"]["publish_gate_passed"] is False
         discover_metric = payload["agents"]["activity"]["metrics"][2]
         discover_lists_total = len(payload["agents"]["discover"]["native"]) + len(payload["agents"]["discover"]["marketplace"])
         assert discover_metric == {"k": "discoverable", "v": discover_lists_total}
-        assert payload["board_portal"]["state"] == "live"
+        assert payload["board_portal"]["state"] == "pre"
         assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
         assert payload["tenant_admin_system"]["managed_data"]["graph_store"]["status"] == "ready"
         assert payload["tenant_admin_system"]["managed_data"]["vector_store"]["status"] == "ready"
         assert payload["tenant_admin_system"]["workflow_posture"]["pending_reviews"] == 1
-        assert payload["tenant_admin_system"]["publication_posture"]["board_pack"]["status"] == "preview_only"
+        assert payload["tenant_admin_system"]["publication_posture"]["board_pack"]["status"] == "blocked_reconciliation"
         assert payload["role_actions"]["viewer_role"] == "tenant_admin"
         assert payload["plan_health"]["next_action"] == "capture_reviewer_decision"
         assert payload["trend"]["truth_basis"] == "reconciled_governed_metrics"
@@ -869,7 +917,8 @@ def test_latest_run_findings_exposes_reconciled_plan_health_and_publication(monk
         assert payload["trend"]["truth_basis"] == "reconciled_governed_metrics"
         assert payload["trend"]["latest_point"]["recoverable_sar"] == 223676
         assert payload["drilldown"]["cash_pulse"]["value_display"].startswith("SAR ")
-        assert payload["drilldown"]["owed_upward"]["next_action"] == "close_challenged_cases"
+        assert payload["drilldown"]["owed_upward"]["next_action"] == "protect_value_signal"
+        assert payload["drilldown"]["owed_upward"]["challenge_count"] == 0
         assert payload["drilldown"]["movers"][0]["mover_id"] == "cash_pulse"
     finally:
         _restore_env(original)

@@ -7,6 +7,8 @@
   --accent: #25335c;
   --accent-ink: #ffffff;
   --accent-2: #8c6a3d;
+  --success: #1a6e54;
+  --warning: #8a5a12;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --serif: "Newsreader", Georgia, "Times New Roman", serif;
   --border: rgba(29, 28, 25, 0.12);
@@ -31,6 +33,8 @@ html[data-theme="dark"] {
   --accent: #d8c8a5;
   --accent-ink: #171919;
   --accent-2: #d5b783;
+  --success: #76d4ab;
+  --warning: #e3bd73;
   --border: rgba(242, 237, 228, 0.12);
   --border-strong: rgba(216, 200, 165, 0.26);
   --muted: rgba(242, 237, 228, 0.72);
@@ -2575,6 +2579,37 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 .agent-progress span,
 .panel-note {
   color: var(--muted);
+}
+
+.grounding-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 3px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  line-height: 1.25;
+}
+
+.grounding-badge--grounded {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+
+.grounding-badge--needs-evidence {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.board-head__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .board-detail-grid {

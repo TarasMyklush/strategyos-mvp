@@ -414,21 +414,63 @@ def _handle_distinct_parties(question: str, bundle: _DataBundle, findings: list[
 
 
 def _handle_recoverable(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
-    if _has_any(question, "pattern", "by type", "per pattern", "category"):
-        by: dict[str, float] = {}
+    total = round(sum(float(f.recoverable_sar) for f in findings), 2)
+    if _has_any(
+        question,
+        "pattern",
+        "by type",
+        "per pattern",
+        "category",
+        "breakdown",
+        "break down",
+        "make up",
+        "makes up",
+        "components",
+    ):
+        by: dict[str, dict[str, float | int]] = {}
         for f in findings:
-            by[f.pattern_type] = by.get(f.pattern_type, 0.0) + float(f.recoverable_sar)
-        rows = sorted(({"pattern_type": k, "recoverable_sar": round(v, 2)} for k, v in by.items()), key=lambda r: r["recoverable_sar"], reverse=True)
-        listing = "; ".join(f"{r['pattern_type']} ({_sar(r['recoverable_sar'])})" for r in rows)
+            bucket = by.setdefault(f.pattern_type, {"recoverable_sar": 0.0, "finding_count": 0})
+            bucket["recoverable_sar"] = float(bucket["recoverable_sar"]) + float(f.recoverable_sar)
+            bucket["finding_count"] = int(bucket["finding_count"]) + 1
+        rows = sorted(
+            (
+                {
+                    "pattern_type": pattern_type,
+                    "recoverable_sar": round(float(values["recoverable_sar"]), 2),
+                    "finding_count": int(values["finding_count"]),
+                }
+                for pattern_type, values in by.items()
+            ),
+            key=lambda row: row["recoverable_sar"],
+            reverse=True,
+        )
+        component_total = round(sum(float(row["recoverable_sar"]) for row in rows), 2)
+        delta = round(total - component_total, 2)
+        listing = "; ".join(
+            f"{row['pattern_type']} ({_sar(float(row['recoverable_sar']))}; "
+            f"{row['finding_count']} finding{'s' if row['finding_count'] != 1 else ''})"
+            for row in rows
+        )
         return {
             "matched": True,
-            "answer": f"Recoverable by pattern: {listing}.",
+            "answer": (
+                f"All {len(findings)} governed findings are included. Recoverable by pattern: {listing}. "
+                f"The components total {_sar(component_total)}, which reconciles to the stated total of {_sar(total)}"
+                + ("." if abs(delta) <= 0.01 else f"; unreconciled difference: {_sar(delta)}.")
+            ),
             "value": rows, "unit": "SAR",
-            "basis": "sum of recoverable_sar grouped by finding pattern_type.",
+            "basis": f"sum of recoverable_sar grouped by finding pattern_type over all {len(findings)} findings and reconciled to the run total.",
             "citations": _finding_citations(findings),
             "available": True,
+            "reconciliation": {
+                "status": "passed" if abs(delta) <= 0.01 else "failed",
+                "component_total_sar": component_total,
+                "stated_total_sar": total,
+                "delta_sar": delta,
+                "finding_count": len(findings),
+                "displayed_finding_count": len(findings),
+            },
         }
-    total = sum(float(f.recoverable_sar) for f in findings)
     return {
         "matched": True,
         "answer": f"Total recoverable identified is {_sar(total)} across {len(findings)} findings.",

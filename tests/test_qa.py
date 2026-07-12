@@ -60,6 +60,17 @@ def test_recoverable_findings_and_unmatched_questions(qa_context):
         "show recoverable by pattern", bundle=bundle, findings=findings
     )
     assert by_pattern["value"][0]["recoverable_sar"] > 0
+    assert sum(row["finding_count"] for row in by_pattern["value"]) == 8
+    assert sum(row["recoverable_sar"] for row in by_pattern["value"]) == pytest.approx(794_108.0)
+    assert by_pattern["reconciliation"] == {
+        "status": "passed",
+        "component_total_sar": 794_108.0,
+        "stated_total_sar": 794_108.0,
+        "delta_sar": 0.0,
+        "finding_count": 8,
+        "displayed_finding_count": 8,
+    }
+    assert "All 8 governed findings are included" in by_pattern["answer"]
 
     no_match = qa.answer_question("gibberish xyz", bundle=bundle, findings=findings)
     assert no_match["matched"] is False

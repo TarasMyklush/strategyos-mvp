@@ -953,7 +953,7 @@ def test_kg_render_includes_modern_elements():
     assert "kg-density-toggle" in js, "Density toggle control must exist"
     assert "kg-zoom-in" in js and "kg-zoom-out" in js, "Zoom controls must exist"
     assert "kg-focus-mode" in js, "Focus mode control must exist"
-    assert "evidence/source/relationship nodes" in js, "Synthetic node provenance copy must be explicit"
+    assert "No generated nodes" in js, "Graph must disclose that every visible node is persisted"
 
 
 def test_kg_inspector_has_ask_hermes_cta():
@@ -984,23 +984,15 @@ def test_kg_universe_controls_present():
     assert "kg-focus-mode" in js, "Focus mode control must exist"
 
 
-def test_kg_universe_uses_honest_derived_density_nodes():
-    """Dense graph mode must use explicit derived evidence/source/path nodes, not silent fake claims."""
+def test_kg_universe_does_not_generate_decorative_density_nodes():
+    """The graph must render only persisted governed nodes and relationships."""
     js = _static_executive_js()
 
-    assert 'satelliteKind = satelliteIndex % 5 === 0 ? "source"' in js, (
-        "Dense universe must derive source/evidence satellites"
-    )
-    assert "targetTotalNodes = Math.max(110" in js, (
-        "Dense universe must target 100+ visible nodes in honest derived mode"
-    )
-    assert "visual evidence density, not a new business claim" in js, (
-        "Derived density nodes must explicitly disclaim fabricated business claims"
-    )
-    assert 'category: "relationship"' in js, "Relationship relay nodes must exist"
-    assert "relayCount = primaryNodes.length <= 6 ? 3 : 2" in js, (
-        "Sparse governed graphs must gain extra bridge relays so the universe reads visually dense"
-    )
+    assert "targetTotalNodes = Math.max(110" not in js
+    assert "satelliteKind" not in js
+    assert "relayCount" not in js
+    assert "Only persisted governed nodes and relationships are shown" in js
+    assert "Persisted edges:" in js
 
 
 # ── YouTube Leaders' Corner embed safety ──
@@ -3348,7 +3340,7 @@ def test_exact_fx_cta_thread_is_preserved_as_retryable_flow():
     assert 'data-assistant-retry-latest' in executive_js
 
 
-def test_stale_fx_fallback_thread_reloads_and_auto_recovers():
+def test_stale_fx_fallback_thread_reloads_without_duplicate_auto_retry():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
     prefix = '(function () {\n  "use strict";\n'
     suffix = '  bindAssistantForm();\n  bindViewNav();\n  refresh(false);\n  window.setInterval(function () { refresh(false); }, 60000);\n})();\n'
@@ -3554,12 +3546,9 @@ main().catch((error) => {{
     assert result["afterReload"]["retryable"] is True
     assert "Retry now once the service is reachable" in result["afterReload"]["text"]
     assert result["afterReload"]["preview"].startswith("Retry needed ·")
-    assert result["autoRetried"] is True
-    assert result["finalStatus"] == "ok"
-    assert "I couldn't reach the shared assistant service just now." not in result["finalText"]
-    assert "~SAR 9k weekly drag" in result["finalText"]
-    assert "19.2% versus a 19.4% plan" in result["finalText"]
-    assert "packet" not in result["finalText"].lower()
+    assert result["autoRetried"] is False
+    assert result["finalStatus"] == "failed"
+    assert "Retry now once the service is reachable" in result["finalText"]
 
 
 def test_assistant_css_styles_retryable_failure_state():
@@ -3568,6 +3557,31 @@ def test_assistant_css_styles_retryable_failure_state():
     assert '.assistant-message__meta' in executive_css
     assert '.assistant-retry-button' in executive_css
     assert '.assistant-tool-chip--action' in executive_css
+
+
+def test_assistant_transport_has_cached_fallback_without_automatic_retry_loop():
+    executive_js = _static_executive_js()
+
+    assert "strategyos.hermes.answer-cache.v1" in executive_js
+    assert "Showing the last known answer from" in executive_js
+    assert "cachedAssistantFallback" in executive_js
+    assert "message.autoRetryEligible = false" in executive_js
+
+
+def test_persona_title_grounding_badges_and_native_agent_actions_are_visible():
+    executive_js = _static_executive_js()
+    executive_css = Path("strategyos_mvp/static/executive.css").read_text()
+
+    assert "function updateDocumentTitle" in executive_js
+    assert 'personaLabel = state.activePersona === "board" ? "Board Room"' in executive_js
+    assert 'moduleId === "ceo-brief"' in executive_js
+    assert 'moduleId === "board-room-memory"' in executive_js
+    assert "CEO brief opened in Assistants" in executive_js
+    assert "Board room memory opened" in executive_js
+    assert "Grounded ✓" in executive_js
+    assert "Needs evidence ⚠" in executive_js
+    assert ".grounding-badge--grounded" in executive_css
+    assert ".grounding-badge--needs-evidence" in executive_css
 
 
 def test_executive_ux_layout_contracts_are_guarded():

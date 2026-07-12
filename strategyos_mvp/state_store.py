@@ -458,13 +458,7 @@ def executive_snapshot_for_run(run_id: str) -> dict[str, Any]:
                         f.finding_json,
                         count(c.id) as citation_count,
                         count(c.id) filter (where c.resolved) as resolved_citation_count,
-                        exists (
-                            select 1
-                            from strategyos_agent_events e
-                            where e.run_id = f.run_id
-                              and e.finding_id = f.finding_id
-                              and lower(e.action) = 'challenge'
-                        ) as challenged
+                        lower(f.status) = 'challenged' as challenged
                     from strategyos_findings f
                     left join strategyos_finding_citations c
                       on c.run_id = f.run_id and c.finding_id = f.finding_id

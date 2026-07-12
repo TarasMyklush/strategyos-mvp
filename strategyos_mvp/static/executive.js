@@ -1279,83 +1279,6 @@
 
     var universeNodes = primaryNodes.slice();
     var universeEdges = rawEdges.slice();
-    var targetTotalNodes = Math.max(110, primaryNodes.length * 26);
-    var totalImportance = primaryNodes.reduce(function (sum, node) {
-      return sum + Math.max(1, Number(node.importance || 0));
-    }, 0) || 1;
-
-    primaryNodes.forEach(function (node) {
-      var share = Math.max(0.08, Number(node.importance || 0) / totalImportance);
-      var baseCount = Math.max(16, Math.min(34, Math.round((targetTotalNodes - primaryNodes.length) * share)));
-      for (var satelliteIndex = 0; satelliteIndex < baseCount; satelliteIndex += 1) {
-        var satelliteKind = satelliteIndex % 5 === 0 ? "source" : (satelliteIndex % 3 === 0 ? "relationship" : "evidence");
-        var satId = node.id + "__" + satelliteKind + "_" + satelliteIndex;
-        var satRing = Math.floor(satelliteIndex / 8);
-        var satAngle = ((Math.PI * 2) / Math.max(baseCount, 1)) * satelliteIndex + kgUnit(satId, "angle") * 0.9 + satRing * 0.24;
-        var satDistance = 5.8 + satRing * 3.4 + (satelliteIndex % 4) * 1.5 + (node.importance >= 84 ? 1.4 : 0);
-        universeNodes.push({
-          id: satId,
-          label: node.label + " · " + humanizeToken(satelliteKind) + " node",
-          short_label: humanizeToken(satelliteKind),
-          category: satelliteKind,
-          detail: "Derived " + satelliteKind + " node generated from the graph context around " + node.label + ". This is visual evidence density, not a new business claim.",
-          hermes_prompt: firstDefined(node.hermes_prompt, "Explain the evidence around " + node.label + "."),
-          importance: 18 + (satelliteKind === "source" ? 6 : 0),
-          source_count: 1,
-          primary_degree: 1,
-          kind: satelliteKind,
-          synthetic: true,
-          parent_id: node.id,
-          label_priority: false,
-          x: clampNumber(node.x + Math.cos(satAngle) * satDistance, 4, 96),
-          y: clampNumber(node.y + Math.sin(satAngle) * satDistance * 0.84, 6, 95),
-          r: satelliteKind === "source" ? 4.2 : (satelliteKind === "relationship" ? 3.7 : 3.2),
-          focus_anchor: node.id
-        });
-        universeEdges.push([node.id, satId, satelliteKind]);
-      }
-    });
-
-    rawEdges.forEach(function (edge, edgeIndex) {
-      var from = primaryNodes.find(function (candidate) { return candidate.id === edge[0]; });
-      var to = primaryNodes.find(function (candidate) { return candidate.id === edge[1]; });
-      if (!from || !to) return;
-      var relayCount = primaryNodes.length <= 6 ? 3 : 2;
-      var prevId = from.id;
-      var dx = Number(to.x || 0) - Number(from.x || 0);
-      var dy = Number(to.y || 0) - Number(from.y || 0);
-      var norm = Math.sqrt(dx * dx + dy * dy) || 1;
-      var nx = -dy / norm;
-      var ny = dx / norm;
-      for (var relayStep = 0; relayStep < relayCount; relayStep += 1) {
-        var progress = (relayStep + 1) / (relayCount + 1);
-        var relayId = edge[0] + "__" + edge[1] + "__relay_" + edgeIndex + "_" + relayStep;
-        var bend = ((relayStep % 2 === 0 ? 1 : -1) * (2.8 + kgUnit(relayId, "bend") * 3.2));
-        universeNodes.push({
-          id: relayId,
-          label: from.label + " → " + to.label + " relationship",
-          short_label: relayStep === 1 ? "Bridge" : "Path",
-          category: "relationship",
-          detail: "Derived relationship node showing the board path between " + from.label + " and " + to.label + ". This is a visual relay, not a separate finding.",
-          hermes_prompt: firstDefined(from.hermes_prompt, "Explain how " + from.label + " connects to " + to.label + "."),
-          importance: 16,
-          source_count: 1,
-          primary_degree: 2,
-          kind: "relationship",
-          synthetic: true,
-          parent_id: from.id,
-          related_id: to.id,
-          label_priority: false,
-          x: clampNumber(Number(from.x || 0) + dx * progress + nx * bend, 5, 95),
-          y: clampNumber(Number(from.y || 0) + dy * progress + ny * bend, 6, 94),
-          r: 3.3,
-          focus_anchor: from.id
-        });
-        universeEdges.push([prevId, relayId, "relationship"]);
-        prevId = relayId;
-      }
-      universeEdges.push([prevId, to.id, "relationship"]);
-    });
 
     return {
       questions: questions,
@@ -1902,7 +1825,7 @@
         }
         message.retryable = true;
         message.needsRetry = true;
-        message.autoRetryEligible = true;
+        message.autoRetryEligible = false;
         return message;
       }
       if (!isLegacyAssistantTransportFallback(message.text)) return message;
@@ -1914,7 +1837,7 @@
         status: "failed",
         retryable: true,
         needsRetry: true,
-        autoRetryEligible: true,
+        autoRetryEligible: false,
         retryPrompt: inferRetryPrompt(messages, index),
         endpoint: "/assistant/chat",
         errorType: "stale_transport_fallback"
@@ -1953,6 +1876,59 @@
       responseBody: metadata.responseBody || ""
     });
     return result;
+  }
+
+  function assistantAnswerCacheKey(question) {
+    return [
+      String(state.activePersona || "ceo"),
+      String(question || "").trim().toLowerCase().replace(/\s+/g, " ")
+    ].join("::");
+  }
+
+  function loadAssistantAnswerCache() {
+    try {
+      var raw = window.localStorage.getItem("strategyos.hermes.answer-cache.v1");
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function rememberAssistantAnswer(question, result) {
+    if (!result || !result.ok || !String(result.answer || "").trim()) return;
+    try {
+      var cache = loadAssistantAnswerCache();
+      cache[assistantAnswerCacheKey(question)] = {
+        answer: result.answer,
+        metadata: result.metadata || "",
+        responsePayload: result.responsePayload || null,
+        savedAt: new Date().toISOString()
+      };
+      var keys = Object.keys(cache).sort(function (left, right) {
+        return String((cache[right] || {}).savedAt || "").localeCompare(String((cache[left] || {}).savedAt || ""));
+      });
+      keys.slice(25).forEach(function (key) { delete cache[key]; });
+      window.localStorage.setItem("strategyos.hermes.answer-cache.v1", JSON.stringify(cache));
+    } catch (_error) {}
+  }
+
+  function cachedAssistantFallback(question, failure) {
+    var cached = loadAssistantAnswerCache()[assistantAnswerCacheKey(question)];
+    if (!cached || !String(cached.answer || "").trim()) return failure;
+    var savedAt = new Date(cached.savedAt || "");
+    var displayTime = Number.isNaN(savedAt.getTime())
+      ? "an earlier session"
+      : savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return {
+      ok: true,
+      answer: "Live assistant is temporarily unavailable. Showing the last known answer from " + displayTime + ".\n\n" + cached.answer,
+      metadata: [cached.metadata, "Cached fallback · live transport unavailable"].filter(Boolean).join(" · "),
+      responsePayload: cached.responsePayload || null,
+      requestId: failure && failure.requestId,
+      endpoint: failure && failure.endpoint,
+      cachedFallback: true
+    };
   }
 
   function applyAssistantResultToMessage(thread, message, result) {
@@ -2115,7 +2091,7 @@
       );
       var payload = response.payload;
       if (payload && payload.status === "ok") {
-        return {
+        var successfulResult = {
           ok: true,
           answer: qaAnswerText(payload),
           metadata: qaAnswerMeta(payload),
@@ -2123,23 +2099,25 @@
           requestId: requestId,
           endpoint: endpoint
         };
+        rememberAssistantAnswer(cleanMessage, successfulResult);
+        return successfulResult;
       }
-      return makeAssistantFailureResult(cleanMessage, {
+      return cachedAssistantFallback(cleanMessage, makeAssistantFailureResult(cleanMessage, {
         endpoint: endpoint,
         statusCode: response.status,
         requestId: requestId,
         errorType: "invalid_payload",
         details: "Response was reachable but did not return status=ok.",
         responseBody: payload
-      });
+      }));
     } catch (error) {
-      return makeAssistantFailureResult(cleanMessage, {
+      return cachedAssistantFallback(cleanMessage, makeAssistantFailureResult(cleanMessage, {
         endpoint: firstDefined(error && error.endpoint, "/assistant/chat"),
         statusCode: firstDefined(error && error.status, ""),
         requestId: firstDefined(error && error.requestId, ""),
         errorType: firstDefined(error && error.errorType, "network_error"),
         details: error && error.message ? error.message : String(error || "unknown network error")
-      });
+      }));
     }
   }
 
@@ -2382,6 +2360,27 @@
   function handleDiscoverableAgentAction(item, sourceEl) {
     if (!item) {
       showToast('Agent detail is not available yet.');
+      return;
+    }
+    var moduleId = String(firstDefined(item.module_id, item.id, ""));
+    if (item.permitted !== false && moduleId === "ceo-brief") {
+      state.activePersona = "ceo";
+      state.activeView = "assistants";
+      state.activeThreadKey = "";
+      updateHistory();
+      renderPersonaView();
+      openAssistantDrawer(sourceEl);
+      showToast("CEO brief opened in Assistants.");
+      return;
+    }
+    if (item.permitted !== false && moduleId === "board-room-memory") {
+      var route = new URL(discoverableAgentRoute(item), window.location.origin);
+      state.activePersona = "board";
+      state.activeBoard = route.searchParams.get("board") || state.activeBoard || "pre";
+      state.activeView = "home";
+      updateHistory();
+      renderPersonaView();
+      showToast("Board room memory opened.");
       return;
     }
     if (item.permitted !== false) {
@@ -2908,9 +2907,9 @@
       '<button type="button" class="kg-inspector__close" aria-label="Close inspector" id="kg-inspector-close">&times;</button>' +
       '<span class="kg-inspector__badge" style="background:' + escapeHtml(getCategoryColor(node)) + ';color:#08111f">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + '</span>' +
       '<h3 class="kg-inspector__title" id="kg-inspector-title">' + escapeHtml(firstDefined(node.label, "Node")) + '</h3>' +
-      '<p class="kg-inspector__meta">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + ' &middot; Connected to ' + connectedIds.length + ' nodes' + (node.synthetic ? ' &middot; Derived visual node' : '') + '</p>' +
+      '<p class="kg-inspector__meta">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + ' &middot; Connected to ' + connectedIds.length + ' persisted nodes</p>' +
       '<p class="kg-inspector__detail">' + escapeHtml(firstDefined(node.detail, "No additional detail available.")) + '</p>' +
-      '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Provenance</span><span class="kg-inspector__provenance-value">' + escapeHtml(node.synthetic ? 'Deterministically generated from board graph context. Visual density only.' : 'Board context / KG node surfaced from current strategy data.') + '</span></div>' +
+      '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Provenance</span><span class="kg-inspector__provenance-value">Persisted board-context node surfaced from the current governed strategy data.</span></div>' +
       (connectedLabels.length ? '<div class="kg-inspector__connections"><span class="kg-inspector__connections-label">Connected to</span>' + connectedLabels.map(function (l) { return '<span class="kg-inspector__conn-chip">' + l + '</span>'; }).join('') + '</div>' : '') +
       '<button type="button" class="kg-inspector__ask" id="kg-inspector-ask">Ask Hermes about this &rarr;</button>';
     panel.hidden = false;
@@ -3024,10 +3023,9 @@
     });
     var activeLens = firstDefined(focusQuestion && focusQuestion.label, densityMode === "dense" ? "Dense universe" : "Compact universe");
     var evidenceCoverage = Number(graph.evidence_coverage || 0);
-    var syntheticNodes = nodes.filter(function (node) { return node.synthetic; }).length;
 
     card.innerHTML =
-      '<div class="detail-head detail-head--kg"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">Graph Universe</h3><p class="section-note">A dense board intelligence map that reasons across your evidence, live strategy context, and relationship structure.</p></div><span class="pill-inline ok">Board intelligence graph</span></div>'
+      '<div class="detail-head detail-head--kg"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">Graph Universe</h3><p class="section-note">Only persisted governed nodes and relationships are shown. No decorative density nodes are added.</p></div><span class="pill-inline ok">Persisted relationships only</span></div>'
       + '<div class="kg-questions" role="tablist" aria-label="Question lenses">' + safeArray(graph.questions).map(function (question, index) {
         var active = focusQuestion && focusQuestion.id === question.id;
         var focusCount = safeArray(question.focus).length;
@@ -3082,7 +3080,7 @@
       + '<div class="kg-legend" aria-label="Node category legend">' + Object.keys(KG_CATEGORY_COLORS).map(function (cat) {
         return '<span class="kg-legend__item"><span class="kg-legend__swatch" style="background:' + escapeHtml(KG_CATEGORY_COLORS[cat]) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[cat], cat)) + '</span>';
       }).join('') + '</div>'
-      + '<div class="kg-stage__foot"><span class="kg-foot-chip">Primary nodes: ' + Number(graph.raw_node_count || 0) + '</span><span class="kg-foot-chip">Derived evidence/source/relationship nodes: ' + syntheticNodes + '</span><span class="kg-foot-chip">Honest provenance preserved</span></div>'
+      + '<div class="kg-stage__foot"><span class="kg-foot-chip">Persisted nodes: ' + Number(graph.raw_node_count || 0) + '</span><span class="kg-foot-chip">Persisted edges: ' + edges.length + '</span><span class="kg-foot-chip">No generated nodes</span></div>'
       + '</div></div>';
 
     /* ── Wire question lens buttons ── */
@@ -3299,6 +3297,18 @@
     }
   }
 
+  function groundingBadgeMarkup(provenance, explicitGrounding) {
+    var explicit = explicitGrounding && typeof explicitGrounding === "object" ? explicitGrounding : {};
+    var source = firstDefined(explicit.source, provenance && provenance.source, "");
+    var explicitStatus = String(firstDefined(explicit.status, "")).toLowerCase();
+    var grounded = explicitStatus === "grounded" || (!explicitStatus && provenance && provenance.complete === true && source);
+    var label = grounded ? "Grounded ✓" : "Needs evidence ⚠";
+    var title = grounded
+      ? "Traceable to " + String(source || "the governed source")
+      : "This metric is not fully traceable to governed evidence yet.";
+    return '<span class="grounding-badge grounding-badge--' + (grounded ? 'grounded' : 'needs-evidence') + '" title="' + escapeHtml(title) + '">' + label + '</span>';
+  }
+
   function renderDriverGrid() {
     var grid = $("driver-row");
     if (!grid) return;
@@ -3312,7 +3322,7 @@
       tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
       tile.innerHTML = [
         '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
-        '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(driverSubLabel(driver)) + '</span></div></div>'
+        '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(driverSubLabel(driver)) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
       ].join("");
       tile.onclick = function () {
         state.activeDriverKey = key;
@@ -3340,26 +3350,30 @@
       {
         label: "Driver posture",
         value: firstDefined(driver.label, getPlanHealth().label, "Awaiting board data"),
-        detail: firstDefined(driver.detail, getPlanHealth().summary, "No board driver summary yet.")
+        detail: firstDefined(driver.detail, getPlanHealth().summary, "No board driver summary yet."),
+        provenance: driver.provenance
       },
       {
         label: "Board lifecycle",
         value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")),
-        detail: firstDefined(boardStateSupportNote(boardPortal), "Board-safe lifecycle stays explicit.")
+        detail: firstDefined(boardStateSupportNote(boardPortal), "Board-safe lifecycle stays explicit."),
+        grounding: { status: boardPortal.presentation_state ? "grounded" : "needs_evidence", source: "governed board lifecycle" }
       },
       {
         label: "Evidence closure",
         value: String(firstDefined((drilldown.owed_upward || {}).challenge_count, publication.challenged_cases, 0)) + " challenged",
-        detail: "Questions stay attached to evidence, not theatre."
+        detail: "Questions stay attached to evidence, not theatre.",
+        grounding: { status: publication.reconciliation ? "grounded" : "needs_evidence", source: "governed audit reconciliation" }
       },
       {
         label: "Report surface",
         value: String(firstDefined(publication.report_count, 0)) + " routes",
-        detail: firstDefined(publication.preview_route, "Board pack preview waits for the current board pack.")
+        detail: firstDefined(publication.preview_route, "Board pack preview waits for the current board pack."),
+        grounding: { status: Number(publication.report_count || 0) > 0 ? "grounded" : "needs_evidence", source: "governed artifact registry" }
       }
     ];
     grid.innerHTML = metrics.map(function (metric) {
-      return '<article class="metric-card"><span class="metric-label">' + escapeHtml(metric.label) + '</span><strong class="metric-value">' + escapeHtml(metric.value) + '</strong><p class="metric-detail">' + escapeHtml(metric.detail) + '</p></article>';
+      return '<article class="metric-card"><span class="metric-label">' + escapeHtml(metric.label) + '</span><strong class="metric-value">' + escapeHtml(metric.value) + '</strong><p class="metric-detail">' + escapeHtml(metric.detail) + '</p>' + groundingBadgeMarkup(metric.provenance, metric.grounding) + '</article>';
     }).join("");
   }
 
@@ -3850,6 +3864,8 @@
 
   function renderBoardPortal() {
     var board = getBoardPortal();
+    var publication = getPublication();
+    var reconciliation = publication.reconciliation || {};
     var portal = $("board-portal");
     var note = $("board-note");
     if (note) note.textContent = firstDefined(board.governance_note, "Board-safe lifecycle, materials, and context.");
@@ -3879,9 +3895,9 @@
       }).join('') : '<div class="discovery-empty">No closed-state actions are attached yet.</div>') + '</div></section><section class="board-panel frozen-panel"><p class="detail-eyebrow">Frozen snapshot</p><strong>' + escapeHtml(humanizeToken(firstDefined(snapshot.status, 'frozen'))) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(snapshot.summary, 'Between meetings, the board room only sees the frozen snapshot.')) + '</p><button class="timeline-chip" type="button" data-board-prompt="Model a what-if on the frozen board snapshot: if EUR strengthens 5%, what was the hedged outcome?"><strong>◇ What-if on the snapshot</strong><span>No live org data reaches the board</span></button></section></div>';
     }
     portal.innerHTML = [
-      '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined(stateDetail.title, board.state_label, "Board status")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined(stateDetail.summary, board.board_summary, "Board posture stays bounded to the current view.")) + '</p></div><span class="pill-inline ' + toneClass(statusLabel(boardState)) + '">' + escapeHtml(statusLabel(boardState)) + '</span></div>',
+      '<div class="board-head"><div><p class="detail-eyebrow">Reports</p><h3 class="board-title">' + escapeHtml(firstDefined(stateDetail.title, board.state_label, "Board status")) + '</h3><p class="board-copy">' + escapeHtml(firstDefined(stateDetail.summary, board.board_summary, "Board posture stays bounded to the current view.")) + '</p></div><div class="board-head__badges"><span class="pill-inline ' + toneClass(statusLabel(boardState)) + '">' + escapeHtml(statusLabel(boardState)) + '</span><span class="pill-inline ' + (reconciliation.publish_gate_passed ? 'ok' : 'warn') + '">' + (reconciliation.publish_gate_passed ? 'Reconciled ✓' : 'Release blocked ⚠') + '</span></div></div>',
       '<div class="board-kpis">' + safeArray(board.kpis).slice(0, 4).map(function (item) {
-        return '<div class="board-kpi"><span class="board-kpi__label">' + escapeHtml(firstDefined(item.label, "Metric")) + '</span><strong class="board-kpi__value">' + escapeHtml(firstDefined(item.value, item.pct, "—")) + '</strong><span class="board-kpi__sub">' + escapeHtml(firstDefined(item.sub, item.pct ? String(item.pct) + "%" : "Board data")) + '</span></div>';
+        return '<div class="board-kpi"><span class="board-kpi__label">' + escapeHtml(firstDefined(item.label, "Metric")) + '</span><strong class="board-kpi__value">' + escapeHtml(firstDefined(item.value, item.pct, "—")) + '</strong><span class="board-kpi__sub">' + escapeHtml(firstDefined(item.sub, item.pct ? String(item.pct) + "%" : "Board data")) + '</span>' + groundingBadgeMarkup(item.provenance, item.grounding) + '</div>';
       }).join("") + '</div>',
       '<div class="board-state-stack">' + lifecycle.map(function (item) {
         var flags = [];
@@ -4548,7 +4564,19 @@
     }
   }
 
+  function updateDocumentTitle() {
+    var personaLabel = state.activePersona === "board" ? "Board Room" : getPersonaLabel(state.activePersona);
+    var viewLabels = {
+      home: state.activePersona === "board" ? "Portal" : "Diagnostics",
+      assistants: "Assistants",
+      knowledge: "Knowledge",
+      reports: "Reports"
+    };
+    document.title = "StrategyOS — " + personaLabel + " " + firstDefined(viewLabels[state.activeView], "Workspace");
+  }
+
   function renderPersonaView() {
+    updateDocumentTitle();
     renderTopbar();
     renderViewNav();
     renderViewPanels();
