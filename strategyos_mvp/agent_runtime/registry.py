@@ -33,13 +33,19 @@ CASH_RECOVERY = AgentDefinition(
 
 EVIDENCE_CLOSURE = AgentDefinition(
     agent_key="evidence-closure",
-    version=1,
+    # v2 (PR 7 / Gap 3): added evidence.read so evidence_closure_handler can
+    # read excerpt text through the prompt-injection guard rather than only
+    # ever seeing citation metadata. New version, not an in-place edit, per
+    # section 5.1: any task still recorded against
+    # agent_definition_version=1 keeps its original (metadata-only)
+    # contract.
+    version=2,
     display_name="Evidence Closure Agent",
     purpose="Resolve citation gaps, validate provenance, and challenge weak findings",
     handler_key="evidence_closure.v1",
     input_schema="evidence_closure_task.v1",
     output_schema="agent_result.v1",
-    tool_keys=("citations.search", "findings.read", "graph.query"),
+    tool_keys=("citations.search", "findings.read", "graph.query", "evidence.read"),
     allowed_roles=("executive", "finance", "reviewer", "operator"),
 )
 
@@ -103,6 +109,12 @@ CAPABILITY_ROUTES: dict[str, str] = {
 TOOL_RISK_CLASSES: dict[str, str] = {
     "findings.read": "read_only",
     "citations.search": "read_only",
+    # evidence.read is read_only in risk-class terms (it never mutates
+    # anything) -- the injection-guarding is a separate safety property
+    # enforced unconditionally inside the handler, not something the
+    # capability-token risk gate needs to protect (see
+    # tools.py:_evidence_read).
+    "evidence.read": "read_only",
     "graph.query": "read_only",
     "finance_facts.read": "read_only",
     "runtime.health.read": "read_only",

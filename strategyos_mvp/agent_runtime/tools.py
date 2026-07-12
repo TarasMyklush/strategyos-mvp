@@ -106,6 +106,64 @@ def _citations_search(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[
     return {"run_id": run_id, "citations": citations, "count": len(citations)}
 
 
+def _evidence_read(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:
+    """Wraps state_store.evidence_preview_for_run(), the single-citation
+    excerpt reader. Every retrieved excerpt is ALWAYS routed through
+    prompt_injection.guard_untrusted_document_text() before being returned
+    -- there is no code path in this function that can hand a handler raw
+    evidence text. Design doc section 13: "pass retrieved documents as
+    labelled untrusted evidence... preserve the existing prompt-injection
+    scanner... prevent evidence text from changing tool or policy
+    instructions... cap retrieved documents and context size."
+
+    The returned dict deliberately omits guard_untrusted_document_text()'s
+    `raw_text` key -- only `guarded_text` (the labelled, wrapped version)
+    and `contains_prompt_injection_signals`/`detected_signals` (so a
+    handler can choose to flag/refuse rather than silently proceed) are
+    exposed. A handler that wants "the evidence text" has exactly one field
+    to reach for, and it is always the guarded one."""
+    from ..prompt_injection import guard_untrusted_document_text
+
+    run_id = input.get("run_id") or ctx.run_id
+    if not run_id:
+        raise ToolInputInvalid("evidence.read requires a run_id")
+
+    preview = state_store.evidence_preview_for_run(
+        run_id,
+        citation_id=input.get("citation_id"),
+        finding_id=input.get("finding_id"),
+        source_hash=input.get("source_hash"),
+        locator=input.get("locator"),
+    )
+    if preview.get("status") != "ok":
+        return {"available": False, "run_id": run_id, "reason": preview.get("reason") or preview.get("status")}
+
+    guard_result = guard_untrusted_document_text(
+        preview.get("excerpt") or "",
+        source_name=preview.get("source_path"),
+        # evidence_preview_for_run() already bounds excerpt to 4,000 chars
+        # via state_store.preview_text(); max_chars here is a second,
+        # independent cap so this tool's contract does not silently depend
+        # on that upstream bound never changing.
+        max_chars=4_000,
+    )
+    return {
+        "available": True,
+        "run_id": run_id,
+        "finding_id": preview.get("finding_id"),
+        "citation_id": preview.get("citation_id"),
+        "source_path": preview.get("source_path"),
+        "source_hash": preview.get("source_hash"),
+        "locator": preview.get("locator"),
+        "resolved": preview.get("resolved"),
+        "hash_match": preview.get("hash_match"),
+        "preview_kind": preview.get("preview_kind"),
+        "guarded_text": guard_result["guarded_text"],
+        "contains_prompt_injection_signals": guard_result["contains_prompt_injection_signals"],
+        "detected_signals": guard_result["detected_signals"],
+    }
+
+
 def _finance_facts_read(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:
     """Reads strategyos_finance_facts, tenant-scoped. Optional module/
     fact_type/period_key filters narrow the result for a specific KPI
@@ -330,6 +388,7 @@ ToolHandler = Callable[[ToolExecutionContext, dict[str, Any]], dict[str, Any]]
 TOOL_HANDLERS: dict[str, ToolHandler] = {
     "findings.read": _findings_read,
     "citations.search": _citations_search,
+    "evidence.read": _evidence_read,
     "finance_facts.read": _finance_facts_read,
     "graph.query": _graph_query,
     "board_pack.prepare": _board_pack_prepare,

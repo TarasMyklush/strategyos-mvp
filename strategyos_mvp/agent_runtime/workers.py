@@ -163,11 +163,31 @@ def evidence_closure_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -
         for c in resolved[:20]
     ]
 
+    # Read the underlying evidence excerpt for a bounded sample of resolved
+    # citations (design doc section 13: cap retrieved documents), always
+    # through evidence.read -- which always routes text through the
+    # prompt-injection guard, never returning raw excerpt text. A citation
+    # whose evidence trips the scanner is surfaced as a gap, not silently
+    # incorporated, since injected instruction text inside client-supplied
+    # evidence must never be treated as trustworthy content to act on.
+    flagged_citation_ids: list[str] = []
+    for citation in resolved[:5]:
+        evidence_result = invoke_tool(
+            "evidence.read", ctx, {"run_id": run_id, "citation_id": citation.get("citation_id")}
+        )
+        if evidence_result.get("available") and evidence_result.get("contains_prompt_injection_signals"):
+            flagged_citation_ids.append(citation.get("citation_id"))
+
     gaps = []
     if unresolved:
         gaps.append(f"{len(unresolved)} citation(s) failed hash/content resolution")
     if unsupported_findings:
         gaps.append(f"{len(unsupported_findings)} requested finding(s) have no citation on record: " + ", ".join(unsupported_findings))
+    if flagged_citation_ids:
+        gaps.append(
+            f"{len(flagged_citation_ids)} citation(s) contain prompt-injection signals in their evidence text "
+            f"and were not treated as trustworthy content: {', '.join(flagged_citation_ids)}"
+        )
 
     if not citations and not unsupported_findings:
         return {
@@ -197,6 +217,7 @@ def evidence_closure_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -
             "resolved_count": len(resolved),
             "unresolved_count": len(unresolved),
             "unsupported_findings": unsupported_findings,
+            "flagged_citation_ids": flagged_citation_ids,
         },
         "citations": result_citations,
         "confidence": confidence,
