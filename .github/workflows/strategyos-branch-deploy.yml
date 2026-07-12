@@ -502,6 +502,7 @@ jobs:
             test -n "${STRATEGYOS_REVIEWER_AUTH_HEADER}"
             python deploy/scripts/verify_cloud_surface.py \
               --base-url "${STRATEGYOS_PROBE_URL}" \
+              --login-required \
               --operator-auth-header "${STRATEGYOS_OPERATOR_AUTH_HEADER}" \
               --reviewer-auth-header "${STRATEGYOS_REVIEWER_AUTH_HEADER}"
           else
@@ -511,6 +512,7 @@ jobs:
             echo "::add-mask::${reviewer_token}"
             python deploy/scripts/verify_cloud_surface.py \
               --base-url "${STRATEGYOS_PROBE_URL}" \
+              --login-required \
               --operator-auth-header "Authorization: Bearer ${operator_token}" \
               --reviewer-auth-header "Authorization: Bearer ${reviewer_token}"
           fi

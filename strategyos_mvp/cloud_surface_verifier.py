@@ -160,6 +160,13 @@ def evaluate_surface_contract(
     public_evidence_preview: dict[str, Any] | None = None,
     public_report_preview: dict[str, Any] | None = None,
     public_case_details: list[HttpResult] | None = None,
+    anonymous_session_status: int = 200,
+    public_contract_status: int = 200,
+    public_latest_run_status: int = 200,
+    public_findings_status: int = 200,
+    public_evidence_preview_status: int = 200,
+    public_report_preview_status: int = 200,
+    login_required: bool = False,
     expect_human_review: bool = True,
     expect_nonlocal_idp: bool = True,
     expect_no_demo_roles: bool = True,
@@ -168,10 +175,21 @@ def evaluate_surface_contract(
     operator_session = operator_session or {}
     reviewer_session = reviewer_session or {}
 
-    if anonymous_session.get("authenticated") is not False or anonymous_session.get("role") != "anonymous":
+    if login_required:
+        for route, response_status in (
+            ("/ui/session", anonymous_session_status),
+            ("/ui/workspace-contract/latest", public_contract_status),
+            ("/public/runs/latest", public_latest_run_status),
+            ("/public/runs/latest/findings", public_findings_status),
+            ("/public/data/evidence-preview", public_evidence_preview_status),
+            ("/public/runs/latest/report-preview", public_report_preview_status),
+        ):
+            if response_status != 401:
+                failures.append(f"Unauthenticated {route} expected 401, got {response_status}.")
+    elif anonymous_session.get("authenticated") is not False or anonymous_session.get("role") != "anonymous":
         failures.append("Anonymous /ui/session is not anonymous.")
 
-    if public_contract is not None:
+    if not login_required and public_contract is not None:
         if public_contract.get("public_safe") is not True:
             failures.append("Anonymous workspace contract is not marked public_safe=true.")
         principal = public_contract.get("principal") or {}
@@ -189,26 +207,26 @@ def evaluate_surface_contract(
                     f"Anonymous workspace contract route for {surface_id} is not public-safe: {route!r}."
                 )
 
-    if public_latest_run is not None and public_latest_run.get("public_safe") is not True:
+    if not login_required and public_latest_run is not None and public_latest_run.get("public_safe") is not True:
         failures.append("/public/runs/latest is not marked public_safe=true.")
-    if public_findings is not None and public_findings.get("public_safe") is not True:
+    if not login_required and public_findings is not None and public_findings.get("public_safe") is not True:
         failures.append("/public/runs/latest/findings is not marked public_safe=true.")
-    if public_evidence_preview is not None and public_evidence_preview.get("public_safe") is not True:
+    if not login_required and public_evidence_preview is not None and public_evidence_preview.get("public_safe") is not True:
         failures.append("/public/data/evidence-preview is not marked public_safe=true.")
-    if public_report_preview is not None:
+    if not login_required and public_report_preview is not None:
         if public_report_preview.get("public_safe") is not True:
             failures.append("/public/runs/latest/report-preview is not marked public_safe=true.")
         preview_text = str(public_report_preview.get("preview_text") or "")
         if preview_text and "Protected artifact bodies remain behind reviewer/operator authentication" not in preview_text:
             failures.append("Public report preview is missing the protected-artifact boundary note.")
 
-    for route_name, payload in (
+    for route_name, payload in (() if login_required else (
         ("/ui/workspace-contract/latest", public_contract),
         ("/public/runs/latest", public_latest_run),
         ("/public/runs/latest/findings", public_findings),
         ("/public/data/evidence-preview", public_evidence_preview),
         ("/public/runs/latest/report-preview", public_report_preview),
-    ):
+    )):
         if isinstance(payload, dict):
             failures.extend(f"{route_name}: {issue}" for issue in _find_banned_public_paths(payload))
 
@@ -289,6 +307,7 @@ def verify_surface(
     base_url: str,
     operator_headers: dict[str, str] | None,
     reviewer_headers: dict[str, str] | None,
+    login_required: bool = False,
     expect_human_review: bool = True,
     expect_nonlocal_idp: bool = True,
     expect_no_demo_roles: bool = True,
@@ -299,14 +318,20 @@ def verify_surface(
     have_operator = bool(operator_headers)
     have_reviewer = bool(reviewer_headers)
 
-    anonymous_session = http_json("GET", f"{base}/ui/session").payload
+    anonymous_session_result = http_json("GET", f"{base}/ui/session")
+    anonymous_session = anonymous_session_result.payload
     operator_session = http_json("GET", f"{base}/ui/session", headers=operator_headers).payload if have_operator else None
     reviewer_session = http_json("GET", f"{base}/ui/session", headers=reviewer_headers).payload if have_reviewer else None
-    public_contract = http_json("GET", f"{base}/ui/workspace-contract/latest").payload
-    public_latest_run = http_json("GET", f"{base}/public/runs/latest").payload
-    public_findings = http_json("GET", f"{base}/public/runs/latest/findings").payload
-    public_evidence_preview = http_json("GET", f"{base}/public/data/evidence-preview").payload
-    public_report_preview = http_json("GET", f"{base}/public/runs/latest/report-preview").payload
+    public_contract_result = http_json("GET", f"{base}/ui/workspace-contract/latest")
+    public_latest_run_result = http_json("GET", f"{base}/public/runs/latest")
+    public_findings_result = http_json("GET", f"{base}/public/runs/latest/findings")
+    public_evidence_preview_result = http_json("GET", f"{base}/public/data/evidence-preview")
+    public_report_preview_result = http_json("GET", f"{base}/public/runs/latest/report-preview")
+    public_contract = public_contract_result.payload
+    public_latest_run = public_latest_run_result.payload
+    public_findings = public_findings_result.payload
+    public_evidence_preview = public_evidence_preview_result.payload
+    public_report_preview = public_report_preview_result.payload
     live_anon = http_json("GET", f"{base}/health/live")
     live_operator = http_json("GET", f"{base}/health/live", headers=operator_headers) if have_operator else None
     ready_anon = http_json("GET", f"{base}/health/ready")
@@ -335,6 +360,13 @@ def verify_surface(
         public_evidence_preview=public_evidence_preview if isinstance(public_evidence_preview, dict) else None,
         public_report_preview=public_report_preview if isinstance(public_report_preview, dict) else None,
         public_case_details=public_case_details,
+        anonymous_session_status=anonymous_session_result.status,
+        public_contract_status=public_contract_result.status,
+        public_latest_run_status=public_latest_run_result.status,
+        public_findings_status=public_findings_result.status,
+        public_evidence_preview_status=public_evidence_preview_result.status,
+        public_report_preview_status=public_report_preview_result.status,
+        login_required=login_required,
         expect_human_review=expect_human_review,
         expect_nonlocal_idp=expect_nonlocal_idp,
         expect_no_demo_roles=expect_no_demo_roles,
@@ -394,6 +426,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not fail when the externally visible surface reports require_human_review=false.",
     )
+    parser.add_argument(
+        "--login-required",
+        action="store_true",
+        help="Assert that all application and legacy public-data routes reject unauthenticated requests.",
+    )
     return parser
 
 
@@ -420,6 +457,7 @@ def main(argv: list[str] | None = None) -> int:
         base_url=args.base_url,
         operator_headers=operator_headers,
         reviewer_headers=reviewer_headers,
+        login_required=args.login_required,
         expect_human_review=not args.allow_review_disabled,
         expect_nonlocal_idp=not args.allow_local_idp,
         expect_no_demo_roles=not args.allow_demo_roles,

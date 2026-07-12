@@ -109,6 +109,27 @@ def test_evaluate_surface_contract_accepts_hardened_external_surface() -> None:
     assert failures == []
 
 
+def test_evaluate_surface_contract_accepts_login_only_boundary() -> None:
+    failures = evaluate_surface_contract(
+        anonymous_session={"detail": "Sign in is required."},
+        operator_session={"authenticated": True, "role": "operator", "subject": "https://idp.example:operator", "require_human_review": True},
+        reviewer_session={"authenticated": True, "role": "reviewer", "subject": "https://idp.example:reviewer", "require_human_review": True},
+        live_anon=HttpResult(status=401, payload={}),
+        live_operator=HttpResult(status=200, payload={}),
+        ready_anon=HttpResult(status=401, payload={}),
+        ready_reviewer=HttpResult(status=200, payload={"checks": {"governance": {"require_human_review": True}, "auth": {"issuer": "https://idp.example"}}}),
+        anonymous_session_status=401,
+        public_contract_status=401,
+        public_latest_run_status=401,
+        public_findings_status=401,
+        public_evidence_preview_status=401,
+        public_report_preview_status=401,
+        login_required=True,
+    )
+
+    assert failures == []
+
+
 def test_evaluate_surface_contract_rejects_banned_anonymous_payload_content() -> None:
     failures = evaluate_surface_contract(
         anonymous_session={"authenticated": False, "role": "anonymous"},
