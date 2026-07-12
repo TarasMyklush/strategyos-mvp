@@ -10,6 +10,11 @@
         Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src https://www.youtube-nocookie.com https://www.youtube.com; connect-src 'self' https:; font-src 'self'"
     }
 
+    # Static HTML files are implementation templates, not public pages. The
+    # login endpoint is the only anonymous browser surface on this host.
+    @static_html path /static/*.html
+    redir @static_html /login 307
+
     @idp path /.well-known/openid-configuration /oauth/* /login* /auth/login*
     reverse_proxy @idp strategyos-idp:9000 {
         header_down -Server
