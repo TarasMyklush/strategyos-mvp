@@ -1996,7 +1996,10 @@
 
   function openAssistantCase(findingId, sourceEl) {
     var targetId = String(findingId || '').trim();
-    var findings = safeArray(((getExecutiveDiagnostics().sections || {}).findings || {}).items);
+    var findingsSection = ((getExecutiveDiagnostics().sections || {}).findings || {});
+    var findings = safeArray(findingsSection.case_index).length
+      ? safeArray(findingsSection.case_index)
+      : safeArray(findingsSection.items);
     var index = findings.findIndex(function (item) {
       return String(firstDefined(item && item.finding_id, '')) === targetId;
     });
@@ -2004,10 +2007,12 @@
       showToast('That case is no longer available in the current governed run.');
       return;
     }
-    state.openDriverNoteKey = 'finding:' + index;
+    state.selectedFindingId = targetId;
+    state.openDriverNoteKey = 'finding:' + targetId;
     _closeHermesDrawer();
     switchView('home');
     window.setTimeout(function () {
+      renderLowerRailFidelity();
       var caseControl = document.querySelector('[data-finding-id="' + targetId.replace(/"/g, '\\"') + '"]');
       if (caseControl && typeof caseControl.scrollIntoView === 'function') {
         caseControl.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -3234,7 +3239,8 @@
       : "Good morning, " + firstName;
     $("hero-head").textContent = firstDefined(preferredHero.headline, preferredHero.summary, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
-    $("hero-score").textContent = hasScore ? String(clampedScore || 0) : "DB";
+    var truthSourceBadge = diagnostics.source === "database" ? "DB" : diagnostics.source === "governed_artifacts" ? "RUN" : "--";
+    $("hero-score").textContent = hasScore ? String(clampedScore || 0) : truthSourceBadge;
     $("hero-cap").textContent = firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
     var byline = $("hero-byline");
     if (byline) {
@@ -3985,7 +3991,7 @@
     var blueprint = getPersonaBlueprint(state.activePersona);
     var diagnostics = getExecutiveDiagnostics();
     var sections = diagnostics.sections || {};
-    var liveDatabaseMode = diagnostics.mode === "live" && diagnostics.source === "database";
+    var liveGovernedMode = diagnostics.mode === "live" && ["database", "governed_artifacts"].indexOf(diagnostics.source) >= 0;
     var lowerRail = (getExecutiveDiagnostics().composition || {}).lower_rail || getDrilldown().lower_rail || {};
     var findingsPanel = $("findings-panel");
     var developmentsPanel = $("developments-panel");
@@ -3993,30 +3999,46 @@
     var findingsSection = sections.findings || {};
     var developmentsSection = sections.developments || {};
     var weekSection = sections.week_ahead || {};
-    var findings = safeArray(findingsSection.items).length ? safeArray(findingsSection.items).slice(0, 3) : safeArray(blueprint.findings).slice(0, 3);
-    var developments = liveDatabaseMode
+    var primaryFindings = safeArray(findingsSection.items).length ? safeArray(findingsSection.items).slice(0, 3) : safeArray(blueprint.findings).slice(0, 3);
+    var caseIndex = safeArray(findingsSection.case_index).length ? safeArray(findingsSection.case_index) : primaryFindings;
+    var selectedFinding = caseIndex.find(function (item) {
+      return String(firstDefined(item && item.finding_id, '')) === String(state.selectedFindingId || '');
+    });
+    var selectedOutsidePrimary = selectedFinding && !primaryFindings.some(function (item) {
+      return String(firstDefined(item && item.finding_id, '')) === String(state.selectedFindingId || '');
+    });
+    var findings = selectedOutsidePrimary
+      ? [selectedFinding].concat(primaryFindings.filter(function (item) {
+          return String(firstDefined(item && item.finding_id, '')) !== String(state.selectedFindingId || '');
+        }).slice(0, 2))
+      : primaryFindings;
+    var developments = liveGovernedMode
       ? safeArray(developmentsSection.items).slice(0, 3)
       : (safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3));
-    var weekAhead = liveDatabaseMode
+    var weekAhead = liveGovernedMode
       ? safeArray(weekSection.items).slice(0, 3)
       : (safeArray(blueprint.week).length ? safeArray(blueprint.week).slice(0, 3) : safeArray(lowerRail.week_ahead).slice(0, 3));
     var reconciliation = findingsSection.reconciliation || getSharedAssistantContext().findings_reconciliation || {};
-    var remainingRecoverable = Number(firstDefined(reconciliation.remaining_recoverable_sar, 0)) || 0;
+    var displayedRecoverable = selectedOutsidePrimary
+      ? findings.reduce(function (total, item) { return total + (Number(item && item.recoverable_sar) || 0); }, 0)
+      : (Number(firstDefined(reconciliation.displayed_recoverable_sar, 0)) || 0);
+    var totalRecoverable = Number(firstDefined(reconciliation.total_recoverable_sar, displayedRecoverable)) || displayedRecoverable;
+    var remainingRecoverable = Math.max(0, totalRecoverable - displayedRecoverable);
     var totalFindingCount = Number(firstDefined(reconciliation.total_finding_count, findings.length)) || findings.length;
     var displayedFindingCount = Number(firstDefined(reconciliation.displayed_finding_count, findings.length)) || findings.length;
     var reconciliationHtml = '';
     if (totalFindingCount > displayedFindingCount || remainingRecoverable > 0) {
-      reconciliationHtml = '<div class="rail-reconcile"><span>Top ' + escapeHtml(String(displayedFindingCount)) + ' of ' + escapeHtml(String(totalFindingCount)) + ' cases: ' + escapeHtml(formatSar(reconciliation.displayed_recoverable_sar)) + '</span>' + (remainingRecoverable > 0 ? '<span>' + escapeHtml(String(totalFindingCount - displayedFindingCount)) + ' other governed cases: ' + escapeHtml(formatSar(remainingRecoverable)) + '</span>' : '') + '<strong>Total recoverable value: ' + escapeHtml(formatSar(reconciliation.total_recoverable_sar)) + '</strong></div>';
+      reconciliationHtml = '<div class="rail-reconcile"><span>Showing ' + escapeHtml(String(displayedFindingCount)) + ' of ' + escapeHtml(String(totalFindingCount)) + ' cases: ' + escapeHtml(formatSar(displayedRecoverable)) + '</span>' + (remainingRecoverable > 0 ? '<span>' + escapeHtml(String(totalFindingCount - displayedFindingCount)) + ' other governed cases: ' + escapeHtml(formatSar(remainingRecoverable)) + '</span>' : '') + '<strong>Total recoverable value: ' + escapeHtml(formatSar(totalRecoverable)) + '</strong></div>';
     }
     var renderToggleList = function (items, kind) {
       return items.map(function (item, index) {
-        var key = kind + ':' + index;
+        var findingId = kind === 'finding' ? String(firstDefined(item.finding_id, '')) : '';
+        var key = kind + ':' + (findingId || index);
         var open = state.openDriverNoteKey === key;
         var actionPrompt = kind === 'development'
           ? 'Project the impact of “' + firstDefined(item.title, 'this development') + '” on the current plan and what I should prepare for the board.'
           : 'Explain why “' + firstDefined(item.title, 'this finding') + '” matters for the board review and what action I should consider.';
         var actionLabel = kind === 'development' ? 'Project impact on plan' : 'Ask why this matters';
-        var findingId = kind === 'finding' ? String(firstDefined(item.finding_id, '')) : '';
         return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '"' + (findingId ? ' data-finding-id="' + escapeHtml(findingId) + '"' : '') + ' aria-expanded="' + (open ? 'true' : 'false') + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span><span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + '<div class="rail-toggle__actions"><button type="button" class="rail-inline-action" data-rail-prompt="' + escapeHtml(actionPrompt) + '">' + escapeHtml(actionLabel) + '</button></div></div>' : '');
       }).join('');
     };
@@ -4026,14 +4048,14 @@
     }
 
     if (developmentsPanel) {
-      developmentsPanel.hidden = liveDatabaseMode && !developments.length;
+      developmentsPanel.hidden = liveGovernedMode && !developments.length;
       developmentsPanel.innerHTML = developments.length
         ? '<div class="detail-head"><div><h3 class="detail-title">Developments since you were here</h3></div></div><div class="rail-toggle-list">' + renderToggleList(developments, 'development') + '</div>'
         : '';
     }
 
     if (weekPanel) {
-      weekPanel.hidden = liveDatabaseMode && !weekAhead.length;
+      weekPanel.hidden = liveGovernedMode && !weekAhead.length;
       var openIndex = Math.min(state.openWeekIndex || 0, Math.max(weekAhead.length - 1, 0));
       var activeEvent = weekAhead[openIndex] || null;
       weekPanel.innerHTML = weekAhead.length ? '<div class="detail-head"><div><h3 class="detail-title">Week ahead</h3></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
@@ -4652,6 +4674,7 @@
       _kgDragBindingsAttached: false,
       personaOutsideListenerBound: false,
       openDriverNoteKey: "",
+      selectedFindingId: "",
       openWeekIndex: 0,
       agentSummaryOpen: false,
       openAgentId: "",

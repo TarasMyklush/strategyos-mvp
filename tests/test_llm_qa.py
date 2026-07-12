@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import socket
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -130,6 +131,30 @@ def test_governed_case_link_request_returns_current_cases_only():
     assert [item["finding_id"] for item in result["case_links"]] == ["F-003", "F-001"]
     assert "Open case" not in result["answer"]
     assert "SAR 128,000.00" in result["answer"]
+
+
+def test_governed_case_link_request_parses_and_caps_fifty_case_links():
+    base = _finding()
+    findings = [
+        replace(
+            base,
+            finding_id=f"F-{index:03d}",
+            title=f"Governed case {index:03d}",
+            recoverable_sar=float(index),
+        )
+        for index in range(1, 56)
+    ]
+
+    result = qa_engine.answer_question(
+        "give links to 50 specific cases",
+        bundle=_bundle(),
+        findings=findings,
+    )
+
+    assert result["intent"] == "governed_case_links"
+    assert len(result["case_links"]) == 50
+    assert result["case_links"][0]["finding_id"] == "F-055"
+    assert result["case_links"][-1]["finding_id"] == "F-006"
 
 
 def test_llm_chat_status_requires_policy_and_key():

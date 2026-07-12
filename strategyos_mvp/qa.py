@@ -194,7 +194,11 @@ def _handle_invoice_metric(question: str, bundle: _DataBundle, findings: list[_F
 
 
 def _parse_top_n(question: str, default: int = 5) -> int:
-    m = re.search(r"\btop\s+(\d{1,3})\b", question) or re.search(r"\b(\d{1,3})\s+(?:vendors?|customers?|suppliers?)\b", question)
+    m = re.search(r"\btop\s+(\d{1,3})\b", question) or re.search(
+        r"\b(\d{1,3})(?:\s+[a-z][a-z-]*){0,3}\s+"
+        r"(?:vendors?|customers?|suppliers?|cases?|findings?|links?)\b",
+        question,
+    )
     if m:
         return max(1, min(50, int(m.group(1))))
     return default

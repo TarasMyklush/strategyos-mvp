@@ -35,9 +35,12 @@ def _ratio_display(value: Any) -> str:
     if not isinstance(value, Mapping):
         return "--"
     total = int(value.get("total") or 0)
-    if total <= 0:
+    if total <= 0 or value.get("resolved") is None:
         return "--"
-    return f"{int(value.get('resolved') or 0)} / {total}"
+    resolved = int(value.get("resolved") or 0)
+    if resolved < 0 or resolved > total:
+        return "--"
+    return f"{resolved} / {total}"
 
 
 def _humanize(value: Any, fallback: str = "Unavailable") -> str:
@@ -86,7 +89,9 @@ def _hero(read_model: Mapping[str, Any]) -> dict[str, Any]:
     approval_status = str(_claim_value(lifecycle.get("approval_status"), "pending") or "pending").lower()
     citation_value = _claim_value(metrics.get("citation_resolution"), {}) or {}
     citation_total = int(citation_value.get("total") or 0) if isinstance(citation_value, Mapping) else 0
-    citation_resolved = int(citation_value.get("resolved") or 0) if isinstance(citation_value, Mapping) else 0
+    citation_resolved = citation_value.get("resolved") if isinstance(citation_value, Mapping) else None
+    if citation_resolved is not None:
+        citation_resolved = int(citation_resolved)
     if read_model.get("data_status") != "ready":
         label = "Board readiness is unavailable"
         body = read_model.get("status_reason") or "No current governed database run is available."
@@ -121,7 +126,11 @@ def _hero(read_model: Mapping[str, Any]) -> dict[str, Any]:
         "summary": label,
         "body": body,
         "score": None,
-        "score_note": "Database-backed board readiness",
+        "score_note": (
+            "Database-backed board readiness"
+            if read_model.get("source") == "database"
+            else "Governed artifact board readiness"
+        ),
         "secondary_fact": f"As of {read_model.get('as_of')}" if read_model.get("as_of") else "Current governed data",
         "readiness_operands": readiness_operands,
     }
@@ -164,6 +173,33 @@ def _findings(read_model: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict
         "total_finding_count": len(all_findings),
         "displayed_finding_count": len(displayed),
     }
+
+
+def _case_index(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Compact navigation records for every governed finding in the run."""
+    rows: list[dict[str, Any]] = []
+    for item in list(read_model.get("findings") or []):
+        recoverable = float(_claim_value(item.get("recoverable_sar"), 0.0) or 0.0)
+        citations = int(_claim_value(item.get("citation_count"), 0) or 0)
+        challenged = bool(_claim_value(item.get("challenged"), False))
+        rows.append(
+            {
+                "finding_id": _claim_value(item.get("finding_id"), ""),
+                "title": _claim_value(item.get("title"), "Governed finance finding"),
+                "tag": _claim_value(item.get("pattern_label"), "Governed Finance Finding"),
+                "detail": (
+                    f"{_format_sar(recoverable)} recoverable"
+                    + f" · {citations} citation(s)"
+                    + (" · needs closure" if challenged else "")
+                ),
+                "tone": "flat" if challenged else "up",
+                "recoverable_sar": recoverable,
+                "citation_count": citations,
+                "challenged": challenged,
+                "provenance": _provenance(item.get("recoverable_sar")),
+            }
+        )
+    return rows
 
 
 def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
@@ -221,6 +257,7 @@ def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
         "drivers": drivers,
         "findings": {
             "items": findings,
+            "case_index": _case_index(read_model),
             "reconciliation": reconciliation,
         },
         "developments": {
@@ -236,7 +273,7 @@ def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
     }
     payload = {
         "mode": "live",
-        "source": "database",
+        "source": read_model.get("source"),
         "run_id": read_model.get("run_id"),
         "as_of": read_model.get("as_of"),
         "data_status": read_model.get("data_status"),

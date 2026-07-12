@@ -4,8 +4,17 @@ from datetime import datetime
 from typing import Any, Mapping
 
 
-ALLOWED_LIVE_CLAIM_CLASSES = {"db_fact", "db_aggregate", "db_derived", "ui_copy"}
+ALLOWED_LIVE_CLAIM_CLASSES = {
+    "db_fact",
+    "db_aggregate",
+    "db_derived",
+    "artifact_fact",
+    "artifact_aggregate",
+    "artifact_derived",
+    "ui_copy",
+}
 PUBLIC_RUN_ALIAS = "latest-public"
+TRUTH_SOURCES = {"database", "governed_artifacts"}
 
 
 def _real_run_id(summary: Mapping[str, Any] | None) -> str | None:
@@ -29,6 +38,32 @@ def _as_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _as_optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _truth_contract(truth_source: str) -> tuple[str, str]:
+    if truth_source not in TRUTH_SOURCES:
+        raise ValueError(f"unsupported executive truth source: {truth_source}")
+    if truth_source == "database":
+        return "db", "strategyos"
+    return "artifact", "governed_artifact"
+
+
+def _claim_class(truth_source: str, kind: str) -> str:
+    prefix, _ = _truth_contract(truth_source)
+    return f"{prefix}_{kind}"
+
+
+def _source(truth_source: str, database_path: str, artifact_path: str) -> str:
+    return database_path if truth_source == "database" else artifact_path
 
 
 def _safe_label(value: Any, fallback: str) -> str:
@@ -102,6 +137,7 @@ def _finding_claims(
     *,
     run_id: str | None,
     as_of: str | None,
+    truth_source: str,
 ) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     for index, row in enumerate(rows, start=1):
@@ -113,48 +149,48 @@ def _finding_claims(
             {
                 "finding_id": claim(
                     row.get("finding_id") or f"finding-{index}",
-                    claim_class="db_fact",
+                    claim_class=_claim_class(truth_source, "fact"),
                     run_id=run_id,
                     as_of=as_of,
-                    source="strategyos_findings.finding_id",
+                    source=_source(truth_source, "strategyos_findings.finding_id", "governed_artifact.findings.finding_id"),
                 ),
                 "title": claim(
                     str(title),
-                    claim_class="db_fact",
+                    claim_class=_claim_class(truth_source, "fact"),
                     run_id=run_id,
                     as_of=as_of,
-                    source="strategyos_findings.finding_json.title",
+                    source=_source(truth_source, "strategyos_findings.finding_json.title", "governed_artifact.findings.title"),
                 ),
                 "pattern_label": claim(
                     _safe_label(pattern, "Governed Finance Finding"),
-                    claim_class="db_derived",
+                    claim_class=_claim_class(truth_source, "derived"),
                     run_id=run_id,
                     as_of=as_of,
-                    source="strategyos_findings.pattern_type",
+                    source=_source(truth_source, "strategyos_findings.pattern_type", "governed_artifact.findings.pattern_type"),
                     derivation="controlled_pattern_label",
                 ),
                 "recoverable_sar": claim(
                     recoverable,
-                    claim_class="db_fact",
+                    claim_class=_claim_class(truth_source, "fact"),
                     run_id=run_id,
                     as_of=as_of,
-                    source="strategyos_findings.recoverable_sar",
+                    source=_source(truth_source, "strategyos_findings.recoverable_sar", "governed_artifact.findings.recoverable_sar"),
                 ),
                 "citation_count": claim(
                     citation_count,
-                    claim_class="db_aggregate",
+                    claim_class=_claim_class(truth_source, "aggregate"),
                     run_id=run_id,
                     as_of=as_of,
-                    source="strategyos_finding_citations",
+                    source=_source(truth_source, "strategyos_finding_citations", "governed_artifact.knowledge_graph.supported_by"),
                     record_count=citation_count,
                     derivation="count(citations by finding)",
                 ),
                 "challenged": claim(
                     bool(row.get("challenged")),
-                    claim_class="db_fact",
+                    claim_class=_claim_class(truth_source, "fact"),
                     run_id=run_id,
                     as_of=as_of,
-                    source="strategyos_findings.challenge_state",
+                    source=_source(truth_source, "strategyos_agent_events.action", "governed_artifact.audit_log.action"),
                     complete=True,
                 ),
             }
@@ -168,78 +204,94 @@ def build_executive_read_model(
     audit_summary: dict[str, Any] | None,
     publication: dict[str, Any] | None,
     agent_modules: dict[str, Any] | None,
+    *,
+    truth_source: str = "governed_artifacts",
+    source_status_reason: str | None = None,
 ) -> dict[str, Any]:
+    _truth_contract(truth_source)
     rows = list(finding_rows or [])
     run_id = _real_run_id(summary)
     as_of = _iso_or_none((summary or {}).get("created_at") or (summary or {}).get("updated_at"))
     data_status = "ready" if summary and run_id else "missing"
-    status_reason = (
+    status_reason = source_status_reason or (
         "Current governed database run is available."
+        if data_status == "ready" and truth_source == "database"
+        else "Current governed artifact run is available; database truth is unavailable."
         if data_status == "ready"
-        else "No current governed database run is available."
+        else "No current governed run is available."
     )
     total_recoverable = round(sum(_as_float(row.get("recoverable_sar")) for row in rows), 2)
-    citation_count = sum(_as_int(row.get("citation_count")) for row in rows)
-    resolved_count = _as_int((audit_summary or {}).get("resolved_count"))
+    finding_citation_count = sum(_as_int(row.get("citation_count")) for row in rows)
+    audited_citation_count = _as_optional_int((audit_summary or {}).get("citation_count"))
+    citation_count = (
+        audited_citation_count
+        if audited_citation_count is not None
+        else finding_citation_count
+    )
+    resolved_count = _as_optional_int((audit_summary or {}).get("resolved_count"))
     challenged_count = sum(1 for row in rows if row.get("challenged"))
-    report_count = _as_int((publication or {}).get("report_count"))
+    report_count = _as_optional_int((publication or {}).get("report_count"))
     approval_status = str((summary or {}).get("approval_status") or "pending").lower()
     current_stage = str((summary or {}).get("current_stage") or "unknown").lower()
     metrics = {
         "recoverable_total": claim(
             total_recoverable,
-            claim_class="db_aggregate",
+            claim_class=_claim_class(truth_source, "aggregate"),
             run_id=run_id,
             as_of=as_of,
-            source="strategyos_findings.recoverable_sar",
+            source=_source(truth_source, "strategyos_findings.recoverable_sar", "governed_artifact.findings.recoverable_sar"),
             record_count=len(rows),
             derivation="sum(recoverable_sar)",
             complete=bool(summary),
         ),
         "finding_count": claim(
             len(rows),
-            claim_class="db_aggregate",
+            claim_class=_claim_class(truth_source, "aggregate"),
             run_id=run_id,
             as_of=as_of,
-            source="strategyos_findings",
+            source=_source(truth_source, "strategyos_findings", "governed_artifact.findings"),
             record_count=len(rows),
             derivation="count(findings)",
             complete=bool(summary),
         ),
         "citation_resolution": claim(
             {"resolved": resolved_count, "total": citation_count},
-            claim_class="db_aggregate",
+            claim_class=_claim_class(truth_source, "aggregate"),
             run_id=run_id,
             as_of=as_of,
-            source="strategyos_finding_citations.resolved",
+            source=_source(truth_source, "strategyos_finding_citations.resolved", "governed_artifact.citation_audit.resolved"),
             record_count=citation_count,
             derivation="count(resolved citations) / count(citations)",
-            complete=bool(summary),
+            complete=(
+                bool(summary)
+                and resolved_count is not None
+                and 0 <= resolved_count <= citation_count
+            ),
         ),
         "challenged_count": claim(
             challenged_count,
-            claim_class="db_aggregate",
+            claim_class=_claim_class(truth_source, "aggregate"),
             run_id=run_id,
             as_of=as_of,
-            source="strategyos_findings.challenge_state",
+            source=_source(truth_source, "strategyos_agent_events.action", "governed_artifact.audit_log.action"),
             record_count=len(rows),
             derivation="count(challenged findings)",
             complete=bool(summary),
         ),
         "report_count": claim(
             report_count,
-            claim_class="db_aggregate",
+            claim_class=_claim_class(truth_source, "aggregate"),
             run_id=run_id,
             as_of=as_of,
-            source="strategyos_artifacts",
-            record_count=report_count,
+            source=_source(truth_source, "strategyos_artifacts", "governed_artifact.report_contracts"),
+            record_count=report_count or 0,
             derivation="count(report artifacts)",
-            complete=bool(summary),
+            complete=bool(summary) and report_count is not None,
         ),
     }
     return {
         "mode": "live",
-        "source": "database",
+        "source": truth_source,
         "run_id": run_id,
         "as_of": as_of,
         "data_status": data_status,
@@ -247,23 +299,28 @@ def build_executive_read_model(
         "lifecycle": {
             "approval_status": claim(
                 approval_status,
-                claim_class="db_fact",
+                claim_class=_claim_class(truth_source, "fact"),
                 run_id=run_id,
                 as_of=as_of,
-                source="strategyos_runs.approval_status",
+                source=_source(truth_source, "strategyos_runs.approval_status", "governed_artifact.run_summary.approval_status"),
                 complete=bool(summary),
             ),
             "current_stage": claim(
                 current_stage,
-                claim_class="db_fact",
+                claim_class=_claim_class(truth_source, "fact"),
                 run_id=run_id,
                 as_of=as_of,
-                source="strategyos_runs.current_stage",
+                source=_source(truth_source, "strategyos_runs.current_stage", "governed_artifact.run_summary.current_stage"),
                 complete=bool(summary),
             ),
         },
         "metrics": metrics,
-        "findings": _finding_claims(rows, run_id=run_id, as_of=as_of),
+        "findings": _finding_claims(
+            rows,
+            run_id=run_id,
+            as_of=as_of,
+            truth_source=truth_source,
+        ),
         "developments": {
             "items": [],
             "status": "unavailable",
@@ -276,7 +333,13 @@ def build_executive_read_model(
         },
         "agent_activity": {
             "items": list((agent_modules or {}).get("audit_log") or []),
-            "status": "db_backed" if (agent_modules or {}).get("audit_log") else "capability_only",
+            "status": (
+                "db_backed"
+                if truth_source == "database" and (agent_modules or {}).get("audit_log")
+                else "artifact_backed"
+                if (agent_modules or {}).get("audit_log")
+                else "capability_only"
+            ),
             "reason": "Running-agent claims require persisted task or event records.",
         },
     }

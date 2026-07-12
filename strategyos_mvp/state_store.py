@@ -385,6 +385,200 @@ def get_run_detail(run_id: str) -> dict[str, Any]:
     }
 
 
+def executive_snapshot_for_run(run_id: str) -> dict[str, Any]:
+    """Load the executive truth surface from persisted relational records.
+
+    This deliberately does not fall back to run artifacts. Callers can choose an
+    explicitly labelled artifact fallback, but a payload returned as ``ok`` here
+    is backed by the StrategyOS Postgres tables named in its provenance.
+    """
+    normalized_run_id = uuid_value(run_id)
+    if normalized_run_id is None:
+        return {
+            "status": "missing",
+            "reason": "The current run does not have a database identity.",
+        }
+
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    assert connection is not None
+    try:
+        with connection as conn:
+            ensure_data_schema(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select
+                        r.id,
+                        r.created_at,
+                        r.run_dir,
+                        r.dataset_root,
+                        r.finding_count,
+                        r.locked_finding_count,
+                        r.total_recoverable_sar,
+                        r.status,
+                        r.current_stage,
+                        r.requires_human_review,
+                        r.approved_at,
+                        r.approved_by,
+                        r.summary_json,
+                        a.decision as latest_approval_decision
+                    from strategyos_runs r
+                    left join lateral (
+                        select decision
+                        from strategyos_approvals
+                        where run_id = r.id
+                        order by created_at desc
+                        limit 1
+                    ) a on true
+                    where r.id = %s
+                    """,
+                    (normalized_run_id,),
+                )
+                run_record = fetchone_dict(cur)
+                if run_record is None:
+                    return {
+                        "status": "missing",
+                        "reason": "The current run is not present in the database.",
+                    }
+
+                cur.execute(
+                    """
+                    select
+                        f.finding_id,
+                        f.pattern_type,
+                        f.vendor_id,
+                        f.vendor_name,
+                        f.status,
+                        f.confidence,
+                        f.leakage_sar,
+                        f.recoverable_sar,
+                        f.finding_json,
+                        count(c.id) as citation_count,
+                        count(c.id) filter (where c.resolved) as resolved_citation_count,
+                        exists (
+                            select 1
+                            from strategyos_agent_events e
+                            where e.run_id = f.run_id
+                              and e.finding_id = f.finding_id
+                              and lower(e.action) = 'challenge'
+                        ) as challenged
+                    from strategyos_findings f
+                    left join strategyos_finding_citations c
+                      on c.run_id = f.run_id and c.finding_id = f.finding_id
+                    where f.run_id = %s
+                    group by f.id
+                    order by f.recoverable_sar desc, f.finding_id
+                    """,
+                    (normalized_run_id,),
+                )
+                finding_records = fetchall_dicts(cur)
+
+                cur.execute(
+                    """
+                    select artifact_name, local_path, object_uri
+                    from strategyos_artifacts
+                    where run_id = %s
+                    order by created_at, artifact_name
+                    """,
+                    (normalized_run_id,),
+                )
+                artifact_records = fetchall_dicts(cur)
+
+                cur.execute(
+                    """
+                    select round_no, actor, finding_id, action, detail, event_json, created_at
+                    from strategyos_agent_events
+                    where run_id = %s
+                    order by created_at desc
+                    limit 50
+                    """,
+                    (normalized_run_id,),
+                )
+                event_records = fetchall_dicts(cur)
+    except Exception:
+        return {
+            "status": "failed",
+            "reason": "The database executive snapshot is temporarily unavailable.",
+        }
+
+    run_data = normalize_record(run_record)
+    stored_summary = run_data.get("summary_json")
+    summary = dict(stored_summary) if isinstance(stored_summary, dict) else {}
+    approval_status = str(run_data.get("latest_approval_decision") or "").lower()
+    if not approval_status:
+        approval_status = "approved" if run_data.get("approved_at") else (
+            "pending" if run_data.get("requires_human_review") else "not_required"
+        )
+    summary.update(
+        {
+            "run_id": str(run_data.get("id")),
+            "created_at": run_data.get("created_at"),
+            "run_dir": run_data.get("run_dir"),
+            "dataset": run_data.get("dataset_root"),
+            "findings": run_data.get("finding_count"),
+            "locked_findings": run_data.get("locked_finding_count"),
+            "total_recoverable_sar": run_data.get("total_recoverable_sar"),
+            "status": run_data.get("status"),
+            "current_stage": run_data.get("current_stage"),
+            "requires_human_review": bool(run_data.get("requires_human_review")),
+            "approved_at": run_data.get("approved_at"),
+            "approved_by": run_data.get("approved_by"),
+            "approval_status": approval_status,
+        }
+    )
+
+    findings: list[dict[str, Any]] = []
+    for record in finding_records:
+        row = normalize_record(record)
+        finding_json = row.get("finding_json")
+        finding_payload = finding_json if isinstance(finding_json, dict) else {}
+        pattern_type = str(row.get("pattern_type") or finding_payload.get("pattern_type") or "")
+        findings.append(
+            {
+                "finding_id": str(row.get("finding_id") or ""),
+                "title": str(finding_payload.get("title") or row.get("finding_id") or "Finding"),
+                "pattern_type": pattern_type,
+                "classification": str(finding_payload.get("classification") or ""),
+                "confidence": str(row.get("confidence") or ""),
+                "status": str(row.get("status") or ""),
+                "recoverable_sar": row.get("recoverable_sar"),
+                "leakage_sar": row.get("leakage_sar"),
+                "owner": str(row.get("vendor_name") or row.get("vendor_id") or ""),
+                "citation_count": int(row.get("citation_count") or 0),
+                "resolved_citation_count": int(row.get("resolved_citation_count") or 0),
+                "challenged": bool(row.get("challenged")),
+            }
+        )
+
+    artifacts = {
+        str(record.get("artifact_name")): str(record.get("object_uri") or record.get("local_path"))
+        for record in (normalize_record(item) for item in artifact_records)
+        if record.get("artifact_name") and (record.get("object_uri") or record.get("local_path"))
+    }
+    citation_count = sum(int(row.get("citation_count") or 0) for row in findings)
+    resolved_count = sum(int(row.get("resolved_citation_count") or 0) for row in findings)
+    return {
+        "status": "ok",
+        "source": "database",
+        "summary": summary,
+        "findings": findings,
+        "audit_summary": {
+            "status": "ok",
+            "run_id": normalized_run_id,
+            "citation_count": citation_count,
+            "resolved_count": resolved_count,
+            "challenged_finding_ids": [
+                row["finding_id"] for row in findings if row.get("challenged")
+            ],
+        },
+        "artifacts": artifacts,
+        "agent_events": [normalize_record(record) for record in event_records],
+    }
+
+
 def list_pending_reviews() -> list[dict[str, Any]] | dict[str, Any]:
     connection, skipped = database_connection()
     if skipped is not None:

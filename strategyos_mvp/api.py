@@ -762,12 +762,13 @@ def _build_public_safe_assistant_packet(
     if str(db_run_id or "") == ANONYMOUS_PUBLIC_RUN_ID:
         db_run_id = None
     if executive_presentation_payload is None:
-        executive_read_model = build_executive_read_model(
+        executive_read_model = _executive_read_model_from_available_truth(
             summary,
             finding_rows,
             audit_summary,
             publication,
             agent_modules,
+            public_safe=True,
         )
         executive_presentation_payload = build_executive_presentation(executive_read_model)
     db_status = _data_management_status_for_run(str(db_run_id or "") or None)
@@ -906,7 +907,15 @@ def _build_public_safe_assistant_packet(
         "kg_nodes": kg_nodes,
         "kg_edges": kg_edges,
         "trace_summary": {
-            "truth_basis": ["executive_read_model", "executive_presentation", "database_provenance"],
+            "truth_basis": [
+                "executive_read_model",
+                "executive_presentation",
+                (
+                    "database_provenance"
+                    if executive_presentation_payload.get("source") == "database"
+                    else "governed_artifact_provenance"
+                ),
+            ],
             "run_id": executive_presentation_payload.get("run_id"),
             "database_status": db_status.get("status"),
         },
@@ -4035,6 +4044,77 @@ def _drilldown_contract_payload(
     }
 
 
+def _executive_read_model_from_available_truth(
+    summary: dict[str, Any] | None,
+    finding_rows: list[dict[str, Any]],
+    audit_summary: dict[str, Any] | None,
+    publication: dict[str, Any] | None,
+    agent_modules: dict[str, Any] | None,
+    *,
+    public_safe: bool,
+) -> dict[str, Any]:
+    backing_run_id = str(
+        (summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or ""
+    )
+    if backing_run_id == ANONYMOUS_PUBLIC_RUN_ID:
+        backing_run_id = ""
+    database_snapshot = state_store.executive_snapshot_for_run(backing_run_id)
+    if database_snapshot.get("status") == "ok":
+        database_summary = dict(database_snapshot.get("summary") or {})
+        database_rows = list(database_snapshot.get("findings") or [])
+        database_audit = dict(database_snapshot.get("audit_summary") or {})
+        database_agent_modules = {
+            **dict(agent_modules or {}),
+            "audit_log": list(database_snapshot.get("agent_events") or []),
+        }
+        artifact_map = dict(database_snapshot.get("artifacts") or {})
+        tenant_payload = (
+            database_summary.get("tenant_context")
+            if isinstance(database_summary.get("tenant_context"), dict)
+            else {}
+        )
+        report_contracts = build_run_report_contracts(
+            artifact_map,
+            tenant_id=str(tenant_payload.get("tenant_id") or CONFIG.tenant_slug),
+            run_id=str(database_summary.get("run_id") or "") or None,
+        )
+        database_publication = {
+            "report_count": len(report_contracts.reports),
+        }
+        if public_safe:
+            database_summary = _anonymous_public_summary(database_summary) or database_summary
+            database_rows = _anonymous_public_finding_payloads(database_rows)
+            # Resolution state is intentionally not disclosed on the anonymous
+            # executive surface. Preserve the unknown instead of rendering zero.
+            database_audit = _public_latest_run_audit_summary_payload(database_summary)
+        return build_executive_read_model(
+            database_summary,
+            database_rows,
+            database_audit,
+            database_publication,
+            database_agent_modules,
+            truth_source="database",
+        )
+
+    fallback_reason = str(
+        database_snapshot.get("reason")
+        or "The database executive snapshot is unavailable."
+    )
+    return build_executive_read_model(
+        summary,
+        finding_rows,
+        audit_summary,
+        publication,
+        agent_modules,
+        truth_source="governed_artifacts",
+        source_status_reason=(
+            f"{fallback_reason} Showing the current governed artifact run."
+            if summary
+            else fallback_reason
+        ),
+    )
+
+
 def _executive_diagnostics_payload(
     summary: dict[str, Any] | None,
     *,
@@ -4070,12 +4150,13 @@ def _executive_diagnostics_payload(
         "Group CEO",
     )
     active_driver_key = str(executive_modes.get("active_driver_key") or "board_packet")
-    executive_read_model = build_executive_read_model(
+    executive_read_model = _executive_read_model_from_available_truth(
         summary,
         finding_rows,
         audit_summary,
         publication,
         agent_modules,
+        public_safe=_principal_prefers_public_safe_surface(principal),
     )
     executive_presentation_payload = build_executive_presentation(executive_read_model)
     public_packet = _build_public_safe_assistant_packet(
@@ -4178,7 +4259,11 @@ def _executive_diagnostics_payload(
         "truth_basis": [
             "executive_read_model",
             "executive_presentation",
-            "database_provenance",
+            (
+                "database_provenance"
+                if executive_presentation_payload.get("source") == "database"
+                else "governed_artifact_provenance"
+            ),
         ],
         "sections": executive_presentation_payload.get("sections") or {},
         "provenance_summary": executive_presentation_payload.get("provenance_summary") or {},

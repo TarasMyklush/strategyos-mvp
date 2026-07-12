@@ -184,6 +184,8 @@ def test_suggestions_are_static():
 def test_intents_registry_is_complete_and_ordered():
     """All intents must be defined statically with names matching handlers."""
     expected_intents = [
+        "governed_case_links",
+        "named_finding_board_question",
         "working_capital",
         "overdue",
         "recoverable",
