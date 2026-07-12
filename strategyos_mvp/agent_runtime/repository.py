@@ -1313,6 +1313,36 @@ class EffectAlreadyReserved(Exception):
         self.existing_invocation = existing_invocation
 
 
+def _fetch_existing_tool_invocation(tenant_id: str, effect_key: str) -> dict[str, Any]:
+    """Re-queries the winning row after losing the unique(tenant_id,
+    effect_key) race in reserve_tool_effect(). Uses a fresh connection --
+    the caller's transaction already rolled back before calling this, so
+    there is no open transaction/cursor to reuse."""
+    connection, skipped = database_connection()
+    assert skipped is None, skipped
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select id, tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash,
+                       output_hash, effect_key, status, error_code, created_at, completed_at
+                from strategyos_agent_tool_invocations
+                where tenant_id = %s and effect_key = %s
+                """,
+                (tenant_id, effect_key),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    assert record is not None, (
+        f"lost the unique-constraint race for effect_key {effect_key!r} but no winning row is visible -- "
+        "this should be impossible under read-committed isolation once the winner's transaction has committed"
+    )
+    normalized = _stringify_uuids(normalize_record(record))
+    normalized["tool_invocation_id"] = normalized.pop("id")
+    return normalized
+
+
 def reserve_tool_effect(
     tenant_id: str,
     task_id: str,
@@ -1337,6 +1367,7 @@ def reserve_tool_effect(
         return skipped
 
     assert connection is not None
+    lost_race = False
     with connection as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -1355,18 +1386,45 @@ def reserve_tool_effect(
                 normalized_existing["tool_invocation_id"] = normalized_existing.pop("id")
                 raise EffectAlreadyReserved(normalized_existing)
 
-            cur.execute(
-                """
-                insert into strategyos_agent_tool_invocations
-                    (tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash, effect_key, status)
-                values (%s, %s, %s, %s, %s, %s, %s, 'pending')
-                returning id, tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash,
-                          output_hash, effect_key, status, error_code, created_at, completed_at
-                """,
-                (tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash, effect_key),
-            )
-            record = fetchone_dict(cur)
-        conn.commit()
+            # The SELECT above cannot make the check-then-insert atomic on
+            # its own: two concurrent callers can both pass it (neither
+            # sees the other's row yet) and both reach this INSERT. The
+            # unique(tenant_id, effect_key) constraint is what actually
+            # enforces exactly-one-winner; catching its violation here
+            # (rather than letting a raw UniqueViolation propagate to the
+            # caller) is what makes EffectAlreadyReserved reliable under
+            # real concurrency, not just against a sequential retry.
+            # lost_race defers the EffectAlreadyReserved fetch/raise until
+            # after this `with connection`/`with cursor` block has closed
+            # and returned the connection to the pool -- fetching the
+            # winner's row needs its own connection, and checking one out
+            # while still holding this one open would double the pool
+            # pressure this function puts on every call for no reason.
+            try:
+                cur.execute(
+                    """
+                    insert into strategyos_agent_tool_invocations
+                        (tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash, effect_key, status)
+                    values (%s, %s, %s, %s, %s, %s, %s, 'pending')
+                    returning id, tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash,
+                              output_hash, effect_key, status, error_code, created_at, completed_at
+                    """,
+                    (tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash, effect_key),
+                )
+                record = fetchone_dict(cur)
+            except Exception as exc:
+                if not events_module._is_unique_violation(exc):
+                    raise
+                conn.rollback()
+                lost_race = True
+                record = None
+
+        if not lost_race:
+            conn.commit()
+
+    if lost_race:
+        raise EffectAlreadyReserved(_fetch_existing_tool_invocation(tenant_id, effect_key))
+
     assert record is not None
     normalized = _stringify_uuids(normalize_record(record))
     normalized["tool_invocation_id"] = normalized.pop("id")
