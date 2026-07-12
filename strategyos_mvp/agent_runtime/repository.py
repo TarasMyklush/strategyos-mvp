@@ -21,7 +21,7 @@ import uuid
 from typing import Any
 from uuid import UUID
 
-from ..state_store import database_connection, fetchone_dict, json_blob, normalize_record
+from ..state_store import database_connection, fetchall_dicts, fetchone_dict, json_blob, normalize_record
 from . import events as events_module
 from .models import (
     ApprovalStatus,
@@ -1025,6 +1025,45 @@ def _normalize_approval(record: dict[str, Any]) -> dict[str, Any]:
     normalized = _stringify_uuids(normalize_record(record))
     normalized["approval_id"] = normalized.pop("id")
     return normalized
+
+
+def list_approval_requests(tenant_id: str, *, status: str | None = "pending", limit: int = 100) -> list[dict[str, Any]]:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return []
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            if status:
+                cur.execute(
+                    """
+                    select id, tenant_id, task_id, linked_approval_id, effect_hash, risk_class,
+                           public_explanation, status, decided_by_subject, decided_by_role,
+                           decision_comment, created_at, decided_at, expires_at
+                    from strategyos_agent_approval_requests
+                    where tenant_id = %s and status = %s
+                    order by created_at desc
+                    limit %s
+                    """,
+                    (tenant_id, status, limit),
+                )
+            else:
+                cur.execute(
+                    """
+                    select id, tenant_id, task_id, linked_approval_id, effect_hash, risk_class,
+                           public_explanation, status, decided_by_subject, decided_by_role,
+                           decision_comment, created_at, decided_at, expires_at
+                    from strategyos_agent_approval_requests
+                    where tenant_id = %s
+                    order by created_at desc
+                    limit %s
+                    """,
+                    (tenant_id, limit),
+                )
+            rows = fetchall_dicts(cur)
+        conn.commit()
+    return [_normalize_approval(row) for row in rows]
 
 
 def decide_approval(
