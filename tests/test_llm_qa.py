@@ -16,6 +16,7 @@ from strategyos_mvp.ingestion import DataBundle
 from strategyos_mvp.models import Citation, Finding
 from strategyos_mvp import api as api_module
 from strategyos_mvp import llm_qa
+from strategyos_mvp import qa as qa_engine
 
 
 def _config(**overrides):
@@ -80,6 +81,41 @@ def _finding() -> Finding:
         remediation="Recover duplicate payment.",
         citations=[Citation("ap.xlsx", "row 2", "Acme duplicate row")],
     )
+
+
+def _dormant_credit_finding() -> Finding:
+    return Finding(
+        finding_id="F-003",
+        title="Dormant supplier credit not offset: CR-2024-091",
+        pattern_type="dormant_credit_balance",
+        vendor_id="V-3",
+        vendor_name="Mediterranean Foods Trading LLC",
+        leakage_sar=128_000.0,
+        recoverable_sar=128_000.0,
+        recoverable_usd=34_133.0,
+        confidence="HIGH",
+        classification="CASH (recoverable now)",
+        rationale="Open supplier credit remained in GL while later invoices from the same vendor were paid in full.",
+        remediation="AP should offset the credit against the next payment or request refund; controller should add an aging review for open vendor credits.",
+        citations=[Citation("gl_extract.xlsx", "row 9", "CR-2024-091; credit SAR 128,000.00")],
+        calculation={"credit_reference": "CR-2024-091", "credit_sar": 128_000.0},
+    )
+
+
+def test_named_governed_finding_board_question_is_not_routed_as_supplier_lookup():
+    result = qa_engine.answer_question(
+        "Explain why ‘Dormant supplier credit not offset: CR-2024-091’ matters for the board review and what action I should consider.",
+        bundle=_bundle(),
+        findings=[_dormant_credit_finding()],
+    )
+
+    assert result["matched"] is True
+    assert result["intent"] == "named_finding_board_question"
+    assert result["finding_id"] == "F-003"
+    assert "SAR 128,000.00" in result["answer"]
+    assert "Open supplier credit remained" in result["answer"]
+    assert "AP should offset the credit" in result["answer"]
+    assert "No vendor matching" not in result["answer"]
 
 
 def test_llm_chat_status_requires_policy_and_key():

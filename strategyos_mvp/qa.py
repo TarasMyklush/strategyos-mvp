@@ -256,6 +256,94 @@ def _handle_named_party_spend(question: str, bundle: _DataBundle, findings: list
     }
 
 
+_FINDING_REFERENCE = re.compile(r"\b(?:[A-Z]{2,12}-)?\d{4}-\d{2,}\b", re.IGNORECASE)
+_FINDING_TITLE_STOPWORDS = frozenset(
+    {
+        "a", "an", "and", "at", "board", "consider", "does", "explain", "for",
+        "i", "is", "it", "matters", "not", "of", "on", "or", "review", "should",
+        "the", "this", "to", "what", "why", "with",
+    }
+)
+
+
+def _finding_for_question(question: str, findings: list[_Finding]) -> _Finding | None:
+    """Resolve a question about one governed finding before ledger Q&A.
+
+    A board question commonly repeats a case title (or an embedded credit/invoice
+    reference).  It must not be mistaken for a free-text supplier lookup just
+    because the title contains words such as "supplier" or "vendor".
+    """
+    normalized_question = _normalize(question)
+    references = {
+        value.lower()
+        for value in _FINDING_REFERENCE.findall(question)
+        if value
+    }
+    question_words = {
+        word
+        for word in re.findall(r"[a-z0-9]+", normalized_question)
+        if len(word) > 2 and word not in _FINDING_TITLE_STOPWORDS
+    }
+    for finding in findings:
+        searchable = " ".join(
+            [
+                str(finding.finding_id or ""),
+                str(finding.title or ""),
+                str((finding.calculation or {}).get("credit_reference") or ""),
+            ]
+        ).lower()
+        if references and any(reference in searchable for reference in references):
+            return finding
+        title_words = {
+            word
+            for word in re.findall(r"[a-z0-9]+", str(finding.title or "").lower())
+            if len(word) > 2 and word not in _FINDING_TITLE_STOPWORDS
+        }
+        # Three meaningful title words is specific enough to distinguish a
+        # governed case from a generic supplier/payment question.
+        if len(question_words & title_words) >= 3:
+            return finding
+    return None
+
+
+def _handle_named_finding_board_question(
+    question: str,
+    bundle: _DataBundle,
+    findings: list[_Finding],
+) -> dict[str, _Any]:
+    finding = _finding_for_question(question, findings)
+    if finding is None:
+        return {"matched": False}
+
+    amount = _sar(float(finding.recoverable_sar))
+    rationale = " ".join(str(finding.rationale or "").split())
+    remediation = " ".join(str(finding.remediation or "").split())
+    # The finding text is the source of the explanation and action.  Do not
+    # invent ownership, timing, or cash-realisation claims that are absent from
+    # the governed record.
+    answer_parts = [
+        f"{finding.title} is a {amount} governed case.",
+        rationale or "The current run marked this item for board review.",
+    ]
+    if remediation:
+        answer_parts.append(f"Recommended action: {remediation}")
+    else:
+        answer_parts.append("Recommended action: review the cited evidence and confirm the next owner before board release.")
+    answer_parts.append(
+        "For the board, treat the value as an identified recoverable amount until the recorded action is completed."
+    )
+    return {
+        "matched": True,
+        "answer": " ".join(answer_parts),
+        "value": round(float(finding.recoverable_sar), 2),
+        "unit": "SAR",
+        "basis": "Governed finding title, recoverable amount, rationale, remediation, and citations.",
+        "citations": _finding_citations([finding]),
+        "available": True,
+        "finding_id": finding.finding_id,
+    }
+
+
 def _handle_distinct_parties(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     if _has_any(question, "customer"):
         role, frame, col, label = "ar_ledger", bundle.ar, "Customer_ID", "customers"
@@ -408,6 +496,12 @@ def _handle_overdue(question: str, bundle: _DataBundle, findings: list[_Finding]
 # ---------------------------------------------------------------------------
 
 INTENTS: tuple[_Intent, ...] = (
+    _Intent(
+        "named_finding_board_question",
+        lambda q: bool(_FINDING_REFERENCE.search(q))
+        or ("board" in q and any(token in q for token in ("matter", "action", "review"))),
+        _handle_named_finding_board_question,
+    ),
     _Intent("working_capital",
            lambda q: _has_any(q, "dso", "dpo", "working capital", "drift", "days sales", "days payable"),
            _handle_working_capital),
