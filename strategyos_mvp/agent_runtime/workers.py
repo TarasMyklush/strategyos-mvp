@@ -124,6 +124,7 @@ def cash_recovery_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -> d
                 {
                     "action": "resolve_evidence_gap",
                     "reason": "Citation coverage is below policy",
+                    "run_id": run_id,
                     "finding_ids": coverage["weak_findings"],
                 }
             ]
@@ -206,21 +207,124 @@ def evidence_closure_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -
     }
 
 
+def board_pack_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:
+    """Handler for handler_key board_pack.v1 (prepare_board_pack,
+    explain_publication_posture). Wraps the board_pack.prepare tool, which
+    itself wraps api.py's real publication-payload builders -- this handler
+    never invents a "published" status; it reports whatever the existing
+    reviewer/publication gate currently says."""
+    run_id = input.get("run_id") or ctx.run_id
+    if not run_id:
+        raise HandlerInputInvalid("board_pack_handler requires a run_id")
+
+    board_pack_result = invoke_tool(
+        "board_pack.prepare", ctx,
+        {"run_id": run_id, "principal_role": input.get("principal_role"), "public_safe": input.get("public_safe", False)},
+    )
+    if not board_pack_result.get("available"):
+        return {
+            "summary": "The board pack could not be prepared for this run.",
+            "status": "insufficient_evidence",
+            "data": {"run_id": run_id},
+            "citations": [],
+            "confidence": "low",
+            "gaps": [board_pack_result.get("reason") or "run not found"],
+            "proposed_actions": [],
+            "artifacts": [],
+            "metrics": {},
+        }
+
+    publication = board_pack_result.get("publication", {})
+    reports = board_pack_result.get("reports", {})
+    release_status = (publication.get("board_pack") or {}).get("status") or publication.get("publish_state")
+    report_count = (publication.get("board_pack") or {}).get("report_count", 0)
+    evidence_count = (publication.get("board_pack") or {}).get("evidence_count", 0)
+
+    gaps = []
+    proposed_actions = []
+    if release_status not in ("published", "approved_for_release"):
+        gaps.append(f"Board pack release status is {release_status!r}; not yet approved or published.")
+        proposed_actions.append({"action": "review.request", "reason": "Board pack awaiting reviewer decision", "run_id": run_id})
+
+    return {
+        "summary": f"Board pack for run {run_id} is {release_status} with {report_count} report(s), {evidence_count} evidence item(s).",
+        "status": "complete",
+        "data": {
+            "run_id": run_id,
+            "release_status": release_status,
+            "report_count": report_count,
+            "evidence_count": evidence_count,
+        },
+        "citations": [],
+        "confidence": "high" if not gaps else "medium",
+        "gaps": gaps,
+        "proposed_actions": proposed_actions,
+        "artifacts": [],
+        "metrics": {},
+    }
+
+
+def runtime_guardrail_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:
+    """Handler for handler_key runtime_guardrail.v1 (inspect_runtime_health,
+    diagnose_connector_or_queue). Wraps runtime.health.read, which itself
+    wraps the existing readiness_payload()/hatchet_dependency_status()
+    functions -- no synthetic health data."""
+    health = invoke_tool("runtime.health.read", ctx, {})
+    overall_status = health.get("status", "unknown")
+    checks = health.get("checks", {})
+
+    failing = [name for name, result in checks.items() if isinstance(result, dict) and result.get("status") == "failed"]
+    degraded = [name for name, result in checks.items() if isinstance(result, dict) and result.get("status") == "skipped"]
+
+    gaps = []
+    if failing:
+        gaps.append(f"{len(failing)} subsystem(s) failing: {', '.join(failing)}")
+    if degraded:
+        gaps.append(f"{len(degraded)} subsystem(s) degraded/skipped: {', '.join(degraded)}")
+
+    hatchet_status = health.get("hatchet", {}).get("status", "unknown")
+    if hatchet_status == "failed":
+        gaps.append(f"Hatchet task queue is unhealthy: {health.get('hatchet', {}).get('reason', 'unknown reason')}")
+
+    confidence = "high" if overall_status == "ok" else ("medium" if overall_status == "degraded" else "low")
+
+    return {
+        "summary": f"Runtime status is {overall_status}" + (f"; {len(failing)} subsystem(s) failing" if failing else "."),
+        "status": "complete",
+        "data": {
+            "overall_status": overall_status,
+            "failing_subsystems": failing,
+            "degraded_subsystems": degraded,
+            "hatchet_status": hatchet_status,
+        },
+        "citations": [],
+        "confidence": confidence,
+        "gaps": gaps,
+        "proposed_actions": [],
+        "artifacts": [],
+        "metrics": {},
+    }
+
+
 HANDLER_KEY_TO_FUNCTION = {
     "cash_recovery.v1": cash_recovery_handler,
     "evidence_closure.v1": evidence_closure_handler,
+    "board_pack.v1": board_pack_handler,
+    "runtime_guardrail.v1": runtime_guardrail_handler,
 }
 
 
 def validate_worker_registry() -> None:
     """Every implemented handler must correspond to a real registered agent
-    definition's handler_key. The inverse (every definition has a handler)
-    is NOT required here -- board_pack.v1/runtime_guardrail.v1 are
-    intentionally unimplemented until PR 4."""
+    definition's handler_key, and as of PR 4 every catalogued agent
+    definition must have an implemented handler."""
     known_handler_keys = {d.handler_key for d in AGENT_DEFINITIONS_BY_KEY.values()}
     unknown = set(HANDLER_KEY_TO_FUNCTION.keys()) - known_handler_keys
     if unknown:
         raise ValueError(f"worker handlers registered for unknown handler_keys: {sorted(unknown)}")
+    missing = known_handler_keys - set(HANDLER_KEY_TO_FUNCTION.keys())
+    if missing:
+        raise ValueError(f"agent definitions have no implemented handler: {sorted(missing)}")
 
 
 def run_handler(handler_key: str, ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:

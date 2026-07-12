@@ -64,3 +64,42 @@ def resolve_risk_class(agent_definition: AgentDefinition, task_type: str, risk_c
 
 def is_role_permitted(agent_definition: AgentDefinition, role: str) -> bool:
     return role in agent_definition.allowed_roles or role in {"system", "tenant_admin"}
+
+
+# Design doc section 15 "Budgets and loop prevention" -- per root task:
+MAX_HANDOFF_DEPTH = 3
+MAX_CHILD_TASKS_PER_ROOT = 8
+
+
+@dataclass(frozen=True)
+class HandoffPolicyDecision:
+    allowed: bool
+    reason: str
+
+
+def check_handoff_budget(
+    *,
+    depth: int,
+    child_task_count: int,
+    from_agent_key: str,
+    to_agent_key: str,
+    requested_capability: str,
+    prior_handoff_signatures: frozenset[tuple[str, str, str]],
+    scope_hash: str,
+) -> HandoffPolicyDecision:
+    """Enforces depth/fan-out/loop-prevention before a handoff is created.
+    `prior_handoff_signatures` is the set of (to_agent_key, capability,
+    scope_hash) tuples already used for this root task -- a repeat means the
+    same agent is being asked to do the same work on the same scope again,
+    which is the design doc's loop-prevention rule ("no handoff to the same
+    agent for the same capability and scope hash")."""
+    if from_agent_key == to_agent_key:
+        return HandoffPolicyDecision(False, "an agent cannot hand off to itself")
+    if depth >= MAX_HANDOFF_DEPTH:
+        return HandoffPolicyDecision(False, f"handoff depth limit ({MAX_HANDOFF_DEPTH}) reached")
+    if child_task_count >= MAX_CHILD_TASKS_PER_ROOT:
+        return HandoffPolicyDecision(False, f"child task limit ({MAX_CHILD_TASKS_PER_ROOT}) reached for this root task")
+    signature = (to_agent_key, requested_capability, scope_hash)
+    if signature in prior_handoff_signatures:
+        return HandoffPolicyDecision(False, "duplicate handoff to the same agent for the same capability and scope")
+    return HandoffPolicyDecision(True, "within budget")

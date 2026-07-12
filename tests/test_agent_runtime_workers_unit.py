@@ -146,3 +146,110 @@ def test_evidence_closure_handler_high_confidence_when_all_resolved(monkeypatch,
 
     assert result["confidence"] == "high"
     assert result["gaps"] == []
+
+
+def _patch_board_pack_tool(monkeypatch, board_pack_result):
+    def fake_board_pack_prepare(ctx, input):
+        return board_pack_result
+
+    monkeypatch.setitem(tools_module.TOOL_HANDLERS, "board_pack.prepare", fake_board_pack_prepare)
+
+
+def _patch_runtime_health_tool(monkeypatch, health_result):
+    def fake_runtime_health_read(ctx, input):
+        return health_result
+
+    monkeypatch.setitem(tools_module.TOOL_HANDLERS, "runtime.health.read", fake_runtime_health_read)
+
+
+def test_board_pack_handler_requires_run_id(ctx):
+    ctx_no_run = ToolExecutionContext(tenant_id="t1", task_id="task1", run_id=None)
+    with pytest.raises(workers.HandlerInputInvalid):
+        workers.board_pack_handler(ctx_no_run, {})
+
+
+def test_board_pack_handler_reports_insufficient_evidence_when_run_missing(monkeypatch, ctx):
+    _patch_board_pack_tool(monkeypatch, {"available": False, "run_id": "run1", "reason": "run not found"})
+    result = workers.board_pack_handler(ctx, {"run_id": "run1"})
+    assert result["status"] == "insufficient_evidence"
+
+
+def test_board_pack_handler_reports_awaiting_review_gap(monkeypatch, ctx):
+    _patch_board_pack_tool(
+        monkeypatch,
+        {
+            "available": True,
+            "run_id": "run1",
+            "publication": {
+                "board_pack": {"status": "ready", "report_count": 3, "evidence_count": 5},
+                "publish_state": "awaiting_review",
+            },
+            "reports": {},
+        },
+    )
+    result = workers.board_pack_handler(ctx, {"run_id": "run1"})
+    assert result["status"] == "complete"
+    assert result["gaps"], "expected a gap for an unpublished/unapproved board pack"
+    assert result["proposed_actions"][0]["action"] == "review.request"
+
+
+def test_board_pack_handler_no_gap_when_approved_for_release(monkeypatch, ctx):
+    _patch_board_pack_tool(
+        monkeypatch,
+        {
+            "available": True,
+            "run_id": "run1",
+            "publication": {
+                "board_pack": {"status": "approved_for_release", "report_count": 3, "evidence_count": 5},
+                "publish_state": "approved_for_release",
+            },
+            "reports": {},
+        },
+    )
+    result = workers.board_pack_handler(ctx, {"run_id": "run1"})
+    assert result["gaps"] == []
+    assert result["confidence"] == "high"
+
+
+def test_runtime_guardrail_handler_reports_ok_status(monkeypatch, ctx):
+    _patch_runtime_health_tool(
+        monkeypatch,
+        {
+            "status": "ok",
+            "checks": {"postgres": {"status": "ok"}, "neo4j": {"status": "ok"}},
+            "hatchet": {"status": "ok"},
+        },
+    )
+    result = workers.runtime_guardrail_handler(ctx, {})
+    assert result["data"]["overall_status"] == "ok"
+    assert result["confidence"] == "high"
+    assert result["gaps"] == []
+
+
+def test_runtime_guardrail_handler_flags_failing_subsystems(monkeypatch, ctx):
+    _patch_runtime_health_tool(
+        monkeypatch,
+        {
+            "status": "failed",
+            "checks": {"postgres": {"status": "failed"}, "neo4j": {"status": "ok"}},
+            "hatchet": {"status": "ok"},
+        },
+    )
+    result = workers.runtime_guardrail_handler(ctx, {})
+    assert result["data"]["overall_status"] == "failed"
+    assert "postgres" in result["data"]["failing_subsystems"]
+    assert result["confidence"] == "low"
+    assert result["gaps"]
+
+
+def test_runtime_guardrail_handler_flags_hatchet_unhealthy(monkeypatch, ctx):
+    _patch_runtime_health_tool(
+        monkeypatch,
+        {
+            "status": "degraded",
+            "checks": {"postgres": {"status": "ok"}},
+            "hatchet": {"status": "failed", "reason": "worker not registered"},
+        },
+    )
+    result = workers.runtime_guardrail_handler(ctx, {})
+    assert any("Hatchet" in gap for gap in result["gaps"])

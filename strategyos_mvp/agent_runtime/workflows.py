@@ -31,10 +31,20 @@ from pydantic import BaseModel
 from ..config import CONFIG
 from ..state_store import database_connection, fetchall_dicts
 from . import repository
-from .models import TaskStatus
-from .registry import AGENT_DEFINITIONS_BY_KEY
+from .models import HandoffStatus, TaskStatus
+from .policy import check_handoff_budget, resolve_risk_class
+from .registry import AGENT_DEFINITIONS_BY_KEY, resolve_agent_for_capability
 from .tools import ToolExecutionContext
 from .workers import HandlerInputInvalid, run_handler
+
+# proposed_actions[].action values a handler may emit that this module
+# recognizes as "create a real handoff for this" (design doc section 8.3
+# step 1: "Worker emits a typed handoff proposal"). Any other action value
+# in proposed_actions is left as an inert suggestion for a human/Hermes to
+# read -- not every proposed_action becomes a handoff.
+HANDOFF_ACTION_TO_CAPABILITY = {
+    "resolve_evidence_gap": "resolve_evidence_gap",
+}
 
 AGENT_TASK_EXECUTE_TASK_NAME = "strategyos.agent.task.execute"
 HATCHET_EXECUTION_TIMEOUT = timedelta(minutes=10)
@@ -139,7 +149,111 @@ def execute_agent_task_job(
     final = repository.transition_task(
         tenant_id, task_id, target_status=TaskStatus.SUCCEEDED, actor=worker_actor, result=result
     )
+
+    if CONFIG.agent_handoffs_enabled:
+        _create_proposed_handoffs(tenant_id, task_id, running_task, agent_definition, result, worker_actor)
+
     return AgentTaskExecuteOutput(task_id=task_id, status=final["status"])
+
+
+def _create_proposed_handoffs(
+    tenant_id: str,
+    source_task_id: str,
+    source_task: dict[str, Any],
+    from_agent_definition: Any,
+    result: dict[str, Any],
+    actor: dict[str, str],
+) -> None:
+    """Turns recognized proposed_actions entries into real handoffs + child
+    tasks, subject to depth/fan-out/loop-prevention budget checks (design
+    doc section 8.3, section 15). A rejected budget check is logged onto the
+    task's result rather than raised -- a handoff that can't be created
+    should not fail the parent task that already succeeded."""
+    proposed_actions = result.get("proposed_actions") or []
+    if not proposed_actions:
+        return
+
+    root_task_id = repository.find_root_task_id(tenant_id, source_task_id)
+    depth = repository.handoff_depth_for_task(tenant_id, source_task_id) + 1
+    child_task_count = repository.count_tasks_under_root(tenant_id, root_task_id)
+    prior_signatures = repository.prior_handoff_signatures_for_root(tenant_id, root_task_id)
+
+    for action in proposed_actions:
+        action_name = action.get("action")
+        capability = HANDOFF_ACTION_TO_CAPABILITY.get(action_name)
+        if capability is None:
+            continue  # not every proposed_action is a handoff-worthy one
+
+        to_agent_definition = resolve_agent_for_capability(capability)
+        if to_agent_definition is None:
+            continue  # invented/unroutable capability -- never handed off
+
+        handoff_input = {k: v for k, v in action.items() if k != "action"}
+        scope_hash = repository.hash_scope(handoff_input)
+
+        decision = check_handoff_budget(
+            depth=depth,
+            child_task_count=child_task_count,
+            from_agent_key=from_agent_definition.agent_key,
+            to_agent_key=to_agent_definition.agent_key,
+            requested_capability=capability,
+            prior_handoff_signatures=prior_signatures,
+            scope_hash=scope_hash,
+        )
+        if not decision.allowed:
+            continue  # policy-rejected; the parent task's result already succeeded
+
+        to_installation = repository.ensure_agent_installation(tenant_id, to_agent_definition.agent_key)
+        policy_decision = resolve_risk_class(to_agent_definition, capability, None)
+        child_task = repository.create_task(
+            tenant_id,
+            agent_installation_id=to_installation["installation_id"],
+            agent_definition_version=to_agent_definition.version,
+            task_type=capability,
+            objective=str(action.get("reason") or f"Handoff from {from_agent_definition.display_name}"),
+            risk_class=policy_decision.risk_class.value,
+            requested_by_type="agent",
+            requested_by_id=source_task["agent_installation_id"],
+            idempotency_key=f"{tenant_id}:handoff:{source_task_id}:{capability}:{scope_hash}",
+            conversation_id=source_task.get("conversation_id"),
+            parent_task_id=source_task_id,
+            input=handoff_input,
+        )
+        if child_task["status"] == TaskStatus.PROPOSED.value:
+            if policy_decision.requires_approval:
+                child_task = repository.transition_task(
+                    tenant_id, child_task["task_id"], target_status=TaskStatus.WAITING_FOR_APPROVAL, actor=actor
+                )
+                repository.create_approval_request(
+                    tenant_id,
+                    task_id=child_task["task_id"],
+                    effect_hash=repository.hash_scope({"task_id": child_task["task_id"], "capability": capability, "input": handoff_input}),
+                    risk_class=policy_decision.risk_class.value,
+                    public_explanation=f"{to_agent_definition.display_name} requests approval to: {child_task['objective']}",
+                    actor=actor,
+                )
+            else:
+                child_task = repository.transition_task(
+                    tenant_id, child_task["task_id"], target_status=TaskStatus.QUEUED, actor=actor
+                )
+
+        handoff = repository.create_handoff(
+            tenant_id,
+            source_task_id=source_task_id,
+            child_task_id=child_task["task_id"],
+            from_agent_installation_id=source_task["agent_installation_id"],
+            to_agent_installation_id=to_installation["installation_id"],
+            reason=str(action.get("reason") or ""),
+            requested_capability=capability,
+            expected_output_schema="agent_result.v1",
+            input=handoff_input,
+            actor=actor,
+        )
+        repository.transition_handoff(
+            tenant_id, handoff["handoff_id"], target_status=HandoffStatus.ACCEPTED, actor=actor
+        )
+        prior_signatures = prior_signatures | {(to_agent_definition.agent_key, capability, scope_hash)}
+        child_task_count += 1
 
 
 def _fail_task(

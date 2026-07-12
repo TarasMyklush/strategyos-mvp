@@ -15,6 +15,8 @@ the business-record update via events.append_event().
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from typing import Any
 from uuid import UUID
@@ -729,6 +731,133 @@ def _normalize_handoff(record: dict[str, Any]) -> dict[str, Any]:
     normalized = _stringify_uuids(normalize_record(record))
     normalized["handoff_id"] = normalized.pop("id")
     return normalized
+
+
+def find_root_task_id(tenant_id: str, task_id: str) -> str:
+    """Walks parent_task_id up to the root. Used by handoff budget checks
+    (design doc section 15: budgets are enforced "per root task")."""
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return task_id
+
+    assert connection is not None
+    current_id = task_id
+    with connection as conn:
+        with conn.cursor() as cur:
+            for _ in range(50):  # hard bound: never loop forever on bad data
+                cur.execute(
+                    "select parent_task_id::text from strategyos_agent_tasks where id = %s and tenant_id = %s",
+                    (current_id, tenant_id),
+                )
+                row = cur.fetchone()
+                if row is None or row[0] is None:
+                    break
+                current_id = row[0]
+        conn.commit()
+    return current_id
+
+
+def handoff_depth_for_task(tenant_id: str, task_id: str) -> int:
+    """Counts ancestor hops from `task_id` back to its root via
+    parent_task_id -- the depth a new handoff FROM this task would be
+    created at."""
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return 0
+
+    assert connection is not None
+    depth = 0
+    current_id = task_id
+    with connection as conn:
+        with conn.cursor() as cur:
+            for _ in range(50):
+                cur.execute(
+                    "select parent_task_id::text from strategyos_agent_tasks where id = %s and tenant_id = %s",
+                    (current_id, tenant_id),
+                )
+                row = cur.fetchone()
+                if row is None or row[0] is None:
+                    break
+                depth += 1
+                current_id = row[0]
+        conn.commit()
+    return depth
+
+
+def count_tasks_under_root(tenant_id: str, root_task_id: str) -> int:
+    """Counts every task descended from (or equal to) root_task_id, using a
+    recursive CTE over parent_task_id -- the child-task-count budget check."""
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return 0
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                with recursive descendants as (
+                    select id from strategyos_agent_tasks where id = %s and tenant_id = %s
+                    union all
+                    select t.id from strategyos_agent_tasks t
+                    join descendants d on t.parent_task_id = d.id
+                    where t.tenant_id = %s
+                )
+                select count(*) from descendants
+                """,
+                (root_task_id, tenant_id, tenant_id),
+            )
+            count = cur.fetchone()[0]
+        conn.commit()
+    return int(count)
+
+
+def prior_handoff_signatures_for_root(tenant_id: str, root_task_id: str) -> frozenset[tuple[str, str, str]]:
+    """Returns (to_agent installation's agent_key, requested_capability,
+    scope_hash) for every handoff already created under this root task's
+    tree -- used by policy.check_handoff_budget's loop-prevention check.
+    scope_hash is derived by the caller from the handoff's input, not
+    stored separately, so this reads input_json and lets the caller hash it
+    consistently with how it hashes the new proposed handoff's scope."""
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return frozenset()
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                with recursive descendants as (
+                    select id from strategyos_agent_tasks where id = %s and tenant_id = %s
+                    union all
+                    select t.id from strategyos_agent_tasks t
+                    join descendants d on t.parent_task_id = d.id
+                    where t.tenant_id = %s
+                )
+                select ai.agent_key, h.requested_capability, h.input_json
+                from strategyos_agent_handoffs h
+                join strategyos_agent_installations ai on ai.id = h.to_agent_installation_id
+                where h.source_task_id in (select id from descendants) and h.tenant_id = %s
+                """,
+                (root_task_id, tenant_id, tenant_id, tenant_id),
+            )
+            rows = cur.fetchall()
+        conn.commit()
+    signatures = set()
+    for agent_key, capability, input_json in rows:
+        scope_hash = hash_scope(input_json or {})
+        signatures.add((agent_key, capability, scope_hash))
+    return frozenset(signatures)
+
+
+def hash_scope(scope: dict[str, Any]) -> str:
+    """Canonical hash for a task/handoff input scope, used both when reading
+    prior handoff signatures and when checking a new proposed handoff
+    against them -- callers on both sides must use this function so the
+    hashes are comparable."""
+    canonical = json.dumps(scope, sort_keys=True, default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def transition_handoff(
