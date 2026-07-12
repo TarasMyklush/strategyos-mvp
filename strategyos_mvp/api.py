@@ -3641,6 +3641,25 @@ def _board_portal_payload(
                 },
             },
             {
+                "key": "citation_resolution",
+                "label": "Evidence resolution",
+                "value": _format_resolution_display(
+                    (audit_summary or {}).get("resolved_count"),
+                    (audit_summary or {}).get("citation_count"),
+                ),
+                "sub": "current audit totals",
+                "grounding": {
+                    "status": (
+                        "grounded"
+                        if (audit_summary or {}).get("citation_count") is not None
+                        and (audit_summary or {}).get("resolved_count") is not None
+                        and 0 <= int((audit_summary or {}).get("resolved_count")) <= int((audit_summary or {}).get("citation_count"))
+                        else "needs_evidence"
+                    ),
+                    "source": "governed citation audit",
+                },
+            },
+            {
                 "key": "report_count",
                 "label": "Board packet reports",
                 "value": report_count,
@@ -4516,11 +4535,17 @@ def _chat_threads_payload(
                 ),
             }
         )
-    preview_status = (summary or {}).get('status') or 'available'
-    preview_stage = current_stage.replace('_', ' ')
-    workflow_preview = (
-        f"Board context is {preview_status.replace('_', ' ')} at {preview_stage}"
-    )
+    preview_status = str((summary or {}).get("status") or "available")
+    preview_stage = current_stage.replace("_", " ")
+    preview_status_label = preview_status.replace("_", " ")
+    if preview_status_label == "missing":
+        workflow_preview = "No current governed run is available yet."
+    elif preview_status_label == "available":
+        workflow_preview = "Board context is available."
+    elif preview_status_label == preview_stage:
+        workflow_preview = f"Board context is {preview_status_label}."
+    else:
+        workflow_preview = f"Board context is {preview_status_label} at {preview_stage}."
     if challenged_count:
         workflow_preview += f" · {challenged_count} challenged item{'s' if challenged_count != 1 else ''}"
     threads = [
@@ -9910,10 +9935,15 @@ async def _llm_answer_question_async(*args: Any, **kwargs: Any) -> dict[str, Any
 
 def _assistant_question_is_challenge_closure(question: str) -> bool:
     norm = " ".join(str(question or "").lower().split())
+    asks_for_audit_status = (
+        ("challenged" in norm or "challenge" in norm)
+        and any(token in norm for token in ("status", "evidence", "closure", "citation", "resolve", "resolved"))
+    ) or "evidence closure" in norm or "citation resolution" in norm
     return (
         "close challenged cases" in norm
         or "close challenge cases" in norm
         or ("challenged" in norm and "evidence" in norm and "next action" in norm)
+        or asks_for_audit_status
     )
 
 
@@ -9978,12 +10008,16 @@ def _authenticated_challenge_closure_result(
             else "blocked"
         ),
     }
+    citation_total = audit_summary.get("citation_count")
+    citation_resolved = audit_summary.get("resolved_count")
+    citation_resolution = _format_resolution_display(citation_resolved, citation_total)
 
     if not open_ids:
         answer = (
             "There are no open challenged cases in the current governed audit state. "
             f"The audit history records {len(historical_ids)} case"
             f"{'s' if len(historical_ids) != 1 else ''} that were challenged, but their latest recorded states are responded, locked, closed, or resolved. "
+            f"Evidence resolution is {citation_resolution.lower()}. "
             "No challenge-closure action is required now; confirm the packet reconciliation and current approval decision before release."
         )
         suggestions = [
@@ -10033,6 +10067,11 @@ def _authenticated_challenge_closure_result(
         "case_links": [],
         "grounding_status": "grounded",
         "reconciliation": reconciliation,
+        "citation_resolution": {
+            "resolved": citation_resolved,
+            "total": citation_total,
+            "display": citation_resolution,
+        },
         "_orchestrator_force_answer": True,
     }
 

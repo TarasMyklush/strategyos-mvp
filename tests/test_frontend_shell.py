@@ -3104,6 +3104,18 @@ def test_assistant_transport_failures_log_visible_diagnostics():
     assert 'response.headers.get("x-request-id")' in executive_js
     assert 'errorType: firstDefined(error && error.errorType, "network_error")' in executive_js or 'errorType: "network_error"' in executive_js
     assert 'errorType = response.status === 401 ? "auth_error"' in executive_js or ': "http_error";' in executive_js
+    assert 'errorType = "timeout"' in executive_js
+    assert 'Promise.race([requestPromise, timeoutPromise])' in executive_js
+    assert 'A request must always leave its loading state' in executive_js
+    assert 'pendingThread = threadStore()[threadKey]' in executive_js
+
+
+def test_assistant_network_count_is_labeled_not_presented_as_failed_requests():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text()
+
+    assert 'assistantName + " network · " + liveCount + " active"' in executive_js
+    assert 'active assistant module' in executive_js
+    assert 'fabBadge.hidden = true' in executive_js
 
 
 def test_assistant_invalid_ui_token_recovers_anonymously_and_replaces_failed_message():

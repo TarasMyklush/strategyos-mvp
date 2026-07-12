@@ -670,15 +670,24 @@
 
   function postJson(path, body, options) {
     var requestOptions = options || {};
+    var timeoutMs = Number(firstDefined(requestOptions.timeoutMs, 45000));
     var headers = authHeaders({ skipAuth: requestOptions.skipAuth === true });
     var usedBearerAuth = Boolean(headers.Authorization);
     headers["Content-Type"] = "application/json";
     var requestId = firstDefined(requestOptions && requestOptions.requestId, body && body.trace_id, "");
     if (requestId) headers["X-Request-ID"] = requestId;
-    return fetch(path, {
+    var abortController = typeof AbortController === "function" ? new AbortController() : null;
+    var timeoutId = null;
+    var timeoutError = new Error("Assistant request timed out after " + timeoutMs + "ms");
+    timeoutError.endpoint = path;
+    timeoutError.status = 0;
+    timeoutError.requestId = requestId;
+    timeoutError.errorType = "timeout";
+    var requestPromise = fetch(path, {
       method: "POST",
       headers: headers,
-      body: JSON.stringify(body || {})
+      body: JSON.stringify(body || {}),
+      signal: abortController ? abortController.signal : undefined
     }).then(function (response) {
       return parseJsonResponse(response).then(function (payload) {
         if (shouldRetryAssistantAnonymously(response, body, requestOptions, usedBearerAuth)) {
@@ -719,15 +728,24 @@
           requestId: responseRequestId
         };
       });
-    }).catch(function (error) {
+    });
+    var timeoutPromise = new Promise(function (_resolve, reject) {
+      timeoutId = window.setTimeout(function () {
+        if (abortController) abortController.abort();
+        reject(timeoutError);
+      }, timeoutMs);
+    });
+    return Promise.race([requestPromise, timeoutPromise]).catch(function (error) {
       if (error && error.endpoint) throw error;
       var networkError = new Error(firstDefined(error && error.message, "Assistant transport failure"));
       networkError.endpoint = path;
       networkError.status = 0;
       networkError.requestId = requestId;
-      networkError.errorType = "network_error";
+      networkError.errorType = error && error.name === "AbortError" ? "timeout" : "network_error";
       networkError.cause = error;
       throw networkError;
+    }).finally(function () {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
     });
   }
 
@@ -855,25 +873,46 @@
       input.placeholder = 'Thinking\u2026';
       form.classList.add('assistant-form--loading');
     }
-    var result = await buildAssistantReply(cleanPrompt, validChip, hiddenContext);
-    // Clear loading state
-    if (!validChip && form && input) {
-      input.disabled = false;
-      input.placeholder = 'Ask Hermes\u2026';
-      form.classList.remove('assistant-form--loading');
-      focusAssistantInput();
+    var pendingThread = threadStore()[threadKey];
+    var result;
+    try {
+      result = await buildAssistantReply(cleanPrompt, validChip, hiddenContext);
+    } catch (error) {
+      result = makeAssistantFailureResult(cleanPrompt, {
+        endpoint: firstDefined(error && error.endpoint, "/assistant/chat"),
+        statusCode: firstDefined(error && error.status, ""),
+        requestId: firstDefined(error && error.requestId, ""),
+        errorType: firstDefined(error && error.errorType, "unexpected_client_error"),
+        details: error && error.message ? error.message : String(error || "Unexpected assistant client error")
+      });
+    } finally {
+      // A request must always leave its loading state, including when the
+      // browser aborts a transport or a rendering helper throws.
+      if (!validChip && form && input) {
+        input.disabled = false;
+        input.placeholder = 'Ask Hermes\u2026';
+        form.classList.remove('assistant-form--loading');
+        focusAssistantInput();
+      }
+      if (validChip) {
+        validChip.textContent = originalText;
+        validChip.disabled = false;
+      }
+    }
+    if (!result) {
+      result = makeAssistantFailureResult(cleanPrompt, {
+        endpoint: "/assistant/chat",
+        errorType: "empty_transport_result",
+        details: "The assistant transport returned without a result."
+      });
     }
     if (pending) {
-      var thread = threadStore()[threadKey];
+      var thread = threadStore()[threadKey] || pendingThread;
       if (thread) {
         applyAssistantResultToMessage(thread, pending, result);
       }
       saveStoredThreads();
       renderAssistantStudio();
-    }
-    if (validChip) {
-      validChip.textContent = originalText;
-      validChip.disabled = false;
     }
   }
 
@@ -2779,15 +2818,21 @@
     var active = exchanges.find(function (item) { return item.id === state.activeA2AExchange; }) || exchanges[0] || null;
     var liveCount = exchanges.filter(function (item) { return String(firstDefined(item.status, "active")).toLowerCase() !== "done"; }).length;
 
-    if (fabText) fabText.textContent = assistantName + " ↔ assistants";
+    if (fabText) fabText.textContent = assistantName + " network · " + liveCount + " active";
     if (title) title.textContent = assistantName + " ↔ assistant network";
     if (subtitle) subtitle.textContent = "Your chief of staff, gathering for you · live";
     if (fabBadge) {
-      fabBadge.hidden = !liveCount;
+      // This is the active-module count, not a failed-request queue. The
+      // visible launcher label above carries the count in plain language.
+      fabBadge.hidden = true;
       fabBadge.textContent = String(liveCount || 0);
+      fabBadge.title = String(liveCount) + " active assistant module" + (liveCount === 1 ? "" : "s");
+      fabBadge.setAttribute("aria-label", fabBadge.title);
     }
     if (fab) {
       fab.setAttribute("aria-expanded", state.a2aOpen ? "true" : "false");
+      fab.setAttribute("aria-label", assistantName + " assistant network: " + liveCount + " active module" + (liveCount === 1 ? "" : "s"));
+      fab.title = assistantName + " assistant network: " + liveCount + " active module" + (liveCount === 1 ? "" : "s");
       fab.onclick = function () {
         state.a2aOpen = !state.a2aOpen;
         renderA2APanel();

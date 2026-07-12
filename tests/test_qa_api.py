@@ -840,7 +840,7 @@ def test_authenticated_challenge_closure_uses_current_audit_state_without_qa_rel
             "/assistant/chat",
             headers={"X-API-Key": "operator-key"},
             json={
-                "question": "Help me close challenged cases before the board meeting. Which cases are challenged, what evidence is needed, and what is my next action?",
+                "question": "What is the current status of challenged cases and evidence closure?",
                 "persona": "ceo",
                 "mode": "auto",
             },
@@ -854,6 +854,11 @@ def test_authenticated_challenge_closure_uses_current_audit_state_without_qa_rel
         assert payload["reconciliation"]["open_challenge_count"] == 0
         assert payload["reconciliation"]["historical_challenge_count"] == 1
         assert "no open challenged cases" in payload["answer"].lower()
+        assert payload["citation_resolution"] == {
+            "resolved": 2,
+            "total": 2,
+            "display": "2 of 2 citations resolved",
+        }
         assert payload["case_links"] == []
     finally:
         _restore_env(original)
@@ -891,6 +896,25 @@ def test_authenticated_challenge_closure_returns_links_for_every_open_case(monke
     assert result["grounding_status"] == "grounded"
     assert [item["finding_id"] for item in result["case_links"]] == ["F-001", "F-002"]
     assert result["reconciliation"]["open_finding_row_count"] == 2
+
+
+def test_board_status_thread_does_not_repeat_the_same_lifecycle_value(monkeypatch):
+    monkeypatch.setattr(api_module, "_finding_rows_from_summary", lambda summary: [])
+
+    chat = api_module._chat_threads_payload(
+        {"run_id": "run-1", "status": "awaiting_review", "current_stage": "awaiting_review"},
+        {"role": "operator", "authenticated": True},
+        executive_modes={
+            "active_persona_id": "ceo",
+            "active_board_state": "pre",
+            "active_driver_key": "board_packet",
+            "personas": [{"persona_id": "ceo", "label": "Group CEO"}],
+        },
+        board_portal={"presentation_state": "pre"},
+        publication={"challenged_cases": 0, "approval_status": "pending", "board_pack": {}},
+    )
+
+    assert chat["threads"][0]["preview"] == "Board context is awaiting review."
 
 
 def test_assistant_chat_authenticated_graph_route_returns_graph_provenance(monkeypatch):
