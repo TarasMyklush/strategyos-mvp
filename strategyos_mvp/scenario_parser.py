@@ -1844,11 +1844,13 @@ def _parse_governed_public_exec_surface(
         answer = ""
         basis = ""
 
-    topic_tokens = [
-        token
-        for token in ("hedge", "currency", "eur", "fx", "margin", "ebitda", "revenue", "cash", "jv", "joint venture", "recoverable", "recovery", "evidence")
-        if token in norm
-    ]
+    wants_jv_funding = any(token in norm for token in ("jv", "joint venture", "joint-venture"))
+    topic_token_source = (
+        ("jv", "joint venture", "joint-venture", "liquidity", "funding")
+        if wants_jv_funding
+        else ("hedge", "currency", "eur", "fx", "margin", "ebitda", "revenue", "cash", "recoverable", "recovery", "evidence")
+    )
+    topic_tokens = [token for token in topic_token_source if token in norm]
     related: list[tuple[str, int, dict[str, Any]]] = []
     for source_name, items in (("drivers", drivers), ("findings", findings)):
         for index, item in enumerate(items):
@@ -1879,7 +1881,7 @@ def _parse_governed_public_exec_surface(
             "assumptions have been substituted."
         )
         basis = "Governed packet contains no matching currency or hedge driver/finding."
-    elif any(token in norm for token in ("jv", "joint venture", "joint-venture")) and not related:
+    elif wants_jv_funding and not related:
         answer = (
             "The current governed run does not expose a quantified JV funding or liquidity scenario, "
             "so StrategyOS cannot determine how the JV is funded from this packet. No illustrative "

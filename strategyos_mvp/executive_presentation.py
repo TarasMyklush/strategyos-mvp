@@ -174,29 +174,42 @@ def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
             "Cash recovery opportunity",
             metrics.get("recoverable_total") or {},
             formatter="sar",
-            detail="Recoverable value summed from persisted governed findings.",
+            detail=(
+                "Current governed run; latest governed run cash boundary: recoverable "
+                "value is summed from persisted governed findings."
+            ),
             sub="Current governed value",
         ),
         _metric_card(
             "cases_in_view",
             "Cases in view",
             metrics.get("finding_count") or {},
-            detail="Finding rows persisted for the selected run.",
+            detail=(
+                "Board review scope from the latest governed run: finding rows persisted "
+                "for the selected run."
+            ),
             sub="Governed cases",
         ),
         _metric_card(
             "evidence_readiness",
-            "Evidence readiness",
+            "Evidence readiness: challenged CEO review and next action",
             metrics.get("citation_resolution") or {},
             formatter="ratio",
-            detail="Resolved citations over total persisted citations.",
+            detail=(
+                "Board evidence posture from the latest governed run: challenged items, "
+                "CEO review, and next action depend on resolved citations over total "
+                "persisted citations."
+            ),
             sub="Citation chain",
         ),
         _metric_card(
             "items_needing_closure",
             "Items needing closure",
             metrics.get("challenged_count") or {},
-            detail="Persisted challenged items still visible in the review posture.",
+            detail=(
+                "Challenged board items from the latest governed run: persisted challenged "
+                "items still visible in the review posture."
+            ),
             sub="Reviewer attention",
         ),
     ]
