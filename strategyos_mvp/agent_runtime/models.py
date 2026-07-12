@@ -56,8 +56,13 @@ TASK_STATUS_TRANSITIONS: dict[TaskStatus, frozenset[TaskStatus]] = {
     TaskStatus.TIMED_OUT: frozenset(),
 }
 
+# FAILED is deliberately excluded: the lifecycle diagram (design doc section
+# 7) allows failed -> queued under retry policy, so it is not a dead end.
+# failure_code/failure_detail_public may still be set on a FAILED task; a
+# later retry's transition to QUEUED is expected to clear them via a fresh
+# attempt, not by this set's membership.
 TASK_TERMINAL_STATUSES: frozenset[TaskStatus] = frozenset(
-    {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.TIMED_OUT}
+    {TaskStatus.SUCCEEDED, TaskStatus.CANCELLED, TaskStatus.TIMED_OUT}
 )
 
 

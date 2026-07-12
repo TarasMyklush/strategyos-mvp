@@ -484,7 +484,7 @@ create index if not exists idx_strategyos_kg_edges_label on strategyos_kg_edges(
 
 -- Agents layer (docs/agent-layer/agents-layer-design.md section 6).
 -- strategyos_agent_events (above) is the pre-existing finding-audit table
--- with run-specific columns; it is kept as-is for backward compatibility.
+-- with run-specific columns, kept as-is for backward compatibility.
 -- The tables below are the normalized agents schema and are intentionally
 -- separate from it.
 
