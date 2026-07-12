@@ -44,6 +44,21 @@
 
   <main class="page fidelity-shell" id="sheet">
     <section class="view-panel view-panel--home" data-view-panel="home" id="view-home" role="tabpanel" aria-hidden="false">
+      <section class="section" id="board-workspace" aria-labelledby="board-heading" hidden>
+        <div class="section-head section-head--split">
+          <div>
+            <h2 class="section-title" id="board-heading">Board portal</h2>
+            <p class="section-note" id="board-note">CEO-approved material, lifecycle state, and the decisions recorded for this meeting.</p>
+          </div>
+          <div class="state-tabs" id="board-state-row" role="tablist" aria-label="Board lifecycle states"></div>
+          <p class="section-note board-state-note" id="board-state-note">Board lifecycle stays explicit from pre-board preparation through frozen close.</p>
+        </div>
+        <article class="card board-portal" id="board-portal"></article>
+        <div class="reports-secondary">
+          <article class="card report-surface-card" id="report-surface-card"></article>
+        </div>
+      </section>
+
       <section class="hero card" id="hero" aria-labelledby="hero-head">
         <div class="hero-copy">
           <p class="eyebrow" id="hero-eyebrow">Group CEO diagnostics</p>
@@ -70,7 +85,7 @@
         </div>
       </section>
 
-      <section class="section" aria-labelledby="driver-heading">
+      <section class="section" id="kpi-index-section" aria-labelledby="driver-heading">
         <div class="section-head">
           <h2 class="section-title" id="driver-heading">The group index</h2>
           <p class="section-note" id="driver-hint">Percent of plan is the headline — the figure is the footnote. Tap a driver for the story.</p>
@@ -78,14 +93,14 @@
         <div class="driver-grid" id="driver-row"></div>
       </section>
 
-      <section class="section" aria-labelledby="drill-heading">
+      <section class="section" id="kpi-detail-section" aria-labelledby="drill-heading">
         <div class="section-head">
           <h2 class="section-title" id="drill-heading">What's driving it</h2>
         </div>
         <article class="card detail-card" id="driver-drill"></article>
       </section>
 
-      <section class="section" aria-labelledby="lower-rail-heading">
+      <section class="section" id="priority-section" aria-labelledby="lower-rail-heading">
         <div class="section-head">
           <h2 class="section-title" id="lower-rail-heading">What matters now</h2>
         </div>
@@ -96,14 +111,14 @@
         </div>
       </section>
 
-      <section class="section" aria-labelledby="gravity-heading">
+      <section class="section" id="decision-questions-section" aria-labelledby="gravity-heading">
         <div class="section-head">
-          <h2 class="section-title" id="gravity-heading">Explore scenarios</h2>
+          <h2 class="section-title" id="gravity-heading">Decision questions</h2>
         </div>
         <article class="card detail-card" id="gravity-panel"></article>
       </section>
 
-      <section class="section" aria-labelledby="agents-heading">
+      <section class="section" id="agents-section" aria-labelledby="agents-heading">
         <div class="section-head">
           <div>
             <h2 class="section-title" id="agents-heading">Agents</h2>
@@ -122,8 +137,8 @@
     <section class="view-panel" data-view-panel="assistants" id="view-assistants" role="tabpanel" aria-hidden="true" hidden>
       <section class="section" aria-labelledby="assistant-view-heading">
         <div class="section-head">
-          <h2 class="section-title" id="assistant-view-heading">Assistants</h2>
-          <p class="section-note">A read on current usage, freshness, and context depth across your organization — your team readiness view.</p>
+          <h2 class="section-title" id="assistant-view-heading">Executive coverage</h2>
+          <p class="section-note">What the AI team is doing, what it has produced, and where a human decision is waiting.</p>
         </div>
         <article class="card assistant-network-card" id="assistant-network-card"></article>
       </section>
@@ -132,39 +147,13 @@
     <section class="view-panel" data-view-panel="knowledge" id="view-knowledge" role="tabpanel" aria-hidden="true" hidden>
       <section class="section" aria-labelledby="knowledge-view-heading">
         <div class="section-head">
-          <h2 class="section-title" id="knowledge-view-heading">Knowledge graph</h2>
-          <p class="section-note">How your organization’s governed data relates — shaped by the questions you’ve asked.</p>
+          <h2 class="section-title" id="knowledge-view-heading">Evidence map</h2>
+          <p class="section-note">Trace board claims to governed evidence and the persisted relationships between them.</p>
         </div>
         <article class="card knowledge-graph-card" id="knowledge-graph-card"></article>
         <aside class="kg-inspector" id="kg-inspector" hidden aria-labelledby="kg-inspector-title"></aside>
       </section>
 
-      <section class="section" aria-labelledby="board-heading">
-      <div class="section-head section-head--split">
-        <div>
-          <h2 class="section-title" id="board-heading">Board portal</h2>
-          <p class="section-note" id="board-note">Board-safe lifecycle, materials, and governed memory.</p>
-        </div>
-        <div class="state-tabs" id="board-state-row" role="tablist" aria-label="Board lifecycle states"></div>
-        <p class="section-note board-state-note" id="board-state-note">Board lifecycle stays explicit from pre-board preparation through frozen close.</p>
-      </div>
-      <article class="card board-portal" id="board-portal"></article>
-      <div class="reports-secondary">
-        <article class="card report-surface-card" id="report-surface-card"></article>
-      </div>
-
-      <section class="section" aria-labelledby="summary-heading">
-        <div class="section-head">
-          <h2 class="section-title" id="summary-heading">Summary</h2>
-        </div>
-        <article class="summary card" id="summary-card">
-          <p class="summary-kicker" id="summary-kicker">Current readout</p>
-          <h3 class="summary-title" id="summary-title">Executive signal</h3>
-          <p class="summary-body" id="summary-body">Loading summary…</p>
-          <p class="summary-note" id="summary-note"></p>
-          <a class="summary-link" id="summary-link" href="/executive">Open governed view</a>
-        </article>
-      </section>
     </section>
   </main>
 

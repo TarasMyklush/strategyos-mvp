@@ -979,7 +979,7 @@ def test_knowledge_graph_subtitle_grammar():
     """#10: Knowledge graph subtitle must disclose persisted-only data."""
     js = _static_executive_js()
 
-    assert "Only persisted governed nodes and relationships are shown" in js, (
+    assert "Every visible node and link is persisted in the governed run" in js, (
         "Knowledge graph subtitle must explain that the graph is persisted-only"
     )
     # Old wording must NOT appear
@@ -1186,15 +1186,15 @@ def test_avatar_profile_action_is_wired_not_dead():
     )
 
 
-def test_assistant_network_uses_header_row_not_repeated_labels():
-    """Assistant rows must not repeat Freshness/Used/Context labels on every row."""
+def test_assistant_network_uses_executive_semantic_headers():
+    """Assistant rows use business output and decision semantics, not telemetry jargon."""
     js = _static_executive_js()
     network_start = js.index("function renderAssistantNetwork()")
     network_end = js.index("function renderA2APanel()", network_start)
     network_block = js[network_start:network_end]
 
     assert "network-header" in network_block or "network-list-head" in network_block, (
-        "Assistant network must render one visible header row for Freshness / Used / Context"
+        "Assistant network must render one visible semantic header row"
     )
     assert "<small>freshness</small>" not in network_block, (
         "Assistant rows must not repeat the visible 'freshness' label"
@@ -1208,9 +1208,17 @@ def test_assistant_network_uses_header_row_not_repeated_labels():
     assert '<span class="sr-only">Freshness</span><span class="network-stat-value">' not in network_block, (
         "Assistant rows must not repeat row-level Freshness labels once the header exists"
     )
-    assert 'aria-label="Freshness"' in network_block, (
-        "Assistant stat values should keep a single semantic label without visible row clutter"
-    )
+    assert 'aria-label="State"' in network_block
+    assert 'aria-label="Business output"' in network_block
+    assert 'aria-label="Decision or scope"' in network_block
+
+
+def test_dark_theme_native_controls_inherit_executive_text_colour():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert "button { color: inherit; }" in css
+    assert 'html[data-theme="dark"] .pill-inline.warn' in css
+    assert 'html[data-theme="dark"] .pill-inline.danger' in css
 
 
 def test_agents_running_panel_has_no_orphan_sovereign_bullet_for_ceo():

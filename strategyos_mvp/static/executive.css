@@ -72,7 +72,8 @@ body {
   border: 0;
 }
 
-button, a { font: inherit; }
+button, a, input, textarea, select { font: inherit; }
+button { color: inherit; }
 a { color: inherit; }
 
 .topbar {
@@ -864,7 +865,7 @@ a { color: inherit; }
 
 .network-row {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) minmax(220px, 280px);
+  grid-template-columns: 56px minmax(0, 1fr) minmax(360px, 520px);
   gap: 16px;
   padding: 16px;
   align-items: center;
@@ -900,7 +901,7 @@ a { color: inherit; }
 
 .network-list-head {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) minmax(220px, 280px);
+  grid-template-columns: 56px minmax(0, 1fr) minmax(360px, 520px);
   gap: 16px;
   padding: 0 16px 8px;
   color: var(--soft);
@@ -1911,6 +1912,16 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 
 .hero-prompts { margin-top: 20px; }
 
+#hero[hidden],
+#kpi-index-section[hidden],
+#kpi-detail-section[hidden],
+#priority-section[hidden],
+#decision-questions-section[hidden],
+#agents-section[hidden],
+#board-workspace[hidden] {
+  display: none !important;
+}
+
 .hero-prompts .prompt-chip {
   padding: 8px 12px;
   font-size: 12px;
@@ -1973,6 +1984,114 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 
 .kpi-brief-summary p {
   font-size: 15px;
+}
+
+.kpi-driver-mix {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.kpi-driver-list {
+  display: grid;
+  gap: 13px;
+}
+
+.kpi-driver-row__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 13px;
+}
+
+.kpi-driver-row__head strong {
+  white-space: nowrap;
+}
+
+.kpi-driver-row__head small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.kpi-driver-bar {
+  height: 5px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.kpi-driver-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.kpi-decision-context {
+  display: grid;
+  gap: 7px;
+  padding: 16px 18px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.kpi-decision-context strong {
+  max-width: 85ch;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.board-release-hold {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  max-width: 760px;
+  padding: 34px;
+}
+
+.board-release-hold .board-title {
+  margin: 0;
+}
+
+.decision-question-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.decision-question-card {
+  display: grid;
+  gap: 10px;
+  min-height: 150px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.decision-question-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.decision-question-card span,
+.decision-question-card small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.decision-question-card strong {
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 .kpi-brief-grid {
@@ -2079,6 +2198,10 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   gap: 8px;
 }
 
+.kpi-inline-composer[hidden] {
+  display: none;
+}
+
 .kpi-chat-start,
 .kpi-inline-composer button {
   border: 1px solid var(--accent);
@@ -2172,6 +2295,10 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .decision-question-grid { grid-template-columns: 1fr; }
 }
 
 #gravity-panel,
@@ -2733,6 +2860,9 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 .pill-inline.ok { background: var(--ok-soft); }
 .pill-inline.warn { background: var(--warn-soft); color: #8a5a12; }
 .pill-inline.danger { background: var(--danger-soft); color: #9b3434; }
+
+html[data-theme="dark"] .pill-inline.warn { color: #f0cf91; }
+html[data-theme="dark"] .pill-inline.danger { color: #efaaaa; }
 
 #assistant-state:empty { display: none; }
 
@@ -4781,22 +4911,6 @@ html[data-theme="dark"] .trend-axis {
 
 .disco-conn {
   font-size: 12px;
-}
-
-@media (min-width: 1101px) {
-  /* Reserve a lighter safe lane for the floating Hermes/A2A controls so the
-     lower-right graph cluster remains clickable without entering focus mode. */
-  #knowledge-graph-card {
-    margin-right: clamp(200px, 22vw, 400px);
-  }
-
-  .knowledge-graph-card .kg-stage-shell {
-    margin-right: clamp(180px, 20vw, 360px);
-  }
-
-  .kg-inspector {
-    right: clamp(200px, 22vw, 400px);
-  }
 }
 
 @media (max-width: 1100px) {

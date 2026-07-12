@@ -179,7 +179,7 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="findings-panel"' in html
     assert 'id="developments-panel"' in html
     assert 'id="week-panel"' in html
-    assert "Explore scenarios" in html
+    assert "Decision questions" in html
     assert 'id="board-portal"' in html
     assert 'id="agents-activity"' in html
     assert 'id="assistant-network-card"' in html
@@ -220,7 +220,7 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="hero-head"' in html or 'class="hero-title"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
     assert "The group index" in html
-    assert 'id="summary-card"' in html or 'class="summary"' in html
+    assert 'id="decision-questions-section"' in html
     assert 'id="driver-drill"' in html
     assert 'id="findings-panel"' in html
     assert 'id="developments-panel"' in html
@@ -279,7 +279,7 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
     assert "The group index" in html
-    assert 'id="summary-card"' in html or 'class="summary"' in html
+    assert 'id="decision-questions-section"' in html
     assert 'id="driver-drill"' in html
     assert 'id="findings-panel"' in html
     assert 'id="developments-panel"' in html
@@ -949,7 +949,7 @@ def test_kg_render_includes_modern_elements():
     assert 'role="application"' in js, "Graph stage must have application ARIA role"
     assert "aria-label" in js, "Graph must have aria-labels"
     assert "kg-dimmed" in js, "Dimmed state class for hover must exist"
-    assert "Graph Universe" in js, "Knowledge graph should expose Graph Universe mode"
+    assert "What supports the board narrative" in js
     assert "kg-density-toggle" in js, "Density toggle control must exist"
     assert "kg-zoom-in" in js and "kg-zoom-out" in js, "Zoom controls must exist"
     assert "kg-focus-mode" in js, "Focus mode control must exist"
@@ -991,7 +991,7 @@ def test_kg_universe_does_not_generate_decorative_density_nodes():
     assert "targetTotalNodes = Math.max(110" not in js
     assert "satelliteKind" not in js
     assert "relayCount" not in js
-    assert "Only persisted governed nodes and relationships are shown" in js
+    assert "Every visible node and link is persisted in the governed run" in js
     assert "Persisted edges:" in js
 
 
@@ -1300,10 +1300,24 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert 'function renderInlineKpiDrill(driver, drillCard)' in js
     assert 'entrypoint: "ceo_kpi_inline"' in js
     assert "kpi_key:" in js
-    assert "View calculation and source trail" in js
+    assert "Calculation and source trail" in js
     assert "executiveKpiBrief(driver)" in js
     assert 'id="driver-drill"' in html
     assert html.index('id="driver-row"') < html.index('id="driver-drill"')
+
+
+def test_ceo_information_architecture_separates_board_and_operational_surfaces():
+    js = _static_executive_js()
+    html = (Path(api_module.STATIC_DIR) / "executive.html").read_text(encoding="utf-8")
+
+    assert 'id="board-workspace"' in html
+    assert 'id="agents-section"' in html
+    assert 'id="decision-questions-section"' in html
+    assert 'boardOnly || id === "agents-section"' in js
+    assert 'state.activePersona === "board" && !boardReleased' in js
+    assert "No live diagnostics, working evidence, or pre-board figures" in js
+    assert "Questions worth answering now" in js
+    assert "What supports the board narrative" in js
 
 
 def test_inline_kpi_chat_does_not_open_the_detached_assistant_drawer():
@@ -3116,12 +3130,12 @@ console.log(JSON.stringify({{
     # the data model.
     assert "Team readiness score" not in result["html"]
     assert "target 80" not in result["html"]
-    assert "Modules running" in result["html"]
+    assert "Active now" in result["html"]
     # Fixture: running + protected = 2 running; preview_only = 1 pending;
     # blocked = 1 blocked/idle.
-    assert "2 running" in result["html"]
-    assert "1 pending" in result["html"]
-    assert "1 blocked / idle" in result["html"]
+    assert "2 active" in result["html"]
+    assert "1 waiting" in result["html"]
+    assert "1 guarded / blocked" in result["html"]
     for fabricated in ("92", "76", "62", "45"):
         assert ">" + fabricated + "<" not in result["html"], (
             f"fabricated readiness score {fabricated} leaked back into the card"
@@ -5482,7 +5496,7 @@ def test_render_board_portal_has_multi_timing_re_sync_chain():
     )
 
 
-def test_render_persona_view_reasserts_board_tab_ui_for_knowledge():
+def test_render_persona_view_reasserts_board_tab_ui_for_board_workspace():
     """P0-13: renderPersonaView must call syncBoardStateTabUI at the end
     for the knowledge view, after ALL render functions have completed.
     This catches className/inline-style reversion from any of the many
@@ -5492,9 +5506,9 @@ def test_render_persona_view_reasserts_board_tab_ui_for_knowledge():
     fn_start = executive_js.index("function renderPersonaView()")
     fn_end = executive_js.index("function refresh", fn_start)
     fn_body = executive_js[fn_start:fn_end]
-    # Must have final re-assert for knowledge view after all renders
-    assert 'state.activeView === "knowledge"' in fn_body, (
-        "renderPersonaView must check for knowledge view"
+    # Must have final re-assert for the dedicated board workspace after all renders
+    assert 'state.activePersona === "board" && state.activeView === "home"' in fn_body, (
+        "renderPersonaView must check for the board workspace"
     )
     assert "syncBoardStateTabUI(resolveBoardState())" in fn_body, (
         "renderPersonaView must re-assert board tab UI for knowledge view"

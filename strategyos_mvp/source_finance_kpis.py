@@ -92,6 +92,11 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
                 ],
             },
         },
+        "contributors": {
+            "revenue": _contributors(revenue_accounts, balances, accounts, credit_nature=True),
+            "cogs": _contributors(cogs_accounts, balances, accounts),
+            "operating_cost": _contributors(operating_cost_accounts, balances, accounts),
+        },
     }
     cash = _cash_position(cash_path, root)
     cash_evidence = cash.pop("evidence", {})
@@ -273,6 +278,33 @@ def _is_operating_cost(account: str, row: Mapping[str, str]) -> bool:
 
 def _scope(accounts: Iterable[str], balances: Mapping[str, Decimal]) -> dict[str, Any]:
     return {"accounts": list(accounts), "net_debit_minus_credit_sar": _number(sum((balances[item] for item in accounts), Decimal()))}
+
+
+def _contributors(
+    scoped_accounts: Iterable[str],
+    balances: Mapping[str, Decimal],
+    account_master: Mapping[str, Mapping[str, str]],
+    *,
+    credit_nature: bool = False,
+) -> list[dict[str, Any]]:
+    """Return reproducible account-level contributors for executive explanation."""
+    rows: list[tuple[str, Decimal]] = []
+    for account in scoped_accounts:
+        value = -balances[account] if credit_nature else balances[account]
+        rows.append((account, value))
+    total = sum((value for _account, value in rows), Decimal())
+    result: list[dict[str, Any]] = []
+    for account, value in sorted(rows, key=lambda item: abs(item[1]), reverse=True):
+        description = str(account_master.get(account, {}).get("account_description") or "").strip()
+        result.append(
+            {
+                "account": account,
+                "label": description or f"Account {account}",
+                "value_sar": _number(value),
+                "share_pct": float((value / total * 100).quantize(Decimal("0.1"))) if total else None,
+            }
+        )
+    return result
 
 
 def _headers(values: Iterable[Any]) -> dict[str, int]:

@@ -1129,9 +1129,13 @@
         assistant: firstDefined(item && item.label, item && item.name, item && item.module_id, "Assistant module " + (index + 1)),
         who: humanizeToken(lane),
         unit: firstDefined(item && item.summary, item && item.doing, item && item.output_metric, tenantDisplayName()),
-        freshness: firstDefined(statusLabel(status), status, "current"),
-        usage: firstDefined(item && item.output_metric, statusLabel(status), "active"),
-        depth: firstDefined(item && item.approval_dependency, item && item.route, "governed"),
+        stateLabel: firstDefined(statusLabel(status), status, "Current"),
+        businessOutput: firstDefined(item && item.output_metric, item && item.summary, "No output reported yet"),
+        decisionScope: (function () {
+          var dependency = firstDefined(item && item.approval_dependency, "");
+          if (!dependency || String(dependency).toLowerCase() === "none") return "No action needed";
+          return humanizeToken(dependency);
+        }()),
         route: firstDefined(item && item.route, "")
       };
     });
@@ -2705,7 +2709,10 @@
 
   function renderViewNav() {
     var nav = $("view-nav");
-    if (nav) nav.hidden = state.activePersona === "board";
+    if (nav) {
+      nav.hidden = state.activePersona === "board";
+      nav.style.display = state.activePersona === "board" ? "none" : "";
+    }
     safeArray(document.querySelectorAll("[data-view-target]")).forEach(function (link) {
       var target = link.getAttribute("data-view-target") || "home";
       if (target === "home") link.textContent = state.activePersona === "board" ? "Portal" : "Diagnostics";
@@ -2732,12 +2739,21 @@
     var hasPercentDrivers = drivers.some(function (driver) { return driverHasPercent(driver); });
     if (state.activePersona === "ceo") {
       if (driverHeading) driverHeading.textContent = "The group index";
-      if (driverHint) driverHint.textContent = "Four governed CEO indicators. Percent of plan is the headline when an approved comparator is available. Select a KPI to inspect its calculation inline.";
+      if (driverHint) driverHint.textContent = "Four governed CEO indicators. Select a KPI to see its contributors, decision implication, and evidence trail.";
     } else {
       if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
       if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current governed measures";
     }
     if (lowerHeading) lowerHeading.textContent = "What matters now";
+    var boardOnly = state.activePersona === "board";
+    ["hero", "kpi-index-section", "kpi-detail-section", "priority-section", "decision-questions-section", "agents-section"].forEach(function (id) {
+      var element = $(id);
+      if (element) element.hidden = boardOnly || id === "agents-section";
+    });
+    var boardWorkspace = $("board-workspace");
+    if (boardWorkspace) boardWorkspace.hidden = !boardOnly;
+    var gravityHeading = $("gravity-heading");
+    if (gravityHeading) gravityHeading.textContent = "Decision questions";
     var footer = $("composed-footer");
     if (footer) footer.hidden = false;
   }
@@ -2771,10 +2787,10 @@
         : '';
       card.innerHTML = [
         '<div class="detail-head"><div><p class="detail-eyebrow">Assistant network</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Assistant Network')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'Governed assistant modules attached to the latest run.')) + '</p></div><div class="network-filter-wrap"><button type="button" class="pill-inline ok network-module-toggle" id="network-module-toggle" aria-haspopup="menu" aria-expanded="' + (state.networkFilterMenuOpen ? 'true' : 'false') + '">' + escapeHtml(filterLabels[activeFilter] || 'All modules') + ' · ' + escapeHtml(String(filteredNetwork.length)) + '</button>' + (state.networkFilterMenuOpen ? '<div class="network-filter-menu" role="menu" aria-label="Filter assistant modules"><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'all' ? 'true' : 'false') + '" data-network-menu-filter="all">All modules</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'running' ? 'true' : 'false') + '" data-network-menu-filter="running">Running</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'pending' ? 'true' : 'false') + '" data-network-menu-filter="pending">Pending</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'blocked' ? 'true' : 'false') + '" data-network-menu-filter="blocked">Blocked / idle</button></div>' : '') + '</div></div>',
-        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? runningCount : '—')) + '</strong><span>Modules running</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="running">' + escapeHtml(String(runningCount)) + ' running</span><span class="pill-inline warn" data-network-filter="pending">' + escapeHtml(String(pendingCount)) + ' pending</span><span class="pill-inline danger" data-network-filter="blocked">' + escapeHtml(String(blockedCount)) + ' blocked / idle</span></div></div>',
-        '<div class="network-list" id="network-module-list" data-active-filter="' + escapeHtml(activeFilter) + '"><div class="network-list-head"><span class="sr-only">Status</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">Freshness</span><span class="network-list-head__stat">Used</span><span class="network-list-head__stat">Context</span></div></div>' + filteredNetwork.map(function (item, index) {
-          return '<div class="network-row" data-network-idx="' + index + '" data-network-status="' + escapeHtml(networkStatusKey(item)) + '" role="button" tabindex="0" title="Ask ' + escapeHtml(firstDefined(item.assistant, 'this assistant')) + ' about its current work"><div class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(statusLabel(item.tone)) + '"><strong>●</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">' + escapeHtml(firstDefined(item.freshness, 'current')) + '</span></span><span aria-label="Used"><span class="network-stat-value">' + escapeHtml(firstDefined(item.usage, 'active')) + '</span></span><span aria-label="Context"><span class="network-stat-value">' + escapeHtml(firstDefined(item.depth, 'good')) + '</span></span></div></div>';
-        }).join('') + (!network.length ? '<div class="network-row"><div class="network-score-badge tone-warn"><strong>—</strong></div><div class="network-row__main"><div class="network-row__head"><strong>Awaiting module telemetry</strong><span>· Governed runtime</span></div><p class="list-copy">No assistant module feed is available for this packet yet.</p></div><div class="network-stats"><span aria-label="Freshness"><span class="network-stat-value">awaiting</span></span><span aria-label="Used"><span class="network-stat-value">—</span></span><span aria-label="Context"><span class="network-stat-value">governed</span></span></div></div>' : '') + (network.length && !filteredNetwork.length ? '<div class="network-empty">No modules match this filter.</div>' : '') + '</div>' + catalogueHtml
+        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? runningCount : '—')) + '</strong><span>Active now</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="running">' + escapeHtml(String(runningCount)) + ' active</span><span class="pill-inline warn" data-network-filter="pending">' + escapeHtml(String(pendingCount)) + ' waiting</span><span class="pill-inline danger" data-network-filter="blocked">' + escapeHtml(String(blockedCount)) + ' guarded / blocked</span></div></div>',
+        '<div class="network-list" id="network-module-list" data-active-filter="' + escapeHtml(activeFilter) + '"><div class="network-list-head"><span class="sr-only">Status</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">State</span><span class="network-list-head__stat">Business output</span><span class="network-list-head__stat">Decision / scope</span></div></div>' + filteredNetwork.map(function (item, index) {
+          return '<div class="network-row" data-network-idx="' + index + '" data-network-status="' + escapeHtml(networkStatusKey(item)) + '" role="button" tabindex="0" title="Ask ' + escapeHtml(firstDefined(item.assistant, 'this assistant')) + ' about its current work"><div class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(statusLabel(item.tone)) + '"><strong>●</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="State"><span class="network-stat-value">' + escapeHtml(firstDefined(item.stateLabel, 'Current')) + '</span></span><span aria-label="Business output"><span class="network-stat-value">' + escapeHtml(firstDefined(item.businessOutput, 'No output reported')) + '</span></span><span aria-label="Decision or scope"><span class="network-stat-value">' + escapeHtml(firstDefined(item.decisionScope, 'No action needed')) + '</span></span></div></div>';
+        }).join('') + (!network.length ? '<div class="network-row"><div class="network-score-badge tone-warn"><strong>—</strong></div><div class="network-row__main"><div class="network-row__head"><strong>Awaiting module telemetry</strong><span>· Governed runtime</span></div><p class="list-copy">No assistant module feed is available for this packet yet.</p></div><div class="network-stats"><span><span class="network-stat-value">Awaiting data</span></span><span><span class="network-stat-value">No output yet</span></span><span><span class="network-stat-value">No action needed</span></span></div></div>' : '') + (network.length && !filteredNetwork.length ? '<div class="network-empty">No modules match this filter.</div>' : '') + '</div>' + catalogueHtml
       ].join('');
       // Bug 3 fix: bind click handlers to network rows so they open the
       // Hermes drawer with a contextual prompt about the clicked module.
@@ -3093,17 +3109,17 @@
       return shouldShowKgLabel(node, focused, isSelected);
     });
     var activeLens = firstDefined(focusQuestion && focusQuestion.label, densityMode === "dense" ? "Dense universe" : "Compact universe");
-    var evidenceCoverage = Number(graph.evidence_coverage || 0);
+    var presentCategories = Array.from(new Set(nodes.map(function (node) { return node.category; }).filter(Boolean)));
 
     card.innerHTML =
-      '<div class="detail-head detail-head--kg"><div><p class="detail-eyebrow">Knowledge graph</p><h3 class="detail-title">Graph Universe</h3><p class="section-note">Only persisted governed nodes and relationships are shown. No decorative density nodes are added.</p></div><span class="pill-inline ok">Persisted relationships only</span></div>'
+      '<div class="detail-head detail-head--kg"><div><p class="detail-eyebrow">Evidence map</p><h3 class="detail-title">What supports the board narrative</h3><p class="section-note">Every visible node and link is persisted in the governed run. Select an item to inspect its evidence and connected claims.</p></div><span class="pill-inline ok">Governed records only</span></div>'
       + '<div class="kg-questions" role="tablist" aria-label="Question lenses">' + safeArray(graph.questions).map(function (question, index) {
         var active = focusQuestion && focusQuestion.id === question.id;
         var focusCount = safeArray(question.focus).length;
         return '<button type="button" class="kg-question' + (active ? ' is-active' : '') + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" data-kg-question="' + index + '"><span class="kg-question__dot" aria-hidden="true"></span>' + escapeHtml(firstDefined(question.label, 'Question')) + '<span class="kg-question__count">' + focusCount + '</span></button>';
       }).join('') + '</div>'
       + '<div class="kg-stage-shell' + (state.kgFocusMode ? ' is-focus-mode' : '') + '">'
-      + '<div class="kg-stage__hud" aria-hidden="false"><div class="kg-hud-chip"><strong>' + nodes.length + '</strong><span>visible nodes</span></div><div class="kg-hud-chip"><strong>' + edges.length + '</strong><span>edges</span></div><div class="kg-hud-chip"><strong>' + activeLens + '</strong><span>active lens</span></div><div class="kg-hud-chip"><strong>' + evidenceCoverage + '</strong><span>evidence coverage</span></div></div>'
+      + '<div class="kg-stage__hud" aria-hidden="false"><div class="kg-hud-chip"><strong>' + nodes.length + '</strong><span>governed records</span></div><div class="kg-hud-chip"><strong>' + edges.length + '</strong><span>persisted links</span></div><div class="kg-hud-chip"><strong>' + activeLens + '</strong><span>current question</span></div></div>'
       + '<div class="kg-controls" role="toolbar" aria-label="Graph universe controls">'
       + '<button type="button" class="kg-control-btn' + (densityMode === 'dense' ? ' is-active' : '') + '" id="kg-density-toggle" aria-pressed="' + (densityMode === 'dense' ? 'true' : 'false') + '">' + (densityMode === 'dense' ? 'Dense mode' : 'Compact mode') + '</button>'
       + '<button type="button" class="kg-control-btn" id="kg-zoom-out" aria-label="Zoom out">−</button>'
@@ -3148,7 +3164,7 @@
       }).join('') + '</div>'
       + '</div>'
       /* Legend */
-      + '<div class="kg-legend" aria-label="Node category legend">' + Object.keys(KG_CATEGORY_COLORS).map(function (cat) {
+      + '<div class="kg-legend" aria-label="Node category legend">' + presentCategories.map(function (cat) {
         return '<span class="kg-legend__item"><span class="kg-legend__swatch" style="background:' + escapeHtml(KG_CATEGORY_COLORS[cat]) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[cat], cat)) + '</span>';
       }).join('') + '</div>'
       + '<div class="kg-stage__foot"><span class="kg-foot-chip">Persisted nodes: ' + Number(graph.raw_node_count || 0) + '</span><span class="kg-foot-chip">Persisted edges: ' + edges.length + '</span><span class="kg-foot-chip">No generated nodes</span></div>'
@@ -3309,8 +3325,9 @@
     $("hero-head").textContent = firstDefined(preferredHero.headline, preferredHero.summary, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
     var truthSourceBadge = diagnostics.source === "database" ? "DB" : diagnostics.source === "governed_artifacts" ? "RUN" : "--";
-    $("hero-score").textContent = hasScore ? String(clampedScore || 0) : truthSourceBadge;
-    $("hero-cap").textContent = firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
+    var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
+    $("hero-score").textContent = hasScore ? String(clampedScore || 0) : (reviewGate ? "REVIEW" : truthSourceBadge);
+    $("hero-cap").textContent = reviewGate ? "human release gate" : firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
     var byline = $("hero-byline");
     if (byline) {
       var bylineText = firstDefined(blueprint.by, "");
@@ -3513,6 +3530,7 @@
     var coverage = brief.coverage || {};
     var audit = brief.audit || {};
     var steps = safeArray(calculation.steps);
+    var drivers = safeArray(brief.drivers);
     var auditSources = safeArray(audit.source_titles);
     var rawSources = safeArray(audit.source_files);
     var inputId = "kpi-inline-input-" + key.replace(/[^a-z0-9_-]/gi, "");
@@ -3521,15 +3539,21 @@
         return '<div class="kpi-brief-step"><span>' + escapeHtml(firstDefined(step.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(step.value, "—")) + '</strong></div>';
       }).join("") + '</div>'
       : "";
+    var driverMarkup = drivers.length
+      ? '<section class="kpi-driver-mix"><span class="kpi-brief-label">' + escapeHtml(firstDefined(brief.driver_title, "What makes up this figure")) + '</span><div class="kpi-driver-list">' + drivers.map(function (item) {
+          var share = Number(item.share_pct);
+          var width = Number.isFinite(share) ? Math.max(2, Math.min(100, Math.abs(share))) : 0;
+          return '<div class="kpi-driver-row"><div class="kpi-driver-row__head"><span>' + escapeHtml(firstDefined(item.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(item.value, "—")) + (Number.isFinite(share) ? ' <small>' + escapeHtml(share.toFixed(1)) + '%</small>' : '') + '</strong></div>' + (width ? '<div class="kpi-driver-bar"><span style="width:' + escapeHtml(width.toFixed(1)) + '%"></span></div>' : '') + '</div>';
+        }).join("") + '</div></section>'
+      : '';
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
       '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><h3 class="detail-title">' + escapeHtml(label) + '</h3></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
       '<div class="kpi-brief-summary"><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><p>' + escapeHtml(firstDefined(brief.readout, "No governed explanation is available.")) + '</p></div>',
-      '<div class="kpi-brief-grid"><section class="kpi-brief-panel"><span class="kpi-brief-label">' + escapeHtml(firstDefined(comparison.label, "Comparison")) + '</span><strong>' + escapeHtml(firstDefined(comparison.value, "Not supplied")) + '</strong><p>' + escapeHtml(firstDefined(comparison.note, "No approved comparison is available.")) + '</p></section>',
-      '<section class="kpi-brief-panel"><span class="kpi-brief-label">' + escapeHtml(firstDefined(coverage.label, "Data coverage")) + '</span><strong>' + escapeHtml(firstDefined(coverage.value, "Complete")) + '</strong><p>' + escapeHtml(firstDefined(coverage.note, "")) + '</p></section></div>',
-      '<section class="kpi-brief-calculation"><div><span class="kpi-brief-label">' + escapeHtml(firstDefined(calculation.label, "How this figure is built")) + '</span><p>' + escapeHtml(firstDefined(calculation.formula, "No governed formula is available.")) + '</p></div>' + calculationMarkup + '</section>',
+      driverMarkup,
+      '<section class="kpi-decision-context"><span class="kpi-brief-label">Decision context</span><strong>' + escapeHtml(firstDefined(brief.decision_context, comparison.note, "No decision implication is available.")) + '</strong></section>',
       '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">KPI conversation</span><strong>Ask Hermes about ' + escapeHtml(label) + '</strong><p>Hermes begins with this figure, its calculation boundary and the missing comparison context.</p></div><button type="button" class="kpi-chat-start" data-kpi-chat-start="true">Start with this KPI</button></div><form class="kpi-inline-composer" data-kpi-inline-composer="true" hidden><label class="sr-only" for="' + escapeHtml(inputId) + '">Ask Hermes about ' + escapeHtml(label) + '</label><input id="' + escapeHtml(inputId) + '" type="text" placeholder="Ask a follow-up about ' + escapeHtml(label.toLowerCase()) + '…" autocomplete="off" /><button type="submit">Send</button></form><div class="kpi-inline-answer" aria-live="polite"></div></section>',
-      '<details class="kpi-brief-audit"><summary>View calculation and source trail</summary><div class="kpi-brief-audit__body"><p>' + escapeHtml(firstDefined(audit.computation_boundary, "Calculated only from governed source extracts.")) + '</p>' + (auditSources.length ? '<div><span>Sources used</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Still needed for comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + (firstDefined(audit.evidence_summary, "") ? '<div><span>Calculation evidence</span><strong>' + escapeHtml(audit.evidence_summary) + '</strong></div>' : "") + (rawSources.length ? '<div class="kpi-brief-audit__files"><span>Source files</span><strong>' + escapeHtml(rawSources.join(" · ")) + '</strong></div>' : "") + '</div></details>',
+      '<details class="kpi-brief-audit"><summary>Calculation and source trail</summary><div class="kpi-brief-audit__body"><div><span>Formula</span><strong>' + escapeHtml(firstDefined(calculation.formula, "No governed formula is available.")) + '</strong></div>' + calculationMarkup + '<div><span>Source coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div><p>' + escapeHtml(firstDefined(audit.computation_boundary, "Calculated only from governed source extracts.")) + '</p>' + (auditSources.length ? '<div><span>Sources used</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Still needed for comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + (firstDefined(audit.evidence_summary, "") ? '<div><span>Calculation evidence</span><strong>' + escapeHtml(audit.evidence_summary) + '</strong></div>' : "") + (rawSources.length ? '<div class="kpi-brief-audit__files"><span>Source files</span><strong>' + escapeHtml(rawSources.join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
 
@@ -3577,7 +3601,7 @@
       if (focusInput) input.focus();
     };
     if (startButton) startButton.addEventListener("click", function () {
-      askHermes("Give me the executive readout for " + label + ": explain the current actual, how it is calculated, what comparison data is still needed, and the decision implication. Start from the governed KPI context.", true);
+      askHermes(firstDefined(brief.decision_question, "Give me the executive readout for " + label + ": explain the current actual, its drivers, and the decision implication."), true);
     });
     composer.addEventListener("submit", function (event) {
       event.preventDefault();
@@ -3683,6 +3707,24 @@
       }
     }
     if (gravityPanel) {
+      var currentLabel = firstDefined(driver.label, "the selected KPI");
+      var brief = executiveKpiBrief(driver);
+      var governedPrompts = [
+        firstDefined(brief.decision_question, "What is driving " + currentLabel + " and what decision does it require?"),
+        "What remains before this board packet can be released, who owns it, and what evidence is missing?",
+        "Which governed cases create the largest recoverable value, and what should be acted on first?"
+      ];
+      gravityPanel.innerHTML = [
+        '<div class="detail-head"><div><p class="detail-eyebrow">CEO agenda</p><h3 class="detail-title">Questions worth answering now</h3><p class="section-note">Each question starts Hermes with the relevant KPI, board-gate, or case context already attached.</p></div></div>',
+        '<div class="decision-question-grid">' + governedPrompts.map(function (prompt, index) {
+          var labels = [currentLabel + ' drivers', 'Board release gate', 'Value at stake'];
+          return '<button class="decision-question-card" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><span>' + escapeHtml(labels[index]) + '</span><strong>' + escapeHtml(prompt) + '</strong><small>Ask Hermes with governed context →</small></button>';
+        }).join('') + '</div>'
+      ].join('');
+      safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
+        button.onclick = function () { askAssistant(button.getAttribute("data-chat-prompt") || "", button); };
+      });
+      return;
       var vlogs = [
         { id: 'uTRKdCY4HdE', title: 'Enterprise AI Strategy and CEO Leadership', speaker: 'McKinsey & Company', theme: 'CEO leadership · enterprise AI strategy', dur: '~45 min', summary: 'CXOTalk #851: How CEOs should think about AI strategy, governance, and organizational alignment.', transcript: 'Full discussion on CEO-level AI strategy: moving from experimentation to enterprise-wide adoption, building AI governance frameworks, and aligning AI initiatives with business strategy.' },
         { id: 'sFSzPE2AOE0', title: 'Aligning AI with Enterprise Strategy', speaker: 'Leon Gordon, CEO at Onyx Data', theme: 'AI & data strategy alignment', dur: '~40 min', summary: 'How organizations can bridge the gap between AI capabilities and strategic goals.', transcript: 'Leon Gordon shares frameworks for aligning AI initiatives with enterprise strategy: data maturity assessment, capability mapping, and building a data-driven culture.' },
@@ -3983,7 +4025,13 @@
     var modes = safeArray(board.lifecycle_flow).length ? safeArray(board.lifecycle_flow) : (((state.latestPacket || {}).executive_modes || {}).board_states || []);
     var note = $("board-state-note");
     var activeBoardState = resolveBoardState();
+    var boardPublication = getPublication();
+    var boardStateReleased = Boolean((boardPublication.reconciliation || {}).publish_gate_passed) && /^(approved|published|released|frozen)$/.test(String(firstDefined(boardPublication.publish_state, "")).toLowerCase());
+    var boardStateNote = state.activePersona === "board" && !boardStateReleased
+      ? "No packet content is available until the CEO release decision is recorded."
+      : firstDefined(boardStateSupportNote(board), "Board lifecycle stays explicit from pre-board preparation through frozen close.");
     if (!row) return;
+    if (row.style) row.style.display = state.activePersona === "board" && !boardStateReleased ? "none" : "";
     _ensureBoardStateRowDelegated();
     _ensureBoardStateObserver();
     // Sync existing buttons: update attributes in-place for fast state change.
@@ -4035,7 +4083,7 @@
           })(bs);
         }
       });
-      if (note) note.textContent = firstDefined(boardStateSupportNote(board), "Board lifecycle stays explicit from pre-board preparation through frozen close.");
+      if (note) note.textContent = boardStateNote;
       return;
     }
     // Slow path: mode list changed — full DOM rebuild.
@@ -4071,7 +4119,7 @@
       })(modeState);
       row.appendChild(button);
     });
-    if (note) note.textContent = firstDefined(boardStateSupportNote(board), "Board lifecycle stays explicit from pre-board preparation through frozen close.");
+    if (note) note.textContent = boardStateNote;
   }
 
   function renderBoardPortal() {
@@ -4092,6 +4140,12 @@
     var stateDetail = boardStateDetailForRender(boardState, board);
     var lifecycle = boardLifecycleForRender(boardState, board);
     var livePrompts = safeArray(safeArray(board.live_prompts).length ? board.live_prompts : board.livePrompts);
+    var boardReleased = Boolean(reconciliation.publish_gate_passed) && /^(approved|published|released|frozen)$/.test(String(firstDefined(publication.publish_state, "")).toLowerCase());
+    if (state.activePersona === "board" && !boardReleased) {
+      if (note) note.textContent = "This packet has not been released to the Board Room.";
+      portal.innerHTML = '<div class="board-release-hold"><p class="detail-eyebrow">Release gate</p><h3 class="board-title">Packet awaiting CEO release</h3><p class="board-copy">No live diagnostics, working evidence, or pre-board figures are visible in Board Room. The approved packet will appear here only after the governed release decision is recorded.</p><span class="pill-inline warn">Not released</span></div>';
+      return;
+    }
     var stateSpecific = '';
     if (boardState === 'pre') {
       stateSpecific = '<div class="board-mode-grid"><section class="board-panel"><p class="detail-eyebrow">CEO-approved material</p><div class="mini-list">' + (decks.length ? decks.map(function (item) {
@@ -4115,7 +4169,7 @@
         var flags = [];
         if (item.actual) flags.push('<span class="pill-inline ok">actual</span>');
         if (item.presented) flags.push('<span class="pill-inline warn">presented</span>');
-        if (item.next_action) flags.push('<button type="button" class="pill-inline board-status-chip board-status-chip--action" data-board-action="' + escapeHtml(String(item.next_action)) + '" aria-label="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '" title="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</button>');
+        if (item.next_action && item.presented) flags.push('<button type="button" class="pill-inline board-status-chip board-status-chip--action" data-board-action="' + escapeHtml(String(item.next_action)) + '" aria-label="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '" title="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</button>');
         return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
       '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'frozen'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
@@ -4739,6 +4793,11 @@
     var reportCard = $("report-surface-card");
     var publication = getPublication();
     if (!reportCard) return;
+    var reportReleased = Boolean((publication.reconciliation || {}).publish_gate_passed) && /^(approved|published|released|frozen)$/.test(String(firstDefined(publication.publish_state, "")).toLowerCase());
+    if (state.activePersona === "board" && !reportReleased) {
+      reportCard.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Board material</p><h3 class="detail-title">No released reports</h3></div><span class="pill-inline warn">Release pending</span></div><p class="detail-copy">Report links remain unavailable until the CEO release decision is recorded.</p>';
+      return;
+    }
     reportCard.innerHTML = [
       '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Board reports' : 'Report surface') + '</p><h3 class="detail-title">' + (state.activePersona === "ceo" ? 'Board reports' : 'Previewable report routes') + '</h3></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '</span></div>',
       '<p class="detail-copy">Overview, cases, evidence, and reports now sit as one workspace. This rail keeps the board-safe output explicit.</p>',
@@ -4748,9 +4807,7 @@
           return map[String(fmt).toLowerCase()] || escapeHtml(fmt);
         };
         var catLabel = REPORT_CATEGORY_MAP[item.category] || humanizeToken(item.category) || 'report';
-        var meta = state.activePersona === "ceo"
-          ? escapeHtml(catLabel)
-          : escapeHtml(catLabel) + ' \u00b7 ' + escapeHtml(firstDefined(item.format, 'file'));
+        var meta = escapeHtml(catLabel);
         return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, item.artifact_key, 'Artifact')) + '</strong><p class="list-copy">' + meta + '</p></div><span class="pill-inline ' + (item.restricted ? 'warn' : 'ok') + '">' + escapeHtml(item.restricted ? 'restricted' : 'board-safe') + '</span></div>';
       }).join("") + '</div>',
       state.activePersona === "ceo" ? '' : '<a class="summary-link" href="' + escapeHtml(firstDefined(publication.preview_route, '/public/runs/latest/report-preview')) + '">Open report preview</a>'
@@ -4758,6 +4815,7 @@
   }
 
   function renderSummary() {
+    if (!$("summary-kicker") || !$("summary-title") || !$("summary-body") || !$("summary-note")) return;
     var driver = getActiveDriver() || {};
     var hero = getExecutiveDiagnostics().hero || {};
     var link = $("summary-link");
@@ -4813,7 +4871,7 @@
     // pipeline (CSSOM recalc from innerHTML replacements across multiple
     // render functions) is restored. Only applies when the board portal
     // is visible (knowledge view active).
-    if (state.activeView === "knowledge") {
+    if (state.activePersona === "board" && state.activeView === "home") {
       renderBoardStateTabs();
       syncBoardStateTabUI(resolveBoardState());
     }

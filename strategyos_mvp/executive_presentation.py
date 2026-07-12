@@ -191,15 +191,42 @@ def _executive_kpi_brief(
     scoped_accounts = {}
     if isinstance(evidence_details.get("account_scopes"), Mapping):
         scoped_accounts = evidence_details["account_scopes"]
+    contributors = evidence_details.get("contributors") if isinstance(evidence_details.get("contributors"), Mapping) else {}
+
+    def contributor_rows(scope: str, limit: int = 5) -> list[dict[str, Any]]:
+        rows = list(contributors.get(scope) or []) if isinstance(contributors, Mapping) else []
+        result: list[dict[str, Any]] = []
+        for row in rows[:limit]:
+            if not isinstance(row, Mapping):
+                continue
+            result.append(
+                {
+                    "label": str(row.get("label") or row.get("account") or "Account"),
+                    "value": _format_sar(row.get("value_sar")),
+                    "share_pct": _number_or_none(row.get("share_pct")),
+                }
+            )
+        if len(rows) > limit:
+            shown = sum((_number_or_none(row.get("value_sar")) or 0) for row in rows[:limit] if isinstance(row, Mapping))
+            total = sum((_number_or_none(row.get("value_sar")) or 0) for row in rows if isinstance(row, Mapping))
+            remainder = total - shown
+            result.append({"label": f"Other {len(rows) - limit} accounts", "value": _format_sar(remainder), "share_pct": (remainder / total * 100) if total else None})
+        return result
 
     calculation_steps: list[dict[str, str]] = []
+    driver_rows: list[dict[str, Any]] = []
     narrative = ""
+    implication = ""
+    decision_question = ""
     if key == "revenue":
         account_count = len((scoped_accounts.get("revenue") or {}).get("accounts") or [])
         narrative = "Revenue recognised in the H1 general ledger."
         calculation_steps = [{"label": "Recognised revenue", "value": metric}]
         if account_count:
             narrative = f"Revenue recognised across {account_count} revenue account groups in the H1 general ledger."
+        driver_rows = contributor_rows("revenue")
+        implication = "Revenue performance against plan cannot be judged until the approved revenue plan is connected." if missing_inputs else comparison
+        decision_question = "Which revenue streams account for the current result, and where is concentration risk highest?"
     elif key == "ebitda_margin":
         revenue = _number_or_none(components.get("revenue_actual"))
         cogs = _number_or_none(components.get("cogs_actual"))
@@ -213,12 +240,23 @@ def _executive_kpi_brief(
             {"label": "Less operating cost", "value": display_component(operating_cost)},
             {"label": "EBITDA", "value": display_component(ebitda)},
         ]
+        driver_rows = [
+            {"label": "Revenue", "value": display_component(revenue), "share_pct": None},
+            {"label": "Cost of goods sold", "value": display_component(cogs), "share_pct": (cogs / revenue * 100) if revenue and cogs is not None else None},
+            {"label": "Operating cost", "value": display_component(operating_cost), "share_pct": (operating_cost / revenue * 100) if revenue and operating_cost is not None else None},
+            {"label": "EBITDA", "value": display_component(ebitda), "share_pct": (ebitda / revenue * 100) if revenue and ebitda is not None else None},
+        ]
+        implication = "Margin performance against plan cannot be judged until approved EBITDA and revenue plans are connected." if missing_inputs else comparison
+        decision_question = "What is the EBITDA bridge from revenue through direct and operating costs?"
     elif key == "operating_cost":
         account_count = len((scoped_accounts.get("operating_cost") or {}).get("accounts") or [])
         narrative = "Operating expenditure before depreciation, amortisation and interest."
         calculation_steps = [{"label": "Operating cost", "value": metric}]
         if account_count:
             narrative = f"Operating expenditure across {account_count} expense accounts; depreciation, amortisation and interest excluded."
+        driver_rows = contributor_rows("operating_cost")
+        implication = "Cost performance against plan cannot be judged until the approved operating-cost plan is connected." if missing_inputs else comparison
+        decision_question = "Which operating-cost accounts create the largest spend concentration and merit review?"
     elif key == "cash_vs_floor":
         as_of = str(evidence_details.get("as_of") or "the latest reported date")
         missing_accounts = list(evidence_details.get("missing_accounts") or [])
@@ -226,11 +264,27 @@ def _executive_kpi_brief(
         if missing_accounts:
             narrative += " One balance remains outstanding and has not been estimated."
         calculation_steps = [{"label": "Reported cash position", "value": metric}]
+        reported_accounts = list(evidence_details.get("reported_accounts") or [])
+        cash_total = sum((_number_or_none(row.get("balance_sar")) or 0) for row in reported_accounts if isinstance(row, Mapping))
+        driver_rows = [
+            {
+                "label": str(row.get("account") or "Treasury account"),
+                "value": _format_sar(row.get("balance_sar")),
+                "share_pct": ((_number_or_none(row.get("balance_sar")) or 0) / cash_total * 100) if cash_total else None,
+            }
+            for row in reported_accounts if isinstance(row, Mapping)
+        ]
+        implication = "The cash-floor decision is unavailable until the board floor is supplied; one missing balance remains excluded." if missing_accounts else ("Cash cannot be assessed against the board floor until that floor is connected." if missing_inputs else comparison)
+        decision_question = "What cash is reported, what remains missing, and what floor is required for a board-safe comparison?"
 
     return {
         "period_label": f"{period} actual",
         "metric": metric,
         "readout": narrative,
+        "drivers": driver_rows,
+        "driver_title": "What makes up this figure" if key != "ebitda_margin" else "EBITDA bridge",
+        "decision_context": implication,
+        "decision_question": decision_question,
         "comparison": {
             "label": comparison_name,
             "value": comparison_value,

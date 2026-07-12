@@ -30,6 +30,13 @@ def test_source_pack_calculates_four_ceo_actuals_with_lineage():
     assert payload["evidence"]["revenue"]["details"]["account_scopes"]["revenue"]["accounts"] == [
         "4000", "4010", "4020", "4030"
     ]
+    revenue_drivers = payload["evidence"]["revenue"]["details"]["contributors"]["revenue"]
+    assert [(item["label"], item["value_sar"], item["share_pct"]) for item in revenue_drivers] == [
+        ("Revenue – Catering", "123016434.85", 31.9),
+        ("Revenue – Government", "109896978.70", 28.5),
+        ("Revenue – Modern Trade", "103168943.62", 26.8),
+        ("Revenue – Hospitality", "48997551.73", 12.7),
+    ]
     assert payload["evidence"]["cash_vs_floor"]["actual_complete"] is False
     assert payload["evidence"]["cash_vs_floor"]["details"]["missing_accounts"] == ["Emirates NBD EUR"]
 
@@ -64,3 +71,5 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
         {"label": "EBITDA", "value": "SAR 215.7M"},
     ]
     assert cards[2]["executive_brief"]["readout"].startswith("Operating expenditure across 126")
+    assert cards[2]["executive_brief"]["drivers"][0]["label"] == "Salaries & Wages"
+    assert cards[2]["executive_brief"]["decision_context"].startswith("Cost performance against plan")
