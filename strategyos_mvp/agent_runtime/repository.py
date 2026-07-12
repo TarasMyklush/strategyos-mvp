@@ -61,6 +61,40 @@ def _stringify_uuids(record: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Tenant resolution
+# ---------------------------------------------------------------------------
+
+
+def resolve_tenant_id(tenant_slug: str, *, display_name: str | None = None) -> str:
+    """Every agent_runtime table's tenant_id column is a UUID FK to
+    strategyos_tenants(id), but the authenticated principal only carries a
+    slug (state_store.upsert_tenant() hardcodes CONFIG.tenant_slug, which
+    assumes a single tenant per deployment -- this resolver is generic over
+    any slug so the API layer can convert whatever slug the principal
+    carries). Upserts on conflict so repeated calls for the same slug are
+    idempotent and never create duplicate tenant rows."""
+    connection, skipped = database_connection()
+    if skipped is not None:
+        raise RuntimeError(skipped.get("reason", "database unavailable"))
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into strategyos_tenants (slug, display_name)
+                values (%s, %s)
+                on conflict (slug) do update set display_name = coalesce(excluded.display_name, strategyos_tenants.display_name)
+                returning id
+                """,
+                (tenant_slug, display_name or tenant_slug),
+            )
+            tenant_id = cur.fetchone()[0]
+        conn.commit()
+    return str(tenant_id)
+
+
+# ---------------------------------------------------------------------------
 # Agent definitions and installations
 # ---------------------------------------------------------------------------
 
@@ -224,6 +258,33 @@ def get_conversation(tenant_id: str, conversation_id: str) -> dict[str, Any] | N
                        board_state, classification, archived_at, created_at, updated_at
                 from strategyos_agent_conversations
                 where id = %s and tenant_id = %s
+                """,
+                (conversation_id, tenant_id),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    if record is None:
+        return None
+    normalized = _stringify_uuids(normalize_record(record))
+    normalized["conversation_id"] = normalized.pop("id")
+    return normalized
+
+
+def archive_conversation(tenant_id: str, conversation_id: str) -> dict[str, Any] | None:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                update strategyos_agent_conversations
+                set archived_at = coalesce(archived_at, now()), updated_at = now()
+                where id = %s and tenant_id = %s
+                returning id, tenant_id, created_by_subject, persona, run_id, finding_id,
+                          board_state, classification, archived_at, created_at, updated_at
                 """,
                 (conversation_id, tenant_id),
             )

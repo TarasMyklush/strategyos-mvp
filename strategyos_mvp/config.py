@@ -222,6 +222,9 @@ class StrategyOSConfig:
     twins_mutations_enabled: bool
     twins_scheduler_enabled: bool
     twins_expose_reasoning_diagnostics: bool
+    agent_conversations_enabled: bool
+    agent_handoffs_enabled: bool
+    agent_live_ui_enabled: bool
     ocr_engine: str
     runtime_dep_ca_certificates_version: str
     runtime_dep_curl_version: str
@@ -507,6 +510,9 @@ def load_config() -> StrategyOSConfig:
         twins_expose_reasoning_diagnostics=env_bool(
             "STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS", False
         ),
+        agent_conversations_enabled=env_bool("STRATEGYOS_AGENT_CONVERSATIONS_ENABLED", False),
+        agent_handoffs_enabled=env_bool("STRATEGYOS_AGENT_HANDOFFS_ENABLED", False),
+        agent_live_ui_enabled=env_bool("STRATEGYOS_AGENT_LIVE_UI_ENABLED", False),
         ocr_engine=(env("STRATEGYOS_OCR_ENGINE", "tesseract") or "tesseract").lower(),
         runtime_dep_ca_certificates_version=(
             env("STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION", "20250419")

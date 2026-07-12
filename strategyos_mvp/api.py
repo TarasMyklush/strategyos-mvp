@@ -221,6 +221,7 @@ from .twins.api import (
     router as twin_router,
     twin_operational_health_payload,
 )
+from .agent_runtime.api import router as agent_runtime_router
 
 app = FastAPI(title="StrategyOS MVP API", version="0.1.0")
 STATIC_DIR = Path(__file__).with_name("static")
@@ -247,6 +248,7 @@ def _asset_revision(*relative_paths: str) -> str:
 def _executive_asset_revision() -> str:
     return _asset_revision(*_EXECUTIVE_ASSET_REV_FILES)
 app.include_router(twin_router)
+app.include_router(agent_runtime_router)
 
 ARTIFACT_PREVIEW_LIMIT_BYTES = 24_000
 ARTIFACT_JSON_PARSE_LIMIT_BYTES = 200_000
