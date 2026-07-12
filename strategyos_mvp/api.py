@@ -4423,6 +4423,7 @@ def _executive_diagnostics_payload(
                 "source_files": item.get("source_files"),
                 "trend": item.get("trend"),
                 "trend_status": item.get("trend_status"),
+                "executive_brief": item.get("executive_brief"),
             }
         )
     presentation_hero = dict(executive_presentation_payload.get("hero") or {})

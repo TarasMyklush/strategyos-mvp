@@ -217,6 +217,10 @@ def test_ceo_kpi_contract_uses_only_authoritative_deterministic_finance_inputs()
     assert cards[3]["comparison"] == "SAR 100K above floor"
     assert all(card["availability"] == "verified" for card in cards)
     assert all(card["trend"] == {"actual": [], "plan": []} for card in cards)
+    assert cards[1]["executive_brief"]["calculation"]["steps"][1] == {
+        "label": "Less cost of goods sold",
+        "value": "Not supplied",
+    }
 
 
 def test_ceo_kpi_contract_refuses_untrusted_oracle_shaped_payload():

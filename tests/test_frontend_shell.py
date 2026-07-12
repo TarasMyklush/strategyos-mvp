@@ -1300,6 +1300,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert 'function renderInlineKpiDrill(driver, drillCard)' in js
     assert 'entrypoint: "ceo_kpi_inline"' in js
     assert "kpi_key:" in js
+    assert "View calculation and source trail" in js
+    assert "executiveKpiBrief(driver)" in js
     assert 'id="driver-drill"' in html
     assert html.index('id="driver-row"') < html.index('id="driver-drill"')
 
@@ -1312,7 +1314,10 @@ def test_inline_kpi_chat_does_not_open_the_detached_assistant_drawer():
 
     assert "buildAssistantReply(question, null" in drill_body
     assert "openAssistantDrawer" not in drill_body
-    assert "Hermes starts from this KPI" in drill_body
+    assert "Hermes begins with this figure" in drill_body
+    assert "Start with this KPI" in drill_body
+    assert "kpi-inline-retry" in drill_body
+    assert "Hermes could not reach the shared assistant service" in drill_body
 
 
 def test_ceo_driver_copy_polishes_internal_governed_artifact_keys():

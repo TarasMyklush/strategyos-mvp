@@ -98,6 +98,7 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     components: dict[str, str | None] = {
         "revenue_actual": _number(revenue),
         "revenue_plan": None,
+        "cogs_actual": _number(cogs),
         "ebitda_actual": _number(ebitda),
         "ebitda_plan": None,
         "operating_cost_actual": _number(operating_cost),

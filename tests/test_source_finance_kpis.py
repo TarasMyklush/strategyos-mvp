@@ -19,6 +19,7 @@ def test_source_pack_calculates_four_ceo_actuals_with_lineage():
     assert payload["components"] == {
         "revenue_actual": "385079908.90",
         "revenue_plan": None,
+        "cogs_actual": "75503688.29",
         "ebitda_actual": "215741310.56",
         "ebitda_plan": None,
         "operating_cost_actual": "93834910.05",
@@ -56,3 +57,10 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
     ]
     assert "8,479 GL rows" in cards[0]["evidence_summary"]
     assert "missing Emirates NBD EUR" in cards[3]["detail"]
+    assert cards[1]["executive_brief"]["calculation"]["steps"] == [
+        {"label": "Revenue", "value": "SAR 385.1M"},
+        {"label": "Less cost of goods sold", "value": "SAR 75.5M"},
+        {"label": "Less operating cost", "value": "SAR 93.8M"},
+        {"label": "EBITDA", "value": "SAR 215.7M"},
+    ]
+    assert cards[2]["executive_brief"]["readout"].startswith("Operating expenditure across 126")

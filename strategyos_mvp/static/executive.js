@@ -3408,13 +3408,24 @@
         var readingPosition = window.scrollY;
         state.activeDriverKey = key;
         updateHistory();
-        renderDriverGrid();
-        renderDriverDrillFidelity();
-        renderSummary();
-        // KPI detail is deliberately inline below the strip. Selecting a tile
-        // must never move the executive's reading position.
-        window.requestAnimationFrame(function () {
+        // Render after the click's native focus work has completed. Replacing
+        // the focused button synchronously lets some browsers scroll its new
+        // counterpart into view, which is the exact behaviour this inline
+        // control is designed to avoid.
+        var restoreReadingPosition = function () {
           if (window.scrollY !== readingPosition) window.scrollTo(0, readingPosition);
+        };
+        window.requestAnimationFrame(function () {
+          renderDriverGrid();
+          renderDriverDrillFidelity();
+          renderSummary();
+          // KPI detail is deliberately inline below the strip. Selecting a
+          // tile must never move the executive's reading position. Browsers
+          // can apply scroll anchoring after the next frame when the selected
+          // tile changes, so preserve it across that late layout pass as well.
+          restoreReadingPosition();
+          window.setTimeout(restoreReadingPosition, 0);
+          window.setTimeout(restoreReadingPosition, 220);
         });
       };
       grid.appendChild(tile);
@@ -3459,58 +3470,120 @@
     }).join("");
   }
 
+  function executiveKpiBrief(driver) {
+    var supplied = driver && driver.executive_brief;
+    if (supplied && typeof supplied === "object") return supplied;
+    var key = String(firstDefined(driver && driver.driver_key, driver && driver.key, ""));
+    var isCash = key === "cash_vs_floor";
+    var missing = safeArray(driver && driver.missing_inputs);
+    return {
+      period_label: "Current actual",
+      metric: firstDefined(driver && driver.metric, driver && driver.value, "—"),
+      readout: firstDefined(driver && driver.detail, "No governed calculation is available."),
+      comparison: {
+        label: isCash ? "Board cash floor" : "Approved plan",
+        value: missing.length ? "Not supplied" : firstDefined(driver && driver.comparison, "Available"),
+        note: missing.length ? "No approved comparator was supplied with this data pack." : "Compared with the approved comparator for this period.",
+        available: !missing.length
+      },
+      calculation: {
+        label: "How this figure is built",
+        formula: firstDefined(driver && driver.formula, "No governed formula is available."),
+        steps: [{ label: firstDefined(driver && driver.label, "KPI actual"), value: firstDefined(driver && driver.metric, driver && driver.value, "—") }]
+      },
+      coverage: {
+        label: "Data coverage",
+        value: missing.length ? "Partial" : "Complete",
+        note: missing.length ? "The figure is shown without estimating any missing values." : "All source values used in this figure are present."
+      },
+      audit: {
+        source_titles: [], source_files: safeArray(driver && driver.source_files), required_inputs: safeArray(driver && driver.inputs), missing_inputs: missing,
+        evidence_summary: firstDefined(driver && driver.evidence_summary, ""), computation_boundary: "Calculated only from governed source extracts."
+      }
+    };
+  }
+
   function renderInlineKpiDrill(driver, drillCard) {
     var label = firstDefined(driver.label, "this KPI");
     var availability = String(firstDefined(driver.availability, "unavailable"));
-    var missingInputs = safeArray(driver.missing_inputs);
-    var inputs = safeArray(driver.inputs);
-    var sourceFiles = safeArray(driver.source_files);
-    var actualGrounded = String(((driver.grounding || {}).status) || "").toLowerCase() === "grounded";
-    var evidenceLabel = availability === "verified"
-      ? "Verified from deterministic finance source extracts"
-      : availability === "partial"
-        ? actualGrounded
-          ? "Actual is traceable to source extracts; a comparator is unavailable"
-          : "Partially calculated — comparator or source coverage is unavailable"
-        : "Not calculated — required finance inputs are unavailable";
+    var key = String(firstDefined(driver.driver_key, driver.key, ""));
+    var brief = executiveKpiBrief(driver);
+    var comparison = brief.comparison || {};
+    var calculation = brief.calculation || {};
+    var coverage = brief.coverage || {};
+    var audit = brief.audit || {};
+    var steps = safeArray(calculation.steps);
+    var auditSources = safeArray(audit.source_titles);
+    var rawSources = safeArray(audit.source_files);
+    var inputId = "kpi-inline-input-" + key.replace(/[^a-z0-9_-]/gi, "");
+    var calculationMarkup = steps.length
+      ? '<div class="kpi-brief-steps">' + steps.map(function (step) {
+        return '<div class="kpi-brief-step"><span>' + escapeHtml(firstDefined(step.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(step.value, "—")) + '</strong></div>';
+      }).join("") + '</div>'
+      : "";
     drillCard.innerHTML = [
-      '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(firstDefined(driver.driver_key, driver.key, "")) + '">',
-      '<div class="drill-headline"><div><p class="detail-eyebrow">Inline KPI detail</p><h3 class="detail-title">What drives ' + escapeHtml(label) + '</h3><p class="section-note">' + escapeHtml(evidenceLabel) + '</p></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
-      '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, "No governed calculation is available.")) + '</p>',
-      '<div class="kpi-inline-facts"><div><span>Formula</span><strong>' + escapeHtml(firstDefined(driver.formula, "No governed formula is available.")) + '</strong></div><div><span>Current comparison</span><strong>' + escapeHtml(firstDefined(driver.comparison, driver.sub, "Unavailable")) + '</strong></div><div><span>Calculation evidence</span><strong>' + escapeHtml(firstDefined(driver.evidence_summary, "No source calculation evidence is available.")) + '</strong></div></div>',
-      (sourceFiles.length ? '<div class="kpi-inline-sources"><strong>Source files</strong><span>' + escapeHtml(sourceFiles.join(" · ")) + '</span></div>' : ''),
-      '<div class="kpi-inline-coverage"><div><strong>Data required</strong><div class="chips">' + inputs.map(function (item) { return '<span class="chip chip--static">' + escapeHtml(item) + '</span>'; }).join("") + '</div></div>' + (missingInputs.length ? '<div class="kpi-missing-inputs"><strong>Not present in this run</strong><span>' + escapeHtml(missingInputs.join(" · ")) + '</span></div>' : '<div class="kpi-missing-inputs is-complete"><strong>Calculation coverage</strong><span>All required governed inputs are present.</span></div>') + '</div>',
-      '<div class="kpi-inline-trend"><strong>Historical trend</strong><span>' + escapeHtml(safeArray((driver.trend || {}).actual).length ? "Governed actual and plan series are available." : firstDefined(driver.trend_status, "Historical governed periods are not available.")) + '</span></div>',
-      '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div><strong>Continue with Hermes</strong><p>Hermes starts from this KPI’s formula and governed data boundary.</p></div><form class="kpi-inline-composer" data-kpi-inline-composer="true"><label class="sr-only" for="kpi-inline-input">Ask Hermes about ' + escapeHtml(label) + '</label><input id="kpi-inline-input" type="text" placeholder="Ask about ' + escapeHtml(label.toLowerCase()) + '…" autocomplete="off" /><button type="submit">Ask Hermes</button></form><div class="kpi-inline-answer" aria-live="polite">Select Ask Hermes to start a KPI-specific conversation.</div></section>',
+      '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
+      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><h3 class="detail-title">' + escapeHtml(label) + '</h3></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
+      '<div class="kpi-brief-summary"><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><p>' + escapeHtml(firstDefined(brief.readout, "No governed explanation is available.")) + '</p></div>',
+      '<div class="kpi-brief-grid"><section class="kpi-brief-panel"><span class="kpi-brief-label">' + escapeHtml(firstDefined(comparison.label, "Comparison")) + '</span><strong>' + escapeHtml(firstDefined(comparison.value, "Not supplied")) + '</strong><p>' + escapeHtml(firstDefined(comparison.note, "No approved comparison is available.")) + '</p></section>',
+      '<section class="kpi-brief-panel"><span class="kpi-brief-label">' + escapeHtml(firstDefined(coverage.label, "Data coverage")) + '</span><strong>' + escapeHtml(firstDefined(coverage.value, "Complete")) + '</strong><p>' + escapeHtml(firstDefined(coverage.note, "")) + '</p></section></div>',
+      '<section class="kpi-brief-calculation"><div><span class="kpi-brief-label">' + escapeHtml(firstDefined(calculation.label, "How this figure is built")) + '</span><p>' + escapeHtml(firstDefined(calculation.formula, "No governed formula is available.")) + '</p></div>' + calculationMarkup + '</section>',
+      '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">KPI conversation</span><strong>Ask Hermes about ' + escapeHtml(label) + '</strong><p>Hermes begins with this figure, its calculation boundary and the missing comparison context.</p></div><button type="button" class="kpi-chat-start" data-kpi-chat-start="true">Start with this KPI</button></div><form class="kpi-inline-composer" data-kpi-inline-composer="true" hidden><label class="sr-only" for="' + escapeHtml(inputId) + '">Ask Hermes about ' + escapeHtml(label) + '</label><input id="' + escapeHtml(inputId) + '" type="text" placeholder="Ask a follow-up about ' + escapeHtml(label.toLowerCase()) + '…" autocomplete="off" /><button type="submit">Send</button></form><div class="kpi-inline-answer" aria-live="polite"></div></section>',
+      '<details class="kpi-brief-audit"><summary>View calculation and source trail</summary><div class="kpi-brief-audit__body"><p>' + escapeHtml(firstDefined(audit.computation_boundary, "Calculated only from governed source extracts.")) + '</p>' + (auditSources.length ? '<div><span>Sources used</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Still needed for comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + (firstDefined(audit.evidence_summary, "") ? '<div><span>Calculation evidence</span><strong>' + escapeHtml(audit.evidence_summary) + '</strong></div>' : "") + (rawSources.length ? '<div class="kpi-brief-audit__files"><span>Source files</span><strong>' + escapeHtml(rawSources.join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
 
     var composer = drillCard.querySelector("[data-kpi-inline-composer]");
-    var input = drillCard.querySelector("#kpi-inline-input");
+    var input = drillCard.querySelector("#" + inputId);
     var answer = drillCard.querySelector(".kpi-inline-answer");
+    var startButton = drillCard.querySelector("[data-kpi-chat-start]");
     if (!composer || !input || !answer) return;
-    composer.addEventListener("submit", async function (event) {
-      event.preventDefault();
-      var question = String(input.value || "").trim() || ("Explain the calculation, current data coverage, and governed drivers for " + label + ".");
+    var askHermes = async function (question, focusInput) {
       var button = composer.querySelector("button");
       input.disabled = true;
       if (button) button.disabled = true;
+      if (startButton) startButton.disabled = true;
+      composer.hidden = false;
       answer.className = "kpi-inline-answer is-loading";
-      answer.textContent = "Hermes is checking the governed KPI context…";
+      answer.textContent = "Hermes is preparing the KPI context…";
       var result = await buildAssistantReply(question, null, {
         entrypoint: "ceo_kpi_inline",
         source: "executive_surface",
-        kpi_key: firstDefined(driver.driver_key, driver.key, ""),
+        kpi_key: key,
         kpi_label: label,
         kpi_availability: availability,
         active_view: "home"
       });
-      answer.className = "kpi-inline-answer" + (result && result.ok ? "" : " is-error");
-      answer.textContent = firstDefined(result && result.answer, "Hermes could not return a KPI-specific answer. Please retry.");
+      var replyText = String(result && result.answer || "").trim();
+      var replyOk = Boolean(result && result.ok && replyText);
+      if (!replyText) {
+        replyText = result && result.ok
+          ? "Hermes returned no usable answer for this KPI. Please try again."
+          : "Hermes could not reach the shared assistant service. Please retry once it is available.";
+      }
+      answer.className = "kpi-inline-answer" + (replyOk ? "" : " is-error");
+      answer.textContent = replyText;
+      if (!replyOk && (!result || result.retryable !== false)) {
+        var retryButton = document.createElement("button");
+        retryButton.type = "button";
+        retryButton.className = "kpi-inline-retry";
+        retryButton.textContent = "Retry";
+        retryButton.addEventListener("click", function () { askHermes(question, true); });
+        answer.appendChild(retryButton);
+      }
       input.disabled = false;
       if (button) button.disabled = false;
+      if (startButton) startButton.disabled = false;
+      if (focusInput) input.focus();
+    };
+    if (startButton) startButton.addEventListener("click", function () {
+      askHermes("Give me the executive readout for " + label + ": explain the current actual, how it is calculated, what comparison data is still needed, and the decision implication. Start from the governed KPI context.", true);
+    });
+    composer.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var question = String(input.value || "").trim() || ("Explain the calculation, current data coverage, and decision context for " + label + ".");
       input.value = "";
-      input.focus();
+      askHermes(question, true);
     });
   }
 

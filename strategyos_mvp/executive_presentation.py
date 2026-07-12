@@ -144,6 +144,122 @@ def _basis_points_display(value: float | None) -> str:
     return f"{rounded:+d} bps vs plan"
 
 
+def _source_title(path: Any) -> str:
+    """Return a CEO-readable source label without losing the raw trail."""
+    value = str(path or "")
+    lowered = value.lower()
+    if "gl_extract" in lowered:
+        return "General ledger extract"
+    if "chart_of_accounts" in lowered:
+        return "Chart of accounts"
+    if "cash_forecast" in lowered or "cash_position" in lowered:
+        return "Treasury cash position"
+    return "Governed source extract"
+
+
+def _executive_kpi_brief(
+    spec: Mapping[str, Any],
+    *,
+    period: str,
+    actual: float,
+    metric: str,
+    components: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    missing_inputs: list[str],
+    actual_complete: bool,
+    comparison: str,
+) -> dict[str, Any]:
+    """Separate the CEO decision brief from the expandable calculation trail.
+
+    The CEO surface receives a compact, plain-language explanation.  The
+    reproducible inputs remain present under ``audit`` so no lineage is hidden
+    or rephrased as a business claim.
+    """
+    key = str(spec["key"])
+    evidence_details = evidence.get("details") if isinstance(evidence.get("details"), Mapping) else {}
+    source_files = list(evidence.get("files") or [])
+    source_titles = list(dict.fromkeys(_source_title(item) for item in source_files))
+    comparison_name = "Board cash floor" if key == "cash_vs_floor" else "Approved plan"
+    comparison_value = comparison if not missing_inputs else "Not supplied"
+    comparison_note = (
+        "No approved board cash floor was supplied with this data pack."
+        if key == "cash_vs_floor" and missing_inputs
+        else "No approved plan was supplied with this data pack."
+        if missing_inputs
+        else "Compared with the approved comparator supplied for this period."
+    )
+    scoped_accounts = {}
+    if isinstance(evidence_details.get("account_scopes"), Mapping):
+        scoped_accounts = evidence_details["account_scopes"]
+
+    calculation_steps: list[dict[str, str]] = []
+    narrative = ""
+    if key == "revenue":
+        account_count = len((scoped_accounts.get("revenue") or {}).get("accounts") or [])
+        narrative = "Revenue recognised in the H1 general ledger."
+        calculation_steps = [{"label": "Recognised revenue", "value": metric}]
+        if account_count:
+            narrative = f"Revenue recognised across {account_count} revenue account groups in the H1 general ledger."
+    elif key == "ebitda_margin":
+        revenue = _number_or_none(components.get("revenue_actual"))
+        cogs = _number_or_none(components.get("cogs_actual"))
+        operating_cost = _number_or_none(components.get("operating_cost_actual"))
+        ebitda = _number_or_none(components.get("ebitda_actual"))
+        display_component = lambda value: _format_sar(value) if value is not None else "Not supplied"
+        narrative = "Margin before depreciation, amortisation, interest and tax."
+        calculation_steps = [
+            {"label": "Revenue", "value": display_component(revenue)},
+            {"label": "Less cost of goods sold", "value": display_component(cogs)},
+            {"label": "Less operating cost", "value": display_component(operating_cost)},
+            {"label": "EBITDA", "value": display_component(ebitda)},
+        ]
+    elif key == "operating_cost":
+        account_count = len((scoped_accounts.get("operating_cost") or {}).get("accounts") or [])
+        narrative = "Operating expenditure before depreciation, amortisation and interest."
+        calculation_steps = [{"label": "Operating cost", "value": metric}]
+        if account_count:
+            narrative = f"Operating expenditure across {account_count} expense accounts; depreciation, amortisation and interest excluded."
+    elif key == "cash_vs_floor":
+        as_of = str(evidence_details.get("as_of") or "the latest reported date")
+        missing_accounts = list(evidence_details.get("missing_accounts") or [])
+        narrative = f"Latest reported treasury cash position as at {as_of}."
+        if missing_accounts:
+            narrative += " One balance remains outstanding and has not been estimated."
+        calculation_steps = [{"label": "Reported cash position", "value": metric}]
+
+    return {
+        "period_label": f"{period} actual",
+        "metric": metric,
+        "readout": narrative,
+        "comparison": {
+            "label": comparison_name,
+            "value": comparison_value,
+            "note": comparison_note,
+            "available": not bool(missing_inputs),
+        },
+        "calculation": {
+            "label": "How this figure is built",
+            "formula": str(spec["formula"]),
+            "steps": calculation_steps,
+        },
+        "coverage": {
+            "label": "Data coverage",
+            "value": "Complete" if actual_complete else "Partial",
+            "note": "All source values used in this figure are present."
+            if actual_complete
+            else "The reported figure excludes missing source values; none have been estimated.",
+        },
+        "audit": {
+            "source_titles": source_titles,
+            "source_files": source_files,
+            "required_inputs": list(spec["inputs"]),
+            "missing_inputs": list(missing_inputs),
+            "evidence_summary": str(evidence.get("summary") or ""),
+            "computation_boundary": "Calculated only from the governed source extracts listed here.",
+        },
+    }
+
+
 def _finance_kpi_payload(read_model: Mapping[str, Any]) -> dict[str, Any]:
     """Accept only a named deterministic calculation, never a prose value."""
     for field, engine in (
@@ -330,6 +446,17 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 },
                 "evidence_summary": evidence_summary,
                 "source_files": list(kpi_evidence.get("files") or []),
+                "executive_brief": _executive_kpi_brief(
+                    spec,
+                    period=period,
+                    actual=actual,
+                    metric=metric,
+                    components=components,
+                    evidence=kpi_evidence,
+                    missing_inputs=missing_inputs,
+                    actual_complete=actual_is_complete,
+                    comparison=comparison,
+                ),
             }
         )
     return cards
