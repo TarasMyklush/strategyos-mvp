@@ -247,6 +247,75 @@ def _publication_release(ctx: ToolExecutionContext, input: dict[str, Any]) -> di
     }
 
 
+def _remediation_propose(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:
+    """Cash Recovery's one named consequential capability (design doc
+    section 2: "create remediation proposal; never move money"). This tool
+    performs a REAL, durable, agent_runtime-owned side effect -- unlike
+    publication.release/board_pack.prepare, which are deliberately
+    read-only reports over an existing human-only mutation path. It never
+    touches strategyos_findings or any other pipeline-owned table (that
+    would be the kind of consequential pipeline mutation section 20
+    excludes from this release); it only records, within agent_runtime's
+    own schema, that a remediation proposal was raised for a
+    (task, finding) pair -- exactly the kind of durable "prepare a change
+    without applying it" record design principle 9 describes.
+
+    Effect-key reservation (design doc section 14 step 5: "External-effect
+    tools reserve a unique effect key before execution") is what actually
+    guarantees at-least-once task execution produces effectively-once
+    effects here: a retried task with the same task_id+finding_id reserves
+    the same effect_key and gets EffectAlreadyReserved back instead of
+    inserting a second artifact_links row."""
+    from . import repository
+
+    finding_id = input.get("finding_id")
+    if not finding_id:
+        raise ToolInputInvalid("remediation.propose requires a finding_id")
+    reason = input.get("reason") or "Cash Recovery Agent proposed remediation"
+
+    effect_key = f"remediation-proposal:{ctx.task_id}:{finding_id}"
+    input_hash = repository.hash_scope({"finding_id": finding_id, "reason": reason})
+
+    try:
+        invocation = repository.reserve_tool_effect(
+            ctx.tenant_id, ctx.task_id,
+            task_attempt_id=None,
+            tool_key="remediation.propose", tool_version="v1",
+            input_hash=input_hash, effect_key=effect_key,
+        )
+    except repository.EffectAlreadyReserved as exc:
+        # Already reserved by a prior attempt -- report the existing
+        # invocation's outcome rather than raising or silently re-applying.
+        return {
+            "available": True,
+            "finding_id": finding_id,
+            "already_proposed": True,
+            "status": exc.existing_invocation.get("status"),
+        }
+
+    try:
+        artifact_link = repository.create_artifact_link(
+            ctx.tenant_id, task_id=ctx.task_id,
+            reference_type="remediation_proposal", reference_id=finding_id,
+        )
+        repository.record_tool_invocation_result(
+            ctx.tenant_id, invocation["tool_invocation_id"], status="succeeded",
+            output_hash=repository.hash_scope({"artifact_link_id": artifact_link["artifact_link_id"]}),
+        )
+    except Exception as exc:
+        repository.record_tool_invocation_result(
+            ctx.tenant_id, invocation["tool_invocation_id"], status="failed", error_code=type(exc).__name__,
+        )
+        raise
+    return {
+        "available": True,
+        "finding_id": finding_id,
+        "already_proposed": False,
+        "status": "succeeded",
+        "artifact_link_id": artifact_link["artifact_link_id"],
+    }
+
+
 def _runtime_health_read(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:
     from .. import api as api_module
     from .. import hatchet_runtime
@@ -266,6 +335,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "board_pack.prepare": _board_pack_prepare,
     "review.request": _review_request,
     "publication.release": _publication_release,
+    "remediation.propose": _remediation_propose,
     "runtime.health.read": _runtime_health_read,
 }
 

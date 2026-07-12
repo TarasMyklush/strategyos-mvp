@@ -141,6 +141,12 @@ def execute_agent_task_job(
         task_risk_class=running_task.get("risk_class", "read_only"),
     )
 
+    # A real attempt row per execution -- attempt_no comes from the row-
+    # locked max()+1 in create_task_attempt(), not a hardcoded constant, so
+    # a retried task's capability token carries the real attempt number
+    # design doc section 13 lists on the token's claims.
+    attempt = repository.create_task_attempt(tenant_id, task_id, worker_id=worker_actor["id"])
+
     capability_claims = None
     if CONFIG.agent_capability_token_secret:
         # Issued and immediately re-verified in the same process rather
@@ -154,7 +160,7 @@ def execute_agent_task_job(
         token = issue_capability_token(
             tenant_id=tenant_id,
             task_id=task_id,
-            attempt_no=1,
+            attempt_no=attempt["attempt_no"],
             agent_installation_id=running_task["agent_installation_id"],
             allowed_tool_keys=effective_authority.allowed_tool_keys,
             max_risk_class=effective_authority.max_risk_class,
@@ -172,17 +178,27 @@ def execute_agent_task_job(
     try:
         result = run_handler(agent_definition.handler_key, tool_ctx, running_task.get("input_json") or {})
     except HandlerInputInvalid as exc:
+        repository.finish_task_attempt(
+            tenant_id, attempt["task_attempt_id"], status="failed",
+            error_code="AGENT_INVALID_INPUT", error_detail_restricted=str(exc),
+        )
         return _fail_task(
             tenant_id, task_id, worker_actor,
             failure_code="AGENT_INVALID_INPUT",
             detail_public=str(exc),
         )
     except Exception as exc:  # pragma: no cover - defensive: unexpected handler crash
+        repository.finish_task_attempt(
+            tenant_id, attempt["task_attempt_id"], status="failed",
+            error_code="AGENT_INTERNAL_FAILURE", error_detail_restricted=repr(exc),
+        )
         return _fail_task(
             tenant_id, task_id, worker_actor,
             failure_code="AGENT_INTERNAL_FAILURE",
             detail_public=f"The specialist agent could not complete this task: {type(exc).__name__}.",
         )
+
+    repository.finish_task_attempt(tenant_id, attempt["task_attempt_id"], status="succeeded")
 
     final = repository.transition_task(
         tenant_id, task_id, target_status=TaskStatus.SUCCEEDED, actor=worker_actor, result=result

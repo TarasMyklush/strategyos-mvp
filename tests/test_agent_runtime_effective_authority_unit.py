@@ -98,10 +98,17 @@ def test_an_unknown_role_defaults_to_read_only_not_unbounded():
 def test_read_only_tools_remain_available_at_every_privilege_level():
     """The intersection narrows which prepare/write/restricted tools are
     reachable, but must never strip a read_only tool that the agent
-    actually has -- read_only is always <= any role's ceiling."""
+    actually has -- read_only is always <= any role's ceiling. Uses
+    RUNTIME_GUARDRAIL because its single tool (runtime.health.read) is
+    unconditionally read_only; CASH_RECOVERY (v2) legitimately mixes
+    read_only findings/citations tools with the write-classed
+    remediation.propose, so its full tool_keys set is NOT expected to
+    survive every role/risk_class combination -- that's covered instead by
+    test_max_risk_class_never_exceeds_the_role_cap and
+    test_allowed_tool_keys_is_always_a_subset_of_the_agent_definitions_tool_keys."""
     for role in ("bu", "finance", "executive", "reviewer", "operator"):
         auth = resolve_effective_authority(
-            agent_definition=CASH_RECOVERY, requesting_role=role,
+            agent_definition=RUNTIME_GUARDRAIL, requesting_role=role,
             installation_active=True, task_risk_class="read_only",
         )
-        assert set(auth.allowed_tool_keys) == set(CASH_RECOVERY.tool_keys), role
+        assert set(auth.allowed_tool_keys) == set(RUNTIME_GUARDRAIL.tool_keys), role

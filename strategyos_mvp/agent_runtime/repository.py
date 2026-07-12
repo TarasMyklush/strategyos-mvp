@@ -1152,3 +1152,256 @@ def decide_approval(
             )
         conn.commit()
     return _normalize_approval(record)
+
+
+# ---------------------------------------------------------------------------
+# Task attempts (design doc: "task, attempt, and agent IDs" on the
+# capability token; strategyos_agent_task_attempts, PR 7)
+# ---------------------------------------------------------------------------
+
+
+def create_task_attempt(
+    tenant_id: str,
+    task_id: str,
+    *,
+    worker_id: str,
+    context_manifest_hash: str | None = None,
+) -> dict[str, Any]:
+    """Inserts the next attempt row for a task, with attempt_no computed as
+    max(existing attempt_no) + 1 under a row lock scoped to this task_id --
+    the row lock (not a client-side read-then-insert) is what keeps this
+    correct if two workers ever raced to claim the same task (they can't,
+    because transition_task's queued->running compare-and-set already
+    prevents that, but attempt_no numbering doesn't rely on that guarantee
+    holding forever)."""
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            # Advisory-free row lock via `for update` on the parent task
+            # row -- there is no attempts row to lock before the first
+            # attempt exists, so lock the task itself to serialize
+            # attempt-number assignment.
+            cur.execute(
+                "select id from strategyos_agent_tasks where id = %s and tenant_id = %s for update",
+                (task_id, tenant_id),
+            )
+            if cur.fetchone() is None:
+                conn.rollback()
+                raise TenantMismatch(f"task {task_id} not found for tenant {tenant_id}")
+
+            cur.execute(
+                "select coalesce(max(attempt_no), 0) + 1 from strategyos_agent_task_attempts where task_id = %s",
+                (task_id,),
+            )
+            next_attempt_no = cur.fetchone()[0]
+
+            cur.execute(
+                """
+                insert into strategyos_agent_task_attempts (task_id, attempt_no, worker_id, status, context_manifest_hash)
+                values (%s, %s, %s, 'running', %s)
+                returning id, task_id, attempt_no, worker_id, model_provider, model_name, prompt_version,
+                          context_manifest_hash, status, error_code, error_detail_restricted, started_at, finished_at
+                """,
+                (task_id, next_attempt_no, worker_id, context_manifest_hash),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    assert record is not None
+    normalized = _stringify_uuids(normalize_record(record))
+    normalized["task_attempt_id"] = normalized.pop("id")
+    return normalized
+
+
+def finish_task_attempt(
+    tenant_id: str,
+    task_attempt_id: str,
+    *,
+    status: str,
+    error_code: str | None = None,
+    error_detail_restricted: str | None = None,
+) -> dict[str, Any]:
+    """error_detail_restricted is exactly that -- restricted. Never surface
+    it through a public-safe API response; only failure_detail_public on
+    the task itself is safe for that (design doc section 8: "Internal
+    exception text belongs in restricted logs/attempt metadata.")."""
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                update strategyos_agent_task_attempts
+                set status = %s, error_code = %s, error_detail_restricted = %s, finished_at = now()
+                where id = %s and task_id in (select id from strategyos_agent_tasks where tenant_id = %s)
+                returning id, task_id, attempt_no, worker_id, model_provider, model_name, prompt_version,
+                          context_manifest_hash, status, error_code, error_detail_restricted, started_at, finished_at
+                """,
+                (status, error_code, error_detail_restricted, task_attempt_id, tenant_id),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    if record is None:
+        raise TenantMismatch(f"task attempt {task_attempt_id} not found for tenant {tenant_id}")
+    normalized = _stringify_uuids(normalize_record(record))
+    normalized["task_attempt_id"] = normalized.pop("id")
+    return normalized
+
+
+# ---------------------------------------------------------------------------
+# Tool invocations and effect-key reservation (design doc section 14 step 5:
+# "External-effect tools reserve a unique effect key before execution",
+# section 11: "At-least-once execution, effectively-once effects.")
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Artifact links (design doc: "Task/message links to evidence and
+# artifacts"). Used by remediation.propose as its actual durable effect --
+# an agent_runtime-owned record, never a write into a pipeline-owned table
+# like strategyos_findings.
+# ---------------------------------------------------------------------------
+
+
+def create_artifact_link(
+    tenant_id: str, *, task_id: str | None = None, message_id: str | None = None,
+    reference_type: str, reference_id: str,
+) -> dict[str, Any]:
+    if task_id is None and message_id is None:
+        raise ValueError("create_artifact_link requires task_id or message_id")
+
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into strategyos_agent_artifact_links (tenant_id, task_id, message_id, reference_type, reference_id)
+                values (%s, %s, %s, %s, %s)
+                returning id, tenant_id, task_id, message_id, reference_type, reference_id, created_at
+                """,
+                (tenant_id, task_id, message_id, reference_type, reference_id),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    assert record is not None
+    normalized = _stringify_uuids(normalize_record(record))
+    normalized["artifact_link_id"] = normalized.pop("id")
+    return normalized
+
+
+class EffectAlreadyReserved(Exception):
+    """Raised by reserve_tool_effect when (tenant_id, effect_key) already
+    has a row -- the caller must treat this as "already handled", not as an
+    error to retry past. This is the mechanism that turns at-least-once
+    task execution into effectively-once side effects."""
+
+    def __init__(self, existing_invocation: dict[str, Any]):
+        super().__init__(
+            f"effect_key already reserved by tool_invocation {existing_invocation.get('tool_invocation_id')} "
+            f"(status={existing_invocation.get('status')})"
+        )
+        self.existing_invocation = existing_invocation
+
+
+def reserve_tool_effect(
+    tenant_id: str,
+    task_id: str,
+    *,
+    task_attempt_id: str | None,
+    tool_key: str,
+    tool_version: str,
+    input_hash: str,
+    effect_key: str,
+) -> dict[str, Any]:
+    """Inserts a `pending` tool_invocations row keyed on
+    (tenant_id, effect_key) BEFORE the tool's actual side effect executes.
+    If a row with this effect_key already exists (a retry of a task whose
+    prior attempt reserved the effect but crashed before or after applying
+    it), raises EffectAlreadyReserved with the existing row instead of
+    inserting a duplicate -- the caller must not re-apply the effect, only
+    decide whether to wait/re-check/report based on the existing row's
+    status. record_tool_invocation_result() completes the row once the
+    actual call (success or failure) is known."""
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select id, tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash,
+                       output_hash, effect_key, status, error_code, created_at, completed_at
+                from strategyos_agent_tool_invocations
+                where tenant_id = %s and effect_key = %s
+                """,
+                (tenant_id, effect_key),
+            )
+            existing = fetchone_dict(cur)
+            if existing is not None:
+                conn.commit()
+                normalized_existing = _stringify_uuids(normalize_record(existing))
+                normalized_existing["tool_invocation_id"] = normalized_existing.pop("id")
+                raise EffectAlreadyReserved(normalized_existing)
+
+            cur.execute(
+                """
+                insert into strategyos_agent_tool_invocations
+                    (tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash, effect_key, status)
+                values (%s, %s, %s, %s, %s, %s, %s, 'pending')
+                returning id, tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash,
+                          output_hash, effect_key, status, error_code, created_at, completed_at
+                """,
+                (tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash, effect_key),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    assert record is not None
+    normalized = _stringify_uuids(normalize_record(record))
+    normalized["tool_invocation_id"] = normalized.pop("id")
+    return normalized
+
+
+def record_tool_invocation_result(
+    tenant_id: str,
+    tool_invocation_id: str,
+    *,
+    status: str,
+    output_hash: str | None = None,
+    error_code: str | None = None,
+) -> dict[str, Any]:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+
+    assert connection is not None
+    with connection as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                update strategyos_agent_tool_invocations
+                set status = %s, output_hash = %s, error_code = %s, completed_at = now()
+                where id = %s and tenant_id = %s
+                returning id, tenant_id, task_id, task_attempt_id, tool_key, tool_version, input_hash,
+                          output_hash, effect_key, status, error_code, created_at, completed_at
+                """,
+                (status, output_hash, error_code, tool_invocation_id, tenant_id),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    if record is None:
+        raise TenantMismatch(f"tool invocation {tool_invocation_id} not found for tenant {tenant_id}")
+    normalized = _stringify_uuids(normalize_record(record))
+    normalized["tool_invocation_id"] = normalized.pop("id")
+    return normalized

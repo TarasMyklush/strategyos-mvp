@@ -16,13 +16,18 @@ from .models import AgentDefinition
 
 CASH_RECOVERY = AgentDefinition(
     agent_key="cash-recovery",
-    version=1,
+    # v2 (PR 7 / Gap 2): added remediation.propose -- Cash Recovery's one
+    # named consequential capability (design doc section 2: "create
+    # remediation proposal; never move money"). New version, not an
+    # in-place edit, per section 5.1: any task still recorded against
+    # agent_definition_version=1 keeps its original (read-only) contract.
+    version=2,
     display_name="Cash Recovery Agent",
     purpose="Find, quantify, and monitor recoverable leakage",
     handler_key="cash_recovery.v1",
     input_schema="cash_recovery_task.v1",
     output_schema="agent_result.v1",
-    tool_keys=("findings.read", "finance_facts.read", "citations.search"),
+    tool_keys=("findings.read", "finance_facts.read", "citations.search", "remediation.propose"),
     allowed_roles=("executive", "finance", "reviewer", "operator"),
 )
 
@@ -115,6 +120,11 @@ TOOL_RISK_CLASSES: dict[str, str] = {
     "board_pack.prepare": "read_only",
     "review.request": "read_only",
     "publication.release": "restricted",
+    # Genuinely writes a durable strategyos_agent_artifact_links row (see
+    # tools.py:_remediation_propose) -- unlike board_pack.prepare/
+    # review.request, this one has a real side effect to protect against
+    # duplication, hence "write" not "read_only".
+    "remediation.propose": "write",
 }
 
 
