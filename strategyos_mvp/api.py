@@ -35,6 +35,8 @@ from .executive_design import (
     executive_board_design,
     executive_persona_design,
 )
+from .executive_presentation import build_executive_presentation
+from .executive_read_model import build_executive_read_model
 from .assistants import get_orchestrator, list_supported_personas
 from .assistants.graph_retrieval import route_graph_question
 from .ingestion import load_dataset
@@ -753,11 +755,21 @@ def _build_public_safe_assistant_packet(
     board_portal: dict[str, Any],
     strategy_substrate: dict[str, Any],
     agent_modules: dict[str, Any],
+    executive_presentation_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     persona_key = str(persona_id or "ceo").strip().lower() or "ceo"
     db_run_id = (summary or {}).get("_backing_run_id") or (summary or {}).get("run_id")
     if str(db_run_id or "") == ANONYMOUS_PUBLIC_RUN_ID:
         db_run_id = None
+    if executive_presentation_payload is None:
+        executive_read_model = build_executive_read_model(
+            summary,
+            finding_rows,
+            audit_summary,
+            publication,
+            agent_modules,
+        )
+        executive_presentation_payload = build_executive_presentation(executive_read_model)
     db_status = _data_management_status_for_run(str(db_run_id or "") or None)
     metrics = _governed_metrics_payload(summary, finding_rows, audit_summary)
     plan_health = _bounded_plan_health_payload(summary, finding_rows, audit_summary)
@@ -772,25 +784,7 @@ def _build_public_safe_assistant_packet(
         }
     )
 
-    drivers = [
-        {
-            "driver_key": card.get("card_id"),
-            "label": card.get("label"),
-            "metric": _assistant_metric_label(str(card.get("card_id") or ""), card.get("value")),
-            "status": card.get("unit") or "current",
-            "detail": (
-                plan_health.get("summary")
-                if str(card.get("card_id") or "") == "board_packet_reports"
-                else f"Derived from the latest governed run for {card.get('label') or 'this metric'}."
-            ),
-            "pct": None,
-            "sub": card.get("trend_hint"),
-            "chips": [],
-            "movers": {"lifting": [], "dragging": []},
-            "trend": {"actual": [], "plan": []},
-        }
-        for card in kpi_cards[:4]
-    ]
+    drivers = list(executive_presentation_payload.get("driver_grid") or [])
 
     display_rows = list(finding_rows or [])[:3]
     displayed_recoverable = round(
@@ -807,69 +801,10 @@ def _build_public_safe_assistant_packet(
         "displayed_finding_count": len(display_rows),
     }
 
-    findings = [
-        {
-            "title": row.get("title") or row.get("pattern_label") or "Governed signal",
-            "tag": row.get("pattern_label") or row.get("classification") or "governed",
-            "detail": (
-                f"{int(row.get('citation_count') or 0)} citation(s)"
-                + (
-                    f" · {_format_sar_brief(row.get('recoverable_sar'))} recoverable"
-                    if row.get("recoverable_sar") is not None
-                    else ""
-                )
-                + (" · challenged" if row.get("challenged") else "")
-            ).strip(),
-            "tone": "flat" if row.get("challenged") else "up",
-        }
-        for row in display_rows
-    ]
-
-    developments = [
-        {
-            "title": "Approval posture",
-            "meta": str((summary or {}).get("approval_status") or "pending").replace("_", " "),
-            "impact": f"Board pack status is {str((publication.get('board_pack') or {}).get('status') or publication.get('status') or 'pending').replace('_', ' ')}.",
-            "kind": "watch",
-        },
-        {
-            "title": "Current workflow stage",
-            "meta": str((summary or {}).get("current_stage") or "created").replace("_", " "),
-            "impact": plan_health.get("summary") or "Governed run state is available for the executive surface.",
-            "kind": "win" if summary else "watch",
-        },
-        {
-            "title": "Database backing status",
-            "meta": db_status.get("status") or "unknown",
-            "impact": db_status.get("reason") or "Governed data is backed by the configured state store.",
-            "kind": "watch" if db_status.get("status") != "ready" else "win",
-        },
-    ]
-
-    # Bug 8: strip infrastructure/internal findings that aren't relevant to CEO audience.
-    findings = [f for f in findings if f.get("title") != "Database backing status"]
-
-    next_action = str((publication.get("approval") or {}).get("next_action") or "inspect_board_pack_status")
-    week = [
-        {
-            "key": "review_gate",
-            "day": "Now",
-            "title": "Review gate",
-            "when": str((summary or {}).get("approval_status") or "pending").replace("_", " "),
-            "prep": plan_health.get("summary") or "No governed run is available yet.",
-            "urgent": bool(metrics.get("challenged_count")),
-            "prompt": f"Help me {next_action.replace('_', ' ')}.",
-        },
-        {
-            "key": "board_packet",
-            "day": "Latest",
-            "title": "Board packet",
-            "when": str((publication.get("board_pack") or {}).get("status") or publication.get("status") or "pending").replace("_", " "),
-            "prep": f"{int(publication.get('report_count') or 0)} surfaced report artifact(s) and {int(metrics.get('citation_count') or 0)} citation(s).",
-            "urgent": False,
-            "prompt": "Show the current board packet posture.",
-        },
-    ]
+    presentation_sections = executive_presentation_payload.get("sections") or {}
+    findings = list((presentation_sections.get("findings") or {}).get("items") or [])
+    developments = list((presentation_sections.get("developments") or {}).get("items") or [])
+    week = list((presentation_sections.get("week_ahead") or {}).get("items") or [])
 
     kpi_nodes = list(((strategy_substrate.get("kpi_tree") or {}).get("nodes") or []))
     kg_nodes = [
@@ -919,7 +854,11 @@ def _build_public_safe_assistant_packet(
 
     return {
         "packet_id": f"latest-public:{persona_key}:{str((summary or {}).get('run_id') or ANONYMOUS_PUBLIC_RUN_ID)}",
-        "source": "governed_run",
+        "mode": executive_presentation_payload.get("mode") or "live",
+        "source": executive_presentation_payload.get("source") or "database",
+        "truth_run_id": executive_presentation_payload.get("run_id"),
+        "as_of": executive_presentation_payload.get("as_of"),
+        "data_status": executive_presentation_payload.get("data_status"),
         "persona_id": persona_key,
         "assistant": "StrategyOS",
         "is_illustrative": False,
@@ -932,14 +871,15 @@ def _build_public_safe_assistant_packet(
             "run_summary": {
                 "status": "ok" if summary else "missing",
                 "run_id": (summary or {}).get("run_id"),
+                "truth_run_id": executive_presentation_payload.get("run_id"),
             },
             "database": db_status,
         },
         "health": {
             "score": None,
-            "headline": plan_health.get("label") or "Governed run unavailable",
-            "body": plan_health.get("summary") or db_status.get("reason") or "No governed run is available.",
-            "scoreNote": plan_health.get("badge") or db_status.get("status") or "governed",
+            "headline": ((executive_presentation_payload.get("hero") or {}).get("headline") or plan_health.get("label") or "Governed run unavailable"),
+            "body": ((executive_presentation_payload.get("hero") or {}).get("body") or plan_health.get("summary") or db_status.get("reason") or "No governed run is available."),
+            "scoreNote": ((executive_presentation_payload.get("hero") or {}).get("score_note") or plan_health.get("badge") or db_status.get("status") or "governed"),
         },
         "drivers": drivers,
         "findings": findings,
@@ -966,10 +906,12 @@ def _build_public_safe_assistant_packet(
         "kg_nodes": kg_nodes,
         "kg_edges": kg_edges,
         "trace_summary": {
-            "truth_basis": ["run_summary", "publication", "board_portal", "strategy_substrate", "agent_modules"],
-            "run_id": (summary or {}).get("run_id"),
+            "truth_basis": ["executive_read_model", "executive_presentation", "database_provenance"],
+            "run_id": executive_presentation_payload.get("run_id"),
             "database_status": db_status.get("status"),
         },
+        "sections": presentation_sections,
+        "provenance_summary": executive_presentation_payload.get("provenance_summary"),
     }
 
 
@@ -4128,6 +4070,14 @@ def _executive_diagnostics_payload(
         "Group CEO",
     )
     active_driver_key = str(executive_modes.get("active_driver_key") or "board_packet")
+    executive_read_model = build_executive_read_model(
+        summary,
+        finding_rows,
+        audit_summary,
+        publication,
+        agent_modules,
+    )
+    executive_presentation_payload = build_executive_presentation(executive_read_model)
     public_packet = _build_public_safe_assistant_packet(
         summary,
         persona_id=persona_id,
@@ -4137,6 +4087,7 @@ def _executive_diagnostics_payload(
         board_portal=board_portal,
         strategy_substrate=strategy_substrate,
         agent_modules=agent_modules,
+        executive_presentation_payload=executive_presentation_payload,
     )
     persona_blueprint = {
         "health": dict(public_packet.get("health") or {}),
@@ -4156,7 +4107,7 @@ def _executive_diagnostics_payload(
         challenged_count=challenged_count,
     )
     driver_tiles = []
-    persona_drivers = list(persona_blueprint.get("drivers") or [])
+    persona_drivers = list(executive_presentation_payload.get("driver_grid") or persona_blueprint.get("drivers") or [])
     for item in persona_drivers[:4] or list(executive_modes.get("driver_focus") or [])[:4]:
         driver_tiles.append(
             {
@@ -4169,23 +4120,32 @@ def _executive_diagnostics_payload(
                 "portfolio_id": item.get("portfolio_id"),
                 "pct": item.get("pct"),
                 "sub": item.get("sub"),
+                "provenance": item.get("provenance"),
             }
         )
+    presentation_hero = dict(executive_presentation_payload.get("hero") or {})
     return {
+        "mode": executive_presentation_payload.get("mode"),
+        "source": executive_presentation_payload.get("source"),
+        "run_id": executive_presentation_payload.get("run_id"),
+        "as_of": executive_presentation_payload.get("as_of"),
+        "data_status": executive_presentation_payload.get("data_status"),
+        "status_reason": executive_presentation_payload.get("status_reason"),
         "hero": {
             "persona_id": persona_id,
             "persona_label": persona_label,
-            "score": hero_score,
-            "status": plan_health.get("status"),
-            "label": plan_health.get("label"),
-            "summary": lifecycle_hero.get("headline"),
-            "body": lifecycle_hero.get("body"),
-            "score_note": lifecycle_hero.get("score_note"),
-            "secondary_fact": lifecycle_hero.get("secondary_fact"),
+            "score": presentation_hero.get("score"),
+            "status": presentation_hero.get("status") or plan_health.get("status"),
+            "label": presentation_hero.get("label") or plan_health.get("label"),
+            "summary": presentation_hero.get("summary") or lifecycle_hero.get("headline"),
+            "body": presentation_hero.get("body") or lifecycle_hero.get("body"),
+            "score_note": presentation_hero.get("score_note") or lifecycle_hero.get("score_note"),
+            "secondary_fact": presentation_hero.get("secondary_fact") or lifecycle_hero.get("secondary_fact"),
             "quote": persona_blueprint.get("quote"),
             "quoted_by": persona_blueprint.get("by"),
             "active_driver_key": active_driver_key,
             "board_state": board_portal.get("presentation_state") or board_portal.get("state"),
+            "readiness_operands": presentation_hero.get("readiness_operands"),
         },
         "driver_grid": driver_tiles,
         "composition": {
@@ -4216,13 +4176,12 @@ def _executive_diagnostics_payload(
             "node_count": strategy_substrate.get("node_count"),
         },
         "truth_basis": [
-            "plan_health",
-            "publication",
-            "board_portal",
-            "drilldown",
-            "strategy_substrate",
-            "agent_modules",
+            "executive_read_model",
+            "executive_presentation",
+            "database_provenance",
         ],
+        "sections": executive_presentation_payload.get("sections") or {},
+        "provenance_summary": executive_presentation_payload.get("provenance_summary") or {},
     }
 
 

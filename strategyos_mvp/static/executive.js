@@ -3188,8 +3188,10 @@
     var fullName = sessionDisplayName();
     var firstName = fullName ? fullName.split(/\s+/)[0] : getPersonaLabel(state.activePersona);
     var preferredHero = hero && (hero.summary || hero.body || hero.score_note) ? hero : (blueprint.health || {});
+    var hasScore = hero.score !== undefined && hero.score !== null && hero.score !== "";
     var score = Number(firstDefined(hero.score, 0));
     if (preferredHero && preferredHero.score !== undefined && preferredHero.score !== null && preferredHero.score !== "") {
+      hasScore = true;
       score = Number(preferredHero.score);
     }
     var clampedScore = Math.max(0, Math.min(100, score));
@@ -3208,7 +3210,7 @@
       : "Good morning, " + firstName;
     $("hero-head").textContent = firstDefined(preferredHero.headline, preferredHero.summary, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
-    $("hero-score").textContent = String(clampedScore || 0);
+    $("hero-score").textContent = hasScore ? String(clampedScore || 0) : "DB";
     $("hero-cap").textContent = firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
     var byline = $("hero-byline");
     if (byline) {
@@ -3957,14 +3959,24 @@
 
   function renderLowerRailFidelity() {
     var blueprint = getPersonaBlueprint(state.activePersona);
+    var diagnostics = getExecutiveDiagnostics();
+    var sections = diagnostics.sections || {};
+    var liveDatabaseMode = diagnostics.mode === "live" && diagnostics.source === "database";
     var lowerRail = (getExecutiveDiagnostics().composition || {}).lower_rail || getDrilldown().lower_rail || {};
     var findingsPanel = $("findings-panel");
     var developmentsPanel = $("developments-panel");
     var weekPanel = $("week-panel");
-    var findings = safeArray(blueprint.findings).slice(0, 3);
-    var developments = safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3);
-    var weekAhead = safeArray(blueprint.week).length ? safeArray(blueprint.week).slice(0, 3) : safeArray(lowerRail.week_ahead).slice(0, 3);
-    var reconciliation = getSharedAssistantContext().findings_reconciliation || {};
+    var findingsSection = sections.findings || {};
+    var developmentsSection = sections.developments || {};
+    var weekSection = sections.week_ahead || {};
+    var findings = safeArray(findingsSection.items).length ? safeArray(findingsSection.items).slice(0, 3) : safeArray(blueprint.findings).slice(0, 3);
+    var developments = liveDatabaseMode
+      ? safeArray(developmentsSection.items).slice(0, 3)
+      : (safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3));
+    var weekAhead = liveDatabaseMode
+      ? safeArray(weekSection.items).slice(0, 3)
+      : (safeArray(blueprint.week).length ? safeArray(blueprint.week).slice(0, 3) : safeArray(lowerRail.week_ahead).slice(0, 3));
+    var reconciliation = findingsSection.reconciliation || getSharedAssistantContext().findings_reconciliation || {};
     var remainingRecoverable = Number(firstDefined(reconciliation.remaining_recoverable_sar, 0)) || 0;
     var totalFindingCount = Number(firstDefined(reconciliation.total_finding_count, findings.length)) || findings.length;
     var displayedFindingCount = Number(firstDefined(reconciliation.displayed_finding_count, findings.length)) || findings.length;
@@ -3989,15 +4001,19 @@
     }
 
     if (developmentsPanel) {
-      developmentsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Developments since you were here</h3></div></div><div class="rail-toggle-list">' + renderToggleList(developments, 'development') + '</div>';
+      developmentsPanel.hidden = liveDatabaseMode && !developments.length;
+      developmentsPanel.innerHTML = developments.length
+        ? '<div class="detail-head"><div><h3 class="detail-title">Developments since you were here</h3></div></div><div class="rail-toggle-list">' + renderToggleList(developments, 'development') + '</div>'
+        : '';
     }
 
     if (weekPanel) {
+      weekPanel.hidden = liveDatabaseMode && !weekAhead.length;
       var openIndex = Math.min(state.openWeekIndex || 0, Math.max(weekAhead.length - 1, 0));
       var activeEvent = weekAhead[openIndex] || null;
-      weekPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Week ahead</h3></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
+      weekPanel.innerHTML = weekAhead.length ? '<div class="detail-head"><div><h3 class="detail-title">Week ahead</h3></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”: model the options and what I should walk in having decided."><strong>Explore scenarios</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For “' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + '”, what data am I missing and who should I request it from?"><strong>⤓ Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line…" /><button type="submit">Send</button></form></div>' : '');
+      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ': model the options and what I should walk in having decided."><strong>Explore scenarios</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ', what data am I missing and who should I request it from?"><strong>Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line..." /><button type="submit">Send</button></form></div>' : '') : '';
       safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
         safeArray(panel && panel.querySelectorAll('[data-rail-toggle]')).forEach(function (button) {
           button.onclick = function () {
