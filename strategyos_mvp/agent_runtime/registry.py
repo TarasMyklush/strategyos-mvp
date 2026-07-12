@@ -40,13 +40,19 @@ EVIDENCE_CLOSURE = AgentDefinition(
 
 BOARD_PACK = AgentDefinition(
     agent_key="board-pack",
-    version=1,
+    # v2 (PR 6): added publication.release so board_pack_handler can report
+    # release eligibility through the restricted-tool capability-token path
+    # rather than reading approval_status_for_run directly. Per design doc
+    # section 5.1, this is a new version, not an in-place edit -- any task
+    # still recorded against agent_definition_version=1 keeps its original
+    # contract.
+    version=2,
     display_name="Board Pack Agent",
     purpose="Produce board-safe summaries and publication candidates",
     handler_key="board_pack.v1",
     input_schema="board_pack_task.v1",
     output_schema="agent_result.v1",
-    tool_keys=("board_pack.prepare", "findings.read", "review.request"),
+    tool_keys=("board_pack.prepare", "findings.read", "review.request", "publication.release"),
     allowed_roles=("executive", "reviewer", "operator"),
 )
 
@@ -96,8 +102,18 @@ TOOL_RISK_CLASSES: dict[str, str] = {
     "finance_facts.read": "read_only",
     "runtime.health.read": "read_only",
     "finance_controls.run": "prepare",
-    "board_pack.prepare": "prepare",
-    "review.request": "prepare",
+    # board_pack.prepare and review.request are catalogued read_only, not
+    # "prepare": both tools.py implementations (_board_pack_prepare,
+    # _review_request) only wrap existing read functions
+    # (_summary_publication_payload/_summary_report_contracts,
+    # approval_status_for_run) -- neither mutates anything. Classifying
+    # them as "prepare" would (correctly, as of PR 6's capability-token
+    # gate) require every existing board-pack task to carry a token for a
+    # call that has no side effect to protect against. Only
+    # publication.release and a hypothetical future finance_controls.run
+    # wiring are genuinely consequential in this catalogue.
+    "board_pack.prepare": "read_only",
+    "review.request": "read_only",
     "publication.release": "restricted",
 }
 

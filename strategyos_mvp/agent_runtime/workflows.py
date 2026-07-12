@@ -31,6 +31,7 @@ from pydantic import BaseModel
 from ..config import CONFIG
 from ..state_store import database_connection, fetchall_dicts
 from . import repository
+from .capability_tokens import issue_capability_token, verify_capability_token
 from .models import HandoffStatus, TaskStatus
 from .policy import check_handoff_budget, resolve_risk_class
 from .registry import AGENT_DEFINITIONS_BY_KEY, resolve_agent_for_capability
@@ -124,11 +125,30 @@ def execute_agent_task_job(
             detail_public="No registered agent is installed for this task.",
         )
 
+    capability_claims = None
+    if CONFIG.agent_capability_token_secret:
+        # Issued and immediately re-verified in the same process rather
+        # than trusted as-minted: this proves the token this attempt
+        # carries is exactly what a real cross-process worker would
+        # receive and validate, not a shortcut. Never written into the
+        # task's input_json/result_json or passed to a handler's LLM call
+        # -- it only ever lives on tool_ctx.capability_claims.
+        token = issue_capability_token(
+            tenant_id=tenant_id,
+            task_id=task_id,
+            attempt_no=1,
+            agent_installation_id=running_task["agent_installation_id"],
+            allowed_tool_keys=agent_definition.tool_keys,
+            max_risk_class=running_task.get("risk_class", "read_only"),
+        )
+        capability_claims = verify_capability_token(token)
+
     tool_ctx = ToolExecutionContext(
         tenant_id=tenant_id,
         task_id=task_id,
         run_id=(running_task.get("input_json") or {}).get("run_id")
         or (running_task.get("context_manifest_json") or {}).get("run_id"),
+        capability_claims=capability_claims,
     )
 
     try:

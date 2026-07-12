@@ -26,13 +26,16 @@ from .registry import TOOL_RISK_CLASSES
 class ToolExecutionContext:
     """What a tool handler is allowed to see. No bearer tokens, no raw
     database connections, no unrestricted repository objects -- only
-    resolved scope. Constructed by workers.py from the task's capability
-    token (PR 6) or, in PR 2, directly from the task's context_manifest."""
+    resolved scope, plus (as of PR 6) the verified capability_claims a
+    handler must pass through to invoke_tool() for any non-read_only tool
+    call. Constructed by workflows.py from the task's issued capability
+    token; a handler never mints or re-verifies a token itself."""
 
     tenant_id: str
     task_id: str
     run_id: str | None
     allowed_evidence_ids: tuple[str, ...] = ()
+    capability_claims: Any | None = None
 
 
 class ToolNotFound(Exception):
@@ -211,6 +214,39 @@ def _review_request(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[st
     return {"run_id": run_id, "approval_status": status}
 
 
+def _publication_release(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:
+    """Deliberately read-only, despite being catalogued as a "restricted"
+    tool. The existing publication mutation (_record_reviewer_decision /
+    POST /reviewer/runs/{run_id}/approve) already requires an authenticated
+    human reviewer identity, a claimed checkpoint, and a fingerprint match
+    -- design doc section 20 explicitly excludes agents from performing
+    consequential mutations directly in this release ("agents transferring
+    funds, editing ERP records, or emailing third parties" is the named
+    non-goal category; publication release is the same class of action).
+    An agent task can only report whether a run is eligible for release
+    and what would still block it; the actual state change stays exclusively
+    on the existing human-reviewer HTTP path. This satisfies "restricted"
+    classification (it still requires a valid capability token to invoke)
+    without giving a worker the power to publish anything itself."""
+    run_id = input.get("run_id") or ctx.run_id
+    if not run_id:
+        raise ToolInputInvalid("publication.release requires a run_id")
+    approval_status = state_store.approval_status_for_run(run_id)
+    if isinstance(approval_status, dict) and approval_status.get("status") == "missing":
+        return {"available": False, "run_id": run_id, "reason": "run not found"}
+    eligible = (
+        isinstance(approval_status, dict)
+        and approval_status.get("approval_status") == "approved"
+    )
+    return {
+        "available": True,
+        "run_id": run_id,
+        "release_eligible": eligible,
+        "approval_status": approval_status,
+        "blocking_reason": None if eligible else "run has not been approved by a human reviewer",
+    }
+
+
 def _runtime_health_read(ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:
     from .. import api as api_module
     from .. import hatchet_runtime
@@ -229,22 +265,60 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "graph.query": _graph_query,
     "board_pack.prepare": _board_pack_prepare,
     "review.request": _review_request,
+    "publication.release": _publication_release,
     "runtime.health.read": _runtime_health_read,
 }
 
 
 def validate_tool_registry() -> None:
     """Every handler must be a catalogued, risk-classed tool key, and every
-    read_only/prepare tool referenced by an agent definition should have a
-    handler here by PR 2 (restricted tools like publication.release are
-    intentionally still unimplemented -- PR 6 territory)."""
+    tool key actually referenced by a shipped agent definition must have an
+    implemented handler. TOOL_RISK_CLASSES may still list a tool
+    (finance_controls.run) that no current agent uses and that has no
+    Postgres-backed seam to wrap -- skills/finance_controls.py operates on
+    an in-memory DataBundle from the live finance-run pipeline, not
+    historical Postgres state, so it cannot be called from an after-the-
+    fact agent task without re-running the whole pipeline. It stays
+    catalogued (a future agent might reference it) but unimplemented is
+    not an error until something actually depends on it."""
+    from .registry import AGENT_DEFINITIONS
+
     unknown = set(TOOL_HANDLERS.keys()) - set(TOOL_RISK_CLASSES.keys())
     if unknown:
         raise ValueError(f"tool handlers registered for uncatalogued tool keys: {sorted(unknown)}")
+    referenced_tool_keys = {key for definition in AGENT_DEFINITIONS for key in definition.tool_keys}
+    missing = referenced_tool_keys - set(TOOL_HANDLERS.keys())
+    if missing:
+        raise ValueError(f"agent-referenced tool keys have no implemented handler: {sorted(missing)}")
 
 
-def invoke_tool(tool_key: str, ctx: ToolExecutionContext, input: dict[str, Any]) -> dict[str, Any]:
+def invoke_tool(
+    tool_key: str,
+    ctx: ToolExecutionContext,
+    input: dict[str, Any],
+    *,
+    capability_claims: Any | None = None,
+) -> dict[str, Any]:
+    """A verified capability token (capability_tokens.CapabilityClaims) is
+    required for prepare/write/restricted tools -- design doc section 13:
+    "Tool dispatch verifies it." Defaults to ctx.capability_claims so a
+    handler calling invoke_tool(key, ctx, input) doesn't need to
+    separately thread the token through every call site; pass
+    capability_claims explicitly only to override that default. Read-only
+    tools remain callable without a token."""
+    if capability_claims is None:
+        capability_claims = ctx.capability_claims
     handler = TOOL_HANDLERS.get(tool_key)
     if handler is None:
         raise ToolNotFound(f"no handler registered for tool key {tool_key!r}")
+
+    tool_risk_class = TOOL_RISK_CLASSES.get(tool_key, "restricted")
+    if tool_risk_class != "read_only":
+        if capability_claims is None:
+            raise ToolInputInvalid(
+                f"tool {tool_key!r} (risk class {tool_risk_class!r}) requires a verified capability token"
+            )
+        from .capability_tokens import authorize_tool_call
+
+        authorize_tool_call(capability_claims, tool_key=tool_key, tool_risk_class=tool_risk_class)
     return handler(ctx, input)

@@ -4389,7 +4389,19 @@ def _chat_threads_payload(
         ],
         "a2a": {
             "enabled": True,
-            "mode": "derived_handoff_only",
+            # design doc acceptance criteria: "a2a.mode reports
+            # durable_task_handoffs only when real persistence/execution is
+            # enabled" -- gated on all three per-PR feature flags being on
+            # together (conversations + handoffs + live UI), since that is
+            # the full vertical slice the mode name promises. Any single
+            # flag off means some part of the chain (durable conversation
+            # storage, real typed handoffs, or the live network/approval
+            # surface) is still the pre-agent-runtime derived behavior.
+            "mode": (
+                "durable_task_handoffs"
+                if (CONFIG.agent_conversations_enabled and CONFIG.agent_handoffs_enabled and CONFIG.agent_live_ui_enabled)
+                else "derived_handoff_only"
+            ),
             "items": [
                 {
                     "handoff_id": f"action:{index}",

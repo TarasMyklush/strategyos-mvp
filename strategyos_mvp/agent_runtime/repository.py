@@ -153,11 +153,23 @@ def sync_agent_definitions() -> dict[str, Any]:
     return {"status": "synced", "count": len(AGENT_DEFINITIONS)}
 
 
-def ensure_agent_installation(tenant_id: str, agent_key: str, *, version: int = 1) -> dict[str, Any]:
+def ensure_agent_installation(tenant_id: str, agent_key: str, *, version: int | None = None) -> dict[str, Any]:
     """Activate `agent_key` for `tenant_id`, or return the existing active
     installation. Enforces the unique-active-per-(tenant,agent_key) index by
     checking first rather than relying on a races-prone upsert, since the
-    partial unique index has no natural ON CONFLICT target."""
+    partial unique index has no natural ON CONFLICT target.
+
+    `version` defaults to the registry's current version for this agent_key
+    (not a hardcoded 1) -- BOARD_PACK moved to v2 in PR 6, and a caller that
+    didn't pass a version would otherwise silently install every new
+    installation pinned to v1 forever, permanently missing v2's
+    publication.release tool."""
+    if version is None:
+        from .registry import AGENT_DEFINITIONS_BY_KEY
+
+        definition = AGENT_DEFINITIONS_BY_KEY.get(agent_key)
+        version = definition.version if definition is not None else 1
+
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
