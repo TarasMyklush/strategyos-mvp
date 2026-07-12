@@ -26,6 +26,7 @@ from .state_store import persist_run_summary
 from .storage import sync_artifacts as sync_artifact_files
 from .storage import sync_source_files
 from .runtime_governance import RuntimeGovernance, build_run_summary, checkpoint_state
+from .source_finance_kpis import derive_source_finance_kpis
 from .source_pack import resolve_source_pack_for_run
 from .vector_store import sync_findings_vector_store
 from .workflow import build_workflow
@@ -315,6 +316,9 @@ def _execute_strategyos_workflow(
     )
 
     summary = build_run_summary(result)
+    # Standard runs receive source extracts directly. Derive the CEO actuals
+    # from those files instead of requiring a separate Oracle API request.
+    summary["finance_kpi"] = derive_source_finance_kpis(dataset_root)
     attach_local_review_checkpoint(summary, result)
     if source_pack_payload is not None:
         summary["source_pack"] = {

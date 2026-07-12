@@ -1616,6 +1616,19 @@
     return governedMeasureLabel(firstDefined(driver && driver.sub, driver && driver.trend_hint, 'Current governed measure'));
   }
 
+  function unavailableDriverMarkup(driver) {
+    var inputs = safeArray(driver && driver.missing_inputs);
+    var needs = inputs.length ? inputs.join(" · ") : "Reconciled finance inputs";
+    return [
+      '<div class="driver-unavailable" aria-label="Finance data required">',
+      '<span class="driver-unavailable__eyebrow">Finance data required</span>',
+      '<strong class="driver-unavailable__title">Not calculated</strong>',
+      '<p class="driver-unavailable__copy">' + escapeHtml(needs) + '</p>',
+      '<span class="driver-unavailable__cta">View formula and data request →</span>',
+      '</div>'
+    ].join("");
+  }
+
   function qaAnswerText(payload) {
     if (!payload) return "I could not reach the Q&A service. Try again from an authenticated session.";
     var answer = scrubExecutiveTechnicalLanguage(cleanVisibleQaAnswer(firstDefined(payload.answer, "")));
@@ -3378,13 +3391,21 @@
       var tile = document.createElement("button");
       tile.type = "button";
       tile.className = "driver-tile" + (activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? " is-selected" : "");
+      if (driver.availability === "unavailable") tile.className += " driver-tile--unavailable";
       tile.setAttribute("data-driver-key", key);
       tile.setAttribute("aria-pressed", activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === key ? "true" : "false");
-      tile.innerHTML = [
-        '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
-        '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(driverSubLabel(driver)) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
-      ].join("");
+      tile.innerHTML = driver.availability === "unavailable"
+        ? [
+          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong></div>',
+          unavailableDriverMarkup(driver),
+          groundingBadgeMarkup(driver.provenance, driver.grounding)
+        ].join("")
+        : [
+          '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
+          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(driverSubLabel(driver)) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
+        ].join("");
       tile.onclick = function () {
+        var readingPosition = window.scrollY;
         state.activeDriverKey = key;
         updateHistory();
         renderDriverGrid();
@@ -3392,6 +3413,9 @@
         renderSummary();
         // KPI detail is deliberately inline below the strip. Selecting a tile
         // must never move the executive's reading position.
+        window.requestAnimationFrame(function () {
+          if (window.scrollY !== readingPosition) window.scrollTo(0, readingPosition);
+        });
       };
       grid.appendChild(tile);
     });
@@ -3440,16 +3464,21 @@
     var availability = String(firstDefined(driver.availability, "unavailable"));
     var missingInputs = safeArray(driver.missing_inputs);
     var inputs = safeArray(driver.inputs);
+    var sourceFiles = safeArray(driver.source_files);
+    var actualGrounded = String(((driver.grounding || {}).status) || "").toLowerCase() === "grounded";
     var evidenceLabel = availability === "verified"
-      ? "Verified from the deterministic finance snapshot"
+      ? "Verified from deterministic finance source extracts"
       : availability === "partial"
-        ? "Partially calculated — a comparator is unavailable"
+        ? actualGrounded
+          ? "Actual is traceable to source extracts; a comparator is unavailable"
+          : "Partially calculated — comparator or source coverage is unavailable"
         : "Not calculated — required finance inputs are unavailable";
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(firstDefined(driver.driver_key, driver.key, "")) + '">',
-      '<div class="drill-headline"><div><p class="detail-eyebrow">Inline KPI detail</p><h3 class="detail-title">What drives ' + escapeHtml(label) + '</h3><p class="section-note">' + escapeHtml(evidenceLabel) + '</p></div>' + groundingBadgeMarkup(driver.provenance, { status: availability === "verified" ? "grounded" : "needs_evidence", source: (driver.provenance || {}).source }) + '</div>',
+      '<div class="drill-headline"><div><p class="detail-eyebrow">Inline KPI detail</p><h3 class="detail-title">What drives ' + escapeHtml(label) + '</h3><p class="section-note">' + escapeHtml(evidenceLabel) + '</p></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
       '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, "No governed calculation is available.")) + '</p>',
-      '<div class="kpi-inline-facts"><div><span>Formula</span><strong>' + escapeHtml(firstDefined(driver.formula, "No governed formula is available.")) + '</strong></div><div><span>Current comparison</span><strong>' + escapeHtml(firstDefined(driver.comparison, driver.sub, "Unavailable")) + '</strong></div></div>',
+      '<div class="kpi-inline-facts"><div><span>Formula</span><strong>' + escapeHtml(firstDefined(driver.formula, "No governed formula is available.")) + '</strong></div><div><span>Current comparison</span><strong>' + escapeHtml(firstDefined(driver.comparison, driver.sub, "Unavailable")) + '</strong></div><div><span>Calculation evidence</span><strong>' + escapeHtml(firstDefined(driver.evidence_summary, "No source calculation evidence is available.")) + '</strong></div></div>',
+      (sourceFiles.length ? '<div class="kpi-inline-sources"><strong>Source files</strong><span>' + escapeHtml(sourceFiles.join(" · ")) + '</span></div>' : ''),
       '<div class="kpi-inline-coverage"><div><strong>Data required</strong><div class="chips">' + inputs.map(function (item) { return '<span class="chip chip--static">' + escapeHtml(item) + '</span>'; }).join("") + '</div></div>' + (missingInputs.length ? '<div class="kpi-missing-inputs"><strong>Not present in this run</strong><span>' + escapeHtml(missingInputs.join(" · ")) + '</span></div>' : '<div class="kpi-missing-inputs is-complete"><strong>Calculation coverage</strong><span>All required governed inputs are present.</span></div>') + '</div>',
       '<div class="kpi-inline-trend"><strong>Historical trend</strong><span>' + escapeHtml(safeArray((driver.trend || {}).actual).length ? "Governed actual and plan series are available." : firstDefined(driver.trend_status, "Historical governed periods are not available.")) + '</span></div>',
       '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div><strong>Continue with Hermes</strong><p>Hermes starts from this KPI’s formula and governed data boundary.</p></div><form class="kpi-inline-composer" data-kpi-inline-composer="true"><label class="sr-only" for="kpi-inline-input">Ask Hermes about ' + escapeHtml(label) + '</label><input id="kpi-inline-input" type="text" placeholder="Ask about ' + escapeHtml(label.toLowerCase()) + '…" autocomplete="off" /><button type="submit">Ask Hermes</button></form><div class="kpi-inline-answer" aria-live="polite">Select Ask Hermes to start a KPI-specific conversation.</div></section>',

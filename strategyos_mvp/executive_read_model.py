@@ -325,6 +325,11 @@ def build_executive_read_model(
             if isinstance((summary or {}).get("oracle_kpi"), Mapping)
             else {}
         ),
+        "finance_kpi": (
+            dict((summary or {}).get("finance_kpi") or {})
+            if isinstance((summary or {}).get("finance_kpi"), Mapping)
+            else {}
+        ),
         "findings": _finding_claims(
             rows,
             run_id=run_id,

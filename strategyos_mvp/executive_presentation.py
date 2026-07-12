@@ -144,17 +144,16 @@ def _basis_points_display(value: float | None) -> str:
     return f"{rounded:+d} bps vs plan"
 
 
-def _oracle_kpi_payload(read_model: Mapping[str, Any]) -> dict[str, Any]:
-    payload = read_model.get("oracle_kpi")
-    if not isinstance(payload, Mapping):
-        return {}
-    # The CEO page accepts figures only from the deterministic engine.  A
-    # similarly shaped, hand-authored summary is not sufficient evidence.
-    if payload.get("derived_from") != "deterministic_oracle_kpi_engine":
-        return {}
-    if payload.get("authoritative") is not True:
-        return {}
-    return dict(payload)
+def _finance_kpi_payload(read_model: Mapping[str, Any]) -> dict[str, Any]:
+    """Accept only a named deterministic calculation, never a prose value."""
+    for field, engine in (
+        ("finance_kpi", "deterministic_source_finance_kpi_engine"),
+        ("oracle_kpi", "deterministic_oracle_kpi_engine"),
+    ):
+        payload = read_model.get(field)
+        if isinstance(payload, Mapping) and payload.get("derived_from") == engine and payload.get("authoritative") is True:
+            return dict(payload)
+    return {}
 
 
 def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, list[float]]:
@@ -209,25 +208,27 @@ def _unavailable_ceo_kpi(spec: Mapping[str, Any], *, reason: str) -> dict[str, A
 
 
 def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
-    oracle_payload = _oracle_kpi_payload(read_model)
-    components = oracle_payload.get("components") if isinstance(oracle_payload.get("components"), Mapping) else {}
-    period = str(oracle_payload.get("reporting_period_key") or "the selected period")
+    finance_payload = _finance_kpi_payload(read_model)
+    components = finance_payload.get("components") if isinstance(finance_payload.get("components"), Mapping) else {}
+    evidence = finance_payload.get("evidence") if isinstance(finance_payload.get("evidence"), Mapping) else {}
+    actual_complete = finance_payload.get("actual_complete") if isinstance(finance_payload.get("actual_complete"), Mapping) else {}
+    period = str(finance_payload.get("reporting_period_key") or "the selected period")
     provenance = {
-        "source": "deterministic Oracle finance snapshot",
-        "complete": bool(oracle_payload),
-        "reporting_period_key": oracle_payload.get("reporting_period_key"),
-        "computation_boundary": oracle_payload.get("computation_boundary"),
+        "source": "deterministic finance calculation from uploaded source extracts",
+        "complete": bool(finance_payload),
+        "reporting_period_key": finance_payload.get("reporting_period_key"),
+        "computation_boundary": finance_payload.get("computation_boundary"),
     }
     cards: list[dict[str, Any]] = []
 
     for spec in _CEO_KPI_SPECS:
-        if not oracle_payload:
+        if not finance_payload:
             cards.append(
                 _unavailable_ceo_kpi(
                     spec,
                     reason=(
-                        "This run contains governed findings and evidence, but no reconciled "
-                        "Oracle finance snapshot for this KPI. StrategyOS will not estimate it."
+                        "This run has no deterministic finance calculation for this KPI. "
+                        "StrategyOS will not estimate it."
                     ),
                 )
             )
@@ -246,7 +247,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                     reason=(
                         f"Cannot calculate {spec['label']} for {period}: missing "
                         + ", ".join(missing_keys)
-                        + " in the reconciled finance snapshot."
+                        + " in the deterministic finance calculation."
                     ),
                 )
             )
@@ -268,7 +269,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             pct = (actual / comparator) * 100 if comparator not in {None, 0} else None
             metric = _format_sar(actual)
             if comparator is None:
-                comparison = "Plan or floor comparison unavailable"
+                comparison = "Board floor comparison unavailable" if spec["key"] == "cash_vs_floor" else "Plan comparison unavailable"
                 missing_inputs = ["Approved plan" if spec["key"] != "cash_vs_floor" else "Approved board cash floor"]
             else:
                 delta = actual - comparator
@@ -278,14 +279,28 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                     comparison = f"{pct:.1f}% of plan"
                 missing_inputs = []
 
+        kpi_evidence = evidence.get(spec["key"]) if isinstance(evidence.get(spec["key"]), Mapping) else {}
+        actual_is_complete = bool(actual_complete.get(spec["key"], True))
+        actual_missing = [] if actual_is_complete else ["Complete latest cash-position balances"]
+        missing_inputs = list(dict.fromkeys([*missing_inputs, *actual_missing]))
         availability = "verified" if not missing_inputs else "partial"
-        status = "Verified" if availability == "verified" else "Partial — comparator unavailable"
+        status = "Verified" if availability == "verified" else "Partial — comparator or source coverage unavailable"
         sub = comparison
         detail = (
-            f"Calculated for {period} from the deterministic finance snapshot. {comparison}."
+            f"Calculated for {period} from the deterministic finance source extracts. {comparison}."
             if availability == "verified"
             else f"Calculated for {period}; {comparison.lower()}. No comparator has been inferred."
         )
+        evidence_summary = str(kpi_evidence.get("summary") or "")
+        if evidence_summary:
+            detail += " " + evidence_summary
+        if not actual_is_complete:
+            detail += " The current cash figure is partial; no missing balance has been estimated."
+        card_provenance = {
+            **provenance,
+            "complete": actual_is_complete,
+            "source_files": list(kpi_evidence.get("files") or []),
+        }
         cards.append(
             {
                 "kpi_contract": True,
@@ -306,15 +321,25 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "comparison": comparison,
                 "chips": [],
                 "movers": {"lifting": [], "dragging": []},
-                "trend": _safe_trend(oracle_payload, str(spec["key"])),
+                "trend": _safe_trend(finance_payload, str(spec["key"])),
                 "trend_status": "Historical governed periods are not available.",
-                "provenance": dict(provenance),
+                "provenance": card_provenance,
+                "grounding": {
+                    "status": "grounded" if actual_is_complete else "needs_evidence",
+                    "source": card_provenance["source"],
+                },
+                "evidence_summary": evidence_summary,
+                "source_files": list(kpi_evidence.get("files") or []),
             }
         )
     return cards
 
 
-def _hero(read_model: Mapping[str, Any]) -> dict[str, Any]:
+def _hero(
+    read_model: Mapping[str, Any],
+    *,
+    drivers: list[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
     metrics = read_model.get("metrics") or {}
     lifecycle = read_model.get("lifecycle") or {}
     challenged = int(_claim_value(metrics.get("challenged_count"), 0) or 0)
@@ -325,10 +350,21 @@ def _hero(read_model: Mapping[str, Any]) -> dict[str, Any]:
     citation_resolved = citation_value.get("resolved") if isinstance(citation_value, Mapping) else None
     if citation_resolved is not None:
         citation_resolved = int(citation_resolved)
+    finance_kpis_unavailable = bool(drivers) and all(
+        str(driver.get("availability") or "") == "unavailable"
+        for driver in drivers or []
+    )
     if read_model.get("data_status") != "ready":
         label = "Board readiness is unavailable"
         body = read_model.get("status_reason") or "No current governed database run is available."
         status = "missing"
+    elif finance_kpis_unavailable:
+        label = "CEO finance baseline is not yet connected"
+        body = (
+            "The board packet is available, but Revenue, EBITDA margin, Operating cost and Cash vs floor "
+            "are deliberately withheld because this run has no deterministic source calculation with their required inputs."
+        )
+        status = "finance_data_required"
     elif challenged:
         label = "Board pack is not yet clean for release"
         body = f"{challenged} item(s) still need evidence closure before executive release."
@@ -436,8 +472,8 @@ def _case_index(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
-    hero = _hero(read_model)
     drivers = _ceo_kpi_cards(read_model)
+    hero = _hero(read_model, drivers=drivers)
     findings, reconciliation = _findings(read_model)
     developments = list((read_model.get("developments") or {}).get("items") or [])
     week = list((read_model.get("week_ahead") or {}).get("items") or [])

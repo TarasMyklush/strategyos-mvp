@@ -1273,6 +1273,18 @@ def test_driver_grid_renders_governed_metric_when_percent_is_absent():
     assert "driver-pct--metric" in css
 
 
+def test_unavailable_ceo_kpis_explain_the_data_request_without_empty_rings():
+    js = _static_executive_js()
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert "function unavailableDriverMarkup(driver)" in js
+    assert "Finance data required" in js
+    assert "View formula and data request" in js
+    assert "driver-tile--unavailable" in js
+    assert ".driver-tile--unavailable" in css
+    assert ".driver-unavailable__cta" in css
+
+
 def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     js = _static_executive_js()
     html = (Path(api_module.STATIC_DIR) / "executive.html").read_text(encoding="utf-8")
@@ -1281,6 +1293,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     render_end = js.index("function renderMetrics()")
     render_body = js[render_start:render_end]
     assert "scrollIntoView" not in render_body
+    assert "var readingPosition = window.scrollY;" in render_body
+    assert "window.scrollTo(0, readingPosition)" in render_body
     assert "aria-pressed" in render_body
     assert 'data-driver-key' in render_body
     assert 'function renderInlineKpiDrill(driver, drillCard)' in js

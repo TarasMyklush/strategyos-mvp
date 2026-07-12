@@ -4413,11 +4413,14 @@ def _executive_diagnostics_payload(
                 "pct": item.get("pct"),
                 "sub": item.get("sub"),
                 "provenance": item.get("provenance"),
+                "grounding": item.get("grounding"),
                 "availability": item.get("availability"),
                 "formula": item.get("formula"),
                 "inputs": item.get("inputs"),
                 "missing_inputs": item.get("missing_inputs"),
                 "comparison": item.get("comparison"),
+                "evidence_summary": item.get("evidence_summary"),
+                "source_files": item.get("source_files"),
                 "trend": item.get("trend"),
                 "trend_status": item.get("trend_status"),
             }
@@ -10270,8 +10273,19 @@ def _ceo_kpi_inline_result(
             f"{card.get('comparison') or card.get('sub') or ''} "
             f"Formula: {card.get('formula') or 'governed KPI calculation.'}"
         )
+        if card.get("evidence_summary"):
+            answer += f" Calculation evidence: {card['evidence_summary']}"
+        source_files = [str(item) for item in list(card.get("source_files") or []) if str(item)]
+        if source_files:
+            answer += " Source files: " + ", ".join(source_files) + "."
         if missing:
-            answer += " The calculation is partial because " + ", ".join(missing) + " is unavailable; no comparator was inferred."
+            if len(missing) == 1:
+                missing_text = missing[0] + " is unavailable"
+            elif len(missing) == 2:
+                missing_text = missing[0] + " and " + missing[1] + " are unavailable"
+            else:
+                missing_text = ", ".join(missing[:-1]) + ", and " + missing[-1] + " are unavailable"
+            answer += " The calculation is partial because " + missing_text + "; no comparator was inferred."
             grounding = "needs_evidence"
         else:
             grounding = "grounded"

@@ -3955,6 +3955,56 @@ html[data-theme="dark"] .trend-axis {
   justify-items: center;
 }
 
+.driver-tile--unavailable {
+  align-content: start;
+  justify-items: stretch;
+  min-height: 248px;
+  text-align: left;
+}
+
+.driver-tile--unavailable .driver-meta {
+  justify-items: start;
+}
+
+.driver-unavailable {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-height: 144px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface));
+}
+
+.driver-unavailable__eyebrow {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.driver-unavailable__title {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.driver-unavailable__copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.driver-unavailable__cta {
+  margin-top: auto;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .driver-foot {
   font-size: 14px;
   color: var(--ink);

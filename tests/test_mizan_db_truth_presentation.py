@@ -69,6 +69,7 @@ def test_mizan_style_presentation_uses_database_claims_only():
     assert presentation["driver_grid"][0]["metric"] == "Not available"
     assert presentation["driver_grid"][0]["availability"] == "unavailable"
     assert "will not estimate" in presentation["driver_grid"][0]["detail"]
+    assert presentation["hero"]["label"] == "CEO finance baseline is not yet connected"
     assert presentation["sections"]["developments"]["items"] == []
     assert presentation["sections"]["week_ahead"]["items"] == []
     assert presentation["provenance_summary"]["all_claims_validated"] is True
