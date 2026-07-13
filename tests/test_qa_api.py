@@ -131,6 +131,12 @@ def test_ceo_kpi_answer_carries_governed_business_drivers_and_sources(monkeypatc
                     "availability": "available",
                     "missing_inputs": ["H1 budget aligned to this reporting scope"],
                     "grounding": {"status": "grounded"},
+                    "source_files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"],
+                    "trend": {"actual": [100.0, 120.0], "plan": [], "has_plan_series": False},
+                    "movers": {
+                        "lifting": [{"name": "Revenue – Catering", "delta": "20.0 SAR"}],
+                        "dragging": [{"name": "Revenue – Government", "delta": "-5.0 SAR"}],
+                    },
                     "executive_brief": {
                         "readout": "Revenue recognised across four revenue groups.",
                         "drivers": [
@@ -149,12 +155,16 @@ def test_ceo_kpi_answer_carries_governed_business_drivers_and_sources(monkeypatc
         {"summary": {}},
         kpi_key="revenue",
         public_safe=False,
+        question="What is driving revenue and how does it compare with plan?",
     )
 
     assert "Revenue – Catering — SAR 123.0M · 31.9%" in result["answer"]
     assert "largest reported contributor is Revenue – Catering at 31.9%" in result["answer"]
     assert "General ledger extract; Chart of accounts" in result["answer"]
+    assert "strongest positive movement is Revenue – Catering (20.0 SAR)" in result["answer"]
+    assert "cannot state a variance to plan" in result["answer"]
     assert "direct comparison is withheld" in result["answer"]
+    assert result["citations"][0]["source_path"] == "02_ERP_Extracts/GL_Extract_H1_2026.csv"
     assert result["grounding_status"] == "grounded"
 
 

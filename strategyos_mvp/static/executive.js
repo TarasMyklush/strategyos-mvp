@@ -3641,12 +3641,45 @@
     var description = chartRows.map(function (item) {
       return firstDefined(item.label, "Component") + " " + Number(item.share_pct).toFixed(1) + "%";
     }).join(", ");
-    return '<section class="kpi-mix-chart"><div class="kpi-mix-chart__head"><span class="kpi-brief-label">' + escapeHtml(firstDefined(titles[key], "Current composition")) + '</span><small>Share of the current reported figure</small></div><div class="kpi-mix-chart__bar" role="img" aria-label="' + escapeHtml(description) + '">' + chartRows.map(function (item, index) {
-      var width = Math.max(2, Math.abs(Number(item.share_pct) || 0) / total * 100);
-      return '<span class="kpi-mix-chart__segment tone-' + (index % 6) + '" style="width:' + escapeHtml(width.toFixed(2)) + '%" title="' + escapeHtml(firstDefined(item.label, "Component") + " · " + Number(item.share_pct).toFixed(1) + "%") + '"></span>';
-    }).join("") + '</div><div class="kpi-mix-chart__legend">' + chartRows.map(function (item, index) {
+    var arcPath = function (start, end) {
+      var radians = function (value) { return (value - 90) * Math.PI / 180; };
+      var point = function (value) { return [50 + 38 * Math.cos(radians(value)), 50 + 38 * Math.sin(radians(value))]; };
+      var startPoint = point(start);
+      var endPoint = point(end);
+      var largeArc = end - start > 180 ? 1 : 0;
+      return 'M ' + startPoint[0].toFixed(3) + ' ' + startPoint[1].toFixed(3) + ' A 38 38 0 ' + largeArc + ' 1 ' + endPoint[0].toFixed(3) + ' ' + endPoint[1].toFixed(3);
+    };
+    var cursor = 0;
+    var slices = chartRows.map(function (item, index) {
+      var share = Math.abs(Number(item.share_pct) || 0) / total * 100;
+      var start = cursor;
+      cursor += share;
+      return '<path class="kpi-mix-chart__slice tone-stroke-' + (index % 6) + '" d="' + arcPath(start, cursor) + '"><title>' + escapeHtml(firstDefined(item.label, "Component") + " · " + Number(item.share_pct).toFixed(1) + "%") + '</title></path>';
+    }).join("");
+    return '<section class="kpi-mix-chart"><div class="kpi-mix-chart__head"><span class="kpi-brief-label">' + escapeHtml(firstDefined(titles[key], "Current composition")) + '</span><small>Share of the current reported figure</small></div><div class="kpi-mix-chart__body"><svg class="kpi-mix-chart__donut" viewBox="0 0 100 100" role="img" aria-label="' + escapeHtml(description) + '"><circle class="kpi-mix-chart__track" cx="50" cy="50" r="38"></circle>' + slices + '<text x="50" y="47" text-anchor="middle">Actual</text><text x="50" y="57" text-anchor="middle">mix</text></svg><div class="kpi-mix-chart__legend">' + chartRows.map(function (item, index) {
       return '<div><span class="kpi-mix-chart__swatch tone-' + (index % 6) + '"></span><span>' + escapeHtml(firstDefined(item.label, "Component")) + '</span><strong>' + escapeHtml(Number(item.share_pct).toFixed(1)) + '%</strong></div>';
-    }).join("") + '</div></section>';
+    }).join("") + '</div></div></section>';
+  }
+
+  function kpiTrendChartMarkup(label, trend) {
+    var actual = safeArray(trend && trend.actual).map(Number).filter(function (value) { return Number.isFinite(value); });
+    var plan = safeArray(trend && trend.plan).map(Number).filter(function (value) { return Number.isFinite(value); });
+    var labels = safeArray(trend && trend.labels);
+    var hasPlan = trend && trend.has_plan_series === true && plan.length === actual.length && actual.length > 1;
+    if (actual.length <= 1) return '';
+    var values = actual.concat(hasPlan ? plan : []);
+    var low = Math.min.apply(null, values);
+    var high = Math.max.apply(null, values);
+    var span = Math.max(1, high - low);
+    var pathFor = function (series) {
+      return series.map(function (value, index) {
+        var x = series.length === 1 ? 150 : 12 + (index * 276) / (series.length - 1);
+        var y = 108 - (((value - low) / span) * 82 + 10);
+        return (index ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
+      }).join(' ');
+    };
+    var accessibleLabels = labels.length === actual.length ? labels.join(', ') : actual.length + ' governed reporting periods';
+    return '<section class="kpi-trend"><div class="kpi-trend__head"><span class="kpi-brief-label">' + escapeHtml(label) + ' dynamics</span><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Aligned plan</span>' : '<span>No aligned plan series supplied</span>') + '</div></div><svg viewBox="0 0 300 120" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus aligned plan across ' : ' actual trend across ') + accessibleLabels) + '"><path class="kpi-trend__grid" d="M12,98 H288 M12,57 H288 M12,16 H288"></path><path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + '</svg></section>';
   }
 
   function renderInlineKpiDrill(driver, drillCard) {
@@ -3663,24 +3696,8 @@
     var drivers = safeArray(brief.drivers);
     var auditSources = safeArray(audit.source_titles);
     var governedTrend = (driver && driver.trend) || {};
-    var actualTrend = safeArray(governedTrend.actual).map(Number).filter(function (value) { return Number.isFinite(value); });
-    var planTrend = safeArray(governedTrend.plan).map(Number).filter(function (value) { return Number.isFinite(value); });
-    var hasPlanSeries = governedTrend.has_plan_series === true && planTrend.length === actualTrend.length && actualTrend.length > 1;
-    var trendMarkup = '';
-    if (actualTrend.length > 1) {
-      var values = actualTrend.concat(hasPlanSeries ? planTrend : []);
-      var low = Math.min.apply(null, values);
-      var high = Math.max.apply(null, values);
-      var span = Math.max(1, high - low);
-      var trendPath = function (series) {
-        return series.map(function (value, index) {
-          var x = series.length === 1 ? 150 : (index * 300) / (series.length - 1);
-          var y = 110 - (((value - low) / span) * 86 + 12);
-          return (index ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
-        }).join(' ');
-      };
-      trendMarkup = '<section class="kpi-trend"><span class="kpi-brief-label">Revenue dynamics</span><div class="kpi-trend__legend"><span>Actual</span>' + (hasPlanSeries ? '<span>Plan</span>' : '<span>No aligned plan series supplied</span>') + '</div><svg viewBox="0 0 300 120" role="img" aria-label="' + escapeHtml(label) + (hasPlanSeries ? ' actual versus plan trend' : ' actual trend') + '"><path class="trend-chain__actual" d="' + escapeHtml(trendPath(actualTrend)) + '"></path>' + (hasPlanSeries ? '<path class="trend-chain__plan" d="' + escapeHtml(trendPath(planTrend)) + '"></path>' : '') + '</svg></section>';
-    } else if (key === 'revenue') {
+    var trendMarkup = kpiTrendChartMarkup(label, governedTrend);
+    if (!trendMarkup && key === 'revenue') {
       trendMarkup = '<section class="kpi-trend kpi-trend--empty"><span class="kpi-brief-label">Revenue dynamics</span><p>Multiple governed reporting periods are required before StrategyOS can show movement. No plan line has been inferred.</p></section>';
     }
     // Use the same governed percentage contract as the dashboard gauge. Some
@@ -3714,8 +3731,6 @@
       chartMarkup,
       driverMarkup,
       trendMarkup,
-      chartMarkup,
-      driverMarkup,
       strategicReference ? '<section class="kpi-strategic-reference"><span class="kpi-brief-label">' + escapeHtml(firstDefined(strategicReference.label, "Approved strategic reference")) + '</span><strong>' + escapeHtml(firstDefined(strategicReference.value, "—")) + '</strong><p>' + escapeHtml(firstDefined(strategicReference.note, "")) + '</p><small>' + escapeHtml(firstDefined(strategicReference.source, "")) + '</small></section>' : '',
       '<section class="kpi-decision-context"><span class="kpi-brief-label">Decision context</span><strong>' + escapeHtml(firstDefined(brief.decision_context, comparison.note, "No decision implication is available.")) + '</strong></section>',
       '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask Hermes about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div></section>',

@@ -1371,6 +1371,10 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "data-kpi-question" in js
     assert "kpiMixChartMarkup(key, drivers)" in js
     assert "Share of the current reported figure" in js
+    assert 'class="kpi-mix-chart__donut"' in js
+    assert "function kpiTrendChartMarkup(label, trend)" in js
+    assert "No aligned plan series supplied" in js
+    assert "trend.has_plan_series === true" in js
     assert 'rawShare === null || rawShare === undefined || rawShare === "" ? NaN' in js
     assert "data-kpi-inline-composer" not in js
     assert "executiveKpiBrief(driver)" in js

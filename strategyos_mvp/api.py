@@ -10637,6 +10637,7 @@ def _ceo_kpi_inline_result(
     *,
     kpi_key: str,
     public_safe: bool,
+    question: str = "",
 ) -> dict[str, Any]:
     """Answer a CEO KPI conversation from server-resolved truth only.
 
@@ -10678,6 +10679,12 @@ def _ceo_kpi_inline_result(
     calculation = brief.get("calculation") if isinstance(brief.get("calculation"), Mapping) else {}
     audit = brief.get("audit") if isinstance(brief.get("audit"), Mapping) else {}
     drivers = [item for item in list(brief.get("drivers") or []) if isinstance(item, Mapping)]
+    movers = card.get("movers") if isinstance(card.get("movers"), Mapping) else {}
+    lifting = [item for item in list(movers.get("lifting") or []) if isinstance(item, Mapping)]
+    dragging = [item for item in list(movers.get("dragging") or []) if isinstance(item, Mapping)]
+    trend = card.get("trend") if isinstance(card.get("trend"), Mapping) else {}
+    has_plan_series = bool(trend.get("has_plan_series"))
+    question_words = " ".join(str(question or "").casefold().split())
     if availability == "unavailable":
         answer = (
             f"{label} is not available for the current reporting period because the required finance information is incomplete. "
@@ -10712,6 +10719,27 @@ def _ceo_kpi_inline_result(
                 ranked_drivers.sort(reverse=True)
                 largest_share, largest_label = ranked_drivers[0]
                 answer += f"The largest reported contributor is {largest_label} at {largest_share:.1f}%. "
+        if kpi_key == "revenue" and (lifting or dragging):
+            movement_parts: list[str] = []
+            if lifting:
+                movement_parts.append(
+                    "the strongest positive movement is "
+                    + "; ".join(
+                        f"{str(item.get('name') or 'an identified revenue group')} ({str(item.get('delta') or 'change recorded')})"
+                        for item in lifting[:2]
+                    )
+                )
+            if dragging:
+                movement_parts.append(
+                    "the movement requiring attention is "
+                    + "; ".join(
+                        f"{str(item.get('name') or 'an identified revenue group')} ({str(item.get('delta') or 'change recorded')})"
+                        for item in dragging[:2]
+                    )
+                )
+            answer += "Across the governed revenue periods, " + "; ".join(movement_parts) + ". "
+        if kpi_key == "revenue" and any(token in question_words for token in ("plan", "compare", "variance", "versus", "vs")) and not has_plan_series:
+            answer += "A period-aligned revenue plan series has not been supplied, so I cannot state a variance to plan. "
         formula = str(calculation.get("formula") or card.get("formula") or "").strip()
         if formula:
             answer += f"Calculation: {formula} "
@@ -10734,11 +10762,20 @@ def _ceo_kpi_inline_result(
         card_grounding = card.get("grounding") if isinstance(card.get("grounding"), Mapping) else {}
         if str(card_grounding.get("status") or "").lower() in {"needs_evidence", "not_grounded", "partial"}:
             grounding = "needs_evidence"
+    source_files = [str(item) for item in list(card.get("source_files") or audit.get("source_files") or []) if str(item)]
+    citations = [
+        {
+            "source_path": source_file,
+            "locator": f"CEO {label} evidence",
+            "excerpt": f"Governed source used for the current {label} measure.",
+        }
+        for source_file in source_files[:6]
+    ]
     return {
         "matched": True,
         "answer": answer,
         "basis": "Current CEO finance records and approved strategic references",
-        "citations": [],
+        "citations": citations,
         "suggestions": [
             f"What needs executive attention for {label}?",
             f"What is driving {label}?",
@@ -10926,6 +10963,7 @@ async def _assistant_chat_response(
             context,
             kpi_key=contextual_kpi_key,
             public_safe=public_safe,
+            question=question,
         )
         orchestrated = get_orchestrator().process(
             question,
