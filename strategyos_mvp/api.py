@@ -10366,6 +10366,64 @@ def _assistant_question_has_business_scope(question: str) -> bool:
     return False
 
 
+_EXTERNAL_DECISION_EVIDENCE_PATTERNS = (
+    r"\bacquir(?:e|ing|ed|isition)\b",
+    r"\bcompetitor\b",
+    r"\bmerger\b",
+    r"\bmarket share\b",
+    r"\bvaluation\b",
+    r"\bdue diligence\b",
+)
+
+
+def _unavailable_external_decision_result(
+    question: str,
+    context: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Fail closed for decisions that need evidence outside a finance run.
+
+    This is a data-capability boundary, not a list of pre-written answers. It
+    prevents an external model from mistaking a finance/controls run for market
+    or transaction diligence and makes the scope visible to an executive.
+    """
+    normalized = " ".join(str(question or "").casefold().split())
+    if not any(re.search(pattern, normalized) for pattern in _EXTERNAL_DECISION_EVIDENCE_PATTERNS):
+        return None
+    bundle = context.get("bundle")
+    metadata = getattr(bundle, "run_metadata", {}) if bundle is not None else {}
+    roles = [str(role) for role in list(metadata.get("available_roles") or []) if str(role)] if isinstance(metadata, Mapping) else []
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    has_finance_kpis = isinstance(summary.get("finance_kpi") or summary.get("oracle_kpi"), Mapping)
+    scope: list[str] = []
+    if "ap_ledger" in roles:
+        scope.append("AP ledger")
+    if "ar_ledger" in roles:
+        scope.append("AR ledger")
+    if "gl_extract" in roles or has_finance_kpis:
+        scope.append("GL-derived finance KPIs")
+    if "cash_forecast" in roles:
+        scope.append("cash-position data")
+    scope_text = ", ".join(scope) if scope else "the current governed finance and controls run"
+    return {
+        "matched": False,
+        "answer": (
+            "I cannot support that decision from the current governed run. "
+            f"It contains {scope_text}, but not market, competitive, valuation, legal, or transaction-diligence evidence. "
+            "Provide those approved inputs before asking Hermes for a recommendation."
+        ),
+        "citations": [],
+        "suggestions": [
+            "What is driving revenue now?",
+            "What needs to change to reach a 60% EBITDA margin?",
+            "What evidence is missing for this decision?",
+        ],
+        "basis": "Governed evidence-scope boundary; no external-decision recommendation was inferred from a finance run.",
+        "answered_by": "evidence_scope_boundary",
+        "grounding_status": "needs_evidence",
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _public_safe_general_answer(question: str) -> dict[str, Any] | None:
     norm = " ".join(str(question or "").lower().split())
     direct_answers = {
@@ -11371,6 +11429,27 @@ async def _assistant_chat_response(
             llm_status=llm_status,
             assistant_context=assistant_context,
         )
+    scope_boundary_result = _unavailable_external_decision_result(question, context)
+    if scope_boundary_result is not None:
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result={**scope_boundary_result, "assistant_mode": "evidence_scope_boundary"},
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=scope_boundary_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
     deterministic_result = qa_engine.answer_question(
         question,
         bundle=context["bundle"],

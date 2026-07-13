@@ -168,6 +168,24 @@ def test_ceo_kpi_answer_carries_governed_business_drivers_and_sources(monkeypatc
     assert result["grounding_status"] == "grounded"
 
 
+def test_external_decision_question_fails_closed_with_actual_governed_scope():
+    bundle = type("Bundle", (), {"run_metadata": {"available_roles": ["ap_ledger", "ar_ledger", "gl_extract"]}})()
+    result = api_module._unavailable_external_decision_result(
+        "Should I acquire a competitor next quarter?",
+        {"bundle": bundle, "summary": {"finance_kpi": {"authoritative": True}}},
+    )
+
+    assert result is not None
+    assert result["matched"] is False
+    assert "AP ledger, AR ledger, GL-derived finance KPIs" in result["answer"]
+    assert "market, competitive, valuation, legal, or transaction-diligence evidence" in result["answer"]
+    assert result["answered_by"] == "evidence_scope_boundary"
+    assert api_module._unavailable_external_decision_result(
+        "What is driving revenue now?",
+        {"bundle": bundle, "summary": {"finance_kpi": {"authoritative": True}}},
+    ) is None
+
+
 def test_qa_endpoint_returns_answer_and_suggestions(monkeypatch):
     original, client = _client_with_auth()
     try:
