@@ -20,6 +20,8 @@
   --surface-strong: #fbfaf7;
   --surface-glass: color-mix(in srgb, var(--surface-strong) 82%, transparent);
   --ink: #1d1c19;
+  --ink-2: #57544d;
+  --ink-3: #8d897f;
   --accent: #25335c;
   --accent-ink: #ffffff;
   --accent-2: #8c6a3d;
@@ -28,7 +30,7 @@
   --up: #4e7c5b;
   --flat: #b07d34;
   --down: #b0523c;
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --serif: "Newsreader", Georgia, "Times New Roman", serif;
   --border: rgba(29, 28, 25, 0.12);
   --border-strong: rgba(37, 51, 92, 0.22);
@@ -50,6 +52,8 @@ html[data-theme="dark"] {
   --surface: #202323;
   --surface-strong: #262929;
   --ink: #f2ede4;
+  --ink-2: #cbc5ba;
+  --ink-3: #9f9a91;
   --accent: #d8c8a5;
   --accent-ink: #171919;
   --accent-2: #d5b783;
@@ -5603,9 +5607,9 @@ body {
 }
 
 .driver-tile.is-selected {
-  border: 2px solid var(--accent);
+  border: 1px solid var(--accent);
   background: var(--surface);
-  box-shadow: 0 10px 28px rgba(37, 51, 92, 0.12);
+  box-shadow: 0 0 0 1px var(--accent), 0 1px 2px rgba(40, 36, 28, 0.04), 0 8px 28px -16px rgba(40, 36, 28, 0.16);
   transform: none;
 }
 
@@ -5613,11 +5617,70 @@ body {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: -9px;
-  width: 15px;
-  height: 15px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
   background: var(--surface);
-  border-right: 2px solid var(--accent);
-  border-bottom: 2px solid var(--accent);
-  transform: translateX(-50%) rotate(45deg);
+  border-right: 1px solid var(--accent);
+  border-bottom: 1px solid var(--accent);
+  transform: translate(-50%, 50%) rotate(45deg);
+}
+
+/* Exact KPI-card typography and geometry from the CEO reference surface.
+   Grounding stays visible but is overlaid so governance metadata does not
+   distort the four-card executive index. */
+.driver-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 13px;
+  padding: 24px 18px 20px;
+  font-size: 13.3333px;
+  line-height: normal;
+}
+
+.driver-ring-stage {
+  width: 104px;
+  height: 104px;
+  min-height: 104px;
+}
+
+.driver-meta {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: auto;
+}
+
+.driver-label {
+  line-height: normal;
+}
+
+.driver-foot {
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.driver-sub,
+.driver-ofplan {
+  color: var(--ink-3);
+}
+
+.pct-sign {
+  color: var(--ink-2);
+}
+
+.driver-tile > .driver-meta > .grounding-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+  padding: 3px 6px;
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
 }

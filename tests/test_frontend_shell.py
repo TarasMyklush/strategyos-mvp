@@ -1290,6 +1290,16 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert "--ring-tick: #9b968a" in css
     assert ".driver-ring__value--flat { stroke: var(--flat); }" in css
     assert ".driver-pct {" in css and "font-family: var(--serif);" in css
+    assert '"Helvetica Neue", Helvetica, Arial, sans-serif' in css
+    assert "gap: 13px;" in css
+    assert "padding: 24px 18px 20px;" in css
+    assert "width: 104px;\n  height: 104px;\n  min-height: 104px;" in css
+    assert "font-size: 12px;\n  line-height: normal;\n  white-space: nowrap;" in css
+    assert "box-shadow: 0 0 0 1px var(--accent)" in css
+    assert "border-right: 1px solid var(--accent);" in css
+    assert "border-bottom: 1px solid var(--accent);" in css
+    assert ".driver-tile > .driver-meta > .grounding-badge" in css
+    assert "position: absolute;\n  top: 8px;\n  right: 8px;" in css
 
 
 def test_unavailable_ceo_kpis_explain_the_data_request_without_empty_rings():
