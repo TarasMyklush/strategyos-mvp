@@ -1953,9 +1953,12 @@ def test_driver_ring_over_plan_badge_has_outside_pill_css():
     )
 
 
-def test_floating_controls_safe_zone_at_desktop():
-    """Desktop layout must keep the assistant dock compact without stealing a
-    full right-hand page column."""
+def test_assistant_controls_do_not_cover_financial_evidence_at_desktop():
+    """The dock may float only when there is a genuine external gutter.
+
+    Standard executive laptop/desktop widths use an in-bar launcher instead,
+    avoiding an action control sitting over values in a KPI drill.
+    """
     css = _static_executive_css()
 
     assert "--assistant-dock-width" in css, (
@@ -1974,6 +1977,15 @@ def test_floating_controls_safe_zone_at_desktop():
     dock_block = css[dock_start:dock_end]
     assert "display: flex" in dock_block and "max-width: min(460px" in dock_block, (
         "Desktop dock must be a compact horizontal control, not a tall stacked rail"
+    )
+    assert "@media (min-width: 981px) and (max-width: 1799px)" in css, (
+        "The fixed dock must be suppressed where the page has no outer gutter"
+    )
+    assert ".assistant-dock { display: none; }" in css, (
+        "The standard desktop dock must not overlay decision evidence"
+    )
+    assert ".topbar-assistant-launch { display: inline-flex; }" in css, (
+        "A visible in-bar Ask Hermes control must replace the suppressed dock"
     )
     assert "@media (max-width: 960px)" in css and "position: static;" in css, (
         "Mobile/tablet layout must drop the fixed dock and return it to normal flow"

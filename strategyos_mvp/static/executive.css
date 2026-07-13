@@ -142,6 +142,39 @@ a { color: inherit; }
 
 .tb-right { justify-content: flex-end; }
 
+/* At ordinary desktop widths there is no safe right-hand gutter for a
+   persistent floating control.  The actionable Hermes entry point lives in
+   the top bar instead, so financial evidence is never covered while scrolling. */
+.topbar-assistant-launch {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 8px 11px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.topbar-assistant-launch:hover { background: var(--accent-soft); }
+
+.topbar-assistant-launch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.topbar-assistant-launch__mark {
+  color: var(--accent);
+  font-size: 15px;
+}
+
 .brand-lockup {
   flex-direction: column;
   align-items: flex-start;
@@ -584,6 +617,14 @@ a { color: inherit; }
   gap: 8px;
   align-items: end;
   justify-content: flex-end;
+}
+
+/* The 1,240px page has an external gutter wide enough for the two compact
+   dock controls only on very large displays.  Below that threshold the
+   top-bar launcher above replaces the fixed dock. */
+@media (min-width: 981px) and (max-width: 1799px) {
+  .assistant-dock { display: none; }
+  .topbar-assistant-launch { display: inline-flex; }
 }
 
 .chat-launcher {

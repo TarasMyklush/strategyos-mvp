@@ -1482,6 +1482,10 @@ def test_assistant_dock_does_not_reserve_desktop_page_column():
     assert "max-width: min(460px" in dock_block
     assert "display: none" in launcher_prompt_block
     assert "display: none" in a2a_text_block
+    assert 'id="topbar-assistant-launch"' in (Path(api_module.STATIC_DIR) / "executive.html").read_text(encoding="utf-8")
+    assert "@media (min-width: 981px) and (max-width: 1799px)" in css
+    assert ".assistant-dock { display: none; }" in css
+    assert ".topbar-assistant-launch { display: inline-flex; }" in css
 
 
 def test_assistant_drawer_and_messages_are_bounded_to_prevent_cropped_chat():
@@ -1678,12 +1682,16 @@ def test_all_cta_families_call_ask_assistant():
             f"CTA family '{label}' must have attribute '{pattern}' in executive.js"
         )
 
-    # Floating launcher must open drawer directly via shared _openHermesDrawer
-    assert 'launcher.onclick' in js, "Floating launcher must have onclick handler"
-    launcher_idx = js.index('launcher.onclick')
-    launcher_block = js[launcher_idx:launcher_idx + 200]
-    assert '_openHermesDrawer(' in launcher_block, (
-        "Floating launcher must call _openHermesDrawer() — not bypass the shared path"
+    # Both global entry points must open the same governed drawer. At ordinary
+    # desktop widths the top-bar trigger replaces the floating dock so it
+    # cannot obscure KPI evidence while the user scrolls.
+    assert '[launcher, topbarLauncher].forEach' in js, (
+        "Dock and top-bar Hermes triggers must share one binding path"
+    )
+    launcher_idx = js.index('[launcher, topbarLauncher].forEach')
+    launcher_block = js[launcher_idx:launcher_idx + 300]
+    assert 'trigger.onclick' in launcher_block and '_openHermesDrawer(trigger)' in launcher_block, (
+        "Each global Hermes trigger must use the shared drawer-opening route"
     )
 
 

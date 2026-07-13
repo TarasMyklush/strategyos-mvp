@@ -2624,6 +2624,7 @@
     var btn = $("persona-btn");
     var viewNav = $("view-nav");
     var launcher = $("chat-launcher-cta");
+    var topbarAssistantLauncher = $("topbar-assistant-launch");
     var launcherPrompt = document.querySelector("#chat-launcher .chat-launcher__prompt");
     var userName = $("topbar-user-name");
     var userRole = $("topbar-user-role");
@@ -2657,6 +2658,10 @@
       } else {
         launcher.innerHTML = '<span class="asst-avatar sm">' + escapeHtml(firstDefined(activePersona.assistant_glyph, blueprint.assistantGlyph, '◆')) + '</span> Ask ' + escapeHtml(assistantName);
       }
+    }
+    if (topbarAssistantLauncher) {
+      topbarAssistantLauncher.innerHTML = '<span class="topbar-assistant-launch__mark" aria-hidden="true">' + escapeHtml(assistantGlyph) + '</span><span class="topbar-assistant-launch__label">Ask ' + escapeHtml(assistantName) + '</span>';
+      topbarAssistantLauncher.setAttribute("aria-label", "Ask " + assistantName);
     }
     if (launcherPrompt) launcherPrompt.hidden = state.activePersona !== "board";
     if (userName) userName.textContent = "";
@@ -4817,6 +4822,7 @@
     var drawer = $("assistant-drawer");
     var scrim = $("assistant-scrim");
     var launcher = $("chat-launcher");
+    var topbarLauncher = $("topbar-assistant-launch");
     var closeButton = $("assistant-close");
     var threads = personaThreadRecords();
     var current = threadStore()[currentThreadKey()];
@@ -4837,12 +4843,13 @@
         _closeHermesDrawer();
       };
     }
-    if (launcher) {
-      launcher.hidden = state.drawerOpen || state.activeView === "assistants";
-      launcher.onclick = function () {
-        _openHermesDrawer(launcher);
+    [launcher, topbarLauncher].forEach(function (trigger) {
+      if (!trigger) return;
+      trigger.hidden = state.drawerOpen || state.activeView === "assistants";
+      trigger.onclick = function () {
+        _openHermesDrawer(trigger);
       };
-    }
+    });
     if (closeButton) {
       closeButton.onclick = function () {
         _closeHermesDrawer();
