@@ -2538,6 +2538,7 @@ def test_inline_ceo_kpi_chat_uses_server_resolved_contract_and_never_llm(monkeyp
         assert "SAR 1.2M" in payload["answer"]
         assert "SAR 999.0B" not in payload["answer"]
         assert payload["assistant_context"]["kpi_key"] == "revenue"
+        assert payload["grounding_status"] == "grounded"
 
         kg_response = client.post(
             "/assistant/chat",

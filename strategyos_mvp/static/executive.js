@@ -1686,6 +1686,7 @@
     var citations = safeArray(payload.citations);
     var risk = payload.hallucination_risk || (payload.risk_metadata && payload.risk_metadata.hallucination_risk) || {};
     var riskLevel = cleanMetaText(firstDefined(risk.level, ""));
+    var groundingStatus = String(firstDefined(payload.grounding_status, "")).trim().toLowerCase();
     var scenarioType = cleanMetaText(firstDefined(payload.scenario_type, ""));
 
     // Bug 5 fix: derive grounding level from actual evidence when the backend
@@ -1694,7 +1695,11 @@
       riskLevel = citations.length >= 3 ? "strong" : "partial";
     }
     var executiveBasis = executiveEvidenceBasis(basis);
-    var confidence = executiveEvidenceConfidence(riskLevel, citations.length);
+    var confidence = groundingStatus === "grounded"
+      ? "Grounded"
+      : (groundingStatus === "needs_evidence" || groundingStatus === "not_grounded"
+        ? "Needs evidence"
+        : executiveEvidenceConfidence(riskLevel, citations.length));
     if (executiveBasis) parts.push("Evidence basis: " + executiveBasis);
     if (calculations.length) parts.push("Calculation: " + calculations.length + " check" + (calculations.length === 1 ? "" : "s") + " reconciled");
     if (citations.length) parts.push("Evidence: " + citations.length + " source" + (citations.length === 1 ? "" : "s") + " checked");
