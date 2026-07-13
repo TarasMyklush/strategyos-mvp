@@ -3489,7 +3489,6 @@
           restoreReadingPosition();
           window.setTimeout(restoreReadingPosition, 0);
           window.setTimeout(restoreReadingPosition, 220);
-          window.setTimeout(restoreReadingPosition, 600);
         });
       };
       grid.appendChild(tile);

@@ -5556,6 +5556,13 @@ body {
 }
 
 /* Final cascade guard for the reference-aligned selected KPI state. */
+.view-panel--home {
+  /* The KPI detail changes height when a card is selected. Chrome's scroll
+     anchoring otherwise moves the whole CEO dashboard even though selection
+     is an inline state change. Keep the executive's reading position stable. */
+  overflow-anchor: none;
+}
+
 .driver-tile.is-selected {
   border: 2px solid var(--accent);
   background: var(--surface);

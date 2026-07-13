@@ -1290,6 +1290,7 @@ def test_unavailable_ceo_kpis_explain_the_data_request_without_empty_rings():
 
 def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     js = _static_executive_js()
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
     html = (Path(api_module.STATIC_DIR) / "executive.html").read_text(encoding="utf-8")
 
     render_start = js.index("function renderDriverGrid()")
@@ -1300,7 +1301,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "window.scrollTo(0, readingPosition)" in render_body
     assert 'tile.addEventListener("pointerdown", function (event)' in render_body
     assert "event.preventDefault()" in render_body
-    assert "window.setTimeout(restoreReadingPosition, 600)" in render_body
+    assert ".view-panel--home" in css
+    assert "overflow-anchor: none" in css
     assert "state.driverSelectionScrollY" in render_body
     assert "aria-pressed" in render_body
     assert 'data-driver-key' in render_body
