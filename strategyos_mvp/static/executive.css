@@ -5482,8 +5482,8 @@ body {
 }
 
 .hero-score__label {
-  width: min(112px, 68%);
-  max-width: 112px;
+  width: calc(100% - 12px);
+  max-width: 116px;
   justify-self: center;
   align-self: center;
   margin: auto;
@@ -5491,11 +5491,21 @@ body {
 }
 
 .hero-score__caption {
-  max-width: 112px;
-  margin: 8px auto 0;
+  max-width: 116px;
+  margin: 6px auto 0;
   line-height: 1.18;
   letter-spacing: 0.025em;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.hero-score__value {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.hero-score__value--compact {
+  font-size: 31px;
 }
 
 .section:has(.agents-row) {

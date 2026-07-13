@@ -3391,7 +3391,11 @@
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
     var truthSourceBadge = diagnostics.source === "database" ? "DB" : diagnostics.source === "governed_artifacts" ? "RUN" : "--";
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
-    $("hero-score").textContent = hasScore ? String(clampedScore || 0) : (reviewGate ? "OPEN" : truthSourceBadge);
+    var heroScoreText = hasScore ? String(clampedScore || 0) : (reviewGate ? "OPEN" : truthSourceBadge);
+    $("hero-score").textContent = heroScoreText;
+    // Board-gate labels must remain a single, centred word inside the same
+    // 128px reference ring across every governed state (DB, RUN, OPEN, REVIEW).
+    $("hero-score").classList.toggle("hero-score__value--compact", heroScoreText.length > 4);
     $("hero-cap").textContent = reviewGate ? "reviewer decision" : firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
     var byline = $("hero-byline");
     if (byline) {

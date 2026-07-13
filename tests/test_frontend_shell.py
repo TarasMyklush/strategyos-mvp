@@ -1303,6 +1303,9 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert "grid-template-columns: 128px minmax(0, 1fr);" in css
     assert "width: 128px;\n  height: 128px;" in css
     assert "stroke-width: 6;" in css
+    assert "width: calc(100% - 12px);\n  max-width: 116px;" in css
+    assert ".hero-score__value--compact" in css
+    assert 'classList.toggle("hero-score__value--compact", heroScoreText.length > 4)' in _static_executive_js()
     assert ".kpi-brief-title-row" in css
     assert ".kpi-brief-ratio" in css
     assert "font-size: 15px;\n  font-weight: 600;" in css
@@ -3720,9 +3723,9 @@ def test_executive_ux_layout_contracts_are_guarded():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
 
     assert ".hero-score__label" in executive_css
-    assert "max-width: 112px" in executive_css
+    assert "max-width: 116px" in executive_css
     assert ".hero-score__caption" in executive_css
-    assert "overflow-wrap: anywhere" in executive_css
+    assert "white-space: nowrap" in executive_css
     assert ".section:has(.agents-row)" in executive_css
     assert "max-height: none" in executive_css
     assert ".disco-footer" in executive_css
