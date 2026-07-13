@@ -3462,6 +3462,15 @@
     return '<span class="grounding-badge grounding-badge--' + (grounded ? 'grounded' : 'needs-evidence') + '" title="' + escapeHtml(title) + '">' + label + '</span>';
   }
 
+  function syncDriverSelectionUI(grid, activeKey) {
+    if (!grid) return;
+    Array.prototype.forEach.call(grid.querySelectorAll("[data-driver-key]"), function (tile) {
+      var selected = String(tile.getAttribute("data-driver-key") || "") === String(activeKey || "");
+      tile.classList.toggle("is-selected", selected);
+      tile.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+  }
+
   function renderDriverGrid() {
     var grid = $("driver-row");
     if (!grid) return;
@@ -3511,15 +3520,15 @@
         state.driverSelectionScrollY = null;
         state.activeDriverKey = key;
         updateHistory();
-        // Render after the click's native focus work has completed. Replacing
-        // the focused button synchronously lets some browsers scroll its new
-        // counterpart into view, which is the exact behaviour this inline
-        // control is designed to avoid.
+        // Keep the four-card strip and its focused button mounted. Replacing
+        // the strip here lets browsers scroll the replacement into view and
+        // breaks the dashboard's inline-detail interaction.
+        syncDriverSelectionUI(grid, key);
         var restoreReadingPosition = function () {
           if (window.scrollY !== readingPosition) window.scrollTo(0, readingPosition);
         };
+        restoreReadingPosition();
         window.requestAnimationFrame(function () {
-          renderDriverGrid();
           renderDriverDrillFidelity();
           renderSummary();
           // KPI detail is deliberately inline below the strip. Selecting a

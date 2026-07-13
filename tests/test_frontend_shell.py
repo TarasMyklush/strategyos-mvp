@@ -1322,6 +1322,10 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "state.driverSelectionScrollY" in render_body
     assert "aria-pressed" in render_body
     assert 'data-driver-key' in render_body
+    assert "function syncDriverSelectionUI(grid, activeKey)" in js
+    click_body = render_body[render_body.index("tile.onclick = function"):]
+    assert "syncDriverSelectionUI(grid, key);" in click_body
+    assert "renderDriverGrid();" not in click_body
     assert 'function renderInlineKpiDrill(driver, drillCard)' in js
     assert 'entrypoint: "ceo_kpi_inline"' in js
     assert 'data-kpi-label=' in js
