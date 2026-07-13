@@ -2067,8 +2067,10 @@
     var driverComposerSelector = "#driver" + "-composer";
     var weekComposerSelector = "#week" + "-composer";
     var entrypoint = "drawer_input";
+    var contextualKpiKey = element ? String(element.getAttribute("data-kpi-key") || "").trim() : "";
     if (element) {
-      if (element.id === "kg-inspector-ask") entrypoint = "knowledge_graph";
+      if (contextualKpiKey) entrypoint = "ceo_kpi_inline";
+      else if (element.id === "kg-inspector-ask") entrypoint = "knowledge_graph";
       else if (element.id === "leaders-hermes-cta" || element.id === "video-hermes-cta") entrypoint = "leaders_corner";
       else if (element.classList.contains("disco-browse")) entrypoint = "agents_discovery";
       else if (element.getAttribute("data-board-prompt") !== null || element.getAttribute("data-board-action") !== null) entrypoint = "board_portal";
@@ -2090,7 +2092,9 @@
       // Board portal prompts must NOT carry stale hero/revenue driver_key — use
       // "board_packet" so the backend routes the question against board-relevant
       // answer chains (e.g. hedge downside, JV funding) instead of revenue context.
-      driver_key: entrypoint === "board_portal" ? "board_packet" : firstDefined(activeDriver && (activeDriver.driver_key || activeDriver.key), state.activeDriverKey, "board_packet"),
+      driver_key: entrypoint === "board_portal" ? "board_packet" : firstDefined(contextualKpiKey, activeDriver && (activeDriver.driver_key || activeDriver.key), state.activeDriverKey, "board_packet"),
+      kpi_key: contextualKpiKey || undefined,
+      kpi_label: contextualKpiKey && activeDriver ? firstDefined(activeDriver.label, "") : undefined,
       thread_key: currentThreadKey(),
       active_view: state.activeView || "home"
     };
@@ -3326,8 +3330,8 @@
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
     var truthSourceBadge = diagnostics.source === "database" ? "DB" : diagnostics.source === "governed_artifacts" ? "RUN" : "--";
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
-    $("hero-score").textContent = hasScore ? String(clampedScore || 0) : (reviewGate ? "REVIEW" : truthSourceBadge);
-    $("hero-cap").textContent = reviewGate ? "human release gate" : firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
+    $("hero-score").textContent = hasScore ? String(clampedScore || 0) : (reviewGate ? "OPEN" : truthSourceBadge);
+    $("hero-cap").textContent = reviewGate ? "reviewer decision" : firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
     var byline = $("hero-byline");
     if (byline) {
       var bylineText = firstDefined(blueprint.by, "");
@@ -3718,7 +3722,8 @@
         '<div class="detail-head"><div><p class="detail-eyebrow">CEO agenda</p><h3 class="detail-title">Questions worth answering now</h3><p class="section-note">Each question starts Hermes with the relevant KPI, board-gate, or case context already attached.</p></div></div>',
         '<div class="decision-question-grid">' + governedPrompts.map(function (prompt, index) {
           var labels = [currentLabel + ' drivers', 'Board release gate', 'Value at stake'];
-          return '<button class="decision-question-card" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><span>' + escapeHtml(labels[index]) + '</span><strong>' + escapeHtml(prompt) + '</strong><small>Ask Hermes with governed context →</small></button>';
+          var kpiAttribute = index === 0 ? ' data-kpi-key="' + escapeHtml(String(firstDefined(driver.driver_key, driver.key, ""))) + '"' : '';
+          return '<button class="decision-question-card" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"' + kpiAttribute + '><span>' + escapeHtml(labels[index]) + '</span><strong>' + escapeHtml(prompt) + '</strong><small>Ask Hermes with governed context →</small></button>';
         }).join('') + '</div>'
       ].join('');
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {

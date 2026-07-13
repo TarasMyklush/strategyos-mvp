@@ -1221,6 +1221,17 @@ def test_dark_theme_native_controls_inherit_executive_text_colour():
     assert 'html[data-theme="dark"] .pill-inline.danger' in css
 
 
+def test_review_gate_copy_fits_ring_and_decision_kpi_routes_deterministically():
+    js = _static_executive_js()
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert 'reviewGate ? "OPEN"' in js
+    assert 'reviewGate ? "reviewer decision"' in js
+    assert 'data-kpi-key=' in js
+    assert 'if (contextualKpiKey) entrypoint = "ceo_kpi_inline"' in js
+    assert "font-size: clamp(25px, 3vw, 38px)" in css
+
+
 def test_agents_running_panel_has_no_orphan_sovereign_bullet_for_ceo():
     """CEO agents panel must not render an empty decorative sovereign bullet."""
     js = _static_executive_js()

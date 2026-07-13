@@ -178,6 +178,72 @@ def test_qa_llm_mode_is_blocked_until_configured():
         _restore_env(original)
 
 
+def test_authenticated_assistant_auto_mode_falls_back_when_provider_returns_empty_content(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-key",
+            "STRATEGYOS_RUN_POLICY": "external-approved",
+            "STRATEGYOS_APPROVED_EXTERNAL_MODES": "model_provider_use",
+            "STRATEGYOS_MODEL_PROVIDER_ENABLED": "true",
+            "STRATEGYOS_LLM_CHAT_ENABLED": "true",
+            "STRATEGYOS_LLM_API_KEY": "test-key",
+            "STRATEGYOS_LLM_MODEL": "deepseek-v4-pro",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "summary": {"run_id": "run-1"},
+                "run_id": "run-1",
+                "run_mode": "full",
+                "kg_nodes": [],
+                "kg_edges": [],
+            },
+        )
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(api_module, "route_graph_question", lambda *_args, **_kwargs: {"matched": False})
+        monkeypatch.setattr(api_module, "_route_keyword_retrieval", lambda *_args, **_kwargs: {"matched": False})
+        monkeypatch.setattr(
+            api_module.qa_engine,
+            "answer_question",
+            lambda *_args, **_kwargs: {
+                "matched": False,
+                "answer": "The governed data cannot supply a board cash floor; no floor was inferred.",
+                "basis": "Deterministic governed fallback.",
+                "citations": [],
+                "suggestions": [],
+                "answered_by": "tabular",
+            },
+        )
+
+        async def failed_provider(*_args, **_kwargs):
+            raise RuntimeError("LLM provider returned an empty answer after retrying with a plain-text prompt.")
+
+        monkeypatch.setattr(api_module, "_llm_answer_question_async", failed_provider)
+
+        response = client.post(
+            "/assistant/chat",
+            json={"question": "What cash is reported and what floor is missing?", "persona": "ceo", "mode": "auto"},
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["mode"] == "deterministic"
+        assert payload["llm_fallback_attempted"] is True
+        assert payload["trace"]["llm_transport_failed"] is True
+        assert "no floor was inferred" in payload["answer"].lower()
+    finally:
+        _restore_env(original)
+
+
 def test_qa_llm_mode_uses_configured_adapter(monkeypatch):
     original = _apply_env(
         {

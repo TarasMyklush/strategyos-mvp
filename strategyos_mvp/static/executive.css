@@ -2382,6 +2382,10 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
     order: initial;
   }
 
+  .hero-score-wrap {
+    justify-items: center;
+  }
+
   .assistant-layout {
     grid-template-columns: 1fr;
   }
@@ -2624,8 +2628,10 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 }
 
 .hero-score__value {
-  font-size: 38px;
+  max-width: 100%;
+  font-size: clamp(25px, 3vw, 38px);
   line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .hero-score__caption {

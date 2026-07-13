@@ -450,6 +450,61 @@ def test_empty_provider_content_retries_with_plain_text_prompt(monkeypatch):
     assert result["citations"]
 
 
+def test_deepseek_v4_qa_disables_thinking_so_final_content_is_not_starved(monkeypatch):
+    captured_bodies = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "content": json.dumps(
+                                    {
+                                        "matched": True,
+                                        "answer": "Cash is reported; the floor is not supplied.",
+                                        "basis": "Governed evidence.",
+                                        "citations": [],
+                                        "suggestions": [],
+                                    }
+                                ),
+                                "reasoning_content": "",
+                            },
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured_bodies.append(json.loads(request.data.decode("utf-8")))
+        return FakeResponse()
+
+    monkeypatch.setattr(llm_qa, "urlopen", fake_urlopen)
+
+    result = llm_qa.answer_question(
+        "What cash is reported?",
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={"run_id": "run-1", "run_mode": "full"},
+        config=_config(
+            llm_provider="deepseek",
+            llm_base_url="https://api.deepseek.com",
+            llm_model="deepseek-v4-pro",
+        ),
+    )
+
+    assert result["answer"] == "Cash is reported; the floor is not supplied."
+    assert captured_bodies[0]["thinking"] == {"type": "disabled"}
+
+
 def test_malformed_json_like_provider_content_retries_with_plain_text_prompt(monkeypatch):
     responses = [
         {"choices": [{"message": {"content": '{ "matched": true, "answer": "The'}}]},

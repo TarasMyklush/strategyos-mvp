@@ -10857,19 +10857,57 @@ async def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
-    result = await _llm_answer_question_async(
-        question,
-        bundle=context["bundle"],
-        findings=context["findings"],
-        summary=context["summary"],
-        config=CONFIG,
-        persona=persona,
-        supplemental_evidence=_supplemental_grounding_payload(
-            graph_result=graph_result,
-            retrieval_result=retrieval_result,
-            deterministic_result=deterministic_result,
-        ),
-    )
+    try:
+        result = await _llm_answer_question_async(
+            question,
+            bundle=context["bundle"],
+            findings=context["findings"],
+            summary=context["summary"],
+            config=CONFIG,
+            persona=persona,
+            supplemental_evidence=_supplemental_grounding_payload(
+                graph_result=graph_result,
+                retrieval_result=retrieval_result,
+                deterministic_result=deterministic_result,
+            ),
+        )
+    except RuntimeError as exc:
+        transport_status = dict(llm_qa.provider_transport_payload(exc) or {})
+        if mode == "llm":
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={"message": str(exc), "transport": transport_status} if transport_status else str(exc),
+            ) from exc
+        if transport_status:
+            transport_status["fallback_used"] = True
+        failure_status = {**llm_status, "transport": transport_status}
+        fallback_result = {
+            **deterministic_result,
+            "assistant_mode": "qa_engine",
+            "answered_by": deterministic_result.get("answered_by") or "tabular",
+            "_orchestrator_force_answer": True,
+        }
+        fallback_orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=fallback_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=fallback_orchestrated,
+            base_result=fallback_result,
+            llm_status=failure_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = True
+        payload["llm_error"] = str(exc)
+        payload["trace"]["llm_transport_failed"] = True
+        return payload
     if result.get("matched") is False:
         grounded_fallback = None
         if graph_result and graph_result.get("matched"):

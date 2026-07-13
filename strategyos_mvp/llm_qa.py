@@ -610,6 +610,15 @@ def _call_openai_compatible_chat(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    # DeepSeek V4 enables thinking by default. Its reasoning tokens count
+    # against max_tokens and can consume the entire executive-response budget,
+    # leaving message.content empty even though reasoning_content is present.
+    # Hermes needs a concise final answer, not provider chain-of-thought, so use
+    # the provider's supported non-thinking mode for this bounded QA surface.
+    provider = str(getattr(config, "llm_provider", "") or "").strip().lower()
+    model = str(getattr(config, "llm_model", "") or "").strip().lower()
+    if provider == "deepseek" and model.startswith("deepseek-v4"):
+        payload["thinking"] = {"type": "disabled"}
     if response_format is not None:
         payload["response_format"] = response_format
     request = Request(
