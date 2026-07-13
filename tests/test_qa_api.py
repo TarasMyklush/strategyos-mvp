@@ -118,6 +118,46 @@ def test_qa_requires_auth(monkeypatch):
         _restore_env(original)
 
 
+def test_ceo_kpi_answer_carries_governed_business_drivers_and_sources(monkeypatch):
+    monkeypatch.setattr(
+        api_module,
+        "build_executive_presentation",
+        lambda _read_model: {
+            "driver_grid": [
+                {
+                    "key": "revenue",
+                    "label": "Revenue",
+                    "metric": "SAR 385.1M",
+                    "availability": "available",
+                    "missing_inputs": ["H1 budget aligned to this reporting scope"],
+                    "grounding": {"status": "grounded"},
+                    "executive_brief": {
+                        "readout": "Revenue recognised across four revenue groups.",
+                        "drivers": [
+                            {"label": "Revenue – Catering", "value": "SAR 123.0M", "share_pct": 31.9},
+                            {"label": "Revenue – Government", "value": "SAR 109.9M", "share_pct": 28.5},
+                        ],
+                        "calculation": {"formula": "Revenue = sum of scoped revenue-account balances."},
+                        "audit": {"source_titles": ["General ledger extract", "Chart of accounts"]},
+                    },
+                }
+            ]
+        },
+    )
+
+    result = api_module._ceo_kpi_inline_result(
+        {"summary": {}},
+        kpi_key="revenue",
+        public_safe=False,
+    )
+
+    assert "Revenue – Catering — SAR 123.0M · 31.9%" in result["answer"]
+    assert "largest reported contributor is Revenue – Catering at 31.9%" in result["answer"]
+    assert "General ledger extract; Chart of accounts" in result["answer"]
+    assert "direct comparison is withheld" in result["answer"]
+    assert result["grounding_status"] == "grounded"
+
+
 def test_qa_endpoint_returns_answer_and_suggestions(monkeypatch):
     original, client = _client_with_auth()
     try:
@@ -2498,5 +2538,24 @@ def test_inline_ceo_kpi_chat_uses_server_resolved_contract_and_never_llm(monkeyp
         assert "SAR 1.2M" in payload["answer"]
         assert "SAR 999.0B" not in payload["answer"]
         assert payload["assistant_context"]["kpi_key"] == "revenue"
+
+        kg_response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "What drives this figure?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "source": "executive_surface",
+                    "entrypoint": "knowledge_graph",
+                    "kpi_key": "revenue",
+                },
+            },
+        )
+        assert kg_response.status_code == 200
+        kg_payload = kg_response.json()
+        assert kg_payload["answered_by"] == "governed_kpi"
+        assert kg_payload["llm_fallback_attempted"] is False
     finally:
         _restore_env(original)

@@ -2082,6 +2082,7 @@
     var weekComposerSelector = "#week" + "-composer";
     var entrypoint = "drawer_input";
     var contextualKpiKey = element ? String(element.getAttribute("data-kpi-key") || "").trim() : "";
+    var contextualKpiLabel = element ? String(element.getAttribute("data-kpi-label") || "").trim() : "";
     if (element) {
       if (contextualKpiKey) entrypoint = "ceo_kpi_inline";
       else if (element.id === "kg-inspector-ask") entrypoint = "knowledge_graph";
@@ -2108,7 +2109,7 @@
       // answer chains (e.g. hedge downside, JV funding) instead of revenue context.
       driver_key: entrypoint === "board_portal" ? "board_packet" : firstDefined(contextualKpiKey, activeDriver && (activeDriver.driver_key || activeDriver.key), state.activeDriverKey, "board_packet"),
       kpi_key: contextualKpiKey || undefined,
-      kpi_label: contextualKpiKey && activeDriver ? firstDefined(activeDriver.label, "") : undefined,
+      kpi_label: contextualKpiKey ? firstDefined(contextualKpiLabel, activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === contextualKpiKey ? activeDriver.label : "") : undefined,
       thread_key: currentThreadKey(),
       active_view: state.activeView || "home"
     };
@@ -3010,6 +3011,12 @@
       var cn = nodeMap[cid];
       return cn ? escapeHtml(cn.label) : "";
     }).filter(Boolean).slice(0, 10);
+    var nodeProperties = node.properties && typeof node.properties === "object" ? node.properties : {};
+    var nodeKpiKey = String(firstDefined(
+      nodeProperties.kpi_key,
+      node.category === "KPI" && String(node.id || "").indexOf("kpi:") === 0 ? String(node.id).slice(4) : "",
+      ""
+    )).trim();
     var relevanceByCategory = {
       KPI: "This is one of the four headline measures in the CEO dashboard.",
       business_driver: "This shows what contributes to the selected headline figure.",
@@ -3025,7 +3032,7 @@
       '<p class="kg-inspector__detail">' + escapeHtml(firstDefined(node.detail, "No additional detail available.")) + '</p>' +
       '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Why it matters</span><span class="kg-inspector__provenance-value">' + escapeHtml(firstDefined(relevanceByCategory[node.category], "This provides context for the selected headline figure.")) + '</span></div>' +
       (connectedLabels.length ? '<div class="kg-inspector__connections"><span class="kg-inspector__connections-label">Related figures and drivers</span>' + connectedLabels.map(function (l) { return '<span class="kg-inspector__conn-chip">' + l + '</span>'; }).join('') + '</div>' : '') +
-      '<button type="button" class="kg-inspector__ask" id="kg-inspector-ask">Ask Hermes about this &rarr;</button>';
+      '<button type="button" class="kg-inspector__ask" id="kg-inspector-ask"' + (nodeKpiKey ? ' data-kpi-key="' + escapeHtml(nodeKpiKey) + '" data-kpi-label="' + escapeHtml(firstDefined(node.label, "KPI")) + '"' : '') + '>Ask Hermes about this &rarr;</button>';
     panel.hidden = false;
     panel.setAttribute("aria-hidden", "false");
     // Wire close button

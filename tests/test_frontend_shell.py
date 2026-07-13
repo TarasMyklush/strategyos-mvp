@@ -1308,6 +1308,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert 'data-driver-key' in render_body
     assert 'function renderInlineKpiDrill(driver, drillCard)' in js
     assert 'entrypoint: "ceo_kpi_inline"' in js
+    assert 'data-kpi-label=' in js
+    assert 'nodeProperties.kpi_key' in js
     assert "kpi_key:" in js
     assert "How this figure is calculated" in js
     assert "data-kpi-question" in js

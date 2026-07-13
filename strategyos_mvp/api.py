@@ -10466,6 +10466,9 @@ def _ceo_kpi_inline_result(
     missing = [str(item) for item in list(card.get("missing_inputs") or []) if str(item)]
     brief = card.get("executive_brief") if isinstance(card.get("executive_brief"), Mapping) else {}
     strategic_reference = brief.get("strategic_reference") if isinstance(brief.get("strategic_reference"), Mapping) else None
+    calculation = brief.get("calculation") if isinstance(brief.get("calculation"), Mapping) else {}
+    audit = brief.get("audit") if isinstance(brief.get("audit"), Mapping) else {}
+    drivers = [item for item in list(brief.get("drivers") or []) if isinstance(item, Mapping)]
     if availability == "unavailable":
         answer = (
             f"{label} is not available for the current reporting period because the required finance information is incomplete. "
@@ -10477,6 +10480,32 @@ def _ceo_kpi_inline_result(
             f"{label} is {card.get('metric') or 'available'} for the selected period. "
             f"{brief.get('readout') or card.get('detail') or ''} "
         )
+        if drivers:
+            driver_parts: list[str] = []
+            ranked_drivers: list[tuple[float, str]] = []
+            for item in drivers[:8]:
+                driver_label = str(item.get("label") or "Component")
+                driver_value = str(item.get("value") or "").strip()
+                raw_share = item.get("share_pct")
+                share_text = ""
+                try:
+                    if raw_share not in (None, ""):
+                        share_number = float(raw_share)
+                        share_text = f"{share_number:.1f}%"
+                        if share_number > 0:
+                            ranked_drivers.append((share_number, driver_label))
+                except (TypeError, ValueError):
+                    pass
+                display = " · ".join(part for part in (driver_value, share_text) if part)
+                driver_parts.append(f"{driver_label} — {display}" if display else driver_label)
+            answer += "The current composition is: " + "; ".join(driver_parts) + ". "
+            if ranked_drivers:
+                ranked_drivers.sort(reverse=True)
+                largest_share, largest_label = ranked_drivers[0]
+                answer += f"The largest reported contributor is {largest_label} at {largest_share:.1f}%. "
+        formula = str(calculation.get("formula") or card.get("formula") or "").strip()
+        if formula:
+            answer += f"Calculation: {formula} "
         if strategic_reference:
             answer += (
                 f"The {str(strategic_reference.get('label') or 'approved strategic reference').lower()} is "
@@ -10484,9 +10513,18 @@ def _ceo_kpi_inline_result(
             )
         if missing:
             answer += f"A direct comparison is withheld because {' and '.join(missing)} is still needed."
-            grounding = "needs_evidence"
+            # The current actual and the disclosed comparison gap are both
+            # governed facts. A missing comparator must not downgrade the
+            # truthfulness of the available KPI itself.
+            grounding = "grounded"
         else:
             grounding = "grounded"
+        source_titles = [str(item) for item in list(audit.get("source_titles") or []) if str(item)]
+        if source_titles:
+            answer += " Business sources: " + "; ".join(source_titles[:6]) + "."
+        card_grounding = card.get("grounding") if isinstance(card.get("grounding"), Mapping) else {}
+        if str(card_grounding.get("status") or "").lower() in {"needs_evidence", "not_grounded", "partial"}:
+            grounding = "needs_evidence"
     return {
         "matched": True,
         "answer": answer,
@@ -10617,10 +10655,11 @@ async def _assistant_chat_response(
         context["public_context_packet"]["view_state"] = view_state
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
-    if str(assistant_context.get("entrypoint") or "") == "ceo_kpi_inline":
+    contextual_kpi_key = str(assistant_context.get("kpi_key") or "").strip()
+    if contextual_kpi_key and str(assistant_context.get("entrypoint") or "") in {"ceo_kpi_inline", "knowledge_graph"}:
         kpi_result = _ceo_kpi_inline_result(
             context,
-            kpi_key=str(assistant_context.get("kpi_key") or ""),
+            kpi_key=contextual_kpi_key,
             public_safe=public_safe,
         )
         orchestrated = get_orchestrator().process(
