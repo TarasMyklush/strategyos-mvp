@@ -697,7 +697,8 @@ def _finance_target_margin_result(
 
 
 def _parse_financial_what_if_guard(prompt: str, context: dict[str, Any]) -> ScenarioResult | None:
-    if _public_packet(context):
+    public_packet = _public_packet(context)
+    if public_packet and public_packet.get("is_illustrative") is not False:
         return None
     norm = _normalize(prompt)
     if not _has_scenario_intent(prompt):
@@ -2677,10 +2678,19 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
             basis="Empty prompt — no scenario to parse.",
         )
 
-    # Governed public surfaces are an exclusive routing boundary. They must not
-    # fall through to the legacy illustrative scenario families registered below.
+    # Governed public surfaces may run the same deterministic target-margin
+    # scenario as the CEO dashboard when the user supplies an explicit margin
+    # and the source-derived baseline is present. Keep recovery, hedge, and all
+    # legacy illustrative scenario families inside the governed-public boundary.
     public_packet = _public_packet(context)
     if public_packet.get("is_illustrative") is False:
+        norm = _normalize(prompt)
+        prompt_numbers = _parse_numeric_tokens(prompt)
+        target_margin = _target_margin_from_prompt(prompt, prompt_numbers)
+        if target_margin is not None and any(token in norm for token in ("margin", "ebitda")):
+            result = _parse_financial_what_if_guard(prompt, context)
+            if result is not None:
+                return _hydrate_scenario_result(result)
         result = _parse_governed_public_exec_surface(prompt, context, public_packet)
         return _hydrate_scenario_result(result)
 

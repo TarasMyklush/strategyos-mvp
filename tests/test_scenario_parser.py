@@ -242,6 +242,54 @@ def test_ebitda_target_margin_uses_governed_dashboard_baseline():
     }
 
 
+def test_governed_public_ceo_surface_models_target_margin_from_same_dashboard_baseline():
+    result = parse_scenario(
+        "Model what needs to happen to reach a 60% EBITDA margin using the current governed revenue and cost baseline.",
+        {
+            "bundle": {"public_safe": True},
+            "findings": [],
+            "kg_nodes": [],
+            "public_context_packet": {
+                "is_illustrative": False,
+                "public_safe": True,
+                "drivers": [],
+                "findings": [],
+            },
+            "summary": {
+                "finance_kpi": {
+                    "authoritative": True,
+                    "reporting_period_key": "H1 2026",
+                    "reporting_currency": "SAR",
+                    "components": {
+                        "revenue_actual": "385079908.90",
+                        "cogs_actual": "75503688.29",
+                        "operating_cost_actual": "93834910.05",
+                        "ebitda_actual": "215741310.56",
+                    },
+                    "evidence": {
+                        "ebitda_margin": {
+                            "files": [
+                                "02_ERP_Extracts/GL_Extract_H1_2026.csv",
+                                "03_Master_Data/Chart_of_Accounts.xlsx",
+                            ]
+                        }
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.matched is True
+    assert result.scenario_id == "ebitda_target_margin"
+    assert result.scenario_type == "deterministic"
+    assert result.hallucination_risk.level.value == "none"
+    assert "56.0%" in result.answer
+    assert "60.0%" in result.answer
+    assert "SAR 15,306,634.78" in result.answer
+    assert "SAR 460,139,210.87" in result.answer
+    assert "Current governed drivers" not in result.answer
+
+
 def test_ebitda_target_margin_can_complete_one_component_from_governed_identity():
     result = parse_scenario(
         "What needs to change to reach a 60% EBITDA margin?",

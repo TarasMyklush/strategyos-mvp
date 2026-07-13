@@ -2638,3 +2638,76 @@ def test_assistant_chat_models_target_margin_from_governed_finance_kpis_despite_
         assert "cannot calculate" not in payload["answer"].lower()
     finally:
         _restore_env(original)
+
+
+def test_public_ceo_chat_models_target_margin_from_governed_dashboard_baseline(monkeypatch):
+    original, client = _client_with_public_ceo_surface()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_public_assistant_context",
+            lambda _run_id, **_kwargs: {
+                "bundle": {"public_safe": True},
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "public_context_packet": {
+                    "is_illustrative": False,
+                    "public_safe": True,
+                    "drivers": [],
+                    "findings": [],
+                },
+                "summary": {
+                    "run_id": "latest-public",
+                    "finance_kpi": {
+                        "authoritative": True,
+                        "reporting_period_key": "H1 2026",
+                        "reporting_currency": "SAR",
+                        "components": {
+                            "revenue_actual": "385079908.90",
+                            "cogs_actual": "75503688.29",
+                            "operating_cost_actual": "93834910.05",
+                            "ebitda_actual": "215741310.56",
+                        },
+                        "evidence": {
+                            "ebitda_margin": {
+                                "files": [
+                                    "02_ERP_Extracts/GL_Extract_H1_2026.csv",
+                                    "03_Master_Data/Chart_of_Accounts.xlsx",
+                                ]
+                            }
+                        },
+                    },
+                },
+                "run_id": "latest-public",
+                "run_mode": "public-safe",
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Model what needs to happen to reach a 60% EBITDA margin using the current governed revenue and cost baseline.",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "source": "executive_surface",
+                    "entrypoint": "ceo_kpi_inline",
+                    "kpi_key": "ebitda_margin",
+                    "kpi_label": "EBITDA margin",
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run_mode"] == "public-safe"
+        assert payload["scenario_id"] == "ebitda_target_margin"
+        assert payload["scenario_type"] == "deterministic"
+        assert payload["hallucination_risk"]["level"] == "none"
+        assert "56.0%" in payload["answer"]
+        assert "60.0%" in payload["answer"]
+        assert "SAR 15,306,634.78" in payload["answer"]
+        assert "Current governed drivers" not in payload["answer"]
+    finally:
+        _restore_env(original)
