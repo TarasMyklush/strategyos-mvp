@@ -1300,6 +1300,15 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert "border-bottom: 1px solid var(--accent);" in css
     assert ".driver-tile > .driver-meta > .grounding-badge" in css
     assert "position: absolute;\n  top: 8px;\n  right: 8px;" in css
+    assert "grid-template-columns: 128px minmax(0, 1fr);" in css
+    assert "width: 128px;\n  height: 128px;" in css
+    assert "stroke-width: 6;" in css
+    assert ".kpi-brief-title-row" in css
+    assert ".kpi-brief-ratio" in css
+    assert "font-size: 15px;\n  font-weight: 600;" in css
+    assert "font-size: 12.5px;\n  font-weight: 400;" in css
+    assert "font-size: 15.5px;" in css
+    assert 'class="kpi-brief-title-row"' in _static_executive_js()
 
 
 def test_unavailable_ceo_kpis_explain_the_data_request_without_empty_rings():

@@ -3374,7 +3374,7 @@
       score = Number(preferredHero.score);
     }
     var clampedScore = Math.max(0, Math.min(100, score));
-    var circumference = 2 * Math.PI * 48;
+    var circumference = 2 * Math.PI * 60;
     var dash = circumference * (clampedScore / 100);
     var prompts = getHeroPrompts();
     var miniStats = [
@@ -3420,8 +3420,8 @@
     var dot = $("hero-dot");
     if (dot) {
       var angleRad = (clampedScore / 100) * 2 * Math.PI;
-      var dotCx = 60 + 48 * Math.sin(angleRad);
-      var dotCy = 60 - 48 * Math.cos(angleRad);
+      var dotCx = 64 + 60 * Math.sin(angleRad);
+      var dotCy = 64 - 60 * Math.cos(angleRad);
       dot.setAttribute("cx", String(Math.round(dotCx * 10) / 10));
       dot.setAttribute("cy", String(Math.round(dotCy * 10) / 10));
       dot.style.visibility = "visible";
@@ -3652,6 +3652,10 @@
     var steps = safeArray(calculation.steps);
     var drivers = safeArray(brief.drivers);
     var auditSources = safeArray(audit.source_titles);
+    var headlinePct = Number(driver && driver.pct);
+    var headlineRatio = Number.isFinite(headlinePct)
+      ? headlinePct.toFixed(1) + "% " + String(firstDefined(driver.ring_label, driverSubLabel(driver), "of plan"))
+      : "";
     var calculationMarkup = steps.length
       ? '<div class="kpi-brief-steps">' + steps.map(function (step) {
         return '<div class="kpi-brief-step"><span>' + escapeHtml(firstDefined(step.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(step.value, "—")) + '</strong></div>';
@@ -3668,8 +3672,8 @@
     var chartMarkup = kpiMixChartMarkup(key, drivers);
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
-      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><h3 class="detail-title">' + escapeHtml(label) + '</h3></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
-      '<div class="kpi-brief-summary"><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><p>' + escapeHtml(firstDefined(brief.readout, "No explanation is available.")) + '</p></div>',
+      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3>' + (headlineRatio ? '<span class="kpi-brief-ratio">' + escapeHtml(headlineRatio) + '</span>' : '') + '<strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong></div></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
+      '<div class="kpi-brief-summary"><p>' + escapeHtml(firstDefined(brief.readout, "No explanation is available.")) + '</p></div>',
       chartMarkup,
       driverMarkup,
       strategicReference ? '<section class="kpi-strategic-reference"><span class="kpi-brief-label">' + escapeHtml(firstDefined(strategicReference.label, "Approved strategic reference")) + '</span><strong>' + escapeHtml(firstDefined(strategicReference.value, "—")) + '</strong><p>' + escapeHtml(firstDefined(strategicReference.note, "")) + '</p><small>' + escapeHtml(firstDefined(strategicReference.source, "")) + '</small></section>' : '',

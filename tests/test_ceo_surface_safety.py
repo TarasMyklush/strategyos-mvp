@@ -862,6 +862,11 @@ def test_plan_health_gauge_has_indicator_dot():
     assert "dot.style.visibility" in js, (
         "Dot visibility must be set to visible after positioning"
     )
+    assert 'viewBox="0 0 128 128"' in html
+    assert 'cx="64" cy="64" r="60"' in html
+    assert "2 * Math.PI * 60" in js
+    assert "64 + 60 * Math.sin(angleRad)" in js
+    assert "64 - 60 * Math.cos(angleRad)" in js
 
 
 def test_kpi_spacing_css_exists():
