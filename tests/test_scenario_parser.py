@@ -186,6 +186,88 @@ def test_ebitda_scenario_fails_closed_when_income_statement_inputs_are_absent():
     assert "cost baseline" in result.answer.lower()
 
 
+def test_ebitda_target_margin_uses_governed_dashboard_baseline():
+    result = parse_scenario(
+        "model what needs to happen so we have 60% margin",
+        {
+            "bundle": object(),
+            "findings": [],
+            "kg_nodes": [],
+            "public_context_packet": {},
+            "summary": {
+                "finance_kpi": {
+                    "authoritative": True,
+                    "reporting_period_key": "H1 2026",
+                    "reporting_currency": "SAR",
+                    "components": {
+                        "revenue_actual": "385079908.90",
+                        "cogs_actual": "75503688.29",
+                        "operating_cost_actual": "93834910.05",
+                        "ebitda_actual": "215741310.56",
+                    },
+                    "evidence": {
+                        "ebitda_margin": {
+                            "files": [
+                                "02_ERP_Extracts/GL_Extract_H1_2026.csv",
+                                "03_Master_Data/Chart_of_Accounts.xlsx",
+                            ]
+                        }
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.matched is True
+    assert result.scenario_id == "ebitda_target_margin"
+    assert result.scenario_type == "deterministic"
+    assert "56.0%" in result.answer
+    assert "60.0%" in result.answer
+    assert "SAR 15,306,634.78" in result.answer
+    assert "SAR 78,528,275.27" in result.answer
+    assert "16.3%" in result.answer
+    assert "SAR 460,139,210.87" in result.answer
+    assert "19.5%" in result.answer
+    assert "not a forecast" in result.answer
+    assert result.hallucination_risk.level.value == "none"
+    assert {step.step_id for step in result.calculations} == {
+        "governed_ebitda_baseline",
+        "target_ebitda",
+        "fixed_revenue_cost_path",
+        "fixed_opex_growth_path",
+    }
+    assert {citation["source_path"] for citation in result.citations} == {
+        "02_ERP_Extracts/GL_Extract_H1_2026.csv",
+        "03_Master_Data/Chart_of_Accounts.xlsx",
+    }
+
+
+def test_ebitda_target_margin_can_complete_one_component_from_governed_identity():
+    result = parse_scenario(
+        "What needs to change to reach a 60% EBITDA margin?",
+        {
+            "bundle": object(),
+            "findings": [],
+            "kg_nodes": [],
+            "public_context_packet": {},
+            "summary": {
+                "finance_kpi": {
+                    "reporting_period_key": "H1 2026",
+                    "components": {
+                        "revenue_actual": "385079908.90",
+                        "cogs_actual": "75503688.29",
+                        "ebitda_actual": "215741310.56",
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.scenario_id == "ebitda_target_margin"
+    assert "SAR 93,834,910.05" in result.answer
+    assert result.scenario_type == "deterministic"
+
+
 def test_authenticated_digital_health_without_actual_data_does_not_use_synthetic_baseline():
     result = parse_scenario(
         "Simulate Digital Health flat by end of year",

@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from .models import (
     CalculationStep,
@@ -219,7 +219,7 @@ def _risk_high(basis: str, gap: str) -> HallucinationRisk:
 
 _SCENARIO_INTENT_RE = re.compile(
     r"\b(if|assume|assuming|scenario|simulate|model|project|increase|decrease|"
-    r"recover|realize|collect|hedge|change by|what would happen|what happens|"
+    r"recover|realize|collect|hedge|change by|reach|target|achieve|what needs to change|what would happen|what happens|"
     r"impact of|falls?|rises?|flat by|by end of year|eoy)\b",
     re.IGNORECASE,
 )
@@ -451,6 +451,251 @@ def _parse_recovery_realization(prompt: str, context: dict[str, Any]) -> Scenari
     )
 
 
+def _decimal_or_none(value: Any) -> Decimal | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return Decimal(str(value).replace(",", ""))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Resolve one compatible finance baseline from the current governed run.
+
+    Source-derived finance KPIs are preferred because they are the same deterministic
+    actuals rendered by the CEO dashboard. The older oracle payload remains supported
+    for runs created before the source-finance engine was introduced.
+    """
+    summary = context.get("summary")
+    if not isinstance(summary, Mapping):
+        return None
+
+    for key in ("finance_kpi", "oracle_kpi"):
+        payload = summary.get(key)
+        if not isinstance(payload, Mapping):
+            continue
+        components = payload.get("components")
+        if not isinstance(components, Mapping):
+            components = payload
+
+        revenue = _decimal_or_none(components.get("revenue_actual"))
+        cogs = _decimal_or_none(components.get("cogs_actual"))
+        operating_cost = _decimal_or_none(components.get("operating_cost_actual"))
+        ebitda = _decimal_or_none(components.get("ebitda_actual"))
+        if revenue is None or revenue <= 0:
+            continue
+
+        # EBITDA can safely complete one missing cost component because this is the
+        # governing identity used by the dashboard calculation contract.
+        if ebitda is None and cogs is not None and operating_cost is not None:
+            ebitda = revenue - cogs - operating_cost
+        elif cogs is None and ebitda is not None and operating_cost is not None:
+            cogs = revenue - operating_cost - ebitda
+        elif operating_cost is None and ebitda is not None and cogs is not None:
+            operating_cost = revenue - cogs - ebitda
+
+        if any(value is None for value in (cogs, operating_cost, ebitda)):
+            continue
+        assert cogs is not None and operating_cost is not None and ebitda is not None
+
+        evidence = payload.get("evidence") if isinstance(payload.get("evidence"), Mapping) else {}
+        ebitda_evidence = evidence.get("ebitda_margin") if isinstance(evidence, Mapping) else {}
+        files = ebitda_evidence.get("files") if isinstance(ebitda_evidence, Mapping) else []
+        citations = [
+            {
+                "source_path": str(source_path),
+                "locator": "Governed revenue, COGS, operating-cost and EBITDA baseline",
+                "excerpt": "",
+            }
+            for source_path in (files or [])
+            if source_path
+        ]
+        if not citations:
+            citations = [{
+                "source_path": f"run_summary://{key}",
+                "locator": "components.revenue_actual,cogs_actual,operating_cost_actual,ebitda_actual",
+                "excerpt": "",
+            }]
+
+        return {
+            "source_key": key,
+            "period": str(payload.get("reporting_period_key") or summary.get("reporting_period") or "current governed period"),
+            "currency": str(payload.get("reporting_currency") or "SAR"),
+            "revenue": revenue,
+            "cogs": cogs,
+            "operating_cost": operating_cost,
+            "ebitda": ebitda,
+            "citations": citations,
+        }
+    return None
+
+
+def _target_margin_from_prompt(prompt: str, prompt_numbers: list[dict[str, Any]]) -> Decimal | None:
+    norm = _normalize(prompt)
+    if "margin" not in norm:
+        return None
+    percentages = [token for token in prompt_numbers if token.get("unit") == "%"]
+    if not percentages:
+        return None
+    # Prefer the percentage closest to the word "margin" so prompts containing
+    # other percentages remain deterministic.
+    margin_at = norm.find("margin")
+    selected = min(percentages, key=lambda token: abs(int(token["span"][0]) - margin_at))
+    target = Decimal(selected["value"]) / Decimal("100")
+    return target if Decimal("0") < target < Decimal("1") else None
+
+
+def _finance_target_margin_result(
+    target_margin: Decimal,
+    baseline: Mapping[str, Any],
+    prompt_numbers: list[dict[str, Any]],
+) -> ScenarioResult:
+    revenue = Decimal(baseline["revenue"])
+    cogs = Decimal(baseline["cogs"])
+    operating_cost = Decimal(baseline["operating_cost"])
+    ebitda = Decimal(baseline["ebitda"])
+    citations = list(baseline["citations"])
+    current_margin = ebitda / revenue
+    target_ebitda = revenue * target_margin
+    improvement = target_ebitda - ebitda
+
+    baseline_step = CalculationStep(
+        step_id="governed_ebitda_baseline",
+        description="Reconcile the current EBITDA baseline used by the CEO dashboard",
+        formula="EBITDA = revenue - COGS - operating cost; margin = EBITDA / revenue",
+        inputs={
+            "revenue_sar": str(revenue),
+            "cogs_sar": str(cogs),
+            "operating_cost_sar": str(operating_cost),
+            "period": baseline["period"],
+        },
+        result=_percent(float(current_margin), 2),
+        unit="EBITDA margin",
+        citations=citations,
+    )
+    target_step = CalculationStep(
+        step_id="target_ebitda",
+        description="Calculate EBITDA required at the requested target margin",
+        formula="target EBITDA = governed revenue × target margin",
+        inputs={
+            "revenue_sar": str(revenue),
+            "target_margin": str(target_margin),
+            "prompt_numbers": _serialized_prompt_numbers(prompt_numbers),
+        },
+        result=_sar_decimal(target_ebitda),
+        unit="SAR",
+        citations=citations,
+        assumptions=["The requested margin is treated as a scenario target, not as an approved forecast."],
+    )
+
+    if improvement <= 0:
+        answer = (
+            f"The current EBITDA margin is {_percent(float(current_margin), 1)} "
+            f"({_sar_decimal(ebitda)} EBITDA on {_sar_decimal(revenue)} revenue), already at or above "
+            f"the requested {_percent(float(target_margin), 1)} target for {baseline['period']}."
+        )
+        return ScenarioResult(
+            scenario_id="ebitda_target_margin",
+            scenario_label="Finance - EBITDA Target Margin",
+            matched=True,
+            answer=answer,
+            calculations=[baseline_step, target_step],
+            kg_context=[],
+            citations=citations,
+            assumptions=["No operating change is required to meet a target below the current governed margin."],
+            hallucination_risk=_risk_none("Current-run finance KPI components and deterministic EBITDA identity."),
+            suggestions=["Model a higher target margin", "Show the EBITDA baseline"],
+            scenario_type="deterministic",
+            basis="Calculated from the same governed finance components rendered by the CEO dashboard.",
+        )
+
+    target_operating_cost = revenue - cogs - target_ebitda
+    operating_cost_reduction = operating_cost - target_operating_cost
+    operating_cost_reduction_rate = operating_cost_reduction / operating_cost
+    cogs_rate = cogs / revenue
+    revenue_denominator = Decimal("1") - cogs_rate - target_margin
+    required_revenue = operating_cost / revenue_denominator if revenue_denominator > 0 else None
+
+    calculations = [baseline_step, target_step]
+    calculations.append(CalculationStep(
+        step_id="fixed_revenue_cost_path",
+        description="Cost path with revenue and COGS held at their governed baseline",
+        formula="target operating cost = revenue - COGS - target EBITDA",
+        inputs={
+            "revenue_sar": str(revenue),
+            "cogs_sar": str(cogs),
+            "current_operating_cost_sar": str(operating_cost),
+            "target_ebitda_sar": str(target_ebitda),
+        },
+        result={
+            "target_operating_cost_sar": _sar_decimal(target_operating_cost),
+            "operating_cost_reduction_sar": _sar_decimal(operating_cost_reduction),
+            "operating_cost_reduction_pct": _percent(float(operating_cost_reduction_rate), 1),
+        },
+        unit="SAR",
+        citations=citations,
+        assumptions=["Revenue and COGS remain at the current governed baseline."],
+    ))
+
+    growth_sentence = ""
+    if required_revenue is not None:
+        revenue_increase = required_revenue - revenue
+        revenue_increase_rate = revenue_increase / revenue
+        calculations.append(CalculationStep(
+            step_id="fixed_opex_growth_path",
+            description="Revenue path with operating cost fixed and COGS held at its current revenue rate",
+            formula="required revenue = operating cost / (1 - current COGS rate - target margin)",
+            inputs={
+                "operating_cost_sar": str(operating_cost),
+                "current_cogs_rate": str(cogs_rate),
+                "target_margin": str(target_margin),
+            },
+            result={
+                "required_revenue_sar": _sar_decimal(required_revenue),
+                "revenue_increase_sar": _sar_decimal(revenue_increase),
+                "revenue_increase_pct": _percent(float(revenue_increase_rate), 1),
+            },
+            unit="SAR",
+            citations=citations,
+            assumptions=["Operating cost stays fixed and COGS remains the current share of revenue."],
+        ))
+        growth_sentence = (
+            f"\n\nRevenue path — hold operating cost at {_sar_decimal(operating_cost)} and COGS at its current "
+            f"{_percent(float(cogs_rate), 1)} of revenue: grow revenue to {_sar_decimal(required_revenue)} "
+            f"(+{_sar_decimal(revenue_increase)}, {_percent(float(revenue_increase_rate), 1)})."
+        )
+
+    answer = (
+        f"Current position — EBITDA margin is {_percent(float(current_margin), 1)}: "
+        f"{_sar_decimal(ebitda)} EBITDA on {_sar_decimal(revenue)} revenue for {baseline['period']}.\n\n"
+        f"Target — at {_percent(float(target_margin), 1)}, EBITDA must reach {_sar_decimal(target_ebitda)}, "
+        f"an improvement of {_sar_decimal(improvement)}.\n\n"
+        f"Cost path — hold revenue and COGS constant: reduce operating cost from {_sar_decimal(operating_cost)} "
+        f"to {_sar_decimal(target_operating_cost)} (-{_sar_decimal(operating_cost_reduction)}, "
+        f"{_percent(float(operating_cost_reduction_rate), 1)})."
+        f"{growth_sentence}\n\n"
+        "These are auditable boundary paths, not a forecast. Specify the intended revenue/cost mix and timing to model a combined execution path."
+    )
+    return ScenarioResult(
+        scenario_id="ebitda_target_margin",
+        scenario_label="Finance - EBITDA Target Margin",
+        matched=True,
+        answer=answer,
+        calculations=calculations,
+        kg_context=[],
+        citations=citations,
+        assumptions=[
+            "The target margin is a user-provided scenario assumption, not an approved forecast.",
+            "Boundary paths deliberately avoid inventing a management-selected mix of revenue growth and cost action.",
+        ],
+        hallucination_risk=_risk_none("Current-run finance KPI components and explicit deterministic formulas."),
+        suggestions=["Model a 50/50 revenue and cost path", "Show the calculation trace", "What is the current EBITDA baseline?"],
+        scenario_type="deterministic",
+        basis="Calculated from the same governed finance components rendered by the CEO dashboard.",
+    )
+
+
 def _parse_financial_what_if_guard(prompt: str, context: dict[str, Any]) -> ScenarioResult | None:
     if _public_packet(context):
         return None
@@ -473,6 +718,10 @@ def _parse_financial_what_if_guard(prompt: str, context: dict[str, Any]) -> Scen
         )
 
     if any(token in norm for token in ("revenue", "cost", "costs", "ebitda", "margin", "opex", "cogs")):
+        baseline = _governed_finance_baseline(context)
+        target_margin = _target_margin_from_prompt(prompt, prompt_numbers)
+        if baseline is not None and target_margin is not None:
+            return _finance_target_margin_result(target_margin, baseline, prompt_numbers)
         return _scenario_missing_data_result(
             scenario_id="ebitda_scenario",
             scenario_label="Finance - EBITDA Scenario",

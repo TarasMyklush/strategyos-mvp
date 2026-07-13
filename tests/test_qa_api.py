@@ -2560,3 +2560,74 @@ def test_inline_ceo_kpi_chat_uses_server_resolved_contract_and_never_llm(monkeyp
         assert kg_payload["llm_fallback_attempted"] is False
     finally:
         _restore_env(original)
+
+
+def test_assistant_chat_models_target_margin_from_governed_finance_kpis_despite_stale_cash_context(monkeypatch):
+    original, client = _client_with_auth()
+    api_module._QA_CONTEXT_CACHE.clear()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "public_context_packet": {},
+                "summary": {
+                    "run_id": "source-finance-run",
+                    "finance_kpi": {
+                        "authoritative": True,
+                        "reporting_period_key": "H1 2026",
+                        "reporting_currency": "SAR",
+                        "components": {
+                            "revenue_actual": "385079908.90",
+                            "cogs_actual": "75503688.29",
+                            "operating_cost_actual": "93834910.05",
+                            "ebitda_actual": "215741310.56",
+                        },
+                        "evidence": {
+                            "ebitda_margin": {
+                                "files": [
+                                    "02_ERP_Extracts/GL_Extract_H1_2026.csv",
+                                    "03_Master_Data/Chart_of_Accounts.xlsx",
+                                ]
+                            }
+                        },
+                    },
+                },
+                "run_id": "source-finance-run",
+                "run_mode": "full",
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "model what needs to happen so we have 60% margin",
+                "persona": "ceo",
+                "mode": "auto",
+                "driver_context": {
+                    "key": "cash_vs_floor",
+                    "label": "Cash vs floor",
+                    "metric": "3.5%",
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["scenario_id"] == "ebitda_target_margin"
+        assert payload["scenario_type"] == "deterministic"
+        assert payload["answered_by"] == "scenario"
+        assert payload.get("llm_fallback_attempted", False) is False
+        assert payload["hallucination_risk"]["level"] == "none"
+        assert "56.0%" in payload["answer"]
+        assert "60.0%" in payload["answer"]
+        assert "SAR 15,306,634.78" in payload["answer"]
+        assert "SAR 460,139,210.87" in payload["answer"]
+        assert "cannot calculate" not in payload["answer"].lower()
+    finally:
+        _restore_env(original)
