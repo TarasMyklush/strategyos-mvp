@@ -753,6 +753,207 @@ def _assistant_metric_label(card_id: str, value: Any) -> str:
     return str(value)
 
 
+def _ceo_kpi_knowledge_graph(
+    kpi_cards: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Project the CEO graph from the same contract as the four KPI cards.
+
+    The operational Neo4j projection remains useful for finding, vendor and
+    invoice investigations.  It is not, however, the source of the CEO finance
+    cards.  This graph deliberately starts from those cards and exposes their
+    governed calculation components, comparisons, gaps and source extracts so
+    the visual surface cannot drift into a technical architecture diagram.
+    """
+
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    questions: list[dict[str, Any]] = []
+    node_ids: set[str] = set()
+    edge_ids: set[tuple[str, str, str]] = set()
+
+    def add_node(node: dict[str, Any]) -> None:
+        node_id = str(node.get("id") or "").strip()
+        if not node_id or node_id in node_ids:
+            return
+        node_ids.add(node_id)
+        nodes.append(node)
+
+    def add_edge(source: str, target: str, label: str) -> None:
+        key = (source, target, label)
+        if not source or not target or key in edge_ids:
+            return
+        edge_ids.add(key)
+        edges.append({"source": source, "target": target, "label": label})
+
+    for card in list(kpi_cards or [])[:4]:
+        key = str(card.get("driver_key") or card.get("key") or "").strip()
+        if not key:
+            continue
+        label = str(card.get("label") or key.replace("_", " ").title())
+        metric = str(card.get("metric") or card.get("value") or "Not available")
+        brief = card.get("executive_brief") if isinstance(card.get("executive_brief"), dict) else {}
+        readout = str(brief.get("readout") or card.get("detail") or "")
+        comparison = brief.get("comparison") if isinstance(brief.get("comparison"), dict) else {}
+        coverage = brief.get("coverage") if isinstance(brief.get("coverage"), dict) else {}
+        audit = brief.get("audit") if isinstance(brief.get("audit"), dict) else {}
+        kpi_id = f"kpi:{key}"
+        detail_parts = [metric, readout]
+        if comparison:
+            detail_parts.append(
+                f"{comparison.get('label') or 'Comparator'}: {comparison.get('value') or 'Not supplied'}."
+            )
+        if coverage:
+            detail_parts.append(
+                f"Data coverage: {coverage.get('value') or 'Unavailable'}. {coverage.get('note') or ''}"
+            )
+        add_node(
+            {
+                "id": kpi_id,
+                "label": label,
+                "short_label": f"{label} · {metric}",
+                "category": "KPI",
+                "detail": " ".join(part.strip() for part in detail_parts if part).strip(),
+                "hermes_prompt": str(
+                    brief.get("decision_question")
+                    or f"Explain {label}, its calculation, business drivers and evidence gaps."
+                ),
+                "properties": {
+                    "kpi_key": key,
+                    "metric": metric,
+                    "availability": card.get("availability"),
+                    "formula": card.get("formula"),
+                },
+                "r": 14,
+            }
+        )
+        focus = [kpi_id]
+
+        # Make the structural relationships between the four headline KPIs
+        # explicit.  EBITDA margin is calculated from Revenue and Operating
+        # cost rather than represented as an isolated technical node.
+        if key == "ebitda_margin":
+            add_edge("kpi:revenue", kpi_id, "INPUT_TO")
+            add_edge("kpi:operating_cost", kpi_id, "INPUT_TO")
+            focus.extend(["kpi:revenue", "kpi:operating_cost"])
+
+        calculation = brief.get("calculation") if isinstance(brief.get("calculation"), dict) else {}
+        component_labels: set[str] = set()
+        for index, step in enumerate(list(calculation.get("steps") or [])[:8], start=1):
+            if not isinstance(step, dict):
+                continue
+            step_label = str(step.get("label") or f"Calculation component {index}")
+            component_labels.add(step_label.strip().lower())
+            step_value = str(step.get("value") or "Not supplied")
+            component_id = f"component:{key}:{index}"
+            add_node(
+                {
+                    "id": component_id,
+                    "label": step_label,
+                    "short_label": f"{step_label} · {step_value}",
+                    "category": "business_driver",
+                    "detail": f"{step_label}: {step_value}. This is a governed component of {label}.",
+                    "hermes_prompt": f"Explain how {step_label} contributes to {label} and cite the governed calculation basis.",
+                    "properties": {"value": step_value, "kpi_key": key},
+                    "r": 9,
+                }
+            )
+            add_edge(component_id, kpi_id, "COMPOSES")
+            focus.append(component_id)
+
+        for index, driver in enumerate(list(brief.get("drivers") or [])[:8], start=1):
+            if not isinstance(driver, dict):
+                continue
+            driver_label = str(driver.get("label") or f"Business driver {index}")
+            if driver_label.strip().lower() in component_labels:
+                continue
+            driver_value = str(driver.get("value") or "Not supplied")
+            driver_id = f"driver:{key}:{index}"
+            add_node(
+                {
+                    "id": driver_id,
+                    "label": driver_label,
+                    "short_label": f"{driver_label} · {driver_value}",
+                    "category": "business_driver",
+                    "detail": f"{driver_label}: {driver_value}. Shown in the CEO explanation of {label}.",
+                    "hermes_prompt": f"Explain the contribution of {driver_label} to {label} using the current governed data.",
+                    "properties": {
+                        "value": driver_value,
+                        "share_pct": driver.get("share_pct"),
+                        "kpi_key": key,
+                    },
+                    "r": 8,
+                }
+            )
+            add_edge(driver_id, kpi_id, "DRIVES")
+            focus.append(driver_id)
+
+        if comparison:
+            comparator_id = f"comparator:{key}"
+            comparator_label = str(comparison.get("label") or "Approved comparator")
+            comparator_value = str(comparison.get("value") or "Not supplied")
+            add_node(
+                {
+                    "id": comparator_id,
+                    "label": comparator_label,
+                    "short_label": f"{comparator_label} · {comparator_value}",
+                    "category": "comparator",
+                    "detail": str(comparison.get("note") or f"Comparator for {label}: {comparator_value}."),
+                    "hermes_prompt": f"What comparator is available for {label}, and what decision can or cannot be made from it?",
+                    "properties": {"value": comparator_value, "available": comparison.get("available")},
+                    "r": 9,
+                }
+            )
+            add_edge(comparator_id, kpi_id, "COMPARED_WITH")
+            focus.append(comparator_id)
+
+        missing_inputs = list(card.get("missing_inputs") or audit.get("missing_inputs") or [])
+        for index, missing in enumerate(missing_inputs[:6], start=1):
+            missing_label = str(missing or "Required governed input")
+            gap_id = f"gap:{key}:{index}"
+            add_node(
+                {
+                    "id": gap_id,
+                    "label": missing_label,
+                    "category": "evidence_gap",
+                    "detail": f"{missing_label} is not present, so StrategyOS does not infer the missing comparison or value.",
+                    "hermes_prompt": f"Why is {missing_label} required for {label}, and what remains valid without it?",
+                    "properties": {"kpi_key": key, "missing": True},
+                    "r": 8,
+                }
+            )
+            add_edge(gap_id, kpi_id, "REQUIRED_FOR")
+            focus.append(gap_id)
+
+        source_titles = list(audit.get("source_titles") or [])
+        source_files = list(audit.get("source_files") or card.get("source_files") or [])
+        for index, source_file in enumerate(source_files[:6], start=1):
+            source_title = str(source_titles[index - 1] if index <= len(source_titles) else "Governed source extract")
+            source_id = f"source:{key}:{index}"
+            add_node(
+                {
+                    "id": source_id,
+                    "label": source_title,
+                    "category": "source",
+                    "detail": f"Governed source used to calculate {label}. Audit reference: {source_file}.",
+                    "hermes_prompt": f"Explain which values from {source_title} support {label} and how they are bounded.",
+                    "properties": {"source_file": source_file, "kpi_key": key},
+                    "r": 8,
+                }
+            )
+            add_edge(source_id, kpi_id, "SUPPORTS")
+            focus.append(source_id)
+
+        questions.append(
+            {
+                "id": f"question:{key}",
+                "label": label,
+                "focus": list(dict.fromkeys(focus)),
+            }
+        )
+
+    return nodes, edges, questions
+
+
 def _build_public_safe_assistant_packet(
     summary: dict[str, Any] | None,
     *,
@@ -861,29 +1062,8 @@ def _build_public_safe_assistant_packet(
     developments = list((presentation_sections.get("developments") or {}).get("items") or [])
     week = list((presentation_sections.get("week_ahead") or {}).get("items") or [])
 
-    kpi_nodes = list(((strategy_substrate.get("kpi_tree") or {}).get("nodes") or []))
-    kg_nodes = [
-        {
-            "id": item.get("node_id") or f"node-{index}",
-            "label": item.get("label") or item.get("node_id") or "KPI node",
-            "properties": {
-                "status": item.get("status"),
-                "value": item.get("value"),
-                "portfolio_id": item.get("portfolio_id"),
-            },
-        }
-        for index, item in enumerate(kpi_nodes[:8], start=1)
-    ]
-    kg_edges = []
-    for item in kpi_nodes[:8]:
-        for child_id in list(item.get("child_ids") or []):
-            kg_edges.append(
-                {
-                    "source": item.get("node_id"),
-                    "target": child_id,
-                    "label": "DEPENDS_ON",
-                }
-            )
+    executive_kpis = list(presentation_sections.get("drivers") or [])
+    kg_nodes, kg_edges, kg_questions = _ceo_kpi_knowledge_graph(executive_kpis)
 
     running_agents = list((agent_modules.get("running") or []))
     activity_summary = agent_modules.get("summary") or {}
@@ -960,6 +1140,7 @@ def _build_public_safe_assistant_packet(
         "facts": facts,
         "kg_nodes": kg_nodes,
         "kg_edges": kg_edges,
+        "kg_questions": kg_questions,
         "trace_summary": {
             "truth_basis": [
                 "executive_read_model",

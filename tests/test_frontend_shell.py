@@ -949,11 +949,11 @@ def test_kg_render_includes_modern_elements():
     assert 'role="application"' in js, "Graph stage must have application ARIA role"
     assert "aria-label" in js, "Graph must have aria-labels"
     assert "kg-dimmed" in js, "Dimmed state class for hover must exist"
-    assert "What supports the board narrative" in js
+    assert "What drives the four headline figures" in js
     assert "kg-density-toggle" in js, "Density toggle control must exist"
     assert "kg-zoom-in" in js and "kg-zoom-out" in js, "Zoom controls must exist"
     assert "kg-focus-mode" in js, "Focus mode control must exist"
-    assert "No generated nodes" in js, "Graph must disclose that every visible node is persisted"
+    assert "No illustrative business data" in js, "Graph must disclose that it adds no illustrative business claims"
 
 
 def test_kg_inspector_has_ask_hermes_cta():
@@ -985,14 +985,15 @@ def test_kg_universe_controls_present():
 
 
 def test_kg_universe_does_not_generate_decorative_density_nodes():
-    """The graph must render only persisted governed nodes and relationships."""
+    """The graph must not generate decorative business data."""
     js = _static_executive_js()
 
     assert "targetTotalNodes = Math.max(110" not in js
     assert "satelliteKind" not in js
     assert "relayCount" not in js
-    assert "Every visible node and link is persisted in the governed run" in js
-    assert "Persisted edges:" in js
+    assert "come from the same governed finance contract as the CEO dashboard" in js
+    assert "No illustrative business data" in js
+    assert "Governed relationships:" in js
 
 
 # ── YouTube Leaders' Corner embed safety ──
@@ -1317,7 +1318,7 @@ def test_ceo_information_architecture_separates_board_and_operational_surfaces()
     assert 'state.activePersona === "board" && !boardReleased' in js
     assert "No live diagnostics, working evidence, or pre-board figures" in js
     assert "Questions worth answering now" in js
-    assert "What supports the board narrative" in js
+    assert "What drives the four headline figures" in js
 
 
 def test_inline_kpi_chat_does_not_open_the_detached_assistant_drawer():

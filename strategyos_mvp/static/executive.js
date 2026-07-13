@@ -1207,6 +1207,13 @@
       evidence: "evidence",
       source: "source",
       relationship: "relationship",
+      business_driver: "business_driver",
+      driver: "business_driver",
+      component: "business_driver",
+      comparator: "comparator",
+      benchmark: "comparator",
+      evidence_gap: "evidence_gap",
+      data_gap: "evidence_gap",
       signal: "signal"
     };
     return map[key] || raw || "signal";
@@ -1264,6 +1271,9 @@
       evidence: { x: 52, y: 14, radius: 12 },
       source: { x: 66, y: 86, radius: 12 },
       relationship: { x: 58, y: 62, radius: 12 },
+      business_driver: { x: 33, y: 54, radius: 17 },
+      comparator: { x: 74, y: 32, radius: 15 },
+      evidence_gap: { x: 76, y: 70, radius: 15 },
       signal: { x: 32, y: 36, radius: 14 }
     };
 
@@ -1279,6 +1289,7 @@
         category: category,
         detail: firstDefined(node && node.detail, node && node.description, node && node.value, "No additional detail available."),
         hermes_prompt: firstDefined(node && node.hermes_prompt, "Tell me about " + firstDefined(node && node.label, "this node") + "."),
+        properties: (node && node.properties) || {},
         importance: importance,
         source_count: Math.max(2, degree + Math.round((String(firstDefined(node && node.detail, "")).length || 0) / 70) + 1),
         primary_degree: degree,
@@ -1340,10 +1351,10 @@
     var shared = getSharedAssistantContext();
     if (safeArray(shared.kg_nodes).length) {
       return buildKnowledgeUniverse({
-        questions: [
+        questions: safeArray(shared.kg_questions).length ? safeArray(shared.kg_questions) : [
           {
             id: "shared-public-packet",
-            label: "Board context",
+            label: "CEO KPI evidence",
             focus: safeArray(shared.kg_nodes).map(function (node) { return node.id; })
           }
         ],
@@ -1351,9 +1362,11 @@
           return {
             id: firstDefined(node && node.id, safeNodeId(node && node.label, index)),
             label: firstDefined(node && node.label, "Node " + (index + 1)),
+            short_label: firstDefined(node && node.short_label, node && node.label, "Node " + (index + 1)),
             category: normalizeKgCategory(firstDefined(node && node.category, node && node.properties && node.properties.domain, "signal")),
             detail: firstDefined(node && node.properties && (node.properties.detail || node.properties.value || node.properties.vs_plan), node && node.detail, "No additional detail available."),
             hermes_prompt: firstDefined(node && node.hermes_prompt, "Explain " + firstDefined(node && node.label, "this board signal") + " in the current strategy context."),
+            properties: (node && node.properties) || {},
             r: clampNumber(firstDefined(node && node.r, 10), 7, 13)
           };
         }),
@@ -2935,12 +2948,14 @@
   var KG_CATEGORY_COLORS = {
     plan: "#6f8cff", KPI: "#31d49b", business_unit: "#ffd166", finding: "#ff6b81",
     document: "#ba9cff", vendor: "#42c7ff", invoice: "#ff9f43", contract: "#7ee081",
-    evidence: "#6ee7ff", source: "#f7d96c", relationship: "#b7c0d4", signal: "#92a0b8"
+    evidence: "#6ee7ff", source: "#f7d96c", relationship: "#b7c0d4", signal: "#92a0b8",
+    business_driver: "#7ee081", comparator: "#ffd166", evidence_gap: "#ff9f43"
   };
   var KG_CATEGORY_LABELS = {
     plan: "Board Plan", KPI: "KPI", business_unit: "Business Unit", finding: "Finding",
     document: "Document", vendor: "Vendor", invoice: "Invoice", contract: "Contract",
-    evidence: "Evidence", source: "Source", relationship: "Relationship", signal: "Signal"
+    evidence: "Evidence", source: "Source", relationship: "Relationship", signal: "Signal",
+    business_driver: "Business Driver", comparator: "Comparator", evidence_gap: "Missing Input"
   };
   var REPORT_CATEGORY_MAP = {
     board_pack: "Board pack", graph: "Data relationships", audit: "Review trail",
@@ -2971,7 +2986,7 @@
   }
 
   function getDensityNodeLimit(graph) {
-    if ((state.kgDensityMode || "dense") === "dense") return safeArray(graph.nodes).length;
+    if ((state.kgDensityMode || "compact") === "dense") return safeArray(graph.nodes).length;
     var real = Number(graph.raw_node_count || 0);
     return Math.max(real + 24, Math.round(safeArray(graph.nodes).length * 0.52));
   }
@@ -3000,7 +3015,7 @@
       '<h3 class="kg-inspector__title" id="kg-inspector-title">' + escapeHtml(firstDefined(node.label, "Node")) + '</h3>' +
       '<p class="kg-inspector__meta">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + ' &middot; Connected to ' + connectedIds.length + ' persisted nodes</p>' +
       '<p class="kg-inspector__detail">' + escapeHtml(firstDefined(node.detail, "No additional detail available.")) + '</p>' +
-      '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Provenance</span><span class="kg-inspector__provenance-value">Persisted board-context node surfaced from the current governed strategy data.</span></div>' +
+      '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Why it is here</span><span class="kg-inspector__provenance-value">This item comes from the same governed finance calculation contract used by the four CEO dashboard KPIs. No illustrative business data is added.</span></div>' +
       (connectedLabels.length ? '<div class="kg-inspector__connections"><span class="kg-inspector__connections-label">Connected to</span>' + connectedLabels.map(function (l) { return '<span class="kg-inspector__conn-chip">' + l + '</span>'; }).join('') + '</div>' : '') +
       '<button type="button" class="kg-inspector__ask" id="kg-inspector-ask">Ask Hermes about this &rarr;</button>';
     panel.hidden = false;
@@ -3083,22 +3098,20 @@
   function renderKnowledgeGraph() {
     var graph = getKnowledgeGraph();
     if (!card) return;
-    if (!state.kgDensityMode) state.kgDensityMode = window.innerWidth <= 640 ? 'compact' : 'dense';
+    if (!state.kgDensityMode) state.kgDensityMode = 'compact';
     if (!Number.isFinite(Number(state.kgZoom))) state.kgZoom = 1;
     if (!Number.isFinite(Number(state.kgPanX))) state.kgPanX = 0;
     if (!Number.isFinite(Number(state.kgPanY))) state.kgPanY = 0;
     var focusQuestion = graph.questions[state.knowledgeQuestionIndex || 0] || null;
     var focused = focusQuestion ? new Set(safeArray(focusQuestion.focus)) : null;
-    var densityMode = state.kgDensityMode || "dense";
-    var visibleLimit = getDensityNodeLimit(graph);
+    var densityMode = state.kgDensityMode || "compact";
     var rankedNodes = safeArray(graph.nodes).slice().sort(function (left, right) {
       if (!!left.synthetic !== !!right.synthetic) return left.synthetic ? 1 : -1;
       return Number(right.importance || 0) - Number(left.importance || 0);
     });
-    var visibleNodes = rankedNodes.filter(function (node, index) {
-      if (index < visibleLimit) return true;
-      if (!node.synthetic) return true;
-      return false;
+    var visibleNodes = rankedNodes.filter(function (node) {
+      if (densityMode === 'dense' || !focused) return true;
+      return isNodeFocused(node, focused);
     });
     var visibleNodeIds = new Set(visibleNodes.map(function (node) { return node.id; }));
     var nodes = visibleNodes;
@@ -3112,20 +3125,20 @@
     var labels = nodes.filter(function (node) {
       return shouldShowKgLabel(node, focused, isSelected);
     });
-    var activeLens = firstDefined(focusQuestion && focusQuestion.label, densityMode === "dense" ? "Dense universe" : "Compact universe");
+    var activeLens = firstDefined(focusQuestion && focusQuestion.label, densityMode === "dense" ? "All KPI evidence" : "Selected KPI evidence");
     var presentCategories = Array.from(new Set(nodes.map(function (node) { return node.category; }).filter(Boolean)));
 
     card.innerHTML =
-      '<div class="detail-head detail-head--kg"><div><p class="detail-eyebrow">Evidence map</p><h3 class="detail-title">What supports the board narrative</h3><p class="section-note">Every visible node and link is persisted in the governed run. Select an item to inspect its evidence and connected claims.</p></div><span class="pill-inline ok">Governed records only</span></div>'
+      '<div class="detail-head detail-head--kg"><div><p class="detail-eyebrow">CEO KPI map</p><h3 class="detail-title">What drives the four headline figures</h3><p class="section-note">The four KPI anchors, calculation components, business drivers, comparators, missing inputs and source extracts come from the same governed finance contract as the CEO dashboard.</p></div><span class="pill-inline ok">Same KPI data</span></div>'
       + '<div class="kg-questions" role="tablist" aria-label="Question lenses">' + safeArray(graph.questions).map(function (question, index) {
         var active = focusQuestion && focusQuestion.id === question.id;
         var focusCount = safeArray(question.focus).length;
         return '<button type="button" class="kg-question' + (active ? ' is-active' : '') + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" data-kg-question="' + index + '"><span class="kg-question__dot" aria-hidden="true"></span>' + escapeHtml(firstDefined(question.label, 'Question')) + '<span class="kg-question__count">' + focusCount + '</span></button>';
       }).join('') + '</div>'
       + '<div class="kg-stage-shell' + (state.kgFocusMode ? ' is-focus-mode' : '') + '">'
-      + '<div class="kg-stage__hud" aria-hidden="false"><div class="kg-hud-chip"><strong>' + nodes.length + '</strong><span>governed records</span></div><div class="kg-hud-chip"><strong>' + edges.length + '</strong><span>persisted links</span></div><div class="kg-hud-chip"><strong>' + activeLens + '</strong><span>current question</span></div></div>'
+      + '<div class="kg-stage__hud" aria-hidden="false"><div class="kg-hud-chip"><strong>' + nodes.length + '</strong><span>KPI evidence items</span></div><div class="kg-hud-chip"><strong>' + edges.length + '</strong><span>calculation links</span></div><div class="kg-hud-chip"><strong>' + activeLens + '</strong><span>selected KPI</span></div></div>'
       + '<div class="kg-controls" role="toolbar" aria-label="Graph universe controls">'
-      + '<button type="button" class="kg-control-btn' + (densityMode === 'dense' ? ' is-active' : '') + '" id="kg-density-toggle" aria-pressed="' + (densityMode === 'dense' ? 'true' : 'false') + '">' + (densityMode === 'dense' ? 'Dense mode' : 'Compact mode') + '</button>'
+      + '<button type="button" class="kg-control-btn' + (densityMode === 'dense' ? ' is-active' : '') + '" id="kg-density-toggle" aria-pressed="' + (densityMode === 'dense' ? 'true' : 'false') + '">' + (densityMode === 'dense' ? 'All KPIs' : 'Selected KPI') + '</button>'
       + '<button type="button" class="kg-control-btn" id="kg-zoom-out" aria-label="Zoom out">−</button>'
       + '<button type="button" class="kg-control-btn" id="kg-zoom-in" aria-label="Zoom in">+</button>'
       + '<button type="button" class="kg-control-btn" id="kg-fit" aria-label="Fit graph">Fit</button>'
@@ -3171,7 +3184,7 @@
       + '<div class="kg-legend" aria-label="Node category legend">' + presentCategories.map(function (cat) {
         return '<span class="kg-legend__item"><span class="kg-legend__swatch" style="background:' + escapeHtml(KG_CATEGORY_COLORS[cat]) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[cat], cat)) + '</span>';
       }).join('') + '</div>'
-      + '<div class="kg-stage__foot"><span class="kg-foot-chip">Persisted nodes: ' + Number(graph.raw_node_count || 0) + '</span><span class="kg-foot-chip">Persisted edges: ' + edges.length + '</span><span class="kg-foot-chip">No generated nodes</span></div>'
+      + '<div class="kg-stage__foot"><span class="kg-foot-chip">KPI evidence items: ' + Number(graph.raw_node_count || 0) + '</span><span class="kg-foot-chip">Governed relationships: ' + edges.length + '</span><span class="kg-foot-chip">No illustrative business data</span></div>'
       + '</div></div>';
 
     /* ── Wire question lens buttons ── */
@@ -3260,7 +3273,7 @@
 
     var densityToggle = $('kg-density-toggle');
     if (densityToggle) densityToggle.onclick = function () {
-      state.kgDensityMode = (state.kgDensityMode || 'dense') === 'dense' ? 'compact' : 'dense';
+      state.kgDensityMode = (state.kgDensityMode || 'compact') === 'dense' ? 'compact' : 'dense';
       renderKnowledgeGraph();
     };
     var zoomIn = $('kg-zoom-in');
@@ -3285,7 +3298,7 @@
       state.kgZoom = 1;
       state.kgPanX = 0;
       state.kgPanY = 0;
-      state.kgDensityMode = state.kgDensityMode || 'dense';
+      state.kgDensityMode = state.kgDensityMode || 'compact';
       closeNodeInspector();
       renderKnowledgeGraph();
     };
@@ -4966,7 +4979,7 @@
       networkFilterMenuOpen: false,
       selectedAgentModuleKey: "",
       knowledgeQuestionIndex: 0,
-      kgDensityMode: window.innerWidth <= 640 ? "compact" : "dense",
+      kgDensityMode: "compact",
       kgZoom: 1,
       kgPanX: 0,
       kgPanY: 0,

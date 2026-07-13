@@ -1336,6 +1336,58 @@ def test_public_assistant_context_exposes_kg_and_public_safe_findings(monkeypatc
     assert payload["public_context_packet"]["source"] == "server_public_executive_packet"
 
 
+def test_ceo_knowledge_graph_uses_the_same_four_kpi_contracts_as_dashboard():
+    cards = []
+    for key, label, metric in (
+        ("revenue", "Revenue", "SAR 385.1M"),
+        ("ebitda_margin", "EBITDA margin", "31.2%"),
+        ("operating_cost", "Operating cost", "SAR 80.0M"),
+        ("cash_vs_floor", "Cash vs floor", "SAR 42.3M"),
+    ):
+        cards.append(
+            {
+                "driver_key": key,
+                "label": label,
+                "metric": metric,
+                "availability": "partial" if key == "cash_vs_floor" else "verified",
+                "formula": f"Governed formula for {label}",
+                "missing_inputs": ["Approved board cash floor"] if key == "cash_vs_floor" else [],
+                "source_files": [f"source/{key}.xlsx"],
+                "executive_brief": {
+                    "readout": f"Governed readout for {label}",
+                    "decision_question": f"Explain {label}",
+                    "drivers": [{"label": f"{label} contributor", "value": metric, "share_pct": 100}],
+                    "comparison": {
+                        "label": "Board cash floor" if key == "cash_vs_floor" else "Approved plan",
+                        "value": "Not supplied" if key == "cash_vs_floor" else "Available",
+                        "available": key != "cash_vs_floor",
+                    },
+                    "coverage": {"value": "Partial" if key == "cash_vs_floor" else "Complete"},
+                    "calculation": {"steps": [{"label": f"{label} actual", "value": metric}]},
+                    "audit": {
+                        "source_titles": ["Governed source extract"],
+                        "source_files": [f"source/{key}.xlsx"],
+                        "missing_inputs": ["Approved board cash floor"] if key == "cash_vs_floor" else [],
+                    },
+                },
+            }
+        )
+
+    nodes, edges, questions = api_module._ceo_kpi_knowledge_graph(cards)
+    node_ids = {node["id"] for node in nodes}
+    edge_tuples = {(edge["source"], edge["target"], edge["label"]) for edge in edges}
+
+    assert {f"kpi:{card['driver_key']}" for card in cards}.issubset(node_ids)
+    assert [question["label"] for question in questions] == [card["label"] for card in cards]
+    assert ("kpi:revenue", "kpi:ebitda_margin", "INPUT_TO") in edge_tuples
+    assert ("kpi:operating_cost", "kpi:ebitda_margin", "INPUT_TO") in edge_tuples
+    assert any(node["category"] == "business_driver" for node in nodes)
+    assert any(node["category"] == "comparator" for node in nodes)
+    assert any(node["category"] == "evidence_gap" for node in nodes)
+    assert any(node["category"] == "source" for node in nodes)
+    assert all("vendor" not in str(node.get("category") or "").lower() for node in nodes)
+
+
 def test_public_safe_legacy_demo_prompts_use_only_governed_answers(monkeypatch):
     original = _apply_env(
         {

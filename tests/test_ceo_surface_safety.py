@@ -976,11 +976,11 @@ def test_feedback_form_css_layout():
 
 
 def test_knowledge_graph_subtitle_grammar():
-    """#10: Knowledge graph subtitle must disclose persisted-only data."""
+    """#10: Knowledge graph subtitle must disclose its governed KPI boundary."""
     js = _static_executive_js()
 
-    assert "Every visible node and link is persisted in the governed run" in js, (
-        "Knowledge graph subtitle must explain that the graph is persisted-only"
+    assert "come from the same governed finance contract as the CEO dashboard" in js, (
+        "Knowledge graph subtitle must explain that it uses the CEO KPI contract"
     )
     # Old wording must NOT appear
     assert "proof the system" not in js, (
