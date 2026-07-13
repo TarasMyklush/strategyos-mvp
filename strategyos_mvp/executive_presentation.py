@@ -124,6 +124,32 @@ _CEO_KPI_SPECS: tuple[dict[str, Any], ...] = (
 )
 
 
+# Board-approved strategic references are deliberately kept separate from the
+# period-aligned finance comparators above.  The current finance extract is H1
+# and scoped; comparing it directly with an annual Group target would create a
+# misleading percentage.  These references tell the CEO what has been approved
+# while making the remaining alignment requirement explicit.
+_BOARD_STRATEGIC_REFERENCES: dict[str, dict[str, Any]] = {
+    "revenue": {
+        "label": "Approved FY2026 Group revenue plan",
+        "value": "SAR 8.35B",
+        "note": "Board approved on 12 January 2026. A phased H1 budget for the same entities is still required for a valid performance comparison.",
+    },
+    "ebitda_margin": {
+        "label": "Approved FY2028 Group EBITDA margin target",
+        "value": "23.0%",
+        "note": "This is the approved long-term target, not an H1 2026 budget comparator.",
+    },
+    "cash_vs_floor": {
+        "label": "Approved Group cash floor",
+        "value": "SAR 1.20B",
+        "note": "The current cash extract is partial and is not yet aligned to the full Group scope required for a valid floor assessment.",
+    },
+}
+
+_STRATEGY_SOURCE_TITLE = "Mizan Group Strategy 2026–2028 · Board approved 12 January 2026"
+
+
 def _number_or_none(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
@@ -154,7 +180,7 @@ def _source_title(path: Any) -> str:
         return "Chart of accounts"
     if "cash_forecast" in lowered or "cash_position" in lowered:
         return "Treasury cash position"
-    return "Governed source extract"
+    return "Finance source"
 
 
 def _executive_kpi_brief(
@@ -179,12 +205,13 @@ def _executive_kpi_brief(
     evidence_details = evidence.get("details") if isinstance(evidence.get("details"), Mapping) else {}
     source_files = list(evidence.get("files") or [])
     source_titles = list(dict.fromkeys(_source_title(item) for item in source_files))
-    comparison_name = "Board cash floor" if key == "cash_vs_floor" else "Approved plan"
-    comparison_value = comparison if not missing_inputs else "Not supplied"
+    strategic_reference = _BOARD_STRATEGIC_REFERENCES.get(key)
+    comparison_name = "Current-period comparison"
+    comparison_value = comparison if not missing_inputs else "Not yet aligned"
     comparison_note = (
-        "No approved board cash floor was supplied with this data pack."
-        if key == "cash_vs_floor" and missing_inputs
-        else "No approved plan was supplied with this data pack."
+        "An approved strategic reference exists, but the current actual and comparator are not yet aligned to the same period and scope."
+        if missing_inputs and strategic_reference
+        else "A current-period budget for the same scope has not yet been connected."
         if missing_inputs
         else "Compared with the approved comparator supplied for this period."
     )
@@ -225,7 +252,7 @@ def _executive_kpi_brief(
         if account_count:
             narrative = f"Revenue recognised across {account_count} revenue account groups in the H1 general ledger."
         driver_rows = contributor_rows("revenue")
-        implication = "Revenue performance against plan cannot be judged until the approved revenue plan is connected." if missing_inputs else comparison
+        implication = "The FY2026 Group revenue plan is approved. Performance against it will be shown once the phased H1 budget is aligned to this reporting scope." if missing_inputs else comparison
         decision_question = "Which revenue streams account for the current result, and where is concentration risk highest?"
     elif key == "ebitda_margin":
         revenue = _number_or_none(components.get("revenue_actual"))
@@ -246,7 +273,7 @@ def _executive_kpi_brief(
             {"label": "Operating cost", "value": display_component(operating_cost), "share_pct": (operating_cost / revenue * 100) if revenue and operating_cost is not None else None},
             {"label": "EBITDA", "value": display_component(ebitda), "share_pct": (ebitda / revenue * 100) if revenue and ebitda is not None else None},
         ]
-        implication = "Margin performance against plan cannot be judged until approved EBITDA and revenue plans are connected." if missing_inputs else comparison
+        implication = "The FY2028 margin target is approved. An H1 2026 EBITDA budget for the same scope is still needed for a current performance comparison." if missing_inputs else comparison
         decision_question = "What is the EBITDA bridge from revenue through direct and operating costs?"
     elif key == "operating_cost":
         account_count = len((scoped_accounts.get("operating_cost") or {}).get("accounts") or [])
@@ -255,7 +282,7 @@ def _executive_kpi_brief(
         if account_count:
             narrative = f"Operating expenditure across {account_count} expense accounts; depreciation, amortisation and interest excluded."
         driver_rows = contributor_rows("operating_cost")
-        implication = "Cost performance against plan cannot be judged until the approved operating-cost plan is connected." if missing_inputs else comparison
+        implication = "Current operating cost is available. The matching H1 operating-cost budget has not yet been connected." if missing_inputs else comparison
         decision_question = "Which operating-cost accounts create the largest spend concentration and merit review?"
     elif key == "cash_vs_floor":
         as_of = str(evidence_details.get("as_of") or "the latest reported date")
@@ -274,7 +301,7 @@ def _executive_kpi_brief(
             }
             for row in reported_accounts if isinstance(row, Mapping)
         ]
-        implication = "The cash-floor decision is unavailable until the board floor is supplied; one missing balance remains excluded." if missing_accounts else ("Cash cannot be assessed against the board floor until that floor is connected." if missing_inputs else comparison)
+        implication = "The Group cash floor is SAR 1.20B. The current cash position is partial and not yet aligned to full Group scope, so a floor comparison is withheld." if missing_inputs else comparison
         decision_question = "What cash is reported, what remains missing, and what floor is required for a board-safe comparison?"
 
     return {
@@ -291,6 +318,10 @@ def _executive_kpi_brief(
             "note": comparison_note,
             "available": not bool(missing_inputs),
         },
+        "strategic_reference": {
+            **strategic_reference,
+            "source": _STRATEGY_SOURCE_TITLE,
+        } if strategic_reference else None,
         "calculation": {
             "label": "How this figure is built",
             "formula": str(spec["formula"]),
@@ -309,7 +340,7 @@ def _executive_kpi_brief(
             "required_inputs": list(spec["inputs"]),
             "missing_inputs": list(missing_inputs),
             "evidence_summary": str(evidence.get("summary") or ""),
-            "computation_boundary": "Calculated only from the governed source extracts listed here.",
+            "computation_boundary": "No missing value has been estimated.",
         },
     }
 
@@ -357,20 +388,20 @@ def _unavailable_ceo_kpi(spec: Mapping[str, Any], *, reason: str) -> dict[str, A
         "value": "Not available",
         "pct": None,
         "status": "Not available",
-        "sub": "Cannot be calculated from the current processed dataset",
+        "sub": "Required finance information is not available for this reporting period",
         "detail": reason,
         "story": reason,
         "formula": spec["formula"],
         "inputs": list(spec["inputs"]),
         "missing_inputs": missing,
         "availability": "unavailable",
-        "comparison": "No comparison is shown because the required governed inputs are missing.",
+        "comparison": "No comparison is shown until the required finance information is available.",
         "chips": [],
         "movers": {"lifting": [], "dragging": []},
         "trend": {"actual": [], "plan": []},
-        "trend_status": "Historical governed periods are not available.",
+        "trend_status": "Comparable historical periods are not available.",
         "provenance": {
-            "source": "current processed dataset",
+            "source": "current reporting information",
             "complete": False,
             "reason": reason,
         },
@@ -384,7 +415,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
     actual_complete = finance_payload.get("actual_complete") if isinstance(finance_payload.get("actual_complete"), Mapping) else {}
     period = str(finance_payload.get("reporting_period_key") or "the selected period")
     provenance = {
-        "source": "deterministic finance calculation from uploaded source extracts",
+        "source": "current finance records",
         "complete": bool(finance_payload),
         "reporting_period_key": finance_payload.get("reporting_period_key"),
         "computation_boundary": finance_payload.get("computation_boundary"),
@@ -397,8 +428,8 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 _unavailable_ceo_kpi(
                     spec,
                     reason=(
-                        "This run has no deterministic finance calculation for this KPI. "
-                        "StrategyOS will not estimate it."
+                        "The finance information required for this figure is not available for the current reporting period. "
+                        "No value has been estimated."
                     ),
                 )
             )
@@ -417,7 +448,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                     reason=(
                         f"Cannot calculate {spec['label']} for {period}: missing "
                         + ", ".join(missing_keys)
-                        + " in the deterministic finance calculation."
+                        + " in the current finance records."
                     ),
                 )
             )
@@ -434,13 +465,17 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             variance_bps = (actual_margin - plan_margin) * 100 if plan_margin is not None else None
             metric = _percent_display(actual_margin)
             comparison = _basis_points_display(variance_bps)
-            missing_inputs = [] if plan_margin is not None else ["Approved EBITDA plan", "Approved revenue plan"]
+            missing_inputs = [] if plan_margin is not None else ["H1 EBITDA budget aligned to this scope", "H1 revenue budget aligned to this scope"]
         else:
             pct = (actual / comparator) * 100 if comparator not in {None, 0} else None
             metric = _format_sar(actual)
             if comparator is None:
                 comparison = "Board floor comparison unavailable" if spec["key"] == "cash_vs_floor" else "Plan comparison unavailable"
-                missing_inputs = ["Approved plan" if spec["key"] != "cash_vs_floor" else "Approved board cash floor"]
+                missing_inputs = [
+                    "H1 budget aligned to this reporting scope"
+                    if spec["key"] != "cash_vs_floor"
+                    else "Complete Group cash position aligned to the approved floor"
+                ]
             else:
                 delta = actual - comparator
                 if spec["key"] == "cash_vs_floor":
@@ -454,12 +489,12 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
         actual_missing = [] if actual_is_complete else ["Complete latest cash-position balances"]
         missing_inputs = list(dict.fromkeys([*missing_inputs, *actual_missing]))
         availability = "verified" if not missing_inputs else "partial"
-        status = "Verified" if availability == "verified" else "Partial — comparator or source coverage unavailable"
+        status = "Verified" if availability == "verified" else "Current actual available · comparison pending"
         sub = comparison
         detail = (
-            f"Calculated for {period} from the deterministic finance source extracts. {comparison}."
+            f"Calculated for {period}. {comparison}."
             if availability == "verified"
-            else f"Calculated for {period}; {comparison.lower()}. No comparator has been inferred."
+            else f"Calculated for {period}. A comparison is withheld until period and scope are aligned."
         )
         evidence_summary = str(kpi_evidence.get("summary") or "")
         if evidence_summary:
@@ -492,7 +527,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "chips": [],
                 "movers": {"lifting": [], "dragging": []},
                 "trend": _safe_trend(finance_payload, str(spec["key"])),
-                "trend_status": "Historical governed periods are not available.",
+                "trend_status": "Comparable historical periods are not available.",
                 "provenance": card_provenance,
                 "grounding": {
                     "status": "grounded" if actual_is_complete else "needs_evidence",
@@ -537,13 +572,13 @@ def _hero(
     )
     if read_model.get("data_status") != "ready":
         label = "Board readiness is unavailable"
-        body = read_model.get("status_reason") or "No current governed database run is available."
+        body = read_model.get("status_reason") or "Current reporting information is not available."
         status = "missing"
     elif finance_kpis_unavailable:
         label = "CEO finance baseline is not yet connected"
         body = (
             "The board packet is available, but Revenue, EBITDA margin, Operating cost and Cash vs floor "
-            "are deliberately withheld because this run has no deterministic source calculation with their required inputs."
+            "are withheld because the required finance information is not available for this reporting period."
         )
         status = "finance_data_required"
     elif challenged:
@@ -552,11 +587,11 @@ def _hero(
         status = "needs_reviewer_closure"
     elif approval_status == "approved" and reports:
         label = "Board pack is approved for release"
-        body = f"Approval is recorded and {reports} report surface(s) are available from the governed run."
+        body = f"Approval is recorded and {reports} report surface(s) are ready."
         status = "release_ready"
     elif approval_status in {"pending", "awaiting_review", ""}:
         label = "Reviewer decision is still open"
-        body = "The packet has governed finance evidence, but release still depends on human review."
+        body = "The finance evidence is ready, but release still depends on human review."
         status = "review_gate"
     else:
         label = "Board pack needs follow-up"
@@ -581,7 +616,7 @@ def _hero(
             if read_model.get("source") == "database"
             else "Governed artifact board readiness"
         ),
-        "secondary_fact": f"As of {read_model.get('as_of')}" if read_model.get("as_of") else "Current governed data",
+        "secondary_fact": f"As of {read_model.get('as_of')}" if read_model.get("as_of") else "Current reporting period",
         "readiness_operands": readiness_operands,
     }
 

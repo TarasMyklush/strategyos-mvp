@@ -979,9 +979,8 @@ def test_knowledge_graph_subtitle_grammar():
     """#10: Knowledge graph subtitle must disclose its governed KPI boundary."""
     js = _static_executive_js()
 
-    assert "come from the same governed finance contract as the CEO dashboard" in js, (
-        "Knowledge graph subtitle must explain that it uses the CEO KPI contract"
-    )
+    assert "Choose a headline figure to see what makes it up" in js
+    assert "governed finance contract" not in js
     # Old wording must NOT appear
     assert "proof the system" not in js, (
         "Knowledge graph subtitle must NOT contain 'proof the system' (old wording)"

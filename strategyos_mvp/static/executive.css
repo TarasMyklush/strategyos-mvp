@@ -2045,6 +2045,52 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   line-height: 1.5;
 }
 
+.kpi-strategic-reference {
+  display: grid;
+  gap: 7px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+.kpi-strategic-reference strong {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 500;
+}
+
+.kpi-strategic-reference p,
+.kpi-strategic-reference small {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.kpi-question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kpi-question-actions button {
+  padding: 10px 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kpi-question-actions button:hover,
+.kpi-question-actions button:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
 .board-release-hold {
   display: grid;
   justify-items: start;

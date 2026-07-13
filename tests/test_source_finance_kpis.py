@@ -55,9 +55,18 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
         ("Cash vs floor", "SAR 42.3M"),
     ]
     assert cards[0]["availability"] == "partial"
-    assert cards[0]["missing_inputs"] == ["Approved plan"]
-    assert cards[1]["missing_inputs"] == ["Approved EBITDA plan", "Approved revenue plan"]
-    assert cards[3]["missing_inputs"] == ["Approved board cash floor", "Complete latest cash-position balances"]
+    assert cards[0]["missing_inputs"] == ["H1 budget aligned to this reporting scope"]
+    assert cards[1]["missing_inputs"] == [
+        "H1 EBITDA budget aligned to this scope",
+        "H1 revenue budget aligned to this scope",
+    ]
+    assert cards[3]["missing_inputs"] == [
+        "Complete Group cash position aligned to the approved floor",
+        "Complete latest cash-position balances",
+    ]
+    assert cards[0]["executive_brief"]["strategic_reference"]["value"] == "SAR 8.35B"
+    assert cards[1]["executive_brief"]["strategic_reference"]["value"] == "23.0%"
+    assert cards[3]["executive_brief"]["strategic_reference"]["value"] == "SAR 1.20B"
     assert cards[0]["source_files"] == [
         "02_ERP_Extracts/GL_Extract_H1_2026.csv",
         "03_Master_Data/Chart_of_Accounts.xlsx",
@@ -72,4 +81,4 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
     ]
     assert cards[2]["executive_brief"]["readout"].startswith("Operating expenditure across 126")
     assert cards[2]["executive_brief"]["drivers"][0]["label"] == "Salaries & Wages"
-    assert cards[2]["executive_brief"]["decision_context"].startswith("Cost performance against plan")
+    assert cards[2]["executive_brief"]["decision_context"].startswith("Current operating cost is available")

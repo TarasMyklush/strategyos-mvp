@@ -794,6 +794,7 @@ def _ceo_kpi_knowledge_graph(
         brief = card.get("executive_brief") if isinstance(card.get("executive_brief"), dict) else {}
         readout = str(brief.get("readout") or card.get("detail") or "")
         comparison = brief.get("comparison") if isinstance(brief.get("comparison"), dict) else {}
+        strategic_reference = brief.get("strategic_reference") if isinstance(brief.get("strategic_reference"), dict) else {}
         coverage = brief.get("coverage") if isinstance(brief.get("coverage"), dict) else {}
         audit = brief.get("audit") if isinstance(brief.get("audit"), dict) else {}
         kpi_id = f"kpi:{key}"
@@ -851,8 +852,8 @@ def _ceo_kpi_knowledge_graph(
                     "label": step_label,
                     "short_label": f"{step_label} · {step_value}",
                     "category": "business_driver",
-                    "detail": f"{step_label}: {step_value}. This is a governed component of {label}.",
-                    "hermes_prompt": f"Explain how {step_label} contributes to {label} and cite the governed calculation basis.",
+                    "detail": f"{step_label}: {step_value}. This contributes to {label}.",
+                    "hermes_prompt": f"Explain how {step_label} contributes to {label} in business terms.",
                     "properties": {"value": step_value, "kpi_key": key},
                     "r": 9,
                 }
@@ -875,7 +876,7 @@ def _ceo_kpi_knowledge_graph(
                     "short_label": f"{driver_label} · {driver_value}",
                     "category": "business_driver",
                     "detail": f"{driver_label}: {driver_value}. Shown in the CEO explanation of {label}.",
-                    "hermes_prompt": f"Explain the contribution of {driver_label} to {label} using the current governed data.",
+                    "hermes_prompt": f"Explain the contribution of {driver_label} to {label} using the current reporting information.",
                     "properties": {
                         "value": driver_value,
                         "share_pct": driver.get("share_pct"),
@@ -906,16 +907,35 @@ def _ceo_kpi_knowledge_graph(
             add_edge(comparator_id, kpi_id, "COMPARED_WITH")
             focus.append(comparator_id)
 
+        if strategic_reference:
+            reference_id = f"strategic-reference:{key}"
+            reference_label = str(strategic_reference.get("label") or "Approved strategic reference")
+            reference_value = str(strategic_reference.get("value") or "Available")
+            add_node(
+                {
+                    "id": reference_id,
+                    "label": reference_label,
+                    "short_label": f"{reference_label} · {reference_value}",
+                    "category": "comparator",
+                    "detail": f"{reference_value}. {strategic_reference.get('note') or ''}",
+                    "hermes_prompt": f"Explain how {label} relates to {reference_label} and why a direct comparison may be withheld.",
+                    "properties": {"value": reference_value, "source": strategic_reference.get("source")},
+                    "r": 10,
+                }
+            )
+            add_edge(reference_id, kpi_id, "STRATEGIC_REFERENCE")
+            focus.append(reference_id)
+
         missing_inputs = list(card.get("missing_inputs") or audit.get("missing_inputs") or [])
         for index, missing in enumerate(missing_inputs[:6], start=1):
-            missing_label = str(missing or "Required governed input")
+            missing_label = str(missing or "Required information")
             gap_id = f"gap:{key}:{index}"
             add_node(
                 {
                     "id": gap_id,
                     "label": missing_label,
                     "category": "evidence_gap",
-                    "detail": f"{missing_label} is not present, so StrategyOS does not infer the missing comparison or value.",
+                    "detail": f"{missing_label} is still needed before this comparison is decision-ready.",
                     "hermes_prompt": f"Why is {missing_label} required for {label}, and what remains valid without it?",
                     "properties": {"kpi_key": key, "missing": True},
                     "r": 8,
@@ -927,15 +947,15 @@ def _ceo_kpi_knowledge_graph(
         source_titles = list(audit.get("source_titles") or [])
         source_files = list(audit.get("source_files") or card.get("source_files") or [])
         for index, source_file in enumerate(source_files[:6], start=1):
-            source_title = str(source_titles[index - 1] if index <= len(source_titles) else "Governed source extract")
+            source_title = str(source_titles[index - 1] if index <= len(source_titles) else "Finance source")
             source_id = f"source:{key}:{index}"
             add_node(
                 {
                     "id": source_id,
                     "label": source_title,
                     "category": "source",
-                    "detail": f"Governed source used to calculate {label}. Audit reference: {source_file}.",
-                    "hermes_prompt": f"Explain which values from {source_title} support {label} and how they are bounded.",
+                    "detail": f"{source_title} supports the current {label} figure.",
+                    "hermes_prompt": f"Explain which business values from {source_title} support {label}.",
                     "properties": {"source_file": source_file, "kpi_key": key},
                     "r": 8,
                 }
@@ -10407,7 +10427,7 @@ def _ceo_kpi_inline_result(
     kpi_key: str,
     public_safe: bool,
 ) -> dict[str, Any]:
-    """Answer the inline CEO KPI conversation from server-resolved truth only.
+    """Answer a CEO KPI conversation from server-resolved truth only.
 
     The browser supplies a KPI key, never an authoritative KPI value.  Rebuild
     the presentation contract from the resolved run so a stale or manipulated
@@ -10430,8 +10450,8 @@ def _ceo_kpi_inline_result(
     if not isinstance(card, Mapping):
         return {
             "matched": True,
-            "answer": "That KPI is not part of the governed CEO KPI set. Choose Revenue, EBITDA margin, Operating cost, or Cash vs floor.",
-            "basis": "The inline CEO KPI route accepts only the four governed KPI keys.",
+            "answer": "That figure is not part of the four CEO headline measures. Choose Revenue, EBITDA margin, Operating cost, or Cash vs floor.",
+            "basis": "Available CEO headline measures",
             "citations": [],
             "suggestions": ["Explain Revenue", "Explain EBITDA margin", "Explain Operating cost", "Explain Cash vs floor"],
             "answered_by": "governed_kpi",
@@ -10442,43 +10462,37 @@ def _ceo_kpi_inline_result(
     label = str(card.get("label") or "this KPI")
     availability = str(card.get("availability") or "unavailable")
     missing = [str(item) for item in list(card.get("missing_inputs") or []) if str(item)]
+    brief = card.get("executive_brief") if isinstance(card.get("executive_brief"), Mapping) else {}
+    strategic_reference = brief.get("strategic_reference") if isinstance(brief.get("strategic_reference"), Mapping) else None
     if availability == "unavailable":
         answer = (
-            f"{label} cannot be calculated from the current processed dataset. "
-            f"{card.get('detail') or 'The required governed finance inputs are unavailable.'} "
-            "I will not estimate or substitute a value."
+            f"{label} is not available for the current reporting period because the required finance information is incomplete. "
+            "No value has been estimated."
         )
         grounding = "needs_evidence"
     else:
         answer = (
             f"{label} is {card.get('metric') or 'available'} for the selected period. "
-            f"{card.get('comparison') or card.get('sub') or ''} "
-            f"Formula: {card.get('formula') or 'governed KPI calculation.'}"
+            f"{brief.get('readout') or card.get('detail') or ''} "
         )
-        if card.get("evidence_summary"):
-            answer += f" Calculation evidence: {card['evidence_summary']}"
-        source_files = [str(item) for item in list(card.get("source_files") or []) if str(item)]
-        if source_files:
-            answer += " Source files: " + ", ".join(source_files) + "."
+        if strategic_reference:
+            answer += (
+                f"The {str(strategic_reference.get('label') or 'approved strategic reference').lower()} is "
+                f"{strategic_reference.get('value') or 'available'}. {strategic_reference.get('note') or ''} "
+            )
         if missing:
-            if len(missing) == 1:
-                missing_text = missing[0] + " is unavailable"
-            elif len(missing) == 2:
-                missing_text = missing[0] + " and " + missing[1] + " are unavailable"
-            else:
-                missing_text = ", ".join(missing[:-1]) + ", and " + missing[-1] + " are unavailable"
-            answer += " The calculation is partial because " + missing_text + "; no comparator was inferred."
+            answer += f"A direct comparison is withheld because {' and '.join(missing)} is still needed."
             grounding = "needs_evidence"
         else:
             grounding = "grounded"
     return {
         "matched": True,
         "answer": answer,
-        "basis": "Server-resolved deterministic CEO KPI contract; the browser provided only the KPI key.",
+        "basis": "Current CEO finance records and approved strategic references",
         "citations": [],
         "suggestions": [
-            f"What data is required to calculate {label}?",
-            f"Show the formula for {label}",
+            f"What needs executive attention for {label}?",
+            f"What is driving {label}?",
         ],
         "answered_by": "governed_kpi",
         "grounding_status": grounding,

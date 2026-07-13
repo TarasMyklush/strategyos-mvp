@@ -953,7 +953,8 @@ def test_kg_render_includes_modern_elements():
     assert "kg-density-toggle" in js, "Density toggle control must exist"
     assert "kg-zoom-in" in js and "kg-zoom-out" in js, "Zoom controls must exist"
     assert "kg-focus-mode" in js, "Focus mode control must exist"
-    assert "No illustrative business data" in js, "Graph must disclose that it adds no illustrative business claims"
+    assert "Select any item for its business meaning" in js
+    assert "No illustrative business data" not in js
 
 
 def test_kg_inspector_has_ask_hermes_cta():
@@ -991,9 +992,10 @@ def test_kg_universe_does_not_generate_decorative_density_nodes():
     assert "targetTotalNodes = Math.max(110" not in js
     assert "satelliteKind" not in js
     assert "relayCount" not in js
-    assert "come from the same governed finance contract as the CEO dashboard" in js
-    assert "No illustrative business data" in js
-    assert "Governed relationships:" in js
+    assert "Choose a headline figure to see what makes it up" in js
+    assert "No illustrative business data" not in js
+    assert "Why it matters" in js
+    assert "Ask Hermes for a decision-focused explanation" in js
 
 
 # ── YouTube Leaders' Corner embed safety ──
@@ -1301,7 +1303,9 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert 'function renderInlineKpiDrill(driver, drillCard)' in js
     assert 'entrypoint: "ceo_kpi_inline"' in js
     assert "kpi_key:" in js
-    assert "Calculation and source trail" in js
+    assert "How this figure is calculated" in js
+    assert "data-kpi-question" in js
+    assert "data-kpi-inline-composer" not in js
     assert "executiveKpiBrief(driver)" in js
     assert 'id="driver-drill"' in html
     assert html.index('id="driver-row"') < html.index('id="driver-drill"')
@@ -1321,18 +1325,17 @@ def test_ceo_information_architecture_separates_board_and_operational_surfaces()
     assert "What drives the four headline figures" in js
 
 
-def test_inline_kpi_chat_does_not_open_the_detached_assistant_drawer():
+def test_kpi_questions_use_the_shared_assistant_drawer():
     js = _static_executive_js()
     drill_start = js.index("function renderInlineKpiDrill(driver, drillCard)")
     drill_end = js.index("function renderDriverDrillFidelity()")
     drill_body = js[drill_start:drill_end]
 
-    assert "buildAssistantReply(question, null" in drill_body
-    assert "openAssistantDrawer" not in drill_body
-    assert "Hermes begins with this figure" in drill_body
-    assert "Start with this KPI" in drill_body
-    assert "kpi-inline-retry" in drill_body
-    assert "Hermes could not reach the shared assistant service" in drill_body
+    assert "askAssistant(" in drill_body
+    assert "buildAssistantReply(question, null" not in drill_body
+    assert "shared conversation" in drill_body
+    assert "What needs my attention?" in drill_body
+    assert "kpi-inline-retry" not in drill_body
 
 
 def test_ceo_driver_copy_polishes_internal_governed_artifact_keys():
@@ -1369,7 +1372,7 @@ def test_governed_measure_hint_replaces_percent_copy_when_driver_pct_absent():
     end = js.index("function renderAssistantNetwork()")
     body = js[start:end]
     assert "hasPercentDrivers" in body
-    assert "All figures: current governed measures" in body
+    assert "All figures: current measures" in body
     assert "All figures: % of plan" in body
 
 
@@ -4056,8 +4059,8 @@ console.log(JSON.stringify({{
     assert "Dormant supplier credit" in result["answerText"]
     assert "Duplicate supplier identity" in result["answerText"]
     assert "Missed early-payment discount" in result["answerText"]
-    assert "Evidence basis: Calculated from current governed findings" in result["answerMeta"]
-    assert "Calculation: 6 governed checks reconciled" in result["answerMeta"]
+    assert "Evidence basis: Calculated from current reviewed findings" in result["answerMeta"]
+    assert "Calculation: 6 checks reconciled" in result["answerMeta"]
     assert "Evidence confidence: Partial" in result["answerMeta"]
     for banned in (
         "auto_renewal_escalation",

@@ -175,7 +175,7 @@
 
   function governedMeasureLabel(value) {
     var raw = String(value || "").trim();
-    if (!raw) return "Current governed measure";
+    if (!raw) return "Current measure";
     var key = raw.toLowerCase();
     return GOVERNED_MEASURE_LABELS[key] || humanizeToken(raw);
   }
@@ -1096,7 +1096,7 @@
       hint: firstDefined(
         activity.line,
         runningCount ? runningCount + " active module" + (runningCount === 1 ? "" : "s") + " · " + discoverableCount + " discoverable · " + approvalCount + " approval gate" + (approvalCount === 1 ? "" : "s") : "",
-        "Awaiting governed assistant module telemetry."
+        "Assistant status is not available yet."
       ),
       running_count: runningCount,
       discoverable_count: discoverableCount,
@@ -1155,7 +1155,7 @@
         status: status,
         topic: firstDefined(item && item.summary, item && item.doing, "Governed module activity"),
         messages: [
-          { from: "StrategyOS", text: firstDefined(item && item.summary, item && item.doing, "Module is active in the governed runtime.") },
+          { from: "StrategyOS", text: firstDefined(item && item.summary, item && item.doing, "Assistant is active.") },
           { from: name, text: firstDefined(item && item.output_metric, statusLabel(status), "Current") }
         ]
       };
@@ -1170,7 +1170,7 @@
         status: firstDefined(item && item.status, "pending"),
         topic: firstDefined(item && item.next_action, "Approval gate"),
         messages: [
-          { from: "StrategyOS", text: "Approval gate is visible in the governed runtime." },
+          { from: "StrategyOS", text: "The approval gate is ready for review." },
           { from: label, text: firstDefined(item && item.next_action, item && item.status, "pending") }
         ]
       };
@@ -1626,11 +1626,11 @@
     if (driverHasPercent(driver)) {
       return String(firstDefined(driver.pct, '—')) + '% of plan';
     }
-    return firstDefined(driver && driver.metric, 'Current governed value');
+    return firstDefined(driver && driver.metric, 'Current value');
   }
 
   function driverSubLabel(driver) {
-    return governedMeasureLabel(firstDefined(driver && driver.sub, driver && driver.trend_hint, 'Current governed measure'));
+    return governedMeasureLabel(firstDefined(driver && driver.sub, driver && driver.trend_hint, 'Current measure'));
   }
 
   function unavailableDriverMarkup(driver) {
@@ -1655,7 +1655,7 @@
   function executiveEvidenceBasis(basis) {
     var raw = String(basis || "");
     if (/\bscenario parser\b/i.test(raw) || /\bparser\b/i.test(raw) || /\bfinance_leakage\b/i.test(raw) || /\brun findings\b/i.test(raw)) {
-      return "Calculated from current governed findings";
+      return "Calculated from current reviewed findings";
     }
     var text = scrubExecutiveTechnicalLanguage(cleanMetaText(basis));
     if (!text) return "";
@@ -1690,7 +1690,7 @@
     var executiveBasis = executiveEvidenceBasis(basis);
     var confidence = executiveEvidenceConfidence(riskLevel, citations.length);
     if (executiveBasis) parts.push("Evidence basis: " + executiveBasis);
-    if (calculations.length) parts.push("Calculation: " + calculations.length + " governed check" + (calculations.length === 1 ? "" : "s") + " reconciled");
+    if (calculations.length) parts.push("Calculation: " + calculations.length + " check" + (calculations.length === 1 ? "" : "s") + " reconciled");
     if (citations.length) parts.push("Evidence: " + citations.length + " source" + (citations.length === 1 ? "" : "s") + " checked");
     if (scenarioType && scenarioType !== "deterministic") parts.push("Scenario status: " + humanizeToken(scenarioType).toLowerCase());
     if (confidence) parts.push("Evidence confidence: " + confidence);
@@ -1834,14 +1834,9 @@
   }
 
   function summarizeAssistantFailure(message) {
-    var statusCode = firstDefined(message && message.statusCode, "");
-    var requestId = firstDefined(message && message.requestId, "");
-    var errorType = firstDefined(message && message.errorType, "transport_failure");
-    var parts = ["Temporary transport failure", firstDefined(message && message.endpoint, "/assistant/chat")];
-    if (statusCode) parts.push("status " + statusCode);
-    parts.push(humanizeToken(errorType));
-    if (requestId) parts.push("request " + requestId);
-    return parts.join(" · ");
+    return message && message.retryable === false
+      ? "Hermes is unavailable for this request."
+      : "Hermes is temporarily unavailable. Your question is preserved and can be retried.";
   }
 
   function buildRetryPreview(prompt) {
@@ -2057,7 +2052,7 @@
       return String(firstDefined(item && item.finding_id, '')) === targetId;
     });
     if (index < 0) {
-      showToast('That case is no longer available in the current governed run.');
+      showToast('That case is no longer available in the current review.');
       return;
     }
     state.selectedFindingId = targetId;
@@ -2756,10 +2751,10 @@
     var hasPercentDrivers = drivers.some(function (driver) { return driverHasPercent(driver); });
     if (state.activePersona === "ceo") {
       if (driverHeading) driverHeading.textContent = "The group index";
-      if (driverHint) driverHint.textContent = "Four governed CEO indicators. Select a KPI to see its contributors, decision implication, and evidence trail.";
+      if (driverHint) driverHint.textContent = "Four CEO indicators. Select a KPI to see its contributors, decision implication, and supporting sources.";
     } else {
       if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
-      if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current governed measures";
+      if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current measures";
     }
     if (lowerHeading) lowerHeading.textContent = "What matters now";
     var boardOnly = state.activePersona === "board";
@@ -3009,14 +3004,21 @@
       var cn = nodeMap[cid];
       return cn ? escapeHtml(cn.label) : "";
     }).filter(Boolean).slice(0, 10);
+    var relevanceByCategory = {
+      KPI: "This is one of the four headline measures in the CEO dashboard.",
+      business_driver: "This shows what contributes to the selected headline figure.",
+      comparator: "This is the approved reference used to assess performance when period and scope are aligned.",
+      evidence_gap: "This identifies what is still needed before the comparison is decision-ready.",
+      source: "This is a business source supporting the selected figure."
+    };
     panel.innerHTML =
       '<button type="button" class="kg-inspector__close" aria-label="Close inspector" id="kg-inspector-close">&times;</button>' +
       '<span class="kg-inspector__badge" style="background:' + escapeHtml(getCategoryColor(node)) + ';color:#08111f">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + '</span>' +
       '<h3 class="kg-inspector__title" id="kg-inspector-title">' + escapeHtml(firstDefined(node.label, "Node")) + '</h3>' +
-      '<p class="kg-inspector__meta">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Node")) + ' &middot; Connected to ' + connectedIds.length + ' persisted nodes</p>' +
+      '<p class="kg-inspector__meta">' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || "Item")) + ' &middot; ' + connectedIds.length + ' related item' + (connectedIds.length === 1 ? '' : 's') + '</p>' +
       '<p class="kg-inspector__detail">' + escapeHtml(firstDefined(node.detail, "No additional detail available.")) + '</p>' +
-      '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Why it is here</span><span class="kg-inspector__provenance-value">This item comes from the same governed finance calculation contract used by the four CEO dashboard KPIs. No illustrative business data is added.</span></div>' +
-      (connectedLabels.length ? '<div class="kg-inspector__connections"><span class="kg-inspector__connections-label">Connected to</span>' + connectedLabels.map(function (l) { return '<span class="kg-inspector__conn-chip">' + l + '</span>'; }).join('') + '</div>' : '') +
+      '<div class="kg-inspector__provenance"><span class="kg-inspector__provenance-label">Why it matters</span><span class="kg-inspector__provenance-value">' + escapeHtml(firstDefined(relevanceByCategory[node.category], "This provides context for the selected headline figure.")) + '</span></div>' +
+      (connectedLabels.length ? '<div class="kg-inspector__connections"><span class="kg-inspector__connections-label">Related figures and drivers</span>' + connectedLabels.map(function (l) { return '<span class="kg-inspector__conn-chip">' + l + '</span>'; }).join('') + '</div>' : '') +
       '<button type="button" class="kg-inspector__ask" id="kg-inspector-ask">Ask Hermes about this &rarr;</button>';
     panel.hidden = false;
     panel.setAttribute("aria-hidden", "false");
@@ -3129,15 +3131,15 @@
     var presentCategories = Array.from(new Set(nodes.map(function (node) { return node.category; }).filter(Boolean)));
 
     card.innerHTML =
-      '<div class="detail-head detail-head--kg"><div><p class="detail-eyebrow">CEO KPI map</p><h3 class="detail-title">What drives the four headline figures</h3><p class="section-note">The four KPI anchors, calculation components, business drivers, comparators, missing inputs and source extracts come from the same governed finance contract as the CEO dashboard.</p></div><span class="pill-inline ok">Same KPI data</span></div>'
+      '<div class="detail-head detail-head--kg"><div><p class="detail-eyebrow">CEO performance map</p><h3 class="detail-title">What drives the four headline figures</h3><p class="section-note">Choose a headline figure to see what makes it up, the approved reference, and what is still needed for a reliable comparison.</p></div><span class="pill-inline ok">Current reporting period</span></div>'
       + '<div class="kg-questions" role="tablist" aria-label="Question lenses">' + safeArray(graph.questions).map(function (question, index) {
         var active = focusQuestion && focusQuestion.id === question.id;
         var focusCount = safeArray(question.focus).length;
         return '<button type="button" class="kg-question' + (active ? ' is-active' : '') + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" data-kg-question="' + index + '"><span class="kg-question__dot" aria-hidden="true"></span>' + escapeHtml(firstDefined(question.label, 'Question')) + '<span class="kg-question__count">' + focusCount + '</span></button>';
       }).join('') + '</div>'
       + '<div class="kg-stage-shell' + (state.kgFocusMode ? ' is-focus-mode' : '') + '">'
-      + '<div class="kg-stage__hud" aria-hidden="false"><div class="kg-hud-chip"><strong>' + nodes.length + '</strong><span>KPI evidence items</span></div><div class="kg-hud-chip"><strong>' + edges.length + '</strong><span>calculation links</span></div><div class="kg-hud-chip"><strong>' + activeLens + '</strong><span>selected KPI</span></div></div>'
-      + '<div class="kg-controls" role="toolbar" aria-label="Graph universe controls">'
+      + '<div class="kg-stage__hud" aria-hidden="false"><div class="kg-hud-chip"><strong>' + nodes.length + '</strong><span>figures and drivers</span></div><div class="kg-hud-chip"><strong>' + activeLens + '</strong><span>current focus</span></div></div>'
+      + '<div class="kg-controls" role="toolbar" aria-label="Performance map controls">'
       + '<button type="button" class="kg-control-btn' + (densityMode === 'dense' ? ' is-active' : '') + '" id="kg-density-toggle" aria-pressed="' + (densityMode === 'dense' ? 'true' : 'false') + '">' + (densityMode === 'dense' ? 'All KPIs' : 'Selected KPI') + '</button>'
       + '<button type="button" class="kg-control-btn" id="kg-zoom-out" aria-label="Zoom out">−</button>'
       + '<button type="button" class="kg-control-btn" id="kg-zoom-in" aria-label="Zoom in">+</button>'
@@ -3145,7 +3147,7 @@
       + '<button type="button" class="kg-control-btn" id="kg-reset" aria-label="Reset graph view">Reset</button>'
       + '<button type="button" class="kg-control-btn' + (state.kgFocusMode ? ' is-active' : '') + '" id="kg-focus-mode" aria-pressed="' + (state.kgFocusMode ? 'true' : 'false') + '">' + (state.kgFocusMode ? 'Exit focus' : 'Focus mode') + '</button>'
       + '</div>'
-      + '<div class="kg-stage" tabindex="0" role="application" aria-label="Board intelligence graph universe — interactive knowledge map. Use mouse or touch to pan, wheel to zoom, and Enter to open node details.">'
+      + '<div class="kg-stage" tabindex="0" role="application" aria-label="Interactive CEO performance map. Use mouse or touch to move, wheel to zoom, and Enter to open details.">'
       + '<div class="kg-canvas" style="transform:' + escapeHtml(kgCanvasTransform()) + '">'
       + '<svg viewBox="0 0 100 100" class="kg-svg" aria-hidden="true">'
       + '<defs><radialGradient id="kg-core-glow" cx="50%" cy="46%" r="52%"><stop offset="0%" stop-color="rgba(111,140,255,0.20)"></stop><stop offset="100%" stop-color="rgba(8,13,24,0)"></stop></radialGradient></defs>'
@@ -3184,7 +3186,7 @@
       + '<div class="kg-legend" aria-label="Node category legend">' + presentCategories.map(function (cat) {
         return '<span class="kg-legend__item"><span class="kg-legend__swatch" style="background:' + escapeHtml(KG_CATEGORY_COLORS[cat]) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[cat], cat)) + '</span>';
       }).join('') + '</div>'
-      + '<div class="kg-stage__foot"><span class="kg-foot-chip">KPI evidence items: ' + Number(graph.raw_node_count || 0) + '</span><span class="kg-foot-chip">Governed relationships: ' + edges.length + '</span><span class="kg-foot-chip">No illustrative business data</span></div>'
+      + '<div class="kg-stage__foot"><span class="kg-foot-chip">Select any item for its business meaning</span><span class="kg-foot-chip">Ask Hermes for a decision-focused explanation</span></div>'
       + '</div></div>';
 
     /* ── Wire question lens buttons ── */
@@ -3513,16 +3515,16 @@
     return {
       period_label: "Current actual",
       metric: firstDefined(driver && driver.metric, driver && driver.value, "—"),
-      readout: firstDefined(driver && driver.detail, "No governed calculation is available."),
+      readout: firstDefined(driver && driver.detail, "No calculation is available."),
       comparison: {
-        label: isCash ? "Board cash floor" : "Approved plan",
-        value: missing.length ? "Not supplied" : firstDefined(driver && driver.comparison, "Available"),
-        note: missing.length ? "No approved comparator was supplied with this data pack." : "Compared with the approved comparator for this period.",
+        label: "Current-period comparison",
+        value: missing.length ? "Not yet aligned" : firstDefined(driver && driver.comparison, "Available"),
+        note: missing.length ? "A comparator for the same period and scope has not yet been connected." : "Compared with the approved comparator for this period.",
         available: !missing.length
       },
       calculation: {
         label: "How this figure is built",
-        formula: firstDefined(driver && driver.formula, "No governed formula is available."),
+        formula: firstDefined(driver && driver.formula, "No calculation method is available."),
         steps: [{ label: firstDefined(driver && driver.label, "KPI actual"), value: firstDefined(driver && driver.metric, driver && driver.value, "—") }]
       },
       coverage: {
@@ -3532,7 +3534,7 @@
       },
       audit: {
         source_titles: [], source_files: safeArray(driver && driver.source_files), required_inputs: safeArray(driver && driver.inputs), missing_inputs: missing,
-        evidence_summary: firstDefined(driver && driver.evidence_summary, ""), computation_boundary: "Calculated only from governed source extracts."
+        evidence_summary: firstDefined(driver && driver.evidence_summary, ""), computation_boundary: "No missing value has been estimated."
       }
     };
   }
@@ -3543,14 +3545,13 @@
     var key = String(firstDefined(driver.driver_key, driver.key, ""));
     var brief = executiveKpiBrief(driver);
     var comparison = brief.comparison || {};
+    var strategicReference = brief.strategic_reference || null;
     var calculation = brief.calculation || {};
     var coverage = brief.coverage || {};
     var audit = brief.audit || {};
     var steps = safeArray(calculation.steps);
     var drivers = safeArray(brief.drivers);
     var auditSources = safeArray(audit.source_titles);
-    var rawSources = safeArray(audit.source_files);
-    var inputId = "kpi-inline-input-" + key.replace(/[^a-z0-9_-]/gi, "");
     var calculationMarkup = steps.length
       ? '<div class="kpi-brief-steps">' + steps.map(function (step) {
         return '<div class="kpi-brief-step"><span>' + escapeHtml(firstDefined(step.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(step.value, "—")) + '</strong></div>';
@@ -3566,65 +3567,31 @@
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
       '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><h3 class="detail-title">' + escapeHtml(label) + '</h3></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
-      '<div class="kpi-brief-summary"><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><p>' + escapeHtml(firstDefined(brief.readout, "No governed explanation is available.")) + '</p></div>',
+      '<div class="kpi-brief-summary"><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><p>' + escapeHtml(firstDefined(brief.readout, "No explanation is available.")) + '</p></div>',
       driverMarkup,
+      strategicReference ? '<section class="kpi-strategic-reference"><span class="kpi-brief-label">' + escapeHtml(firstDefined(strategicReference.label, "Approved strategic reference")) + '</span><strong>' + escapeHtml(firstDefined(strategicReference.value, "—")) + '</strong><p>' + escapeHtml(firstDefined(strategicReference.note, "")) + '</p><small>' + escapeHtml(firstDefined(strategicReference.source, "")) + '</small></section>' : '',
       '<section class="kpi-decision-context"><span class="kpi-brief-label">Decision context</span><strong>' + escapeHtml(firstDefined(brief.decision_context, comparison.note, "No decision implication is available.")) + '</strong></section>',
-      '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">KPI conversation</span><strong>Ask Hermes about ' + escapeHtml(label) + '</strong><p>Hermes begins with this figure, its calculation boundary and the missing comparison context.</p></div><button type="button" class="kpi-chat-start" data-kpi-chat-start="true">Start with this KPI</button></div><form class="kpi-inline-composer" data-kpi-inline-composer="true" hidden><label class="sr-only" for="' + escapeHtml(inputId) + '">Ask Hermes about ' + escapeHtml(label) + '</label><input id="' + escapeHtml(inputId) + '" type="text" placeholder="Ask a follow-up about ' + escapeHtml(label.toLowerCase()) + '…" autocomplete="off" /><button type="submit">Send</button></form><div class="kpi-inline-answer" aria-live="polite"></div></section>',
-      '<details class="kpi-brief-audit"><summary>Calculation and source trail</summary><div class="kpi-brief-audit__body"><div><span>Formula</span><strong>' + escapeHtml(firstDefined(calculation.formula, "No governed formula is available.")) + '</strong></div>' + calculationMarkup + '<div><span>Source coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div><p>' + escapeHtml(firstDefined(audit.computation_boundary, "Calculated only from governed source extracts.")) + '</p>' + (auditSources.length ? '<div><span>Sources used</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Still needed for comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + (firstDefined(audit.evidence_summary, "") ? '<div><span>Calculation evidence</span><strong>' + escapeHtml(audit.evidence_summary) + '</strong></div>' : "") + (rawSources.length ? '<div class="kpi-brief-audit__files"><span>Source files</span><strong>' + escapeHtml(rawSources.join(" · ")) + '</strong></div>' : "") + '</div></details>',
+      '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask Hermes about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div></section>',
+      '<details class="kpi-brief-audit"><summary>How this figure is calculated</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
-
-    var composer = drillCard.querySelector("[data-kpi-inline-composer]");
-    var input = drillCard.querySelector("#" + inputId);
-    var answer = drillCard.querySelector(".kpi-inline-answer");
-    var startButton = drillCard.querySelector("[data-kpi-chat-start]");
-    if (!composer || !input || !answer) return;
-    var askHermes = async function (question, focusInput) {
-      var button = composer.querySelector("button");
-      input.disabled = true;
-      if (button) button.disabled = true;
-      if (startButton) startButton.disabled = true;
-      composer.hidden = false;
-      answer.className = "kpi-inline-answer is-loading";
-      answer.textContent = "Hermes is preparing the KPI context…";
-      var result = await buildAssistantReply(question, null, {
-        entrypoint: "ceo_kpi_inline",
-        source: "executive_surface",
-        kpi_key: key,
-        kpi_label: label,
-        kpi_availability: availability,
-        active_view: "home"
+    safeArray(drillCard.querySelectorAll("[data-kpi-question]")).forEach(function (button) {
+      button.addEventListener("click", function () {
+        var questionType = button.getAttribute("data-kpi-question");
+        var prompts = {
+          decision: firstDefined(brief.decision_question, "What needs executive attention for " + label + "?"),
+          drivers: "What is driving the current " + label + " result, and where is concentration highest?",
+          comparison: "Explain how " + label + " relates to the approved plan, and why any direct comparison is currently withheld."
+        };
+        askAssistant(prompts[questionType] || prompts.decision, button, {
+          entrypoint: "ceo_kpi_inline",
+          source: "executive_surface",
+          kpi_key: key,
+          kpi_label: label,
+          kpi_availability: availability,
+          active_view: "home"
+        });
       });
-      var replyText = String(result && result.answer || "").trim();
-      var replyOk = Boolean(result && result.ok && replyText);
-      if (!replyText) {
-        replyText = result && result.ok
-          ? "Hermes returned no usable answer for this KPI. Please try again."
-          : "Hermes could not reach the shared assistant service. Please retry once it is available.";
-      }
-      answer.className = "kpi-inline-answer" + (replyOk ? "" : " is-error");
-      answer.textContent = replyText;
-      if (!replyOk && (!result || result.retryable !== false)) {
-        var retryButton = document.createElement("button");
-        retryButton.type = "button";
-        retryButton.className = "kpi-inline-retry";
-        retryButton.textContent = "Retry";
-        retryButton.addEventListener("click", function () { askHermes(question, true); });
-        answer.appendChild(retryButton);
-      }
-      input.disabled = false;
-      if (button) button.disabled = false;
-      if (startButton) startButton.disabled = false;
-      if (focusInput) input.focus();
-    };
-    if (startButton) startButton.addEventListener("click", function () {
-      askHermes(firstDefined(brief.decision_question, "Give me the executive readout for " + label + ": explain the current actual, its drivers, and the decision implication."), true);
-    });
-    composer.addEventListener("submit", function (event) {
-      event.preventDefault();
-      var question = String(input.value || "").trim() || ("Explain the calculation, current data coverage, and decision context for " + label + ".");
-      input.value = "";
-      askHermes(question, true);
     });
   }
 
@@ -3736,7 +3703,7 @@
         '<div class="decision-question-grid">' + governedPrompts.map(function (prompt, index) {
           var labels = [currentLabel + ' drivers', 'Board release gate', 'Value at stake'];
           var kpiAttribute = index === 0 ? ' data-kpi-key="' + escapeHtml(String(firstDefined(driver.driver_key, driver.key, ""))) + '"' : '';
-          return '<button class="decision-question-card" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"' + kpiAttribute + '><span>' + escapeHtml(labels[index]) + '</span><strong>' + escapeHtml(prompt) + '</strong><small>Ask Hermes with governed context →</small></button>';
+          return '<button class="decision-question-card" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"' + kpiAttribute + '><span>' + escapeHtml(labels[index]) + '</span><strong>' + escapeHtml(prompt) + '</strong><small>Ask Hermes with this context →</small></button>';
         }).join('') + '</div>'
       ].join('');
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
