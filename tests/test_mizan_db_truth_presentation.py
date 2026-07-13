@@ -216,7 +216,10 @@ def test_ceo_kpi_contract_uses_only_authoritative_deterministic_finance_inputs()
     assert cards[2]["pct"] == 105.0
     assert cards[3]["comparison"] == "SAR 100K above floor"
     assert all(card["availability"] == "verified" for card in cards)
-    assert all(card["trend"] == {"actual": [], "plan": []} for card in cards)
+    assert all(
+        card["trend"] == {"actual": [], "plan": [], "labels": [], "has_plan_series": False}
+        for card in cards
+    )
     assert cards[1]["executive_brief"]["calculation"]["steps"][1] == {
         "label": "Less cost of goods sold",
         "value": "Not supplied",
@@ -392,7 +395,7 @@ def test_executive_js_live_database_mode_does_not_fallback_to_synthetic_rails():
     assert "liveGovernedMode\n      ? safeArray(developmentsSection.items)" in js
     assert "liveGovernedMode\n      ? safeArray(weekSection.items)" in js
     assert "developmentsPanel.hidden = liveGovernedMode && !developments.length" in js
-    assert "weekPanel.hidden = liveGovernedMode && !weekAhead.length" in js
+    assert "No governed calendar has been supplied for this run" in js
     assert "findingsSection.case_index" in js
     assert "state.selectedFindingId = targetId" in js
     assert 'diagnostics.source === "governed_artifacts" ? "RUN"' in js

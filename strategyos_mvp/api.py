@@ -16,7 +16,7 @@ from urllib.parse import quote, urlparse
 from uuid import UUID, uuid4
 
 try:
-    from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+    from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
     from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
@@ -233,6 +233,18 @@ app = FastAPI(
     redoc_url=None if CONFIG.login_required else "/redoc",
     openapi_url=None if CONFIG.login_required else "/openapi.json",
 )
+
+
+@app.middleware("http")
+async def prevent_assistant_response_caching(request: Request, call_next: Any) -> Any:
+    """A question is part of the answer contract; never reuse a prior reply."""
+    response = await call_next(request)
+    if request.url.path in {"/assistant/chat", "/qa"}:
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
 STATIC_DIR = Path(__file__).with_name("static")
 TWINS_STATIC_DIR = Path(__file__).parent / "twins" / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

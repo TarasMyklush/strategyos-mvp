@@ -915,16 +915,12 @@ def test_week_ahead_toggle_behavior():
     )
 
 
-def test_browse_all_agents_opens_assistant():
-    """#6: CEO Browse All Agents must open a catalogue, not submit a chat prompt."""
+def test_browse_all_agents_stays_in_agents_workspace():
+    """#6: Browse All Agents must expose the catalogue, not redirect to chat."""
     js = _static_executive_js()
 
-    assert "switchView('assistants')" in js, (
-        "CEO Browse All Agents must switch to assistants view"
-    )
-    assert "assistantCatalogueOpen" in js, (
-        "CEO Browse All Agents must open the assistant catalogue state"
-    )
+    assert 'data-view-target="agents"' in _ceo_executive_html()
+    assert 'state.discoveryQuery = \'\';' in js
     assert "Show me the agent catalogue" not in js, (
         "CEO Browse All Agents must not submit a canned assistant prompt"
     )

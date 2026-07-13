@@ -359,11 +359,11 @@ def _finance_kpi_payload(read_model: Mapping[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, list[float]]:
+def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, Any]:
     trend = payload.get("trend")
     item = trend.get(key) if isinstance(trend, Mapping) else None
     if not isinstance(item, Mapping):
-        return {"actual": [], "plan": []}
+        return {"actual": [], "plan": [], "labels": [], "has_plan_series": False}
 
     def values(name: str) -> list[float]:
         result: list[float] = []
@@ -376,7 +376,14 @@ def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, list[float]]:
 
     actual = values("actual")
     plan = values("plan")
-    return {"actual": actual, "plan": plan} if actual and plan and len(actual) == len(plan) else {"actual": [], "plan": []}
+    labels = [str(value) for value in list(item.get("labels") or [])]
+    has_plan = bool(item.get("has_plan_series")) and bool(plan) and len(actual) == len(plan)
+    return {
+        "actual": actual,
+        "plan": plan if has_plan else [],
+        "labels": labels if len(labels) == len(actual) else [],
+        "has_plan_series": has_plan,
+    }
 
 
 def _unavailable_ceo_kpi(spec: Mapping[str, Any], *, reason: str) -> dict[str, Any]:
@@ -400,7 +407,7 @@ def _unavailable_ceo_kpi(spec: Mapping[str, Any], *, reason: str) -> dict[str, A
         "comparison": "No comparison is shown until the required finance information is available.",
         "chips": [],
         "movers": {"lifting": [], "dragging": []},
-        "trend": {"actual": [], "plan": []},
+        "trend": {"actual": [], "plan": [], "labels": [], "has_plan_series": False},
         "trend_status": "Comparable historical periods are not available.",
         "provenance": {
             "source": "current reporting information",
@@ -414,6 +421,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
     finance_payload = _finance_kpi_payload(read_model)
     components = finance_payload.get("components") if isinstance(finance_payload.get("components"), Mapping) else {}
     evidence = finance_payload.get("evidence") if isinstance(finance_payload.get("evidence"), Mapping) else {}
+    dynamics = finance_payload.get("dynamics") if isinstance(finance_payload.get("dynamics"), Mapping) else {}
     actual_complete = finance_payload.get("actual_complete") if isinstance(finance_payload.get("actual_complete"), Mapping) else {}
     period = str(finance_payload.get("reporting_period_key") or "the selected period")
     provenance = {
@@ -553,9 +561,13 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "availability": availability,
                 "comparison": comparison,
                 "chips": [],
-                "movers": {"lifting": [], "dragging": []},
+                "movers": dict(dynamics.get(spec["key"]) or {"lifting": [], "dragging": []}),
                 "trend": _safe_trend(finance_payload, str(spec["key"])),
-                "trend_status": "Comparable historical periods are not available.",
+                "trend_status": (
+                    "Plan comparison is available from the aligned budget series."
+                    if _safe_trend(finance_payload, str(spec["key"])).get("has_plan_series")
+                    else "Actual trend is shown when multiple governed periods are available; no plan series has been supplied."
+                ),
                 "provenance": card_provenance,
                 "grounding": {
                     "status": "grounded" if actual_is_complete else "needs_evidence",

@@ -19,6 +19,7 @@ class DataRoleSpec:
     date_columns: tuple[str, ...] = ()
     column_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     expected_sheet_names: tuple[str, ...] = ()
+    required_for_run: bool = True
 
 
 DATA_ROLE_SPECS: tuple[DataRoleSpec, ...] = (
@@ -192,6 +193,22 @@ DATA_ROLE_SPECS: tuple[DataRoleSpec, ...] = (
         ),
     ),
     DataRoleSpec(
+        role="calendar",
+        label="CEO calendar and agenda",
+        kind="structured",
+        attribute_name="calendar",
+        target_path="09_Calendar/CEO_Agenda_H2_2026.xlsx",
+        required_columns=("Event_Date", "Title", "Type"),
+        date_columns=("Event_Date",),
+        column_aliases={
+            "Event_Date": ("event date", "date", "meeting date"),
+            "Title": ("event title", "meeting", "agenda item"),
+            "Type": ("event type", "meeting type", "category"),
+        },
+        expected_sheet_names=("calendar", "agenda"),
+        required_for_run=False,
+    ),
+    DataRoleSpec(
         role="bank_statement",
         label="Bank statement",
         kind="document",
@@ -239,7 +256,7 @@ def run_model_role_specs() -> tuple[DataRoleSpec, ...]:
     return tuple(
         spec
         for spec in registered_data_role_specs()
-        if spec.kind == "structured" and spec.target_path
+        if spec.kind == "structured" and spec.target_path and spec.required_for_run
     )
 
 

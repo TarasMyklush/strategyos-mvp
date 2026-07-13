@@ -79,6 +79,16 @@ def test_executive_assistant_uses_governed_qa_not_fake_captured_reply():
     assert "Prompt captured" not in js
 
 
+def test_executive_has_a_dedicated_agents_tab_and_honest_calendar_empty_state():
+    html = _app_entry_response()
+    js = _static_executive_js()
+
+    assert 'data-view-target="agents"' in html
+    assert 'data-view-panel="agents"' in html
+    assert 'switchView(\'assistants\')' not in js[js.index("var browseBtn"):js.index("var browseBtn") + 700]
+    assert "No governed calendar has been supplied for this run" in js
+
+
 def test_executive_static_js_switches_latest_run_route_by_session_mode():
     js = _static_executive_js()
 
@@ -1375,7 +1385,8 @@ def test_ceo_information_architecture_separates_board_and_operational_surfaces()
     assert 'id="board-workspace"' in html
     assert 'id="agents-section"' in html
     assert 'id="decision-questions-section"' in html
-    assert 'boardOnly || id === "agents-section"' in js
+    assert 'data-view-target="agents"' in html
+    assert 'data-view-panel="agents"' in html
     assert 'state.activePersona === "board" && !boardReleased' in js
     assert "No live diagnostics, working evidence, or pre-board figures" in js
     assert "Questions worth answering now" in js

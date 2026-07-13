@@ -341,11 +341,15 @@ def build_executive_read_model(
             "status": "unavailable",
             "reason": "No persisted prior-snapshot comparison is available for this run.",
         },
-        "week_ahead": {
-            "items": [],
-            "status": "unavailable",
-            "reason": "No persisted schedule or decision records are available for this run.",
-        },
+        "week_ahead": (
+            dict((summary or {}).get("calendar_agenda") or {})
+            if isinstance((summary or {}).get("calendar_agenda"), Mapping)
+            else {
+                "items": [],
+                "status": "unavailable",
+                "reason": "No governed calendar workbook was supplied for this run.",
+            }
+        ),
         "agent_activity": {
             "items": list((agent_modules or {}).get("audit_log") or []),
             "status": (

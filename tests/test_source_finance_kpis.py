@@ -39,6 +39,10 @@ def test_source_pack_calculates_four_ceo_actuals_with_lineage():
     ]
     assert payload["evidence"]["cash_vs_floor"]["actual_complete"] is False
     assert payload["evidence"]["cash_vs_floor"]["details"]["missing_accounts"] == ["Emirates NBD EUR"]
+    revenue_trend = payload["trend"]["revenue"]
+    assert revenue_trend["actual"]
+    assert revenue_trend["plan"] == []
+    assert revenue_trend["has_plan_series"] is False
 
 
 def test_source_pack_actuals_render_without_inventing_missing_comparators():
@@ -55,6 +59,9 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
         ("Cash vs floor", "SAR 42.3M"),
     ]
     assert cards[0]["availability"] == "partial"
+    assert cards[0]["trend"]["actual"]
+    assert cards[0]["trend"]["plan"] == []
+    assert cards[0]["trend"]["has_plan_series"] is False
     assert cards[0]["missing_inputs"] == ["H1 budget aligned to this reporting scope"]
     assert cards[1]["missing_inputs"] == [
         "H1 EBITDA budget aligned to this scope",

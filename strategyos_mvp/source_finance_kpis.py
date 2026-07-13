@@ -72,6 +72,7 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     operating_cost = sum((balances[account] for account in operating_cost_accounts), Decimal())
     ebitda = revenue - cogs - operating_cost
     period = _period_label(dates)
+    revenue_dynamics = _revenue_dynamics(gl, revenue_accounts, accounts)
     gl_evidence = {
         "file": _relative(gl_path, root),
         "sha256": _sha256(gl_path),
@@ -156,9 +157,71 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
             "No plan or board floor is inferred when it is absent."
         ),
         "components": components,
+        # Revenue movement is a period-by-period calculation from the same GL
+        # rows as the headline actual.  A plan is deliberately absent unless a
+        # separately governed budget role supplies one; actuals never become a
+        # proxy plan.
+        "trend": {"revenue": revenue_dynamics["trend"]},
+        "dynamics": {"revenue": revenue_dynamics["movers"]},
         "actual_complete": actual_complete,
         "evidence": evidence,
         "source_files": sorted({item for group in evidence.values() for item in group["files"]}),
+    }
+
+
+def _revenue_dynamics(
+    gl: Iterable[Mapping[str, Any]],
+    revenue_accounts: Iterable[str],
+    account_master: Mapping[str, Mapping[str, str]],
+) -> dict[str, Any]:
+    """Calculate real revenue periods and account movement from the GL.
+
+    The comparison is period-over-period only.  It intentionally returns no
+    plan series: an aligned budget must arrive through a separate governed
+    source rather than being inferred from actual performance.
+    """
+    revenue_set = set(revenue_accounts)
+    periods: dict[str, Decimal] = defaultdict(Decimal)
+    account_periods: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+    for row in gl:
+        account = str(row.get("account") or "").strip()
+        current = _date_value(row.get("date"))
+        if account not in revenue_set or current is None:
+            continue
+        debit = _decimal(row.get("debit"))
+        credit = _decimal(row.get("credit"))
+        if debit is None or credit is None:
+            continue
+        # Revenue is credit-natured, so credit less debit is the reported
+        # positive contribution for the period.
+        value = credit - debit
+        period_key = current.strftime("%Y-%m")
+        periods[period_key] += value
+        account_periods[account][period_key] += value
+
+    labels = sorted(periods)
+    actual = [_number(periods[label]) for label in labels]
+    movers: dict[str, list[dict[str, str]]] = {"lifting": [], "dragging": []}
+    if len(labels) >= 2:
+        previous, latest = labels[-2], labels[-1]
+        deltas: list[tuple[str, Decimal]] = []
+        for account, by_period in account_periods.items():
+            delta = by_period.get(latest, Decimal()) - by_period.get(previous, Decimal())
+            if delta:
+                deltas.append((account, delta))
+        for account, delta in sorted(deltas, key=lambda item: item[1], reverse=True)[:4]:
+            if delta <= 0:
+                continue
+            label = str(account_master.get(account, {}).get("account_description") or f"Account {account}")
+            movers["lifting"].append({"name": label, "delta": "+" + _number(delta) + " SAR"})
+        for account, delta in sorted(deltas, key=lambda item: item[1])[:4]:
+            if delta >= 0:
+                continue
+            label = str(account_master.get(account, {}).get("account_description") or f"Account {account}")
+            movers["dragging"].append({"name": label, "delta": _number(delta) + " SAR"})
+    return {
+        "trend": {"labels": labels, "actual": actual, "plan": [], "has_plan_series": False},
+        "movers": movers,
     }
 
 

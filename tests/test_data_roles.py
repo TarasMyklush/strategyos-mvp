@@ -29,6 +29,7 @@ def test_data_role_registry_exposes_current_run_model_roles_in_order():
         "chart_of_accounts",
         "purchase_orders",
         "cash_forecast",
+        "calendar",
         "bank_statement",
         "contract",
         "email_correspondence",

@@ -2801,9 +2801,9 @@
     }
     if (lowerHeading) lowerHeading.textContent = "What matters now";
     var boardOnly = state.activePersona === "board";
-    ["hero", "kpi-index-section", "kpi-detail-section", "priority-section", "decision-questions-section", "agents-section"].forEach(function (id) {
+    ["hero", "kpi-index-section", "kpi-detail-section", "priority-section", "decision-questions-section"].forEach(function (id) {
       var element = $(id);
-      if (element) element.hidden = boardOnly || id === "agents-section";
+      if (element) element.hidden = boardOnly;
     });
     var boardWorkspace = $("board-workspace");
     if (boardWorkspace) boardWorkspace.hidden = !boardOnly;
@@ -3662,6 +3662,27 @@
     var steps = safeArray(calculation.steps);
     var drivers = safeArray(brief.drivers);
     var auditSources = safeArray(audit.source_titles);
+    var governedTrend = (driver && driver.trend) || {};
+    var actualTrend = safeArray(governedTrend.actual).map(Number).filter(function (value) { return Number.isFinite(value); });
+    var planTrend = safeArray(governedTrend.plan).map(Number).filter(function (value) { return Number.isFinite(value); });
+    var hasPlanSeries = governedTrend.has_plan_series === true && planTrend.length === actualTrend.length && actualTrend.length > 1;
+    var trendMarkup = '';
+    if (actualTrend.length > 1) {
+      var values = actualTrend.concat(hasPlanSeries ? planTrend : []);
+      var low = Math.min.apply(null, values);
+      var high = Math.max.apply(null, values);
+      var span = Math.max(1, high - low);
+      var trendPath = function (series) {
+        return series.map(function (value, index) {
+          var x = series.length === 1 ? 150 : (index * 300) / (series.length - 1);
+          var y = 110 - (((value - low) / span) * 86 + 12);
+          return (index ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
+        }).join(' ');
+      };
+      trendMarkup = '<section class="kpi-trend"><span class="kpi-brief-label">Revenue dynamics</span><div class="kpi-trend__legend"><span>Actual</span>' + (hasPlanSeries ? '<span>Plan</span>' : '<span>No aligned plan series supplied</span>') + '</div><svg viewBox="0 0 300 120" role="img" aria-label="' + escapeHtml(label) + (hasPlanSeries ? ' actual versus plan trend' : ' actual trend') + '"><path class="trend-chain__actual" d="' + escapeHtml(trendPath(actualTrend)) + '"></path>' + (hasPlanSeries ? '<path class="trend-chain__plan" d="' + escapeHtml(trendPath(planTrend)) + '"></path>' : '') + '</svg></section>';
+    } else if (key === 'revenue') {
+      trendMarkup = '<section class="kpi-trend kpi-trend--empty"><span class="kpi-brief-label">Revenue dynamics</span><p>Multiple governed reporting periods are required before StrategyOS can show movement. No plan line has been inferred.</p></section>';
+    }
     // Use the same governed percentage contract as the dashboard gauge. Some
     // KPIs intentionally leave the legacy `pct` field null and expose their
     // audited ratio as `ring_pct`; Number(null) would incorrectly render 0.0%.
@@ -3690,6 +3711,9 @@
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
       '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3>' + (headlineRatio ? '<span class="kpi-brief-ratio">' + escapeHtml(headlineRatio) + '</span>' : '') + '<strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong></div></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
       '<div class="kpi-brief-summary"><p>' + escapeHtml(firstDefined(brief.readout, "No explanation is available.")) + '</p></div>',
+      chartMarkup,
+      driverMarkup,
+      trendMarkup,
       chartMarkup,
       driverMarkup,
       strategicReference ? '<section class="kpi-strategic-reference"><span class="kpi-brief-label">' + escapeHtml(firstDefined(strategicReference.label, "Approved strategic reference")) + '</span><strong>' + escapeHtml(firstDefined(strategicReference.value, "—")) + '</strong><p>' + escapeHtml(firstDefined(strategicReference.note, "")) + '</p><small>' + escapeHtml(firstDefined(strategicReference.source, "")) + '</small></section>' : '',
@@ -4445,12 +4469,12 @@
     }
 
     if (weekPanel) {
-      weekPanel.hidden = liveGovernedMode && !weekAhead.length;
+      weekPanel.hidden = false;
       var openIndex = Math.min(state.openWeekIndex || 0, Math.max(weekAhead.length - 1, 0));
       var activeEvent = weekAhead[openIndex] || null;
-      weekPanel.innerHTML = weekAhead.length ? '<div class="detail-head"><div><h3 class="detail-title">Week ahead</h3></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
+      weekPanel.innerHTML = weekAhead.length ? '<div class="detail-head"><div><h3 class="detail-title">CEO agenda</h3></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ': model the options and what I should walk in having decided."><strong>Explore scenarios</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ', what data am I missing and who should I request it from?"><strong>Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line..." /><button type="submit">Send</button></form></div>' : '') : '';
+      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ': model the options and what I should walk in having decided."><strong>Explore scenarios</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ', what data am I missing and who should I request it from?"><strong>Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line..." /><button type="submit">Send</button></form></div>' : '') : '<div class="detail-head"><div><h3 class="detail-title">CEO agenda</h3></div></div><p class="section-note">No governed calendar has been supplied for this run. Upload the Calendar / Agenda workbook to show upcoming events and preparation needs.</p>';
       safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
         safeArray(panel && panel.querySelectorAll('[data-rail-toggle]')).forEach(function (button) {
           button.onclick = function () {
@@ -4663,13 +4687,10 @@
       var browseBtn = discoveryCard.querySelector('.disco-browse');
       if (browseBtn) {
         browseBtn.onclick = function () {
-          state.assistantCatalogueOpen = true;
-          switchView('assistants');
-          window.setTimeout(function () {
-            renderAssistantNetwork();
-            var catalogue = $("assistant-catalogue");
-            if (catalogue && typeof catalogue.scrollIntoView === "function") catalogue.scrollIntoView({ block: "start", behavior: "smooth" });
-          }, 0);
+          state.discoveryQuery = '';
+          renderAgentsDiscovery();
+          var input = $("agent-discovery-search");
+          if (input) input.focus();
         };
       }
       safeArray(discoveryCard.querySelectorAll('.disco-add')).forEach(function (button) {
@@ -4947,6 +4968,7 @@
     var viewLabels = {
       home: state.activePersona === "board" ? "Portal" : "Diagnostics",
       assistants: "Assistants",
+      agents: "Agents",
       knowledge: "Knowledge",
       reports: "Reports"
     };
