@@ -3066,6 +3066,24 @@ def test_assistant_requests_include_shared_entrypoint_metadata():
         assert token in executive_js
 
 
+def test_assistant_network_sends_structured_governed_module_context():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    network_start = executive_js.index("function getAssistantNetwork()")
+    network_end = executive_js.index("function getAssistantExchanges()", network_start)
+    network_block = executive_js[network_start:network_end]
+    assert "var stateContract = modules.state_contract || {}" in network_block
+    assert "safeArray(stateContract.modules)" in network_block
+    assert "moduleId: firstDefined(item && item.module_id" in network_block
+
+    prompt_start = executive_js.index("Tell me about the \"")
+    prompt_block = executive_js[prompt_start:prompt_start + 700]
+    assert "module_id: moduleItem.moduleId" in prompt_block
+    assert 'entity_type: "governed_module"' in prompt_block
+    assert 'entrypoint: "assistant_network"' in prompt_block
+    assert "led by" not in prompt_block
+    assert "in the " in prompt_block and " lane" in prompt_block
+
+
 def test_executive_surface_prefers_shared_assistant_packet_for_visible_facts():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
     assert "BOOTSTRAP_ASSISTANT_CONTEXT = bootstrap.assistant_public_context || {}" in executive_js

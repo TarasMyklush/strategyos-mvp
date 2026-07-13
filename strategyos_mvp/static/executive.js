@@ -1118,19 +1118,22 @@
 
   function getAssistantNetwork() {
     var modules = getAgentsModule();
-    var running = safeArray(getRunningAgents());
+    var stateContract = modules.state_contract || {};
+    var running = safeArray(stateContract.modules);
+    if (!running.length) running = safeArray(getRunningAgents());
     if (!running.length) running = safeArray(modules.running);
     return running.map(function (item, index) {
       var status = firstDefined(item && item.status, "running");
       var lane = firstDefined(item && item.lane, item && item.tag, "governed");
       return {
+        moduleId: firstDefined(item && item.module_id, item && item.id, ""),
         statusRank: assistantModuleStatusRank(status),
         tone: status,
         assistant: firstDefined(item && item.label, item && item.name, item && item.module_id, "Assistant module " + (index + 1)),
         who: humanizeToken(lane),
-        unit: firstDefined(item && item.summary, item && item.doing, item && item.output_metric, tenantDisplayName()),
+        unit: firstDefined(item && item.current_activity, item && item.summary, item && item.doing, item && item.output, item && item.output_metric, tenantDisplayName()),
         stateLabel: firstDefined(statusLabel(status), status, "Current"),
-        businessOutput: firstDefined(item && item.output_metric, item && item.summary, "No output reported yet"),
+        businessOutput: firstDefined(item && item.output, item && item.output_metric, item && item.current_activity, item && item.summary, "No output reported yet"),
         decisionScope: (function () {
           var dependency = firstDefined(item && item.approval_dependency, "");
           if (!dependency || String(dependency).toLowerCase() === "none") return "No action needed";
@@ -2853,9 +2856,12 @@
           if (!moduleItem) return;
           var moduleName = firstDefined(moduleItem.assistant, 'this assistant');
           var moduleWho = firstDefined(moduleItem.who, '');
-          var moduleStatus = firstDefined(moduleItem.status, moduleItem.tone, '');
-          var prompt = 'Tell me about the "' + moduleName + '" module' + (moduleWho ? ' (led by ' + moduleWho + ')' : '') + ': what is it doing right now, is it blocked, and what does it need from me?';
-          askAssistant(prompt, row);
+          var prompt = 'Tell me about the "' + moduleName + '" module' + (moduleWho ? ' (in the ' + moduleWho + ' lane)' : '') + ': what is it doing right now, is it blocked, and what does it need from me?';
+          askAssistant(prompt, row, {
+            module_id: moduleItem.moduleId,
+            entity_type: "governed_module",
+            entrypoint: "assistant_network"
+          });
         };
         row.onclick = handler;
         row.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } };

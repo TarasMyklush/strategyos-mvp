@@ -203,6 +203,131 @@ def test_qa_endpoint_returns_answer_and_suggestions(monkeypatch):
         _restore_env(original)
 
 
+def test_governed_module_contract_covers_every_visible_module():
+    module_payload = api_module._agent_modules_payload(
+        None,
+        [],
+        None,
+        {"role": "executive", "authenticated": True},
+    )
+    contract = api_module._governed_module_state_contract(
+        None,
+        role="executive",
+        public_safe=False,
+    )
+
+    assert contract == module_payload["state_contract"]
+    modules = {item["module_id"]: item for item in contract["modules"]}
+    assert contract["contract_version"] == "governed_module_state.v1"
+    assert set(modules) == {
+        "cash-recovery-watch",
+        "evidence-closure-monitor",
+        "board-pack-compiler",
+        "runtime-guardrail",
+    }
+    for module in modules.values():
+        assert module["label"]
+        assert module["status"]
+        assert module["current_activity"]
+        assert module["output"]
+        assert module["dependency"]
+        assert module["provenance"]["source"] == "governed_run_publication_and_review_state"
+
+
+def test_governed_module_resolver_uses_server_contract_not_client_state():
+    result = api_module._resolve_governed_module_status(
+        'Tell me about the "Board-pack compiler" module: what is it doing right now, is it blocked, and what does it need from me?',
+        summary=None,
+        assistant_context={
+            "module_id": "board-pack-compiler",
+            # This untrusted value must not be used in the response.
+            "module_status": "running with no blockers",
+        },
+        role="executive",
+        public_safe=False,
+    )
+
+    assert result is not None
+    assert result["matched"] is True
+    assert result["answered_by"] == "governed_module"
+    assert result["module"]["module_id"] == "board-pack-compiler"
+    assert "Board-pack compiler is a governed executive module" in result["answer"]
+    assert "does not contain any information" not in result["answer"]
+    assert "running with no blockers" not in result["answer"]
+
+
+def test_governed_module_resolver_answers_every_registered_module():
+    contract = api_module._governed_module_state_contract(
+        None,
+        role="executive",
+        public_safe=False,
+    )
+
+    for module in contract["modules"]:
+        result = api_module._resolve_governed_module_status(
+            f'What is the status of the "{module["label"]}" module?',
+            summary=None,
+            assistant_context={"module_id": module["module_id"], "entity_type": "governed_module"},
+            role="executive",
+            public_safe=False,
+        )
+
+        assert result is not None, module["module_id"]
+        assert result["module"]["module_id"] == module["module_id"]
+        assert "Current state:" in result["answer"]
+        assert "What it needs from you:" in result["answer"]
+
+
+def test_assistant_chat_resolves_structured_module_context_before_llm(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "summary": None,
+                "run_id": "run-1",
+                "run_mode": "full",
+                "kg_nodes": [],
+                "kg_edges": [],
+            },
+        )
+        monkeypatch.setattr(
+            api_module.qa_engine,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("module route must precede tabular Q&A")),
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": 'Tell me about the "Board-pack compiler" module: what is it doing right now, is it blocked, and what does it need from me?',
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "source": "executive_surface",
+                    "entrypoint": "assistant_network",
+                    "module_id": "board-pack-compiler",
+                    "entity_type": "governed_module",
+                },
+            },
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_module"
+        assert payload["assistant_mode"] == "governed_module"
+        assert payload["module"]["module_id"] == "board-pack-compiler"
+        assert payload["assistant_context"]["module_id"] == "board-pack-compiler"
+        assert "Current state:" in payload["answer"]
+        assert "What it needs from you:" in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
 def test_qa_llm_mode_is_blocked_until_configured():
     original, client = _client_with_auth()
     try:

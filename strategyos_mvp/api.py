@@ -5124,6 +5124,39 @@ def _record_workflow_summary(record: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _governed_module_state_contract_from_modules(
+    modules: list[dict[str, Any]],
+    *,
+    run_id: str | None,
+) -> dict[str, Any]:
+    """Serialize module facts once for both executive UI and Hermes."""
+    states: list[dict[str, Any]] = []
+    for module in modules:
+        module_id = str(module.get("module_id") or "").strip()
+        if not module_id:
+            continue
+        states.append(
+            {
+                "module_id": module_id,
+                "label": str(module.get("label") or module_id),
+                "lane": str(module.get("lane") or "governed"),
+                "status": str(module.get("status") or "unavailable"),
+                "current_activity": str(module.get("summary") or "No current activity is recorded."),
+                "output": str(module.get("output_metric") or "No output is recorded."),
+                "dependency": str(module.get("approval_dependency") or "awaiting_action"),
+                "provenance": {
+                    "run_id": run_id,
+                    "source": "governed_run_publication_and_review_state",
+                },
+            }
+        )
+    return {
+        "contract_version": "governed_module_state.v1",
+        "run_id": run_id,
+        "modules": states,
+    }
+
+
 def _agent_modules_payload(
     summary: dict[str, Any] | None,
     rows: list[dict[str, Any]],
@@ -5295,6 +5328,164 @@ def _agent_modules_payload(
         "discoverable": discoverable,
         "approvals": approvals,
         "audit_log": audit_log,
+        "state_contract": _governed_module_state_contract_from_modules(
+            modules,
+            run_id=(summary or {}).get("run_id"),
+        ),
+    }
+
+
+def _module_status_label(value: Any) -> str:
+    return str(value or "unavailable").replace("_", " ").replace("-", " ").strip().title()
+
+
+def _module_executive_action(dependency: Any) -> str:
+    """Translate a governed dependency key into an executive-safe action.
+
+    This is deliberately dependency-based rather than module-based: every
+    module uses the same contract, and a new dependency gets a transparent
+    fallback instead of a fabricated action.
+    """
+    key = str(dependency or "").strip().lower()
+    known_actions = {
+        "none": "No executive action is currently required.",
+        "close_challenged_cases": "Sponsor closure of the challenged cases, then review the release posture.",
+        "reviewer_release": "Ensure the reviewer release decision and supporting evidence are complete.",
+        "operator_resume": "Confirm the reviewer decision so the operator workflow can resume.",
+        "prepare_board_pack": "Review the board-pack readiness and decide whether to proceed with publication.",
+        "system_boundary": "No executive action is available; this remains a protected system boundary.",
+        "awaiting_action": "Review the current publication posture and take the next governed action shown in the board workflow.",
+    }
+    if key in known_actions:
+        return known_actions[key]
+    if not key:
+        return "The current governed record does not specify an executive action."
+    return f"Required governed action: {_module_status_label(key)}."
+
+
+def _governed_module_state_contract(
+    summary: dict[str, Any] | None,
+    *,
+    role: str,
+    public_safe: bool,
+) -> dict[str, Any]:
+    """Return the single server-side source of truth for visible modules.
+
+    Module state is derived from the same governed run, publication and review
+    records that render the executive network.  The browser may nominate a
+    module ID, but never supplies the state used in an answer.
+    """
+    rows = _finding_rows_from_summary(summary) if summary else []
+    audit_summary = _latest_run_audit_summary_payload(summary) if summary else None
+    modules_payload = _agent_modules_payload(
+        summary,
+        rows,
+        audit_summary,
+        {"role": role, "authenticated": not public_safe},
+    )
+    contract = modules_payload.get("state_contract")
+    if isinstance(contract, dict):
+        return dict(contract)
+    return _governed_module_state_contract_from_modules(
+        list(modules_payload.get("running") or []),
+        run_id=(summary or {}).get("run_id"),
+    )
+
+
+def _resolve_governed_module_status(
+    question: str,
+    *,
+    summary: dict[str, Any] | None,
+    assistant_context: dict[str, Any] | None,
+    role: str,
+    public_safe: bool,
+) -> dict[str, Any] | None:
+    """Resolve a module question against the server-side module contract."""
+    contract = _governed_module_state_contract(
+        summary,
+        role=role,
+        public_safe=public_safe,
+    )
+    modules = list(contract.get("modules") or [])
+    if not modules:
+        return None
+    context = dict(assistant_context or {})
+    requested_id = str(context.get("module_id") or "").strip().lower()
+    question_normalized = " ".join(str(question or "").lower().split())
+    selected = next(
+        (module for module in modules if str(module.get("module_id") or "").lower() == requested_id),
+        None,
+    )
+    if selected is None:
+        # Typed questions may omit structured context. Match only an entire
+        # registered module label/ID and only in a module-status question.
+        asks_about_module = any(
+            token in question_normalized
+            for token in (" module", "module ", "doing right now", "is it blocked", "what does it need")
+        )
+        if not asks_about_module:
+            return None
+        selected = next(
+            (
+                module
+                for module in modules
+                if str(module.get("label") or "").lower() in question_normalized
+                or str(module.get("module_id") or "").replace("-", " ") in question_normalized
+            ),
+            None,
+        )
+    if selected is None:
+        return None
+
+    status = str(selected["status"] or "unavailable").lower()
+    dependency = str(selected["dependency"] or "awaiting_action")
+    state = _module_status_label(status)
+    dependency_label = _module_status_label(dependency)
+    if status in {"blocked", "idle", "unavailable", "missing"}:
+        blocker = f"It is blocked by: {dependency_label}."
+    elif status in {"preview_only", "preview", "pending", "waiting", "draft", "queued"}:
+        blocker = f"It is waiting on: {dependency_label}."
+    elif dependency.lower() == "none":
+        blocker = "It does not report a current blocker."
+    else:
+        blocker = f"Its current dependency is: {dependency_label}."
+
+    label = str(selected["label"])
+    lane = _module_status_label(selected["lane"])
+    answer = (
+        f"{label} is a governed {lane.lower()} module, not an independent long-running agent. "
+        f"Current state: {state}. It is doing this now: {selected['current_activity']} "
+        f"Current output: {selected['output']}. {blocker} "
+        f"What it needs from you: {_module_executive_action(dependency)}"
+    )
+    module_id = str(selected["module_id"])
+    citations = [
+        {
+            "source_path": "governance://governed-module-state",
+            "locator": f"modules[{module_id}].status",
+            "excerpt": f"{label}: {state}",
+        },
+        {
+            "source_path": "governance://governed-module-state",
+            "locator": f"modules[{module_id}].dependency",
+            "excerpt": dependency_label,
+        },
+    ]
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Server-side governed module-state contract derived from the current run, publication, and review state.",
+        "citations": citations,
+        "suggestions": [
+            f"What must close before {label} can proceed?",
+            "Which challenged cases need executive attention?",
+        ],
+        "assistant_mode": "governed_module",
+        "answered_by": "governed_module",
+        "module": selected,
+        "module_state_contract": contract,
+        "grounding_status": "grounded",
+        "_orchestrator_force_answer": True,
     }
 
 
@@ -10683,6 +10874,34 @@ async def _assistant_chat_response(
         context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    module_result = _resolve_governed_module_status(
+        question,
+        summary=context.get("summary"),
+        assistant_context=assistant_context,
+        role=authenticated_role or ("executive" if public_safe else "authenticated"),
+        public_safe=public_safe,
+    )
+    if module_result is not None:
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=module_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=module_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     contextual_kpi_key = str(assistant_context.get("kpi_key") or "").strip()
     explicit_modelling_request = _assistant_question_requests_modelling(question)
