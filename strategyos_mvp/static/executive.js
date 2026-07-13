@@ -1593,7 +1593,7 @@
     if (!driverHasPercent(driver)) {
       return '<svg class="driver-ring driver-ring--neutral" viewBox="0 0 36 36" aria-hidden="true"><circle class="driver-ring__track" cx="18" cy="18" r="15"></circle></svg>';
     }
-    var pct = Math.max(0, Number(driver.pct) || 0);
+    var pct = Math.max(0, driverPercentValue(driver));
     // Full circle = 100% of plan. Values above 100% cap at full ring;
     // the over-plan amount is shown as a badge outside the ring.
     var frac = Math.max(0.02, Math.min(pct, 100) / 100);
@@ -1602,7 +1602,13 @@
   }
 
   function driverHasPercent(driver) {
-    return driver && driver.pct !== null && driver.pct !== undefined && driver.pct !== "" && Number.isFinite(Number(driver.pct));
+    return driver && Number.isFinite(driverPercentValue(driver));
+  }
+
+  function driverPercentValue(driver) {
+    if (!driver) return NaN;
+    var value = firstDefined(driver.ring_pct, driver.pct, null);
+    return value === null || value === "" ? NaN : Number(value);
   }
 
   function driverCenterMarkup(driver) {
@@ -1610,7 +1616,7 @@
       return '<div class="driver-pct driver-pct--metric"><span class="driver-pct__main">—</span><span class="driver-pct__unit">data gap</span></div>';
     }
     if (driverHasPercent(driver)) {
-      return '<div class="driver-pct">' + escapeHtml(driver.pct) + '<span class="pct-sign">%</span></div>';
+      return '<div class="driver-pct">' + escapeHtml(driverPercentValue(driver).toFixed(1)) + '<span class="pct-sign">%</span></div>';
     }
     var metric = String(firstDefined(driver && driver.metric, '—')).trim();
     var parts = metric.split(/\s+/);
@@ -1624,7 +1630,7 @@
       return "Not calculated";
     }
     if (driverHasPercent(driver)) {
-      return String(firstDefined(driver.pct, '—')) + '% of plan';
+      return String(driverPercentValue(driver).toFixed(1)) + '% ' + firstDefined(driver.ring_label, 'of plan');
     }
     return firstDefined(driver && driver.metric, 'Current value');
   }
@@ -3438,10 +3444,23 @@
         ].join("")
         : [
           '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
-          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(driverSubLabel(driver)) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
+          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(firstDefined(driver.ring_label, driverSubLabel(driver))) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
         ].join("");
+      // Native focus can scroll a partially visible tile before `click`
+      // fires. Preserve the executive's position at pointer/keyboard intent,
+      // before that browser behaviour can occur.
+      var rememberReadingPosition = function () {
+        state.driverSelectionScrollY = window.scrollY;
+      };
+      tile.addEventListener("pointerdown", rememberReadingPosition);
+      tile.addEventListener("touchstart", rememberReadingPosition, { passive: true });
+      tile.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " ") rememberReadingPosition();
+      });
       tile.onclick = function () {
-        var readingPosition = window.scrollY;
+        var rememberedPosition = Number(state.driverSelectionScrollY);
+        var readingPosition = Number.isFinite(rememberedPosition) ? rememberedPosition : window.scrollY;
+        state.driverSelectionScrollY = null;
         state.activeDriverKey = key;
         updateHistory();
         // Render after the click's native focus work has completed. Replacing

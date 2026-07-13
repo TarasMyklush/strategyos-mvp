@@ -1296,8 +1296,10 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     render_end = js.index("function renderMetrics()")
     render_body = js[render_start:render_end]
     assert "scrollIntoView" not in render_body
-    assert "var readingPosition = window.scrollY;" in render_body
+    assert "var readingPosition = Number.isFinite(rememberedPosition) ? rememberedPosition : window.scrollY;" in render_body
     assert "window.scrollTo(0, readingPosition)" in render_body
+    assert 'tile.addEventListener("pointerdown", rememberReadingPosition)' in render_body
+    assert "state.driverSelectionScrollY" in render_body
     assert "aria-pressed" in render_body
     assert 'data-driver-key' in render_body
     assert 'function renderInlineKpiDrill(driver, drillCard)' in js

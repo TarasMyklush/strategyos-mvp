@@ -133,6 +133,7 @@ _BOARD_STRATEGIC_REFERENCES: dict[str, dict[str, Any]] = {
     "revenue": {
         "label": "Approved FY2026 Group revenue plan",
         "value": "SAR 8.35B",
+        "numeric_value": 8_350_000_000.0,
         "note": "Board approved on 12 January 2026. A phased H1 budget for the same entities is still required for a valid performance comparison.",
     },
     "ebitda_margin": {
@@ -143,6 +144,7 @@ _BOARD_STRATEGIC_REFERENCES: dict[str, dict[str, Any]] = {
     "cash_vs_floor": {
         "label": "Approved Group cash floor",
         "value": "SAR 1.20B",
+        "numeric_value": 1_200_000_000.0,
         "note": "The current cash extract is partial and is not yet aligned to the full Group scope required for a valid floor assessment.",
     },
 }
@@ -319,7 +321,7 @@ def _executive_kpi_brief(
             "available": not bool(missing_inputs),
         },
         "strategic_reference": {
-            **strategic_reference,
+            **{name: value for name, value in strategic_reference.items() if name != "numeric_value"},
             "source": _STRATEGY_SOURCE_TITLE,
         } if strategic_reference else None,
         "calculation": {
@@ -456,6 +458,8 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
 
         comparator_key = spec.get("comparator")
         comparator = _number_or_none(components.get(comparator_key)) if comparator_key else None
+        ring_pct: float | None = None
+        ring_label = ""
         if denominator_key:
             plan_numerator = _number_or_none(components.get(spec["plan_numerator"]))
             plan_denominator = _number_or_none(components.get(spec["plan_denominator"]))
@@ -464,6 +468,8 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             pct = (actual_margin / plan_margin) * 100 if plan_margin not in {None, 0} else None
             variance_bps = (actual_margin - plan_margin) * 100 if plan_margin is not None else None
             metric = _percent_display(actual_margin)
+            ring_pct = actual_margin
+            ring_label = "current margin"
             comparison = _basis_points_display(variance_bps)
             missing_inputs = [] if plan_margin is not None else ["H1 EBITDA budget aligned to this scope", "H1 revenue budget aligned to this scope"]
         else:
@@ -483,6 +489,22 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 else:
                     comparison = f"{pct:.1f}% of plan"
                 missing_inputs = []
+
+            if spec["key"] == "revenue":
+                annual_plan = _number_or_none(_BOARD_STRATEGIC_REFERENCES["revenue"].get("numeric_value"))
+                if annual_plan:
+                    ring_pct = actual / annual_plan * 100
+                    ring_label = "of FY2026 Group plan"
+            elif spec["key"] == "operating_cost":
+                revenue_actual = _number_or_none(components.get("revenue_actual"))
+                if revenue_actual:
+                    ring_pct = actual / revenue_actual * 100
+                    ring_label = "of revenue"
+            elif spec["key"] == "cash_vs_floor":
+                group_floor = _number_or_none(_BOARD_STRATEGIC_REFERENCES["cash_vs_floor"].get("numeric_value"))
+                if group_floor:
+                    ring_pct = actual / group_floor * 100
+                    ring_label = "of Group floor · partial scope"
 
         kpi_evidence = evidence.get(spec["key"]) if isinstance(evidence.get(spec["key"]), Mapping) else {}
         actual_is_complete = bool(actual_complete.get(spec["key"], True))
@@ -515,6 +537,8 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "metric": metric,
                 "value": metric,
                 "pct": round(pct, 1) if pct is not None else None,
+                "ring_pct": round(ring_pct, 1) if ring_pct is not None else None,
+                "ring_label": ring_label,
                 "status": status,
                 "sub": sub,
                 "detail": detail,

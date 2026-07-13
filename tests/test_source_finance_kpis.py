@@ -67,6 +67,12 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
     assert cards[0]["executive_brief"]["strategic_reference"]["value"] == "SAR 8.35B"
     assert cards[1]["executive_brief"]["strategic_reference"]["value"] == "23.0%"
     assert cards[3]["executive_brief"]["strategic_reference"]["value"] == "SAR 1.20B"
+    assert [(card["ring_pct"], card["ring_label"]) for card in cards] == [
+        (4.6, "of FY2026 Group plan"),
+        (56.0, "current margin"),
+        (24.4, "of revenue"),
+        (3.5, "of Group floor · partial scope"),
+    ]
     assert cards[0]["source_files"] == [
         "02_ERP_Extracts/GL_Extract_H1_2026.csv",
         "03_Master_Data/Chart_of_Accounts.xlsx",
