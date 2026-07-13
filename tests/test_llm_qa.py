@@ -873,6 +873,30 @@ def test_data_qa_auto_invokes_llm_when_deterministic_misses(monkeypatch):
     assert result["answer"] == "AI fallback answered from supplied evidence."
 
 
+def test_evidence_payload_exposes_governed_gl_and_finance_kpi_scope():
+    bundle = _bundle()
+    bundle.gl = pd.DataFrame([{"Account": "4000", "Debit": 0, "Credit": 1200}])
+    bundle.run_metadata["available_roles"] = ["ap_ledger", "ar_ledger", "gl_extract"]
+    payload = llm_qa._build_evidence_payload(
+        bundle=bundle,
+        findings=[],
+        summary={
+            "finance_kpi": {
+                "authoritative": True,
+                "reporting_period_key": "H1 2026",
+                "reporting_currency": "SAR",
+                "components": {"revenue_actual": "1200", "ebitda_actual": "500"},
+                "evidence": {"revenue": {"files": ["GL.csv", "CoA.xlsx"]}},
+            }
+        },
+    )
+
+    assert payload["data"]["gl_extract"]["available"] is True
+    assert payload["data"]["available_roles"] == ["ap_ledger", "ar_ledger", "gl_extract"]
+    assert payload["finance_kpis"]["components"]["revenue_actual"] == "1200"
+    assert payload["finance_kpis"]["source_files"] == ["GL.csv", "CoA.xlsx"]
+
+
 def test_evidence_payload_wraps_untrusted_text_before_model_egress():
     payload = llm_qa._build_evidence_payload(
         bundle=_bundle(),

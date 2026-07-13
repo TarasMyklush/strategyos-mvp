@@ -43,6 +43,8 @@ def test_source_pack_calculates_four_ceo_actuals_with_lineage():
     assert revenue_trend["actual"]
     assert revenue_trend["plan"] == []
     assert revenue_trend["has_plan_series"] is False
+    assert payload["dynamics"]["revenue"]["lifting"][0]["delta"].startswith("+SAR ")
+    assert "5615726.86" not in payload["dynamics"]["revenue"]["lifting"][0]["delta"]
 
 
 def test_source_pack_actuals_render_without_inventing_missing_comparators():

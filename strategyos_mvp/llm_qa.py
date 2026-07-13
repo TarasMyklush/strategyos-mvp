@@ -67,6 +67,11 @@ _EVIDENCE_TEXT_KEYS = {
 SYSTEM_PROMPT = """You are StrategyOS evidence Q&A.
 Answer only from the JSON evidence supplied by the application.
 If the evidence is insufficient, say that and set matched=false.
+When declining, describe the available evidence scope exactly as supplied in
+``evidence.data.available_roles`` and ``evidence.finance_kpis``. Never claim
+the run is limited to AP/AR if it also contains GL, cash, or governed finance
+KPI evidence. State the missing decision evidence (for example market,
+competitive, legal, or valuation analysis) rather than implying it was checked.
 When the evidence includes graph, retrieval, or deterministic grounding, synthesize it into plain executive language: name the entities involved, explain the evidence, quantify exposure when present, state the board implication, and recommend the next action.
 Return only valid json with keys: matched, answer, basis, citations, suggestions.
 Example json output:
@@ -395,9 +400,11 @@ def _build_evidence_payload(
         "data": {
             "ap_ledger": _frame_summary(bundle, "ap_ledger", bundle.ap),
             "ar_ledger": _frame_summary(bundle, "ar_ledger", bundle.ar),
+            "gl_extract": _frame_summary(bundle, "gl_extract", bundle.gl),
             "available_roles": (bundle.run_metadata or {}).get("available_roles", []),
             "data_contracts": bundle.data_contracts or {},
         },
+        "finance_kpis": _finance_kpi_evidence(summary),
         "findings": [_finding_summary(finding) for finding in findings[:12]],
     }
     if supplemental_evidence:
@@ -455,6 +462,34 @@ def _run_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "citation_resolution_rate",
     ]
     return {key: summary.get(key) for key in allowed_keys if key in summary}
+
+
+def _finance_kpi_evidence(summary: dict[str, Any]) -> dict[str, Any]:
+    """Expose the governed finance contract to Hermes without broad DB leakage."""
+    payload = summary.get("finance_kpi") or summary.get("oracle_kpi") or {}
+    if not isinstance(payload, dict):
+        return {"available": False}
+    components = payload.get("components") if isinstance(payload.get("components"), dict) else {}
+    evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+    source_files: list[str] = []
+    for item in evidence.values():
+        if not isinstance(item, dict):
+            continue
+        for source in item.get("files") or []:
+            source_text = str(source).strip()
+            if source_text and source_text not in source_files:
+                source_files.append(source_text)
+    return {
+        "available": bool(payload.get("authoritative") or components),
+        "reporting_period_key": payload.get("reporting_period_key"),
+        "reporting_currency": payload.get("reporting_currency"),
+        "components": {
+            key: components.get(key)
+            for key in ("revenue_actual", "revenue_plan", "cogs_actual", "operating_cost_actual", "ebitda_actual", "cash_balance")
+            if key in components
+        },
+        "source_files": source_files[:8],
+    }
 
 
 def _frame_summary(bundle: DataBundle, role: str, frame: Any) -> dict[str, Any]:

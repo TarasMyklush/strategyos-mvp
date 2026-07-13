@@ -213,12 +213,12 @@ def _revenue_dynamics(
             if delta <= 0:
                 continue
             label = str(account_master.get(account, {}).get("account_description") or f"Account {account}")
-            movers["lifting"].append({"name": label, "delta": "+" + _number(delta) + " SAR"})
+            movers["lifting"].append({"name": label, "delta": _sar_delta(delta)})
         for account, delta in sorted(deltas, key=lambda item: item[1])[:4]:
             if delta >= 0:
                 continue
             label = str(account_master.get(account, {}).get("account_description") or f"Account {account}")
-            movers["dragging"].append({"name": label, "delta": _number(delta) + " SAR"})
+            movers["dragging"].append({"name": label, "delta": _sar_delta(delta)})
     return {
         "trend": {"labels": labels, "actual": actual, "plan": [], "has_plan_series": False},
         "movers": movers,
@@ -424,6 +424,19 @@ def _period_label(dates: list[date]) -> str:
 
 def _number(value: Decimal | None) -> str | None:
     return None if value is None else format(value.quantize(Decimal("0.01")), "f")
+
+
+def _sar_delta(value: Decimal) -> str:
+    """Use a stable executive display while keeping the underlying trend exact."""
+    sign = "+" if value > 0 else "-" if value < 0 else ""
+    absolute = abs(value)
+    if absolute >= Decimal("1000000"):
+        amount = f"{(absolute / Decimal('1000000')):.1f}M"
+    elif absolute >= Decimal("1000"):
+        amount = f"{(absolute / Decimal('1000')):.1f}K"
+    else:
+        amount = f"{absolute.quantize(Decimal('1')):,.0f}"
+    return f"{sign}SAR {amount}"
 
 
 def _sha256(path: Path) -> str:

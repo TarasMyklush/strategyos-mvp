@@ -10,6 +10,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import quote, urlparse
@@ -10632,6 +10633,30 @@ def _authenticated_challenge_closure_result(
     }
 
 
+def _format_ceo_currency_delta(value: Any) -> str:
+    """Render a governed movement as executive-readable SAR without changing its value.
+
+    Source packs created before the presentation contract used plain decimal
+    strings such as ``+5615726.86 SAR``.  Hermes must keep those persisted runs
+    readable as well as formatting newly-derived runs.
+    """
+    raw = str(value or "").strip()
+    normalized = raw.replace("SAR", "").replace(",", "").strip()
+    try:
+        amount = Decimal(normalized)
+    except (InvalidOperation, ValueError):
+        return raw or "change recorded"
+    sign = "+" if amount > 0 else "-" if amount < 0 else ""
+    absolute = abs(amount)
+    if absolute >= Decimal("1000000"):
+        display = f"{(absolute / Decimal('1000000')):.1f}M"
+    elif absolute >= Decimal("1000"):
+        display = f"{(absolute / Decimal('1000')):.1f}K"
+    else:
+        display = f"{absolute:.0f}"
+    return f"{sign}SAR {display}"
+
+
 def _ceo_kpi_inline_result(
     context: Mapping[str, Any],
     *,
@@ -10725,7 +10750,7 @@ def _ceo_kpi_inline_result(
                 movement_parts.append(
                     "the strongest positive movement is "
                     + "; ".join(
-                        f"{str(item.get('name') or 'an identified revenue group')} ({str(item.get('delta') or 'change recorded')})"
+                        f"{str(item.get('name') or 'an identified revenue group')} ({_format_ceo_currency_delta(item.get('delta'))})"
                         for item in lifting[:2]
                     )
                 )
@@ -10733,7 +10758,7 @@ def _ceo_kpi_inline_result(
                 movement_parts.append(
                     "the movement requiring attention is "
                     + "; ".join(
-                        f"{str(item.get('name') or 'an identified revenue group')} ({str(item.get('delta') or 'change recorded')})"
+                        f"{str(item.get('name') or 'an identified revenue group')} ({_format_ceo_currency_delta(item.get('delta'))})"
                         for item in dragging[:2]
                     )
                 )

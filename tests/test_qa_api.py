@@ -161,7 +161,7 @@ def test_ceo_kpi_answer_carries_governed_business_drivers_and_sources(monkeypatc
     assert "Revenue – Catering — SAR 123.0M · 31.9%" in result["answer"]
     assert "largest reported contributor is Revenue – Catering at 31.9%" in result["answer"]
     assert "General ledger extract; Chart of accounts" in result["answer"]
-    assert "strongest positive movement is Revenue – Catering (20.0 SAR)" in result["answer"]
+    assert "strongest positive movement is Revenue – Catering (+SAR 20)" in result["answer"]
     assert "cannot state a variance to plan" in result["answer"]
     assert "direct comparison is withheld" in result["answer"]
     assert result["citations"][0]["source_path"] == "02_ERP_Extracts/GL_Extract_H1_2026.csv"
