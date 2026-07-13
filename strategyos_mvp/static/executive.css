@@ -2045,7 +2045,7 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 .kpi-executive-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
+  align-items: start;
   gap: 14px;
 }
 
@@ -2114,11 +2114,12 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   font-weight: 500;
 }
 
-.kpi-trend,
-.kpi-movement {
+.kpi-trend {
   align-content: start;
   min-height: 284px;
 }
+
+.kpi-movement { align-content: start; }
 
 .kpi-trend__head,
 .kpi-movement__head {
