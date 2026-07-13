@@ -1309,6 +1309,8 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert "font-size: 12.5px;\n  font-weight: 400;" in css
     assert "font-size: 15.5px;" in css
     assert 'class="kpi-brief-title-row"' in _static_executive_js()
+    assert "var headlinePctRaw = firstDefined(driver && driver.ring_pct, driver && driver.pct, null);" in _static_executive_js()
+    assert 'headlinePctRaw === null || headlinePctRaw === undefined || headlinePctRaw === ""' in _static_executive_js()
 
 
 def test_unavailable_ceo_kpis_explain_the_data_request_without_empty_rings():

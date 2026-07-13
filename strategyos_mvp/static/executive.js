@@ -3652,7 +3652,13 @@
     var steps = safeArray(calculation.steps);
     var drivers = safeArray(brief.drivers);
     var auditSources = safeArray(audit.source_titles);
-    var headlinePct = Number(driver && driver.pct);
+    // Use the same governed percentage contract as the dashboard gauge. Some
+    // KPIs intentionally leave the legacy `pct` field null and expose their
+    // audited ratio as `ring_pct`; Number(null) would incorrectly render 0.0%.
+    var headlinePctRaw = firstDefined(driver && driver.ring_pct, driver && driver.pct, null);
+    var headlinePct = headlinePctRaw === null || headlinePctRaw === undefined || headlinePctRaw === ""
+      ? NaN
+      : Number(headlinePctRaw);
     var headlineRatio = Number.isFinite(headlinePct)
       ? headlinePct.toFixed(1) + "% " + String(firstDefined(driver.ring_label, driverSubLabel(driver), "of plan"))
       : "";
