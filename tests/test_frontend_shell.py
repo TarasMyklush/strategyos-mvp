@@ -1276,6 +1276,22 @@ def test_driver_grid_renders_governed_metric_when_percent_is_absent():
     assert "driver-pct--metric" in css
 
 
+def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+    static_dir = Path(api_module.STATIC_DIR)
+
+    assert '@font-face' in css
+    assert 'font-family: "Newsreader"' in css
+    assert 'url("/static/newsreader-latin.woff2")' in css
+    assert 'url("/static/newsreader-italic-latin.woff2")' in css
+    assert (static_dir / "newsreader-latin.woff2").stat().st_size > 100_000
+    assert (static_dir / "newsreader-italic-latin.woff2").stat().st_size > 100_000
+    assert "--ring-track: #e9e5dc" in css
+    assert "--ring-tick: #9b968a" in css
+    assert ".driver-ring__value--flat { stroke: var(--flat); }" in css
+    assert ".driver-pct {" in css and "font-family: var(--serif);" in css
+
+
 def test_unavailable_ceo_kpis_explain_the_data_request_without_empty_rings():
     js = _static_executive_js()
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")

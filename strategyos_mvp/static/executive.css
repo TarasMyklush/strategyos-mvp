@@ -1,3 +1,19 @@
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/static/newsreader-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Newsreader";
+  font-style: italic;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/static/newsreader-italic-latin.woff2") format("woff2");
+}
+
 :root {
   --bg: #f4f2ed;
   --surface: #ffffff;
@@ -9,6 +25,9 @@
   --accent-2: #8c6a3d;
   --success: #1a6e54;
   --warning: #8a5a12;
+  --up: #4e7c5b;
+  --flat: #b07d34;
+  --down: #b0523c;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --serif: "Newsreader", Georgia, "Times New Roman", serif;
   --border: rgba(29, 28, 25, 0.12);
@@ -19,7 +38,8 @@
   --ok-soft: rgba(26, 110, 84, 0.08);
   --warn-soft: rgba(169, 110, 32, 0.11);
   --danger-soft: rgba(155, 52, 52, 0.09);
-  --ring-track: rgba(37, 51, 92, 0.18);
+  --ring-track: #e9e5dc;
+  --ring-tick: #9b968a;
   --ring-value: var(--accent);
   --shadow: 0 12px 32px rgba(29, 28, 25, 0.06);
   --assistant-dock-width: clamp(220px, 18vw, 300px);
@@ -35,6 +55,9 @@ html[data-theme="dark"] {
   --accent-2: #d5b783;
   --success: #76d4ab;
   --warning: #e3bd73;
+  --up: #6ba47b;
+  --flat: #d09f53;
+  --down: #cf7058;
   --border: rgba(242, 237, 228, 0.12);
   --border-strong: rgba(216, 200, 165, 0.26);
   --muted: rgba(242, 237, 228, 0.72);
@@ -43,7 +66,8 @@ html[data-theme="dark"] {
   --ok-soft: rgba(78, 168, 129, 0.18);
   --warn-soft: rgba(206, 163, 89, 0.18);
   --danger-soft: rgba(196, 107, 107, 0.18);
-  --ring-track: rgba(242, 237, 228, 0.28);
+  --ring-track: #2f2e34;
+  --ring-tick: #79757f;
   --ring-value: var(--accent);
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
 }
@@ -1121,11 +1145,18 @@ a { color: inherit; }
 
 .kg-question:hover,
 .kg-control-btn:hover,
-.kg-question.is-active,
 .kg-control-btn.is-active {
   transform: translateY(-1px);
   border-color: rgba(111, 140, 255, 0.55);
   background: rgba(23, 32, 54, 0.92);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.kg-question.is-active {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
@@ -2460,8 +2491,8 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 
 .state-tab.is-active,
 .filter-chip.is-active {
-  border-color: var(--border-strong);
-  background: var(--accent-soft);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
 }
 
 .state-tab__copy {
@@ -3568,15 +3599,20 @@ html[data-theme="dark"] .pill-inline.danger { color: #efaaaa; }
 
 .driver-ring circle {
   fill: none;
-  stroke-width: 3.5;
+  stroke-width: 5;
 }
 
 .driver-ring__track { stroke: var(--ring-track); }
 
 .driver-ring__value {
-  stroke: var(--ring-value);
   stroke-linecap: round;
+  transition: stroke-dasharray 600ms cubic-bezier(.3,.8,.3,1);
 }
+
+.driver-ring__value--up { stroke: var(--up); }
+.driver-ring__value--flat { stroke: var(--flat); }
+.driver-ring__value--down { stroke: var(--down); }
+.driver-ring__tick { fill: var(--ring-tick); }
 
 .driver-overline {
   margin-bottom: 0;
@@ -4325,8 +4361,9 @@ html[data-theme="dark"] .trend-axis {
 }
 
 .driver-pct {
-  font-size: 27px;
-  font-weight: 600;
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 500;
   line-height: 1;
 }
 
@@ -4354,12 +4391,14 @@ html[data-theme="dark"] .trend-axis {
 
 .pct-sign {
   font-size: 16px;
+  color: var(--muted);
+  margin-left: 1px;
 }
 
 .driver-ofplan {
-  font-size: 12px;
+  font-size: 9.5px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
   color: var(--muted);
 }
 

@@ -10542,6 +10542,29 @@ def _ceo_kpi_inline_result(
     }
 
 
+def _assistant_question_requests_modelling(question: str) -> bool:
+    """Let an explicit scenario override passive card/graph context.
+
+    KPI entry points attach their source card to every follow-up. That context is
+    useful for ordinary explanation, but it must not trap an explicit modelling
+    request inside a canned KPI explanation.
+    """
+    norm = " ".join(str(question or "").lower().split())
+    finance_terms = ("revenue", "cost", "costs", "opex", "cogs", "ebitda", "margin", "cash")
+    if not any(term in norm for term in finance_terms):
+        return False
+    if re.search(r"\b(model|simulate|scenario)\b", norm):
+        return True
+    if re.search(r"\b(if|assume|assuming|what happens|what would happen)\b", norm):
+        return True
+    if re.search(r"\b(reach|target|achieve|increase|decrease|rise|fall|grow|reduce)\b", norm) and re.search(
+        r"\d+(?:\.\d+)?\s*%",
+        norm,
+    ):
+        return True
+    return False
+
+
 async def _assistant_chat_response(
     request: AssistantChatRequest | QaRequest,
     *,
@@ -10656,7 +10679,12 @@ async def _assistant_chat_response(
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     contextual_kpi_key = str(assistant_context.get("kpi_key") or "").strip()
-    if contextual_kpi_key and str(assistant_context.get("entrypoint") or "") in {"ceo_kpi_inline", "knowledge_graph"}:
+    explicit_modelling_request = _assistant_question_requests_modelling(question)
+    if (
+        contextual_kpi_key
+        and not explicit_modelling_request
+        and str(assistant_context.get("entrypoint") or "") in {"ceo_kpi_inline", "knowledge_graph"}
+    ):
         kpi_result = _ceo_kpi_inline_result(
             context,
             kpi_key=contextual_kpi_key,

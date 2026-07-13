@@ -540,6 +540,10 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "ring_pct": round(ring_pct, 1) if ring_pct is not None else None,
                 "ring_label": ring_label,
                 "status": status,
+                # The source pack does not provide aligned H1 plan comparators
+                # for these four measures. Use the reference design's neutral
+                # amber treatment instead of implying favourable/adverse performance.
+                "tone": "flat",
                 "sub": sub,
                 "detail": detail,
                 "story": detail,

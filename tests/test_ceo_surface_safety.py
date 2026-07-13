@@ -1787,10 +1787,10 @@ def test_cta_count_all_matches_expected():
 
 
 # ══════════════════════════════════════════════════════════════════════
-# KPI RING VISUAL ENCODING — Full circle MUST equal 100% (not 133.33%)
-#  - Values above 100% cap at full ring; over-plan shown as badge
-#  - No tick marker (the full circle IS the 100% reference)
-#  - Previously: ringMax=400/3 ~133.33 made 100%=3/4 circle — not CEO-intuitive
+# KPI RING VISUAL ENCODING — preserve the supplied executive reference
+#  - 100% is marked at three quarters of the ring
+#  - the remaining quarter leaves visible headroom for over-plan performance
+#  - a small tick makes the 100% reference explicit
 # ══════════════════════════════════════════════════════════════════════
 
 def test_driver_ring_arc_no_pct_clamp():
@@ -1814,118 +1814,54 @@ def test_driver_ring_arc_no_pct_clamp():
     )
 
 
-def test_driver_ring_full_circle_equals_100():
-    """driverRingMarkup must use Math.min(pct, 100) / 100 so that
-    a full circle (frac=1.0) means exactly 100% of plan.
-    ringMax=400/3 (133.33) must NOT be present."""
+def test_driver_ring_preserves_reference_headroom_above_100():
+    """The supplied reference reserves one quarter of the ring for values
+    above 100%, with the plan tick at exactly three quarters."""
     js = _static_executive_js()
 
-    # The old 133.33% ringMax must be gone
-    assert "ringMax = 400 / 3" not in js, (
-        "driverRingMarkup must NOT contain ringMax = 400/3 — "
-        "full circle = 100% of plan, not 133.33%"
+    assert "ringMax = 400 / 3" in js, (
+        "driverRingMarkup must preserve the reference ring ceiling so 100% lands at three quarters"
     )
-
-    # The fraction must use Math.min(pct, 100) / 100 (full circle at 100%)
-    assert "Math.min(pct, 100) / 100" in js, (
-        "driverRingMarkup must cap at Math.min(pct, 100) / 100 — "
-        "full circle = 100%"
-    )
-
-    # Must NOT reference ringMax anywhere
-    func_start = js.index("function driverRingMarkup")
-    func_end = js.index("function qaAnswerText", func_start)
-    ring_func_body = js[func_start:func_end]
-    assert "ringMax" not in ring_func_body, (
-        "driverRingMarkup must NOT reference ringMax — "
-        "the ring ceiling is 100, not a separate max variable"
+    assert "Math.min(pct, ringMax) / ringMax" in js, (
+        "driverRingMarkup must calculate the arc against the reference ring ceiling"
     )
 
 
-def test_driver_ring_no_tick():
-    """There is no tick marker needed — the full circle itself is the 100%
-    reference. tickAngle must not exist in driverRingMarkup."""
+def test_driver_ring_has_reference_tick():
+    """The visual contract requires a visible 100% plan marker."""
     js = _static_executive_js()
 
     func_start = js.index("function driverRingMarkup")
     func_end = js.index("function qaAnswerText", func_start)
     ring_func_body = js[func_start:func_end]
 
-    assert "tickAngle" not in ring_func_body, (
-        "driverRingMarkup must NOT compute tickAngle — "
-        "the full circle IS the 100% reference; no separate tick needed"
-    )
+    assert "tickAngle" in ring_func_body
+    assert "driver-ring__tick" in ring_func_body
 
 
 def test_driver_ring_dash_proportional_to_pct():
-    """Verify mathematically that dash values are proportional to pct
-    in the 0-100 range, and that values above 100 all produce the same
-    full-ring dash.
-
-    circumference = 2 * PI * 15 ≈ 94.2478
-    For pct <= 100: dash = circumference * (pct / 100)
-    For pct >= 100: dash = circumference (full ring)
-
-    Expected:
-      pct=0   → dash ≈ 1.9   (0.02 floor)
-      pct=50  → dash ≈ 47.1
-      pct=78  → dash ≈ 73.5
-      pct=99  → dash ≈ 93.3
-      pct=100 → dash ≈ 94.2  (full ring)
-      pct=101 → dash ≈ 94.2  (capped — full ring)
-      pct=102 → dash ≈ 94.2  (capped — full ring)
-      pct=123 → dash ≈ 94.2  (capped — full ring)
-    """
+    """Verify the exact 104px reference-gauge geometry."""
     import math
-    radius = 15
-    circumference = 2 * math.pi * radius  # ≈ 94.2478
+    radius = (104 - 5) / 2 - 8
+    circumference = 2 * math.pi * radius
+    ring_max = 400 / 3
 
     def expected_dash(pct_value):
         pct = max(0, pct_value)
-        frac = max(0.02, min(pct, 100) / 100)
+        frac = max(0.02, min(pct, ring_max) / ring_max)
         return round(circumference * frac, 1)
 
-    # --- 0-100 range: proportional ---
     dash_0 = expected_dash(0)
     dash_50 = expected_dash(50)
-    dash_78 = expected_dash(78)
-    dash_99 = expected_dash(99)
     dash_100 = expected_dash(100)
-
-    # Floor preserved (0.02 minimum)
-    assert dash_0 > 1.8, f"pct=0 dash must use 0.02 floor, got {dash_0}"
-    assert abs(dash_0 - 1.9) < 0.2, f"pct=0 dash ≈ 1.9, got {dash_0}"
-
-    # 50% = half circumference
-    assert abs(dash_50 - 47.1) < 0.5, f"pct=50 dash ≈ 47.1, got {dash_50}"
-
-    # 78% = 78% of circumference
-    assert abs(dash_78 - 73.5) < 0.5, f"pct=78 dash ≈ 73.5, got {dash_78}"
-
-    # 99% just under full
-    assert abs(dash_99 - 93.3) < 0.5, f"pct=99 dash ≈ 93.3, got {dash_99}"
-
-    # 100% = full circumference
-    assert abs(dash_100 - circumference) < 0.1, (
-        f"pct=100 must be full circle (dash={circumference}), got {dash_100}"
-    )
-
-    # --- Above 100%: all capped at full ring ---
-    dash_101 = expected_dash(101)
-    dash_102 = expected_dash(102)
     dash_123 = expected_dash(123)
+    dash_max = expected_dash(ring_max)
 
-    # All above-100 values must equal the full circumference
-    for label, dash_val in [("101", dash_101), ("102", dash_102), ("123", dash_123)]:
-        assert abs(dash_val - circumference) < 0.1, (
-            f"pct={label} must cap at full ring (dash={circumference}), got {dash_val}"
-        )
-
-    # All above-100 dashes must be identical (full ring)
-    assert dash_101 == dash_102 == dash_123, (
-        f"All pct > 100 must produce identical full-ring dashes: "
-        f"got {dash_101}, {dash_102}, {dash_123}"
-    )
+    assert abs(dash_0 - circumference * 0.02) < 0.2
+    assert abs(dash_50 - circumference * 0.375) < 0.2
+    assert abs(dash_100 - circumference * 0.75) < 0.2
+    assert dash_100 < dash_123 < dash_max
+    assert abs(dash_max - circumference) < 0.2
 
 
 def test_driver_ring_frac_floor_preserved():

@@ -2614,6 +2614,12 @@ def test_assistant_chat_models_target_margin_from_governed_finance_kpis_despite_
                     "label": "Cash vs floor",
                     "metric": "3.5%",
                 },
+                "assistant_context": {
+                    "source": "executive_surface",
+                    "entrypoint": "ceo_kpi_inline",
+                    "kpi_key": "cash_vs_floor",
+                    "kpi_label": "Cash vs floor",
+                },
             },
         )
 

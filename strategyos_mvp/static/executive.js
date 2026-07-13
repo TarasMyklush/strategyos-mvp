@@ -1588,17 +1588,37 @@
   }
 
   function driverRingMarkup(driver) {
-    var radius = 15;
+    var size = 104;
+    var stroke = 5;
+    var ringMax = 400 / 3;
+    var radius = (size - stroke) / 2 - 8;
     var circumference = 2 * Math.PI * radius;
     if (!driverHasPercent(driver)) {
-      return '<svg class="driver-ring driver-ring--neutral" viewBox="0 0 36 36" aria-hidden="true"><circle class="driver-ring__track" cx="18" cy="18" r="15"></circle></svg>';
+      return '<svg class="driver-ring driver-ring--neutral" viewBox="0 0 104 104" aria-hidden="true"><circle class="driver-ring__track" cx="52" cy="52" r="41.5"></circle></svg>';
     }
     var pct = Math.max(0, driverPercentValue(driver));
-    // Full circle = 100% of plan. Values above 100% cap at full ring;
-    // the over-plan amount is shown as a badge outside the ring.
-    var frac = Math.max(0.02, Math.min(pct, 100) / 100);
+    // Preserve the reference gauge: 100% is an explicit tick at three quarters
+    // of the circle, leaving visible headroom for over-plan performance.
+    var frac = Math.max(0.02, Math.min(pct, ringMax) / ringMax);
     var dash = circumference * frac;
-    return '<svg class="driver-ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="driver-ring__track" cx="18" cy="18" r="15"></circle><circle class="driver-ring__value" cx="18" cy="18" r="15" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 18 18)"></circle></svg>';
+    var tickAngle = (100 / ringMax) * 360 - 90;
+    var tickRad = tickAngle * Math.PI / 180;
+    var cos = Math.cos(tickRad);
+    var sin = Math.sin(tickRad);
+    var tangentCos = -sin;
+    var tangentSin = cos;
+    var apexRadius = radius + stroke / 2 + 1.5;
+    var baseRadius = radius + stroke / 2 + 7;
+    var halfWidth = 3.1;
+    var apexX = (52 + apexRadius * cos).toFixed(2);
+    var apexY = (52 + apexRadius * sin).toFixed(2);
+    var base1X = (52 + baseRadius * cos + halfWidth * tangentCos).toFixed(2);
+    var base1Y = (52 + baseRadius * sin + halfWidth * tangentSin).toFixed(2);
+    var base2X = (52 + baseRadius * cos - halfWidth * tangentCos).toFixed(2);
+    var base2Y = (52 + baseRadius * sin - halfWidth * tangentSin).toFixed(2);
+    var tone = String(firstDefined(driver && driver.tone, "flat")).toLowerCase();
+    if (["up", "flat", "down"].indexOf(tone) === -1) tone = "flat";
+    return '<svg class="driver-ring" viewBox="0 0 104 104" aria-hidden="true"><circle class="driver-ring__track" cx="52" cy="52" r="41.5"></circle><circle class="driver-ring__value driver-ring__value--' + tone + '" cx="52" cy="52" r="41.5" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 52 52)"></circle><polygon class="driver-ring__tick" points="' + apexX + ',' + apexY + ' ' + base1X + ',' + base1Y + ' ' + base2X + ',' + base2Y + '"></polygon></svg>';
   }
 
   function driverHasPercent(driver) {
@@ -1616,13 +1636,21 @@
       return '<div class="driver-pct driver-pct--metric"><span class="driver-pct__main">—</span><span class="driver-pct__unit">data gap</span></div>';
     }
     if (driverHasPercent(driver)) {
-      return '<div class="driver-pct">' + escapeHtml(driverPercentValue(driver).toFixed(1)) + '<span class="pct-sign">%</span></div>';
+      return '<div class="driver-pct">' + escapeHtml(driverPercentValue(driver).toFixed(1)) + '<span class="pct-sign">%</span></div><div class="driver-ofplan">' + escapeHtml(driverRingCaption(driver)) + '</div>';
     }
     var metric = String(firstDefined(driver && driver.metric, '—')).trim();
     var parts = metric.split(/\s+/);
     var main = parts.shift() || '—';
     var rest = parts.join(' ');
     return '<div class="driver-pct driver-pct--metric"><span class="driver-pct__main">' + escapeHtml(main) + '</span>' + (rest ? '<span class="driver-pct__unit">' + escapeHtml(rest) + '</span>' : '') + '</div>';
+  }
+
+  function driverRingCaption(driver) {
+    var key = String(firstDefined(driver && driver.driver_key, driver && driver.key, ""));
+    if (key === "ebitda_margin") return "margin";
+    if (key === "operating_cost") return "of revenue";
+    if (key === "cash_vs_floor") return "of floor";
+    return "of plan";
   }
 
   function driverMeasureLabel(driver) {
