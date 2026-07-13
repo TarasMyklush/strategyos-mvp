@@ -3625,43 +3625,39 @@
     };
   }
 
-  function kpiMixChartMarkup(key, drivers) {
-    var chartRows = safeArray(drivers).filter(function (item) {
-      var share = Number(item && item.share_pct);
-      return Number.isFinite(share) && share > 0;
-    });
-    if (chartRows.length < 2) return "";
-    var titles = {
-      revenue: "Revenue mix",
-      ebitda_margin: "Where revenue goes",
-      operating_cost: "Operating-cost mix",
-      cash_vs_floor: "Reported cash composition"
-    };
-    var total = chartRows.reduce(function (sum, item) { return sum + Math.abs(Number(item.share_pct) || 0); }, 0) || 100;
-    var description = chartRows.map(function (item) {
-      return firstDefined(item.label, "Component") + " " + Number(item.share_pct).toFixed(1) + "%";
-    }).join(", ");
-    var arcPath = function (start, end) {
-      var radians = function (value) { return (value - 90) * Math.PI / 180; };
-      var point = function (value) { return [50 + 38 * Math.cos(radians(value)), 50 + 38 * Math.sin(radians(value))]; };
-      var startPoint = point(start);
-      var endPoint = point(end);
-      var largeArc = end - start > 180 ? 1 : 0;
-      return 'M ' + startPoint[0].toFixed(3) + ' ' + startPoint[1].toFixed(3) + ' A 38 38 0 ' + largeArc + ' 1 ' + endPoint[0].toFixed(3) + ' ' + endPoint[1].toFixed(3);
-    };
-    var cursor = 0;
-    var slices = chartRows.map(function (item, index) {
-      var share = Math.abs(Number(item.share_pct) || 0) / total * 100;
-      var start = cursor;
-      cursor += share;
-      return '<path class="kpi-mix-chart__slice tone-stroke-' + (index % 6) + '" d="' + arcPath(start, cursor) + '"><title>' + escapeHtml(firstDefined(item.label, "Component") + " · " + Number(item.share_pct).toFixed(1) + "%") + '</title></path>';
-    }).join("");
-    return '<section class="kpi-mix-chart"><div class="kpi-mix-chart__head"><span class="kpi-brief-label">' + escapeHtml(firstDefined(titles[key], "Current composition")) + '</span><small>Share of the current reported figure</small></div><div class="kpi-mix-chart__body"><svg class="kpi-mix-chart__donut" viewBox="0 0 100 100" role="img" aria-label="' + escapeHtml(description) + '"><circle class="kpi-mix-chart__track" cx="50" cy="50" r="38"></circle>' + slices + '<text x="50" y="47" text-anchor="middle">Actual</text><text x="50" y="57" text-anchor="middle">mix</text></svg><div class="kpi-mix-chart__legend">' + chartRows.map(function (item, index) {
-      return '<div><span class="kpi-mix-chart__swatch tone-' + (index % 6) + '"></span><span>' + escapeHtml(firstDefined(item.label, "Component")) + '</span><strong>' + escapeHtml(Number(item.share_pct).toFixed(1)) + '%</strong></div>';
-    }).join("") + '</div></div></section>';
+  // A selected KPI needs to answer a CEO's three immediate questions: what is
+  // happening, what changed, and what it means.  The former drill stacked a
+  // donut, a second bar treatment, and an unconstrained chart; it made those
+  // questions harder to answer.  These helpers intentionally mirror the
+  // compact target drill: one factual trend, one movement list, and one
+  // composition/bridge view, all backed by the governed card payload.
+  function formatExecutiveTrendValue(value, driver) {
+    var number = Number(value);
+    if (!Number.isFinite(number)) return "—";
+    var clue = [driver && driver.label, driver && driver.metric, driver && driver.value, driver && driver.unit].join(" ").toLowerCase();
+    var absolute = Math.abs(number);
+    var sign = number < 0 ? "−" : "";
+    if (/(sar|revenue|cost|cash|ebitda)/.test(clue)) {
+      if (absolute >= 1000000000) return sign + "SAR " + (absolute / 1000000000).toFixed(absolute >= 10000000000 ? 0 : 1) + "B";
+      if (absolute >= 1000000) return sign + "SAR " + (absolute / 1000000).toFixed(absolute >= 100000000 ? 0 : 1) + "M";
+      if (absolute >= 1000) return sign + "SAR " + (absolute / 1000).toFixed(absolute >= 100000 ? 0 : 1) + "K";
+      return sign + "SAR " + absolute.toLocaleString("en-US", { maximumFractionDigits: 0 });
+    }
+    if (/(%|margin|rate|ratio)/.test(clue)) return number.toFixed(Math.abs(number) >= 10 ? 1 : 2) + "%";
+    return number.toLocaleString("en-US", { maximumFractionDigits: 2 });
   }
 
-  function kpiTrendChartMarkup(label, trend) {
+  function formatExecutiveTrendPeriod(value) {
+    var raw = String(value || "").trim();
+    var match = /^(\d{4})-(\d{2})$/.exec(raw);
+    if (!match) return raw || "Reporting period";
+    var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return months[Math.max(0, Math.min(11, Number(match[2]) - 1))] + " " + match[1];
+  }
+
+  function kpiTrendChartMarkup(driver) {
+    var label = firstDefined(driver && driver.label, "KPI");
+    var trend = driver && driver.trend;
     var actual = safeArray(trend && trend.actual).map(Number).filter(function (value) { return Number.isFinite(value); });
     var plan = safeArray(trend && trend.plan).map(Number).filter(function (value) { return Number.isFinite(value); });
     var labels = safeArray(trend && trend.labels);
@@ -3670,16 +3666,104 @@
     var values = actual.concat(hasPlan ? plan : []);
     var low = Math.min.apply(null, values);
     var high = Math.max.apply(null, values);
+    if (high === low) {
+      var visualPadding = Math.max(Math.abs(high) * 0.05, 1);
+      low -= visualPadding;
+      high += visualPadding;
+    }
     var span = Math.max(1, high - low);
+    var chart = { width: 360, left: 44, right: 344, top: 18, bottom: 130 };
     var pathFor = function (series) {
       return series.map(function (value, index) {
-        var x = series.length === 1 ? 150 : 12 + (index * 276) / (series.length - 1);
-        var y = 108 - (((value - low) / span) * 82 + 10);
+        var x = series.length === 1 ? (chart.left + chart.right) / 2 : chart.left + (index * (chart.right - chart.left)) / (series.length - 1);
+        var y = chart.bottom - ((value - low) / span) * (chart.bottom - chart.top);
         return (index ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
       }).join(' ');
     };
     var accessibleLabels = labels.length === actual.length ? labels.join(', ') : actual.length + ' governed reporting periods';
-    return '<section class="kpi-trend"><div class="kpi-trend__head"><span class="kpi-brief-label">' + escapeHtml(label) + ' dynamics</span><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Aligned plan</span>' : '<span>No aligned plan series supplied</span>') + '</div></div><svg viewBox="0 0 300 120" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus aligned plan across ' : ' actual trend across ') + accessibleLabels) + '"><path class="kpi-trend__grid" d="M12,98 H288 M12,57 H288 M12,16 H288"></path><path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + '</svg></section>';
+    var latestIndex = actual.length - 1;
+    var priorIndex = actual.length - 2;
+    var latest = actual[latestIndex];
+    var latestMovement = latest - actual[priorIndex];
+    var yTicks = [high, (high + low) / 2, low];
+    var yGrid = yTicks.map(function (value) {
+      var y = chart.bottom - ((value - low) / span) * (chart.bottom - chart.top);
+      return '<line class="kpi-trend__grid" x1="' + chart.left + '" x2="' + chart.right + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"></line><text class="kpi-trend__axis kpi-trend__axis--y" x="0" y="' + (y + 3).toFixed(1) + '">' + escapeHtml(formatExecutiveTrendValue(value, driver)) + '</text>';
+    }).join('');
+    var xLabels = actual.map(function (_value, index) {
+      var x = actual.length === 1 ? (chart.left + chart.right) / 2 : chart.left + (index * (chart.right - chart.left)) / (actual.length - 1);
+      var rawLabel = labels.length === actual.length ? labels[index] : 'Period ' + String(index + 1);
+      return '<text class="kpi-trend__axis kpi-trend__axis--x" x="' + x.toFixed(1) + '" y="154" text-anchor="middle">' + escapeHtml(formatExecutiveTrendPeriod(rawLabel)) + '</text>';
+    }).join('');
+    var points = actual.map(function (value, index) {
+      var x = actual.length === 1 ? (chart.left + chart.right) / 2 : chart.left + (index * (chart.right - chart.left)) / (actual.length - 1);
+      var y = chart.bottom - ((value - low) / span) * (chart.bottom - chart.top);
+      var period = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[index]) : 'Period ' + String(index + 1);
+      return '<circle class="kpi-trend__point" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + (index === latestIndex ? '3.7' : '2.4') + '"><title>' + escapeHtml(period + ': ' + formatExecutiveTrendValue(value, driver)) + '</title></circle>';
+    }).join('');
+    var movementLabel = latestMovement === 0 ? 'No change' : (latestMovement > 0 ? '+' : '−') + formatExecutiveTrendValue(Math.abs(latestMovement), driver);
+    var latestPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[latestIndex]) : 'Latest period';
+    var priorPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[priorIndex]) : 'prior period';
+    return '<section class="kpi-trend"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span><small>' + escapeHtml(hasPlan ? 'Actual versus aligned plan' : 'Actual series only — plan is not inferred') + '</small></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Aligned plan</span>' : '') + '</div></div><svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus aligned plan across ' : ' actual trend across ') + accessibleLabels) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong>' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong>' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
+  }
+
+  function kpiMovementMarkup(driver) {
+    var movers = (driver && driver.movers) || {};
+    var higher = safeArray(movers.lifting).slice(0, 2);
+    var lower = safeArray(movers.dragging).slice(0, 2);
+    var rows = [];
+    if (higher.length) {
+      rows.push('<div class="kpi-movement__group"><span>Higher in the latest period</span>' + higher.map(function (item) {
+        return '<div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--up">↗</span><strong>' + escapeHtml(firstDefined(item && item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item && item.delta, '')) + '</small></div>';
+      }).join('') + '</div>');
+    }
+    if (lower.length) {
+      rows.push('<div class="kpi-movement__group"><span>Lower in the latest period</span>' + lower.map(function (item) {
+        return '<div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--down">↘</span><strong>' + escapeHtml(firstDefined(item && item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item && item.delta, '')) + '</small></div>';
+      }).join('') + '</div>');
+    }
+    return '<section class="kpi-movement' + (rows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><span class="kpi-brief-label">What changed</span><small>Contribution by account in the two latest governed periods</small></div>' + (rows.length ? rows.join('') : '<p>No category-level movement is available for the selected reporting periods.</p>') + '</section>';
+  }
+
+  function kpiCompositionMarkup(key, brief, drivers) {
+    var rows = safeArray(drivers);
+    var shares = rows.map(function (item) { return Number(item && item.share_pct); });
+    var allShares = rows.length >= 2 && shares.every(function (share) { return Number.isFinite(share) && share > 0; });
+    var total = allShares ? shares.reduce(function (sum, share) { return sum + share; }, 0) : 0;
+    var titles = {
+      revenue: 'Where current revenue comes from',
+      operating_cost: 'Where current operating cost sits',
+      cash_vs_floor: 'Where reported cash sits'
+    };
+    if (allShares && total >= 98 && total <= 102) {
+      var description = rows.map(function (item) {
+        return firstDefined(item.label, 'Component') + ' ' + Number(item.share_pct).toFixed(1) + '%';
+      }).join(', ');
+      return '<section class="kpi-composition"><div class="kpi-composition__head"><span class="kpi-brief-label">' + escapeHtml(firstDefined(titles[key], brief.driver_title, 'Current composition')) + '</span><small>Share of the current reported figure</small></div><div class="kpi-composition__bar" role="img" aria-label="' + escapeHtml(description) + '">' + rows.map(function (item, index) {
+        var share = Number(item.share_pct);
+        return '<span class="kpi-composition__segment tone-' + (index % 6) + '" style="flex-grow:' + escapeHtml(share.toFixed(3)) + '"><title>' + escapeHtml(firstDefined(item.label, 'Component') + ': ' + share.toFixed(1) + '%') + '</title></span>';
+      }).join('') + '</div><div class="kpi-composition__legend">' + rows.map(function (item, index) {
+        return '<div><span class="kpi-composition__swatch tone-' + (index % 6) + '"></span><span>' + escapeHtml(firstDefined(item.label, 'Component')) + '</span><strong>' + escapeHtml(firstDefined(item.value, '—')) + '</strong><small>' + escapeHtml(Number(item.share_pct).toFixed(1)) + '%</small></div>';
+      }).join('') + '</div></section>';
+    }
+    var bridgeRows = rows.length ? rows : safeArray((brief.calculation || {}).steps);
+    if (!bridgeRows.length) return '';
+    return '<section class="kpi-bridge"><div class="kpi-bridge__head"><span class="kpi-brief-label">' + escapeHtml(firstDefined(brief.driver_title, 'How this figure is built')) + '</span><small>Current reported inputs</small></div><div class="kpi-bridge__rows">' + bridgeRows.map(function (item) {
+      return '<div><span>' + escapeHtml(firstDefined(item.label, 'Component')) + '</span><strong>' + escapeHtml(firstDefined(item.value, '—')) + '</strong></div>';
+    }).join('') + '</div></section>';
+  }
+
+  function kpiExecutiveContextMarkup(brief, comparison, strategicReference) {
+    var comparisonAvailable = comparison && comparison.available === true;
+    var audit = brief.audit || {};
+    var missing = safeArray(audit.missing_inputs);
+    var comparisonHeading = comparisonAvailable ? 'Plan comparison' : 'Plan comparison unavailable';
+    var comparisonDetail = firstDefined(comparison.note, comparisonAvailable ? 'A like-for-like approved comparator is connected.' : 'No like-for-like approved comparator is connected.');
+    var missingDetail = missing.length ? '<small>Needed to compare: ' + escapeHtml(missing.join(' · ')) + '</small>' : '';
+    var referenceMarkup = strategicReference
+      ? '<div class="kpi-comparison__reference"><span>' + escapeHtml(firstDefined(strategicReference.label, 'Approved strategic reference')) + '</span><strong>' + escapeHtml(firstDefined(strategicReference.value, '—')) + '</strong><small>' + escapeHtml(firstDefined(strategicReference.note, 'Reference only; not treated as a period comparison.')) + '</small></div>'
+      : '';
+    return '<div class="kpi-executive-context"><section class="kpi-decision-context"><span class="kpi-brief-label">What this means for you</span><strong>' + escapeHtml(firstDefined(brief.decision_context, 'No decision implication is available.')) + '</strong></section><section class="kpi-comparison ' + (comparisonAvailable ? 'is-available' : 'is-withheld') + '"><span class="kpi-brief-label">' + escapeHtml(comparisonHeading) + '</span><strong>' + escapeHtml(firstDefined(comparison.value, comparisonAvailable ? 'Available' : 'Withheld')) + '</strong><p>' + escapeHtml(comparisonDetail) + '</p>' + missingDetail + referenceMarkup + '</section></div>';
   }
 
   function renderInlineKpiDrill(driver, drillCard) {
@@ -3695,10 +3779,9 @@
     var steps = safeArray(calculation.steps);
     var drivers = safeArray(brief.drivers);
     var auditSources = safeArray(audit.source_titles);
-    var governedTrend = (driver && driver.trend) || {};
-    var trendMarkup = kpiTrendChartMarkup(label, governedTrend);
-    if (!trendMarkup && key === 'revenue') {
-      trendMarkup = '<section class="kpi-trend kpi-trend--empty"><span class="kpi-brief-label">Revenue dynamics</span><p>Multiple governed reporting periods are required before StrategyOS can show movement. No plan line has been inferred.</p></section>';
+    var trendMarkup = kpiTrendChartMarkup(driver);
+    if (!trendMarkup) {
+      trendMarkup = '<section class="kpi-trend kpi-trend--empty"><span class="kpi-brief-label">Reporting trajectory</span><p>Multiple governed reporting periods are required before StrategyOS can show movement. No plan line has been inferred.</p></section>';
     }
     // Use the same governed percentage contract as the dashboard gauge. Some
     // KPIs intentionally leave the legacy `pct` field null and expose their
@@ -3707,32 +3790,28 @@
     var headlinePct = headlinePctRaw === null || headlinePctRaw === undefined || headlinePctRaw === ""
       ? NaN
       : Number(headlinePctRaw);
+    var headlineRatioLabel = String(firstDefined(driver && driver.ring_label, driverSubLabel(driver), "of plan"));
+    // A long-horizon board reference is useful context, but it is never a
+    // substitute for a period-aligned performance comparison.
+    var referenceOnlyRatio = comparison.available !== true && /(plan|floor)/i.test(headlineRatioLabel);
     var headlineRatio = Number.isFinite(headlinePct)
-      ? headlinePct.toFixed(1) + "% " + String(firstDefined(driver.ring_label, driverSubLabel(driver), "of plan"))
+      ? headlinePct.toFixed(1) + "% " + headlineRatioLabel + (referenceOnlyRatio ? " · reference only" : "")
       : "";
     var calculationMarkup = steps.length
       ? '<div class="kpi-brief-steps">' + steps.map(function (step) {
         return '<div class="kpi-brief-step"><span>' + escapeHtml(firstDefined(step.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(step.value, "—")) + '</strong></div>';
       }).join("") + '</div>'
       : "";
-    var driverMarkup = drivers.length
-      ? '<section class="kpi-driver-mix"><span class="kpi-brief-label">' + escapeHtml(firstDefined(brief.driver_title, "What makes up this figure")) + '</span><div class="kpi-driver-list">' + drivers.map(function (item) {
-          var rawShare = item && item.share_pct;
-          var share = rawShare === null || rawShare === undefined || rawShare === "" ? NaN : Number(rawShare);
-          var width = Number.isFinite(share) ? Math.max(2, Math.min(100, Math.abs(share))) : 0;
-          return '<div class="kpi-driver-row"><div class="kpi-driver-row__head"><span>' + escapeHtml(firstDefined(item.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(item.value, "—")) + (Number.isFinite(share) ? ' <small>' + escapeHtml(share.toFixed(1)) + '%</small>' : '') + '</strong></div>' + (width ? '<div class="kpi-driver-bar"><span style="width:' + escapeHtml(width.toFixed(1)) + '%"></span></div>' : '') + '</div>';
-        }).join("") + '</div></section>'
-      : '';
-    var chartMarkup = kpiMixChartMarkup(key, drivers);
+    var movementMarkup = kpiMovementMarkup(driver);
+    var compositionMarkup = kpiCompositionMarkup(key, brief, drivers);
+    var executiveContextMarkup = kpiExecutiveContextMarkup(brief, comparison, strategicReference);
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
       '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3>' + (headlineRatio ? '<span class="kpi-brief-ratio">' + escapeHtml(headlineRatio) + '</span>' : '') + '<strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong></div></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
       '<div class="kpi-brief-summary"><p>' + escapeHtml(firstDefined(brief.readout, "No explanation is available.")) + '</p></div>',
-      chartMarkup,
-      driverMarkup,
-      trendMarkup,
-      strategicReference ? '<section class="kpi-strategic-reference"><span class="kpi-brief-label">' + escapeHtml(firstDefined(strategicReference.label, "Approved strategic reference")) + '</span><strong>' + escapeHtml(firstDefined(strategicReference.value, "—")) + '</strong><p>' + escapeHtml(firstDefined(strategicReference.note, "")) + '</p><small>' + escapeHtml(firstDefined(strategicReference.source, "")) + '</small></section>' : '',
-      '<section class="kpi-decision-context"><span class="kpi-brief-label">Decision context</span><strong>' + escapeHtml(firstDefined(brief.decision_context, comparison.note, "No decision implication is available.")) + '</strong></section>',
+      executiveContextMarkup,
+      '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
+      compositionMarkup,
       '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask Hermes about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div></section>',
       '<details class="kpi-brief-audit"><summary>How this figure is calculated</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'

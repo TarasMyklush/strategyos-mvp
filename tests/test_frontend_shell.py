@@ -1369,13 +1369,21 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "kpi_key:" in js
     assert "How this figure is calculated" in js
     assert "data-kpi-question" in js
-    assert "kpiMixChartMarkup(key, drivers)" in js
+    assert "kpiCompositionMarkup(key, brief, drivers)" in js
     assert "Share of the current reported figure" in js
-    assert 'class="kpi-mix-chart__donut"' in js
-    assert "function kpiTrendChartMarkup(label, trend)" in js
-    assert "No aligned plan series supplied" in js
+    assert 'class="kpi-composition__bar"' in js
+    assert "function kpiTrendChartMarkup(driver)" in js
+    assert "Actual series only — plan is not inferred" in js
     assert "trend.has_plan_series === true" in js
-    assert 'rawShare === null || rawShare === undefined || rawShare === "" ? NaN' in js
+    assert "kpiMovementMarkup(driver)" in js
+    assert "What changed" in js
+    assert "kpiExecutiveContextMarkup(brief, comparison, strategicReference)" in js
+    assert "Plan comparison unavailable" in js
+    assert "referenceOnlyRatio" in js
+    assert "kpi-mix-chart" not in js
+    assert ".kpi-executive-grid" in css
+    assert ".kpi-trend svg {\n  display: block;\n  width: 100%;\n  height: 164px;" in css
+    assert ".kpi-mix-chart" not in css
     assert "data-kpi-inline-composer" not in js
     assert "executiveKpiBrief(driver)" in js
     assert 'id="driver-drill"' in html
