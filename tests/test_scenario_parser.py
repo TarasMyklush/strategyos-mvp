@@ -223,10 +223,10 @@ def test_ebitda_target_margin_uses_governed_dashboard_baseline():
     assert result.scenario_type == "deterministic"
     assert "56.0%" in result.answer
     assert "60.0%" in result.answer
-    assert "SAR 15,306,634.78" in result.answer
-    assert "SAR 78,528,275.27" in result.answer
+    assert "SAR 15.3M" in result.answer
+    assert "SAR 78.5M" in result.answer
     assert "16.3%" in result.answer
-    assert "SAR 460,139,210.87" in result.answer
+    assert "SAR 460.1M" in result.answer
     assert "19.5%" in result.answer
     assert "not a forecast" in result.answer
     assert result.hallucination_risk.level.value == "none"
@@ -285,8 +285,8 @@ def test_governed_public_ceo_surface_models_target_margin_from_same_dashboard_ba
     assert result.hallucination_risk.level.value == "none"
     assert "56.0%" in result.answer
     assert "60.0%" in result.answer
-    assert "SAR 15,306,634.78" in result.answer
-    assert "SAR 460,139,210.87" in result.answer
+    assert "SAR 15.3M" in result.answer
+    assert "SAR 460.1M" in result.answer
     assert "Current governed drivers" not in result.answer
 
 
@@ -312,7 +312,7 @@ def test_ebitda_target_margin_can_complete_one_component_from_governed_identity(
     )
 
     assert result.scenario_id == "ebitda_target_margin"
-    assert "SAR 93,834,910.05" in result.answer
+    assert "SAR 93.8M" in result.answer
     assert result.scenario_type == "deterministic"
 
 

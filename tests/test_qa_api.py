@@ -2786,8 +2786,8 @@ def test_assistant_chat_models_target_margin_from_governed_finance_kpis_despite_
         assert payload["grounding_status"] == "grounded"
         assert "56.0%" in payload["answer"]
         assert "60.0%" in payload["answer"]
-        assert "SAR 15,306,634.78" in payload["answer"]
-        assert "SAR 460,139,210.87" in payload["answer"]
+        assert "SAR 15.3M" in payload["answer"]
+        assert "SAR 460.1M" in payload["answer"]
         assert "cannot calculate" not in payload["answer"].lower()
     finally:
         _restore_env(original)
@@ -2860,7 +2860,7 @@ def test_public_ceo_chat_models_target_margin_from_governed_dashboard_baseline(m
         assert payload["hallucination_risk"]["level"] == "none"
         assert "56.0%" in payload["answer"]
         assert "60.0%" in payload["answer"]
-        assert "SAR 15,306,634.78" in payload["answer"]
+        assert "SAR 15.3M" in payload["answer"]
         assert "Current governed drivers" not in payload["answer"]
     finally:
         _restore_env(original)

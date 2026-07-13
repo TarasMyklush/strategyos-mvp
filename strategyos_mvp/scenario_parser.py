@@ -147,6 +147,20 @@ def _sar_decimal(value: Decimal) -> str:
     return f"SAR {rounded:,.2f}"
 
 
+def _sar_executive_decimal(value: Decimal) -> str:
+    """Render scenario narrative figures at CEO scan speed; audit steps stay exact."""
+    absolute = abs(value)
+    if absolute >= Decimal("1000000000"):
+        display = f"{absolute / Decimal('1000000000'):.1f}B"
+    elif absolute >= Decimal("1000000"):
+        display = f"{absolute / Decimal('1000000'):.1f}M"
+    elif absolute >= Decimal("1000"):
+        display = f"{absolute / Decimal('1000'):.1f}K"
+    else:
+        display = f"{absolute.quantize(Decimal('1'), rounding=ROUND_HALF_UP):,.0f}"
+    return f"SAR {display}"
+
+
 def _usd(value: float) -> str:
     return f"USD {value:,.2f}"
 
@@ -592,7 +606,7 @@ def _finance_target_margin_result(
     if improvement <= 0:
         answer = (
             f"The current EBITDA margin is {_percent(float(current_margin), 1)} "
-            f"({_sar_decimal(ebitda)} EBITDA on {_sar_decimal(revenue)} revenue), already at or above "
+            f"({_sar_executive_decimal(ebitda)} EBITDA on {_sar_executive_decimal(revenue)} revenue), already at or above "
             f"the requested {_percent(float(target_margin), 1)} target for {baseline['period']}."
         )
         return ScenarioResult(
@@ -661,18 +675,18 @@ def _finance_target_margin_result(
             assumptions=["Operating cost stays fixed and COGS remains the current share of revenue."],
         ))
         growth_sentence = (
-            f"\n\nRevenue path — hold operating cost at {_sar_decimal(operating_cost)} and COGS at its current "
-            f"{_percent(float(cogs_rate), 1)} of revenue: grow revenue to {_sar_decimal(required_revenue)} "
-            f"(+{_sar_decimal(revenue_increase)}, {_percent(float(revenue_increase_rate), 1)})."
+            f"\n\nRevenue path — hold operating cost at {_sar_executive_decimal(operating_cost)} and COGS at its current "
+            f"{_percent(float(cogs_rate), 1)} of revenue: grow revenue to {_sar_executive_decimal(required_revenue)} "
+            f"(+{_sar_executive_decimal(revenue_increase)}, {_percent(float(revenue_increase_rate), 1)})."
         )
 
     answer = (
         f"Current position — EBITDA margin is {_percent(float(current_margin), 1)}: "
-        f"{_sar_decimal(ebitda)} EBITDA on {_sar_decimal(revenue)} revenue for {baseline['period']}.\n\n"
-        f"Target — at {_percent(float(target_margin), 1)}, EBITDA must reach {_sar_decimal(target_ebitda)}, "
-        f"an improvement of {_sar_decimal(improvement)}.\n\n"
-        f"Cost path — hold revenue and COGS constant: reduce operating cost from {_sar_decimal(operating_cost)} "
-        f"to {_sar_decimal(target_operating_cost)} (-{_sar_decimal(operating_cost_reduction)}, "
+        f"{_sar_executive_decimal(ebitda)} EBITDA on {_sar_executive_decimal(revenue)} revenue for {baseline['period']}.\n\n"
+        f"Target — at {_percent(float(target_margin), 1)}, EBITDA must reach {_sar_executive_decimal(target_ebitda)}, "
+        f"an improvement of {_sar_executive_decimal(improvement)}.\n\n"
+        f"Cost path — hold revenue and COGS constant: reduce operating cost from {_sar_executive_decimal(operating_cost)} "
+        f"to {_sar_executive_decimal(target_operating_cost)} (-{_sar_executive_decimal(operating_cost_reduction)}, "
         f"{_percent(float(operating_cost_reduction_rate), 1)})."
         f"{growth_sentence}\n\n"
         "These are auditable boundary paths, not a forecast. Specify the intended revenue/cost mix and timing to model a combined execution path."
