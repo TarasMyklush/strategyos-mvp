@@ -1307,6 +1307,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "kpi_key:" in js
     assert "How this figure is calculated" in js
     assert "data-kpi-question" in js
+    assert "kpiMixChartMarkup(key, drivers)" in js
+    assert "Share of the current reported figure" in js
     assert "data-kpi-inline-composer" not in js
     assert "executiveKpiBrief(driver)" in js
     assert 'id="driver-drill"' in html

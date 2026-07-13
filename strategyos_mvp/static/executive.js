@@ -3558,6 +3558,30 @@
     };
   }
 
+  function kpiMixChartMarkup(key, drivers) {
+    var chartRows = safeArray(drivers).filter(function (item) {
+      var share = Number(item && item.share_pct);
+      return Number.isFinite(share) && share > 0;
+    });
+    if (chartRows.length < 2) return "";
+    var titles = {
+      revenue: "Revenue mix",
+      ebitda_margin: "Where revenue goes",
+      operating_cost: "Operating-cost mix",
+      cash_vs_floor: "Reported cash composition"
+    };
+    var total = chartRows.reduce(function (sum, item) { return sum + Math.abs(Number(item.share_pct) || 0); }, 0) || 100;
+    var description = chartRows.map(function (item) {
+      return firstDefined(item.label, "Component") + " " + Number(item.share_pct).toFixed(1) + "%";
+    }).join(", ");
+    return '<section class="kpi-mix-chart"><div class="kpi-mix-chart__head"><span class="kpi-brief-label">' + escapeHtml(firstDefined(titles[key], "Current composition")) + '</span><small>Share of the current reported figure</small></div><div class="kpi-mix-chart__bar" role="img" aria-label="' + escapeHtml(description) + '">' + chartRows.map(function (item, index) {
+      var width = Math.max(2, Math.abs(Number(item.share_pct) || 0) / total * 100);
+      return '<span class="kpi-mix-chart__segment tone-' + (index % 6) + '" style="width:' + escapeHtml(width.toFixed(2)) + '%" title="' + escapeHtml(firstDefined(item.label, "Component") + " · " + Number(item.share_pct).toFixed(1) + "%") + '"></span>';
+    }).join("") + '</div><div class="kpi-mix-chart__legend">' + chartRows.map(function (item, index) {
+      return '<div><span class="kpi-mix-chart__swatch tone-' + (index % 6) + '"></span><span>' + escapeHtml(firstDefined(item.label, "Component")) + '</span><strong>' + escapeHtml(Number(item.share_pct).toFixed(1)) + '%</strong></div>';
+    }).join("") + '</div></section>';
+  }
+
   function renderInlineKpiDrill(driver, drillCard) {
     var label = firstDefined(driver.label, "this KPI");
     var availability = String(firstDefined(driver.availability, "unavailable"));
@@ -3583,10 +3607,12 @@
           return '<div class="kpi-driver-row"><div class="kpi-driver-row__head"><span>' + escapeHtml(firstDefined(item.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(item.value, "—")) + (Number.isFinite(share) ? ' <small>' + escapeHtml(share.toFixed(1)) + '%</small>' : '') + '</strong></div>' + (width ? '<div class="kpi-driver-bar"><span style="width:' + escapeHtml(width.toFixed(1)) + '%"></span></div>' : '') + '</div>';
         }).join("") + '</div></section>'
       : '';
+    var chartMarkup = kpiMixChartMarkup(key, drivers);
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
       '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><h3 class="detail-title">' + escapeHtml(label) + '</h3></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
       '<div class="kpi-brief-summary"><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><p>' + escapeHtml(firstDefined(brief.readout, "No explanation is available.")) + '</p></div>',
+      chartMarkup,
       driverMarkup,
       strategicReference ? '<section class="kpi-strategic-reference"><span class="kpi-brief-label">' + escapeHtml(firstDefined(strategicReference.label, "Approved strategic reference")) + '</span><strong>' + escapeHtml(firstDefined(strategicReference.value, "—")) + '</strong><p>' + escapeHtml(firstDefined(strategicReference.note, "")) + '</p><small>' + escapeHtml(firstDefined(strategicReference.source, "")) + '</small></section>' : '',
       '<section class="kpi-decision-context"><span class="kpi-brief-label">Decision context</span><strong>' + escapeHtml(firstDefined(brief.decision_context, comparison.note, "No decision implication is available.")) + '</strong></section>',
@@ -4905,7 +4931,9 @@
       if (!state._boardStateTransition) {
         state.activeBoard = firstDefined(state.activeBoard, (state.latestPacket.executive_modes || {}).active_board_state, (state.latestPacket.board_portal || {}).presentation_state, "pre");
       }
-      state.activeDriverKey = firstDefined((state.latestPacket.executive_modes || {}).active_driver_key, state.activeDriverKey, "board_packet");
+      // Preserve the KPI the executive selected locally. The packet default is
+      // only used on first load or after an explicit persona reset.
+      state.activeDriverKey = firstDefined(state.activeDriverKey, (state.latestPacket.executive_modes || {}).active_driver_key, "board_packet");
       state.activeCompany = firstDefined((state.latestPacket.executive_modes || {}).company_id, state.activeCompany);
       state.activePortfolio = firstDefined((state.latestPacket.executive_modes || {}).portfolio_id, state.activePortfolio);
       ensureThreads();

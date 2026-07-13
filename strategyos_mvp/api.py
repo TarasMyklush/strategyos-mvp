@@ -4612,6 +4612,8 @@ def _executive_diagnostics_payload(
                 "active": str(item.get("key") or item.get("driver_key") or "") == active_driver_key,
                 "portfolio_id": item.get("portfolio_id"),
                 "pct": item.get("pct"),
+                "ring_pct": item.get("ring_pct"),
+                "ring_label": item.get("ring_label"),
                 "sub": item.get("sub"),
                 "provenance": item.get("provenance"),
                 "grounding": item.get("grounding"),
