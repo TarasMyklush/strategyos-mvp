@@ -3452,12 +3452,20 @@
       var rememberReadingPosition = function () {
         state.driverSelectionScrollY = window.scrollY;
       };
-      tile.addEventListener("pointerdown", rememberReadingPosition);
+      tile.addEventListener("pointerdown", function (event) {
+        rememberReadingPosition();
+        // A KPI tile can sit partly below the viewport. Native button focus
+        // then scrolls it fully into view before the click handler can restore
+        // the executive's reading position. Keep pointer selection focusless;
+        // keyboard users retain the normal focus path below.
+        if (event.isPrimary && event.button === 0) event.preventDefault();
+      });
       tile.addEventListener("touchstart", rememberReadingPosition, { passive: true });
       tile.addEventListener("keydown", function (event) {
         if (event.key === "Enter" || event.key === " ") rememberReadingPosition();
       });
-      tile.onclick = function () {
+      tile.onclick = function (event) {
+        if (event) event.preventDefault();
         var rememberedPosition = Number(state.driverSelectionScrollY);
         var readingPosition = Number.isFinite(rememberedPosition) ? rememberedPosition : window.scrollY;
         state.driverSelectionScrollY = null;
@@ -3481,6 +3489,7 @@
           restoreReadingPosition();
           window.setTimeout(restoreReadingPosition, 0);
           window.setTimeout(restoreReadingPosition, 220);
+          window.setTimeout(restoreReadingPosition, 600);
         });
       };
       grid.appendChild(tile);
@@ -3602,7 +3611,8 @@
       : "";
     var driverMarkup = drivers.length
       ? '<section class="kpi-driver-mix"><span class="kpi-brief-label">' + escapeHtml(firstDefined(brief.driver_title, "What makes up this figure")) + '</span><div class="kpi-driver-list">' + drivers.map(function (item) {
-          var share = Number(item.share_pct);
+          var rawShare = item && item.share_pct;
+          var share = rawShare === null || rawShare === undefined || rawShare === "" ? NaN : Number(rawShare);
           var width = Number.isFinite(share) ? Math.max(2, Math.min(100, Math.abs(share))) : 0;
           return '<div class="kpi-driver-row"><div class="kpi-driver-row__head"><span>' + escapeHtml(firstDefined(item.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(item.value, "—")) + (Number.isFinite(share) ? ' <small>' + escapeHtml(share.toFixed(1)) + '%</small>' : '') + '</strong></div>' + (width ? '<div class="kpi-driver-bar"><span style="width:' + escapeHtml(width.toFixed(1)) + '%"></span></div>' : '') + '</div>';
         }).join("") + '</div></section>'

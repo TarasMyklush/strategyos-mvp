@@ -1298,7 +1298,9 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "scrollIntoView" not in render_body
     assert "var readingPosition = Number.isFinite(rememberedPosition) ? rememberedPosition : window.scrollY;" in render_body
     assert "window.scrollTo(0, readingPosition)" in render_body
-    assert 'tile.addEventListener("pointerdown", rememberReadingPosition)' in render_body
+    assert 'tile.addEventListener("pointerdown", function (event)' in render_body
+    assert "event.preventDefault()" in render_body
+    assert "window.setTimeout(restoreReadingPosition, 600)" in render_body
     assert "state.driverSelectionScrollY" in render_body
     assert "aria-pressed" in render_body
     assert 'data-driver-key' in render_body
@@ -1309,6 +1311,7 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "data-kpi-question" in js
     assert "kpiMixChartMarkup(key, drivers)" in js
     assert "Share of the current reported figure" in js
+    assert 'rawShare === null || rawShare === undefined || rawShare === "" ? NaN' in js
     assert "data-kpi-inline-composer" not in js
     assert "executiveKpiBrief(driver)" in js
     assert 'id="driver-drill"' in html
