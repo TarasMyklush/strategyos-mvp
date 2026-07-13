@@ -10075,6 +10075,12 @@ def _assistant_response_payload(
         payload["hallucination_risk"] = scenario_result.get("hallucination_risk") or hallucination_risk
         payload["risk_metadata"]["hallucination_risk"] = payload["hallucination_risk"]
         payload["risk_metadata"]["traceable"] = bool((payload["hallucination_risk"] or {}).get("traceable"))
+        scenario_risk_level = str((payload["hallucination_risk"] or {}).get("level") or "").lower()
+        if not payload.get("grounding_status"):
+            if scenario_risk_level == "none" and payload["citations"]:
+                payload["grounding_status"] = "grounded"
+            elif str(scenario_result.get("scenario_type") or "") == "missing_data":
+                payload["grounding_status"] = "needs_evidence"
     payload["answer"] = _sanitize_assistant_visible_text(payload.get("answer"))
     return payload
 

@@ -2630,6 +2630,7 @@ def test_assistant_chat_models_target_margin_from_governed_finance_kpis_despite_
         assert payload["answered_by"] == "scenario"
         assert payload.get("llm_fallback_attempted", False) is False
         assert payload["hallucination_risk"]["level"] == "none"
+        assert payload["grounding_status"] == "grounded"
         assert "56.0%" in payload["answer"]
         assert "60.0%" in payload["answer"]
         assert "SAR 15,306,634.78" in payload["answer"]
