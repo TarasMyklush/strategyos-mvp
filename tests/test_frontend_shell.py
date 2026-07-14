@@ -854,6 +854,28 @@ def test_kg_render_includes_modern_elements():
     assert "No illustrative business data" not in js
 
 
+def test_kg_hover_uses_stable_hit_geometry():
+    """Hover emphasis must not move the SVG node under the pointer."""
+    js = _static_executive_js()
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert 'class="kg-node-hit"' in js
+    assert "interactionRadius" in js
+    assert ".kg-node-hit" in css
+    assert "pointer-events: all" in css
+
+    dot_start = css.index(".kg-node-dot {")
+    dot_end = css.index(".kg-node-dot--plan", dot_start)
+    dot_rule = css[dot_start:dot_end]
+    assert "pointer-events: none" in dot_rule
+    assert "transform" not in dot_rule
+
+    hover_start = css.index(".kg-node:hover .kg-node-dot")
+    hover_end = css.index("}", hover_start) + 1
+    hover_rule = css[hover_start:hover_end]
+    assert "transform" not in hover_rule
+
+
 def test_kg_inspector_has_ask_hermes_cta():
     """Inspector panel must include an 'Ask Hermes about this' CTA button."""
     js = _static_executive_js()

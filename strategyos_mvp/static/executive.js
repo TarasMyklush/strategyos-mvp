@@ -3266,11 +3266,13 @@
         var active = isNodeFocused(node, focused);
         var sizeClass = "";
         var nr = Number(node.r || 8);
+        var visualRadius = Math.max(node.synthetic ? 2.4 : 3.8, nr / (node.synthetic ? 1.05 : 1.65));
+        var interactionRadius = Math.max(7, visualRadius + 2.5);
         if (nr >= 12) sizeClass = " kg-node--major";
         else if (nr <= 7) sizeClass = " kg-node--minor";
         if (node.synthetic) sizeClass += ' kg-node--synthetic';
         var selClass = (isSelected === node.id) ? " is-selected" : "";
-        return '<g class="kg-node' + (active ? ' on' : ' off') + sizeClass + selClass + '" data-kg-id="' + escapeHtml(node.id) + '" tabindex="0" role="button" aria-label="' + escapeHtml(firstDefined(node.label, 'Node')) + ' — ' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || 'node')) + '"><circle class="kg-node-dot kg-node-dot--' + escapeHtml(node.category || 'default') + '" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(Math.max(node.synthetic ? 2.4 : 3.8, nr / (node.synthetic ? 1.05 : 1.65)))) + '"></circle></g>';
+        return '<g class="kg-node' + (active ? ' on' : ' off') + sizeClass + selClass + '" data-kg-id="' + escapeHtml(node.id) + '" tabindex="0" role="button" aria-label="' + escapeHtml(firstDefined(node.label, 'Node')) + ' — ' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || 'node')) + '"><circle class="kg-node-hit" aria-hidden="true" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(interactionRadius)) + '"></circle><circle class="kg-node-dot kg-node-dot--' + escapeHtml(node.category || 'default') + '" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(visualRadius)) + '"></circle></g>';
       }).join('')
       + '</svg>'
       /* Labels overlaid on SVG */

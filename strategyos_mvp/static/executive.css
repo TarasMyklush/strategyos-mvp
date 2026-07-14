@@ -1352,11 +1352,26 @@ a { color: inherit; }
   stroke-width: 0.28;
 }
 
+.kg-node {
+  cursor: pointer;
+}
+
+/*
+ * Keep pointer geometry independent from the animated/painted node. SVG
+ * transforms participate in hit testing differently across browsers; using
+ * the painted circle itself as the target caused hover enter/leave feedback.
+ */
+.kg-node-hit {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: all;
+}
+
 .kg-node-dot {
   opacity: 0.98;
   filter: drop-shadow(0 0 8px rgba(111, 140, 255, 0.16));
-  transition: fill 160ms ease, filter 160ms ease, opacity 180ms ease, transform 180ms ease;
-  transform-origin: center;
+  pointer-events: none;
+  transition: fill 160ms ease, filter 160ms ease, opacity 180ms ease, stroke 160ms ease, stroke-width 160ms ease;
 }
 
 .kg-node-dot--plan { fill: #6f8cff; }
@@ -1386,7 +1401,8 @@ a { color: inherit; }
 .kg-node:focus-visible .kg-node-dot,
 .kg-node.is-selected .kg-node-dot {
   filter: drop-shadow(0 0 14px rgba(110, 231, 255, 0.45));
-  transform: scale(1.45);
+  stroke: rgba(255,255,255,0.78);
+  stroke-width: 0.9;
 }
 
 .kg-node.is-selected .kg-node-dot {
