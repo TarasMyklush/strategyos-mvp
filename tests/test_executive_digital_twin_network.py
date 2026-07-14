@@ -110,6 +110,10 @@ def test_executive_ui_distinguishes_twins_from_automations_and_status_ring():
     assert 'id="subtools-panel" hidden' in html
     assert "automationCard.hidden = true" in js
     assert "System workflows — not digital twins" not in js
+    assert ".agents-col-head > div" in css
+    assert ".agents-col-head .ach-title" in css
+    assert ".agents-col-head .ach-hint" in css
+    assert "text-align: left" in css
     assert "This view highlights work in progress" in js
     assert "in progress" in js
     assert "need your attention" in js

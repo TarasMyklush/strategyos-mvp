@@ -5346,6 +5346,35 @@ html[data-theme="dark"] .trend-axis {
   color: var(--ink);
 }
 
+/* Shared AI-team column headers keep the title and explanatory line distinct.
+   Without this wrapper layout, adjacent inline spans visually merge into one
+   sentence and compete with the search field for width. */
+.agents-col-head {
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.agents-col-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.agents-col-head .ach-title,
+.agents-col-head .ach-hint {
+  display: block;
+}
+
+.agents-col-head .ach-hint {
+  text-align: left;
+  line-height: 1.45;
+}
+
+.agents-col-head .twin-search {
+  flex: 0 1 330px;
+  margin: 0 0 0 auto;
+}
+
 .rail-reconcile {
   display: grid;
   gap: 4px;
