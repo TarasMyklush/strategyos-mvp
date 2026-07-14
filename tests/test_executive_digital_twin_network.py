@@ -105,7 +105,6 @@ def test_governed_ebitda_answer_uses_same_finance_components_as_ceo_card():
                 },
             },
         },
-        "public_context_packet": {"is_illustrative": False},
     }
 
     result = parse_scenario("Explain the current EBITDA margin and bridge", context)

@@ -620,6 +620,44 @@ def _target_margin_from_prompt(prompt: str, prompt_numbers: list[dict[str, Any]]
     return target if Decimal("0") < target < Decimal("1") else None
 
 
+def _asks_for_governed_ebitda_baseline(normalized_prompt: str) -> bool:
+    """Identify factual EBITDA questions without swallowing forecast/FX intents."""
+    if not any(token in normalized_prompt for token in ("ebitda", "operating margin", "margin bridge")):
+        return False
+    if any(
+        token in normalized_prompt
+        for token in (
+            "forecast",
+            "project ",
+            "projection",
+            "scenario",
+            "assume",
+            "hedge",
+            "currency",
+            " fx ",
+            "risk to",
+            "impact of",
+            "what happens",
+        )
+    ):
+        return False
+    return any(
+        token in normalized_prompt
+        for token in (
+            "current",
+            "actual",
+            "explain",
+            "bridge",
+            "calculate",
+            "calculation",
+            "how is",
+            "how do",
+            "what is",
+            "show",
+        )
+    )
+
+
 def _finance_target_margin_result(
     target_margin: Decimal,
     baseline: Mapping[str, Any],
@@ -2757,18 +2795,25 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
     # and the source-derived baseline is present. Keep recovery, hedge, and all
     # legacy illustrative scenario families inside the governed-public boundary.
     public_packet = _public_packet(context)
-    if public_packet.get("is_illustrative") is False:
-        norm = _normalize(prompt)
-        prompt_numbers = _parse_numeric_tokens(prompt)
+    norm = _normalize(prompt)
+    prompt_numbers = _parse_numeric_tokens(prompt)
+
+    # Authenticated chat does not carry the anonymous/public packet marker. It
+    # still must use the same source-finance contract as the CEO card instead
+    # of falling through to the older tabular QA engine. A marker explicitly
+    # declaring illustrative data remains excluded from this route.
+    if public_packet.get("is_illustrative") is not True:
         target_margin = _target_margin_from_prompt(prompt, prompt_numbers)
         if target_margin is not None and any(token in norm for token in ("margin", "ebitda")):
             result = _parse_financial_what_if_guard(prompt, context)
             if result is not None:
                 return _hydrate_scenario_result(result)
-        if any(token in norm for token in ("ebitda", "operating margin", "margin bridge")):
+        if _asks_for_governed_ebitda_baseline(norm):
             baseline = _governed_finance_baseline(context)
             if baseline is not None:
                 return _hydrate_scenario_result(_finance_baseline_result(baseline))
+
+    if public_packet.get("is_illustrative") is False:
         result = _parse_governed_public_exec_surface(prompt, context, public_packet)
         return _hydrate_scenario_result(result)
 
