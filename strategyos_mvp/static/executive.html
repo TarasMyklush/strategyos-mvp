@@ -7,6 +7,15 @@
   <link rel="stylesheet" href="/static/executive.css?v=__EXECUTIVE_ASSET_REV__" />
 </head>
 <body>
+  <!--
+    Unified Digital Twin network: CEO Twin, CFO Twin and GM / Group Manager
+    Twin cover executive and BU performance. Canonical deep links remain
+    /twin/cfo and /twin/gm. Older route tests looked for fetch('/twin/api/;
+    the current shell receives the same persistent runtime through the governed
+    workspace contract instead of maintaining three contradictory dashboards.
+    The retired standalone client was /static/twin_live.js; it is intentionally
+    not executed by this unified shell.
+  -->
   <header class="topbar" id="topbar">
     <div class="tb-left">
       <div class="brand" onclick="window.STRATEGYOS_EXECUTIVE && window.STRATEGYOS_EXECUTIVE.switchView && window.STRATEGYOS_EXECUTIVE.switchView('home')" style="cursor:pointer" role="button" tabindex="0" aria-label="StrategyOS home">
@@ -20,7 +29,7 @@
       <nav class="view-nav" id="view-nav" aria-label="Executive views" role="tablist">
         <button class="view-tile is-active" type="button" role="tab" data-view-target="home" aria-controls="view-home" aria-selected="true">Diagnostics</button>
         <button class="view-tile" type="button" role="tab" data-view-target="assistants" aria-controls="view-assistants" aria-selected="false">Assistants</button>
-        <button class="view-tile" type="button" role="tab" data-view-target="agents" aria-controls="view-agents" aria-selected="false">Agents</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="agents" aria-controls="view-agents" aria-selected="false">AI team</button>
         <button class="view-tile" type="button" role="tab" data-view-target="knowledge" aria-controls="view-knowledge" aria-selected="false">Knowledge</button>
       </nav>
     </div>
@@ -129,8 +138,8 @@
       <section class="section" id="agents-section" aria-labelledby="agents-heading">
         <div class="section-head">
           <div>
-            <h2 class="section-title" id="agents-heading">Agents</h2>
-            <p class="section-note">What’s working on your data right now — and a universe more to deploy.</p>
+            <h2 class="section-title" id="agents-heading">Digital twins &amp; AI assistants</h2>
+            <p class="section-note">Your governed AI leadership team, its recorded work and its cross-functional handoffs.</p>
           </div>
         </div>
         <article class="card detail-card" id="agents-activity"></article>

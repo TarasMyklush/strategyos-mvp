@@ -105,6 +105,8 @@ from .vector_store import (
     search_run_vectors,
     vector_status_for_run,
 )
+from .twins.persona import TWIN_CATALOG
+from .twins.store import build_app_repositories
 ANONYMOUS_PUBLIC_RUN_ID = "latest-public"
 _LLM_PROVIDER_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="strategyos-llm")
 _LLM_PROVIDER_SEMAPHORE = asyncio.Semaphore(8)
@@ -4907,121 +4909,192 @@ def _chat_threads_payload(
     }
 
 
+def _permitted_twin_surface_route(twin_role: str, principal_role: str) -> str | None:
+    routes = {"ceo": "/twin/ceo", "cfo": "/twin/cfo", "group_manager": "/twin/gm"}
+    allowed_roles = {
+        "ceo": ("executive", "tenant_admin", "system"),
+        "cfo": ("operator", "reviewer", "tenant_admin", "system"),
+        "group_manager": ("bu", "operator", "tenant_operator", "tenant_admin", "system"),
+    }
+    if twin_role not in routes or not principal_has_any_role(
+        principal_role, *allowed_roles[twin_role]
+    ):
+        return None
+    return routes[twin_role]
+
+
 def _agents_surface_payload(
     summary: dict[str, Any] | None,
     principal: dict[str, Any],
 ) -> dict[str, Any]:
-    role = str(principal.get("role") or "anonymous")
-    authenticated = bool(principal.get("authenticated"))
-    rows = _finding_rows_from_summary(summary) if isinstance(summary, dict) else []
-    audit_summary = (
-        _latest_run_audit_summary_payload(summary) if isinstance(summary, dict) else None
+    """Return the CEO's read-only view of the real Digital Twin runtime.
+
+    Workflow modules deliberately do not enter this contract. They are governed
+    automations and remain available through ``agent_modules``. Calling them
+    agents made the UI imply independent personas and conversations that did not
+    exist.
+    """
+    assistant_names = {
+        "ceo": "Hermes",
+        "cfo": "Atlas",
+        "group_manager": "Iris",
+    }
+    configured_roles = (
+        "ceo",
+        "cfo",
+        "group_manager",
+        "strategy",
+        "analyst",
+        "reviewer",
     )
-    publication = _summary_publication_payload(summary, principal_role=role)
-    plan_health = _bounded_plan_health_payload(summary, rows, audit_summary)
-    connectors = build_ingestion_connector_catalog(principal_role=role)
-    challenged_count = int((publication or {}).get("challenged_cases") or 0)
-    current_stage = _normalize_lifecycle_stage((summary or {}).get("current_stage"))
-    approval_status = str((publication or {}).get("approval_status") or "pending").lower()
-    release_status = str((publication or {}).get("status") or "draft").lower()
-    run_id = str((summary or {}).get("run_id") or "latest")
-    created_label = str((summary or {}).get("created_at") or "latest run")
-    activity_design = {}
-    running_design = []
-    discover_design = []
-    subtools_design = []
-    running = [
+    principal_role = str(principal.get("role") or "anonymous")
+    repositories = build_app_repositories()
+    states = {str(item.get("role") or ""): item for item in repositories.states.list()}
+    inboxes = repositories.inboxes.list()
+    all_investigations = repositories.investigations.list()
+    cycle_history = repositories.cycle_history.list(limit=50)
+    collaboration_events = repositories.governance.list_routing_events(limit=20)
+    twins: list[dict[str, Any]] = []
+    pending_request_total = 0
+    attention_total = 0
+
+    for twin_role in configured_roles:
+        persona = TWIN_CATALOG[twin_role]
+        state = states.get(twin_role) or {}
+        investigations = list((all_investigations or {}).get(twin_role) or [])
+        active_investigations = [
+            item for item in investigations
+            if str(item.get("status") or "open").lower()
+            not in {"completed", "resolved", "closed", "no_action"}
+        ]
+        requests = repositories.requests.list(twin_role, limit=50)
+        pending_requests = [
+            item for item in requests
+            if str(item.get("status") or "pending").lower()
+            not in {"fulfilled", "failed", "expired", "cancelled"}
+        ]
+        pending_request_total += len(pending_requests)
+        needs_attention = any(
+            str(item.get("status") or "").lower()
+            in {"pending_human_review", "blocked_pending_review", "approval"}
+            for item in active_investigations
+        )
+        if needs_attention:
+            attention_total += 1
+        last_wake = state.get("last_wake_at")
+        cycle_count = int(state.get("cycle_count") or 0)
+        if not CONFIG.twins_enabled:
+            runtime_status = "disabled"
+        elif needs_attention:
+            runtime_status = "attention"
+        elif active_investigations or pending_requests:
+            runtime_status = "active"
+        elif last_wake or cycle_count:
+            runtime_status = "monitoring"
+        else:
+            runtime_status = "ready"
+        current_activity = "Ready to monitor governed data when a cycle is started."
+        if active_investigations:
+            latest = active_investigations[-1]
+            current_activity = str(
+                latest.get("query")
+                or latest.get("title")
+                or latest.get("summary")
+                or "Investigating a governed signal."
+            )
+        elif pending_requests:
+            latest = pending_requests[0]
+            current_activity = str(latest.get("subject") or "Waiting for another twin to respond.")
+        elif last_wake:
+            current_activity = "Monitoring its governed KPIs; no open investigation is recorded."
+        twins.append(
+            {
+                "twin_id": str(state.get("twin_id") or f"configured:{twin_role}"),
+                "role": twin_role,
+                "display_name": persona.display_name,
+                "assistant_name": assistant_names.get(twin_role),
+                "status": runtime_status,
+                "last_wake_at": last_wake,
+                "cycle_count": cycle_count,
+                "active_investigation_count": len(active_investigations),
+                "pending_request_count": len(pending_requests),
+                "inbox_count": len((inboxes or {}).get(twin_role) or []),
+                "current_activity": current_activity,
+                "kpis_owned": list(persona.kpis_owned),
+                "goals": list(persona.goals),
+                "authority": persona.authority,
+                "escalation_path": list(persona.escalation_path),
+                "route": _permitted_twin_surface_route(twin_role, principal_role),
+            }
+        )
+
+    recent_events = [
         {
-            "id": item.get("id") or f"agent-{index}",
-            "name": item.get("name") or "Agent",
-            "status": item.get("status") or "queued",
-            "tag": item.get("tag") or item.get("source") or "native",
-            "doing": item.get("doing") or "Awaiting agent detail.",
-            "by": item.get("by") or "StrategyOS",
-            "progress": item.get("progress") or 0,
-            "approval_required": str(item.get("status") or "").lower() == "approval",
-            "route": "/reviewer/pending-reviews"
-            if str(item.get("status") or "").lower() == "approval"
-            else publication.get("preview_route") or "/runs/latest/report-preview",
-            "log": list(item.get("log") or [{"t": created_label, "a": item.get("doing") or "Awaiting agent detail."}]),
+            "timestamp": item.get("timestamp"),
+            "source_role": item.get("source_role"),
+            "target_role": item.get("target_role"),
+            "event_type": item.get("event_type") or "handoff",
+            "subject": item.get("title") or item.get("reason") or "Governed handoff",
         }
-        for index, item in enumerate(running_design, start=1)
+        for item in collaboration_events
     ]
-    native_discovery = [
-        {
-            "id": f"native-{item.get('id') or index}",
-            "name": item.get("name") or "Native agent",
-            "source": item.get("source") or "native",
-            "glyph": item.get("glyph") or "◌",
-            "by": item.get("by") or "StrategyOS",
-            "desc": item.get("desc") or "Native agent surface",
-            "connector": item.get("connector") or "/runs/latest/findings?domain=evidence_qa",
-        }
-        for index, item in enumerate(discover_design, start=1)
-        if str(item.get("source") or "native").lower() == "native"
-    ]
-    market_discovery = [
-        {
-            "id": f"market-{item.get('id') or index}",
-            "name": item.get("name") or "Marketplace agent",
-            "source": item.get("source") or "market",
-            "glyph": item.get("glyph") or "⚡",
-            "by": item.get("by") or "Connector catalog",
-            "desc": item.get("desc") or "Marketplace agent surface",
-            "connector": item.get("connector") or "/ingestion/connectors",
-            "permitted": True,
-            "capabilities": [],
-        }
-        for index, item in enumerate(discover_design, start=1)
-        if str(item.get("source") or "").lower() == "market"
-    ] + [
+    payload = {
+        "contract_version": "digital_twin_network.v1",
+        "status": "ok" if CONFIG.twins_enabled else "disabled",
+        "label": "Digital twins & AI assistants",
+        "summary": {
+            "configured_count": len(twins),
+            "active_count": sum(1 for item in twins if item["status"] in {"active", "monitoring"}),
+            "attention_count": attention_total,
+            "pending_request_count": pending_request_total,
+            "collaboration_event_count": len(collaboration_events),
+        },
+        "digital_twins": twins,
+        "collaboration": {
+            "mode": "typed_inter_twin_protocol",
+            "pending_request_count": pending_request_total,
+            "inbox_count": sum(len(items or []) for items in (inboxes or {}).values()),
+            "recent_events": recent_events,
+        },
+        "runtime": {
+            "enabled": bool(CONFIG.twins_enabled),
+            "mutations_enabled": bool(CONFIG.twins_mutations_enabled),
+            "cycle_count": len(cycle_history),
+            "source": "persistent_twin_repositories",
+        },
+        "authenticated": bool(principal.get("authenticated")),
+    }
+    # Compatibility boundary for non-executive API clients released before the
+    # Digital Twin network contract. These lists stay empty by design: workflow
+    # modules and data connectors must never be reclassified as agents.
+    legacy_connectors = [
         {
             "id": f"connector-{item.get('connector_id')}",
-            "name": item.get("display_name") or "Connector",
-            "source": "market",
-            "glyph": "⚡",
-            "by": "Connector catalog",
-            "desc": "Deploys a governed data-ingestion route into the tenant runtime boundary.",
-            "connector": item.get("connector_id") or "/ingestion/connectors",
+            "name": item.get("display_name") or "Data connector",
+            "source": "connector_catalog",
+            "connector": item.get("connector_id"),
             "permitted": bool(item.get("permitted")),
-            "capabilities": list(item.get("capabilities") or ()),
         }
-        for item in connectors
+        for item in build_ingestion_connector_catalog(
+            principal_role=str(principal.get("role") or "anonymous")
+        )
     ]
-    return {
-        "design_activity": activity_design,
-        "status": "ok" if summary else "awaiting_run",
-        "activity": {
-            "line": activity_design.get("line") or plan_health.get("summary") or "No governed packet is available yet.",
-            "metrics": [
-                {"k": "running", "v": sum(1 for item in running if item["status"] in {"running", "approval"})},
-                {"k": "needs approval", "v": sum(1 for item in running if item["status"] == "approval")},
-                {"k": "discoverable", "v": len(native_discovery) + len(market_discovery)},
-            ],
-            "design_metrics": list(activity_design.get("metrics") or []),
-            "log": list(activity_design.get("log") or [
-                {"t": created_label, "who": "StrategyOS", "a": plan_health.get("next_action") or "continue_workflow"},
-                {"t": run_id, "who": "Runtime", "a": f"Publish state {publication.get('publish_state') or 'draft'}"},
-            ]),
-        },
-        "running": running,
-        "discover": {
-            "search_placeholder": "Search the agent universe…",
-            "deploy_route": "/ingestion/connectors",
-            "native": native_discovery,
-            "marketplace": market_discovery,
-        },
-        "sub_agents": [
-            {
-                "name": item.get("name") or "Subtool",
-                "glyph": item.get("glyph") or "⌁",
-                "desc": item.get("desc") or "Subtool surface",
-            }
-            for item in subtools_design
-        ],
-        "sovereign_note": "Agents remain bounded to the tenant runtime; every action is surfaced through governed routes, not hidden automation.",
-        "authenticated": authenticated,
-    }
+    payload.update(
+        {
+            "running": [],
+            "discover": {"native": [], "marketplace": legacy_connectors},
+            "activity": {
+                "line": "Digital Twin activity is reported from the persistent runtime.",
+                "metrics": [
+                    {"k": "configured", "v": len(twins)},
+                    {"k": "active", "v": payload["summary"]["active_count"]},
+                    {"k": "discoverable", "v": len(legacy_connectors)},
+                ],
+                "log": recent_events,
+            },
+        }
+    )
+    return payload
 
 
 def _tenant_admin_system_payload(
@@ -8050,25 +8123,25 @@ def latest_plan_tracker(
 @app.get("/twin/ceo", response_class=HTMLResponse)
 def twin_ceo_dashboard(
     principal: dict[str, Any] = require_twin_dashboard_access("ceo"),
-) -> HTMLResponse:
-    """Serve the CEO twin dashboard."""
-    return HTMLResponse((TWINS_STATIC_DIR / "ceo.html").read_text(encoding="utf-8"))
+) -> RedirectResponse:
+    """Open the live, database-backed CEO twin in the executive network."""
+    return RedirectResponse(url="/app?persona=ceo&agent=ceo", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/twin/cfo", response_class=HTMLResponse)
 def twin_cfo_dashboard(
     principal: dict[str, Any] = require_twin_dashboard_access("cfo"),
-) -> HTMLResponse:
-    """Serve the CFO twin dashboard."""
-    return HTMLResponse((TWINS_STATIC_DIR / "cfo.html").read_text(encoding="utf-8"))
+) -> RedirectResponse:
+    """Open the live, database-backed CFO twin in the executive network."""
+    return RedirectResponse(url="/app?persona=ceo&agent=cfo", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/twin/gm", response_class=HTMLResponse)
 def twin_gm_dashboard(
     principal: dict[str, Any] = require_twin_dashboard_access("gm"),
-) -> HTMLResponse:
-    """Serve the Group Manager twin dashboard."""
-    return HTMLResponse((TWINS_STATIC_DIR / "gm.html").read_text(encoding="utf-8"))
+) -> RedirectResponse:
+    """Open the live, database-backed Group Manager twin in the executive network."""
+    return RedirectResponse(url="/app?persona=ceo&agent=group_manager", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/ui/session")

@@ -91,8 +91,8 @@ def test_ceo_jargon_replacements():
     assert "Runs on your infrastructure" not in js, (
         "Sovereign text must be CEO-friendly"
     )
-    assert "StrategyOS assistants" in js, (
-        "Native assistant section must use a clear heading instead of an orphaned 'Built-in' label"
+    assert "Digital twins and AI assistants" in js, (
+        "AI team must use the reference-aligned Digital Twin vocabulary"
     )
     assert "Board reports" in js, (
         "Report surface must be rebadged as 'Board reports'"
@@ -793,34 +793,15 @@ def test_ceo_greeting_response_humane():
     assert 'postJson("/assistant/chat"' in js
 
 
-def test_ceo_clickability_disco_add_fixed():
-    """disco-add buttons must have explicit action handling in JS.
-
-    Previously, '.disco-add' buttons in the agents discovery panel were
-    silent dead buttons with no onclick handler. This test verifies:
-    1. disco-add buttons have onclick handler binding in JS
-    2. the binding routes through the governed open/request flow
-    """
+def test_ceo_digital_twin_cards_and_search_are_interactive():
+    """Digital Twin cards and search must have explicit action handling."""
     js = _static_executive_js()
 
-    # 1. disco-add buttons must have onclick handler binding
-    assert "disco-add" in js, (
-        "disco-add buttons must exist in JS"
-    )
-    assert ".disco-add" in js or "disco-add" in js, (
-        "disco-add class selector must be present for binding"
-    )
-
-    # The old toast-only handler made mobile taps appear dead. The binding
-    # must now dispatch to the explicit open/request flow.
-    assert "data-agent-discovery-id" in js, (
-        "disco-add buttons must carry a stable discovery id"
-    )
-    assert "handleDiscoverableAgentAction(item, button)" in js, (
-        "disco-add clicks must dispatch through the governed action handler"
-    )
+    assert "data-twin-toggle" in js
+    assert "twin-network-search" in js
+    assert "state.openAgentId = state.openAgentId === id ? '' : id" in js
     assert "showAgentInstallRequest(item, sourceEl)" in js, (
-        "restricted discovery actions must open the install/request modal"
+        "connector installation must remain a separate governed flow"
     )
     assert "Operator-gated install" in js, (
         "restricted discovery actions must show an operator-gated install message"
@@ -832,10 +813,7 @@ def test_ceo_clickability_disco_add_fixed():
         "disco-add must not regress to the old invisible toast-only non-CEO path"
     )
 
-    # Verify the binding uses forEach over querySelectorAll('.disco-add')
-    assert "querySelectorAll('.disco-add')" in js, (
-        "disco-add buttons must be bound via querySelectorAll"
-    )
+    assert "querySelectorAll('[data-twin-toggle]')" in js
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -915,12 +893,13 @@ def test_week_ahead_toggle_behavior():
     )
 
 
-def test_browse_all_agents_stays_in_agents_workspace():
-    """#6: Browse All Agents must expose the catalogue, not redirect to chat."""
+def test_ai_team_search_stays_in_agents_workspace():
+    """AI-team search must filter in place, not redirect to chat."""
     js = _static_executive_js()
 
     assert 'data-view-target="agents"' in _ceo_executive_html()
-    assert 'state.discoveryQuery = \'\';' in js
+    assert "state.discoveryQuery = search.value || '';" in js
+    assert "renderAgentsDiscovery();" in js
     assert "Show me the agent catalogue" not in js, (
         "CEO Browse All Agents must not submit a canned assistant prompt"
     )
@@ -1073,23 +1052,15 @@ def test_logo_home_link():
     )
 
 
-def test_tenant_runtime_watch_renamed():
-    """#17: 'Tenant runtime watch' must be renamed to 'System health monitor'."""
+def test_workflow_modules_are_labelled_as_automations_not_twins():
+    """Workflow monitors must not be presented as personified AI agents."""
     js = _static_executive_js()
     html = _ceo_executive_html()
 
-    # Old name appearance: may exist as key in replacement mapping; verify transform is present
-    assert "System health monitor" in js, (
-        "JS must contain 'System health monitor' as replacement"
-    )
-    # The HTML served to CEO must not render the old name
+    assert "Governed automations" in js
+    assert "System workflows — not digital twins" in js
     assert "Tenant runtime watch" not in html, (
         "CEO HTML must not render 'Tenant runtime watch'"
-    )
-    # The replacement mapping must exist
-    assert "'Tenant runtime watch': 'System health monitor'" in js or \
-        '"Tenant runtime watch": "System health monitor"' in js, (
-        "JS must have a mapping from 'Tenant runtime watch' to 'System health monitor'"
     )
     # Also check Python API
     api_path = Path(__file__).resolve().parent.parent / \
@@ -1351,31 +1322,16 @@ def test_evidence_chain_hidden_by_default():
     )
 
 
-def test_agents_grammar_need_your_attention():
-    """#3: Agents Running Now must say 'need your attention', not 'needs you'.
-    
-    Scoped to agents section only — 'needs your' in dead-end guard text
-    (e.g. 'the margin narrative needs your line') is correct grammar and
-    unrelated to the agents-label requirement.
-    """
+def test_digital_twin_attention_label_is_ceo_friendly():
+    """Twin attention status must name the required human action."""
     js = _static_executive_js()
 
-    assert "need your attention" in js, (
-        "Agents stats must say 'need your attention' (grammar fix)"
-    )
-    # 'needs you' must NOT appear in the agents section (line 2050-2090)
-    running_card_start = js.index("Running now")
-    running_card_end = running_card_start + 500
-    running_card_block = js[running_card_start:min(running_card_end, len(js))]
-    assert "needs you" not in running_card_block, (
-        "Old 'needs you' grammar must be removed from agents section. "
-        "(False positives from dead-end guard 'needs your' are excluded.)"
-    )
+    assert 'attention: "Needs human review"' in js
+    assert "Running now" not in js
 
 
-def test_agent_status_labels_ceo_friendly():
-    """#4: Agent status labels must use CEO-friendly terms:
-    'Guarded' not 'Protected', 'View only' not 'Preview Only'."""
+def test_twin_status_labels_are_ceo_friendly():
+    """Twin runtime states must be translated into CEO-friendly labels."""
     js = _static_executive_js()
 
     # Global statusLabel map must include CEO-friendly mappings
@@ -1389,13 +1345,9 @@ def test_agent_status_labels_ceo_friendly():
         "statusLabel must map 'preview_only' to 'View only'"
     )
 
-    # Local statusLabel in renderAgentsDiscovery must also use CEO labels
-    assert "return 'Guarded'" in js, (
-        "renderAgentsDiscovery statusLabel must return 'Guarded' for protected"
-    )
-    assert "return 'View only'" in js, (
-        "renderAgentsDiscovery statusLabel must return 'View only'"
-    )
+    assert 'active: "Working"' in js
+    assert 'monitoring: "Monitoring"' in js
+    assert 'ready: "Ready"' in js
 
 
 def test_leaders_corner_single_youtube_link_per_card():

@@ -1,0 +1,117 @@
+from pathlib import Path
+
+from strategyos_mvp import api as api_module
+from strategyos_mvp.scenario_parser import parse_scenario
+from strategyos_mvp.twins.store import build_repositories
+
+
+def test_agents_surface_reads_persistent_digital_twin_runtime(tmp_path, monkeypatch):
+    repositories = build_repositories(tmp_path / "twins")
+    repositories.states.save(
+        "ceo",
+        {
+            "twin_id": "ceo-1",
+            "role": "ceo",
+            "last_wake_at": "2026-07-14T08:00:00+00:00",
+            "cycle_count": 3,
+            "active_investigations": {},
+            "pending_requests": {},
+        },
+    )
+    repositories.investigations.save(
+        "cfo",
+        {
+            "id": "inv-1",
+            "title": "Reconcile H1 EBITDA bridge",
+            "status": "open",
+        },
+    )
+    repositories.requests.save(
+        "cfo",
+        {
+            "request_message_id": "req-1",
+            "subject": "Confirm aligned H1 budget",
+            "status": "pending",
+            "updated_at": "2026-07-14T08:05:00+00:00",
+        },
+    )
+    repositories.governance.save_routing_event(
+        {
+            "event_id": "route-1",
+            "event_type": "handoff",
+            "source_role": "cfo",
+            "target_role": "ceo",
+            "title": "EBITDA evidence ready",
+            "timestamp": "2026-07-14T08:10:00+00:00",
+        }
+    )
+    monkeypatch.setattr(api_module, "build_app_repositories", lambda: repositories)
+
+    payload = api_module._agents_surface_payload(
+        {"run_id": "run-1"},
+        {"role": "executive", "authenticated": True},
+    )
+
+    assert payload["contract_version"] == "digital_twin_network.v1"
+    assert [item["role"] for item in payload["digital_twins"]] == [
+        "ceo",
+        "cfo",
+        "group_manager",
+        "strategy",
+        "analyst",
+        "reviewer",
+    ]
+    cfo = next(item for item in payload["digital_twins"] if item["role"] == "cfo")
+    assert cfo["assistant_name"] == "Atlas"
+    assert cfo["status"] == "active"
+    assert cfo["active_investigation_count"] == 1
+    assert cfo["pending_request_count"] == 1
+    assert cfo["current_activity"] == "Reconcile H1 EBITDA bridge"
+    assert cfo["route"] is None  # CEO may inspect the network, not enter CFO-only controls.
+    assert payload["collaboration"]["recent_events"][0]["subject"] == "EBITDA evidence ready"
+    assert payload["running"] == []  # Workflow modules are never relabelled as twins.
+
+
+def test_executive_ui_distinguishes_twins_from_automations_and_status_ring():
+    root = Path(api_module.STATIC_DIR)
+    js = (root / "executive.js").read_text(encoding="utf-8")
+    css = (root / "executive.css").read_text(encoding="utf-8")
+    html = (root / "executive.html").read_text(encoding="utf-8")
+
+    assert "Digital twins &amp; AI assistants" in html
+    assert "Your AI leadership team" in js
+    assert "System workflows — not digital twins" in js
+    assert "agents.digital_twins" in js
+    assert 'reviewGate ? "Review"' in js
+    assert 'dot.style.visibility = hasScore && clampedScore > 0 ? "visible" : "hidden"' in js
+    assert ".hero-score.is-status .score-ring__dot" in css
+    assert "--display: var(--serif)" in css
+
+
+def test_governed_ebitda_answer_uses_same_finance_components_as_ceo_card():
+    context = {
+        "summary": {
+            "reporting_period": "H1 2026",
+            "finance_kpi": {
+                "reporting_period_key": "H1 2026",
+                "reporting_currency": "SAR",
+                "components": {
+                    "revenue_actual": 1000,
+                    "cogs_actual": 300,
+                    "operating_cost_actual": 140,
+                    "ebitda_actual": 560,
+                    "revenue_plan": None,
+                    "ebitda_plan": None,
+                },
+            },
+        },
+        "public_context_packet": {"is_illustrative": False},
+    }
+
+    result = parse_scenario("Explain the current EBITDA margin and bridge", context)
+
+    assert result.scenario_id == "governed_ebitda_baseline"
+    assert "56.0%" in result.answer
+    assert "SAR 560" in result.answer
+    assert "have not shown a plan variance" in result.answer
+    assert result.basis == "Read from the same governed finance contract used by the CEO KPI card."

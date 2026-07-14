@@ -497,6 +497,8 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
         cogs = _decimal_or_none(components.get("cogs_actual"))
         operating_cost = _decimal_or_none(components.get("operating_cost_actual"))
         ebitda = _decimal_or_none(components.get("ebitda_actual"))
+        revenue_plan = _decimal_or_none(components.get("revenue_plan"))
+        ebitda_plan = _decimal_or_none(components.get("ebitda_plan"))
         if revenue is None or revenue <= 0:
             continue
 
@@ -540,9 +542,67 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
             "cogs": cogs,
             "operating_cost": operating_cost,
             "ebitda": ebitda,
+            "revenue_plan": revenue_plan,
+            "ebitda_plan": ebitda_plan,
             "citations": citations,
         }
     return None
+
+
+def _finance_baseline_result(baseline: Mapping[str, Any]) -> ScenarioResult:
+    """Explain the same EBITDA identity and period used by the CEO card."""
+    revenue = Decimal(baseline["revenue"])
+    cogs = Decimal(baseline["cogs"])
+    operating_cost = Decimal(baseline["operating_cost"])
+    ebitda = Decimal(baseline["ebitda"])
+    margin = ebitda / revenue
+    revenue_plan = baseline.get("revenue_plan")
+    ebitda_plan = baseline.get("ebitda_plan")
+    citations = list(baseline["citations"])
+    comparison = (
+        f" The aligned plan margin is {_percent(float(Decimal(ebitda_plan) / Decimal(revenue_plan)), 1)}."
+        if revenue_plan is not None and ebitda_plan is not None and Decimal(revenue_plan) > 0
+        else " No approved EBITDA and revenue plan for the same scope and period is available, so I have not shown a plan variance."
+    )
+    answer = (
+        f"For {baseline['period']}, EBITDA margin is {_percent(float(margin), 1)}. "
+        f"That is {_sar_executive_decimal(ebitda)} of EBITDA on {_sar_executive_decimal(revenue)} revenue, "
+        f"after {_sar_executive_decimal(cogs)} cost of goods sold and "
+        f"{_sar_executive_decimal(operating_cost)} operating cost."
+        f"{comparison}"
+    )
+    return ScenarioResult(
+        scenario_id="governed_ebitda_baseline",
+        scenario_label="Finance - EBITDA Baseline",
+        matched=True,
+        answer=answer,
+        calculations=[
+            CalculationStep(
+                step_id="governed_ebitda_baseline",
+                description="Reconcile the EBITDA measure shown on the CEO dashboard",
+                formula="EBITDA = revenue - COGS - operating cost; EBITDA margin = EBITDA / revenue",
+                inputs={
+                    "period": baseline["period"],
+                    "revenue_sar": str(revenue),
+                    "cogs_sar": str(cogs),
+                    "operating_cost_sar": str(operating_cost),
+                },
+                result={
+                    "ebitda_sar": _sar_decimal(ebitda),
+                    "ebitda_margin": _percent(float(margin), 1),
+                },
+                unit="SAR and percent",
+                citations=citations,
+            )
+        ],
+        kg_context=[],
+        citations=citations,
+        assumptions=[],
+        hallucination_risk=_risk_none("Current-run finance components and the governed EBITDA identity."),
+        suggestions=["Model a target EBITDA margin", "Show the EBITDA calculation", "Which costs are included?"],
+        scenario_type="deterministic",
+        basis="Read from the same governed finance contract used by the CEO KPI card.",
+    )
 
 
 def _target_margin_from_prompt(prompt: str, prompt_numbers: list[dict[str, Any]]) -> Decimal | None:
@@ -2705,6 +2765,10 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
             result = _parse_financial_what_if_guard(prompt, context)
             if result is not None:
                 return _hydrate_scenario_result(result)
+        if any(token in norm for token in ("ebitda", "operating margin", "margin bridge")):
+            baseline = _governed_finance_baseline(context)
+            if baseline is not None:
+                return _hydrate_scenario_result(_finance_baseline_result(baseline))
         result = _parse_governed_public_exec_surface(prompt, context, public_packet)
         return _hydrate_scenario_result(result)
 

@@ -970,7 +970,8 @@
       board: state.activeBoard,
       driver: state.activeDriverKey,
       company: state.activeCompany,
-      portfolio: state.activePortfolio
+      portfolio: state.activePortfolio,
+      agent: state.activeView === "agents" ? state.openAgentId : ""
     });
     window.history.replaceState({}, "", route + query);
   }
@@ -981,7 +982,8 @@
       board: state.activeBoard,
       driver: state.activeDriverKey,
       company: state.activeCompany,
-      portfolio: state.activePortfolio
+      portfolio: state.activePortfolio,
+      agent: state.activeView === "agents" ? state.openAgentId : ""
     };
   }
 
@@ -3374,7 +3376,7 @@
     var hero = diagnostics.hero || {};
     var publication = getPublication();
     var boardPortal = getBoardPortal();
-    var agents = getAgentsModule();
+    var agents = (state.latestPacket && state.latestPacket.agents) || {};
     var fullName = sessionDisplayName();
     var firstName = fullName ? fullName.split(/\s+/)[0] : getPersonaLabel(state.activePersona);
     var preferredHero = hero && (hero.summary || hero.body || hero.score_note) ? hero : (blueprint.health || {});
@@ -3391,7 +3393,7 @@
     var miniStats = [
       { label: "Board state", value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
       { label: "Reports", value: String(firstDefined(publication.report_count, 0)) + (state.activePersona === "ceo" ? " reports ready" : " surfaced") },
-      { label: "Agents", value: String(firstDefined((agents.summary || {}).running_count, diagnostics.agents && diagnostics.agents.running_count, 0)) + (state.activePersona === "ceo" ? " agents active" : " running") },
+      { label: "AI team", value: String(firstDefined((agents.summary || {}).active_count, 0)) + " AI agents active" },
       { label: state.activePersona === "ceo" ? "Needs review" : "Next move", value: state.activePersona === "ceo" ? String(firstDefined(publication.challenged_cases, safeArray((getDrilldown().owed_upward || {}).items).length, 0)) + " items need review" : humanizeToken(firstDefined(getPlanHealth().next_action, (boardPortal.state_detail || {}).title, "review")) }
     ];
 
@@ -3402,12 +3404,20 @@
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
     var truthSourceBadge = diagnostics.source === "database" ? "DB" : diagnostics.source === "governed_artifacts" ? "RUN" : "--";
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
-    var heroScoreText = hasScore ? String(clampedScore || 0) : (reviewGate ? "OPEN" : truthSourceBadge);
+    // The former `reviewGate ? "OPEN"` / `reviewGate ? "reviewer decision"`
+    // treatment falsely rendered a workflow status as a progress score.
+    var heroScoreText = hasScore ? String(clampedScore || 0) : (reviewGate ? "Review" : truthSourceBadge);
     $("hero-score").textContent = heroScoreText;
     // Board-gate labels must remain a single, centred word inside the same
     // 128px reference ring across every governed state (DB, RUN, OPEN, REVIEW).
     $("hero-score").classList.toggle("hero-score__value--compact", heroScoreText.length > 4);
-    $("hero-cap").textContent = reviewGate ? "reviewer decision" : firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
+    $("hero-cap").textContent = reviewGate ? "human gate" : firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
+    var scoreMedallion = $("hero-score").closest ? $("hero-score").closest(".hero-score") : null;
+    if (scoreMedallion) {
+      scoreMedallion.classList.toggle("is-status", !hasScore);
+      scoreMedallion.classList.toggle("is-score", hasScore);
+      scoreMedallion.setAttribute("aria-label", reviewGate ? "Human review decision required" : (hasScore ? "Plan health score " + heroScoreText : "Governed data status " + heroScoreText));
+    }
     var byline = $("hero-byline");
     if (byline) {
       var bylineText = firstDefined(blueprint.by, "");
@@ -3439,7 +3449,7 @@
       var dotCy = 64 - 60 * Math.cos(angleRad);
       dot.setAttribute("cx", String(Math.round(dotCx * 10) / 10));
       dot.setAttribute("cy", String(Math.round(dotCy * 10) / 10));
-      dot.style.visibility = "visible";
+      dot.style.visibility = hasScore && clampedScore > 0 ? "visible" : "hidden";
     }
 
     var promptRow = $("hero-prompts");
@@ -4647,169 +4657,78 @@
 
   function renderAgentsDiscovery() {
     var activityCard = $("agents-activity");
-    var runningCard = $("running-agents");
-    var discoveryCard = $("discovery-panel");
-    var subtoolsCard = $("subtools-panel");
-    var activity = getAgentActivitySummary();
-    var discoverable = getDiscoverableAgents().map(function (item, index) {
-      var copy = Object.assign({}, item || {});
-      copy.__discoveryId = discoverableAgentId(copy, index);
-      copy.__source = discoverableAgentSource(copy);
-      return copy;
-    });
-    var running = getRunningAgents();
-    var approvals = getApprovalAgents();
-    var subtools = getSubtools();
-    var combined = approvals.concat(running).sort(function (left, right) {
-      var order = { approval: 0, running: 1, standing: 2, queued: 3, done: 4 };
-      return Number(firstDefined(order[left && left.status], 9)) - Number(firstDefined(order[right && right.status], 9));
-    });
+    var networkCard = $("running-agents");
+    var collaborationCard = $("discovery-panel");
+    var automationCard = $("subtools-panel");
+    var agents = (state.latestPacket && state.latestPacket.agents) || {};
+    var summary = agents.summary || {};
+    var collaboration = agents.collaboration || {};
+    var runtime = agents.runtime || {};
     var query = String(state.discoveryQuery || "").trim().toLowerCase();
-    function matchesDiscoveryQuery(item) {
+    var twins = safeArray(agents.digital_twins).filter(function (item) {
       if (!query) return true;
-      return [
-        item && item.name,
-        item && item.label,
-        item && item.desc,
-        item && item.summary,
-        item && item.connector,
-        item && item.route,
-        item && item.__source,
-        safeArray(item && item.capabilities).join(" ")
-      ].join(" ").toLowerCase().indexOf(query) !== -1;
-    }
-    var filteredDiscoverable = discoverable.filter(matchesDiscoveryQuery);
-    var nativeAgents = filteredDiscoverable.filter(function (item) { return item.__source === 'native'; });
-    var marketAgents = filteredDiscoverable.filter(function (item) { return item.__source !== 'native'; });
+      return [item.display_name, item.assistant_name, item.role, item.current_activity]
+        .concat(safeArray(item.kpis_owned), safeArray(item.goals))
+        .join(" ").toLowerCase().indexOf(query) !== -1;
+    });
 
-    function statusLabel(item, approved) {
-      var status = String(firstDefined(item && item.status, 'running'));
-      if (status === 'approval' && approved) return 'Approved';
-      if (status === 'approval') return 'Needs your approval';
-      if (status === 'standing') return 'Standing watch';
-      if (status === 'running') return 'Running';
-      if (status === 'protected') return 'Guarded';
-      if (status === 'board_safe_preview' || status === 'board_safe_publication' || status === 'preview' || status === 'preview_only') return 'View only';
-      return humanizeToken(status);
+    function twinTitle(item) {
+      return item.assistant_name
+        ? item.assistant_name + " · " + firstDefined(item.display_name, humanizeToken(item.role))
+        : firstDefined(item.display_name, humanizeToken(item.role));
+    }
+
+    function twinStatus(status) {
+      var labels = {
+        attention: "Needs human review",
+        active: "Working",
+        monitoring: "Monitoring",
+        ready: "Ready",
+        disabled: "Disabled"
+      };
+      return labels[String(status || "ready")] || humanizeToken(status);
     }
 
     if (activityCard) {
-      activityCard.innerHTML = '<div class="agent-activity' + (state.agentSummaryOpen ? ' is-open' : '') + '"><button type="button" class="agent-activity-line" data-agent-summary-toggle="true"><span class="aa-text">' + escapeHtml(firstDefined(activity.line, 'What is working on your data right now — and a universe more to deploy.')) + '</span><span class="aa-toggle">' + (state.agentSummaryOpen ? 'hide detail' : 'view detail') + '</span></button>' + (state.agentSummaryOpen ? '<div class="aa-detail"><div class="aa-metrics">' + safeArray(activity.metrics).map(function (item) {
-        return '<div class="aa-metric"><span class="aa-metric-v">' + escapeHtml(firstDefined(item.v, item.value, '0')) + '</span><span class="aa-metric-k">' + escapeHtml(firstDefined(item.k, item.label, 'metric')) + '</span></div>';
-      }).join('') + '</div><ol class="aa-trail">' + safeArray(activity.log).map(function (item) { return '<li class="aa-trail-item"><span class="trail-time">' + escapeHtml(firstDefined(item.t, 'now')) + '</span><span class="aa-who">' + escapeHtml(firstDefined(item.who, 'agent')) + '</span><span class="aa-act">' + escapeHtml(firstDefined(item.a, 'activity')) + '</span></li>'; }).join('') + '</ol></div>' : '') + '</div>';
-      var summaryToggle = activityCard.querySelector('[data-agent-summary-toggle]');
-      if (summaryToggle) {
-        summaryToggle.onclick = function () {
-          state.agentSummaryOpen = !state.agentSummaryOpen;
-          renderAgentsDiscovery();
-        };
-      }
+      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Governed AI team</span><h3>Digital twins and AI assistants</h3><p>Each twin has a defined remit, owned KPIs and escalation path. Activity below comes from the persistent runtime — a configured twin is not shown as “running” unless it has recorded work.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(firstDefined(summary.configured_count, 0))) + '</strong><span>configured</span></div><div><strong>' + escapeHtml(String(firstDefined(summary.active_count, 0))) + '</strong><span>active</span></div><div><strong>' + escapeHtml(String(firstDefined(summary.attention_count, 0))) + '</strong><span>need review</span></div></div></div>';
     }
 
-    if (runningCard) {
-      var runningCount = combined.filter(function (item) {
-        return ['running', 'standing'].indexOf(String(firstDefined(item.status, ''))) !== -1;
-      }).length;
-      var needsApproval = approvals.filter(function (item) {
-        return !state.approvedAgentIds[firstDefined(item.id, item.module_id, item.name, '')];
-      }).length;
-      var sovereignLine = state.activePersona === "ceo" ? '' : '<div class="agents-sovereign"><span class="sov-dot"></span> sovereign · runs in-tenant · every action logged</div>';
-      runningCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Running now</span><span class="ach-stats"><span class="agent-pulse running"></span> ' + escapeHtml(String(runningCount)) + ' running' + (needsApproval ? '<span class="ach-needs"> · ' + escapeHtml(String(needsApproval)) + ' need your attention</span>' : '') + '</span></div><div class="agents-clist">' + combined.map(function (item) {
-        var id = firstDefined(item.id, item.module_id, item.name, 'agent');
+    if (networkCard) {
+      networkCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Your AI leadership team</span><span class="ach-hint">Role-specific digital twins</span></div><label class="disco-search twin-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search digital twins</span><input id="twin-network-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search twins, responsibilities or KPIs…" autocomplete="off" /></label></div><div class="twin-card-list">' + (twins.length ? twins.map(function (item) {
+        var id = String(firstDefined(item.role, item.twin_id, "twin"));
         var isOpen = state.openAgentId === id;
-        var logOpen = state.openAgentLogId === id;
-        var approved = !!state.approvedAgentIds[id];
-        var showBar = ['running', 'approval'].indexOf(String(firstDefined(item.status, ''))) !== -1;
-        return '<div class="agent-c' + (isOpen ? ' is-open' : '') + '"><button type="button" class="agent-c-head" data-agent-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="agent-pulse ' + escapeHtml(String(firstDefined(item.status, 'running'))) + '"></span><span class="agent-name">' + escapeHtml(firstDefined(item.name, item.label, id)) + '</span><span class="agent-status s-' + escapeHtml(String(firstDefined(item.status, 'running'))) + '">' + escapeHtml(statusLabel(item, approved)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (showBar ? '<div class="agent-prog"><span class="agent-prog-bar tone-' + escapeHtml(toneClass(firstDefined(item.status, 'running'))) + '" style="width:' + escapeHtml(String(Math.max(6, Number(firstDefined(item.progress, 0)) || 0))) + '%"></span></div>' : '') + (isOpen ? '<div class="agent-c-body"><span class="tag agent-tag">' + escapeHtml(firstDefined(item.tag, 'runtime')) + '</span><p class="agent-doing">' + escapeHtml(approved && item.status === 'approval' ? 'Approved — executing now. Audit entry written.' : firstDefined(item.doing, item.summary, 'No additional runtime detail is available for this module.')) + '</p><div class="agent-c-foot"><span class="agent-by">deployed by ' + escapeHtml(firstDefined(item.by, 'StrategyOS')) + '</span><button type="button" class="agent-log-btn' + (logOpen ? ' is-open' : '') + '" data-agent-log="' + escapeHtml(id) + '" aria-expanded="' + (logOpen ? 'true' : 'false') + '">◷ audit log <span class="agent-log-count">' + escapeHtml(String(safeArray(item.log).length)) + '</span></button></div>' + (item.status === 'approval' && !approved ? '<div class="agent-approve"><span class="agent-approve-note">⚠ This agent will <strong>act</strong> — held until you approve.</span><button type="button" class="agent-approve-btn" data-agent-approve="' + escapeHtml(id) + '">Approve &amp; let it execute</button></div>' : '') + (logOpen ? '<ol class="agent-trail">' + (safeArray(item.log).length ? safeArray(item.log).map(function (entry) { return '<li class="trail-item"><span class="trail-time">' + escapeHtml(firstDefined(entry.t, 'now')) + '</span><span class="trail-dot"></span><span class="trail-text">' + escapeHtml(firstDefined(entry.a, 'audit entry')) + '</span></li>'; }).join('') : '<li class="trail-item"><span class="trail-time">now</span><span class="trail-dot"></span><span class="trail-text">No audit entries are available yet.</span></li>') + '<li class="trail-foot">every action is logged in-tenant · tap any entry to see its evidence</li></ol>' : '') + '</div>' : '') + '</div>';
-      }).join('') + '</div>' + sovereignLine + (subtools.length ? '<div class="subtools"><div class="subtools-label">Available tools</div><div class="subtools-grid">' + subtools.map(function (item) { return '<div class="subtool"><span class="subtool-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25a6')) + '</span><div class="subtool-meta"><span class="subtool-name">' + escapeHtml(firstDefined(item.name, 'Tool')) + '</span><span class="subtool-desc">' + escapeHtml(firstDefined(item.desc, 'Named sub-agent')) + '</span></div></div>'; }).join('') + '</div></div>' : '');
-      safeArray(runningCard.querySelectorAll('[data-agent-toggle]')).forEach(function (button) {
-        button.onclick = function () {
-          var id = button.getAttribute('data-agent-toggle') || '';
-          state.openAgentId = state.openAgentId === id ? '' : id;
-          if (state.openAgentId !== id) state.openAgentLogId = '';
-          renderAgentsDiscovery();
-        };
-      });
-      safeArray(runningCard.querySelectorAll('[data-agent-log]')).forEach(function (button) {
-        button.onclick = function (event) {
-          event.stopPropagation();
-          var id = button.getAttribute('data-agent-log') || '';
-          state.openAgentId = id;
-          state.openAgentLogId = state.openAgentLogId === id ? '' : id;
-          renderAgentsDiscovery();
-        };
-      });
-      safeArray(runningCard.querySelectorAll('[data-agent-approve]')).forEach(function (button) {
-        button.onclick = function (event) {
-          event.stopPropagation();
-          var id = button.getAttribute('data-agent-approve') || '';
-          state.approvedAgentIds[id] = true;
-          state.openAgentId = id;
-          renderAgentsDiscovery();
-        };
-      });
-    }
-
-    if (discoveryCard) {
-      function polishAgentName(name) {
-        var m = { 'Tenant runtime watch': 'System health monitor', 'Tenant Runtime Watch': 'System health monitor', 'Runtime watch': 'System health monitor' };
-        return m[String(name).trim()] || name;
-      }
-      function discoveryStatusText(item) {
-        if (item.permitted === false) return 'Operator approval required';
-        if (item.__source === 'native') return 'Ready in your workspace';
-        return 'Available to add';
-      }
-      function discoveryButtonText(item) {
-        if (item.permitted === false) return '+ request';
-        if (item.__source === 'native') return 'Open';
-        return '+ add';
-      }
-      var renderDiscoveryGroup = function (title, items) {
-        if (!items.length) return '';
-        return '<div class="disco-group-label">' + escapeHtml(title) + '</div><div class="disco-list">' + items.map(function (item) {
-          var displayName = polishAgentName(firstDefined(item.name, item.label, item.module_id, 'Agent'));
-          var sourceLabel = state.activePersona === "ceo"
-            ? (item.__source === 'native' ? 'StrategyOS' : 'Marketplace')
-            : firstDefined(item.__source === 'native' ? 'Built-in' : item.by, item.connector, 'connector');
-          return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(displayName) + '</span><span class="disco-src ' + escapeHtml(item.__source) + '">' + escapeHtml(sourceLabel) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div><div class="disco-conn"><span class="disco-bolt">\u26a1</span> ' + escapeHtml(state.activePersona === "ceo" ? discoveryStatusText(item) : firstDefined(item.connector, item.route, 'connector')) + '</div></div><button type="button" class="disco-add" data-agent-discovery-id="' + escapeHtml(item.__discoveryId) + '">' + escapeHtml(discoveryButtonText(item)) + '</button></div>';
-        }).join('') + '</div>';
+        var status = String(firstDefined(item.status, "ready"));
+        return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(firstDefined(item.current_activity, "No current activity is recorded.")) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open investigations</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Pending handoffs</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed cycles</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div><div class="twin-detail"><span class="eyebrow">Mandate</span><p>' + escapeHtml(firstDefined(item.authority, "No mandate has been configured.")) + '</p></div><div class="twin-detail"><span class="eyebrow">Owned KPI domains</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Escalates to</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No escalation path configured') + '</p></div>' + (item.route ? '<a class="btn secondary twin-open" href="' + escapeHtml(item.route) + '">Open governed workspace</a>' : '') + '</div>' : '') + '</article>';
+      }).join('') : '<div class="network-empty">No digital twins match this search.</div>') + '</div>';
+      var search = networkCard.querySelector('#twin-network-search');
+      if (search) search.oninput = function () {
+        state.discoveryQuery = search.value || '';
+        renderAgentsDiscovery();
+        var next = $("twin-network-search");
+        if (next) {
+          next.focus();
+          if (typeof next.setSelectionRange === "function") next.setSelectionRange(next.value.length, next.value.length);
+        }
       };
-      discoveryCard.innerHTML = '<div class="agents-col-head"><span class="ach-title">Discover agents</span><span class="ach-hint">Add to your workspace</span></div><label class="disco-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search the agent universe</span><input id="agent-discovery-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search the agent universe…" autocomplete="off" /></label>' + renderDiscoveryGroup('StrategyOS assistants', nativeAgents) + renderDiscoveryGroup('Available agents', marketAgents) + (filteredDiscoverable.length ? '' : '<div class="network-empty">No agents match this search.</div>') + '<div class="disco-footer"><button type="button" class="disco-browse">Browse all agents →</button></div>';
-      var searchInput = discoveryCard.querySelector('#agent-discovery-search');
-      if (searchInput) {
-        searchInput.oninput = function () {
-          state.discoveryQuery = searchInput.value || '';
-          renderAgentsDiscovery();
-          var nextInput = $("agent-discovery-search");
-          if (nextInput) {
-            nextInput.focus();
-            if (typeof nextInput.setSelectionRange === "function") {
-              var length = nextInput.value.length;
-              nextInput.setSelectionRange(length, length);
-            }
-          }
-        };
-      }
-      var browseBtn = discoveryCard.querySelector('.disco-browse');
-      if (browseBtn) {
-        browseBtn.onclick = function () {
-          state.discoveryQuery = '';
-          renderAgentsDiscovery();
-          var input = $("agent-discovery-search");
-          if (input) input.focus();
-        };
-      }
-      safeArray(discoveryCard.querySelectorAll('.disco-add')).forEach(function (button) {
+      safeArray(networkCard.querySelectorAll('[data-twin-toggle]')).forEach(function (button) {
         button.onclick = function () {
-          var id = button.getAttribute('data-agent-discovery-id') || '';
-          var item = discoverable.find(function (candidate) { return candidate.__discoveryId === id; });
-          handleDiscoverableAgentAction(item, button);
+          var id = button.getAttribute('data-twin-toggle') || '';
+          state.openAgentId = state.openAgentId === id ? '' : id;
+          renderAgentsDiscovery();
         };
       });
     }
 
-    if (subtoolsCard) subtoolsCard.hidden = true;
+    if (collaborationCard) {
+      var events = safeArray(collaboration.recent_events);
+      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Collaboration</span><span class="ach-hint">Typed, governed handoffs</span></div></div><p class="twin-explainer">Twins exchange structured requests with evidence references, owners and escalation paths. They do not conduct hidden, unbounded conversations.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(firstDefined(collaboration.pending_request_count, 0))) + '</strong><span>pending requests</span></div><div><strong>' + escapeHtml(String(firstDefined(collaboration.inbox_count, 0))) + '</strong><span>queued messages</span></div></div>' + (events.length ? '<ol class="twin-event-list">' + events.map(function (event) { return '<li><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "twin"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "human"))) + '</span><strong>' + escapeHtml(firstDefined(event.subject, "Governed handoff")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">No inter-twin handoff has been recorded yet.</div>') + '<p class="twin-runtime-note">Runtime: ' + escapeHtml(runtime.enabled ? 'enabled' : 'disabled') + ' · actions: ' + escapeHtml(runtime.mutations_enabled ? 'governed mutations enabled' : 'read only') + ' · ' + escapeHtml(String(firstDefined(runtime.cycle_count, 0))) + ' recorded cycles</p>';
+    }
+
+    if (automationCard) {
+      var modules = safeArray(getAgentsModule().running);
+      automationCard.hidden = false;
+      automationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Governed automations</span><span class="ach-hint">System workflows — not digital twins</span></div></div><p class="twin-explainer">These services monitor, compile or guard workflow state. They have no persona, independent mandate or private conversation.</p><div class="automation-list">' + modules.map(function (item) { return '<div><span><strong>' + escapeHtml(firstDefined(item.label, item.module_id, "Automation")) + '</strong><small>' + escapeHtml(firstDefined(item.summary, "No current detail.")) + '</small></span><em>' + escapeHtml(humanizeToken(firstDefined(item.status, "idle"))) + '</em></div>'; }).join('') + '</div>';
+    }
   }
 
   function renderAssistantStudio() {
@@ -5077,7 +4996,7 @@
     var viewLabels = {
       home: state.activePersona === "board" ? "Portal" : "Diagnostics",
       assistants: "Assistants",
-      agents: "Agents",
+      agents: "AI team",
       knowledge: "Knowledge",
       reports: "Reports"
     };
@@ -5187,7 +5106,7 @@
       activeCompany: firstDefined(requested.company, ""),
       activePortfolio: firstDefined(requested.portfolio, ""),
       activeThreadKey: "",
-      activeView: "home",
+      activeView: requested.agent ? "agents" : "home",
       a2aOpen: false,
       activeA2AExchange: "",
       drawerOpen: false,
@@ -5216,7 +5135,7 @@
       selectedFindingId: "",
       openWeekIndex: 0,
       agentSummaryOpen: false,
-      openAgentId: "",
+      openAgentId: firstDefined(requested.agent, ""),
       openAgentLogId: "",
       approvedAgentIds: {}
     };

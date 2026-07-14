@@ -85,7 +85,9 @@ def test_executive_has_a_dedicated_agents_tab_and_honest_calendar_empty_state():
 
     assert 'data-view-target="agents"' in html
     assert 'data-view-panel="agents"' in html
-    assert 'switchView(\'assistants\')' not in js[js.index("var browseBtn"):js.index("var browseBtn") + 700]
+    twin_render = js[js.index("function renderAgentsDiscovery"):js.index("function renderAssistantStudio")]
+    assert "switchView('assistants')" not in twin_render
+    assert "data-twin-toggle" in twin_render
     assert "No governed calendar has been supplied for this run" in js
 
 
@@ -686,12 +688,13 @@ def test_discoverable_agent_modules_are_native_strategyos_surfaces():
     assert {item["source"] for item in payload["discoverable"]} == {"native"}
 
 
-def test_discovery_add_buttons_open_request_flow_not_toast_only():
+def test_digital_twin_cards_open_in_place_and_keep_connector_install_separate():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
     executive_css = Path("strategyos_mvp/static/executive.css").read_text(encoding="utf-8")
 
-    assert "data-agent-discovery-id" in executive_js
-    assert "handleDiscoverableAgentAction(item, button)" in executive_js
+    assert "data-twin-toggle" in executive_js
+    assert "twin-network-search" in executive_js
+    assert "state.openAgentId = state.openAgentId === id ? '' : id" in executive_js
     assert "showAgentInstallRequest(item, sourceEl)" in executive_js
     assert "Agent installation is available from the operator surface" not in executive_js
     assert ".strategyos-agent-install-modal" in executive_css
@@ -3775,10 +3778,10 @@ def test_executive_ux_layout_contracts_are_guarded():
     assert "max-width: 116px" in executive_css
     assert ".hero-score__caption" in executive_css
     assert "white-space: nowrap" in executive_css
-    assert ".section:has(.agents-row)" in executive_css
-    assert "max-height: none" in executive_css
-    assert ".disco-footer" in executive_css
-    assert '<div class="disco-footer"><button type="button" class="disco-browse"' in executive_js
+    assert ".twin-card-list" in executive_css
+    assert ".twin-card__head" in executive_css
+    assert ".twin-network-intro" in executive_css
+    assert 'data-twin-toggle="' in executive_js
     assert ".leaders-card .video-frame-wrapper" in executive_css
     assert "max-height: clamp(220px, 34vh, 360px)" in executive_css
     assert "padding-bottom: max(112px" in executive_css
