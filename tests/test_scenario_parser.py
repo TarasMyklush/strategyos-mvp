@@ -211,6 +211,8 @@ def test_public_value_at_stake_reconciles_cases_and_recommends_first_action():
 
     assert result.matched is True
     assert result.scenario_id == "governed_recovery_priorities"
+    assert result.answer.startswith("The current view shows")
+    assert "governed packet" not in result.answer.lower()
     assert "remaining 3 smaller cases total SAR 77,088.00" in result.answer
     assert "Recommended first action" in result.answer
     assert "Group Finance" in result.answer
