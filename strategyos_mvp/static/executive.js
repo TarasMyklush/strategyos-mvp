@@ -3639,9 +3639,17 @@
   function formatExecutiveTrendValue(value, driver) {
     var number = Number(value);
     if (!Number.isFinite(number)) return "—";
+    var trendUnit = String((driver && driver.trend && driver.trend.unit) || (driver && driver.trend_unit) || "").toLowerCase();
     var clue = [driver && driver.label, driver && driver.metric, driver && driver.value, driver && driver.unit].join(" ").toLowerCase();
     var absolute = Math.abs(number);
     var sign = number < 0 ? "−" : "";
+    if (/(percent|percentage|pct|%)/.test(trendUnit)) return number.toFixed(Math.abs(number) >= 10 ? 1 : 2) + "%";
+    if (/(sar|currency|money)/.test(trendUnit)) {
+      if (absolute >= 1000000000) return sign + "SAR " + (absolute / 1000000000).toFixed(absolute >= 10000000000 ? 0 : 1) + "B";
+      if (absolute >= 1000000) return sign + "SAR " + (absolute / 1000000).toFixed(absolute >= 100000000 ? 0 : 1) + "M";
+      if (absolute >= 1000) return sign + "SAR " + (absolute / 1000).toFixed(absolute >= 100000 ? 0 : 1) + "K";
+      return sign + "SAR " + absolute.toLocaleString("en-US", { maximumFractionDigits: 0 });
+    }
     if (/(sar|revenue|cost|cash|ebitda)/.test(clue)) {
       if (absolute >= 1000000000) return sign + "SAR " + (absolute / 1000000000).toFixed(absolute >= 10000000000 ? 0 : 1) + "B";
       if (absolute >= 1000000) return sign + "SAR " + (absolute / 1000000).toFixed(absolute >= 100000000 ? 0 : 1) + "M";
@@ -3786,7 +3794,7 @@
     var auditSources = safeArray(audit.source_titles);
     var trendMarkup = kpiTrendChartMarkup(driver);
     if (!trendMarkup) {
-      trendMarkup = '<section class="kpi-trend kpi-trend--empty"><span class="kpi-brief-label">Reporting trajectory</span><p>Multiple governed reporting periods are required before StrategyOS can show movement. No plan line has been inferred.</p></section>';
+      trendMarkup = '<section class="kpi-trend kpi-trend--empty"><span class="kpi-brief-label">Reporting trajectory</span><p>At least two governed reporting periods are needed before StrategyOS can show movement. No plan line has been supplied.</p></section>';
     }
     // Use the same governed percentage contract as the dashboard gauge. Some
     // KPIs intentionally leave the legacy `pct` field null and expose their
@@ -3799,7 +3807,7 @@
     // A long-horizon board reference is useful context, but it is never a
     // substitute for a period-aligned performance comparison.
     var referenceOnlyRatio = comparison.available !== true && /(plan|floor)/i.test(headlineRatioLabel);
-    var headlineRatio = Number.isFinite(headlinePct)
+    var headlineRatio = Number.isFinite(headlinePct) && headlineRatioLabel !== "current margin"
       ? headlinePct.toFixed(1) + "% " + headlineRatioLabel + (referenceOnlyRatio ? " · reference only" : "")
       : "";
     var calculationMarkup = steps.length

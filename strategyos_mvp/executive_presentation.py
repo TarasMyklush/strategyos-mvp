@@ -124,34 +124,6 @@ _CEO_KPI_SPECS: tuple[dict[str, Any], ...] = (
 )
 
 
-# Board-approved strategic references are deliberately kept separate from the
-# period-aligned finance comparators above.  The current finance extract is H1
-# and scoped; comparing it directly with an annual Group target would create a
-# misleading percentage.  These references tell the CEO what has been approved
-# while making the remaining alignment requirement explicit.
-_BOARD_STRATEGIC_REFERENCES: dict[str, dict[str, Any]] = {
-    "revenue": {
-        "label": "Approved FY2026 Group revenue plan",
-        "value": "SAR 8.35B",
-        "numeric_value": 8_350_000_000.0,
-        "note": "Board approved on 12 January 2026. A phased H1 budget for the same entities is still required for a valid performance comparison.",
-    },
-    "ebitda_margin": {
-        "label": "Approved FY2028 Group EBITDA margin target",
-        "value": "23.0%",
-        "note": "This is the approved long-term target, not an H1 2026 budget comparator.",
-    },
-    "cash_vs_floor": {
-        "label": "Approved Group cash floor",
-        "value": "SAR 1.20B",
-        "numeric_value": 1_200_000_000.0,
-        "note": "The current cash extract is partial and is not yet aligned to the full Group scope required for a valid floor assessment.",
-    },
-}
-
-_STRATEGY_SOURCE_TITLE = "Mizan Group Strategy 2026–2028 · Board approved 12 January 2026"
-
-
 def _number_or_none(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
@@ -185,6 +157,27 @@ def _source_title(path: Any) -> str:
     return "Finance source"
 
 
+def _governed_strategic_reference(payload: Mapping[str, Any], key: str) -> dict[str, str] | None:
+    """Return an optional strategic reference only when its source is supplied.
+
+    A strategic target can provide useful context, but it must never be a
+    presentation constant.  The standard source-pack path currently does not
+    supply one, so this function intentionally returns ``None`` for the H1
+    dataset.  A future governed input must name its source explicitly.
+    """
+    references = payload.get("strategic_references")
+    item = references.get(key) if isinstance(references, Mapping) else None
+    if not isinstance(item, Mapping):
+        return None
+    label = str(item.get("label") or "").strip()
+    value = str(item.get("value") or "").strip()
+    source = str(item.get("source") or "").strip()
+    if not label or not value or not source:
+        return None
+    note = str(item.get("note") or "Reference only; not used as a period comparison.").strip()
+    return {"label": label, "value": value, "note": note, "source": source}
+
+
 def _executive_kpi_brief(
     spec: Mapping[str, Any],
     *,
@@ -196,6 +189,7 @@ def _executive_kpi_brief(
     missing_inputs: list[str],
     actual_complete: bool,
     comparison: str,
+    strategic_reference: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     """Separate the CEO decision brief from the expandable calculation trail.
 
@@ -207,13 +201,12 @@ def _executive_kpi_brief(
     evidence_details = evidence.get("details") if isinstance(evidence.get("details"), Mapping) else {}
     source_files = list(evidence.get("files") or [])
     source_titles = list(dict.fromkeys(_source_title(item) for item in source_files))
-    strategic_reference = _BOARD_STRATEGIC_REFERENCES.get(key)
     comparison_name = "Current-period comparison"
     comparison_value = comparison if not missing_inputs else "Not yet aligned"
     comparison_note = (
-        "An approved strategic reference exists, but the current actual and comparator are not yet aligned to the same period and scope."
+        "A governed strategic reference is available, but it is not aligned to the current period and scope."
         if missing_inputs and strategic_reference
-        else "A current-period budget for the same scope has not yet been connected."
+        else "A like-for-like approved comparator for the current period and scope has not been supplied."
         if missing_inputs
         else "Compared with the approved comparator supplied for this period."
     )
@@ -254,7 +247,11 @@ def _executive_kpi_brief(
         if account_count:
             narrative = f"Revenue recognised across {account_count} revenue account groups in the H1 general ledger."
         driver_rows = contributor_rows("revenue")
-        implication = "The FY2026 Group revenue plan is approved. Performance against it will be shown once the phased H1 budget is aligned to this reporting scope." if missing_inputs else comparison
+        implication = (
+            f"Current H1 revenue is {metric}. An approved H1 revenue budget for the same entities and period has not been supplied, so no plan comparison is shown."
+            if missing_inputs
+            else comparison
+        )
         decision_question = "Which revenue streams account for the current result, and where is concentration risk highest?"
     elif key == "ebitda_margin":
         revenue = _number_or_none(components.get("revenue_actual"))
@@ -275,7 +272,11 @@ def _executive_kpi_brief(
             {"label": "Operating cost", "value": display_component(operating_cost), "share_pct": (operating_cost / revenue * 100) if revenue and operating_cost is not None else None},
             {"label": "EBITDA", "value": display_component(ebitda), "share_pct": (ebitda / revenue * 100) if revenue and ebitda is not None else None},
         ]
-        implication = "The FY2028 margin target is approved. An H1 2026 EBITDA budget for the same scope is still needed for a current performance comparison." if missing_inputs else comparison
+        implication = (
+            f"Current H1 EBITDA margin is {metric}. Approved H1 EBITDA and revenue budgets for the same entities and period have not been supplied, so no plan comparison is shown."
+            if missing_inputs
+            else comparison
+        )
         decision_question = "What is the EBITDA bridge from revenue through direct and operating costs?"
     elif key == "operating_cost":
         account_count = len((scoped_accounts.get("operating_cost") or {}).get("accounts") or [])
@@ -284,7 +285,11 @@ def _executive_kpi_brief(
         if account_count:
             narrative = f"Operating expenditure across {account_count} expense accounts; depreciation, amortisation and interest excluded."
         driver_rows = contributor_rows("operating_cost")
-        implication = "Current operating cost is available. The matching H1 operating-cost budget has not yet been connected." if missing_inputs else comparison
+        implication = (
+            f"Current H1 operating cost is {metric}. An approved H1 operating-cost budget for the same entities and period has not been supplied, so no plan comparison is shown."
+            if missing_inputs
+            else comparison
+        )
         decision_question = "Which operating-cost accounts create the largest spend concentration and merit review?"
     elif key == "cash_vs_floor":
         as_of = str(evidence_details.get("as_of") or "the latest reported date")
@@ -303,7 +308,11 @@ def _executive_kpi_brief(
             }
             for row in reported_accounts if isinstance(row, Mapping)
         ]
-        implication = "The Group cash floor is SAR 1.20B. The current cash position is partial and not yet aligned to full Group scope, so a floor comparison is withheld." if missing_inputs else comparison
+        implication = (
+            "The latest cash extract is partial. An approved cash floor for the same scope has not been supplied, so no floor comparison is shown."
+            if missing_inputs
+            else comparison
+        )
         decision_question = "What cash is reported, what remains missing, and what floor is required for a board-safe comparison?"
 
     return {
@@ -320,10 +329,7 @@ def _executive_kpi_brief(
             "note": comparison_note,
             "available": not bool(missing_inputs),
         },
-        "strategic_reference": {
-            **{name: value for name, value in strategic_reference.items() if name != "numeric_value"},
-            "source": _STRATEGY_SOURCE_TITLE,
-        } if strategic_reference else None,
+        "strategic_reference": dict(strategic_reference) if strategic_reference else None,
         "calculation": {
             "label": "How this figure is built",
             "formula": str(spec["formula"]),
@@ -363,7 +369,7 @@ def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, Any]:
     trend = payload.get("trend")
     item = trend.get(key) if isinstance(trend, Mapping) else None
     if not isinstance(item, Mapping):
-        return {"actual": [], "plan": [], "labels": [], "has_plan_series": False}
+        return {"actual": [], "plan": [], "labels": [], "has_plan_series": False, "unit": ""}
 
     def values(name: str) -> list[float]:
         result: list[float] = []
@@ -383,6 +389,7 @@ def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, Any]:
         "plan": plan if has_plan else [],
         "labels": labels if len(labels) == len(actual) else [],
         "has_plan_series": has_plan,
+        "unit": str(item.get("unit") or ""),
     }
 
 
@@ -407,7 +414,7 @@ def _unavailable_ceo_kpi(spec: Mapping[str, Any], *, reason: str) -> dict[str, A
         "comparison": "No comparison is shown until the required finance information is available.",
         "chips": [],
         "movers": {"lifting": [], "dragging": []},
-        "trend": {"actual": [], "plan": [], "labels": [], "has_plan_series": False},
+        "trend": {"actual": [], "plan": [], "labels": [], "has_plan_series": False, "unit": ""},
         "trend_status": "Comparable historical periods are not available.",
         "provenance": {
             "source": "current reporting information",
@@ -488,7 +495,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 missing_inputs = [
                     "H1 budget aligned to this reporting scope"
                     if spec["key"] != "cash_vs_floor"
-                    else "Complete Group cash position aligned to the approved floor"
+                    else "Approved cash floor aligned to this reporting scope"
                 ]
             else:
                 delta = actual - comparator
@@ -498,21 +505,11 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                     comparison = f"{pct:.1f}% of plan"
                 missing_inputs = []
 
-            if spec["key"] == "revenue":
-                annual_plan = _number_or_none(_BOARD_STRATEGIC_REFERENCES["revenue"].get("numeric_value"))
-                if annual_plan:
-                    ring_pct = actual / annual_plan * 100
-                    ring_label = "of FY2026 Group plan"
-            elif spec["key"] == "operating_cost":
+            if spec["key"] == "operating_cost":
                 revenue_actual = _number_or_none(components.get("revenue_actual"))
                 if revenue_actual:
                     ring_pct = actual / revenue_actual * 100
                     ring_label = "of revenue"
-            elif spec["key"] == "cash_vs_floor":
-                group_floor = _number_or_none(_BOARD_STRATEGIC_REFERENCES["cash_vs_floor"].get("numeric_value"))
-                if group_floor:
-                    ring_pct = actual / group_floor * 100
-                    ring_label = "of Group floor · partial scope"
 
         kpi_evidence = evidence.get(spec["key"]) if isinstance(evidence.get(spec["key"]), Mapping) else {}
         actual_is_complete = bool(actual_complete.get(spec["key"], True))
@@ -536,6 +533,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             "complete": actual_is_complete,
             "source_files": list(kpi_evidence.get("files") or []),
         }
+        strategic_reference = _governed_strategic_reference(finance_payload, str(spec["key"]))
         cards.append(
             {
                 "kpi_contract": True,
@@ -585,6 +583,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                     missing_inputs=missing_inputs,
                     actual_complete=actual_is_complete,
                     comparison=comparison,
+                    strategic_reference=strategic_reference,
                 ),
             }
         )

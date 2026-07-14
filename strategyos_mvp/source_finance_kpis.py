@@ -72,7 +72,13 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     operating_cost = sum((balances[account] for account in operating_cost_accounts), Decimal())
     ebitda = revenue - cogs - operating_cost
     period = _period_label(dates)
-    revenue_dynamics = _revenue_dynamics(gl, revenue_accounts, accounts)
+    finance_dynamics = _finance_dynamics(
+        gl,
+        revenue_accounts,
+        cogs_accounts,
+        operating_cost_accounts,
+        accounts,
+    )
     gl_evidence = {
         "file": _relative(gl_path, root),
         "sha256": _sha256(gl_path),
@@ -161,46 +167,83 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
         # rows as the headline actual.  A plan is deliberately absent unless a
         # separately governed budget role supplies one; actuals never become a
         # proxy plan.
-        "trend": {"revenue": revenue_dynamics["trend"]},
-        "dynamics": {"revenue": revenue_dynamics["movers"]},
+        "trend": finance_dynamics["trend"],
+        "dynamics": finance_dynamics["movers"],
         "actual_complete": actual_complete,
         "evidence": evidence,
         "source_files": sorted({item for group in evidence.values() for item in group["files"]}),
     }
 
 
-def _revenue_dynamics(
+def _finance_dynamics(
     gl: Iterable[Mapping[str, Any]],
     revenue_accounts: Iterable[str],
+    cogs_accounts: Iterable[str],
+    operating_cost_accounts: Iterable[str],
     account_master: Mapping[str, Mapping[str, str]],
 ) -> dict[str, Any]:
-    """Calculate real revenue periods and account movement from the GL.
+    """Calculate governed monthly finance movement from the GL.
 
-    The comparison is period-over-period only.  It intentionally returns no
-    plan series: an aligned budget must arrive through a separate governed
-    source rather than being inferred from actual performance.
+    Revenue, COGS and operating expense are independently calculated for every
+    month represented by the GL.  That gives the CEO an actual EBITDA-margin
+    trajectory without fabricating a plan line.  A plan remains empty until an
+    aligned, governed budget source is supplied.
     """
     revenue_set = set(revenue_accounts)
-    periods: dict[str, Decimal] = defaultdict(Decimal)
+    cogs_set = set(cogs_accounts)
+    operating_cost_set = set(operating_cost_accounts)
+    scoped_accounts = revenue_set | cogs_set | operating_cost_set
+    periods: dict[str, dict[str, Decimal]] = defaultdict(
+        lambda: {
+            "revenue": Decimal(),
+            "cogs": Decimal(),
+            "operating_cost": Decimal(),
+        }
+    )
     account_periods: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
     for row in gl:
         account = str(row.get("account") or "").strip()
         current = _date_value(row.get("date"))
-        if account not in revenue_set or current is None:
+        if account not in scoped_accounts or current is None:
             continue
         debit = _decimal(row.get("debit"))
         credit = _decimal(row.get("credit"))
         if debit is None or credit is None:
             continue
-        # Revenue is credit-natured, so credit less debit is the reported
-        # positive contribution for the period.
-        value = credit - debit
         period_key = current.strftime("%Y-%m")
-        periods[period_key] += value
-        account_periods[account][period_key] += value
+        if account in revenue_set:
+            # Revenue is credit-natured, so credit less debit is the reported
+            # positive contribution for the period.
+            value = credit - debit
+            periods[period_key]["revenue"] += value
+            account_periods[account][period_key] += value
+        elif account in cogs_set:
+            periods[period_key]["cogs"] += debit - credit
+        else:
+            periods[period_key]["operating_cost"] += debit - credit
 
     labels = sorted(periods)
-    actual = [_number(periods[label]) for label in labels]
+    revenue_actual = [periods[label]["revenue"] for label in labels]
+    operating_cost_actual = [periods[label]["operating_cost"] for label in labels]
+    ebitda_margin_labels: list[str] = []
+    ebitda_margin_actual: list[Decimal] = []
+    for label in labels:
+        revenue = periods[label]["revenue"]
+        if revenue == 0:
+            continue
+        ebitda = revenue - periods[label]["cogs"] - periods[label]["operating_cost"]
+        ebitda_margin_labels.append(label)
+        ebitda_margin_actual.append((ebitda / revenue) * Decimal("100"))
+
+    def actual_trend(series_labels: list[str], values: list[Decimal], *, unit: str) -> dict[str, Any]:
+        return {
+            "labels": series_labels,
+            "actual": [_number(value) for value in values],
+            "plan": [],
+            "has_plan_series": False,
+            "unit": unit,
+        }
+
     movers: dict[str, list[dict[str, str]]] = {"lifting": [], "dragging": []}
     if len(labels) >= 2:
         previous, latest = labels[-2], labels[-1]
@@ -220,8 +263,12 @@ def _revenue_dynamics(
             label = str(account_master.get(account, {}).get("account_description") or f"Account {account}")
             movers["dragging"].append({"name": label, "delta": _sar_delta(delta)})
     return {
-        "trend": {"labels": labels, "actual": actual, "plan": [], "has_plan_series": False},
-        "movers": movers,
+        "trend": {
+            "revenue": actual_trend(labels, revenue_actual, unit="sar"),
+            "ebitda_margin": actual_trend(ebitda_margin_labels, ebitda_margin_actual, unit="percent"),
+            "operating_cost": actual_trend(labels, operating_cost_actual, unit="sar"),
+        },
+        "movers": {"revenue": movers},
     }
 
 

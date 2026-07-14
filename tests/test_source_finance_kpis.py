@@ -40,9 +40,24 @@ def test_source_pack_calculates_four_ceo_actuals_with_lineage():
     assert payload["evidence"]["cash_vs_floor"]["actual_complete"] is False
     assert payload["evidence"]["cash_vs_floor"]["details"]["missing_accounts"] == ["Emirates NBD EUR"]
     revenue_trend = payload["trend"]["revenue"]
-    assert revenue_trend["actual"]
+    assert revenue_trend["labels"] == ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"]
+    assert revenue_trend["actual"] == [
+        "72561833.68",
+        "56571935.86",
+        "67615475.08",
+        "68261922.69",
+        "56702067.56",
+        "63366674.03",
+    ]
     assert revenue_trend["plan"] == []
     assert revenue_trend["has_plan_series"] is False
+    assert revenue_trend["unit"] == "sar"
+    ebitda_margin_trend = payload["trend"]["ebitda_margin"]
+    assert ebitda_margin_trend["labels"] == revenue_trend["labels"]
+    assert ebitda_margin_trend["actual"] == ["44.06", "38.77", "55.40", "64.10", "60.95", "72.69"]
+    assert ebitda_margin_trend["plan"] == []
+    assert ebitda_margin_trend["has_plan_series"] is False
+    assert ebitda_margin_trend["unit"] == "percent"
     assert payload["dynamics"]["revenue"]["lifting"][0]["delta"].startswith("+SAR ")
     assert "5615726.86" not in payload["dynamics"]["revenue"]["lifting"][0]["delta"]
 
@@ -70,18 +85,18 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
         "H1 revenue budget aligned to this scope",
     ]
     assert cards[3]["missing_inputs"] == [
-        "Complete Group cash position aligned to the approved floor",
+        "Approved cash floor aligned to this reporting scope",
         "Complete latest cash-position balances",
     ]
-    assert cards[0]["executive_brief"]["strategic_reference"]["value"] == "SAR 8.35B"
-    assert cards[1]["executive_brief"]["strategic_reference"]["value"] == "23.0%"
-    assert cards[3]["executive_brief"]["strategic_reference"]["value"] == "SAR 1.20B"
+    assert [card["executive_brief"]["strategic_reference"] for card in cards] == [None, None, None, None]
     assert [(card["ring_pct"], card["ring_label"]) for card in cards] == [
-        (4.6, "of FY2026 Group plan"),
+        (None, ""),
         (56.0, "current margin"),
         (24.4, "of revenue"),
-        (3.5, "of Group floor · partial scope"),
+        (None, ""),
     ]
+    assert cards[1]["trend"]["unit"] == "percent"
+    assert cards[1]["trend"]["actual"] == [44.06, 38.77, 55.4, 64.1, 60.95, 72.69]
     assert cards[0]["source_files"] == [
         "02_ERP_Extracts/GL_Extract_H1_2026.csv",
         "03_Master_Data/Chart_of_Accounts.xlsx",
@@ -96,4 +111,4 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
     ]
     assert cards[2]["executive_brief"]["readout"].startswith("Operating expenditure across 126")
     assert cards[2]["executive_brief"]["drivers"][0]["label"] == "Salaries & Wages"
-    assert cards[2]["executive_brief"]["decision_context"].startswith("Current operating cost is available")
+    assert cards[2]["executive_brief"]["decision_context"].startswith("Current H1 operating cost is SAR 93.8M")

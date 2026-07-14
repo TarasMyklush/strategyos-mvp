@@ -217,7 +217,7 @@ def test_ceo_kpi_contract_uses_only_authoritative_deterministic_finance_inputs()
     assert cards[3]["comparison"] == "SAR 100K above floor"
     assert all(card["availability"] == "verified" for card in cards)
     assert all(
-        card["trend"] == {"actual": [], "plan": [], "labels": [], "has_plan_series": False}
+        card["trend"] == {"actual": [], "plan": [], "labels": [], "has_plan_series": False, "unit": ""}
         for card in cards
     )
     assert cards[1]["executive_brief"]["calculation"]["steps"][1] == {
