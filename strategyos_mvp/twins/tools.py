@@ -142,6 +142,12 @@ def send_message(
     errors = validate_message(msg)
     if errors:
         raise ValueError(f"Invalid inter-twin message: {errors}")
+    from strategyos_mvp.twins.persona import lookup_persona
+
+    if msg.recipient_role != "human" and lookup_persona(msg.recipient_role) is None:
+        raise ValueError(
+            f"Cannot dispatch inter-twin message to unconfigured role {msg.recipient_role!r}"
+        )
 
     repo_set = repositories or build_app_repositories()
     envelope = asdict(msg)
@@ -241,18 +247,76 @@ def reconcile_message_routing_audit(
     the missing audit index without inventing a business outcome.
     """
     repo_set = repositories or build_app_repositories()
+    from datetime import datetime, timezone
+    from strategyos_mvp.twins.persona import TWIN_CATALOG
+
     scanned = 0
     created = 0
-    for messages in (repo_set.inboxes.list() or {}).values():
+    quarantined = 0
+    valid_recipients = set(TWIN_CATALOG) | {"human"}
+    for inbox_role, messages in (repo_set.inboxes.list() or {}).items():
         for message in messages or []:
             scanned += 1
+            recipient_role = str(message.get("recipient_role") or inbox_role or "")
+            if recipient_role not in valid_recipients:
+                message_id = str(message.get("message_id") or "")
+                sender_role = str(message.get("sender_role") or "")
+                now_iso = datetime.now(timezone.utc).isoformat()
+                if str(message.get("routing_status") or "") != "unroutable":
+                    quarantined += 1
+                repo_set.inboxes.update(
+                    str(inbox_role),
+                    message_id,
+                    {
+                        "status": "expired",
+                        "routing_status": "unroutable",
+                        "routing_error": "No configured Digital Twin recipient",
+                        "quarantined_at": now_iso,
+                    },
+                )
+                if sender_role and message_id:
+                    repo_set.requests.update(
+                        sender_role,
+                        message_id,
+                        {
+                            "status": "failed",
+                            "routing_status": "unroutable",
+                            "failed_at": now_iso,
+                            "updated_at": now_iso,
+                            "gaps_remaining": ["No configured Digital Twin recipient"],
+                        },
+                    )
+                    state = repo_set.states.load(sender_role) or {}
+                    pending = dict(state.get("pending_requests") or {})
+                    if message_id in pending:
+                        pending.pop(message_id, None)
+                        state["pending_requests"] = pending
+                        repo_set.states.save(sender_role, state)
+                repo_set.governance.ensure_routing_event(
+                    {
+                        "event_id": f"route-rejected-{message_id}",
+                        "event_type": "message_routing_rejected",
+                        "event_category": "routing_exception",
+                        "source_role": sender_role,
+                        "target_role": recipient_role,
+                        "item_id": message_id,
+                        "title": str(message.get("subject") or "Unroutable handoff"),
+                        "reason": "No configured Digital Twin recipient",
+                        "actor_role": "system",
+                        "actor_subject": "digital-twin:audit-reconciliation",
+                        "audit_source": "inbox_reconciliation",
+                        "idempotency_key": f"message-routing-rejected:{message_id}",
+                        "timestamp": str(message.get("created_at") or now_iso),
+                    }
+                )
+                continue
             if _ensure_message_routing_audit(
                 repo_set,
                 message,
                 audit_source="inbox_reconciliation",
             ):
                 created += 1
-    return {"scanned": scanned, "created": created}
+    return {"scanned": scanned, "created": created, "quarantined": quarantined}
 
 
 # ---------------------------------------------------------------------------

@@ -431,7 +431,17 @@ class KPIResolutionEngine:
             An :class:`InterTwinMessage` ready to be sent to the KPI
             owner via :func:`tools.send_message`.
         """
-        owner = self.find_owner(kpi_node_id) or "unknown"
+        owner = self.find_owner(kpi_node_id)
+        if not owner:
+            raise ValueError(
+                f"KPI node {kpi_node_id!r} has no configured Digital Twin owner"
+            )
+        from strategyos_mvp.twins.persona import lookup_persona
+
+        if lookup_persona(owner) is None:
+            raise ValueError(
+                f"KPI node {kpi_node_id!r} resolves to unconfigured owner {owner!r}"
+            )
         self.__class__._message_counter += 1
         msg_id = f"req-{kpi_node_id}-{self.__class__._message_counter:04d}"
 

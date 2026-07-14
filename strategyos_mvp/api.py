@@ -4968,6 +4968,7 @@ def _agents_surface_payload(
         "analyst",
         "reviewer",
     )
+    configured_role_set = set(configured_roles)
     principal_role = str(principal.get("role") or "anonymous")
     repositories = build_app_repositories()
     states = {str(item.get("role") or ""): item for item in repositories.states.list()}
@@ -4980,6 +4981,7 @@ def _agents_surface_payload(
     fulfilled_request_total = 0
     exception_request_total = 0
     acknowledged_request_total = 0
+    routing_gap_total = 0
     attention_total = 0
     request_status_by_id: dict[str, str] = {}
     terminal_request_statuses = {"fulfilled", "failed", "expired", "cancelled"}
@@ -4994,9 +4996,22 @@ def _agents_surface_payload(
             not in {"completed", "resolved", "closed", "no_action"}
         ]
         requests = repositories.requests.list(twin_role)
+        valid_requests = []
+        unroutable_requests = []
         for request_record in requests:
             request_id = str(request_record.get("request_message_id") or "")
             request_status = str(request_record.get("status") or "pending").lower()
+            responder_role = str(request_record.get("responder_role") or "")
+            is_routable = (
+                responder_role in configured_role_set
+                and responder_role != twin_role
+                and str(request_record.get("routing_status") or "") != "unroutable"
+            )
+            if not is_routable:
+                routing_gap_total += 1
+                unroutable_requests.append(request_record)
+                continue
+            valid_requests.append(request_record)
             if request_id:
                 request_status_by_id[request_id] = request_status
             if request_status == "fulfilled":
@@ -5006,7 +5021,7 @@ def _agents_surface_payload(
             elif request_status == "acknowledged":
                 acknowledged_request_total += 1
         pending_requests = [
-            item for item in requests
+            item for item in valid_requests
             if str(item.get("status") or "pending").lower()
             not in terminal_request_statuses
         ]
@@ -5056,6 +5071,7 @@ def _agents_surface_payload(
                 "cycle_count": cycle_count,
                 "active_investigation_count": len(active_investigations),
                 "pending_request_count": len(pending_requests),
+                "routing_gap_count": len(unroutable_requests),
                 "inbox_count": len((inboxes or {}).get(twin_role) or []),
                 "current_activity": current_activity,
                 "kpis_owned": list(persona.kpis_owned),
@@ -5066,7 +5082,6 @@ def _agents_surface_payload(
             }
         )
 
-    configured_role_set = set(configured_roles)
     collaboration_events = [
         item
         for item in routing_events
@@ -5134,6 +5149,7 @@ def _agents_surface_payload(
             "active_count": sum(1 for item in twins if item["status"] in {"active", "monitoring"}),
             "attention_count": attention_total,
             "pending_request_count": pending_request_total,
+            "routing_gap_count": routing_gap_total,
             "collaboration_event_count": len(collaboration_events),
         },
         "digital_twins": twins,
@@ -5146,10 +5162,18 @@ def _agents_surface_payload(
             "resolved_handoff_count": fulfilled_request_total,
             "exception_handoff_count": exception_request_total,
             "executive_attention_count": attention_total,
+            "routing_gap_count": routing_gap_total,
             # Kept as diagnostic compatibility data. The CEO UI deliberately
             # does not display it as a second workload because each inbox
             # envelope is the delivery representation of a handoff request.
-            "inbox_count": sum(len(items or []) for items in (inboxes or {}).values()),
+            "inbox_count": sum(
+                len((inboxes or {}).get(role) or []) for role in configured_roles
+            ),
+            "unroutable_inbox_count": sum(
+                len(items or [])
+                for role, items in (inboxes or {}).items()
+                if role not in configured_role_set and role != "human"
+            ),
             "recent_events": recent_events,
         },
         "runtime": {

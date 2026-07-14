@@ -101,12 +101,51 @@ def test_reconcile_message_routing_audit_backfills_legacy_inbox_once(tmp_path):
     first = reconcile_message_routing_audit(repositories=repositories)
     second = reconcile_message_routing_audit(repositories=repositories)
 
-    assert first == {"scanned": 1, "created": 1}
-    assert second == {"scanned": 1, "created": 0}
+    assert first == {"scanned": 1, "created": 1, "quarantined": 0}
+    assert second == {"scanned": 1, "created": 0, "quarantined": 0}
     routing = repositories.governance.list_routing_events()
     assert len(routing) == 1
     assert routing[0]["item_id"] == "legacy-1"
     assert routing[0]["audit_source"] == "inbox_reconciliation"
+
+
+def test_reconcile_quarantines_unknown_recipient_and_closes_request(tmp_path):
+    repositories = build_repositories(tmp_path / "twins")
+    repositories.requests.save(
+        "ceo",
+        {
+            "request_message_id": "legacy-unknown-1",
+            "requester_role": "ceo",
+            "responder_role": "unknown",
+            "status": "pending",
+            "created_at": "2026-07-01T09:00:00+00:00",
+        },
+    )
+    repositories.inboxes.append(
+        "unknown",
+        {
+            "message_id": "legacy-unknown-1",
+            "sender_role": "ceo",
+            "recipient_role": "unknown",
+            "message_type": "data_request",
+            "subject": "Unowned KPI request",
+            "created_at": "2026-07-01T09:00:00+00:00",
+            "status": "pending",
+        },
+    )
+
+    result = reconcile_message_routing_audit(repositories=repositories)
+
+    assert result == {"scanned": 1, "created": 0, "quarantined": 1}
+    request = repositories.requests.load("ceo", "legacy-unknown-1")
+    assert request is not None
+    assert request["status"] == "failed"
+    assert request["routing_status"] == "unroutable"
+    message = repositories.inboxes.load("unknown")[0]
+    assert message["status"] == "expired"
+    assert message["routing_status"] == "unroutable"
+    rejected = repositories.governance.list_routing_events()
+    assert rejected[0]["event_type"] == "message_routing_rejected"
 
 
 def test_request_response_flow_reconciles_pending_and_persists(tmp_path):

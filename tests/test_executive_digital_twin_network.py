@@ -30,6 +30,7 @@ def test_agents_surface_reads_persistent_digital_twin_runtime(tmp_path, monkeypa
         "cfo",
         {
             "request_message_id": "req-1",
+            "responder_role": "ceo",
             "subject": "Confirm aligned H1 budget",
             "status": "pending",
             "updated_at": "2026-07-14T08:05:00+00:00",
@@ -39,6 +40,7 @@ def test_agents_surface_reads_persistent_digital_twin_runtime(tmp_path, monkeypa
         "ceo",
         {
             "request_message_id": "req-resolved",
+            "responder_role": "cfo",
             "subject": "Resolved board narrative request",
             "status": "fulfilled",
             "updated_at": "2026-07-14T08:06:00+00:00",
@@ -48,6 +50,7 @@ def test_agents_surface_reads_persistent_digital_twin_runtime(tmp_path, monkeypa
         "group_manager",
         {
             "request_message_id": "req-expired",
+            "responder_role": "analyst",
             "subject": "Expired operating metric request",
             "status": "expired",
             "updated_at": "2026-07-14T08:07:00+00:00",
@@ -90,6 +93,7 @@ def test_agents_surface_reads_persistent_digital_twin_runtime(tmp_path, monkeypa
     assert payload["collaboration"]["resolved_handoff_count"] == 1
     assert payload["collaboration"]["exception_handoff_count"] == 1
     assert payload["collaboration"]["executive_attention_count"] == 0
+    assert payload["collaboration"]["routing_gap_count"] == 0
     assert "None is flagged for executive attention" in payload["collaboration"]["summary"]
     assert payload["collaboration"]["recent_events"][0]["subject"] == "EBITDA evidence ready"
     assert payload["running"] == []  # Workflow modules are never relabelled as twins.
@@ -107,6 +111,7 @@ def test_executive_ui_distinguishes_twins_from_automations_and_status_ring():
     assert "Inbox delivery is part of that handoff, not a second workload" in js
     assert "awaiting response" in js
     assert "need your attention" in js
+    assert "quarantined because no configured Twin owner existed" in js
     assert "queued messages" not in js
     assert "No inter-twin handoff has been recorded yet" not in js
     assert "agents.digital_twins" in js

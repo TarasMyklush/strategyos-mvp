@@ -574,6 +574,20 @@ class TwinRuntime:
                 gaps = self._resolver.detect_gaps(kpi_id)
                 if not gaps:
                     continue
+                owner = self._resolver.find_owner(kpi_id)
+                if not owner or lookup_persona(owner) is None:
+                    decisions.append({
+                        "investigation_id": inv_id,
+                        "action": "escalate",
+                        "reason": f"No configured Digital Twin owns KPI {kpi_id!r}",
+                        "context": {
+                            "kpi_node_id": kpi_id,
+                            "gap": gaps[0],
+                            "routing_status": "unowned_kpi",
+                        },
+                        "decision_source": "deterministic",
+                    })
+                    continue
                 msg = self._resolver.route_request(
                     kpi_node_id=kpi_id,
                     gap=gaps[0],

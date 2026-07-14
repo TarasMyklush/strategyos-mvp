@@ -558,12 +558,25 @@ class TestKPITreeIntegrity:
 class TestEdgeCases:
     """Edge cases for resolution engine and runtime."""
 
-    def test_route_unknown_kpi_uses_unknown_owner(self):
+    def test_route_unknown_kpi_fails_closed_without_phantom_owner(self):
         engine = KPIResolutionEngine()
         gap = {"type": "unknown_node", "detail": "Unknown.", "owner": None}
-        msg = engine.route_request("nonexistent", gap, "ceo")
-        assert msg.recipient_role == "unknown"
-        assert msg.message_type == "data_request"
+        with pytest.raises(ValueError, match="no configured Digital Twin owner"):
+            engine.route_request("nonexistent", gap, "ceo")
+
+    def test_unknown_kpi_decision_escalates_without_unknown_inbox(self):
+        rt = TwinRuntime(CEO_TWIN, create_twin_state("ceo"))
+        issue = {
+            "investigation_id": "inv-unowned",
+            "resolution_hint": "request_data",
+            "kpi_node_id": "nonexistent",
+        }
+
+        decisions = rt._build_deterministic_decisions([issue])
+
+        assert decisions[0]["action"] == "escalate"
+        assert decisions[0]["context"]["routing_status"] == "unowned_kpi"
+        assert _peek_inbox("unknown") == 0
 
     def test_detect_gaps_on_node_without_components(self):
         engine = KPIResolutionEngine()
