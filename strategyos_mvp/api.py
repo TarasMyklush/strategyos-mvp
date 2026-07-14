@@ -10631,12 +10631,18 @@ def _assistant_response_payload(
     answer_is_model_provided = (
         str(payload.get("answered_by") or "").strip().lower() == "llm"
         or str(payload.get("assistant_mode") or "").strip().lower() == "llm"
+        or (
+            response_mode == "llm"
+            and str((base_result or {}).get("answered_by") or "").strip().lower() == "llm"
+        )
     )
     if answer_is_model_provided:
         # This is a product contract, not optional explanatory copy. A model
         # answer may synthesize governed evidence, but it is never presented as
         # a governed calculation. Every Hermes surface renders these fields.
         payload["answer_origin"] = "llm"
+        payload["answered_by"] = "llm"
+        payload["assistant_mode"] = "llm"
         payload["calculation_status"] = "not_calculated"
         payload["review_status"] = "required"
         payload["human_review_required"] = True
@@ -12014,6 +12020,11 @@ async def _assistant_chat_response(
             if public_llm_result is not None:
                 model_result = {
                     **public_llm_result,
+                    "llm_matched": bool(public_llm_result.get("matched")),
+                    # A best-effort model answer remains the selected answer
+                    # even when its own evidence match is incomplete. The
+                    # review contract below carries that uncertainty visibly.
+                    "matched": True,
                     "assistant_mode": "llm",
                     "answered_by": "llm",
                     "_orchestrator_force_answer": True,
@@ -12285,6 +12296,14 @@ async def _assistant_chat_response(
             payload["llm_fallback_attempted"] = True
             payload["llm_grounded_fallback"] = True
             return payload
+    selected_llm_result = {
+        **result,
+        "llm_matched": bool(result.get("matched")),
+        "matched": True,
+        "assistant_mode": "llm",
+        "answered_by": "llm",
+        "_orchestrator_force_answer": True,
+    }
     orchestrated = orchestrator.process(
         question,
         persona=persona,
@@ -12295,7 +12314,7 @@ async def _assistant_chat_response(
             "assistant_mode": "qa_engine",
             "answered_by": deterministic_result.get("answered_by") or "tabular",
         },
-        llm_result=result,
+        llm_result=selected_llm_result,
         driver_context=driver_context,
     )
     payload = _assistant_response_payload(
@@ -12305,7 +12324,7 @@ async def _assistant_chat_response(
         requested_mode=mode,
         persona=persona,
         orchestrated=orchestrated,
-        base_result=result,
+        base_result=selected_llm_result,
         llm_status=llm_status,
         assistant_context=assistant_context,
     )

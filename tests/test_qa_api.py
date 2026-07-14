@@ -1119,7 +1119,7 @@ def test_assistant_chat_public_auto_unmatched_uses_reviewed_llm_with_public_pack
             called["llm"] += 1
             assert _kwargs.get("public_context_packet", {}).get("public_safe") is True
             return {
-                "matched": True,
+                "matched": False,
                 "answer": "The latest public packet does not contain a complete weekly series; the nearest current CEO indicators are available for review.",
                 "basis": "Public executive packet only.",
                 "citations": [],
@@ -1147,6 +1147,8 @@ def test_assistant_chat_public_auto_unmatched_uses_reviewed_llm_with_public_pack
         assert payload["review_status"] == "required"
         assert payload["human_review_required"] is True
         assert payload["public_packet_only"] is True
+        assert payload["llm_matched"] is False
+        assert "does not contain a complete weekly series" in payload["answer"]
         assert called["llm"] == 1
     finally:
         _restore_env(original)
