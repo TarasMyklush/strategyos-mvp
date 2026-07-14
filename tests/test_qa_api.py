@@ -168,6 +168,95 @@ def test_ceo_kpi_answer_carries_governed_business_drivers_and_sources(monkeypatc
     assert result["grounding_status"] == "grounded"
 
 
+def test_free_text_ceo_kpi_routing_covers_rendered_finance_cards():
+    assert api_module._free_text_ceo_kpi_key("Which revenue stream is largest?") == "revenue"
+    assert api_module._free_text_ceo_kpi_key("What data gap blocks cash-versus-floor?") == "cash_vs_floor"
+    assert api_module._free_text_ceo_kpi_key("Explain operating cost") == "operating_cost"
+    assert api_module._free_text_ceo_kpi_key("Explain the EBITDA bridge") == "ebitda_margin"
+    assert api_module._free_text_ceo_kpi_key("Model a 60% EBITDA margin") is None
+
+
+def test_release_gate_answer_uses_publication_contract():
+    result = api_module._governed_release_gate_result(
+        {
+            "run_id": "run-1",
+            "status": "awaiting_review",
+            "current_stage": "awaiting_review",
+            "approval_status": "pending",
+            "requires_human_review": True,
+            "findings": 8,
+            "locked_findings": 8,
+        },
+        role="executive",
+        public_safe=False,
+    )
+
+    assert result["answered_by"] == "governed_release_gate"
+    assert "approve or reject" in result["answer"]
+    assert "8 locked finding(s)" in result["answer"]
+    assert "operator must resume" in result["answer"]
+    assert result["grounding_status"] == "grounded"
+
+
+def test_authenticated_free_text_kpi_and_release_route_before_fallback(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        context = {
+            "bundle": object(),
+            "findings": [],
+            "kg_nodes": [],
+            "kg_edges": [],
+            "summary": {
+                "run_id": "run-1",
+                "status": "awaiting_review",
+                "current_stage": "awaiting_review",
+                "approval_status": "pending",
+                "requires_human_review": True,
+                "findings": 8,
+                "locked_findings": 8,
+            },
+            "run_id": "run-1",
+            "run_mode": "full",
+        }
+        monkeypatch.setattr(api_module, "_resolve_qa_context", lambda _run_id: context)
+        monkeypatch.setattr(
+            api_module,
+            "_ceo_kpi_inline_result",
+            lambda _context, *, kpi_key, public_safe, question="": {
+                "matched": True,
+                "answer": f"Governed {kpi_key} answer",
+                "basis": "Current CEO finance contract",
+                "citations": [{"source_path": "finance://current", "locator": kpi_key, "excerpt": ""}],
+                "suggestions": [],
+                "answered_by": "governed_kpi",
+                "grounding_status": "grounded",
+                "_orchestrator_force_answer": True,
+            },
+        )
+
+        revenue = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": "Which revenue stream is largest?", "persona": "ceo", "mode": "auto"},
+        )
+        assert revenue.status_code == 200
+        assert revenue.json()["answered_by"] == "governed_kpi"
+        assert revenue.json()["answer"] == "Governed revenue answer"
+        assert revenue.json()["llm_fallback_attempted"] is False
+
+        release = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": "What human decision is required before the current board pack can be released?", "persona": "ceo", "mode": "auto"},
+        )
+        assert release.status_code == 200
+        assert release.json()["answered_by"] == "governed_release_gate"
+        assert "approve or reject" in release.json()["answer"]
+        assert release.json()["llm_fallback_attempted"] is False
+    finally:
+        _restore_env(original)
+
+
 def test_external_decision_question_fails_closed_with_actual_governed_scope():
     bundle = type("Bundle", (), {"run_metadata": {"available_roles": ["ap_ledger", "ar_ledger", "gl_extract"]}})()
     result = api_module._unavailable_external_decision_result(

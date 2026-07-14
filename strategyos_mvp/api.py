@@ -10913,6 +10913,107 @@ def _authenticated_challenge_closure_result(
     }
 
 
+def _assistant_question_is_release_gate(question: str) -> bool:
+    norm = " ".join(str(question or "").casefold().split())
+    if not norm:
+        return False
+    return (
+        ("human decision" in norm and any(token in norm for token in ("release", "board pack", "publish")))
+        or ("reviewer decision" in norm and any(token in norm for token in ("release", "board pack", "publish", "required", "open")))
+        or (any(token in norm for token in ("release", "publish")) and "approval" in norm)
+    )
+
+
+def _governed_release_gate_result(
+    summary: dict[str, Any] | None,
+    *,
+    role: str,
+    public_safe: bool,
+) -> dict[str, Any]:
+    """Explain release from the same publication contract that renders the UI."""
+    if not isinstance(summary, dict):
+        return {
+            "matched": True,
+            "answer": "No governed run is available, so there is no current board-pack release decision to make.",
+            "basis": "No current governed run or publication contract is available.",
+            "citations": [],
+            "suggestions": ["Start a governed run"],
+            "answered_by": "governed_release_gate",
+            "grounding_status": "needs_evidence",
+            "_orchestrator_force_answer": True,
+        }
+
+    publication = _summary_publication_payload(
+        summary,
+        principal_role=role,
+        public_safe=public_safe,
+    )
+    approval_status = str(publication.get("approval_status") or "pending").lower()
+    current_stage = str(publication.get("current_stage") or summary.get("current_stage") or "unknown").lower()
+    requires_review = bool(publication.get("requires_human_review"))
+    run_status = str(summary.get("status") or "unknown").lower()
+    finding_count = int(summary.get("locked_findings") or summary.get("findings") or 0)
+    challenged_count = int(publication.get("challenged_cases") or 0)
+    reconciliation = publication.get("reconciliation") if isinstance(publication.get("reconciliation"), dict) else {}
+
+    if run_status == "completed" or str(publication.get("status") or "") == "published":
+        answer = "The current board pack is already published; no further human release decision is pending."
+        grounding = "grounded"
+    elif approval_status == "approved":
+        answer = (
+            "The reviewer has already approved the current packet. No additional executive decision is required at this gate; "
+            "the operator must now resume the governed workflow so the approved outputs can be released."
+        )
+        grounding = "grounded"
+    elif approval_status == "rejected":
+        answer = (
+            "The reviewer has rejected release. The required action is to revise the cited evidence or rerun the affected analysis, "
+            "then return the packet for a new reviewer decision."
+        )
+        grounding = "grounded"
+    elif requires_review or current_stage == "awaiting_review":
+        answer = (
+            "A human reviewer must decide whether to approve or reject the current board pack. "
+            f"The governed packet contains {finding_count} locked finding(s) and {challenged_count} open challenged case(s). "
+            "The reviewer must inspect the evidence and reconciliation, then record the release decision. "
+            "Approval authorizes the next step but does not bypass governance: an operator must resume the workflow after approval."
+        )
+        grounding = "grounded"
+    else:
+        answer = (
+            "The packet has not yet reached its mandatory human-review gate. Complete the current governed workflow stage before a reviewer can record a release decision."
+        )
+        grounding = "needs_evidence"
+
+    citations = [
+        {
+            "source_path": "governance://publication-contract",
+            "locator": "approval_status,current_stage,requires_human_review",
+            "excerpt": f"Approval {approval_status}; stage {current_stage}; human review required {requires_review}.",
+        },
+        {
+            "source_path": "governance://board-reconciliation",
+            "locator": "publish_gate_passed",
+            "excerpt": f"Reconciliation gate passed: {bool(reconciliation.get('publish_gate_passed'))}.",
+        },
+    ]
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Current governed publication, reviewer, and board-reconciliation contract.",
+        "citations": citations,
+        "suggestions": [
+            "What evidence must the reviewer inspect?",
+            "Are any challenged cases still open?",
+        ],
+        "answered_by": "governed_release_gate",
+        "assistant_mode": "governed_release_gate",
+        "grounding_status": grounding,
+        "publication": publication,
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _format_ceo_currency_delta(value: Any) -> str:
     """Render a governed movement as executive-readable SAR without changing its value.
 
@@ -11116,6 +11217,22 @@ def _assistant_question_requests_modelling(question: str) -> bool:
     return False
 
 
+def _free_text_ceo_kpi_key(question: str) -> str | None:
+    """Route factual CEO questions to the same KPI contract as card prompts."""
+    if _assistant_question_requests_modelling(question):
+        return None
+    norm = " ".join(str(question or "").casefold().split())
+    if any(token in norm for token in ("cash versus floor", "cash-versus-floor", "cash vs floor", "cash floor", "cash position")):
+        return "cash_vs_floor"
+    if any(token in norm for token in ("ebitda", "operating margin", "margin bridge")):
+        return "ebitda_margin"
+    if any(token in norm for token in ("operating cost", "operating expense", "opex")):
+        return "operating_cost"
+    if "revenue" in norm:
+        return "revenue"
+    return None
+
+
 async def _assistant_chat_response(
     request: AssistantChatRequest | QaRequest,
     *,
@@ -11228,6 +11345,32 @@ async def _assistant_chat_response(
         context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    if _assistant_question_is_release_gate(question):
+        release_result = _governed_release_gate_result(
+            context.get("summary"),
+            role=authenticated_role or ("executive" if public_safe else "authenticated"),
+            public_safe=public_safe,
+        )
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=release_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=release_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     digital_twin_result = _resolve_digital_twin_status(
         question,
@@ -11592,6 +11735,34 @@ async def _assistant_chat_response(
                 llm_status=llm_status,
                 assistant_context=assistant_context,
             )
+
+    free_text_kpi_key = None if public_safe else _free_text_ceo_kpi_key(question)
+    if free_text_kpi_key:
+        kpi_result = _ceo_kpi_inline_result(
+            context,
+            kpi_key=free_text_kpi_key,
+            public_safe=False,
+            question=question,
+        )
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result={**kpi_result, "assistant_mode": "governed_kpi"},
+            driver_context={"key": free_text_kpi_key},
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=kpi_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     if public_safe and context.get("public_context_packet") is not None:
         if mode == "llm":
