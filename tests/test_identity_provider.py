@@ -97,11 +97,11 @@ def test_login_page_is_human_friendly_and_security_tagged():
         assert response.status_code == 200
         assert response.headers["content-security-policy"].startswith("default-src 'self'")
         assert response.headers["x-robots-tag"] == "noindex, nofollow"
-        assert "Temporary test login" in response.text
+        assert "Customer sign-in" in response.text
         assert "operator.tester" in response.text
         assert "executive.tester" in response.text
         assert "operator.local" not in response.text
-        assert "secure browser cookie" in response.text
+        assert "Sign out from your profile menu" in response.text
         assert "localStorage.removeItem" in response.text
     finally:
         _restore_env(original)
@@ -145,6 +145,32 @@ def test_auth_login_issues_tokens_for_every_test_role():
             assert "httponly" in set_cookie
             assert "secure" in set_cookie
             assert "samesite=lax" in set_cookie
+    finally:
+        _restore_env(original)
+
+
+def test_auth_logout_revokes_session_and_clears_cookie():
+    original = _apply_env(
+        {
+            "STRATEGYOS_IDP_ISSUER": "http://localhost:8089",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-local-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "local-secret",
+            "STRATEGYOS_IDP_TEST_USERS": ALL_TEST_USERS,
+        }
+    )
+    try:
+        client = TestClient(idp_module.app, base_url="https://testserver")
+        signed_in = client.post("/auth/login", json={"username": "executive.tester", "password": "exec-pass"})
+        token = signed_in.json()["access_token"]
+        assert token in idp_module.app.state.tokens
+
+        response = client.post("/auth/logout")
+
+        assert response.status_code == 200
+        assert response.json()["redirect"] == "/login"
+        assert token not in idp_module.app.state.tokens
+        assert "strategyos_session=" in response.headers["set-cookie"].lower()
+        assert "max-age=0" in response.headers["set-cookie"].lower()
     finally:
         _restore_env(original)
 

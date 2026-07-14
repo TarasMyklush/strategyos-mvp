@@ -920,9 +920,13 @@
 
 
   function switchView(view) {
+    var previousView = state.activeView;
     state.activeView = view || "home";
     updateHistory();
     renderPersonaView();
+    if (previousView !== state.activeView && typeof window.scrollTo === "function") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
     if (state.activeView === "assistants") focusAssistantInput();
     // When switching to the knowledge view, re-assert the board tab UI to ensure
     // the browser's CSSOM and accessibility tree reflect the active state. The
@@ -1726,9 +1730,9 @@
       || String(firstDefined(payload.assistant_mode, "")).toLowerCase() === "llm";
 
     if (modelProvided) {
-      parts.push("LLM provided");
+      parts.push("AI-generated answer");
       parts.push("Not calculated");
-      parts.push("Review required");
+      parts.push("Review before use");
     }
 
     // Bug 5 fix: derive grounding level from actual evidence when the backend
@@ -1742,7 +1746,7 @@
       : (groundingStatus === "needs_evidence" || groundingStatus === "not_grounded"
         ? "Needs evidence"
         : executiveEvidenceConfidence(riskLevel, citations.length));
-    if (executiveBasis) parts.push("Evidence basis: " + executiveBasis);
+    if (executiveBasis && !modelProvided) parts.push("Evidence basis: " + executiveBasis);
     if (!modelProvided && calculations.length) parts.push("Calculation: " + calculations.length + " check" + (calculations.length === 1 ? "" : "s") + " reconciled");
     if (citations.length) parts.push("Evidence: " + citations.length + " source" + (citations.length === 1 ? "" : "s") + " checked");
     if (scenarioType && scenarioType !== "deterministic") parts.push("Scenario status: " + humanizeToken(scenarioType).toLowerCase());
@@ -2190,6 +2194,15 @@
       hiddenContext && typeof hiddenContext === "object" ? hiddenContext : {}
     );
     body.assistant_context = entrypointCtx;
+    var activeThread = threadStore()[currentThreadKey()];
+    body.assistant_context.conversation_history = safeArray(activeThread && activeThread.messages)
+      .filter(function (item) {
+        return item && item.status !== "pending" && (item.role === "user" || item.role === "assistant") && String(item.text || "").trim();
+      })
+      .slice(-8)
+      .map(function (item) {
+        return { role: item.role, content: String(item.text || "").trim().slice(0, 2400) };
+      });
     // Board portal prompts must NOT carry hero/revenue driver_context, because
     // the board entrypoint_context already identifies board state/lifecycle and
     // stale driver metrics (e.g. driver_context.key="revenue") cause the backend
@@ -2694,7 +2707,7 @@
         var feedbackAction = state.activePersona === "ceo" ? "" : '<button type="button" class="avatar-tooltip-action" data-avatar-action="feedback">Send feedback</button>';
         var tip = document.createElement('div');
         tip.className = 'strategyos-avatar-tooltip';
-        tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div class="avatar-tooltip-copy"><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · board data</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button><button type="button" class="avatar-tooltip-action" data-avatar-action="theme">' + escapeHtml(themeIcon) + ' ' + escapeHtml(themeLabel) + ' theme</button>' + feedbackAction + '</div>';
+        tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div class="avatar-tooltip-copy"><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · board data</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button><button type="button" class="avatar-tooltip-action" data-avatar-action="theme">' + escapeHtml(themeIcon) + ' ' + escapeHtml(themeLabel) + ' theme</button>' + feedbackAction + '<button type="button" class="avatar-tooltip-action avatar-tooltip-action--signout" data-avatar-action="signout">Sign out</button></div>';
         avatar.parentNode.appendChild(tip);
         var outsideClick = function (event) {
           if (!event.target.closest('#topbar-user')) { tip.remove(); document.removeEventListener('click', outsideClick); }
@@ -2723,6 +2736,18 @@
         var feedbackActionEl = tip.querySelector('[data-avatar-action="feedback"]');
         if (feedbackActionEl) {
           feedbackActionEl.onclick = function () { tip.remove(); showFeedbackForm(); };
+        }
+        var signoutAction = tip.querySelector('[data-avatar-action="signout"]');
+        if (signoutAction) {
+          signoutAction.onclick = async function () {
+            signoutAction.disabled = true;
+            try {
+              await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+            } finally {
+              try { sessionStorage.clear(); } catch (_error) {}
+              window.location.assign('/login');
+            }
+          };
         }
       };
     }
@@ -3169,6 +3194,33 @@
 
   /* ── Main render ── */
   var card = $("knowledge-graph-card");
+  function resolveKgLabelPositions(input) {
+    var placed = [];
+    return safeArray(input).slice().sort(function (a, b) {
+      return Number(a.y || 0) - Number(b.y || 0) || Number(a.x || 0) - Number(b.x || 0);
+    }).map(function (node, index) {
+      var label = String(firstDefined(node.short_label, node.label, 'Node'));
+      var halfWidth = Math.min(13, 2.5 + label.length * 0.34);
+      var halfHeight = 2.8;
+      var baseX = Math.max(halfWidth + 1, Math.min(99 - halfWidth, Number(node.x || 50)));
+      var baseY = Math.max(4, Math.min(96, Number(node.y || 50)));
+      var candidates = [0, -6, 6, -12, 12, -18, 18];
+      var selected = { x: baseX, y: baseY };
+      for (var cursor = 0; cursor < candidates.length; cursor += 1) {
+        var candidate = {
+          x: Math.max(halfWidth + 1, Math.min(99 - halfWidth, baseX + (cursor > 2 ? (index % 2 ? 5 : -5) : 0))),
+          y: Math.max(4, Math.min(96, baseY + candidates[cursor]))
+        };
+        var overlaps = placed.some(function (box) {
+          return Math.abs(candidate.x - box.x) < halfWidth + box.halfWidth + 1
+            && Math.abs(candidate.y - box.y) < halfHeight + box.halfHeight + 1;
+        });
+        if (!overlaps) { selected = candidate; break; }
+      }
+      placed.push({ x: selected.x, y: selected.y, halfWidth: halfWidth, halfHeight: halfHeight });
+      return Object.assign({}, node, { label_x: selected.x, label_y: selected.y });
+    });
+  }
   function renderKnowledgeGraph() {
     var graph = getKnowledgeGraph();
     if (!card) return;
@@ -3196,9 +3248,9 @@
     });
 
     var isSelected = state._kgSelectedNodeId || null;
-    var labels = nodes.filter(function (node) {
+    var labels = resolveKgLabelPositions(nodes.filter(function (node) {
       return shouldShowKgLabel(node, focused, isSelected);
-    });
+    }));
     var activeLens = firstDefined(focusQuestion && focusQuestion.label, densityMode === "dense" ? "All KPI evidence" : "Selected KPI evidence");
     var presentCategories = Array.from(new Set(nodes.map(function (node) { return node.category; }).filter(Boolean)));
 
@@ -3251,7 +3303,7 @@
       /* Labels overlaid on SVG */
       + '<div class="kg-labels">' + labels.map(function (node) {
         var active = isNodeFocused(node, focused);
-        return '<span class="kg-label' + (active ? ' on' : ' off') + (node.synthetic ? ' is-derived' : '') + '" data-kg-label-id="' + escapeHtml(node.id) + '" style="left:' + escapeHtml(String(node.x)) + '%;top:' + escapeHtml(String(node.y)) + '%"><span class="kg-label__dot" style="background:' + escapeHtml(getCategoryColor(node)) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(node.short_label, node.label, 'Node')) + '</span>';
+        return '<span class="kg-label' + (active ? ' on' : ' off') + (node.synthetic ? ' is-derived' : '') + '" data-kg-label-id="' + escapeHtml(node.id) + '" style="left:' + escapeHtml(String(node.label_x)) + '%;top:' + escapeHtml(String(node.label_y)) + '%"><span class="kg-label__dot" style="background:' + escapeHtml(getCategoryColor(node)) + '" aria-hidden="true"></span>' + escapeHtml(firstDefined(node.short_label, node.label, 'Node')) + '</span>';
       }).join('') + '</div>'
       + '</div>'
       /* Legend */
@@ -3806,6 +3858,7 @@
     var label = firstDefined(driver.label, "this KPI");
     var availability = String(firstDefined(driver.availability, "unavailable"));
     var key = String(firstDefined(driver.driver_key, driver.key, ""));
+    var assistantName = assistantNameForState();
     var brief = executiveKpiBrief(driver);
     var comparison = brief.comparison || {};
     var strategicReference = brief.strategic_reference || null;
@@ -3848,7 +3901,7 @@
       executiveContextMarkup,
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       compositionMarkup,
-      '<section class="kpi-inline-chat" aria-label="Ask Hermes about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask Hermes about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div></section>',
+      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div></section>',
       '<details class="kpi-brief-audit"><summary>How this figure is calculated</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
@@ -3977,7 +4030,7 @@
         "Which governed cases create the largest recoverable value, and what should be acted on first?"
       ];
       gravityPanel.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">CEO agenda</p><h3 class="detail-title">Questions worth answering now</h3><p class="section-note">Each question starts Hermes with the relevant KPI, board-gate, or case context already attached.</p></div></div>',
+        '<div class="detail-head"><div><p class="detail-eyebrow">CEO agenda</p><h3 class="detail-title">Questions worth answering now</h3><p class="section-note">Each question opens the executive assistant with the relevant KPI, board approval stage or case already attached.</p></div></div>',
         '<div class="decision-question-grid">' + governedPrompts.map(function (prompt, index) {
           var labels = [currentLabel + ' drivers', 'Board release gate', 'Value at stake'];
           var kpiAttribute = index === 0 ? ' data-kpi-key="' + escapeHtml(String(firstDefined(driver.driver_key, driver.key, ""))) + '"' : '';
@@ -4605,7 +4658,7 @@
       var activeEvent = weekAhead[openIndex] || null;
       weekPanel.innerHTML = weekAhead.length ? '<div class="detail-head"><div><h3 class="detail-title">CEO agenda</h3></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ': model the options and what I should walk in having decided."><strong>Explore scenarios</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ', what data am I missing and who should I request it from?"><strong>Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line..." /><button type="submit">Send</button></form></div>' : '') : '<div class="detail-head"><div><h3 class="detail-title">CEO agenda</h3></div></div><p class="section-note">No governed calendar has been supplied for this run. Upload the Calendar / Agenda workbook to show upcoming events and preparation needs.</p>';
+      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ': model the options and what I should walk in having decided."><strong>Explore scenarios</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ', what data am I missing and who should I request it from?"><strong>Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line..." /><button type="submit">Send</button></form></div>' : '') : '<div class="detail-head"><div><h3 class="detail-title">CEO agenda</h3></div></div><p class="section-note">No executive calendar is connected for this reporting period. Your operations team can add the upcoming meetings and preparation milestones when they are confirmed.</p>';
       safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
         safeArray(panel && panel.querySelectorAll('[data-rail-toggle]')).forEach(function (button) {
           button.onclick = function () {
@@ -4829,8 +4882,13 @@
       }
     }
 
-    if (assistantHeading) assistantHeading.textContent = "Ask Hermes";
-    if (assistantSubtitle) assistantSubtitle.textContent = "Hermes will answer here using the current board pack.";
+    if (assistantHeading) assistantHeading.textContent = "Ask " + assistantName;
+    if (assistantSubtitle) assistantSubtitle.textContent = assistantName + " will answer here using the current board pack.";
+    var assistantInput = $("assistant-input");
+    if (assistantInput) {
+      assistantInput.placeholder = "Ask " + assistantName + "…";
+      assistantInput.setAttribute("aria-label", "Ask " + assistantName);
+    }
     if (assistantState) {
       if (state.activePersona === "ceo") {
         assistantState.textContent = "";

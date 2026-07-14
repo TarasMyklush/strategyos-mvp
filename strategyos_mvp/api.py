@@ -1119,15 +1119,19 @@ def _build_public_safe_assistant_packet(
     week = list((presentation_sections.get("week_ahead") or {}).get("items") or [])
 
     executive_kpis = list(presentation_sections.get("drivers") or [])
+    finding_case_index = list((presentation_sections.get("findings") or {}).get("case_index") or [])
     kg_nodes, kg_edges, kg_questions = _ceo_kpi_knowledge_graph(executive_kpis)
 
     running_agents = list((agent_modules.get("running") or []))
     activity_summary = agent_modules.get("summary") or {}
     activity = {
         "line": (
-            f"{int(activity_summary.get('running_count') or 0)} active module(s) · "
-            f"{int(activity_summary.get('discoverable_count') or 0)} discoverable · "
-            f"{int(activity_summary.get('approval_count') or 0)} approval gate(s)"
+            f"{int(activity_summary.get('running_count') or 0)} active "
+            f"{'module' if int(activity_summary.get('running_count') or 0) == 1 else 'modules'} · "
+            f"{int(activity_summary.get('discoverable_count') or 0)} available "
+            f"{'service' if int(activity_summary.get('discoverable_count') or 0) == 1 else 'services'} · "
+            f"{int(activity_summary.get('approval_count') or 0)} approval "
+            f"{'stage' if int(activity_summary.get('approval_count') or 0) == 1 else 'stages'}"
         ),
         "metrics": [
             {"k": "run id", "v": str((summary or {}).get("run_id") or ANONYMOUS_PUBLIC_RUN_ID)},
@@ -1142,6 +1146,11 @@ def _build_public_safe_assistant_packet(
         f"Recoverable value: {_format_sar_brief(metrics.get('total_recoverable_sar'))}.",
         f"Citation resolution: {_format_ratio_display(metrics.get('resolved_count'), metrics.get('citation_count'))}.",
     ]
+
+    finance_payload = (summary or {}).get("finance_kpi") or (summary or {}).get("oracle_kpi") or {}
+    finance_components = finance_payload.get("components") if isinstance(finance_payload, dict) else {}
+    finance_evidence = finance_payload.get("evidence") if isinstance(finance_payload, dict) else {}
+    cash_evidence = finance_evidence.get("cash_vs_floor") if isinstance(finance_evidence, dict) else {}
 
     return {
         "packet_id": f"latest-public:{persona_key}:{str((summary or {}).get('run_id') or ANONYMOUS_PUBLIC_RUN_ID)}",
@@ -1174,6 +1183,7 @@ def _build_public_safe_assistant_packet(
         },
         "drivers": drivers,
         "findings": findings,
+        "finding_case_index": finding_case_index,
         "developments": developments,
         "week": week,
         "board_portal": board_portal,
@@ -1191,6 +1201,8 @@ def _build_public_safe_assistant_packet(
             "challenged_count": metrics.get("challenged_count"),
             "report_count": publication.get("report_count"),
             "source_boundary": plan_health.get("boundary"),
+            "current_cash_sar": (finance_components or {}).get("cash_balance"),
+            "current_cash_complete": bool((cash_evidence or {}).get("actual_complete", False)),
         },
         "findings_reconciliation": reconciliation,
         "facts": facts,
@@ -2496,8 +2508,8 @@ def _lifecycle_hero_contract(
         return {
             "headline": "Board packet is closed and frozen",
             "body": (
-                f"{persona} view is now a frozen board-session snapshot with {report_count} report artifact(s). "
-                f"{challenged_count} challenged item(s) remain as follow-up constraints, not pre-board prep."
+                f"{persona} view is now a frozen board-session snapshot with {report_count} {'report' if report_count == 1 else 'reports'}. "
+                f"{challenged_count} challenged {'item remains' if challenged_count == 1 else 'items remain'} as follow-up constraints, not pre-board preparation."
             ),
             "score_note": f"closed session · {health_badge}",
             "secondary_fact": health_label,
@@ -2507,7 +2519,7 @@ def _lifecycle_hero_contract(
             "headline": "Board session is live on governed material",
             "body": (
                 f"{persona} view is operating from the approved board packet. "
-                f"{challenged_count} unresolved item(s) are visible as live constraints for the room."
+                f"{challenged_count} unresolved {'item is' if challenged_count == 1 else 'items are'} visible as live constraints for the room."
             ),
             "score_note": f"live session · {health_badge}",
             "secondary_fact": health_label,
@@ -2516,7 +2528,7 @@ def _lifecycle_hero_contract(
         "headline": str(plan_health.get("label") or "Board preparation is active"),
         "body": str(
             plan_health.get("summary")
-            or f"{challenged_count} challenged item(s) need reviewer closure before the board packet goes live."
+            or f"{challenged_count} challenged {'item needs' if challenged_count == 1 else 'items need'} reviewer closure before the board packet goes live."
         ),
         "score_note": f"pre-board · {health_badge}",
         "secondary_fact": health_label,
@@ -5135,11 +5147,11 @@ def _agents_surface_payload(
     elif pending_request_total:
         collaboration_summary = (
             f"{pending_request_total} {handoff_word} "
-            f"{'is' if pending_request_total == 1 else 'are'} awaiting a Twin response. "
+            f"{'is' if pending_request_total == 1 else 'are'} awaiting a leadership-team response. "
             "None is flagged for executive attention."
         )
     else:
-        collaboration_summary = "No handoff is waiting for a Twin response or executive action."
+        collaboration_summary = "Nothing in the leadership-team workflow requires your attention."
     payload = {
         "contract_version": "digital_twin_network.v1",
         "status": "ok" if CONFIG.twins_enabled else "disabled",
@@ -5577,9 +5589,9 @@ def _agent_modules_payload(
             "label": "Runtime guardrail",
             "status": "protected",
             "lane": "system",
-            "summary": "Keeps publication, connector, and store truth bounded to the tenant-admin/system lane.",
+            "summary": "Protects publication and company data access. Configuration changes are restricted to system administrators.",
             "route": "/data/status",
-            "output_metric": str(CONFIG.runtime_backend or "local"),
+            "output_metric": "Guardrails active",
             "approval_dependency": "system_boundary",
         },
     ]
@@ -5670,7 +5682,7 @@ def _agent_modules_payload(
         {
             "event_id": "latest-publication-boundary",
             "title": "Publication boundary",
-            "detail": f"Board pack is {str((publication.get('board_pack') or {}).get('status') or 'pending').replace('_', ' ')} with {publication.get('report_count') or 0} surfaced report artifact(s).",
+            "detail": f"Board pack is {str((publication.get('board_pack') or {}).get('status') or 'pending').replace('_', ' ')} with {publication.get('report_count') or 0} surfaced {'report' if int(publication.get('report_count') or 0) == 1 else 'reports'}.",
         },
     ]
     return {
@@ -6311,7 +6323,7 @@ def _latest_report_preview_payload(
     current_stage = _normalize_lifecycle_stage(summary.get("current_stage"))
     preview_lines = [
         f"Run {summary.get('run_id') or 'latest'} is at {current_stage} with approval status {approval_status}.",
-        f"{publication['report_count']} report artifact(s) are tracked; {publication['restricted_report_count']} remain protected.",
+        f"{publication['report_count']} {'report is' if publication['report_count'] == 1 else 'reports are'} tracked; {publication['restricted_report_count']} remain protected.",
         "Use reviewer/operator artifact access for restricted bodies; this role gets governed publication posture only.",
     ]
     return {
@@ -8366,7 +8378,7 @@ def _plan_tracker_payload() -> dict[str, Any]:
                     "label": "Latest governed run visibility",
                     "result": "pass" if summary else "fail",
                     "note": (
-                        f"Run {summary.get('run_id')} with {report_count} surfaced report artifact(s) and approval posture {approval_status}."
+                        f"Run {summary.get('run_id')} with {report_count} surfaced {'report' if report_count == 1 else 'reports'} and approval posture {approval_status}."
                         if summary
                         else "No governed run is available yet."
                     ),
@@ -9851,7 +9863,7 @@ def _public_report_preview_payload(
     preview_lines = [
         f"Latest governed run: {summary.get('run_id') or 'latest'}.",
         f"Recoverable value identified: {summary.get('total_recoverable_sar') or 0:,.2f} SAR.",
-        f"Review posture: {summary.get('approval_status') or 'pending'} with {len(findings)} finding(s) and {challenged} challenged item(s).",
+        f"Review posture: {summary.get('approval_status') or 'pending'} with {len(findings)} {'finding' if len(findings) == 1 else 'findings'} and {challenged} challenged {'item' if challenged == 1 else 'items'}.",
     ]
     if top_finding:
         preview_lines.append(
@@ -10504,7 +10516,8 @@ def _resolve_public_assistant_context(
         "view_state": view_state,
     }
     synthetic_findings: list[dict[str, Any]] = []
-    for index, item in enumerate(list(merged_packet.get("findings") or [])):
+    assistant_findings = list(merged_packet.get("finding_case_index") or merged_packet.get("findings") or [])
+    for index, item in enumerate(assistant_findings):
         title = str(item.get("title") or "")
         detail = str(item.get("detail") or item.get("impact") or "")
         synthetic_findings.append(
@@ -11575,6 +11588,18 @@ async def _assistant_chat_response(
             packet = {"source": "empty_packet", "public_safe": True}
         context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
+        history = assistant_context.get("conversation_history")
+        if isinstance(history, list):
+            context["public_context_packet"]["conversation_history"] = [
+                {
+                    "role": str(item.get("role") or "")[:16],
+                    "content": str(item.get("content") or "")[:2400],
+                }
+                for item in history[-8:]
+                if isinstance(item, dict)
+                and str(item.get("role") or "") in {"user", "assistant"}
+                and str(item.get("content") or "").strip()
+            ]
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if _assistant_question_is_release_gate(question):

@@ -88,7 +88,7 @@ def test_executive_has_a_dedicated_agents_tab_and_honest_calendar_empty_state():
     twin_render = js[js.index("function renderAgentsDiscovery"):js.index("function renderAssistantStudio")]
     assert "switchView('assistants')" not in twin_render
     assert "data-twin-toggle" in twin_render
-    assert "No governed calendar has been supplied for this run" in js
+    assert "No executive calendar is connected for this reporting period" in js
 
 
 def test_executive_static_js_switches_latest_run_route_by_session_mode():
@@ -2831,7 +2831,7 @@ def test_ceo_drawer_no_banned_strings():
     ceo_facing_texts = [
         'I can answer using the current board pack.',
         'Ask a question to begin.',
-        'Hermes will answer here using the current board pack.',
+        'assistantName + " will answer here using the current board pack."',
     ]
     for text in ceo_facing_texts:
         assert text in executive_js, f"Expected CEO-facing text not found: {text}"
@@ -4290,11 +4290,13 @@ console.log(JSON.stringify({{
     result = json.loads(completed.stdout.strip())
     assert result["answerText"].startswith("Since last week, NUPCO awards were confirmed")
     assert '"matched"' not in result["answerText"]
-    assert "Evidence basis: outer wrapper" in result["answerMeta"]
+    assert "AI-generated answer" in result["answerMeta"]
+    assert "Review before use" in result["answerMeta"]
+    assert "outer wrapper" not in result["answerMeta"]
     assert "Evidence: 1 source checked" in result["answerMeta"]
-    assert "LLM provided" in result["answerMeta"]
+    assert "LLM provided" not in result["answerMeta"]
     assert "Not calculated" in result["answerMeta"]
-    assert "Review required" in result["answerMeta"]
+    assert "Review before use" in result["answerMeta"]
 
 
 def test_qa_answer_text_extracts_answer_from_truncated_jsonish_payload_behaviorally():

@@ -359,17 +359,80 @@ def _recoverable_total_from_findings(findings: list[Any]) -> Decimal:
     return total
 
 
+def _governed_recovery_baseline(context: Mapping[str, Any]) -> tuple[Decimal, int, list[dict[str, Any]]]:
+    """Resolve the one recoverable-value total used across chat entry points.
+
+    The public CEO surface intentionally exposes a compact findings list, so
+    summing that list understates the governed total. Prefer the reconciled
+    packet total and use the complete finding count carried beside it.
+    """
+    packet = _public_packet(dict(context))
+    public_facts = packet.get("public_facts") if isinstance(packet.get("public_facts"), Mapping) else {}
+    reconciliation = packet.get("findings_reconciliation") if isinstance(packet.get("findings_reconciliation"), Mapping) else {}
+    raw_total = public_facts.get("total_recoverable_sar")
+    if raw_total is None:
+        raw_total = reconciliation.get("total_recoverable_sar")
+    total = _decimal_or_none(raw_total)
+    if total is not None and total > 0:
+        count = int(
+            public_facts.get("total_finding_count")
+            or reconciliation.get("total_finding_count")
+            or len(context.get("findings") or [])
+        )
+        return total, count, [_public_packet_citation("findings_reconciliation.total_recoverable_sar", "Reconciled recoverable-value total")]
+
+    findings = list(context.get("findings") or [])
+    total = _recoverable_total_from_findings(findings)
+    citations = [{"source_path": "run_artifacts://findings", "locator": "recoverable_sar aggregation", "excerpt": ""}]
+    return total, len([item for item in findings if isinstance(item, dict)]), citations
+
+
+def _asks_to_realize_all_recoverable(normalized_prompt: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:collect|recover|realize|realise)\s+(?:the\s+)?(?:entire|full|all)(?:\s+of\s+the)?\s+(?:current\s+)?recoverable",
+            normalized_prompt,
+        )
+        or re.search(r"\ball\s+(?:current\s+)?recoverable\s+(?:value|amount|cash|leakage)\b", normalized_prompt)
+    )
+
+
+def _current_cash_baseline(context: Mapping[str, Any]) -> tuple[Decimal | None, bool]:
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    for key in ("finance_kpi", "oracle_kpi"):
+        payload = summary.get(key) if isinstance(summary, Mapping) else None
+        if not isinstance(payload, Mapping):
+            continue
+        components = payload.get("components") if isinstance(payload.get("components"), Mapping) else payload
+        cash = _decimal_or_none(components.get("cash_balance"))
+        if cash is not None:
+            evidence = payload.get("evidence") if isinstance(payload.get("evidence"), Mapping) else {}
+            cash_evidence = evidence.get("cash_vs_floor") if isinstance(evidence.get("cash_vs_floor"), Mapping) else {}
+            return cash, bool(cash_evidence.get("actual_complete", True))
+
+    packet = _public_packet(dict(context))
+    facts = packet.get("public_facts") if isinstance(packet.get("public_facts"), Mapping) else {}
+    cash = _decimal_or_none(facts.get("current_cash_sar"))
+    return cash, bool(facts.get("current_cash_complete", False)) if cash is not None else False
+
+
 def _parse_recovery_realization(prompt: str, context: dict[str, Any]) -> ScenarioResult | None:
-    if _public_packet(context):
-        return None
     norm = _normalize(prompt)
     if not _has_scenario_intent(prompt):
         return None
-    if not any(token in norm for token in ("recover", "recovery", "realize", "collect", "remaining", "remains")):
+    if not re.search(r"\b(?:recover|recovery|realize|realise|collect|remaining|remains)\b", norm):
         return None
 
     prompt_numbers = _parse_numeric_tokens(prompt)
     recovery_amount = _select_recovery_amount(prompt, prompt_numbers)
+    baseline, finding_count, citations = _governed_recovery_baseline(context)
+    if recovery_amount is None and baseline > 0 and _asks_to_realize_all_recoverable(norm):
+        recovery_amount = {
+            "raw": "all current recoverable value",
+            "value": baseline,
+            "unit": "SAR",
+            "span": (0, 0),
+        }
     if recovery_amount is None:
         return _scenario_missing_data_result(
             scenario_id="recovery_realization",
@@ -383,8 +446,6 @@ def _parse_recovery_realization(prompt: str, context: dict[str, Any]) -> Scenari
             suggestions=["If we recover SAR 400,000, what remains?"],
         )
 
-    findings = context.get("findings") or []
-    baseline = _recoverable_total_from_findings(findings)
     if baseline <= 0:
         return _scenario_missing_data_result(
             scenario_id="recovery_realization",
@@ -404,13 +465,14 @@ def _parse_recovery_realization(prompt: str, context: dict[str, Any]) -> Scenari
     realization_rate = capped_realized / baseline if baseline else Decimal("0")
     over_recovery = realized > baseline
 
-    citations = [{"source_path": "run_artifacts://findings", "locator": "recoverable_sar aggregation", "excerpt": ""}]
+    current_cash, cash_complete = _current_cash_baseline(context)
+    ending_cash = current_cash + capped_realized if current_cash is not None else None
     calculations = [
         CalculationStep(
             step_id="baseline_recoverable",
             description="Current governed recoverable-value baseline",
             formula="SUM(recoverable_sar) over current run findings",
-            inputs={"finding_count": len([f for f in findings if isinstance(f, dict)])},
+            inputs={"finding_count": finding_count},
             result=_sar_decimal(baseline),
             unit="SAR",
             citations=citations,
@@ -440,12 +502,37 @@ def _parse_recovery_realization(prompt: str, context: dict[str, Any]) -> Scenari
             citations=citations,
         ),
     ]
+    if ending_cash is not None:
+        calculations.append(
+            CalculationStep(
+                step_id="cash_position_after_recovery",
+                description="Reported cash position after the scenario collection",
+                formula="scenario_ending_cash = current_reported_cash + realized_recovery",
+                inputs={
+                    "current_reported_cash_sar": str(current_cash),
+                    "realized_recovery_sar": str(capped_realized),
+                    "cash_scope_complete": cash_complete,
+                },
+                result=_sar_decimal(ending_cash),
+                unit="SAR",
+                citations=citations,
+                assumptions=["The scenario assumes the recovered amount is collected in cash during the period."],
+            )
+        )
     answer = (
         f"If SAR {realized:,.2f} is recovered, remaining recoverable value falls from "
         f"{_sar_decimal(baseline)} to {_sar_decimal(remaining)}. "
         f"That realizes {_percent(float(realization_rate), 2)} of the current recoverable baseline. "
         "Board readiness does not automatically clear: evidence status, challenges, approvals, and collection proof still need to be closed separately."
     )
+    if ending_cash is not None:
+        scope_note = " The current cash baseline is partial, so the resulting cash position remains partial." if not cash_complete else ""
+        answer += (
+            f" On the reported cash baseline, cash would rise from {_sar_executive_decimal(current_cash)} "
+            f"to {_sar_executive_decimal(ending_cash)}.{scope_note}"
+        )
+    elif "cash" in norm:
+        answer += " Cash increases by the recovered amount, but an ending cash position cannot be stated because the current cash baseline is unavailable."
     if over_recovery:
         answer += " The requested recovery amount is above the current baseline, so the remaining value is capped at SAR 0.00."
 
@@ -459,7 +546,7 @@ def _parse_recovery_realization(prompt: str, context: dict[str, Any]) -> Scenari
         citations=citations,
         assumptions=["User-provided recovery amount is treated as a scenario assumption, not an actual collection event."],
         hallucination_risk=_risk_none("Deterministic recovery realization from current run findings and explicit user amount."),
-        suggestions=["Show calculation trace", "What evidence still blocks board readiness?", "Show top recoverable findings"],
+        suggestions=["Show the recovery calculation", "What should Finance act on first?", "What evidence still blocks collection?"],
         scenario_type="deterministic",
         basis="Scenario parser matched recovery realization and applied the user-provided amount to current run findings.",
     )
@@ -2148,6 +2235,7 @@ def _parse_governed_public_exec_surface(
 
     drivers = [item for item in list(packet.get("drivers") or []) if isinstance(item, dict)]
     findings = [item for item in list(packet.get("findings") or []) if isinstance(item, dict)]
+    complete_findings = [item for item in list(packet.get("finding_case_index") or findings) if isinstance(item, dict)]
     developments = [item for item in list(packet.get("developments") or []) if isinstance(item, dict)]
     public_facts = packet.get("public_facts") if isinstance(packet.get("public_facts"), dict) else {}
     data_sources = packet.get("data_sources") if isinstance(packet.get("data_sources"), dict) else {}
@@ -2274,19 +2362,38 @@ def _parse_governed_public_exec_surface(
         citations.append(_public_citation("public_context_packet.board_portal"))
     elif any(token in norm for token in ("recoverable", "recovery", "evidence", "finding", "citation")):
         total = public_facts.get("total_recoverable_sar")
-        finding_titles = [str(item.get("title") or "").strip() for item in findings[:3] if str(item.get("title") or "").strip()]
+        ranked = sorted(complete_findings, key=lambda item: float(item.get("recoverable_sar") or 0), reverse=True)
+        listed = ranked[:5]
+        listed_total = sum(float(item.get("recoverable_sar") or 0) for item in listed)
+        remaining_count = max(0, len(ranked) - len(listed))
+        remaining_total = max(0.0, float(total or 0) - listed_total)
         fragments = []
         if isinstance(total, (int, float)):
-            fragments.append(f"recoverable value {_sar(float(total))}")
-        if finding_titles:
-            fragments.append("current findings: " + "; ".join(finding_titles))
-            citations.extend(_public_citation(f"public_context_packet.findings[{index}]") for index in range(min(3, len(finding_titles))))
-        answer = (
-            "The current governed packet shows " + ", ".join(fragments) + "."
-            if fragments
-            else "The current governed packet contains no public finding or recovery detail for that question."
-        )
-        basis = "Summarized only current governed public facts and findings."
+            fragments.append(f"{_sar(float(total))} across {int(public_facts.get('total_finding_count') or len(ranked))} governed cases")
+        if listed:
+            fragments.append(
+                "largest cases: "
+                + "; ".join(
+                    f"{str(item.get('title') or 'Governed case')} ({_sar(float(item.get('recoverable_sar') or 0))})"
+                    for item in listed
+                )
+            )
+            citations.extend(_public_citation(f"public_context_packet.finding_case_index[{index}]") for index in range(len(listed)))
+        if remaining_count:
+            fragments.append(f"the remaining {remaining_count} smaller cases total {_sar(remaining_total)}")
+        if fragments:
+            first = listed[0] if listed else {}
+            first_title = str(first.get("title") or "the highest-value case")
+            first_amount = float(first.get("recoverable_sar") or 0)
+            answer = "The current governed packet shows " + ". ".join(fragments) + "."
+            if any(token in norm for token in ("first", "priority", "priorit", "act", "action", "sequence", "owner")):
+                answer += (
+                    f" Recommended first action: Group Finance should validate collection readiness and assign the accountable case owner for {first_title} ({_sar(first_amount)}) today, "
+                    "then work the remaining cases in recoverable-value order. Confirm evidence, collection date and named owner before reporting any amount as realised cash."
+                )
+        else:
+            answer = "The current governed packet contains no finding or recovery detail for that question."
+        basis = "Reconciled the complete governed case index to the packet total and ranked actions by recoverable value."
     else:
         visible = [_governed_public_item_text(item) for item in drivers[:3]]
         visible = [item for item in visible if item]
@@ -2803,6 +2910,9 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
     # of falling through to the older tabular QA engine. A marker explicitly
     # declaring illustrative data remains excluded from this route.
     if public_packet.get("is_illustrative") is not True:
+        recovery_result = _parse_recovery_realization(prompt, context)
+        if recovery_result is not None:
+            return _hydrate_scenario_result(recovery_result)
         target_margin = _target_margin_from_prompt(prompt, prompt_numbers)
         if target_margin is not None and any(token in norm for token in ("margin", "ebitda")):
             result = _parse_financial_what_if_guard(prompt, context)

@@ -150,6 +150,68 @@ def test_recovery_realization_prefers_number_tied_to_recovery_action():
     assert "SAR 394,108.00" in result.answer
 
 
+def test_public_recovery_realization_uses_reconciled_total_and_cash_baseline():
+    packet = {
+        "is_illustrative": False,
+        "public_facts": {
+            "total_recoverable_sar": 794_108,
+            "total_finding_count": 8,
+            "current_cash_sar": "42341408.58",
+            "current_cash_complete": False,
+        },
+        "findings_reconciliation": {
+            "total_recoverable_sar": 794_108,
+            "displayed_recoverable_sar": 717_020,
+            "remaining_recoverable_sar": 77_088,
+            "total_finding_count": 8,
+            "displayed_finding_count": 5,
+        },
+    }
+    result = parse_scenario(
+        "If we collect all recoverable value this quarter, how does that change our cash position?",
+        {
+            "bundle": packet,
+            "public_context_packet": packet,
+            "findings": [{"recoverable_sar": 250_416}],
+            "summary": {},
+            "kg_nodes": [],
+        },
+    )
+
+    assert result.matched is True
+    assert result.scenario_id == "recovery_realization"
+    assert "SAR 794,108.00" in result.answer
+    assert "SAR 43.1M" in result.answer
+    assert "remains partial" in result.answer
+    cash_step = next(step for step in result.calculations if step.step_id == "cash_position_after_recovery")
+    assert cash_step.result == "SAR 43,135,516.58"
+
+
+def test_public_value_at_stake_reconciles_cases_and_recommends_first_action():
+    amounts = [250_416, 177_188, 120_000, 93_000, 76_416, 40_000, 25_000, 12_088]
+    cases = [
+        {"title": f"Case {index}", "recoverable_sar": amount}
+        for index, amount in enumerate(amounts, start=1)
+    ]
+    packet = {
+        "is_illustrative": False,
+        "public_facts": {"total_recoverable_sar": 794_108, "total_finding_count": 8},
+        "findings_reconciliation": {"total_recoverable_sar": 794_108, "total_finding_count": 8},
+        "finding_case_index": cases,
+        "findings": cases[:3],
+    }
+    result = parse_scenario(
+        "Which governed cases create the largest recoverable value, and what should be acted on first?",
+        {"bundle": packet, "public_context_packet": packet, "findings": cases, "kg_nodes": []},
+    )
+
+    assert result.matched is True
+    assert "remaining 3 smaller cases total SAR 77,088.00" in result.answer
+    assert "Recommended first action" in result.answer
+    assert "Group Finance" in result.answer
+    assert "Case 1 (SAR 250,416.00)" in result.answer
+
+
 def test_fx_hedge_scenario_fails_closed_instead_of_returning_leakage_total():
     result = parse_scenario(
         "What would a 60% EUR hedge save?",
