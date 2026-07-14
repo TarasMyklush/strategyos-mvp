@@ -105,9 +105,11 @@ def test_executive_ui_distinguishes_twins_from_automations_and_status_ring():
     css = (root / "executive.css").read_text(encoding="utf-8")
     html = (root / "executive.html").read_text(encoding="utf-8")
 
-    assert "Digital twins &amp; AI assistants" in html
+    assert "AI leadership team" in html
     assert "Your AI leadership team" in js
-    assert "System workflows — not digital twins" in js
+    assert 'id="subtools-panel" hidden' in html
+    assert "automationCard.hidden = true" in js
+    assert "System workflows — not digital twins" not in js
     assert "This view highlights work in progress" in js
     assert "in progress" in js
     assert "need your attention" in js

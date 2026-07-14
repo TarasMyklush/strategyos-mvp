@@ -3247,12 +3247,12 @@ console.log(JSON.stringify({{
     # the data model.
     assert "Team readiness score" not in result["html"]
     assert "target 80" not in result["html"]
-    assert "Active now" in result["html"]
+    assert "Working now" in result["html"]
     # Fixture: running + protected = 2 running; preview_only = 1 pending;
     # blocked = 1 blocked/idle.
-    assert "2 active" in result["html"]
+    assert "2 working" in result["html"]
     assert "1 waiting" in result["html"]
-    assert "1 guarded / blocked" in result["html"]
+    assert "1 need review" in result["html"]
     for fabricated in ("92", "76", "62", "45"):
         assert ">" + fabricated + "<" not in result["html"], (
             f"fabricated readiness score {fabricated} leaked back into the card"

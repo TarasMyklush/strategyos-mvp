@@ -94,7 +94,15 @@ def test_ceo_jargon_replacements():
     assert "Your executive AI team" in js, (
         "AI team must use CEO-friendly leadership vocabulary"
     )
-    for internal_copy in ("persistent runtime", "configured twin", "Role-specific digital twins"):
+    for internal_copy in (
+        "persistent runtime",
+        "configured twin",
+        "Role-specific digital twins",
+        "Awaiting module telemetry",
+        "Governed runtime",
+        "System workflows — not digital twins",
+        "Governed automations",
+    ):
         assert internal_copy not in js, f"CEO surface leaks internal copy: {internal_copy}"
     assert "Board reports" in js, (
         "Report surface must be rebadged as 'Board reports'"
@@ -1054,13 +1062,15 @@ def test_logo_home_link():
     )
 
 
-def test_workflow_modules_are_labelled_as_automations_not_twins():
-    """Workflow monitors must not be presented as personified AI agents."""
+def test_workflow_modules_are_hidden_from_the_ceo_surface():
+    """Operator workflow services must not be presented on the CEO surface."""
     js = _static_executive_js()
     html = _ceo_executive_html()
 
-    assert "Governed automations" in js
-    assert "System workflows — not digital twins" in js
+    assert "automationCard.hidden = true" in js
+    assert "automationCard.innerHTML = ''" in js
+    assert "Governed automations" not in js
+    assert "System workflows — not digital twins" not in js
     assert "Tenant runtime watch" not in html, (
         "CEO HTML must not render 'Tenant runtime watch'"
     )
