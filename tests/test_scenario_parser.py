@@ -1,5 +1,5 @@
-from strategyos_mvp.executive_design import executive_public_assistant_context
 from strategyos_mvp.scenario_parser import parse_scenario
+from tests.fixtures.executive_demo_packet import executive_demo_packet
 
 
 def test_parse_scenario_uses_kg_node_properties_domain_for_digital_health_match():
@@ -45,7 +45,7 @@ def test_parse_scenario_handler_errors_return_safe_error_contract():
 
 
 def test_parse_scenario_public_digital_health_uses_shared_public_packet():
-    packet = executive_public_assistant_context()
+    packet = executive_demo_packet()
     result = parse_scenario(
         "Simulate digital health flat by end of year",
         {
@@ -63,40 +63,24 @@ def test_parse_scenario_public_digital_health_uses_shared_public_packet():
     assert "public executive packet" in result.answer.lower()
 
 
-def test_parse_scenario_public_exec_prompts_return_substantive_answers():
-    packet = executive_public_assistant_context()
-
-    tamween = parse_scenario(
-        'Project the impact of "Tamween audit: SAR 1.2M recoverable" on the current plan and what I should prepare for the board.',
+def test_parse_scenario_finance_leakage_uses_only_supplied_findings():
+    result = parse_scenario(
+        "Show the total recoverable value and its breakdown.",
         {
-            "bundle": packet,
+            "bundle": object(),
             "findings": [
-                {"title": "SAR 8.6M is recoverable across the group", "pattern_type": "group_recovery", "recoverable_sar": 8_600_000},
-                {"title": "Tamween audit: SAR 1.2M recoverable", "pattern_type": "tamween_audit", "recoverable_sar": 1_200_000},
+                {"title": "Case A", "pattern_type": "duplicate_payment", "recoverable_sar": 600_000},
+                {"title": "Case B", "pattern_type": "contract_leakage", "recoverable_sar": 200_000},
             ],
-            "kg_nodes": packet["kg_nodes"],
-            "public_context_packet": packet,
+            "kg_nodes": [],
+            "public_context_packet": {},
         },
     )
-    assert tamween.matched is True
-    assert "sar 1.2m" in tamween.answer.lower()
-    assert "sar 8.6m" in tamween.answer.lower()
-    assert "board" in tamween.answer.lower()
-    assert tamween.hallucination_risk.level.value == "low"
-
-    epharmacy = parse_scenario(
-        "Show e-Pharmacy detail",
-        {
-            "bundle": packet,
-            "findings": [],
-            "kg_nodes": packet["kg_nodes"],
-            "public_context_packet": packet,
-        },
-    )
-    assert epharmacy.matched is True
-    assert epharmacy.scenario_id == "public_exec_epharmacy_detail"
-    assert "growth lever" in epharmacy.answer.lower()
-    assert "capacity" in epharmacy.answer.lower()
+    assert result.matched is True
+    assert result.scenario_id == "finance_leakage"
+    assert "SAR 800,000.00" in result.answer
+    assert "duplicate_payment: SAR 600,000.00" in result.answer
+    assert result.hallucination_risk.level.value == "none"
 
 
 def test_parse_scenario_missing_finance_findings_has_non_none_risk():

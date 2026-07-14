@@ -1144,80 +1144,55 @@ def _requires_plain_text_repair(text: str) -> bool:
 
 
 def _public_packet_repair_answer(*, question: str, packet: dict[str, Any]) -> dict[str, Any] | None:
-    lower = str(question or "").strip().lower()
-    facts = packet.get("public_facts") or {}
-    board = packet.get("board_portal") or {}
-    kpis = list(packet.get("kpis") or [])
     if not packet:
         return None
 
-    if "numbers" in lower and "last week" in lower:
-        return {
-            "matched": True,
-            "answer": (
-                "I do not have a standalone last-week ledger cut in the public packet, but the latest weekly signals are: "
-                f"e-Pharmacy orders up {facts.get('epharmacy_orders_wow_pct', 12):.0f}% week on week, "
-                f"FX dragging EBITDA by about SAR {facts.get('fx_drag_weekly_sar', 9000):,.0f} per week, "
-                f"cold-chain integrity at {facts.get('cold_chain_integrity_pct', 99.4):.1f}%, "
-                f"Tamween recovery at SAR {facts.get('tamween_recoverable_sar', 1_200_000):,.0f}, "
-                f"and group recoverable value at SAR {facts.get('group_recoverable_sar', 8_600_000):,.0f}."
-            ),
-            "basis": "Recovered from the public executive packet facts and weekly board-safe signals.",
-            "citations": _default_public_packet_citations(packet, question),
-            "suggestions": [],
-        }
-    if "changed since last week" in lower:
-        return {
-            "matched": True,
-            "answer": (
-                f"Since last week, the visible packet shows e-Pharmacy orders up {facts.get('epharmacy_orders_wow_pct', 12):.0f}% week on week, "
-                f"the Tamween recovery opportunity at SAR {facts.get('tamween_recoverable_sar', 1_200_000):,.0f}, "
-                f"group recoverable value at SAR {facts.get('group_recoverable_sar', 8_600_000):,.0f}, "
-                f"cold-chain integrity at a record {facts.get('cold_chain_integrity_pct', 99.4):.1f}%, "
-                f"and the board pack at {facts.get('board_pack_completion_pct', 80):.0f}% composed."
-            ),
-            "basis": "Recovered from the public executive packet facts, developments, and week items.",
-            "citations": _default_public_packet_citations(packet, question),
-            "suggestions": [],
-        }
-    if "worry" in lower and "board meeting" in lower:
-        return {
-            "matched": True,
-            "answer": (
-                f"Before the board meeting, focus on the margin narrative first: EBITDA margin is {facts.get('ebitda_margin_pct', 19.2):.1f}% versus "
-                f"{facts.get('ebitda_plan_pct', 19.4):.1f}% plan, FX is dragging by about SAR {facts.get('fx_drag_weekly_sar', 9000):,.0f} a week, "
-                f"the board pack is only {facts.get('board_pack_completion_pct', 80):.0f}% composed, and the open decisions are the FX hedge and GLP-1 JV."
-            ),
-            "basis": "Recovered from the public executive packet board-prep and margin facts.",
-            "citations": _default_public_packet_citations(packet, question),
-            "suggestions": [],
-        }
-    if "business unit" in lower and "dragging margin" in lower:
-        return {
-            "matched": True,
-            "answer": (
-                f"Tamween Distribution is the clearest business-unit drag on margin in the public packet, driven by SAR {facts.get('tamween_recoverable_sar', 1_200_000):,.0f} of recoverable leakage. "
-                "Healthcare Services is the other operating drag because occupancy remains below plan."
-            ),
-            "basis": "Recovered from the public executive packet findings and driver cards.",
-            "citations": _default_public_packet_citations(packet, question),
-            "suggestions": [],
-        }
-    if "summarize the board packet" in lower or ("board packet" in lower and "plain english" in lower):
-        revenue = next((item.get("value") for item in kpis if item.get("key") == "revenue"), "SAR 2.09B")
-        cash = next((item.get("value") for item in kpis if item.get("key") == "cash"), "SAR 1.48B")
-        return {
-            "matched": True,
-            "answer": (
-                f"In plain English: revenue is strong at {revenue}, margin is the soft spot at {facts.get('ebitda_margin_pct', 19.2):.1f}% versus {facts.get('ebitda_plan_pct', 19.4):.1f}% plan, "
-                f"cash is healthy at {cash}, SAR {facts.get('group_recoverable_sar', 8_600_000):,.0f} is recoverable across the group, "
-                "and the main board decisions still hanging over the pack are the FX hedge and the GLP-1 JV."
-            ),
-            "basis": "Recovered from the public executive packet summary, KPIs, and board facts.",
-            "citations": _default_public_packet_citations(packet, question),
-            "suggestions": [],
-        }
-    return None
+    statements: list[str] = []
+
+    def add_statement(*parts: Any) -> None:
+        text = " — ".join(str(part).strip() for part in parts if str(part or "").strip())
+        text = re.sub(r"\s+", " ", text).strip(" .—")
+        if text and text.casefold() not in {item.casefold() for item in statements}:
+            statements.append(text)
+
+    for fact in list(packet.get("facts") or []):
+        if isinstance(fact, str):
+            add_statement(fact)
+    for key in ("kpis", "drivers", "findings", "developments", "week"):
+        for item in list(packet.get(key) or []):
+            if not isinstance(item, dict):
+                continue
+            add_statement(
+                item.get("label") or item.get("title"),
+                item.get("value") or item.get("metric"),
+                item.get("story") or item.get("detail") or item.get("impact") or item.get("prep"),
+            )
+    board = packet.get("board_portal") if isinstance(packet.get("board_portal"), dict) else {}
+    add_statement(board.get("headline") or board.get("summary"), board.get("state_detail"))
+
+    if not statements:
+        return None
+
+    question_tokens = {
+        token
+        for token in re.findall(r"[a-z0-9]+", str(question or "").lower())
+        if len(token) > 2 and token not in {"the", "and", "for", "what", "which", "with", "from", "this", "that"}
+    }
+
+    def relevance(statement: str) -> tuple[int, int]:
+        statement_tokens = set(re.findall(r"[a-z0-9]+", statement.lower()))
+        return (len(question_tokens & statement_tokens), -statements.index(statement))
+
+    ranked = sorted(statements, key=relevance, reverse=True)
+    selected = ranked[:5]
+    answer = "From the current reviewed data: " + ". ".join(item.rstrip(".") for item in selected) + "."
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Recovered only from fields present in the current reviewed data after the model returned no usable text.",
+        "citations": _default_public_packet_citations(packet, question),
+        "suggestions": [],
+    }
 
 
 def _normalize_citations(value: Any) -> list[dict[str, Any]]:
@@ -1289,8 +1264,8 @@ def _default_public_packet_citations(packet: dict[str, Any], question: str) -> l
         add("public_context_packet.board_portal.summary", "public_context_packet.board_portal.kpis[0]", "public_context_packet.week[0]")
     if any(token in lower for token in ["margin", "ebitda", "fx", "hedge", "worry"]):
         add("public_context_packet.drivers[1]", "public_context_packet.findings[0]", "public_context_packet.public_facts")
-    if any(token in lower for token in ["tamween", "8.6", "recoverable", "evidence"]):
-        add("public_context_packet.findings[1]", "public_context_packet.developments[2]", "public_context_packet.public_facts")
+    if any(token in lower for token in ["recoverable", "recovery", "case", "evidence"]):
+        add("public_context_packet.findings[0]", "public_context_packet.developments[0]", "public_context_packet.public_facts")
     if "digital health" in lower:
         add("public_context_packet.drivers[2]")
     if any(token in lower for token in ["unit", "business unit", "dragging"]):

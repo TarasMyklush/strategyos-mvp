@@ -7,7 +7,7 @@ new.strategyos.live {
         X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=(), payment=(), usb=()"
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src https://www.youtube-nocookie.com https://www.youtube.com; connect-src 'self' https:; font-src 'self'"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src 'none'; connect-src 'self' https:; font-src 'self'"
     }
     reverse_proxy host.docker.internal:8080 {
         header_down -Server
@@ -23,7 +23,7 @@ new.strategyos.live {
         X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=(), payment=(), usb=()"
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src https://www.youtube-nocookie.com https://www.youtube.com; connect-src 'self' https:; font-src 'self'"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src 'none'; connect-src 'self' https:; font-src 'self'"
     }
     @idp path /.well-known/openid-configuration /oauth/* /login* /auth/login*
     reverse_proxy @idp strategyos-idp:9000 {

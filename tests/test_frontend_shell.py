@@ -409,9 +409,7 @@ def test_entry_routes_static_assets_have_no_external_origins():
     combined = html + executive_html + js + css
     assert "https://cdn" not in combined
     assert "http://" not in combined
-    # Allow intentional YouTube embed URLs in the Leaders' Corner modal
-    combined_no_youtube = combined.replace("https://www.youtube-nocookie.com", "").replace("https://www.youtube.com", "").replace("https://strategyos.live", "")
-    assert "https://" not in combined_no_youtube
+    assert "https://" not in combined.replace("https://strategyos.live", "")
     assert "fonts.googleapis" not in combined
 
 
@@ -834,120 +832,6 @@ def test_public_executive_shell_ceo_prompt_succeeds_without_session_token(monkey
         _restore_env(original)
 
 
-def test_leaders_corner_has_four_youtube_video_ids():
-    js = _static_executive_js()
-    assert "uTRKdCY4HdE" in js
-    assert "sFSzPE2AOE0" in js
-    assert "pQtdQ6AHn_Q" in js
-    assert "t885M1WB1pg" in js
-
-
-def test_leaders_corner_has_inline_embed_not_dead_buttons():
-    js = _static_executive_js()
-    # Inline embed approach — iframe directly in leaders-card
-    assert 'leaders-featured-iframe' in js, "Must have inline iframe for featured video"
-    assert 'youtube-nocookie.com/embed' in js
-    # Thumbnail selectors that swap the inline player
-    assert 'leaders-thumb' in js
-    assert 'leaders-thumb-grid' in js
-    assert 'selectLeadersVideo' in js
-    # No fake placeholder copy from old entries
-    assert 'Reading margin pressure' not in js
-    assert 'Dr. Amal Faris' not in js
-    assert 'Tariq Bensalem' not in js
-    assert 'Huda Karim' not in js
-    # No dead data-vlog-topic or leader-row buttons
-    assert 'data-vlog-topic' not in js
-    assert 'leader-row__copy' not in js, "Must not render leader-row list — use inline embed + thumbnails"
-
-
-def test_leaders_corner_modal_fallback_still_works():
-    js = _static_executive_js()
-    # Modal functions still available as fallback/alternative path
-    assert 'openVideoModal' in js
-    assert 'closeVideoModal' in js
-    has_keyboard = 'Escape' in js or 'keydown' in js or 'addEventListener' in js
-    assert has_keyboard, "Modal must have keyboard/Escape support"
-
-
-def test_leaders_corner_has_hermes_cta_and_fallback_link():
-    js = _static_executive_js()
-    # Hermes integration still exists for follow-up
-    assert 'askAssistant' in js
-    assert 'leaders-hermes-cta' in js
-    assert 'Ask Hermes about this topic' in js
-    # Fallback link to YouTube
-    assert 'youtube.com/watch' in js
-    assert 'leaders-yt-link' in js
-    assert 'Open on YouTube' in js
-
-
-# ── Leaders' Corner 4-video grid consistency (post-reorg) ──
-
-def test_leaders_corner_four_consistent_thumb_cards():
-    """All 4 videos must be in the thumb grid with consistent structure,
-    not 1 featured + 3 list rows. Grid wrapper must have proper ID."""
-    js = _static_executive_js()
-
-    # Grid wrapper must have id="leaders-thumb-grid" (not just class)
-    assert 'id="leaders-thumb-grid"' in js, (
-        "Leaders thumb grid must have id='leaders-thumb-grid' for selectLeadersVideo"
-    )
-    assert 'leaders-thumb-grid' in js, (
-        "Leaders thumb grid wrapper class must be present"
-    )
-
-    # All 4 video IDs must exist in the source (in vlogs array)
-    for vid in ['uTRKdCY4HdE', 'sFSzPE2AOE0', 'pQtdQ6AHn_Q', 't885M1WB1pg']:
-        assert ("'" + vid + "'") in js or ('"' + vid + '"') in js, (
-            f"Video ID {vid} must be present in vlogs array"
-        )
-
-    # data-video-id attribute must be present in thumb rendering (dynamic, but pattern exists)
-    assert "data-video-id" in js, (
-        "Thumb rendering must use data-video-id attributes"
-    )
-
-    # No 'Select a video below' — replaced with 'Loading video...'
-    assert 'Select a video below' not in js, (
-        "'Select a video below' instruction copy must be removed"
-    )
-    assert 'Loading video...' in js, (
-        "Fallback card must show 'Loading video...' not old instruction copy"
-    )
-
-
-def test_leaders_corner_first_thumb_is_active():
-    """First thumb (index 0) must have is-active class inside the class attribute."""
-    js = _static_executive_js()
-
-    # The is-active class must be inside the class attribute, not outside
-    assert "is-active" in js, (
-        "is-active class logic must be present in thumb rendering"
-    )
-    # Correct pattern: class= ends AFTER the is-active ternary, not before
-    assert "class=\"leaders-thumb' + (i === 0 ? ' is-active' : '') + '\"" in js, (
-        "is-active must be placed inside the class attribute: "
-        "class=\"leaders-thumb' + (i === 0 ? ' is-active' : '') + '\""
-    )
-    # Verify the old broken pattern (is-active outside class attribute) is absent
-    assert "class=\"leaders-thumb\"' + (i === 0 ? ' is-active'" not in js, (
-        "is-active must NOT be placed outside the class attribute — "
-        "the closing quote of class must come AFTER the ternary"
-    )
-
-
-def test_leaders_corner_summary_label_correct():
-    """Summary label must be 'Summary', not 'Transcript' or 'Key points'."""
-    js = _static_executive_js()
-
-    assert '<summary>Summary</summary>' in js, (
-        "Video info must use 'Summary' label, not 'Transcript' or 'Key points'"
-    )
-
-
-# ── Knowledge Graph rendering ──
-
 def test_kg_render_includes_modern_elements():
     """renderKnowledgeGraph() must produce modern graph stage, inspector,
     and category-colored node classes."""
@@ -1011,211 +895,6 @@ def test_kg_universe_does_not_generate_decorative_density_nodes():
     assert "Ask Hermes for a decision-focused explanation" in js
 
 
-# ── YouTube Leaders' Corner embed safety ──
-
-def test_leaders_corner_embed_has_origin_param():
-    """YouTube embed URL must include origin parameter (prevents Error 153)."""
-    js = _static_executive_js()
-
-    # Inline embed (initial render)
-    assert "encodeURIComponent(window.location.origin)" in js, (
-        "origin must be set dynamically via encodeURIComponent(window.location.origin)"
-    )
-    assert "?origin=" in js, "URL must contain origin parameter"
-
-    # The embed URL must still be wired for controlled playback surfaces.
-    origin_count = js.count("encodeURIComponent(window.location.origin)")
-    assert origin_count >= 1, (
-        f"origin should appear in at least 1 playback URL, found {origin_count}"
-    )
-
-
-def test_leaders_corner_embed_has_enablejsapi():
-    """YouTube embed URL must include enablejsapi=1 for postMessage error detection."""
-    js = _static_executive_js()
-
-    assert "enablejsapi=1" in js, (
-        "enablejsapi=1 required for YouTube IFrame API postMessage events"
-    )
-
-    # Must still appear in the controlled playback path.
-    jsapi_count = js.count("enablejsapi=1")
-    assert jsapi_count >= 1, (
-        f"enablejsapi=1 should appear in at least 1 playback URL, found {jsapi_count}"
-    )
-
-
-def test_leaders_corner_embed_has_safe_params():
-    """YouTube embed must keep rel=0 and modestbranding=1 params."""
-    js = _static_executive_js()
-
-    assert "rel=0" in js, "rel=0 prevents related videos at end"
-    assert "modestbranding=1" in js, "modestbranding=1 keeps player clean"
-
-
-def test_leaders_corner_embed_has_referrerpolicy_and_fullscreen():
-    """iframe must have referrerpolicy and fullscreen in allow attribute."""
-    js = _static_executive_js()
-
-    assert "referrerpolicy" in js, (
-        "iframe must have referrerpolicy attribute for cross-origin"
-    )
-    assert "strict-origin-when-cross-origin" in js, (
-        "referrerpolicy must be strict-origin-when-cross-origin"
-    )
-
-    # allow attribute must include fullscreen
-    assert "fullscreen" in js, "allow attribute must include fullscreen"
-    # Verify fullscreen appears in iframe allow context (near youtube-nocookie)
-    embed_section = js[js.index("youtube-nocookie.com/embed"):]
-    assert "fullscreen" in embed_section[:500], (
-        "fullscreen must be near the youtube-nocookie embed URL"
-    )
-
-
-def test_leaders_corner_has_fallback_card_code():
-    """Fallback card code must be present for when embed fails."""
-    js = _static_executive_js()
-
-    assert "leaders-fallback-card" in js, (
-        "Fallback card HTML class must be present"
-    )
-    assert "leaders-fallback-icon" in js, (
-        "Fallback card icon class must be present"
-    )
-    assert "leaders-fallback-link" in js, (
-        "Fallback 'Open on YouTube' link class must be present"
-    )
-    assert "leaders-fallback-msg" in js, (
-        "Fallback message class must be present"
-    )
-    assert "is not available" in js, (
-        "Fallback must indicate video unavailable inline"
-    )
-
-
-def test_leaders_corner_has_postmessage_error_detection():
-    """PostMessage listener must exist for YouTube onError detection."""
-    js = _static_executive_js()
-
-    assert "addEventListener('message'" in js, (
-        "postMessage listener must be registered for YouTube events"
-    )
-    assert "youtube-nocookie.com" in js, (
-        "postMessage listener must filter youtube-nocookie.com origin"
-    )
-    assert '"onError"' in js or "'onError'" in js, (
-        "postMessage listener must handle YouTube onError event"
-    )
-    assert "leaders-featured-iframe" in js, (
-        "postMessage error handler must target leaders-featured-iframe"
-    )
-
-
-def test_leaders_corner_has_fallback_timer():
-    """Fallback timer must use global _leadersFallbackTimer variable."""
-    js = _static_executive_js()
-
-    assert "_leadersFallbackTimer" in js, (
-        "Must use global _leadersFallbackTimer for consistent fallback timing"
-    )
-    assert "clearTimeout(_leadersFallbackTimer)" in js, (
-        "Must clear previous fallback timer when switching videos"
-    )
-
-
-def test_leaders_corner_no_hardcoded_origin():
-    """Origin must NOT be hardcoded — must use window.location.origin."""
-    js = _static_executive_js()
-
-    # The hardcoded origin should NOT appear
-    assert 'origin=https://strategyos.live' not in js, (
-        "Origin must be dynamic (window.location.origin), not hardcoded to strategyos.live"
-    )
-
-
-def test_leaders_corner_fallback_css_exists():
-    """CSS must include styles for leaders-fallback-card, including [hidden] override."""
-    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
-
-    assert ".leaders-fallback-card" in css, (
-        "CSS must define .leaders-fallback-card styles"
-    )
-    assert ".leaders-fallback-icon" in css, (
-        "CSS must define .leaders-fallback-icon styles"
-    )
-    assert ".leaders-fallback-link" in css, (
-        "CSS must define .leaders-fallback-link styles"
-    )
-    # The hidden attribute override must exist to prevent display:flex
-    # from overruling [hidden] (fallback card stacking above iframe)
-    assert ".leaders-fallback-card[hidden]" in css, (
-        "CSS must define .leaders-fallback-card[hidden] to override display:flex "
-        "when JS sets fallback.hidden = true"
-    )
-    # Verify the override uses display:none (or !important) — not just a redefinition
-    hidden_rule_section = css[css.find(".leaders-fallback-card[hidden]"):]
-    assert "display: none" in hidden_rule_section[:120], (
-        ".leaders-fallback-card[hidden] must use display:none to hide fallback card"
-    )
-
-
-def test_leaders_corner_fallback_hidden_css_not_overridable():
-    """The .leaders-fallback-card[hidden] rule must be placed AFTER the primary
-    .leaders-fallback-card rule so it takes priority in the cascade and reliably
-    overrides display:flex when the hidden attribute is present.
-
-    This prevents the exact Hermes live-verification failure: hidden=true on the
-    element but computed display:flex still wins, stacking fallback above iframe."""
-    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
-
-    fallback_pos = css.find(".leaders-fallback-card {")
-    hidden_pos = css.find(".leaders-fallback-card[hidden]")
-    assert fallback_pos > 0, ".leaders-fallback-card base rule must exist"
-    assert hidden_pos > 0, ".leaders-fallback-card[hidden] override must exist"
-    # The [hidden] override must come AFTER the base rule so it wins the cascade
-    assert hidden_pos > fallback_pos, (
-        ".leaders-fallback-card[hidden] must appear AFTER .leaders-fallback-card "
-        "in the stylesheet so the cascade correctly overrides display:flex"
-    )
-
-
-def test_leaders_corner_first_load_initializes_iframe():
-    """On first load, selectLeadersVideo must be called with vlogs[0] to show embedded iframe, not dead placeholder."""
-    js = _static_executive_js()
-
-    # selectLeadersVideo must be called during initialization with the first video
-    assert "selectLeadersVideo(vlogs[0]" in js, (
-        "On first load, selectLeadersVideo(vlogs[0]) must be called to initialize embedded player"
-    )
-    # The featured iframe element must exist in the template
-    assert "leaders-featured-iframe" in js, (
-        "Featured iframe element must exist for video playback"
-    )
-    # The fallback card element must exist as safety net but JS must switch to iframe
-    assert "leaders-featured-fallback" in js, (
-        "Fallback card must exist in template but JS initializes iframe on load"
-    )
-
-
-def test_leaders_corner_single_featured_surface():
-    """Featured surface must be an inline playable embed with fallback preserved."""
-    js = _static_executive_js()
-    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
-
-    assert "leaders-featured-fallback" in js, "Fallback card element must exist"
-    assert "leaders-featured-iframe" in js, "Featured iframe element must exist"
-    assert "youtube-nocookie.com/embed" in js, "Featured card must mount a playable inline embed"
-    assert "frameWrapper.hidden = false" in js
-    assert "fallback.hidden = true" in js
-    assert "Watch in player" in js, "Card preview must offer controlled playback CTA"
-    assert ".leaders-fallback-card[hidden]" in css, (
-        "CSS must preserve hidden override for the fallback shell"
-    )
-
-
-# ── Global Assistant CTA Surface Architecture ──
-
 def test_assistant_drawer_unified_opening_path():
     """All assistant-opening CTAs must route through _openHermesDrawer or openAssistantDrawer.
 
@@ -1240,20 +919,12 @@ def test_assistant_drawer_unified_opening_path():
 
 
 def test_assistant_drawer_shared_state_guard():
-    """_openHermesDrawer must guard: close video modal, close A2A, no redundant open."""
+    """_openHermesDrawer must guard A2A and avoid redundant opens."""
     js = _static_executive_js()
 
     open_fn_start = js.index("function _openHermesDrawer(")
     open_fn_end = js.index("function _closeHermesDrawer()")
     open_fn_body = js[open_fn_start:open_fn_end]
-
-    # Video modal guard
-    assert "state.videoModalOpen" in open_fn_body, (
-        "Must check videoModalOpen before opening drawer"
-    )
-    assert "closeVideoModal()" in open_fn_body, (
-        "Must close video modal when opening drawer"
-    )
 
     # A2A panel guard
     assert "state.a2aOpen" in open_fn_body, (
@@ -1515,39 +1186,6 @@ def test_assistant_drawer_and_messages_are_bounded_to_prevent_cropped_chat():
     assert "max-width: min(78%" in user_block
 
 
-def test_leaders_corner_thumbnail_grid_is_responsive_not_four_column_crammed():
-    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
-
-    grid_start = css.index(".leaders-thumb-grid {")
-    grid_end = css.index("}", grid_start)
-    grid_block = css[grid_start:grid_end]
-    thumb_start = css.index(".leaders-thumb {")
-    thumb_end = css.index("}", thumb_start)
-    thumb_block = css[thumb_start:thumb_end]
-
-    assert "repeat(auto-fit, minmax(150px, 1fr))" in grid_block
-    assert "repeat(4, minmax(0, 1fr))" not in grid_block
-    assert "grid-template-columns: minmax(48px, 72px) minmax(0, 1fr)" in thumb_block
-    assert "min-width: 0" in thumb_block
-
-
-def test_assistant_drawer_mutual_exclusion_video_modal():
-    """openVideoModal must close assistant drawer before opening modal."""
-    js = _static_executive_js()
-
-    modal_fn_start = js.index("function openVideoModal(")
-    # End boundary: next function after openVideoModal
-    modal_fn_end = js.index("function renderBoardStateTabs()")
-    modal_fn_body = js[modal_fn_start:modal_fn_end]
-
-    assert "state.drawerOpen" in modal_fn_body, (
-        "openVideoModal must check drawerOpen state"
-    )
-    assert "_closeHermesDrawer()" in modal_fn_body, (
-        "openVideoModal must close drawer when opening modal"
-    )
-
-
 def test_assistant_drawer_css_z_index_layering():
     """CSS z-index must be layered: chat launcher < video modal < assistant scrim < assistant drawer."""
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
@@ -1655,7 +1293,6 @@ def test_all_cta_families_call_ask_assistant():
     - Week ahead: data-chat-prompt → askAssistant
     - Driver drill: data-driver-chip → askAssistant
     - Gravity/Scenario: data-chat-prompt → askAssistant
-    - Leaders' Corner: leaders-hermes-cta → askAssistant
     - Board portal: data-board-prompt, data-board-action → askAssistant
     - KG Inspector: kg-inspector-ask → askAssistant
     - Hero prompts: prompt-chip → askAssistant (line 1362)
@@ -1680,7 +1317,6 @@ def test_all_cta_families_call_ask_assistant():
         ("Driver drill chips", 'data-driver-chip'),
         ("Board prompts", 'data-board-prompt'),
         ("Board actions", 'data-board-action'),
-        ("Leaders Corner Hermes CTA", 'leaders-hermes-cta'),
         ("KG Inspector", 'kg-inspector-ask'),
         ("Assistant prompt chips", 'data-assistant-prompt'),
     ]
@@ -2800,7 +2436,7 @@ def test_assistant_drawer_html_structure_complete():
 
 
 def test_assistant_drawer_state_initialized():
-    """State object must have drawerOpen and videoModalOpen initialized to false."""
+    """State object must initialize the active assistant surfaces as closed."""
     js = _static_executive_js()
 
     # state initialization block
@@ -2809,7 +2445,6 @@ def test_assistant_drawer_state_initialized():
     state_block = js[state_start:state_end]
 
     assert "drawerOpen: false" in state_block, "drawerOpen must be initialized to false"
-    assert "videoModalOpen: false" in state_block, "videoModalOpen must be initialized to false"
     assert "a2aOpen: false" in state_block, "a2aOpen must be initialized to false"
 
 
@@ -3096,7 +2731,6 @@ def test_assistant_requests_include_shared_entrypoint_metadata():
         '"finding_cta"',
         '"development_cta"',
         '"week_composer"',
-        '"leaders_corner"',
         '"knowledge_graph"',
         '"agents_discovery"',
         '"board_portal"',
@@ -3786,8 +3420,6 @@ def test_executive_ux_layout_contracts_are_guarded():
     assert ".twin-card__head" in executive_css
     assert ".twin-network-intro" in executive_css
     assert 'data-twin-toggle="' in executive_js
-    assert ".leaders-card .video-frame-wrapper" in executive_css
-    assert "max-height: clamp(220px, 34vh, 360px)" in executive_css
     assert "padding-bottom: max(112px" in executive_css
 
 

@@ -12,12 +12,15 @@ import pandas as pd
 import pytest
 
 from strategyos_mvp.config import EXTERNAL_MODE_MODEL_PROVIDER, RunPolicyConfig
-from strategyos_mvp.executive_design import executive_public_assistant_packet
 from strategyos_mvp.ingestion import DataBundle
 from strategyos_mvp.models import Citation, Finding
 from strategyos_mvp import api as api_module
 from strategyos_mvp import llm_qa
 from strategyos_mvp import qa as qa_engine
+from tests.fixtures.executive_demo_packet import executive_demo_packet
+
+
+executive_public_assistant_packet = executive_demo_packet
 
 
 def _config(**overrides):
@@ -1263,7 +1266,8 @@ def test_public_prompt_uses_packet_repair_after_both_empty_answers(monkeypatch):
 
     assert result["matched"] is True
     assert "board meeting" in result["answer"].lower() or "board pack" in result["answer"].lower()
-    assert "fx hedge" in result["answer"].lower()
+    assert "illustrative board meeting" in result["answer"].lower()
+    assert result["basis"].startswith("Recovered only from fields present")
 
 
 def test_evidence_payload_wraps_malicious_findings_citations_and_public_facts(monkeypatch):

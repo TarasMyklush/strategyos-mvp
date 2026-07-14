@@ -190,7 +190,12 @@ def _role_options_html() -> str:
 
 @app.get("/.well-known/openid-configuration")
 def openid_configuration() -> dict[str, Any]:
-    issuer = (CONFIG.idp_issuer or "http://localhost:8089").rstrip("/")
+    issuer = str(CONFIG.idp_issuer or "").strip().rstrip("/")
+    if not issuer:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Identity issuer is not configured.",
+        )
     return {
         "issuer": issuer,
         "token_endpoint": f"{issuer}/oauth/token",

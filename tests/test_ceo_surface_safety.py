@@ -206,131 +206,6 @@ def test_ceo_prompt_chips_send():
     )
 
 
-def test_ceo_video_embed_preserved():
-    """Leader's Corner iframe embed must be present."""
-    js = _static_executive_js()
-    html = _ceo_executive_html()
-
-    # JS must contain iframe embed code
-    assert "youtube-nocookie.com/embed" in js, (
-        "YouTube embed URL must be present in JS"
-    )
-    assert "leaders-featured-iframe" in js, (
-        "Featured iframe ID must be present"
-    )
-
-    # The existing video IDs from the leaders' corner test
-    assert "uTRKdCY4HdE" in js
-    assert "sFSzPE2AOE0" in js
-    assert "pQtdQ6AHn_Q" in js
-    assert "t885M1WB1pg" in js
-
-
-# ── YouTube Error 153 prevention ──
-
-def test_ceo_video_embed_referrerpolicy_attr():
-    """All YouTube iframes must carry referrerpolicy='strict-origin-when-cross-origin'."""
-    js = _static_executive_js()
-
-    # Inline embed (initial render)
-    assert 'referrerpolicy="strict-origin-when-cross-origin"' in js, (
-        "Inline iframe must have referrerpolicy='strict-origin-when-cross-origin'"
-    )
-    assert "strict-origin-when-cross-origin" in js, (
-        "strict-origin-when-cross-origin value must appear in JS"
-    )
-    # Template + modal iframe must carry referrerpolicy
-    referred = js.count("referrerpolicy")
-    assert referred >= 2, (
-        "At least 2 referrerpolicy references expected (card template + modal iframe)"
-    )
-
-
-def test_ceo_video_embed_allow_attrs():
-    """YouTube iframes must include web-share in the allow attribute."""
-    js = _static_executive_js()
-
-    assert "web-share" in js, (
-        "iframe allow attribute must include 'web-share'"
-    )
-    # Full allow string with web-share must appear at least once
-    assert "picture-in-picture; web-share" in js, (
-        "allow attribute must include picture-in-picture; web-share in correct order"
-    )
-
-
-def test_ceo_video_embed_origin_param():
-    """YouTube embed URL must include origin parameter (dynamic via window.location.origin)."""
-    js = _static_executive_js()
-
-    assert "encodeURIComponent(window.location.origin)" in js, (
-        "YouTube embed URL must include dynamic origin=encodeURIComponent(window.location.origin) "
-        "to help YouTube validate embedding context"
-    )
-    assert "?origin=" in js or "&origin=" in js or "origin='" in js, (
-        "YouTube embed URL must include origin parameter"
-    )
-
-
-def test_ceo_video_embed_no_referrer_removed():
-    """no-referrer must NOT appear in executive.js (was root cause of Error 153)."""
-    js = _static_executive_js()
-
-    # 'no-referrer' as a referrer policy value must not appear in JS
-    # (the Caddyfile fix handles the header side; this checks the JS side)
-    assert "no-referrer" not in js, (
-        "'no-referrer' must not appear in executive.js — "
-        "was the root cause of YouTube Error 153"
-    )
-
-
-def test_ceo_video_embed_inline_fallback():
-    """Inline embed must have dual fallback: PostMessage listener for instant
-    Error 153 detection + setTimeout backup. Shows fallback card with 'Open on YouTube' link."""
-    js = _static_executive_js()
-
-    # PostMessage listener catches YouTube iframe API errors (instant Error 153 detection)
-    assert "postMessage" in js.lower() or "message" in js.lower(), (
-        "PostMessage listener must exist for YouTube error detection"
-    )
-    assert "leaders-fallback-card" in js, (
-        "Inline fallback card CSS class must be present"
-    )
-    assert "leaders-fallback-link" in js, (
-        "Inline fallback 'Open on YouTube' link must be present"
-    )
-    # Fallback timer must exist (setTimeout with 10s as backup)
-    assert "setTimeout" in js, (
-        "Inline fallback must use setTimeout for timeout detection"
-    )
-    assert "10000" in js, (
-        "Inline fallback timeout must be 10000ms (10 seconds)"
-    )
-    # Fallback must clear timer on iframe load or PostMessage onReady
-    assert "clearTimeout" in js, (
-        "Inline fallback must clearTimeout on successful iframe load"
-    )
-    # Fallback message must be user-friendly
-    assert "not available" in js and ("inline" in js or "playback" in js), (
-        "Fallback message must indicate video not available inline"
-    )
-
-
-def test_ceo_video_modal_fallback_preserved():
-    """Modal embed fallback must be preserved (10s timeout → 'Open on YouTube')."""
-    js = _static_executive_js()
-
-    assert "video-fallback" in js, (
-        "Modal fallback div ID must be present"
-    )
-    assert "Embed unavailable" in js, (
-        "Modal fallback must contain 'Embed unavailable' text"
-    )
-    assert "video-fallback-link" in js, (
-        "Modal fallback 'Open on YouTube' link must be present"
-    )
-
-
 def test_ceo_persona_dropdown_clean_labels():
     """Persona dropdown must not show persona_id codes as tags."""
     js = _static_executive_js()
@@ -433,12 +308,8 @@ def test_ceo_status_tokens_humanized():
     )
 
 
-def test_gravity_play_card_no_raw_tokens():
-    """Gravity-play-card was simplified: the pill-row with gravity.rails was removed
-    in the CEO UI simplification batch. This test verifies that the simplified
-    gravity card does not reintroduce raw status tokens and the removed pill-row
-    is genuinely absent.
-    """
+def test_ceo_agenda_has_no_raw_status_tokens():
+    """The CEO agenda must use decision questions, not internal state tokens."""
     js = _static_executive_js()
     html = _ceo_executive_html()
     bootstrap_marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
@@ -448,15 +319,8 @@ def test_gravity_play_card_no_raw_tokens():
         _, _, after_bootstrap = bootstrap_tail.partition("</script>")
         visible_html = before_bootstrap + after_bootstrap
 
-    # ---------------------------------------------------------------
-    # PART A: gravity-play-card must still exist
-    # ---------------------------------------------------------------
-    assert "gravity-play-card" in js, (
-        "gravity-play-card class must exist in executive.js"
-    )
-
-    # Extract the gravity-play-card template context
-    gravity_idx = js.index("gravity-play-card")
+    assert "decision-question-grid" in js
+    gravity_idx = js.index("decision-question-grid")
     gravity_context = js[gravity_idx:gravity_idx + 800]
 
     # ---------------------------------------------------------------
@@ -465,7 +329,7 @@ def test_gravity_play_card_no_raw_tokens():
     # The old gravity-play-card had a pill-row with toneClass(item) and
     # statusLabel(item). After simplification, only prompt chips remain.
     assert "pill-row" not in gravity_context, (
-        "gravity-play-card must NOT contain pill-row after simplification"
+        "CEO agenda must not contain the removed status pill row"
     )
 
     # ---------------------------------------------------------------
@@ -478,7 +342,7 @@ def test_gravity_play_card_no_raw_tokens():
     ]
     for phrase in banned_near_gravity:
         assert phrase not in gravity_context, (
-            f"Raw status token '{phrase}' found near gravity-play-card in JS — "
+            f"Raw status token '{phrase}' found near the CEO agenda in JS — "
             f"must not appear after simplification"
         )
 
@@ -505,13 +369,13 @@ def test_gravity_play_card_no_raw_tokens():
         )
 
     # ---------------------------------------------------------------
-    # PART E: Verify the prompt chips (only content remaining) are clean
+    # PART E: Verify the decision questions are the only interactive content
     # ---------------------------------------------------------------
-    assert "timeline-chip" in gravity_context, (
-        "gravity-play-card must contain prompt timeline-chips"
+    assert "decision-question-card" in gravity_context, (
+        "CEO agenda must contain decision-question cards"
     )
-    assert "Send to assistant" in gravity_context, (
-        "gravity-play-card prompt chips must have 'Send to assistant' label"
+    assert "Ask Hermes with this context" in gravity_context, (
+        "CEO decision questions must clearly open Hermes with context"
     )
 
 
@@ -867,30 +731,6 @@ def test_kpi_spacing_css_exists():
     assert ".board-kpi" in css, "board-kpi CSS class must exist"
     # The class must have flex-direction: column and gap
     assert "flex-direction: column" in css, "board-kpi must use column layout"
-
-
-def test_youtube_fallback_pre_rendered():
-    """#3: Leaders' Corner must keep fallback markup while mounting inline playback."""
-    js = _static_executive_js()
-
-    # Fallback card HTML must exist in the template (progressive enhancement — safe default)
-    assert "leaders-featured-fallback" in js, (
-        "Leaders' Corner must have fallback card HTML in template (leaders-featured-fallback)"
-    )
-    # Frame wrapper must still exist for optional playback plumbing.
-    assert "leaders-frame-wrapper" in js, (
-        "Video frame wrapper must exist in HTML template"
-    )
-    # JS must initialize the featured video card on first load.
-    assert "selectLeadersVideo(vlogs[0]" in js, (
-        "On first load, selectLeadersVideo must be called with first vlog to show inline playback"
-    )
-    assert "fallback.hidden = true" in js, (
-        "Fallback shell must be hidden during normal inline playback"
-    )
-    assert "Embed unavailable." in js, (
-        "Fallback shell must retain controlled English copy for embed failures"
-    )
 
 
 def test_week_ahead_toggle_behavior():
@@ -1362,49 +1202,6 @@ def test_twin_status_labels_are_ceo_friendly():
     assert 'ready: "Ready"' in js
 
 
-def test_leaders_corner_single_youtube_link_per_card():
-    """#5: Leaders' Corner must have only ONE 'Open on YouTube' link
-    per card/video surface, not duplicates in fallback + info sections.
-    
-    The initial render fallback card (Loading) must NOT also show
-    a YouTube link — only leaders-video-ctas should carry one.
-    Error-handler and selectLeadersVideo fallback paths are separate
-    code paths and may keep their YouTube fallback links.
-    """
-    js = _static_executive_js()
-
-    # The initial render (gravity panel) fallback card must NOT contain a YouTube link.
-    # We verify this by checking that the "Loading video..." template
-    # does NOT have an <a> tag inside the fallback card.
-    select_text = 'Loading video...'
-    select_idx = js.index(select_text)
-    # Look at the next 300 chars after "Loading video..."
-    after_select = js[select_idx:select_idx + 300]
-    # The fallback card in the initial render must NOT have a YouTube link
-    assert 'leaders-fallback-link' not in after_select, (
-        "Initial render fallback card ('Loading video...') must NOT contain "
-        "a YouTube link — only leaders-video-ctas should have one"
-    )
-
-    # The leaders-video-info section must still have a YouTube link
-    assert "leaders-yt-link" in js, (
-        "Leaders video info must retain the single YouTube link"
-    )
-
-
-def test_leaders_corner_mounts_playable_inline_youtube_player():
-    """Leaders' Corner must mount the featured video inline and keep fallback only for errors."""
-    js = _static_executive_js()
-
-    block_start = js.index("function selectLeadersVideo(")
-    block_end = js.index("function buildVideoModalHtml(", block_start)
-    block = js[block_start:block_end]
-    assert "frameWrapper.hidden = false" in block
-    assert "youtube-nocookie.com/embed" in block
-    assert "fallback.hidden = true" in block
-    assert "Embed unavailable." in block
-
-
 def test_assistants_tab_no_ai_adoption_wording():
     """#6: Assistants tab must NOT contain old 'AI adoption' wording.
     Must use 'team readiness' instead."""
@@ -1665,17 +1462,6 @@ def test_cta_enum_gravity_explore():
     """CTA 4: Gravity/Explore scenarios [data-chat-prompt] chips."""
     js = _static_executive_js()
     assert "data-chat-prompt" in js
-
-def test_cta_enum_leaders_corner_cta():
-    """CTA 5: Leaders' Corner 'Ask Hermes about this topic' CTA."""
-    js = _static_executive_js()
-    assert "leaders-hermes-cta" in js
-    assert "Ask Hermes about this topic" in js
-
-def test_cta_enum_video_modal_cta():
-    """CTA 6: Video modal 'Ask Hermes about this topic' CTA."""
-    js = _static_executive_js()
-    assert "video-hermes-cta" in js
 
 def test_cta_enum_board_prompts():
     """CTA 7: Board portal [data-board-prompt] prompt chips."""
@@ -2323,12 +2109,7 @@ def test_ceo_drawer_hidden_on_page_load():
 
 
 def test_ceo_no_stale_thread_leakage():
-    """CEO persona must filter out stale persisted threads that contain
-    video references, Leaders' Corner content, system threads, or bug threads.
-    
-    Acceptance B/C: No stale Leaders video/FX text polluting CEO conversations.
-    Contextual CTAs must open clean drawers without cross-contamination.
-    """
+    """CEO persona must filter system and invalid legacy threads."""
     js = _static_executive_js()
 
     # ── ensureThreads must contain the CEO stale-thread filter ──
@@ -2341,20 +2122,8 @@ def test_ceo_no_stale_thread_leakage():
     ensure_end = ensure_start + 3000
     ensure_block = js[ensure_start:min(ensure_end, len(js))]
 
-    # Video-related stale thread detection
-    assert "isVideo" in ensure_block, (
-        "ensureThreads must detect video-related stale threads for CEO"
-    )
-    assert "isLeader" in ensure_block, (
-        "ensureThreads must detect Leaders' Corner stale threads for CEO"
-    )
     assert "isSystem" in ensure_block, (
         "ensureThreads must filter system threads for CEO"
-    )
-
-    # Each stale-thread flag must be checked before loading
-    assert "if (isVideo" in ensure_block or "isVideo || isLeader" in ensure_block, (
-        "Stale-thread guards must conditionally skip loading for CEO"
     )
 
 

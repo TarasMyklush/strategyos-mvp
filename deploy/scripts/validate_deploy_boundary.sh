@@ -127,8 +127,11 @@ resolved_auth_mode = auth_mode or (
 require(bool_is_true(merged.get("STRATEGYOS_API_AUTH_ENABLED")), "STRATEGYOS_API_AUTH_ENABLED must remain true for deployable environments.")
 require(bool_is_true(merged.get("STRATEGYOS_REQUIRE_HUMAN_REVIEW")), "STRATEGYOS_REQUIRE_HUMAN_REVIEW must remain true for deployable environments.")
 require(not bool_is_true(merged.get("STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED")), "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED=true is local-only and must not be deployed externally.")
-if target_environment == "hetzner-branch":
-    require(bool_is_true(merged.get("STRATEGYOS_LOGIN_REQUIRED")), "Branch preview must require login before serving application surfaces.")
+if target_public_url and not looks_local(target_public_url):
+    require(
+        bool_is_true(merged.get("STRATEGYOS_LOGIN_REQUIRED")),
+        "Every hosted deployment must set STRATEGYOS_LOGIN_REQUIRED=true before serving application surfaces.",
+    )
 
 run_execution_mode = str(merged.get("STRATEGYOS_RUN_EXECUTION_MODE", "sync") or "sync").strip().lower()
 if run_execution_mode == "hatchet":
@@ -203,13 +206,18 @@ if target_public_url and not looks_local(target_public_url):
         )
 
 if target_environment == "production":
+    require(bool_is_true(merged.get("STRATEGYOS_LOGIN_REQUIRED")), "Production deploys must require login.")
     require(target_public_url.startswith("https://"), "Production deploys require STRATEGYOS_PUBLIC_URL to use https://.")
     require((merged.get("STRATEGYOS_SITE_ADDRESS") or "").strip() not in {"", ":80"}, "Production deploys require a real STRATEGYOS_SITE_ADDRESS domain/TLS address, not :80.")
     require(not bool_is_true(merged.get("STRATEGYOS_PUBLIC_HEALTH_ENABLED")), "Production deploys must keep STRATEGYOS_PUBLIC_HEALTH_ENABLED=false.")
-    require(resolved_auth_mode != "api_key", "Production deploys must not use api_key auth mode for human access.")
-    if resolved_auth_mode == "identity_provider":
-        require(bool_is_true(merged.get("STRATEGYOS_IDP_ENABLED")), "Production identity_provider auth requires STRATEGYOS_IDP_ENABLED=true.")
-        require(str(merged.get("STRATEGYOS_IDP_ISSUER", "")).strip().startswith("https://"), "Production deploys require the identity issuer to use https://.")
+    require(
+        resolved_auth_mode == "proxy_oidc",
+        "Production deploys require proxy_oidc customer SSO; the internal password-grant identity provider is pilot-only.",
+    )
+    require(
+        not str(secrets.get("STRATEGYOS_IDP_TEST_USERS", "") or "").strip(),
+        "Production deploys must not include STRATEGYOS_IDP_TEST_USERS.",
+    )
     if resolved_auth_mode == "proxy_oidc":
         require(not looks_local(merged.get("OAUTH2_PROXY_OIDC_ISSUER_URL")), "Production proxy_oidc deploys must not use a localhost/local-container OIDC issuer.")
         require(str(merged.get("OAUTH2_PROXY_OIDC_ISSUER_URL", "")).strip().startswith("https://"), "Production proxy_oidc deploys require the OIDC issuer to use https://.")

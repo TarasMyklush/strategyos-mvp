@@ -10725,7 +10725,7 @@ _ASSISTANT_BUSINESS_TOKENS = (
     "margin", "ebitda", "profitability", "profit", "loss", "revenue", "income",
     "risk", "plan", "year", "quarter", "board", "packet", "prep", "session",
     "run", "summary", "summarize", "analysis", "diagnostic", "diagnostics",
-    "live", "closed", "tamween", "healthcare", "pharmacy", "fx", "hedge",
+    "live", "closed", "healthcare", "pharmacy", "fx", "hedge",
     "recoverable", "recovery", "evidence", "finding", "citation", "kpi",
     "driver", "ceo", "hermes", "assistant", "thread", "task", "follow-up",
     "invoice", "vendor", "spend", "ap", "working capital", "cash",
@@ -11724,167 +11724,32 @@ async def _assistant_chat_response(
         return payload
 
     def _public_safe_unmatched_result(question_text: str, reason: str | None = None) -> dict[str, Any]:
-        norm = " ".join(str(question_text or "").lower().split())
         governed_packet = context.get("public_context_packet")
         if not isinstance(governed_packet, dict):
             governed_packet = {}
-        governed_suggestions: list[str] = []
-        if governed_packet.get("is_illustrative") is False:
-            for item in list(governed_packet.get("drivers") or [])[:2]:
-                if not isinstance(item, dict):
-                    continue
+        suggestions: list[str] = []
+        for item in list(governed_packet.get("drivers") or [])[:2]:
+            if isinstance(item, dict):
                 label = str(item.get("label") or item.get("key") or "").strip()
                 if label:
-                    governed_suggestions.append(f"Explain the current {label} signal")
-            for item in list(governed_packet.get("findings") or [])[:1]:
-                if not isinstance(item, dict):
-                    continue
+                    suggestions.append(f"Explain the current {label} signal")
+        for item in list(governed_packet.get("findings") or [])[:1]:
+            if isinstance(item, dict):
                 title = str(item.get("title") or "").strip()
                 if title:
-                    governed_suggestions.append(f"Why does “{title}” matter for the board?")
-            governed_suggestions.append("What should I prepare for the board?")
-        if "capital of france" in norm:
-            general_answer = _public_safe_general_answer(question_text)
-            if general_answer is not None:
-                general_answer["suggestions"] = governed_suggestions[:4] or general_answer.get("suggestions") or ["What should I prepare for the board?"]
-                return general_answer
-        if governed_packet.get("is_illustrative") is False:
-            return {
-                "matched": False,
-                "answer": (
-                    "I could not match that question to a quantified scenario in the current governed run. "
-                    "No illustrative values were substituted; ask about a visible driver, finding, or board-state item."
-                ),
-                "citations": [],
-                "suggestions": governed_suggestions[:4],
-                "basis": "Governed packet fallback refused to substitute illustrative scenario values.",
-            }
-        if (
-            "follow-up task" in norm
-            or "follow up task" in norm
-            or "set a task" in norm
-            or "create a task" in norm
-            or ("set" in norm and "task" in norm)
-        ):
-            return {
-                "matched": True,
-                "answer": (
-                    "I can help frame the follow-up, but I cannot create or assign tasks from the public board-safe Hermes surface. "
-                    "For this prompt, the safe next step is: create a follow-up for Iris on fulfilment capacity, link it to the current board-prep capacity risk, and confirm owner, due date, and escalation path in the operator workflow."
-                ),
-                "citations": [_public_packet_citation("board_portal", "Shared public executive packet")],
-                "suggestions": [
-                    "Should we pull forward e-Pharmacy fulfilment capacity?",
-                    "Help me prepare the board pack for the pre-board stage.",
-                    "What is driving margin pressure this quarter?",
-                ],
-                "basis": "Public executive surface is read-only for task creation, so the assistant must return an exact operational limitation instead of a canned packet summary.",
-            }
-        is_out_of_domain = not _assistant_question_has_business_scope(question_text)
-        if is_out_of_domain:
-            general_answer = _public_safe_general_answer(question_text)
-            if general_answer is not None:
-                general_answer["suggestions"] = governed_suggestions[:4] or general_answer.get("suggestions") or []
-                return general_answer
-            return {
-                "matched": False,
-                "answer": "I can answer general questions with the model after you sign in. On this public board-safe surface, I can only answer from the current StrategyOS board packet. Try asking about margin, risk, board prep, recoverable leakage, or a specific business driver visible in the packet.",
-                "citations": [],
-                "suggestions": [
-                    "What is driving margin pressure this quarter?",
-                    "Help me prepare the board pack for the pre-board stage.",
-                    "Show evidence for SAR 8.6M recoverable",
-                    "Risk to full-year plan?",
-                ],
-                "basis": "Out-of-domain question detected on the public executive surface — no LLM call is allowed for anonymous/public-safe users.",
-            }
-        # Board-prep / board meeting guidance: return matched=true with
-        # board lifecycle guidance instead of falling through to canned
-        # revenue/margin summary.
-        if (
-            "how should i prep for the board" in norm
-            or "prep for the board" in norm
-            or "board meeting" in norm
-            or ("board" in norm and any(token in norm for token in ("prepare", "prep", "pack")))
-        ):
-            return {
-                "matched": True,
-                "answer": (
-                    "From the current board lifecycle, you are in the Pre-board stage. The recommended next steps are: "
-                    "review the CEO-approved packet materials (current decks, supplementary questions, and evidence), "
-                    "close any challenged findings before the board session, and confirm the meeting posture and timeline. "
-                    "Once the packet is clean, transition to Live to run the room on approved material only."
-                ),
-                "citations": [_public_packet_citation("board_portal", "Shared public executive packet")],
-                "suggestions": [
-                    "What is driving margin pressure this quarter?",
-                    "Show evidence for SAR 8.6M recoverable",
-                    "Risk to full-year plan?",
-                    "Should I prepare for any challenged findings before going live?",
-                ],
-                "basis": "Board-prep question detected on the public executive surface — returned board lifecycle guidance instead of canned revenue/margin summary.",
-            }
-        # Hedge prompt: if the question is about hedge (without ebitda/margin
-        # qualifier), return the hedge-specific answer. The scenario parser also
-        # handles "fx" + "hedge" + "ebitda"/"margin" combos, but "hedge downside"
-        # only contains "hedge" and falls through to this fallback.
-        if any(token in norm for token in ("hedge", "currency", "eur")):
-            answer = (
-                "The public packet shows EBITDA margin at 19.2%, 20 bps below plan, with FX creating roughly SAR 9k of weekly drag. "
-                "The visible board narrative says a 60% EUR hedge neutralises most of that drag and recovers about 15 bps. "
-                "The hedge downside is that a partial (60%) cover leaves about 40% of EUR exposure unhedged — about SAR 6k/wk residual drag — "
-                "and if EUR strengthens further the board may need to re-evaluate coverage. The board action is to tighten the hedge response, "
-                "protect margin recovery, and convert the recovery pool into realized uplift."
-            )
-            basis = "Public packet hedge impact summary synthesized from visible CEO facts and current board narrative."
-        # JV / funded from cash prompt: if the question mentions joint venture,
-        # JV, funded from cash, or cash funding for the JV, return the
-        # JV-specific answer from the packet.
-        elif any(token in norm for token in ("jv", "joint venture", "joint-venture")) and (
-            any(token in norm for token in ("fund", "cash", "capital", "finance", "pay", "liquidity"))
-        ):
-            answer = (
-                "From the current public packet, the JV is structured with supply-lock terms that are agreed and cash headroom confirmed. "
-                "e-Pharmacy orders are +12% week on week on the GLP-1 refill cohort with fulfilment holding at a 2-day SLA, and the "
-                "week-ahead packet says the JV signature locks supply ahead of demand. The board implication is capacity timing, not "
-                "cash availability — the packet confirms sufficient liquidity for the JV commitment, but the board should monitor "
-                "fulfilment capacity to avoid supply chain bottlenecks as orders scale."
-            )
-            basis = "Public packet JV funding summary synthesized from visible CEO facts and e-Pharmacy growth narrative."
-        elif any(token in norm for token in ("margin", "ebitda", "profitability")):
-            answer = (
-                "From the current public packet, margin pressure is coming from FX drag, hot API input cost, Healthcare occupancy below plan, and Tamween still sitting behind its recovery path. "
-                "The board actions are to tighten the hedge response, protect occupancy recovery, and convert the recovery pool into realized uplift."
-            )
-            basis = "Public packet margin summary synthesized from visible CEO facts."
-        elif any(token in norm for token in ("risk", "plan", "year")):
-            answer = (
-                "From the current public packet, the main risk is still margin quality rather than demand: revenue is ahead, but FX, API cost, Healthcare occupancy, and Tamween timing are still shaping the board narrative."
-            )
-            basis = "Public packet risk summary synthesized from visible CEO facts."
-        else:
-            # Catch-all for business-token prompts that don't match a specific handler.
-            # Return scope-boundary message + matched=False so the frontend can
-            # distinguish unmatched from deterministic answers.
-            answer = (
-                "I'm Hermes, your board chief of staff. I can help with questions about the organization's "
-                "board pack, governed evidence, strategic decisions, and the current board lifecycle state. "
-                "Your question appears to be outside the available board context — try asking about margin, "
-                "risk, board prep, recoverable leakage, or a specific business driver visible in the packet."
-            )
-            basis = "Public executive surface: unmatched query caught in safety fallback — scope-boundary message returned instead of canned packet summary."
+                    suggestions.append(f"Why does {title} matter for the board?")
+        suggestions.append("What should I prepare for the board?")
         return {
             "matched": False,
-            "answer": answer,
-            "citations": [_public_packet_citation("facts[0]", "Shared public executive packet")],
-            "suggestions": [
-                "What is driving margin pressure this quarter?",
-                "Help me prepare the board pack for the pre-board stage.",
-                "Show evidence for SAR 8.6M recoverable",
-                "Risk to full-year plan?",
-            ],
-            "basis": basis,
+            "answer": (
+                "I could not match that question to a calculated result in the current reviewed data. "
+                "No values were inferred or substituted. Ask about a visible KPI, case, or board decision."
+            ),
+            "citations": [],
+            "suggestions": suggestions[:4],
+            "basis": reason or "No calculated result matched the current reviewed data.",
         }
+
     orchestrator = get_orchestrator()
     findings_payload = [
         finding.__dict__ if hasattr(finding, "__dict__") else finding

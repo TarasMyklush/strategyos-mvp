@@ -1101,8 +1101,8 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         assert payload["llm_fallback_attempted"] is False
         assert payload["answered_by"] in {"packet", "scenario"}
         answer = payload["answer"].lower()
-        assert "current governed run" in answer
-        assert "no illustrative values were substituted" in answer
+        assert "current reviewed data" in answer
+        assert "no values were inferred or substituted" in answer
         assert all(marker.lower() not in answer for marker in ("19.2%", "SAR 8.6M", "60% EUR"))
     finally:
         _restore_env(original)
@@ -2292,9 +2292,9 @@ def test_public_safe_persona_variants_return_substantive_answers(monkeypatch):
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
         client = TestClient(api_module.app)
         cases = [
-            ("cfo", "Where is the SAR 8.6M?"),
+            ("cfo", "What is the current recovery opportunity?"),
             ("gm", "Where is capacity binding first?"),
-            ("bucfo", "What is the SAR 1.2M recovery path?"),
+            ("bucfo", "What is the current recovery path?"),
         ]
 
         for persona, question in cases:
@@ -2314,7 +2314,9 @@ def test_public_safe_persona_variants_return_substantive_answers(monkeypatch):
             assert payload.get("scenario_id") in {None, "public_exec_governed_packet"}, question
             assert "outside the current deterministic public-safe prompt set" not in payload["answer"], question
             assert "No findings available for leakage analysis" not in payload["answer"], question
-            assert "current governed" in payload["answer"].lower(), question
+            assert "current" in payload["answer"].lower(), question
+            assert "sar 8.6m" not in payload["answer"].lower(), question
+            assert "sar 1.2m" not in payload["answer"].lower(), question
             assert all(marker not in payload["answer"].lower() for marker in ("sar 8.6m", "sar 1.2m", "eastern hub")), question
 
         bucfo_payload = client.post(

@@ -52,3 +52,13 @@ def test_deploy_jobs_are_actually_gated_on_ci_verification() -> None:
     assert "needs:" in deploy_job.split("steps:", 1)[0], (
         "the deploy job must remain chained behind the gated image job"
     )
+
+
+def test_deploy_verifies_the_anonymous_login_boundary_after_cutover() -> None:
+    text = _deploy_yaml()
+
+    assert "STRATEGYOS_LOGIN_REQUIRED: 'true'" in text
+    assert '"STRATEGYOS_LOGIN_REQUIRED": os.environ["STRATEGYOS_LOGIN_REQUIRED"]' in text
+    assert text.count("--login-required") == 2
+    assert "- name: Verify anonymous login boundary" in text
+    assert "Anonymous application, API-documentation, and login boundaries are closed." in text

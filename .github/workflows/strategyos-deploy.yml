@@ -10,6 +10,7 @@ on:
         default: hetzner-qa
         options:
           - hetzner-qa
+          - production
       run_smoke:
         description: Start one protected /runs smoke request after readiness passes
         required: false
@@ -169,6 +170,9 @@ jobs:
       STRATEGYOS_IDP_OPERATOR_USERNAME: ${{ vars.STRATEGYOS_IDP_OPERATOR_USERNAME || 'operator.hosted' }}
       STRATEGYOS_IDP_REVIEWER_USERNAME: ${{ vars.STRATEGYOS_IDP_REVIEWER_USERNAME || 'reviewer.hosted' }}
       STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: 'false'
+      # This is a release invariant, not an environment preference. Every
+      # externally reachable StrategyOS deployment must start at sign-in.
+      STRATEGYOS_LOGIN_REQUIRED: 'true'
       STRATEGYOS_PUBLIC_HEALTH_ENABLED: ${{ vars.STRATEGYOS_PUBLIC_HEALTH_ENABLED || 'false' }}
       STRATEGYOS_REQUIRE_HUMAN_REVIEW: 'true'
       STRATEGYOS_TWINS_ENABLED: ${{ vars.STRATEGYOS_TWINS_ENABLED || 'true' }}
@@ -271,6 +275,7 @@ jobs:
                "STRATEGYOS_IDP_OPERATOR_USERNAME": os.environ["STRATEGYOS_IDP_OPERATOR_USERNAME"],
                "STRATEGYOS_IDP_REVIEWER_USERNAME": os.environ["STRATEGYOS_IDP_REVIEWER_USERNAME"],
                "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": os.environ["STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED"],
+               "STRATEGYOS_LOGIN_REQUIRED": os.environ["STRATEGYOS_LOGIN_REQUIRED"],
                "STRATEGYOS_PUBLIC_HEALTH_ENABLED": os.environ["STRATEGYOS_PUBLIC_HEALTH_ENABLED"],
                "STRATEGYOS_REQUIRE_HUMAN_REVIEW": os.environ["STRATEGYOS_REQUIRE_HUMAN_REVIEW"],
                "STRATEGYOS_TWINS_ENABLED": os.environ["STRATEGYOS_TWINS_ENABLED"],
@@ -494,6 +499,7 @@ jobs:
             test -n "${STRATEGYOS_REVIEWER_AUTH_HEADER}"
             python deploy/scripts/verify_cloud_surface.py \
               --base-url "${STRATEGYOS_PUBLIC_URL}" \
+              --login-required \
               --operator-auth-header "${STRATEGYOS_OPERATOR_AUTH_HEADER}" \
               --reviewer-auth-header "${STRATEGYOS_REVIEWER_AUTH_HEADER}"
           else
@@ -503,9 +509,33 @@ jobs:
             echo "::add-mask::${reviewer_token}"
             python deploy/scripts/verify_cloud_surface.py \
               --base-url "${STRATEGYOS_PUBLIC_URL}" \
+              --login-required \
               --operator-auth-header "Authorization: Bearer ${operator_token}" \
               --reviewer-auth-header "Authorization: Bearer ${reviewer_token}"
           fi
+
+      - name: Verify anonymous login boundary
+        run: |
+          set -euo pipefail
+          base_url="${STRATEGYOS_PUBLIC_URL%/}"
+          for route in / /app /dashboard /executive /guide /plan; do
+            headers="$(mktemp)"
+            status="$(curl --silent --show-error --output /dev/null --dump-header "${headers}" --max-time 20 "${base_url}${route}" --write-out '%{http_code}')"
+            location="$(awk 'BEGIN {IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' "${headers}")"
+            rm -f "${headers}"
+            if [ "${status}" != "307" ] || [ "${location}" != "/login" ]; then
+              echo "::error::Anonymous ${route} expected 307 Location: /login, got ${status} Location: ${location:-<none>}"
+              exit 1
+            fi
+          done
+          for route in /docs /openapi.json; do
+            status="$(curl --silent --show-error --output /dev/null --max-time 20 "${base_url}${route}" --write-out '%{http_code}')"
+            if [ "${status}" != "404" ]; then
+              echo "::error::Anonymous ${route} expected 404, got ${status}"
+              exit 1
+            fi
+          done
+          echo "Anonymous application, API-documentation, and login boundaries are closed."
 
       - name: Validate public edge headers
         run: |
