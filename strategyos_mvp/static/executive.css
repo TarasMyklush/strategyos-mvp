@@ -5873,6 +5873,7 @@ body {
   padding: 24px 18px 20px;
   font-size: 13.3333px;
   line-height: normal;
+  container-type: inline-size;
 }
 
 .driver-ring-stage {
@@ -5886,18 +5887,32 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  width: auto;
+  gap: 4px;
+  width: 100%;
 }
 
 .driver-label {
+  font-size: 13.5px;
   line-height: normal;
 }
 
 .driver-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+  min-height: 29px;
   color: var(--ink-2);
-  font-size: 12px;
-  line-height: normal;
+  font-size: 11.5px;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
+}
+
+.driver-foot__metric {
+  color: var(--ink-2);
+  font-weight: 520;
   white-space: nowrap;
 }
 
@@ -5906,8 +5921,89 @@ body {
   color: var(--ink-3);
 }
 
+.driver-sub {
+  display: block;
+  max-width: 100%;
+  font-size: 10.5px;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.driver-pct {
+  font-size: 27px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.driver-pct--money {
+  max-width: 86px;
+  gap: 1px;
+}
+
+.driver-pct--money .driver-pct__currency {
+  color: var(--ink-3);
+  font-family: var(--sans);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.driver-pct--money .driver-pct__amount {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  line-height: 1;
+}
+
+.driver-pct--money .driver-pct__main {
+  font-size: 27px;
+  letter-spacing: -0.035em;
+}
+
+.driver-pct--money .driver-pct__magnitude {
+  margin-left: 1px;
+  color: var(--ink-2);
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
 .pct-sign {
   color: var(--ink-2);
+  font-size: 13px;
+}
+
+.driver-ofplan {
+  font-size: 9px;
+}
+
+@container (max-width: 230px) {
+  .driver-ring-stage {
+    width: 96px;
+    height: 96px;
+    min-height: 96px;
+  }
+
+  .driver-ring-stage .driver-ring {
+    width: 96px;
+    height: 96px;
+  }
+
+  .driver-pct,
+  .driver-pct--money .driver-pct__main {
+    font-size: 24px;
+  }
+
+  .driver-label {
+    font-size: 13px;
+  }
+
+  .driver-foot {
+    font-size: 11px;
+  }
 }
 
 .driver-tile > .driver-meta > .grounding-badge {

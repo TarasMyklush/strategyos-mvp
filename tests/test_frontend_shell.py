@@ -1000,7 +1000,11 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert "gap: 13px;" in css
     assert "padding: 24px 18px 20px;" in css
     assert "width: 104px;\n  height: 104px;\n  min-height: 104px;" in css
-    assert "font-size: 12px;\n  line-height: normal;\n  white-space: nowrap;" in css
+    assert "container-type: inline-size;" in css
+    assert ".driver-pct--money" in css
+    assert ".driver-foot__metric" in css
+    assert "white-space: normal;" in css
+    assert "@container (max-width: 230px)" in css
     assert "box-shadow: 0 0 0 1px var(--accent)" in css
     assert "border-right: 1px solid var(--accent);" in css
     assert "border-bottom: 1px solid var(--accent);" in css
@@ -1020,6 +1024,17 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert 'class="kpi-brief-title-row"' in _static_executive_js()
     assert "var headlinePctRaw = firstDefined(driver && driver.ring_pct, driver && driver.pct, null);" in _static_executive_js()
     assert 'headlinePctRaw === null || headlinePctRaw === undefined || headlinePctRaw === ""' in _static_executive_js()
+
+
+def test_driver_card_money_and_metadata_typography_is_structured():
+    js = _static_executive_js()
+
+    assert "moneyMatch" in js
+    assert 'driver-pct__currency' in js
+    assert 'driver-pct__amount' in js
+    assert 'driver-pct__magnitude' in js
+    assert 'driver-foot__metric' in js
+    assert '<span class="driver-sub"> · ' not in js
 
 
 def test_unavailable_ceo_kpis_explain_the_data_request_without_empty_rings():

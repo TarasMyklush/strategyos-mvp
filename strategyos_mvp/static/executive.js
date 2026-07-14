@@ -1622,6 +1622,10 @@
       return '<div class="driver-pct">' + escapeHtml(driverPercentValue(driver).toFixed(1)) + '<span class="pct-sign">%</span></div><div class="driver-ofplan">' + escapeHtml(driverRingCaption(driver)) + '</div>';
     }
     var metric = String(firstDefined(driver && driver.metric, '—')).trim();
+    var moneyMatch = metric.match(/^([A-Z]{3})\s+([+-]?\d[\d,.]*)([KMBT]?)$/i);
+    if (moneyMatch) {
+      return '<div class="driver-pct driver-pct--metric driver-pct--money"><span class="driver-pct__currency">' + escapeHtml(moneyMatch[1].toUpperCase()) + '</span><span class="driver-pct__amount"><span class="driver-pct__main">' + escapeHtml(moneyMatch[2]) + '</span>' + (moneyMatch[3] ? '<span class="driver-pct__magnitude">' + escapeHtml(moneyMatch[3].toUpperCase()) + '</span>' : '') + '</span></div>';
+    }
     var parts = metric.split(/\s+/);
     var main = parts.shift() || '—';
     var rest = parts.join(' ');
@@ -3558,7 +3562,7 @@
         ].join("")
         : [
           '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
-          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(firstDefined(driver.ring_label, driverSubLabel(driver))) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
+          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot"><span class="driver-foot__metric">' + escapeHtml(firstDefined(driver.metric, '—')) + '</span><span class="driver-sub">' + escapeHtml(firstDefined(driver.ring_label, driverSubLabel(driver))) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
         ].join("");
       // Native focus can scroll a partially visible tile before `click`
       // fires. Preserve the executive's position at pointer/keyboard intent,
