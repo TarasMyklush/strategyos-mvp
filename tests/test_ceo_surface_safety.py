@@ -91,9 +91,11 @@ def test_ceo_jargon_replacements():
     assert "Runs on your infrastructure" not in js, (
         "Sovereign text must be CEO-friendly"
     )
-    assert "Digital twins and AI assistants" in js, (
-        "AI team must use the reference-aligned Digital Twin vocabulary"
+    assert "Your executive AI team" in js, (
+        "AI team must use CEO-friendly leadership vocabulary"
     )
+    for internal_copy in ("persistent runtime", "configured twin", "Role-specific digital twins"):
+        assert internal_copy not in js, f"CEO surface leaks internal copy: {internal_copy}"
     assert "Board reports" in js, (
         "Report surface must be rebadged as 'Board reports'"
     )

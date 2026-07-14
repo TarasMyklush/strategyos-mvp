@@ -5045,7 +5045,7 @@ def _agents_surface_payload(
             runtime_status = "monitoring"
         else:
             runtime_status = "ready"
-        current_activity = "Ready to monitor governed data when a cycle is started."
+        current_activity = "Ready to support the next leadership review."
         if active_investigations:
             latest = active_investigations[-1]
             current_activity = str(
@@ -5206,11 +5206,11 @@ def _agents_surface_payload(
             "running": [],
             "discover": {"native": [], "marketplace": legacy_connectors},
             "activity": {
-                "line": "Digital Twin activity is reported from the persistent runtime.",
+                "line": "Leadership-team activity reflects recorded work and decisions needing attention.",
                 "metrics": [
-                    {"k": "configured", "v": len(twins)},
-                    {"k": "active", "v": payload["summary"]["active_count"]},
-                    {"k": "discoverable", "v": len(legacy_connectors)},
+                    {"k": "AI leaders", "v": len(twins)},
+                    {"k": "working now", "v": payload["summary"]["active_count"]},
+                    {"k": "available services", "v": len(legacy_connectors)},
                 ],
                 "log": recent_events,
             },
