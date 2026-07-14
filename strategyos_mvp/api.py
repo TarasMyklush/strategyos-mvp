@@ -5007,6 +5007,7 @@ def _agents_surface_payload(
             current_activity = str(latest.get("subject") or "Waiting for another twin to respond.")
         elif last_wake:
             current_activity = "Monitoring its governed KPIs; no open investigation is recorded."
+        current_activity = _executive_twin_activity(current_activity)
         twins.append(
             {
                 "twin_id": str(state.get("twin_id") or f"configured:{twin_role}"),
@@ -5095,6 +5096,154 @@ def _agents_surface_payload(
         }
     )
     return payload
+
+
+def _executive_twin_activity(value: Any) -> str:
+    """Render persisted runtime activity as readable executive copy."""
+    activity = re.sub(
+        r"\s*[—–-]\s*unknown[_ ]node\b",
+        "",
+        str(value or "").strip(),
+        flags=re.IGNORECASE,
+    )
+    activity = re.sub(r"\bunknown[_ ]node\b", "", activity, flags=re.IGNORECASE)
+    activity = re.sub(r"\s+", " ", activity.replace("_", " ")).strip(" ·—–-")
+    if not activity:
+        return "No current governed activity is recorded."
+    return activity[0].upper() + activity[1:]
+
+
+def _resolve_digital_twin_status(
+    question: str,
+    *,
+    summary: dict[str, Any] | None,
+    role: str,
+    public_safe: bool,
+    assistant_context: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Answer AI-team questions from the same persisted Twin runtime as the UI."""
+    if public_safe:
+        return None
+    normalized = " ".join(str(question or "").lower().split())
+    context = dict(assistant_context or {})
+    structured_twin = str(
+        context.get("twin_role") or context.get("agent_id") or context.get("agent") or ""
+    ).strip().lower()
+    network_terms = (
+        "digital twin",
+        "digital twins",
+        "ai team",
+        "ai assistant",
+        "ai assistants",
+        "agent network",
+        "agents tab",
+    )
+    asks_about_agents = (
+        "agents" in normalized
+        and any(token in normalized for token in ("doing", "status", "active", "attention", "blocked"))
+    )
+    named_terms = ("hermes", "atlas", "iris", "ceo twin", "cfo twin", "group manager twin")
+    if not structured_twin and not any(term in normalized for term in (*network_terms, *named_terms)) and not asks_about_agents:
+        return None
+
+    principal = {"role": role, "authenticated": True}
+    network = _agents_surface_payload(summary, principal)
+    twins = list(network.get("digital_twins") or [])
+    if not twins:
+        return None
+
+    def twin_matches(item: dict[str, Any]) -> bool:
+        role_alias = str(item.get("role") or "").replace("_", " ").lower()
+        aliases = {
+            str(item.get("display_name") or "").lower(),
+            str(item.get("assistant_name") or "").lower(),
+            str(item.get("twin_id") or "").lower(),
+        }
+        if structured_twin and structured_twin in {*aliases, role_alias}:
+            return True
+        if role_alias and f"{role_alias} twin" in normalized:
+            return True
+        return any(alias and alias in normalized for alias in aliases)
+
+    selected = [item for item in twins if twin_matches(item)]
+    summary_payload = dict(network.get("summary") or {})
+    citations = [
+        {
+            "source_path": "runtime://digital-twin-network",
+            "locator": "summary",
+            "excerpt": (
+                f"{summary_payload.get('configured_count', len(twins))} configured; "
+                f"{summary_payload.get('attention_count', 0)} requiring executive attention"
+            ),
+        }
+    ]
+
+    if selected:
+        item = selected[0]
+        name = str(item.get("assistant_name") or item.get("display_name") or "Digital Twin")
+        role_label = str(item.get("display_name") or item.get("role") or "Digital Twin")
+        status_label = _module_status_label(item.get("status") or "ready")
+        attention = str(item.get("status") or "").lower() == "attention"
+        executive_action = (
+            "It is flagged for executive attention; open its governed workspace and review the recorded escalation."
+            if attention
+            else "It is not currently flagged for executive intervention. Pending handoffs remain governed Twin-to-Twin dependencies unless an escalation changes the status to Attention."
+        )
+        answer = (
+            f"{name} ({role_label}) is {status_label.lower()}. "
+            f"Current activity: {item.get('current_activity') or 'No current governed activity is recorded.'} "
+            f"It owns {', '.join(_module_status_label(value) for value in list(item.get('kpis_owned') or [])) or 'no configured KPI domains'}, "
+            f"with {int(item.get('active_investigation_count') or 0)} open investigation(s) and "
+            f"{int(item.get('pending_request_count') or 0)} pending handoff(s). {executive_action}"
+        )
+        citations.append(
+            {
+                "source_path": "runtime://digital-twin-network",
+                "locator": f"digital_twins[{item.get('role')}].status",
+                "excerpt": f"{name}: {status_label}",
+            }
+        )
+        suggestions = [
+            f"What KPIs does {name} own?",
+            "Which Digital Twin needs executive attention?",
+        ]
+    else:
+        active = int(summary_payload.get("active_count") or 0)
+        attention = int(summary_payload.get("attention_count") or 0)
+        pending = int(summary_payload.get("pending_request_count") or 0)
+        activity_lines = []
+        for item in twins:
+            name = str(item.get("assistant_name") or item.get("display_name") or _module_status_label(item.get("role")))
+            activity_lines.append(
+                f"{name}: {_module_status_label(item.get('status') or 'ready')} — {item.get('current_activity') or 'No current governed activity is recorded.'}"
+            )
+        attention_sentence = (
+            f"{attention} Twin(s) are explicitly flagged for executive attention."
+            if attention
+            else "No Twin is currently flagged for executive attention."
+        )
+        answer = (
+            f"Your AI Team has {len(twins)} configured Digital Twins; {active} are active or monitoring. "
+            f"{attention_sentence} The network has {pending} pending governed handoff(s); these are not executive approvals unless a Twin is marked Attention. "
+            "Current activity — " + " ".join(activity_lines)
+        )
+        suggestions = [
+            "What is Atlas doing now?",
+            "Which Digital Twin needs executive attention?",
+        ]
+
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Persistent Digital Twin repositories used by the authenticated CEO AI Team surface.",
+        "citations": citations,
+        "suggestions": suggestions,
+        "assistant_mode": "digital_twin_runtime",
+        "answered_by": "digital_twin_runtime",
+        "digital_twin_network": network,
+        "grounding_status": "grounded",
+        "_orchestrator_force_answer": True,
+    }
 
 
 def _tenant_admin_system_payload(
@@ -11079,6 +11228,34 @@ async def _assistant_chat_response(
         context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    digital_twin_result = _resolve_digital_twin_status(
+        question,
+        summary=context.get("summary"),
+        role=authenticated_role or ("executive" if public_safe else "authenticated"),
+        public_safe=public_safe,
+        assistant_context=assistant_context,
+    )
+    if digital_twin_result is not None:
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=digital_twin_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=digital_twin_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     module_result = _resolve_governed_module_status(
         question,

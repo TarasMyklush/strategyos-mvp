@@ -115,3 +115,65 @@ def test_governed_ebitda_answer_uses_same_finance_components_as_ceo_card():
     assert "SAR 560" in result.answer
     assert "have not shown a plan variance" in result.answer
     assert result.basis == "Read from the same governed finance contract used by the CEO KPI card."
+
+
+def test_hermes_ai_team_answer_uses_same_persistent_runtime(tmp_path, monkeypatch):
+    repositories = build_repositories(tmp_path / "twins")
+    repositories.states.save(
+        "ceo",
+        {
+            "twin_id": "ceo-1",
+            "role": "ceo",
+            "last_wake_at": "2026-07-14T08:00:00+00:00",
+            "cycle_count": 2,
+        },
+    )
+    repositories.requests.save(
+        "ceo",
+        {
+            "request_message_id": "req-1",
+            "subject": "Data request: board_narrative — unknown_node",
+            "status": "pending",
+        },
+    )
+    monkeypatch.setattr(api_module, "build_app_repositories", lambda: repositories)
+
+    result = api_module._resolve_digital_twin_status(
+        "What is my AI team doing now, and which Digital Twin needs executive attention?",
+        summary={"run_id": "run-1"},
+        role="executive",
+        public_safe=False,
+    )
+
+    assert result is not None
+    assert result["matched"] is True
+    assert result["answered_by"] == "digital_twin_runtime"
+    assert "6 configured Digital Twins" in result["answer"]
+    assert "No Twin is currently flagged for executive attention" in result["answer"]
+    assert "unknown_node" not in result["answer"]
+    assert result["digital_twin_network"]["contract_version"] == "digital_twin_network.v1"
+
+
+def test_hermes_specific_twin_answer_is_role_specific(tmp_path, monkeypatch):
+    repositories = build_repositories(tmp_path / "twins")
+    repositories.investigations.save(
+        "cfo",
+        {
+            "id": "inv-1",
+            "title": "Reconcile H1 EBITDA bridge",
+            "status": "open",
+        },
+    )
+    monkeypatch.setattr(api_module, "build_app_repositories", lambda: repositories)
+
+    result = api_module._resolve_digital_twin_status(
+        "What is Atlas doing now?",
+        summary={"run_id": "run-1"},
+        role="executive",
+        public_safe=False,
+    )
+
+    assert result is not None
+    assert "Atlas (CFO Twin)" in result["answer"]
+    assert "Reconcile H1 EBITDA bridge" in result["answer"]
+    assert "not currently flagged for executive intervention" in result["answer"]
