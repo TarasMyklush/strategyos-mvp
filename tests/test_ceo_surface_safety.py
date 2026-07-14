@@ -2351,3 +2351,33 @@ def test_ceo_digital_health_answer_leads_with_facts():
     js = _static_executive_js()
     assert "/digital health/i" not in js
     assert 'postJson("/assistant/chat"' in js
+
+
+def test_knowledge_map_node_hover_scale_stays_anchored_to_the_node():
+    """Hovering or selecting a performance-map node must not make it vibrate.
+
+    .kg-node-dot is an SVG <circle> positioned via cx/cy inside a 0-100
+    viewBox, and hover/selection applies transform: scale(1.45). SVG resolves
+    transform-origin against the view-box by default, so without
+    transform-box: fill-box the hovered circle scales away from the map
+    centre, slides out from under the cursor, drops :hover, snaps back, and
+    re-enters -- an enter/leave oscillation the CEO sees as the node
+    "vibrating" when trying to select it.
+    """
+    css = _static_executive_css()
+
+    dot_rule_start = css.index(".kg-node-dot {")
+    dot_rule = css[dot_rule_start:css.index("}", dot_rule_start)]
+
+    assert "transform-box: fill-box" in dot_rule, (
+        "kg-node-dot must set transform-box: fill-box so the hover/selected "
+        "scale anchors to the circle itself instead of the SVG view-box"
+    )
+    assert "transform-origin: center" in dot_rule, (
+        "kg-node-dot must keep transform-origin: center so the fill-box scale "
+        "grows the node in place under the cursor"
+    )
+    assert "transform: scale(1.45);" in css, (
+        "hover/selected node scale should remain; if the scale is removed, "
+        "revisit whether transform-box is still required"
+    )

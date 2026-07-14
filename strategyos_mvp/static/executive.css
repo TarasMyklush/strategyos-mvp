@@ -1356,6 +1356,10 @@ a { color: inherit; }
   opacity: 0.98;
   filter: drop-shadow(0 0 8px rgba(111, 140, 255, 0.16));
   transition: fill 160ms ease, filter 160ms ease, opacity 180ms ease, transform 180ms ease;
+  /* fill-box keeps transform-origin on the circle itself; the SVG default
+     (view-box) scales hovered nodes away from the map centre, sliding them out
+     from under the cursor and causing an enter/leave hover oscillation. */
+  transform-box: fill-box;
   transform-origin: center;
 }
 
