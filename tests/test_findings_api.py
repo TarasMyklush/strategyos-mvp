@@ -870,7 +870,7 @@ def test_data_status_includes_workflow_and_publication_posture(monkeypatch):
         assert payload["publication"]["reconciliation"]["publish_gate_passed"] is False
         discover_metric = payload["agents"]["activity"]["metrics"][2]
         discover_lists_total = len(payload["agents"]["discover"]["native"]) + len(payload["agents"]["discover"]["marketplace"])
-        assert discover_metric == {"k": "discoverable", "v": discover_lists_total}
+        assert discover_metric == {"k": "available services", "v": discover_lists_total}
         assert payload["board_portal"]["state"] == "pre"
         assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
         assert payload["tenant_admin_system"]["managed_data"]["graph_store"]["status"] == "ready"
