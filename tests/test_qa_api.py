@@ -1112,7 +1112,22 @@ def test_assistant_chat_public_auto_unmatched_uses_reviewed_llm_with_public_pack
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
-        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(
+            api_module,
+            "parse_scenario",
+            lambda *_args, **_kwargs: _parsed_scenario(
+                matched=True,
+                payload={
+                    "matched": True,
+                    "scenario_id": "public_exec_governed_packet",
+                    "scenario_type": "deterministic",
+                    "answer": "Generic packet summary that must not preempt Hermes.",
+                    "basis": "Generic public packet catch-all.",
+                    "citations": [],
+                    "suggestions": [],
+                },
+            ),
+        )
         called = {"llm": 0}
 
         def fake_answer(*_args, **_kwargs):

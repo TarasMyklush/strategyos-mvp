@@ -11401,7 +11401,7 @@ def _assistant_question_requests_modelling(question: str) -> bool:
     finance_terms = ("revenue", "cost", "costs", "opex", "cogs", "ebitda", "margin", "cash")
     if not any(term in norm for term in finance_terms):
         return False
-    if re.search(r"\b(model|simulate|scenario)\b", norm):
+    if re.search(r"\b(model|simulate|scenario|project)\b", norm):
         return True
     if re.search(r"\b(if|assume|assuming|what happens|what would happen)\b", norm):
         return True
@@ -11954,7 +11954,13 @@ async def _assistant_chat_response(
         scenario_result = parsed.as_dict()
         if public_safe and parsed.matched:
             scenario_result.setdefault("answered_by", "packet")
-        if parsed.matched:
+        public_packet_catchall = (
+            public_safe
+            and str(scenario_result.get("scenario_id") or "") == "public_exec_governed_packet"
+            and mode in {"auto", "llm"}
+            and bool(llm_status.get("enabled"))
+        )
+        if parsed.matched and not public_packet_catchall:
             orchestrated = orchestrator.process(
                 question,
                 persona=persona,
@@ -12050,6 +12056,33 @@ async def _assistant_chat_response(
                 payload["llm_fallback_attempted"] = True
                 payload["public_packet_only"] = True
                 return payload
+
+        if (
+            scenario_result
+            and scenario_result.get("matched")
+            and str(scenario_result.get("scenario_id") or "") == "public_exec_governed_packet"
+        ):
+            # Provider failure degrades to the already-computed public packet
+            # answer. It must not fall through to an unrelated generic reply.
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                scenario_result=scenario_result,
+                driver_context=request.driver_context,
+            )
+            payload = _assistant_response_payload(
+                response_mode="deterministic",
+                question=question,
+                context=context,
+                requested_mode=mode,
+                persona=persona,
+                orchestrated=orchestrated,
+                scenario_result=scenario_result,
+                llm_status=llm_status,
+                assistant_context=assistant_context,
+            )
+            payload["llm_fallback_attempted"] = True
+            return payload
 
         public_safe_result = _public_safe_unmatched_result(
             question,
