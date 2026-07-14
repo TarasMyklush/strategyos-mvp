@@ -2405,9 +2405,10 @@ def _parse_governed_public_exec_surface(
         basis = "Summarized only current governed driver cards."
         citations.extend(_public_citation(f"public_context_packet.drivers[{index}]") for index in range(min(3, len(visible))))
 
+    recovery_priority_answer = basis.startswith("Reconciled the complete governed case index")
     return ScenarioResult(
-        scenario_id="public_exec_governed_packet",
-        scenario_label="Executive Surface — Governed Packet",
+        scenario_id="governed_recovery_priorities" if recovery_priority_answer else "public_exec_governed_packet",
+        scenario_label="Finance — Recovery Priorities" if recovery_priority_answer else "Executive Surface — Governed Packet",
         matched=True,
         answer=answer,
         calculations=[],
