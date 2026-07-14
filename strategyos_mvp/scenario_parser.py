@@ -2301,6 +2301,13 @@ def _parse_governed_public_exec_surface(
         else ("hedge", "currency", "eur", "fx", "margin", "ebitda", "revenue", "cash", "recoverable", "recovery", "evidence")
     )
     topic_tokens = [token for token in topic_token_source if token in norm]
+    wants_recovery_priorities = (
+        any(token in norm for token in ("recoverable", "recovery", "finding", "case"))
+        and any(
+            token in norm
+            for token in ("largest", "highest", "first", "priority", "priorit", "acted", "action", "sequence", "owner")
+        )
+    )
     related: list[tuple[str, int, dict[str, Any]]] = []
     for source_name, items in (("drivers", drivers), ("findings", findings)):
         for index, item in enumerate(items):
@@ -2338,7 +2345,7 @@ def _parse_governed_public_exec_surface(
             "funding assumptions have been substituted."
         )
         basis = "Governed packet contains no matching JV funding or liquidity driver/finding."
-    elif related:
+    elif related and not wants_recovery_priorities:
         fragments = []
         for source_name, index, item in related[:3]:
             fragments.append(_governed_public_item_text(item))

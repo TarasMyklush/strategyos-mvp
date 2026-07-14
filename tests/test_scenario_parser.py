@@ -190,7 +190,11 @@ def test_public_recovery_realization_uses_reconciled_total_and_cash_baseline():
 def test_public_value_at_stake_reconciles_cases_and_recommends_first_action():
     amounts = [250_416, 177_188, 120_000, 93_000, 76_416, 40_000, 25_000, 12_088]
     cases = [
-        {"title": f"Case {index}", "recoverable_sar": amount}
+        {
+            "title": f"Case {index}",
+            "recoverable_sar": amount,
+            "impact": f"SAR {amount:,.0f} recoverable",
+        }
         for index, amount in enumerate(amounts, start=1)
     ]
     packet = {
