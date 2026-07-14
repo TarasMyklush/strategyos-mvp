@@ -91,9 +91,19 @@ def test_ceo_jargon_replacements():
     assert "Runs on your infrastructure" not in js, (
         "Sovereign text must be CEO-friendly"
     )
-    assert "Digital twins and AI assistants" in js, (
-        "AI team must use the reference-aligned Digital Twin vocabulary"
+    assert "Your executive AI team" in js, (
+        "AI team must use CEO-friendly leadership vocabulary"
     )
+    for internal_copy in (
+        "persistent runtime",
+        "configured twin",
+        "Role-specific digital twins",
+        "Awaiting module telemetry",
+        "Governed runtime",
+        "System workflows — not digital twins",
+        "Governed automations",
+    ):
+        assert internal_copy not in js, f"CEO surface leaks internal copy: {internal_copy}"
     assert "Board reports" in js, (
         "Report surface must be rebadged as 'Board reports'"
     )
@@ -971,11 +981,11 @@ def test_hermes_header_phrase_clean():
     """#11: Hermes header must use 'Ask Hermes' heading and 'Answers from the current board pack' subtitle."""
     js = _static_executive_js()
 
-    assert '"Ask Hermes"' in js or "'Ask Hermes'" in js, (
-        "Hermes header heading must be 'Ask Hermes'"
+    assert 'assistantHeading.textContent = "Ask " + assistantName' in js, (
+        "Assistant header heading must follow the active persona's assistant"
     )
-    assert "Hermes will answer here using the current board pack." in js, (
-        "Hermes subtitle must be 'Hermes will answer here using the current board pack.'"
+    assert 'assistantName + " will answer here using the current board pack."' in js, (
+        "Assistant subtitle must follow the active persona's assistant"
     )
     # Old jargon must not appear
     assert "named, threaded chief-of-staff follow-up" not in js, (
@@ -1052,13 +1062,15 @@ def test_logo_home_link():
     )
 
 
-def test_workflow_modules_are_labelled_as_automations_not_twins():
-    """Workflow monitors must not be presented as personified AI agents."""
+def test_workflow_modules_are_hidden_from_the_ceo_surface():
+    """Operator workflow services must not be presented on the CEO surface."""
     js = _static_executive_js()
     html = _ceo_executive_html()
 
-    assert "Governed automations" in js
-    assert "System workflows — not digital twins" in js
+    assert "automationCard.hidden = true" in js
+    assert "automationCard.innerHTML = ''" in js
+    assert "Governed automations" not in js
+    assert "System workflows — not digital twins" not in js
     assert "Tenant runtime watch" not in html, (
         "CEO HTML must not render 'Tenant runtime watch'"
     )
@@ -1147,7 +1159,7 @@ def test_avatar_profile_action_is_wired_not_dead():
     """Avatar tooltip Profile & settings action must have a real click handler."""
     js = _static_executive_js()
     avatar_start = js.index("data-avatar-action=\"profile\"")
-    avatar_block = js[avatar_start:avatar_start + 900]
+    avatar_block = js[avatar_start:avatar_start + 1600]
 
     assert "querySelector('[data-avatar-action=\"profile\"]')" in avatar_block, (
         "Profile action must be queried after the tooltip renders"
@@ -2029,10 +2041,10 @@ def test_ceo_assistant_no_duplicate_under_review():
 
 
 def test_ceo_assistant_header_is_ask_hermes():
-    """'Ask Hermes' must be in the heading content."""
+    """The CEO resolves Hermes while other personas keep their own assistant."""
     js = _static_executive_js()
-    assert '"Ask Hermes"' in js, (
-        "executive.js must set assistantHeading to 'Ask Hermes'"
+    assert 'assistantHeading.textContent = "Ask " + assistantName' in js, (
+        "executive.js must bind the heading to the persona assistant"
     )
     html = _ceo_executive_html()
     assert "Ask Hermes</h3>" in html or "Ask Hermes</h3>" in html, (

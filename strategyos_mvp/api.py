@@ -1119,15 +1119,19 @@ def _build_public_safe_assistant_packet(
     week = list((presentation_sections.get("week_ahead") or {}).get("items") or [])
 
     executive_kpis = list(presentation_sections.get("drivers") or [])
+    finding_case_index = list((presentation_sections.get("findings") or {}).get("case_index") or [])
     kg_nodes, kg_edges, kg_questions = _ceo_kpi_knowledge_graph(executive_kpis)
 
     running_agents = list((agent_modules.get("running") or []))
     activity_summary = agent_modules.get("summary") or {}
     activity = {
         "line": (
-            f"{int(activity_summary.get('running_count') or 0)} active module(s) · "
-            f"{int(activity_summary.get('discoverable_count') or 0)} discoverable · "
-            f"{int(activity_summary.get('approval_count') or 0)} approval gate(s)"
+            f"{int(activity_summary.get('running_count') or 0)} active "
+            f"{'module' if int(activity_summary.get('running_count') or 0) == 1 else 'modules'} · "
+            f"{int(activity_summary.get('discoverable_count') or 0)} available "
+            f"{'service' if int(activity_summary.get('discoverable_count') or 0) == 1 else 'services'} · "
+            f"{int(activity_summary.get('approval_count') or 0)} approval "
+            f"{'stage' if int(activity_summary.get('approval_count') or 0) == 1 else 'stages'}"
         ),
         "metrics": [
             {"k": "run id", "v": str((summary or {}).get("run_id") or ANONYMOUS_PUBLIC_RUN_ID)},
@@ -1142,6 +1146,11 @@ def _build_public_safe_assistant_packet(
         f"Recoverable value: {_format_sar_brief(metrics.get('total_recoverable_sar'))}.",
         f"Citation resolution: {_format_ratio_display(metrics.get('resolved_count'), metrics.get('citation_count'))}.",
     ]
+
+    finance_payload = (summary or {}).get("finance_kpi") or (summary or {}).get("oracle_kpi") or {}
+    finance_components = finance_payload.get("components") if isinstance(finance_payload, dict) else {}
+    finance_evidence = finance_payload.get("evidence") if isinstance(finance_payload, dict) else {}
+    cash_evidence = finance_evidence.get("cash_vs_floor") if isinstance(finance_evidence, dict) else {}
 
     return {
         "packet_id": f"latest-public:{persona_key}:{str((summary or {}).get('run_id') or ANONYMOUS_PUBLIC_RUN_ID)}",
@@ -1174,6 +1183,7 @@ def _build_public_safe_assistant_packet(
         },
         "drivers": drivers,
         "findings": findings,
+        "finding_case_index": finding_case_index,
         "developments": developments,
         "week": week,
         "board_portal": board_portal,
@@ -1191,6 +1201,8 @@ def _build_public_safe_assistant_packet(
             "challenged_count": metrics.get("challenged_count"),
             "report_count": publication.get("report_count"),
             "source_boundary": plan_health.get("boundary"),
+            "current_cash_sar": (finance_components or {}).get("cash_balance"),
+            "current_cash_complete": bool((cash_evidence or {}).get("actual_complete", False)),
         },
         "findings_reconciliation": reconciliation,
         "facts": facts,
@@ -2496,8 +2508,8 @@ def _lifecycle_hero_contract(
         return {
             "headline": "Board packet is closed and frozen",
             "body": (
-                f"{persona} view is now a frozen board-session snapshot with {report_count} report artifact(s). "
-                f"{challenged_count} challenged item(s) remain as follow-up constraints, not pre-board prep."
+                f"{persona} view is now a frozen board-session snapshot with {report_count} {'report' if report_count == 1 else 'reports'}. "
+                f"{challenged_count} challenged {'item remains' if challenged_count == 1 else 'items remain'} as follow-up constraints, not pre-board preparation."
             ),
             "score_note": f"closed session · {health_badge}",
             "secondary_fact": health_label,
@@ -2507,7 +2519,7 @@ def _lifecycle_hero_contract(
             "headline": "Board session is live on governed material",
             "body": (
                 f"{persona} view is operating from the approved board packet. "
-                f"{challenged_count} unresolved item(s) are visible as live constraints for the room."
+                f"{challenged_count} unresolved {'item is' if challenged_count == 1 else 'items are'} visible as live constraints for the room."
             ),
             "score_note": f"live session · {health_badge}",
             "secondary_fact": health_label,
@@ -2516,7 +2528,7 @@ def _lifecycle_hero_contract(
         "headline": str(plan_health.get("label") or "Board preparation is active"),
         "body": str(
             plan_health.get("summary")
-            or f"{challenged_count} challenged item(s) need reviewer closure before the board packet goes live."
+            or f"{challenged_count} challenged {'item needs' if challenged_count == 1 else 'items need'} reviewer closure before the board packet goes live."
         ),
         "score_note": f"pre-board · {health_badge}",
         "secondary_fact": health_label,
@@ -5045,7 +5057,7 @@ def _agents_surface_payload(
             runtime_status = "monitoring"
         else:
             runtime_status = "ready"
-        current_activity = "Ready to monitor governed data when a cycle is started."
+        current_activity = "Ready to support the next leadership review."
         if active_investigations:
             latest = active_investigations[-1]
             current_activity = str(
@@ -5135,11 +5147,11 @@ def _agents_surface_payload(
     elif pending_request_total:
         collaboration_summary = (
             f"{pending_request_total} {handoff_word} "
-            f"{'is' if pending_request_total == 1 else 'are'} awaiting a Twin response. "
+            f"{'is' if pending_request_total == 1 else 'are'} awaiting a leadership-team response. "
             "None is flagged for executive attention."
         )
     else:
-        collaboration_summary = "No handoff is waiting for a Twin response or executive action."
+        collaboration_summary = "Nothing in the leadership-team workflow requires your attention."
     payload = {
         "contract_version": "digital_twin_network.v1",
         "status": "ok" if CONFIG.twins_enabled else "disabled",
@@ -5206,11 +5218,11 @@ def _agents_surface_payload(
             "running": [],
             "discover": {"native": [], "marketplace": legacy_connectors},
             "activity": {
-                "line": "Digital Twin activity is reported from the persistent runtime.",
+                "line": "Leadership-team activity reflects recorded work and decisions needing attention.",
                 "metrics": [
-                    {"k": "configured", "v": len(twins)},
-                    {"k": "active", "v": payload["summary"]["active_count"]},
-                    {"k": "discoverable", "v": len(legacy_connectors)},
+                    {"k": "AI leaders", "v": len(twins)},
+                    {"k": "working now", "v": payload["summary"]["active_count"]},
+                    {"k": "available services", "v": len(legacy_connectors)},
                 ],
                 "log": recent_events,
             },
@@ -5577,9 +5589,9 @@ def _agent_modules_payload(
             "label": "Runtime guardrail",
             "status": "protected",
             "lane": "system",
-            "summary": "Keeps publication, connector, and store truth bounded to the tenant-admin/system lane.",
+            "summary": "Protects publication and company data access. Configuration changes are restricted to system administrators.",
             "route": "/data/status",
-            "output_metric": str(CONFIG.runtime_backend or "local"),
+            "output_metric": "Guardrails active",
             "approval_dependency": "system_boundary",
         },
     ]
@@ -5670,7 +5682,7 @@ def _agent_modules_payload(
         {
             "event_id": "latest-publication-boundary",
             "title": "Publication boundary",
-            "detail": f"Board pack is {str((publication.get('board_pack') or {}).get('status') or 'pending').replace('_', ' ')} with {publication.get('report_count') or 0} surfaced report artifact(s).",
+            "detail": f"Board pack is {str((publication.get('board_pack') or {}).get('status') or 'pending').replace('_', ' ')} with {publication.get('report_count') or 0} surfaced {'report' if int(publication.get('report_count') or 0) == 1 else 'reports'}.",
         },
     ]
     return {
@@ -6311,7 +6323,7 @@ def _latest_report_preview_payload(
     current_stage = _normalize_lifecycle_stage(summary.get("current_stage"))
     preview_lines = [
         f"Run {summary.get('run_id') or 'latest'} is at {current_stage} with approval status {approval_status}.",
-        f"{publication['report_count']} report artifact(s) are tracked; {publication['restricted_report_count']} remain protected.",
+        f"{publication['report_count']} {'report is' if publication['report_count'] == 1 else 'reports are'} tracked; {publication['restricted_report_count']} remain protected.",
         "Use reviewer/operator artifact access for restricted bodies; this role gets governed publication posture only.",
     ]
     return {
@@ -8366,7 +8378,7 @@ def _plan_tracker_payload() -> dict[str, Any]:
                     "label": "Latest governed run visibility",
                     "result": "pass" if summary else "fail",
                     "note": (
-                        f"Run {summary.get('run_id')} with {report_count} surfaced report artifact(s) and approval posture {approval_status}."
+                        f"Run {summary.get('run_id')} with {report_count} surfaced {'report' if report_count == 1 else 'reports'} and approval posture {approval_status}."
                         if summary
                         else "No governed run is available yet."
                     ),
@@ -9851,7 +9863,7 @@ def _public_report_preview_payload(
     preview_lines = [
         f"Latest governed run: {summary.get('run_id') or 'latest'}.",
         f"Recoverable value identified: {summary.get('total_recoverable_sar') or 0:,.2f} SAR.",
-        f"Review posture: {summary.get('approval_status') or 'pending'} with {len(findings)} finding(s) and {challenged} challenged item(s).",
+        f"Review posture: {summary.get('approval_status') or 'pending'} with {len(findings)} {'finding' if len(findings) == 1 else 'findings'} and {challenged} challenged {'item' if challenged == 1 else 'items'}.",
     ]
     if top_finding:
         preview_lines.append(
@@ -10504,7 +10516,8 @@ def _resolve_public_assistant_context(
         "view_state": view_state,
     }
     synthetic_findings: list[dict[str, Any]] = []
-    for index, item in enumerate(list(merged_packet.get("findings") or [])):
+    assistant_findings = list(merged_packet.get("finding_case_index") or merged_packet.get("findings") or [])
+    for index, item in enumerate(assistant_findings):
         title = str(item.get("title") or "")
         detail = str(item.get("detail") or item.get("impact") or "")
         synthetic_findings.append(
@@ -10628,14 +10641,38 @@ def _assistant_response_payload(
                 payload["grounding_status"] = "grounded"
             elif str(scenario_result.get("scenario_type") or "") == "missing_data":
                 payload["grounding_status"] = "needs_evidence"
+    answer_is_model_provided = (
+        str(payload.get("answered_by") or "").strip().lower() == "llm"
+        or str(payload.get("assistant_mode") or "").strip().lower() == "llm"
+        or (
+            response_mode == "llm"
+            and str((base_result or {}).get("answered_by") or "").strip().lower() == "llm"
+        )
+    )
+    if answer_is_model_provided:
+        # This is a product contract, not optional explanatory copy. A model
+        # answer may synthesize governed evidence, but it is never presented as
+        # a governed calculation. Every Hermes surface renders these fields.
+        payload["answer_origin"] = "llm"
+        payload["answered_by"] = "llm"
+        payload["assistant_mode"] = "llm"
+        payload["calculation_status"] = "not_calculated"
+        payload["review_status"] = "required"
+        payload["human_review_required"] = True
+        payload["model_answer_disclosure"] = (
+            "LLM-provided answer; not a governed calculation; human review required."
+        )
+    else:
+        payload.setdefault("answer_origin", "governed")
+        payload.setdefault("human_review_required", False)
     payload["answer"] = _sanitize_assistant_visible_text(payload.get("answer"))
     return payload
 
 
 def _public_safe_llm_status() -> dict[str, Any]:
     status_payload = dict(llm_qa.chat_status(CONFIG) or {})
-    status_payload["enabled"] = False
-    status_payload["reason"] = "Public-safe surface disables llm, graph, and vector grounding."
+    status_payload["public_safe"] = True
+    status_payload["evidence_scope"] = "public_executive_packet_only"
     return status_payload
 
 
@@ -11170,12 +11207,30 @@ def _ceo_kpi_question_intent(question: str, requested_intent: str | None = None)
     norm = " ".join(str(question or "").casefold().split())
     if re.search(r"\b(plan|budget|comparator|comparison|compare|variance|versus|vs\.?|target|baseline)\b", norm):
         return "comparison"
-    if re.search(r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|movement|moved|make up|come from|comes from)\b", norm):
+    if re.search(r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|movement|moved|make up|come from|comes from|coming from)\b", norm):
         return "drivers"
     if re.search(r"\b(attention|action|decision|decide|approve|approval|intervene|escalat|need from me|should i|next step)\b", norm):
         return "decision"
     declared = str(requested_intent or "").strip().lower()
     return declared if declared in {"decision", "drivers", "comparison", "overview"} else "overview"
+
+
+def _ceo_kpi_cards(context: Mapping[str, Any], *, public_safe: bool) -> list[dict[str, Any]]:
+    """Build the four CEO cards from the same server-resolved truth as the page."""
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    read_model = _executive_read_model_from_available_truth(
+        dict(summary),
+        [],
+        {},
+        {"report_count": 0},
+        {},
+        public_safe=public_safe,
+    )
+    return [
+        dict(item)
+        for item in list(build_executive_presentation(read_model).get("driver_grid") or [])
+        if isinstance(item, Mapping)
+    ]
 
 
 def _ceo_kpi_inline_result(
@@ -11192,16 +11247,7 @@ def _ceo_kpi_inline_result(
     the presentation contract from the resolved run so a stale or manipulated
     browser state cannot change the number Hermes describes.
     """
-    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
-    read_model = _executive_read_model_from_available_truth(
-        dict(summary),
-        [],
-        {},
-        {"report_count": 0},
-        {},
-        public_safe=public_safe,
-    )
-    cards = list(build_executive_presentation(read_model).get("driver_grid") or [])
+    cards = _ceo_kpi_cards(context, public_safe=public_safe)
     card = next(
         (item for item in cards if str(item.get("key") or item.get("driver_key") or "") == kpi_key),
         None,
@@ -11368,7 +11414,7 @@ def _assistant_question_requests_modelling(question: str) -> bool:
     finance_terms = ("revenue", "cost", "costs", "opex", "cogs", "ebitda", "margin", "cash")
     if not any(term in norm for term in finance_terms):
         return False
-    if re.search(r"\b(model|simulate|scenario)\b", norm):
+    if re.search(r"\b(model|simulate|scenario|project)\b", norm):
         return True
     if re.search(r"\b(if|assume|assuming|what happens|what would happen)\b", norm):
         return True
@@ -11380,8 +11426,24 @@ def _assistant_question_requests_modelling(question: str) -> bool:
     return False
 
 
-def _free_text_ceo_kpi_key(question: str) -> str | None:
-    """Route factual CEO questions to the same KPI contract as card prompts."""
+def _decimal_references(text: str) -> set[Decimal]:
+    """Return CEO-scale decimal references, accepting decimal comma or point."""
+    values: set[Decimal] = set()
+    for raw in re.findall(r"(?<![\d.])(\d+(?:[.,]\d+))(?![\d.])", str(text or "")):
+        try:
+            values.add(Decimal(raw.replace(",", ".")))
+        except InvalidOperation:
+            continue
+    return values
+
+
+def _free_text_ceo_kpi_key(
+    question: str,
+    context: Mapping[str, Any] | None = None,
+    *,
+    public_safe: bool = False,
+) -> str | None:
+    """Route names or uniquely displayed values to the governed KPI contract."""
     if _assistant_question_requests_modelling(question):
         return None
     norm = " ".join(str(question or "").casefold().split())
@@ -11393,6 +11455,25 @@ def _free_text_ceo_kpi_key(question: str) -> str | None:
         return "operating_cost"
     if "revenue" in norm:
         return "revenue"
+    references = _decimal_references(question)
+    if references and context is not None:
+        matches: set[str] = set()
+        for card in _ceo_kpi_cards(context, public_safe=public_safe):
+            key = str(card.get("key") or card.get("driver_key") or "").strip()
+            if not key:
+                continue
+            # Match only headline displays, never arbitrary component values;
+            # ambiguity deliberately falls through to the reviewed LLM path.
+            card_values = _decimal_references(
+                " ".join(
+                    str(card.get(field) or "")
+                    for field in ("metric", "value", "pct", "ring_pct")
+                )
+            )
+            if references & card_values:
+                matches.add(key)
+        if len(matches) == 1:
+            return next(iter(matches))
     return None
 
 
@@ -11507,6 +11588,18 @@ async def _assistant_chat_response(
             packet = {"source": "empty_packet", "public_safe": True}
         context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
+        history = assistant_context.get("conversation_history")
+        if isinstance(history, list):
+            context["public_context_packet"]["conversation_history"] = [
+                {
+                    "role": str(item.get("role") or "")[:16],
+                    "content": str(item.get("content") or "")[:2400],
+                }
+                for item in history[-8:]
+                if isinstance(item, dict)
+                and str(item.get("role") or "") in {"user", "assistant"}
+                and str(item.get("content") or "").strip()
+            ]
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if _assistant_question_is_release_gate(question):
@@ -11591,7 +11684,12 @@ async def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
-    contextual_kpi_key = str(assistant_context.get("kpi_key") or "").strip()
+    explicit_kpi_key = _free_text_ceo_kpi_key(
+        question,
+        context,
+        public_safe=public_safe,
+    )
+    contextual_kpi_key = explicit_kpi_key or str(assistant_context.get("kpi_key") or "").strip()
     explicit_modelling_request = _assistant_question_requests_modelling(question)
     if (
         contextual_kpi_key
@@ -11881,7 +11979,13 @@ async def _assistant_chat_response(
         scenario_result = parsed.as_dict()
         if public_safe and parsed.matched:
             scenario_result.setdefault("answered_by", "packet")
-        if parsed.matched:
+        public_packet_catchall = (
+            public_safe
+            and str(scenario_result.get("scenario_id") or "") == "public_exec_governed_packet"
+            and mode in {"auto", "llm"}
+            and bool(llm_status.get("enabled"))
+        )
+        if parsed.matched and not public_packet_catchall:
             orchestrated = orchestrator.process(
                 question,
                 persona=persona,
@@ -11900,12 +12004,12 @@ async def _assistant_chat_response(
                 assistant_context=assistant_context,
             )
 
-    free_text_kpi_key = None if public_safe else _free_text_ceo_kpi_key(question)
+    free_text_kpi_key = explicit_kpi_key
     if free_text_kpi_key:
         kpi_result = _ceo_kpi_inline_result(
             context,
             kpi_key=free_text_kpi_key,
-            public_safe=False,
+            public_safe=public_safe,
             question=question,
         )
         orchestrated = orchestrator.process(
@@ -11929,12 +12033,86 @@ async def _assistant_chat_response(
         return payload
 
     if public_safe and context.get("public_context_packet") is not None:
-        if mode == "llm":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=llm_status["reason"],
+        if mode != "deterministic" and llm_status.get("enabled"):
+            try:
+                public_llm_result = await _llm_answer_question_async(
+                    question,
+                    bundle=context["bundle"],
+                    findings=context["findings"],
+                    summary=context["summary"],
+                    config=CONFIG,
+                    public_context_packet=context["public_context_packet"],
+                    persona=persona,
+                )
+            except RuntimeError:
+                # The CEO sees a useful board-packet fallback, never provider
+                # transport details. The shared UI keeps its retry/cache path.
+                public_llm_result = None
+            if public_llm_result is not None:
+                model_result = {
+                    **public_llm_result,
+                    "llm_matched": bool(public_llm_result.get("matched")),
+                    # A best-effort model answer remains the selected answer
+                    # even when its own evidence match is incomplete. The
+                    # review contract below carries that uncertainty visibly.
+                    "matched": True,
+                    "assistant_mode": "llm",
+                    "answered_by": "llm",
+                    "_orchestrator_force_answer": True,
+                }
+                orchestrated = orchestrator.process(
+                    question,
+                    persona=persona,
+                    llm_result=model_result,
+                    driver_context=request.driver_context,
+                )
+                payload = _assistant_response_payload(
+                    response_mode="llm",
+                    question=question,
+                    context=context,
+                    requested_mode=mode,
+                    persona=persona,
+                    orchestrated=orchestrated,
+                    base_result=model_result,
+                    llm_status=public_llm_result.get("llm_status") or llm_status,
+                    assistant_context=assistant_context,
+                )
+                payload["mode"] = "llm"
+                payload["llm_fallback_attempted"] = True
+                payload["public_packet_only"] = True
+                return payload
+
+        if (
+            scenario_result
+            and scenario_result.get("matched")
+            and str(scenario_result.get("scenario_id") or "") == "public_exec_governed_packet"
+        ):
+            # Provider failure degrades to the already-computed public packet
+            # answer. It must not fall through to an unrelated generic reply.
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                scenario_result=scenario_result,
+                driver_context=request.driver_context,
             )
-        public_safe_result = _public_safe_unmatched_result(question, None if mode == "deterministic" else llm_status.get("reason"))
+            payload = _assistant_response_payload(
+                response_mode="deterministic",
+                question=question,
+                context=context,
+                requested_mode=mode,
+                persona=persona,
+                orchestrated=orchestrated,
+                scenario_result=scenario_result,
+                llm_status=llm_status,
+                assistant_context=assistant_context,
+            )
+            payload["llm_fallback_attempted"] = True
+            return payload
+
+        public_safe_result = _public_safe_unmatched_result(
+            question,
+            None if mode == "deterministic" else llm_status.get("reason"),
+        )
         orchestrated = orchestrator.process(
             question,
             persona=persona,
@@ -11957,7 +12135,7 @@ async def _assistant_chat_response(
             llm_status=llm_status,
             assistant_context=assistant_context,
         )
-        payload["llm_fallback_attempted"] = False
+        payload["llm_fallback_attempted"] = mode != "deterministic" and bool(llm_status.get("enabled"))
         return payload
 
     if context["bundle"] is None:
@@ -12176,6 +12354,14 @@ async def _assistant_chat_response(
             payload["llm_fallback_attempted"] = True
             payload["llm_grounded_fallback"] = True
             return payload
+    selected_llm_result = {
+        **result,
+        "llm_matched": bool(result.get("matched")),
+        "matched": True,
+        "assistant_mode": "llm",
+        "answered_by": "llm",
+        "_orchestrator_force_answer": True,
+    }
     orchestrated = orchestrator.process(
         question,
         persona=persona,
@@ -12186,7 +12372,7 @@ async def _assistant_chat_response(
             "assistant_mode": "qa_engine",
             "answered_by": deterministic_result.get("answered_by") or "tabular",
         },
-        llm_result=result,
+        llm_result=selected_llm_result,
         driver_context=driver_context,
     )
     payload = _assistant_response_payload(
@@ -12196,7 +12382,7 @@ async def _assistant_chat_response(
         requested_mode=mode,
         persona=persona,
         orchestrated=orchestrated,
-        base_result=result,
+        base_result=selected_llm_result,
         llm_status=llm_status,
         assistant_context=assistant_context,
     )

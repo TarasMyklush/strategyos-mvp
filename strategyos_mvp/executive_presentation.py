@@ -622,11 +622,11 @@ def _hero(
         status = "finance_data_required"
     elif challenged:
         label = "Board pack is not yet clean for release"
-        body = f"{challenged} item(s) still need evidence closure before executive release."
+        body = f"{challenged} {'item' if challenged == 1 else 'items'} still need evidence closure before executive release."
         status = "needs_reviewer_closure"
     elif approval_status == "approved" and reports:
         label = "Board pack is approved for release"
-        body = f"Approval is recorded and {reports} report surface(s) are ready."
+        body = f"Approval is recorded and {reports} {'report' if reports == 1 else 'reports'} are ready."
         status = "release_ready"
     elif approval_status in {"pending", "awaiting_review", ""}:
         label = "Reviewer decision is still open"
@@ -680,7 +680,7 @@ def _findings(read_model: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict
                 "tag": _claim_value(item.get("pattern_label"), "Governed Finance Finding"),
                 "detail": (
                     f"{_format_sar(recoverable)} recoverable"
-                    + f" · {citations} citation(s)"
+                    + f" · {citations} supporting {'document' if citations == 1 else 'documents'}"
                     + (" · needs closure" if challenged else "")
                 ),
                 "tone": "flat" if challenged else "up",
@@ -713,7 +713,7 @@ def _case_index(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "tag": _claim_value(item.get("pattern_label"), "Governed Finance Finding"),
                 "detail": (
                     f"{_format_sar(recoverable)} recoverable"
-                    + f" · {citations} citation(s)"
+                    + f" · {citations} supporting {'document' if citations == 1 else 'documents'}"
                     + (" · needs closure" if challenged else "")
                 ),
                 "tone": "flat" if challenged else "up",

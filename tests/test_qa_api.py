@@ -169,6 +169,17 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
         public_safe=False,
         question="How does revenue compare with the approved plan?",
     )
+    numeric_key = api_module._free_text_ceo_kpi_key(
+        "explainwhere 385,1 is coming from",
+        {"summary": {}},
+        public_safe=False,
+    )
+    numeric_answer = api_module._ceo_kpi_inline_result(
+        {"summary": {}},
+        kpi_key=numeric_key or "",
+        public_safe=False,
+        question="explainwhere 385,1 is coming from",
+    )
 
     assert decision["kpi_question_intent"] == "decision"
     assert "Movement requiring attention: Revenue – Government (-SAR 5)" in decision["answer"]
@@ -188,8 +199,86 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
     assert "Current composition" not in comparison["answer"]
 
     assert len({decision["answer"], drivers["answer"], comparison["answer"]}) == 3
+    assert numeric_key == "revenue"
+    assert numeric_answer["answered_by"] == "governed_kpi"
+    assert numeric_answer["kpi_question_intent"] == "drivers"
+    assert "Revenue is SAR 385.1M" in numeric_answer["answer"]
+    assert "Revenue – Catering — SAR 123.0M · 31.9%" in numeric_answer["answer"]
     assert drivers["citations"][0]["source_path"] == "02_ERP_Extracts/GL_Extract_H1_2026.csv"
     assert all(result["grounding_status"] == "grounded" for result in (decision, drivers, comparison))
+
+
+def test_assistant_chat_resolves_locale_formatted_headline_value_before_llm(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {"run_id": "finance-run"},
+                "run_id": "finance-run",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(
+            api_module,
+            "build_executive_presentation",
+            lambda _read_model: {
+                "driver_grid": [
+                    {
+                        "key": "revenue",
+                        "label": "Revenue",
+                        "metric": "SAR 385.1M",
+                        "availability": "available",
+                        "grounding": {"status": "grounded"},
+                        "source_files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"],
+                        "movers": {},
+                        "trend": {},
+                        "executive_brief": {
+                            "readout": "Revenue recognised across four revenue groups.",
+                            "drivers": [{"label": "Revenue – Catering", "value": "SAR 123.0M", "share_pct": 31.9}],
+                        },
+                    }
+                ]
+            },
+        )
+
+        async def forbidden_llm(*_args, **_kwargs):
+            raise AssertionError("A displayed KPI value must resolve before LLM fallback")
+
+        monkeypatch.setattr(api_module, "_llm_answer_question_async", forbidden_llm)
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "explainwhere 385,1 is coming from",
+                "persona": "ceo",
+                "mode": "auto",
+                # A previously opened card must not trap a new, explicit KPI
+                # reference inside stale drawer context.
+                "assistant_context": {
+                    "entrypoint": "ceo_kpi_inline",
+                    "kpi_key": "cash_vs_floor",
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_kpi"
+        assert payload["answer_origin"] == "governed"
+        assert payload["human_review_required"] is False
+        assert payload["llm_fallback_attempted"] is False
+        assert "Revenue is SAR 385.1M" in payload["answer"]
+        assert "Revenue – Catering" in payload["answer"]
+        assert "provide more details" not in payload["answer"].lower()
+    finally:
+        _restore_env(original)
 
 
 def test_ceo_kpi_intent_contract_handles_free_text_and_declared_ui_intent():
@@ -792,6 +881,10 @@ def test_authenticated_assistant_general_question_uses_llm(monkeypatch):
         assert payload["answered_by"] == "llm"
         assert payload["llm_general_answer"] is True
         assert "Paris" in payload["answer"]
+        assert payload["answer_origin"] == "llm"
+        assert payload["calculation_status"] == "not_calculated"
+        assert payload["review_status"] == "required"
+        assert payload["human_review_required"] is True
     finally:
         _restore_env(original)
 
@@ -1015,16 +1108,39 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         _restore_env(original)
 
 
-def test_assistant_chat_public_auto_unmatched_does_not_call_llm_when_enabled(monkeypatch):
+def test_assistant_chat_public_auto_unmatched_uses_reviewed_llm_with_public_packet(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
-        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(
+            api_module,
+            "parse_scenario",
+            lambda *_args, **_kwargs: _parsed_scenario(
+                matched=True,
+                payload={
+                    "matched": True,
+                    "scenario_id": "public_exec_governed_packet",
+                    "scenario_type": "deterministic",
+                    "answer": "Generic packet summary that must not preempt Hermes.",
+                    "basis": "Generic public packet catch-all.",
+                    "citations": [],
+                    "suggestions": [],
+                },
+            ),
+        )
         called = {"llm": 0}
 
         def fake_answer(*_args, **_kwargs):
             called["llm"] += 1
-            raise AssertionError("public-safe route must not call llm_qa.answer_question")
+            assert _kwargs.get("public_context_packet", {}).get("public_safe") is True
+            return {
+                "matched": False,
+                "answer": "The latest public packet does not contain a complete weekly series; the nearest current CEO indicators are available for review.",
+                "basis": "Public executive packet only.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            }
 
         monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
         monkeypatch.setattr(api_module.llm_qa, "answer_general_question", fake_answer)
@@ -1036,13 +1152,19 @@ def test_assistant_chat_public_auto_unmatched_does_not_call_llm_when_enabled(mon
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["mode"] == "deterministic"
+        assert payload["mode"] == "llm"
         assert payload["requested_mode"] == "auto"
         assert payload["run_mode"] == "public-safe"
-        assert payload["llm_fallback_attempted"] is False
-        assert payload["answered_by"] in {"packet", "scenario"}
-        assert payload["llm_status"]["enabled"] is False
-        assert called["llm"] == 0
+        assert payload["llm_fallback_attempted"] is True
+        assert payload["answered_by"] == "llm"
+        assert payload["answer_origin"] == "llm"
+        assert payload["calculation_status"] == "not_calculated"
+        assert payload["review_status"] == "required"
+        assert payload["human_review_required"] is True
+        assert payload["public_packet_only"] is True
+        assert payload["llm_matched"] is False
+        assert "does not contain a complete weekly series" in payload["answer"]
+        assert called["llm"] == 1
     finally:
         _restore_env(original)
 
@@ -1073,7 +1195,7 @@ def test_assistant_chat_public_ceo_margin_pressure_prompt_returns_packet_answer(
         _restore_env(original)
 
 
-def test_assistant_chat_public_llm_mode_returns_403_and_never_calls_llm_when_enabled(monkeypatch):
+def test_assistant_chat_public_llm_mode_uses_public_packet_and_requires_review(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
@@ -1081,7 +1203,14 @@ def test_assistant_chat_public_llm_mode_returns_403_and_never_calls_llm_when_ena
         monkeypatch.setattr(
             api_module.llm_qa,
             "answer_question",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("public-safe route must not call llm_qa.answer_question")),
+            lambda *_args, **_kwargs: {
+                "matched": True,
+                "answer": "The board packet is awaiting reviewer decision; the finance evidence is ready.",
+                "basis": "Public executive packet only.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            },
         )
         monkeypatch.setattr(
             api_module.llm_qa,
@@ -1094,17 +1223,33 @@ def test_assistant_chat_public_llm_mode_returns_403_and_never_calls_llm_when_ena
             json={"question": "summarize the board packet in plain English", "persona": "ceo", "mode": "llm"},
         )
 
-        assert response.status_code == 403
-        assert "Public-safe surface disables llm, graph, and vector grounding." in response.json()["detail"]
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "llm"
+        assert payload["public_packet_only"] is True
+        assert payload["answer_origin"] == "llm"
+        assert payload["review_status"] == "required"
     finally:
         _restore_env(original)
 
 
-def test_answered_by_never_claims_graph_vector_or_llm_on_public_safe_surface(monkeypatch):
+def test_public_safe_llm_never_claims_graph_or_vector_and_is_review_labeled(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
         monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: {
+                "matched": True,
+                "answer": "The public packet does not expose a case with that identifier.",
+                "basis": "Public executive packet only.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            },
+        )
 
         response = client.post(
             "/assistant/chat",
@@ -1113,7 +1258,10 @@ def test_answered_by_never_claims_graph_vector_or_llm_on_public_safe_surface(mon
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["answered_by"] not in {"graph", "vector", "llm"}
+        assert payload["answered_by"] == "llm"
+        assert payload["answered_by"] not in {"graph", "vector"}
+        assert payload["public_packet_only"] is True
+        assert payload["human_review_required"] is True
     finally:
         _restore_env(original)
 
@@ -1615,7 +1763,7 @@ def test_assistant_chat_public_finance_terms_do_not_hit_generic_persona_template
             assert response.status_code == 200, question
             payload = response.json()
             assert payload["mode"] == "deterministic", question
-            assert payload["answered_by"] == "packet", question
+            assert payload["answered_by"] in {"packet", "governed_kpi"}, question
             assert "which aspect would you like to examine" not in payload["answer"].lower(), question
             assert "which part do you want to explore" not in payload["answer"].lower(), question
     finally:
@@ -2325,7 +2473,19 @@ def test_public_manual_out_of_domain_prompt_is_answered_not_replaced_with_packet
         monkeypatch.setattr(
             api_module.llm_qa,
             "answer_general_question",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("public-safe out-of-domain prompt must not call LLM")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("public-safe questions use the public-packet LLM adapter")),
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: {
+                "matched": True,
+                "answer": "Paris is the capital of France. This is a general-knowledge answer.",
+                "basis": "Model-provided general knowledge; no board-packet calculation.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            },
         )
 
         response = client.post(
@@ -2346,7 +2506,9 @@ def test_public_manual_out_of_domain_prompt_is_answered_not_replaced_with_packet
         assert "general-knowledge answer" in answer
         assert "revenue remains ahead while the board still needs a clean margin story" not in answer
         assert payload["run_mode"] == "public-safe"
-        assert payload["llm_fallback_attempted"] is False
+        assert payload["llm_fallback_attempted"] is True
+        assert payload["answered_by"] == "llm"
+        assert payload["review_status"] == "required"
     finally:
         _restore_env(original)
 

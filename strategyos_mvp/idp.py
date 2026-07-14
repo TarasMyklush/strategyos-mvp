@@ -217,7 +217,7 @@ def login_page() -> HTMLResponse:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>StrategyOS test login</title>
+  <title>Sign in — StrategyOS</title>
   <style>
     :root {{ color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
     *, *::before, *::after {{ box-sizing: border-box; }}
@@ -241,9 +241,9 @@ def login_page() -> HTMLResponse:
 </head>
 <body>
   <main>
-    <div class="eyebrow">Temporary test login</div>
+    <div class="eyebrow">Customer sign-in</div>
     <h1>Sign in to StrategyOS</h1>
-    <p>For authorized testers only. This lightweight login is for role testing and will be replaced by production SSO.</p>
+    <p>Use your authorized StrategyOS account to continue.</p>
     <form id="login-form">
       <label>Role and username
         <select id="username" autocomplete="username" required>{options}</select>
@@ -253,7 +253,7 @@ def login_page() -> HTMLResponse:
       </label>
       <button id="submit" type="submit">Sign in</button>
       <div id="error" class="error" role="alert" aria-live="polite"></div>
-      <div class="hint">Your authenticated session is kept in a secure browser cookie. Clear site data to switch roles.</div>
+      <div class="hint">Use Sign out from your profile menu when you need to switch accounts.</div>
     </form>
   </main>
   <script>
@@ -335,6 +335,25 @@ async def login(request: Request) -> JSONResponse:
         secure=True,
         samesite="lax",
         path="/",
+    )
+    return response
+
+
+@app.post("/auth/logout")
+async def logout(request: Request) -> JSONResponse:
+    token = str(request.cookies.get(SESSION_COOKIE_NAME) or "").strip()
+    if token:
+        _token_store().pop(token, None)
+    response = JSONResponse(
+        {"status": "ok", "redirect": "/login"},
+        headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"},
+    )
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="lax",
     )
     return response
 

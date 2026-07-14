@@ -11,8 +11,8 @@
     Unified Digital Twin network: CEO Twin, CFO Twin and GM / Group Manager
     Twin cover executive and BU performance. Canonical deep links remain
     /twin/cfo and /twin/gm. Older route tests looked for fetch('/twin/api/;
-    the current shell receives the same persistent runtime through the governed
-    workspace contract instead of maintaining three contradictory dashboards.
+    the current shell receives the same shared workspace contract instead of
+    maintaining three contradictory dashboards.
     The retired standalone client was /static/twin_live.js; it is intentionally
     not executed by this unified shell.
   -->
@@ -138,15 +138,15 @@
       <section class="section" id="agents-section" aria-labelledby="agents-heading">
         <div class="section-head">
           <div>
-            <h2 class="section-title" id="agents-heading">Digital twins &amp; AI assistants</h2>
-            <p class="section-note">Your governed AI leadership team, its recorded work and its cross-functional handoffs.</p>
+            <h2 class="section-title" id="agents-heading">AI leadership team</h2>
+            <p class="section-note">Your AI leadership team, the priorities it is covering, and anything that needs your decision.</p>
           </div>
         </div>
         <article class="card detail-card" id="agents-activity"></article>
         <div class="agents-layout">
           <article class="card detail-card" id="running-agents"></article>
           <article class="card detail-card" id="discovery-panel"></article>
-          <article class="card detail-card" id="subtools-panel"></article>
+          <article class="card detail-card" id="subtools-panel" hidden></article>
         </div>
       </section>
     </section>
@@ -176,7 +176,7 @@
 
   <footer class="composed-footer" id="composed-footer">
     <span class="composed-mark" aria-hidden="true"></span>
-    <span class="composed-copy">Composed by StrategyOS from the current governed strategy and knowledge graph — a System of Intent above the systems of record.</span>
+    <span class="composed-copy">Prepared by StrategyOS from the approved strategy and verified company data.</span>
     <a class="composed-link" href="/guide">How it works</a>
     <span class="composed-time">refreshed today · 06:14 · Riyadh</span>
   </footer>
@@ -244,7 +244,7 @@
           <div class="assistant-messages" id="assistant-messages" aria-live="polite"></div>
           <div class="assistant-prompts" id="assistant-prompt-row"></div>
           <form class="assistant-form" id="assistant-form">
-            <label class="sr-only" for="assistant-input">Ask assistant</label>
+            <label class="sr-only" for="assistant-input">Ask your executive assistant</label>
             <input id="assistant-input" name="assistant-input" type="text" placeholder="Ask Hermes…" autocomplete="off" />
             <button type="submit">Send</button>
           </form>
