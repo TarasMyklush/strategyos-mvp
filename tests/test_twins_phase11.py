@@ -14,7 +14,7 @@ from strategyos_mvp.twins.protocol import InterTwinMessage
 from strategyos_mvp.twins.resolution import KPI_TREE, KPIResolutionEngine
 from strategyos_mvp.twins.runtime import TwinRuntime
 from strategyos_mvp.twins.store import build_repositories
-from strategyos_mvp.twins.tools import send_message
+from strategyos_mvp.twins.tools import reconcile_message_routing_audit, send_message
 
 
 def _apply_env(env_updates: dict[str, str | None]):
@@ -70,6 +70,43 @@ def test_send_message_persists_via_repository(tmp_path):
     assert envelope["message_id"] == "msg-persist-1"
     assert inbox[0]["message_id"] == "msg-persist-1"
     assert inbox[0]["subject"] == "Persist this message"
+    routing = repositories.governance.list_routing_events()
+    assert len(routing) == 1
+    assert routing[0]["event_type"] == "message_dispatched"
+    assert routing[0]["item_id"] == "msg-persist-1"
+    assert routing[0]["audit_source"] == "message_dispatch"
+
+    # Worker retries must not duplicate either the inbox envelope or audit event.
+    send_message(msg, repositories=repositories)
+    assert len(repositories.inboxes.load("cfo")) == 1
+    assert len(repositories.governance.list_routing_events()) == 1
+
+
+def test_reconcile_message_routing_audit_backfills_legacy_inbox_once(tmp_path):
+    repositories = build_repositories(tmp_path / "twins")
+    repositories.inboxes.append(
+        "cfo",
+        {
+            "message_id": "legacy-1",
+            "sender_role": "ceo",
+            "recipient_role": "cfo",
+            "message_type": "data_request",
+            "priority": "normal",
+            "subject": "Legacy governed request",
+            "created_at": "2026-07-01T09:00:00+00:00",
+            "status": "pending",
+        },
+    )
+
+    first = reconcile_message_routing_audit(repositories=repositories)
+    second = reconcile_message_routing_audit(repositories=repositories)
+
+    assert first == {"scanned": 1, "created": 1}
+    assert second == {"scanned": 1, "created": 0}
+    routing = repositories.governance.list_routing_events()
+    assert len(routing) == 1
+    assert routing[0]["item_id"] == "legacy-1"
+    assert routing[0]["audit_source"] == "inbox_reconciliation"
 
 
 def test_request_response_flow_reconciles_pending_and_persists(tmp_path):

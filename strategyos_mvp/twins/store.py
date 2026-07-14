@@ -375,6 +375,39 @@ class GovernanceRepository(_JsonRepository):
     def save_routing_event(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._append_record(self._routing_path, record)
 
+    def ensure_routing_event(self, record: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """Persist one routing event per idempotency identity.
+
+        Message delivery can be retried by a worker or reconstructed from a
+        durable inbox during an upgrade.  The governance log must therefore be
+        append-only without recording the same dispatch twice.
+        """
+        source_role = str(record.get("source_role") or "")
+        item_id = str(record.get("item_id") or "")
+        event_type = str(record.get("event_type") or "")
+        idempotency_key = str(record.get("idempotency_key") or "")
+        selected: dict[str, Any] = {}
+        created = False
+
+        def _ensure(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            nonlocal selected, created
+            for existing in records:
+                if (
+                    str(existing.get("source_role") or "") == source_role
+                    and str(existing.get("item_id") or "") == item_id
+                    and str(existing.get("event_type") or "") == event_type
+                    and str(existing.get("idempotency_key") or "") == idempotency_key
+                ):
+                    selected = copy.deepcopy(existing)
+                    return records
+            selected = copy.deepcopy(record)
+            records.append(copy.deepcopy(record))
+            created = True
+            return records
+
+        self._mutate_file(self._routing_path, [], _ensure)
+        return copy.deepcopy(selected), created
+
     def save_audit_entry(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._append_record(self._audit_path, record)
 

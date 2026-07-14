@@ -4,11 +4,12 @@ import asyncio
 import html
 import hashlib
 import json
+import logging
 import re
 import socket
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -107,7 +108,9 @@ from .vector_store import (
 )
 from .twins.persona import TWIN_CATALOG
 from .twins.store import build_app_repositories
+from .twins.tools import reconcile_message_routing_audit
 ANONYMOUS_PUBLIC_RUN_ID = "latest-public"
+logger = logging.getLogger(__name__)
 _LLM_PROVIDER_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="strategyos-llm")
 _LLM_PROVIDER_SEMAPHORE = asyncio.Semaphore(8)
 PUBLIC_EVIDENCE_BOUNDARY_NOTE = (
@@ -227,6 +230,23 @@ from .twins.api import (
     twin_operational_health_payload,
 )
 
+@asynccontextmanager
+async def _app_lifespan(_: FastAPI):
+    """Reconcile durable Twin audit indexes before serving executive reads."""
+    try:
+        result = reconcile_message_routing_audit()
+        if result["created"]:
+            logger.info(
+                "Reconciled %s legacy Digital Twin routing audit event(s)",
+                result["created"],
+            )
+    except Exception:
+        # Audit reconciliation must fail closed in the UI contract without
+        # preventing the rest of the governed application from starting.
+        logger.exception("Digital Twin routing audit reconciliation failed")
+    yield
+
+
 app = FastAPI(
     title="StrategyOS MVP API",
     version="0.1.0",
@@ -235,6 +255,7 @@ app = FastAPI(
     docs_url=None if CONFIG.login_required else "/docs",
     redoc_url=None if CONFIG.login_required else "/redoc",
     openapi_url=None if CONFIG.login_required else "/openapi.json",
+    lifespan=_app_lifespan,
 )
 
 
@@ -4953,10 +4974,15 @@ def _agents_surface_payload(
     inboxes = repositories.inboxes.list()
     all_investigations = repositories.investigations.list()
     cycle_history = repositories.cycle_history.list(limit=50)
-    collaboration_events = repositories.governance.list_routing_events(limit=20)
+    routing_events = repositories.governance.list_routing_events(limit=100)
     twins: list[dict[str, Any]] = []
     pending_request_total = 0
+    fulfilled_request_total = 0
+    exception_request_total = 0
+    acknowledged_request_total = 0
     attention_total = 0
+    request_status_by_id: dict[str, str] = {}
+    terminal_request_statuses = {"fulfilled", "failed", "expired", "cancelled"}
 
     for twin_role in configured_roles:
         persona = TWIN_CATALOG[twin_role]
@@ -4967,11 +4993,22 @@ def _agents_surface_payload(
             if str(item.get("status") or "open").lower()
             not in {"completed", "resolved", "closed", "no_action"}
         ]
-        requests = repositories.requests.list(twin_role, limit=50)
+        requests = repositories.requests.list(twin_role)
+        for request_record in requests:
+            request_id = str(request_record.get("request_message_id") or "")
+            request_status = str(request_record.get("status") or "pending").lower()
+            if request_id:
+                request_status_by_id[request_id] = request_status
+            if request_status == "fulfilled":
+                fulfilled_request_total += 1
+            elif request_status in {"failed", "expired", "cancelled"}:
+                exception_request_total += 1
+            elif request_status == "acknowledged":
+                acknowledged_request_total += 1
         pending_requests = [
             item for item in requests
             if str(item.get("status") or "pending").lower()
-            not in {"fulfilled", "failed", "expired", "cancelled"}
+            not in terminal_request_statuses
         ]
         pending_request_total += len(pending_requests)
         needs_attention = any(
@@ -5029,16 +5066,65 @@ def _agents_surface_payload(
             }
         )
 
-    recent_events = [
-        {
-            "timestamp": item.get("timestamp"),
-            "source_role": item.get("source_role"),
-            "target_role": item.get("target_role"),
-            "event_type": item.get("event_type") or "handoff",
-            "subject": item.get("title") or item.get("reason") or "Governed handoff",
-        }
-        for item in collaboration_events
-    ]
+    configured_role_set = set(configured_roles)
+    collaboration_events = [
+        item
+        for item in routing_events
+        if str(item.get("source_role") or "") in configured_role_set
+        and str(item.get("target_role") or "") in configured_role_set
+        and (
+            str(item.get("event_category") or "") == "inter_twin_message"
+            or str(item.get("event_type") or "") in {"message_dispatched", "handoff"}
+        )
+    ][:20]
+    recent_events = []
+    for item in collaboration_events:
+        item_id = str(item.get("item_id") or "")
+        lifecycle_id = str(item.get("request_message_id") or item_id)
+        request_status = request_status_by_id.get(lifecycle_id)
+        if request_status == "fulfilled":
+            lifecycle_status = "resolved"
+        elif request_status in {"failed", "expired", "cancelled"}:
+            lifecycle_status = "exception"
+        elif request_status == "acknowledged":
+            lifecycle_status = "acknowledged"
+        elif request_status:
+            lifecycle_status = "awaiting_response"
+        else:
+            lifecycle_status = "recorded"
+        recent_events.append(
+            {
+                "event_id": item.get("event_id"),
+                "timestamp": item.get("timestamp"),
+                "source_role": item.get("source_role"),
+                "target_role": item.get("target_role"),
+                "event_type": item.get("event_type") or "handoff",
+                "message_type": item.get("message_type"),
+                "subject": item.get("title") or item.get("reason") or "Governed handoff",
+                "status": lifecycle_status,
+                "audit_source": item.get("audit_source") or "governance_log",
+            }
+        )
+    completed_cycle_count = sum(
+        1 for item in cycle_history if str(item.get("status") or "").lower() == "completed"
+    )
+    failed_cycle_count = sum(
+        1 for item in cycle_history if str(item.get("status") or "").lower() == "failed"
+    )
+    handoff_word = "handoff" if pending_request_total == 1 else "handoffs"
+    if attention_total:
+        collaboration_summary = (
+            f"{pending_request_total} open {handoff_word}; "
+            f"{attention_total} require executive review."
+        )
+    elif pending_request_total:
+        collaboration_summary = (
+            f"{pending_request_total} {handoff_word} "
+            f"{'is' if pending_request_total == 1 else 'are'} awaiting a Twin response. "
+            "None is flagged for executive attention."
+        )
+    else:
+        collaboration_summary = "No handoff is waiting for a Twin response or executive action."
     payload = {
         "contract_version": "digital_twin_network.v1",
         "status": "ok" if CONFIG.twins_enabled else "disabled",
@@ -5053,7 +5139,16 @@ def _agents_surface_payload(
         "digital_twins": twins,
         "collaboration": {
             "mode": "typed_inter_twin_protocol",
+            "summary": collaboration_summary,
+            "open_handoff_count": pending_request_total,
             "pending_request_count": pending_request_total,
+            "acknowledged_handoff_count": acknowledged_request_total,
+            "resolved_handoff_count": fulfilled_request_total,
+            "exception_handoff_count": exception_request_total,
+            "executive_attention_count": attention_total,
+            # Kept as diagnostic compatibility data. The CEO UI deliberately
+            # does not display it as a second workload because each inbox
+            # envelope is the delivery representation of a handoff request.
             "inbox_count": sum(len(items or []) for items in (inboxes or {}).values()),
             "recent_events": recent_events,
         },
@@ -5061,6 +5156,8 @@ def _agents_surface_payload(
             "enabled": bool(CONFIG.twins_enabled),
             "mutations_enabled": bool(CONFIG.twins_mutations_enabled),
             "cycle_count": len(cycle_history),
+            "completed_cycle_count": completed_cycle_count,
+            "failed_cycle_count": failed_cycle_count,
             "source": "persistent_twin_repositories",
         },
         "authenticated": bool(principal.get("authenticated")),

@@ -156,7 +156,20 @@ def send_message(
     envelope.setdefault("body", msg.body)
     envelope.setdefault("created_at", msg.created_at)
     envelope["status"] = envelope.get("status") or "delivered"
-    repo_set.inboxes.append(msg.recipient_role, envelope)
+    existing = next(
+        (
+            item
+            for item in repo_set.inboxes.load(msg.recipient_role)
+            if str(item.get("message_id") or "") == msg.message_id
+        ),
+        None,
+    )
+    if existing is None:
+        repo_set.inboxes.append(msg.recipient_role, envelope)
+    else:
+        repo_set.inboxes.update(msg.recipient_role, msg.message_id, envelope)
+
+    _ensure_message_routing_audit(repo_set, envelope, audit_source="message_dispatch")
 
     logger.info(
         "TWIN MESSAGE [%s] %s → %s | %s | %s",
@@ -172,6 +185,74 @@ def send_message(
         f"[{msg.message_type}] {msg.subject}"
     )
     return envelope
+
+
+def _ensure_message_routing_audit(
+    repositories: TwinRepositories,
+    message: dict[str, Any],
+    *,
+    audit_source: str,
+) -> bool:
+    """Write the durable governance event paired with an inbox message."""
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    message_id = str(message.get("message_id") or "").strip()
+    source_role = str(message.get("sender_role") or "").strip()
+    target_role = str(message.get("recipient_role") or "").strip()
+    if not message_id or not source_role or not target_role:
+        return False
+    _, created = repositories.governance.ensure_routing_event(
+        {
+            "event_id": f"route-{uuid4().hex[:12]}",
+            "event_type": "message_dispatched",
+            "event_category": "inter_twin_message",
+            "source_role": source_role,
+            "target_role": target_role,
+            "item_id": message_id,
+            "request_message_id": str(
+                message.get("request_message_id")
+                or message.get("parent_message_id")
+                or message_id
+            ),
+            "title": str(message.get("subject") or "Governed handoff"),
+            "reason": f"{str(message.get('message_type') or 'message').replace('_', ' ')} delivered to governed inbox",
+            "message_type": str(message.get("message_type") or "notification"),
+            "priority": str(message.get("priority") or "normal"),
+            "delivery_status": str(message.get("status") or "pending"),
+            "actor_role": source_role,
+            "actor_subject": f"digital-twin:{source_role}",
+            "audit_source": audit_source,
+            "idempotency_key": f"message-dispatch:{message_id}",
+            "timestamp": str(message.get("created_at") or datetime.now(timezone.utc).isoformat()),
+        }
+    )
+    return created
+
+
+def reconcile_message_routing_audit(
+    *, repositories: TwinRepositories | None = None
+) -> dict[str, int]:
+    """Backfill dispatch audit events from durable legacy inbox envelopes.
+
+    Older releases persisted the recipient inbox but omitted the corresponding
+    governance event.  Inbox envelopes already contain the immutable message
+    identity, sender, recipient and creation time, so reconciliation restores
+    the missing audit index without inventing a business outcome.
+    """
+    repo_set = repositories or build_app_repositories()
+    scanned = 0
+    created = 0
+    for messages in (repo_set.inboxes.list() or {}).values():
+        for message in messages or []:
+            scanned += 1
+            if _ensure_message_routing_audit(
+                repo_set,
+                message,
+                audit_source="inbox_reconciliation",
+            ):
+                created += 1
+    return {"scanned": scanned, "created": created}
 
 
 # ---------------------------------------------------------------------------
