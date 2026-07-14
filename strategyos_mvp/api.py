@@ -10652,8 +10652,8 @@ def _assistant_response_payload(
 
 def _public_safe_llm_status() -> dict[str, Any]:
     status_payload = dict(llm_qa.chat_status(CONFIG) or {})
-    status_payload["enabled"] = False
-    status_payload["reason"] = "Public-safe surface disables llm, graph, and vector grounding."
+    status_payload["public_safe"] = True
+    status_payload["evidence_scope"] = "public_executive_packet_only"
     return status_payload
 
 
@@ -11996,12 +11996,54 @@ async def _assistant_chat_response(
         return payload
 
     if public_safe and context.get("public_context_packet") is not None:
-        if mode == "llm":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=llm_status["reason"],
-            )
-        public_safe_result = _public_safe_unmatched_result(question, None if mode == "deterministic" else llm_status.get("reason"))
+        if mode != "deterministic" and llm_status.get("enabled"):
+            try:
+                public_llm_result = await _llm_answer_question_async(
+                    question,
+                    bundle=context["bundle"],
+                    findings=context["findings"],
+                    summary=context["summary"],
+                    config=CONFIG,
+                    public_context_packet=context["public_context_packet"],
+                    persona=persona,
+                )
+            except RuntimeError:
+                # The CEO sees a useful board-packet fallback, never provider
+                # transport details. The shared UI keeps its retry/cache path.
+                public_llm_result = None
+            if public_llm_result is not None:
+                model_result = {
+                    **public_llm_result,
+                    "assistant_mode": "llm",
+                    "answered_by": "llm",
+                    "_orchestrator_force_answer": True,
+                }
+                orchestrated = orchestrator.process(
+                    question,
+                    persona=persona,
+                    llm_result=model_result,
+                    driver_context=request.driver_context,
+                )
+                payload = _assistant_response_payload(
+                    response_mode="llm",
+                    question=question,
+                    context=context,
+                    requested_mode=mode,
+                    persona=persona,
+                    orchestrated=orchestrated,
+                    base_result=model_result,
+                    llm_status=public_llm_result.get("llm_status") or llm_status,
+                    assistant_context=assistant_context,
+                )
+                payload["mode"] = "llm"
+                payload["llm_fallback_attempted"] = True
+                payload["public_packet_only"] = True
+                return payload
+
+        public_safe_result = _public_safe_unmatched_result(
+            question,
+            None if mode == "deterministic" else llm_status.get("reason"),
+        )
         orchestrated = orchestrator.process(
             question,
             persona=persona,
@@ -12024,7 +12066,7 @@ async def _assistant_chat_response(
             llm_status=llm_status,
             assistant_context=assistant_context,
         )
-        payload["llm_fallback_attempted"] = False
+        payload["llm_fallback_attempted"] = mode != "deterministic" and bool(llm_status.get("enabled"))
         return payload
 
     if context["bundle"] is None:

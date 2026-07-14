@@ -1108,7 +1108,7 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         _restore_env(original)
 
 
-def test_assistant_chat_public_auto_unmatched_does_not_call_llm_when_enabled(monkeypatch):
+def test_assistant_chat_public_auto_unmatched_uses_reviewed_llm_with_public_packet(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
@@ -1117,7 +1117,15 @@ def test_assistant_chat_public_auto_unmatched_does_not_call_llm_when_enabled(mon
 
         def fake_answer(*_args, **_kwargs):
             called["llm"] += 1
-            raise AssertionError("public-safe route must not call llm_qa.answer_question")
+            assert _kwargs.get("public_context_packet", {}).get("public_safe") is True
+            return {
+                "matched": True,
+                "answer": "The latest public packet does not contain a complete weekly series; the nearest current CEO indicators are available for review.",
+                "basis": "Public executive packet only.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            }
 
         monkeypatch.setattr(api_module.llm_qa, "answer_question", fake_answer)
         monkeypatch.setattr(api_module.llm_qa, "answer_general_question", fake_answer)
@@ -1129,13 +1137,17 @@ def test_assistant_chat_public_auto_unmatched_does_not_call_llm_when_enabled(mon
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["mode"] == "deterministic"
+        assert payload["mode"] == "llm"
         assert payload["requested_mode"] == "auto"
         assert payload["run_mode"] == "public-safe"
-        assert payload["llm_fallback_attempted"] is False
-        assert payload["answered_by"] in {"packet", "scenario"}
-        assert payload["llm_status"]["enabled"] is False
-        assert called["llm"] == 0
+        assert payload["llm_fallback_attempted"] is True
+        assert payload["answered_by"] == "llm"
+        assert payload["answer_origin"] == "llm"
+        assert payload["calculation_status"] == "not_calculated"
+        assert payload["review_status"] == "required"
+        assert payload["human_review_required"] is True
+        assert payload["public_packet_only"] is True
+        assert called["llm"] == 1
     finally:
         _restore_env(original)
 
@@ -1166,7 +1178,7 @@ def test_assistant_chat_public_ceo_margin_pressure_prompt_returns_packet_answer(
         _restore_env(original)
 
 
-def test_assistant_chat_public_llm_mode_returns_403_and_never_calls_llm_when_enabled(monkeypatch):
+def test_assistant_chat_public_llm_mode_uses_public_packet_and_requires_review(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
@@ -1174,7 +1186,14 @@ def test_assistant_chat_public_llm_mode_returns_403_and_never_calls_llm_when_ena
         monkeypatch.setattr(
             api_module.llm_qa,
             "answer_question",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("public-safe route must not call llm_qa.answer_question")),
+            lambda *_args, **_kwargs: {
+                "matched": True,
+                "answer": "The board packet is awaiting reviewer decision; the finance evidence is ready.",
+                "basis": "Public executive packet only.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            },
         )
         monkeypatch.setattr(
             api_module.llm_qa,
@@ -1187,17 +1206,33 @@ def test_assistant_chat_public_llm_mode_returns_403_and_never_calls_llm_when_ena
             json={"question": "summarize the board packet in plain English", "persona": "ceo", "mode": "llm"},
         )
 
-        assert response.status_code == 403
-        assert "Public-safe surface disables llm, graph, and vector grounding." in response.json()["detail"]
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "llm"
+        assert payload["public_packet_only"] is True
+        assert payload["answer_origin"] == "llm"
+        assert payload["review_status"] == "required"
     finally:
         _restore_env(original)
 
 
-def test_answered_by_never_claims_graph_vector_or_llm_on_public_safe_surface(monkeypatch):
+def test_public_safe_llm_never_claims_graph_or_vector_and_is_review_labeled(monkeypatch):
     original, client = _client_with_public_ceo_surface(llm_enabled=True)
     try:
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
         monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: {
+                "matched": True,
+                "answer": "The public packet does not expose a case with that identifier.",
+                "basis": "Public executive packet only.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            },
+        )
 
         response = client.post(
             "/assistant/chat",
@@ -1206,7 +1241,10 @@ def test_answered_by_never_claims_graph_vector_or_llm_on_public_safe_surface(mon
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["answered_by"] not in {"graph", "vector", "llm"}
+        assert payload["answered_by"] == "llm"
+        assert payload["answered_by"] not in {"graph", "vector"}
+        assert payload["public_packet_only"] is True
+        assert payload["human_review_required"] is True
     finally:
         _restore_env(original)
 
@@ -2418,7 +2456,19 @@ def test_public_manual_out_of_domain_prompt_is_answered_not_replaced_with_packet
         monkeypatch.setattr(
             api_module.llm_qa,
             "answer_general_question",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("public-safe out-of-domain prompt must not call LLM")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("public-safe questions use the public-packet LLM adapter")),
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: {
+                "matched": True,
+                "answer": "Paris is the capital of France. This is a general-knowledge answer.",
+                "basis": "Model-provided general knowledge; no board-packet calculation.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            },
         )
 
         response = client.post(
@@ -2439,7 +2489,9 @@ def test_public_manual_out_of_domain_prompt_is_answered_not_replaced_with_packet
         assert "general-knowledge answer" in answer
         assert "revenue remains ahead while the board still needs a clean margin story" not in answer
         assert payload["run_mode"] == "public-safe"
-        assert payload["llm_fallback_attempted"] is False
+        assert payload["llm_fallback_attempted"] is True
+        assert payload["answered_by"] == "llm"
+        assert payload["review_status"] == "required"
     finally:
         _restore_env(original)
 
