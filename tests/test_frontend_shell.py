@@ -1372,6 +1372,10 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "kpi_key:" in js
     assert "How this figure is calculated" in js
     assert "data-kpi-question" in js
+    assert 'decision: "For " + label + ", what requires my decision or attention now?"' in js
+    assert "kpi_question_intent: questionType" in js
+    assert "function assistantAnswerCacheKey(question, assistantContext)" in js
+    assert 'String(firstDefined(context.kpi_question_intent, "free_text"))' in js
     assert "kpiCompositionMarkup(key, brief, drivers)" in js
     assert "Share of the current reported figure" in js
     assert 'class="kpi-composition__bar"' in js

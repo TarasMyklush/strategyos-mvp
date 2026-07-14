@@ -118,7 +118,7 @@ def test_qa_requires_auth(monkeypatch):
         _restore_env(original)
 
 
-def test_ceo_kpi_answer_carries_governed_business_drivers_and_sources(monkeypatch):
+def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatch):
     monkeypatch.setattr(
         api_module,
         "build_executive_presentation",
@@ -151,21 +151,54 @@ def test_ceo_kpi_answer_carries_governed_business_drivers_and_sources(monkeypatc
         },
     )
 
-    result = api_module._ceo_kpi_inline_result(
+    decision = api_module._ceo_kpi_inline_result(
         {"summary": {}},
         kpi_key="revenue",
         public_safe=False,
-        question="What is driving revenue and how does it compare with plan?",
+        question="What requires my decision or attention for revenue?",
+    )
+    drivers = api_module._ceo_kpi_inline_result(
+        {"summary": {}},
+        kpi_key="revenue",
+        public_safe=False,
+        question="What is driving revenue and where is concentration highest?",
+    )
+    comparison = api_module._ceo_kpi_inline_result(
+        {"summary": {}},
+        kpi_key="revenue",
+        public_safe=False,
+        question="How does revenue compare with the approved plan?",
     )
 
-    assert "Revenue – Catering — SAR 123.0M · 31.9%" in result["answer"]
-    assert "largest reported contributor is Revenue – Catering at 31.9%" in result["answer"]
-    assert "General ledger extract; Chart of accounts" in result["answer"]
-    assert "strongest positive movement is Revenue – Catering (+SAR 20)" in result["answer"]
-    assert "cannot state a variance to plan" in result["answer"]
-    assert "direct comparison is withheld" in result["answer"]
-    assert result["citations"][0]["source_path"] == "02_ERP_Extracts/GL_Extract_H1_2026.csv"
-    assert result["grounding_status"] == "grounded"
+    assert decision["kpi_question_intent"] == "decision"
+    assert "Movement requiring attention: Revenue – Government (-SAR 5)" in decision["answer"]
+    assert "immediate governance gap" in decision["answer"]
+    assert "Current composition" not in decision["answer"]
+
+    assert drivers["kpi_question_intent"] == "drivers"
+    assert "Revenue – Catering — SAR 123.0M · 31.9%" in drivers["answer"]
+    assert "largest reported contributor is Revenue – Catering at 31.9%" in drivers["answer"]
+    assert "Positive movement: Revenue – Catering (+SAR 20)" in drivers["answer"]
+    assert "No like-for-like plan variance" not in drivers["answer"]
+
+    assert comparison["kpi_question_intent"] == "comparison"
+    assert "No like-for-like plan variance is stated" in comparison["answer"]
+    assert "No period-aligned revenue plan series is connected" in comparison["answer"]
+    assert "H1 budget aligned to this reporting scope" in comparison["answer"]
+    assert "Current composition" not in comparison["answer"]
+
+    assert len({decision["answer"], drivers["answer"], comparison["answer"]}) == 3
+    assert drivers["citations"][0]["source_path"] == "02_ERP_Extracts/GL_Extract_H1_2026.csv"
+    assert all(result["grounding_status"] == "grounded" for result in (decision, drivers, comparison))
+
+
+def test_ceo_kpi_intent_contract_handles_free_text_and_declared_ui_intent():
+    assert api_module._ceo_kpi_question_intent("What needs my attention?") == "decision"
+    assert api_module._ceo_kpi_question_intent("Where does this result come from?") == "drivers"
+    assert api_module._ceo_kpi_question_intent("What is the variance to budget?") == "comparison"
+    assert api_module._ceo_kpi_question_intent("Explain this figure", "drivers") == "drivers"
+    # Explicit wording wins over inconsistent client metadata.
+    assert api_module._ceo_kpi_question_intent("How does this compare to plan?", "decision") == "comparison"
 
 
 def test_free_text_ceo_kpi_routing_covers_rendered_finance_cards():

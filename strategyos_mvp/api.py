@@ -11159,12 +11159,32 @@ def _format_ceo_currency_delta(value: Any) -> str:
     return f"{sign}SAR {display}"
 
 
+def _ceo_kpi_question_intent(question: str, requested_intent: str | None = None) -> str:
+    """Classify the executive purpose of a KPI question.
+
+    The browser may declare the intent of a governed action, but free-text
+    questions must work through the same contract.  Question wording wins when
+    it is explicit; the declared intent is only used for short/ambiguous UI
+    prompts.  This changes answer shape, never the server-resolved KPI facts.
+    """
+    norm = " ".join(str(question or "").casefold().split())
+    if re.search(r"\b(plan|budget|comparator|comparison|compare|variance|versus|vs\.?|target|baseline)\b", norm):
+        return "comparison"
+    if re.search(r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|movement|moved|make up|come from|comes from)\b", norm):
+        return "drivers"
+    if re.search(r"\b(attention|action|decision|decide|approve|approval|intervene|escalat|need from me|should i|next step)\b", norm):
+        return "decision"
+    declared = str(requested_intent or "").strip().lower()
+    return declared if declared in {"decision", "drivers", "comparison", "overview"} else "overview"
+
+
 def _ceo_kpi_inline_result(
     context: Mapping[str, Any],
     *,
     kpi_key: str,
     public_safe: bool,
     question: str = "",
+    question_intent: str | None = None,
 ) -> dict[str, Any]:
     """Answer a CEO KPI conversation from server-resolved truth only.
 
@@ -11205,87 +11225,108 @@ def _ceo_kpi_inline_result(
     strategic_reference = brief.get("strategic_reference") if isinstance(brief.get("strategic_reference"), Mapping) else None
     calculation = brief.get("calculation") if isinstance(brief.get("calculation"), Mapping) else {}
     audit = brief.get("audit") if isinstance(brief.get("audit"), Mapping) else {}
+    comparison = brief.get("comparison") if isinstance(brief.get("comparison"), Mapping) else {}
     drivers = [item for item in list(brief.get("drivers") or []) if isinstance(item, Mapping)]
     movers = card.get("movers") if isinstance(card.get("movers"), Mapping) else {}
     lifting = [item for item in list(movers.get("lifting") or []) if isinstance(item, Mapping)]
     dragging = [item for item in list(movers.get("dragging") or []) if isinstance(item, Mapping)]
     trend = card.get("trend") if isinstance(card.get("trend"), Mapping) else {}
     has_plan_series = bool(trend.get("has_plan_series"))
-    question_words = " ".join(str(question or "").casefold().split())
+    resolved_intent = _ceo_kpi_question_intent(question, question_intent)
+    metric = str(card.get("metric") or "available")
+
+    def _composition_sentence() -> str:
+        if not drivers:
+            return "No component-level breakdown is available for this figure."
+        parts: list[str] = []
+        ranked: list[tuple[float, str]] = []
+        for item in drivers[:8]:
+            driver_label = str(item.get("label") or "Component")
+            driver_value = str(item.get("value") or "").strip()
+            share_text = ""
+            try:
+                raw_share = item.get("share_pct")
+                if raw_share not in (None, ""):
+                    share = float(raw_share)
+                    share_text = f"{share:.1f}%"
+                    if share > 0:
+                        ranked.append((share, driver_label))
+            except (TypeError, ValueError):
+                pass
+            display = " · ".join(part for part in (driver_value, share_text) if part)
+            parts.append(f"{driver_label} — {display}" if display else driver_label)
+        sentence = "Current composition: " + "; ".join(parts) + "."
+        if ranked:
+            largest_share, largest_label = max(ranked)
+            sentence += f" The largest reported contributor is {largest_label} at {largest_share:.1f}%."
+        return sentence
+
+    def _movement_sentence(*, decision_only: bool = False) -> str:
+        if not (lifting or dragging):
+            return "No category-level movement requiring interpretation is recorded for the available periods."
+        parts: list[str] = []
+        if dragging:
+            prefix = "Movement requiring attention" if decision_only else "Negative movement"
+            parts.append(
+                prefix + ": " + "; ".join(
+                    f"{str(item.get('name') or 'identified group')} ({_format_ceo_currency_delta(item.get('delta'))})"
+                    for item in dragging[:2]
+                )
+            )
+        if lifting and not decision_only:
+            parts.append(
+                "Positive movement: " + "; ".join(
+                    f"{str(item.get('name') or 'identified group')} ({_format_ceo_currency_delta(item.get('delta'))})"
+                    for item in lifting[:2]
+                )
+            )
+        return ". ".join(parts) + "."
+
     if availability == "unavailable":
         answer = (
             f"{label} is not available for the current reporting period because the required finance information is incomplete. "
             "No value has been estimated."
         )
+        if missing:
+            answer += f" Needed to answer this {resolved_intent} question: {'; '.join(missing)}."
         grounding = "needs_evidence"
     else:
-        answer = (
-            f"{label} is {card.get('metric') or 'available'} for the selected period. "
-            f"{brief.get('readout') or card.get('detail') or ''} "
-        )
-        if drivers:
-            driver_parts: list[str] = []
-            ranked_drivers: list[tuple[float, str]] = []
-            for item in drivers[:8]:
-                driver_label = str(item.get("label") or "Component")
-                driver_value = str(item.get("value") or "").strip()
-                raw_share = item.get("share_pct")
-                share_text = ""
-                try:
-                    if raw_share not in (None, ""):
-                        share_number = float(raw_share)
-                        share_text = f"{share_number:.1f}%"
-                        if share_number > 0:
-                            ranked_drivers.append((share_number, driver_label))
-                except (TypeError, ValueError):
-                    pass
-                display = " · ".join(part for part in (driver_value, share_text) if part)
-                driver_parts.append(f"{driver_label} — {display}" if display else driver_label)
-            answer += "The current composition is: " + "; ".join(driver_parts) + ". "
-            if ranked_drivers:
-                ranked_drivers.sort(reverse=True)
-                largest_share, largest_label = ranked_drivers[0]
-                answer += f"The largest reported contributor is {largest_label} at {largest_share:.1f}%. "
-        if kpi_key == "revenue" and (lifting or dragging):
-            movement_parts: list[str] = []
-            if lifting:
-                movement_parts.append(
-                    "the strongest positive movement is "
-                    + "; ".join(
-                        f"{str(item.get('name') or 'an identified revenue group')} ({_format_ceo_currency_delta(item.get('delta'))})"
-                        for item in lifting[:2]
-                    )
-                )
+        if resolved_intent == "decision":
+            decision_context = str(brief.get("decision_context") or "").strip()
+            answer = (decision_context or f"{label} is {metric} for the selected period.") + " "
             if dragging:
-                movement_parts.append(
-                    "the movement requiring attention is "
-                    + "; ".join(
-                        f"{str(item.get('name') or 'an identified revenue group')} ({_format_ceo_currency_delta(item.get('delta'))})"
-                        for item in dragging[:2]
-                    )
+                answer += _movement_sentence(decision_only=True) + " "
+            if missing:
+                answer += f"The immediate governance gap is {'; '.join(missing)}. Supply or approve that comparator before treating the figure as a plan variance."
+            elif not dragging:
+                answer += "No KPI-specific exception requiring executive intervention is recorded in the current governed data."
+        elif resolved_intent == "drivers":
+            answer = f"{label} is {metric}. {brief.get('readout') or card.get('detail') or ''} "
+            answer += _composition_sentence() + " "
+            answer += _movement_sentence()
+        elif resolved_intent == "comparison":
+            answer = f"The current {label.lower()} actual is {metric}. "
+            if comparison.get("available") is True:
+                answer += f"{comparison.get('value') or 'A like-for-like approved comparator is available'}. {comparison.get('note') or ''}"
+            else:
+                answer += f"No like-for-like plan variance is stated. {comparison.get('note') or ''} "
+                if kpi_key == "revenue" and not has_plan_series:
+                    answer += "No period-aligned revenue plan series is connected. "
+                if missing:
+                    answer += f"Needed for a valid comparison: {'; '.join(missing)}."
+            if strategic_reference:
+                answer += (
+                    f" The {str(strategic_reference.get('label') or 'approved strategic reference').lower()} is "
+                    f"{strategic_reference.get('value') or 'available'}, but {strategic_reference.get('note') or 'it is reference-only.'}"
                 )
-            answer += "Across the governed revenue periods, " + "; ".join(movement_parts) + ". "
-        if kpi_key == "revenue" and any(token in question_words for token in ("plan", "compare", "variance", "versus", "vs")) and not has_plan_series:
-            answer += "A period-aligned revenue plan series has not been supplied, so I cannot state a variance to plan. "
-        formula = str(calculation.get("formula") or card.get("formula") or "").strip()
-        if formula:
-            answer += f"Calculation: {formula} "
-        if strategic_reference:
-            answer += (
-                f"The {str(strategic_reference.get('label') or 'approved strategic reference').lower()} is "
-                f"{strategic_reference.get('value') or 'available'}. {strategic_reference.get('note') or ''} "
-            )
-        if missing:
-            answer += f"A direct comparison is withheld because {' and '.join(missing)} is still needed."
-            # The current actual and the disclosed comparison gap are both
-            # governed facts. A missing comparator must not downgrade the
-            # truthfulness of the available KPI itself.
-            grounding = "grounded"
         else:
-            grounding = "grounded"
-        source_titles = [str(item) for item in list(audit.get("source_titles") or []) if str(item)]
-        if source_titles:
-            answer += " Business sources: " + "; ".join(source_titles[:6]) + "."
+            answer = (
+                f"{label} is {metric}. {brief.get('readout') or card.get('detail') or ''} "
+                f"{brief.get('decision_context') or ''}"
+            )
+        # The current actual and any disclosed evidence gap are governed facts.
+        # Missing comparison inputs do not downgrade the available actual.
+        grounding = "grounded"
         card_grounding = card.get("grounding") if isinstance(card.get("grounding"), Mapping) else {}
         if str(card_grounding.get("status") or "").lower() in {"needs_evidence", "not_grounded", "partial"}:
             grounding = "needs_evidence"
@@ -11310,6 +11351,7 @@ def _ceo_kpi_inline_result(
         "answered_by": "governed_kpi",
         "grounding_status": grounding,
         "missing_inputs": missing,
+        "kpi_question_intent": resolved_intent,
         "kpi": dict(card),
         "_orchestrator_force_answer": True,
     }
@@ -11561,6 +11603,7 @@ async def _assistant_chat_response(
             kpi_key=contextual_kpi_key,
             public_safe=public_safe,
             question=question,
+            question_intent=str(assistant_context.get("kpi_question_intent") or "") or None,
         )
         orchestrated = get_orchestrator().process(
             question,

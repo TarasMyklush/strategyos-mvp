@@ -1994,9 +1994,13 @@
     return result;
   }
 
-  function assistantAnswerCacheKey(question) {
+  function assistantAnswerCacheKey(question, assistantContext) {
+    var context = assistantContext && typeof assistantContext === "object" ? assistantContext : {};
     return [
       String(state.activePersona || "ceo"),
+      String(firstDefined(context.entrypoint, "drawer_input")),
+      String(firstDefined(context.kpi_key, context.driver_key, "none")),
+      String(firstDefined(context.kpi_question_intent, "free_text")),
       String(question || "").trim().toLowerCase().replace(/\s+/g, " ")
     ].join("::");
   }
@@ -2011,11 +2015,11 @@
     }
   }
 
-  function rememberAssistantAnswer(question, result) {
+  function rememberAssistantAnswer(question, result, assistantContext) {
     if (!result || !result.ok || !String(result.answer || "").trim()) return;
     try {
       var cache = loadAssistantAnswerCache();
-      cache[assistantAnswerCacheKey(question)] = {
+      cache[assistantAnswerCacheKey(question, assistantContext)] = {
         answer: result.answer,
         metadata: result.metadata || "",
         responsePayload: result.responsePayload || null,
@@ -2029,8 +2033,8 @@
     } catch (_error) {}
   }
 
-  function cachedAssistantFallback(question, failure) {
-    var cached = loadAssistantAnswerCache()[assistantAnswerCacheKey(question)];
+  function cachedAssistantFallback(question, failure, assistantContext) {
+    var cached = loadAssistantAnswerCache()[assistantAnswerCacheKey(question, assistantContext)];
     if (!cached || !String(cached.answer || "").trim()) return failure;
     var savedAt = new Date(cached.savedAt || "");
     var displayTime = Number.isNaN(savedAt.getTime())
@@ -2220,7 +2224,7 @@
           requestId: requestId,
           endpoint: endpoint
         };
-        rememberAssistantAnswer(cleanMessage, successfulResult);
+        rememberAssistantAnswer(cleanMessage, successfulResult, entrypointCtx);
         return successfulResult;
       }
       return cachedAssistantFallback(cleanMessage, makeAssistantFailureResult(cleanMessage, {
@@ -2230,7 +2234,7 @@
         errorType: "invalid_payload",
         details: "Response was reachable but did not return status=ok.",
         responseBody: payload
-      }));
+      }), entrypointCtx);
     } catch (error) {
       return cachedAssistantFallback(cleanMessage, makeAssistantFailureResult(cleanMessage, {
         endpoint: firstDefined(error && error.endpoint, "/assistant/chat"),
@@ -2238,7 +2242,7 @@
         requestId: firstDefined(error && error.requestId, ""),
         errorType: firstDefined(error && error.errorType, "network_error"),
         details: error && error.message ? error.message : String(error || "unknown network error")
-      }));
+      }), entrypointCtx);
     }
   }
 
@@ -3843,7 +3847,7 @@
       button.addEventListener("click", function () {
         var questionType = button.getAttribute("data-kpi-question");
         var prompts = {
-          decision: firstDefined(brief.decision_question, "What needs executive attention for " + label + "?"),
+          decision: "For " + label + ", what requires my decision or attention now?",
           drivers: "What is driving the current " + label + " result, and where is concentration highest?",
           comparison: "Explain how " + label + " relates to the approved plan, and why any direct comparison is currently withheld."
         };
@@ -3852,6 +3856,7 @@
           source: "executive_surface",
           kpi_key: key,
           kpi_label: label,
+          kpi_question_intent: questionType,
           kpi_availability: availability,
           active_view: "home"
         });
