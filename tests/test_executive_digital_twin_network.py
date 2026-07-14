@@ -108,10 +108,13 @@ def test_executive_ui_distinguishes_twins_from_automations_and_status_ring():
     assert "Digital twins &amp; AI assistants" in html
     assert "Your AI leadership team" in js
     assert "System workflows — not digital twins" in js
-    assert "Inbox delivery is part of that handoff, not a second workload" in js
-    assert "awaiting response" in js
+    assert "This view highlights work in progress" in js
+    assert "in progress" in js
     assert "need your attention" in js
-    assert "quarantined because no configured Twin owner existed" in js
+    assert "legacy request" not in js
+    assert "quarantined" not in js
+    assert "system-owner remediation" not in js
+    assert "Governed runtime active" not in js
     assert "queued messages" not in js
     assert "No inter-twin handoff has been recorded yet" not in js
     assert "agents.digital_twins" in js

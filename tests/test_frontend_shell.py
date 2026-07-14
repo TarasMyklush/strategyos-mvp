@@ -4253,6 +4253,11 @@ const harness = factory();
 const payload = {{
   mode: 'llm',
   assistant_mode: 'llm',
+  answered_by: 'llm',
+  answer_origin: 'llm',
+  calculation_status: 'not_calculated',
+  review_status: 'required',
+  human_review_required: true,
   run_id: 'latest-public',
   answer: JSON.stringify({{
     matched: true,
@@ -4287,6 +4292,9 @@ console.log(JSON.stringify({{
     assert '"matched"' not in result["answerText"]
     assert "Evidence basis: outer wrapper" in result["answerMeta"]
     assert "Evidence: 1 source checked" in result["answerMeta"]
+    assert "LLM provided" in result["answerMeta"]
+    assert "Not calculated" in result["answerMeta"]
+    assert "Review required" in result["answerMeta"]
 
 
 def test_qa_answer_text_extracts_answer_from_truncated_jsonish_payload_behaviorally():

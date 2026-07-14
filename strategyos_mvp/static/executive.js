@@ -1721,6 +1721,15 @@
     var riskLevel = cleanMetaText(firstDefined(risk.level, ""));
     var groundingStatus = String(firstDefined(payload.grounding_status, "")).trim().toLowerCase();
     var scenarioType = cleanMetaText(firstDefined(payload.scenario_type, ""));
+    var modelProvided = String(firstDefined(payload.answer_origin, "")).toLowerCase() === "llm"
+      || String(firstDefined(payload.answered_by, "")).toLowerCase() === "llm"
+      || String(firstDefined(payload.assistant_mode, "")).toLowerCase() === "llm";
+
+    if (modelProvided) {
+      parts.push("LLM provided");
+      parts.push("Not calculated");
+      parts.push("Review required");
+    }
 
     // Bug 5 fix: derive grounding level from actual evidence when the backend
     // reports "none" but citations exist — these are contradictory signals.
@@ -1734,7 +1743,7 @@
         ? "Needs evidence"
         : executiveEvidenceConfidence(riskLevel, citations.length));
     if (executiveBasis) parts.push("Evidence basis: " + executiveBasis);
-    if (calculations.length) parts.push("Calculation: " + calculations.length + " check" + (calculations.length === 1 ? "" : "s") + " reconciled");
+    if (!modelProvided && calculations.length) parts.push("Calculation: " + calculations.length + " check" + (calculations.length === 1 ? "" : "s") + " reconciled");
     if (citations.length) parts.push("Evidence: " + citations.length + " source" + (citations.length === 1 ? "" : "s") + " checked");
     if (scenarioType && scenarioType !== "deterministic") parts.push("Scenario status: " + humanizeToken(scenarioType).toLowerCase());
     if (confidence) parts.push("Evidence confidence: " + confidence);
@@ -4729,14 +4738,14 @@
       var openHandoffs = Number(firstDefined(collaboration.open_handoff_count, collaboration.pending_request_count, 0)) || 0;
       var resolvedHandoffs = Number(firstDefined(collaboration.resolved_handoff_count, 0)) || 0;
       var attentionHandoffs = Number(firstDefined(collaboration.executive_attention_count, 0)) || 0;
-      var exceptionHandoffs = Number(firstDefined(collaboration.exception_handoff_count, 0)) || 0;
-      var routingGaps = Number(firstDefined(collaboration.routing_gap_count, 0)) || 0;
       var completedCycles = Number(firstDefined(runtime.completed_cycle_count, runtime.cycle_count, 0)) || 0;
-      var collaborationMeaning = firstDefined(collaboration.summary, openHandoffs ? openHandoffs + ' handoffs are awaiting a Twin response.' : 'No handoff is waiting for a Twin response or executive action.');
+      var collaborationMeaning = attentionHandoffs
+        ? attentionHandoffs + ' item' + (attentionHandoffs === 1 ? ' requires' : 's require') + ' your attention.'
+        : (openHandoffs ? openHandoffs + ' item' + (openHandoffs === 1 ? ' is' : 's are') + ' progressing with the leadership team.' : 'Nothing requires your attention.');
       var noEventCopy = openHandoffs
-        ? 'Open handoffs exist, but their governed routing history is not available.'
-        : 'No handoff activity is currently recorded.';
-      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Collaboration</span><span class="ach-hint">Governed Twin-to-Twin handoffs</span></div></div><p class="twin-explainer">Each handoff is one structured request with an owner, evidence references and an escalation path. Inbox delivery is part of that handoff, not a second workload.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>awaiting response</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>resolved</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (routingGaps ? '<p class="twin-collab-alert">' + escapeHtml(String(routingGaps)) + ' legacy request' + (routingGaps === 1 ? ' was' : 's were') + ' quarantined because no configured Twin owner existed. ' + (routingGaps === 1 ? 'It is' : 'They are') + ' excluded from collaboration counts and assigned to system-owner remediation.</p>' : '') + (exceptionHandoffs ? '<p class="twin-collab-alert">' + escapeHtml(String(exceptionHandoffs)) + ' handoff exception' + (exceptionHandoffs === 1 ? '' : 's') + ' remain with their operational owners.</p>' : '') + (events.length ? '<div class="twin-event-heading">Recent governed activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "twin"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "twin"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Governed handoff")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>') + '<p class="twin-runtime-note">' + escapeHtml(runtime.enabled ? 'Governed runtime active' : 'Governed runtime paused') + ' · ' + escapeHtml(String(completedCycles)) + ' completed cycle' + (completedCycles === 1 ? '' : 's') + (Number(firstDefined(runtime.failed_cycle_count, 0)) ? ' · ' + escapeHtml(String(runtime.failed_cycle_count)) + ' failed' : '') + '</p>';
+        ? 'Items are progressing; no decision is requested from you yet.'
+        : 'No recent leadership-team activity needs review.';
+      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Leadership team activity</span><span class="ach-hint">Items moving between your AI leaders</span></div></div><p class="twin-explainer">This view highlights work in progress and shows only the items that need an executive decision.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>') + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
     }
 
     if (automationCard) {

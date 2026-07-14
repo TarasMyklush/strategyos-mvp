@@ -169,6 +169,17 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
         public_safe=False,
         question="How does revenue compare with the approved plan?",
     )
+    numeric_key = api_module._free_text_ceo_kpi_key(
+        "explainwhere 385,1 is coming from",
+        {"summary": {}},
+        public_safe=False,
+    )
+    numeric_answer = api_module._ceo_kpi_inline_result(
+        {"summary": {}},
+        kpi_key=numeric_key or "",
+        public_safe=False,
+        question="explainwhere 385,1 is coming from",
+    )
 
     assert decision["kpi_question_intent"] == "decision"
     assert "Movement requiring attention: Revenue – Government (-SAR 5)" in decision["answer"]
@@ -188,8 +199,86 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
     assert "Current composition" not in comparison["answer"]
 
     assert len({decision["answer"], drivers["answer"], comparison["answer"]}) == 3
+    assert numeric_key == "revenue"
+    assert numeric_answer["answered_by"] == "governed_kpi"
+    assert numeric_answer["kpi_question_intent"] == "drivers"
+    assert "Revenue is SAR 385.1M" in numeric_answer["answer"]
+    assert "Revenue – Catering — SAR 123.0M · 31.9%" in numeric_answer["answer"]
     assert drivers["citations"][0]["source_path"] == "02_ERP_Extracts/GL_Extract_H1_2026.csv"
     assert all(result["grounding_status"] == "grounded" for result in (decision, drivers, comparison))
+
+
+def test_assistant_chat_resolves_locale_formatted_headline_value_before_llm(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {"run_id": "finance-run"},
+                "run_id": "finance-run",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *_args, **_kwargs: _parsed_scenario(matched=False))
+        monkeypatch.setattr(
+            api_module,
+            "build_executive_presentation",
+            lambda _read_model: {
+                "driver_grid": [
+                    {
+                        "key": "revenue",
+                        "label": "Revenue",
+                        "metric": "SAR 385.1M",
+                        "availability": "available",
+                        "grounding": {"status": "grounded"},
+                        "source_files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"],
+                        "movers": {},
+                        "trend": {},
+                        "executive_brief": {
+                            "readout": "Revenue recognised across four revenue groups.",
+                            "drivers": [{"label": "Revenue – Catering", "value": "SAR 123.0M", "share_pct": 31.9}],
+                        },
+                    }
+                ]
+            },
+        )
+
+        async def forbidden_llm(*_args, **_kwargs):
+            raise AssertionError("A displayed KPI value must resolve before LLM fallback")
+
+        monkeypatch.setattr(api_module, "_llm_answer_question_async", forbidden_llm)
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "explainwhere 385,1 is coming from",
+                "persona": "ceo",
+                "mode": "auto",
+                # A previously opened card must not trap a new, explicit KPI
+                # reference inside stale drawer context.
+                "assistant_context": {
+                    "entrypoint": "ceo_kpi_inline",
+                    "kpi_key": "cash_vs_floor",
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_kpi"
+        assert payload["answer_origin"] == "governed"
+        assert payload["human_review_required"] is False
+        assert payload["llm_fallback_attempted"] is False
+        assert "Revenue is SAR 385.1M" in payload["answer"]
+        assert "Revenue – Catering" in payload["answer"]
+        assert "provide more details" not in payload["answer"].lower()
+    finally:
+        _restore_env(original)
 
 
 def test_ceo_kpi_intent_contract_handles_free_text_and_declared_ui_intent():
@@ -792,6 +881,10 @@ def test_authenticated_assistant_general_question_uses_llm(monkeypatch):
         assert payload["answered_by"] == "llm"
         assert payload["llm_general_answer"] is True
         assert "Paris" in payload["answer"]
+        assert payload["answer_origin"] == "llm"
+        assert payload["calculation_status"] == "not_calculated"
+        assert payload["review_status"] == "required"
+        assert payload["human_review_required"] is True
     finally:
         _restore_env(original)
 
@@ -1615,7 +1708,7 @@ def test_assistant_chat_public_finance_terms_do_not_hit_generic_persona_template
             assert response.status_code == 200, question
             payload = response.json()
             assert payload["mode"] == "deterministic", question
-            assert payload["answered_by"] == "packet", question
+            assert payload["answered_by"] in {"packet", "governed_kpi"}, question
             assert "which aspect would you like to examine" not in payload["answer"].lower(), question
             assert "which part do you want to explore" not in payload["answer"].lower(), question
     finally:

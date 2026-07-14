@@ -10628,6 +10628,24 @@ def _assistant_response_payload(
                 payload["grounding_status"] = "grounded"
             elif str(scenario_result.get("scenario_type") or "") == "missing_data":
                 payload["grounding_status"] = "needs_evidence"
+    answer_is_model_provided = (
+        str(payload.get("answered_by") or "").strip().lower() == "llm"
+        or str(payload.get("assistant_mode") or "").strip().lower() == "llm"
+    )
+    if answer_is_model_provided:
+        # This is a product contract, not optional explanatory copy. A model
+        # answer may synthesize governed evidence, but it is never presented as
+        # a governed calculation. Every Hermes surface renders these fields.
+        payload["answer_origin"] = "llm"
+        payload["calculation_status"] = "not_calculated"
+        payload["review_status"] = "required"
+        payload["human_review_required"] = True
+        payload["model_answer_disclosure"] = (
+            "LLM-provided answer; not a governed calculation; human review required."
+        )
+    else:
+        payload.setdefault("answer_origin", "governed")
+        payload.setdefault("human_review_required", False)
     payload["answer"] = _sanitize_assistant_visible_text(payload.get("answer"))
     return payload
 
@@ -11170,12 +11188,30 @@ def _ceo_kpi_question_intent(question: str, requested_intent: str | None = None)
     norm = " ".join(str(question or "").casefold().split())
     if re.search(r"\b(plan|budget|comparator|comparison|compare|variance|versus|vs\.?|target|baseline)\b", norm):
         return "comparison"
-    if re.search(r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|movement|moved|make up|come from|comes from)\b", norm):
+    if re.search(r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|movement|moved|make up|come from|comes from|coming from)\b", norm):
         return "drivers"
     if re.search(r"\b(attention|action|decision|decide|approve|approval|intervene|escalat|need from me|should i|next step)\b", norm):
         return "decision"
     declared = str(requested_intent or "").strip().lower()
     return declared if declared in {"decision", "drivers", "comparison", "overview"} else "overview"
+
+
+def _ceo_kpi_cards(context: Mapping[str, Any], *, public_safe: bool) -> list[dict[str, Any]]:
+    """Build the four CEO cards from the same server-resolved truth as the page."""
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    read_model = _executive_read_model_from_available_truth(
+        dict(summary),
+        [],
+        {},
+        {"report_count": 0},
+        {},
+        public_safe=public_safe,
+    )
+    return [
+        dict(item)
+        for item in list(build_executive_presentation(read_model).get("driver_grid") or [])
+        if isinstance(item, Mapping)
+    ]
 
 
 def _ceo_kpi_inline_result(
@@ -11192,16 +11228,7 @@ def _ceo_kpi_inline_result(
     the presentation contract from the resolved run so a stale or manipulated
     browser state cannot change the number Hermes describes.
     """
-    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
-    read_model = _executive_read_model_from_available_truth(
-        dict(summary),
-        [],
-        {},
-        {"report_count": 0},
-        {},
-        public_safe=public_safe,
-    )
-    cards = list(build_executive_presentation(read_model).get("driver_grid") or [])
+    cards = _ceo_kpi_cards(context, public_safe=public_safe)
     card = next(
         (item for item in cards if str(item.get("key") or item.get("driver_key") or "") == kpi_key),
         None,
@@ -11380,8 +11407,24 @@ def _assistant_question_requests_modelling(question: str) -> bool:
     return False
 
 
-def _free_text_ceo_kpi_key(question: str) -> str | None:
-    """Route factual CEO questions to the same KPI contract as card prompts."""
+def _decimal_references(text: str) -> set[Decimal]:
+    """Return CEO-scale decimal references, accepting decimal comma or point."""
+    values: set[Decimal] = set()
+    for raw in re.findall(r"(?<![\d.])(\d+(?:[.,]\d+))(?![\d.])", str(text or "")):
+        try:
+            values.add(Decimal(raw.replace(",", ".")))
+        except InvalidOperation:
+            continue
+    return values
+
+
+def _free_text_ceo_kpi_key(
+    question: str,
+    context: Mapping[str, Any] | None = None,
+    *,
+    public_safe: bool = False,
+) -> str | None:
+    """Route names or uniquely displayed values to the governed KPI contract."""
     if _assistant_question_requests_modelling(question):
         return None
     norm = " ".join(str(question or "").casefold().split())
@@ -11393,6 +11436,25 @@ def _free_text_ceo_kpi_key(question: str) -> str | None:
         return "operating_cost"
     if "revenue" in norm:
         return "revenue"
+    references = _decimal_references(question)
+    if references and context is not None:
+        matches: set[str] = set()
+        for card in _ceo_kpi_cards(context, public_safe=public_safe):
+            key = str(card.get("key") or card.get("driver_key") or "").strip()
+            if not key:
+                continue
+            # Match only headline displays, never arbitrary component values;
+            # ambiguity deliberately falls through to the reviewed LLM path.
+            card_values = _decimal_references(
+                " ".join(
+                    str(card.get(field) or "")
+                    for field in ("metric", "value", "pct", "ring_pct")
+                )
+            )
+            if references & card_values:
+                matches.add(key)
+        if len(matches) == 1:
+            return next(iter(matches))
     return None
 
 
@@ -11591,7 +11653,12 @@ async def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
-    contextual_kpi_key = str(assistant_context.get("kpi_key") or "").strip()
+    explicit_kpi_key = _free_text_ceo_kpi_key(
+        question,
+        context,
+        public_safe=public_safe,
+    )
+    contextual_kpi_key = explicit_kpi_key or str(assistant_context.get("kpi_key") or "").strip()
     explicit_modelling_request = _assistant_question_requests_modelling(question)
     if (
         contextual_kpi_key
@@ -11900,12 +11967,12 @@ async def _assistant_chat_response(
                 assistant_context=assistant_context,
             )
 
-    free_text_kpi_key = None if public_safe else _free_text_ceo_kpi_key(question)
+    free_text_kpi_key = explicit_kpi_key
     if free_text_kpi_key:
         kpi_result = _ceo_kpi_inline_result(
             context,
             kpi_key=free_text_kpi_key,
-            public_safe=False,
+            public_safe=public_safe,
             question=question,
         )
         orchestrated = orchestrator.process(
