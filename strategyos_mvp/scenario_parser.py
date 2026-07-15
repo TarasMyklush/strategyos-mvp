@@ -1117,6 +1117,22 @@ def _parse_financial_what_if_guard(prompt: str, context: dict[str, Any]) -> Scen
             if line_reduction is not None:
                 line, reduction = line_reduction
                 return _finance_cost_line_scenario_result(line, reduction, baseline, prompt_numbers)
+            # The baseline resolved, so revenue and costs are NOT missing. Saying
+            # they are would be a false statement about the run's own data. What
+            # is actually missing is a lever this run can price.
+            return _scenario_missing_data_result(
+                scenario_id="ebitda_scenario",
+                scenario_label="Finance - EBITDA Scenario",
+                answer=(
+                    f"I hold the {baseline['period']} baseline -- revenue {_sar_executive_decimal(Decimal(baseline['revenue']))}, "
+                    f"EBITDA {_sar_executive_decimal(Decimal(baseline['ebitda']))} -- but I cannot model this change because "
+                    "it does not name a cost line this run reports, or a target margin. Name a line from the "
+                    "operating-cost composition, or state a target margin, and I can calculate it exactly."
+                ),
+                missing_inputs=["named_cost_line_or_target_margin"],
+                prompt_numbers=prompt_numbers,
+                suggestions=["Show what makes up operating cost", "What revenue do we need for a 60% EBITDA margin?"],
+            )
         return _scenario_missing_data_result(
             scenario_id="ebitda_scenario",
             scenario_label="Finance - EBITDA Scenario",

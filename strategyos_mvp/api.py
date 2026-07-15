@@ -12252,7 +12252,22 @@ def _question_asks_what_to_do_about_cost(question: str) -> bool:
     text = " ".join(str(question or "").casefold().split())
     if not text:
         return False
-    return bool(_COST_ACTION_RE.search(text) and _COST_SUBJECT_RE.search(text))
+    if not (_COST_ACTION_RE.search(text) and _COST_SUBJECT_RE.search(text)):
+        return False
+    # "What if we reduce rent expense by 15%?" is not an open question about
+    # cost -- the executive already chose the lever AND the size, which is
+    # arithmetic the scenario engine does exactly. Answering that with a generic
+    # lever list ignores what was asked.
+    #
+    # Scenario INTENT alone cannot separate the two: "how can I decrease
+    # operating cost?" reads as scenario intent too, and it is precisely the
+    # open question levers exist for. The stated quantity is what distinguishes
+    # a chosen cut from an open ask, so the percentage is the test -- with
+    # intent still required, so "costs are 26% of revenue, what can I do?"
+    # keeps its levers.
+    if scenario_has_intent(text) and re.search(r"\d+(?:\.\d+)?\s*%", text):
+        return False
+    return True
 
 
 def _governed_cost_lever_result(

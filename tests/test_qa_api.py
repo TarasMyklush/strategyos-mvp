@@ -4003,7 +4003,8 @@ def test_a_rollup_row_is_not_a_line_an_executive_can_cut():
     assert result is None or result.scenario_type == "missing_data"
 
 
-def test_an_unnamed_line_still_fails_closed():
+def test_an_unnamed_line_fails_closed_without_lying_about_the_baseline():
+    """The run HAS revenue and EBITDA. Reporting them missing is a false statement."""
     from strategyos_mvp.scenario_parser import parse_scenario
 
     result = parse_scenario(
@@ -4011,6 +4012,18 @@ def test_an_unnamed_line_still_fails_closed():
     )
     assert result is not None
     assert result.scenario_type == "missing_data"
+    assert "revenue, cost baseline, compatible period, and scope are not all available" not in result.answer
+    assert "SAR 385.1M" in result.answer
+    assert "does not name a cost line this run reports" in result.answer
+
+
+def test_a_quantified_cut_is_calculated_not_answered_with_generic_levers():
+    """"Reduce rent expense by 15%" chose the lever AND the size: that is arithmetic."""
+    assert api_module._question_asks_what_to_do_about_cost("What if we reduce rent expense by 15%?") is False
+
+
+def test_an_open_cost_question_still_gets_levers():
+    assert api_module._question_asks_what_to_do_about_cost("How can I decrease operating cost?") is True
 
 
 def test_an_asserted_drop_the_run_cannot_check_is_not_accepted_in_silence():
@@ -4043,3 +4056,10 @@ def test_a_change_claim_without_a_loaded_run_is_left_to_the_no_evidence_path():
         context={},
     )
     assert payload.get("claim_verdict") != "unverifiable"
+
+
+def test_a_percentage_that_is_not_a_chosen_cut_keeps_its_levers():
+    """A stated share is context, not a lever the executive picked."""
+    assert api_module._question_asks_what_to_do_about_cost(
+        "Salaries are 26% of operating cost, how can I reduce spend?"
+    ) is True
