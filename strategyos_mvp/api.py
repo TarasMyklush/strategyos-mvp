@@ -12141,8 +12141,24 @@ def _governed_reference_result(
     if finding_match is not None:
         return _finding_reference_answer(finding_match)
 
+    # A question about a whole KPI ("What is our revenue?") belongs to the KPI
+    # contract, which states the figure on its own terms. This resolver only
+    # renders components, so answering a KPI match here described it as a part
+    # of whichever card the component search happened to land on -- the source
+    # of "SAR 385.1M is Revenue within EBITDA margin". Defer instead.
     component = next((item for item in matches if item.get("kind") == "kpi_component"), None)
     if component is None:
+        return None
+    # A whole-KPI question ("What is our revenue?") matched the card itself and
+    # no component: it belongs to the KPI contract, which states the figure on
+    # its own terms. Answering it here rendered it as a part of whichever card
+    # the component search landed on -- "SAR 385.1M is Revenue within EBITDA
+    # margin". A component match is more specific, so it still answers here.
+    if any(item.get("kind") == "kpi" for item in matches) and not _resolve_governed_entities(
+        [item for item in matches if item.get("kind") == "kpi_component"],
+        question=question,
+        history=history,
+    ):
         return None
 
     card = component.get("card") if isinstance(component.get("card"), Mapping) else {}

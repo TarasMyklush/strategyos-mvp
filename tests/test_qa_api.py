@@ -3713,3 +3713,52 @@ def test_kpi_card_buttons_still_route_when_the_card_supplies_the_key():
         "a card that names its own KPI must still route; the guard applies to "
         "inference, not to an explicit key supplied by the surface"
     )
+
+
+def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
+    """"What is our revenue?" must not be rendered as a component of another card.
+
+    The reference resolver only builds component answers. A whole-KPI match
+    fell through to the component search and was described as a part of
+    whichever card that landed on, producing the live non sequitur "SAR 385.1M
+    is Revenue within EBITDA margin". A component match is more specific and
+    still answers here.
+    """
+    monkeypatch.setattr(
+        api_module,
+        "build_executive_presentation",
+        lambda _rm: {
+            "driver_grid": [
+                {
+                    "key": "revenue",
+                    "label": "Revenue",
+                    "metric": "SAR 385.1M",
+                    "source_files": ["gl.csv"],
+                    "executive_brief": {
+                        "readout": "Revenue recognised across 4 revenue account groups.",
+                        "calculation": {"formula": "sum of scoped revenue-account balances"},
+                        "drivers": [
+                            {"label": "Revenue – Government", "value": "SAR 109.9M", "share_pct": 28.5}
+                        ],
+                    },
+                }
+            ]
+        },
+    )
+    context = {"run_id": "run-1", "findings": [], "summary": {}}
+
+    whole_kpi = api_module._governed_reference_result(
+        context, question="What is our revenue?", assistant_context={}, history=[], public_safe=False
+    )
+    assert whole_kpi is None, (
+        "a whole-KPI question belongs to the KPI contract, which states the "
+        "figure on its own terms"
+    )
+
+    component = api_module._governed_reference_result(
+        context, question="Elaborate on SAR 109.9M", assistant_context={}, history=[], public_safe=False
+    )
+    assert component is not None, "a component reference is specific and must still resolve"
+    assert "Revenue – Government within Revenue" in component["answer"], (
+        "the component must be named within its own parent KPI"
+    )
