@@ -3895,7 +3895,7 @@
       executiveContextMarkup,
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       compositionMarkup,
-      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div></section>',
+      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask anything about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
       '<details class="kpi-brief-audit"><summary>How this figure is calculated</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
@@ -3918,6 +3918,30 @@
         });
       });
     });
+
+    // Free-text ask, carrying the same context as the preset buttons above so
+    // the figure on screen stays the subject: whatever the executive types is
+    // answered about THIS KPI first, and only widens if the question plainly
+    // reaches past it.
+    var askForm = drillCard.querySelector("[data-kpi-ask-form]");
+    if (askForm) {
+      askForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var input = askForm.querySelector("[data-kpi-ask-input]");
+        var typed = String((input && input.value) || "").trim();
+        if (!typed) return;
+        input.value = "";
+        askAssistant(typed, askForm.querySelector("[data-kpi-ask-send]") || askForm, {
+          entrypoint: "ceo_kpi_inline",
+          source: "executive_surface",
+          kpi_key: key,
+          kpi_label: label,
+          kpi_question_intent: "free_text",
+          kpi_availability: availability,
+          active_view: "home"
+        });
+      });
+    }
   }
 
   function renderDriverDrillFidelity() {
