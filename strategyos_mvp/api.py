@@ -230,6 +230,7 @@ from .twins.api import (
     router as twin_router,
     twin_operational_health_payload,
 )
+from .agent_runtime.api import router as agent_runtime_router
 
 @asynccontextmanager
 async def _app_lifespan(_: FastAPI):
@@ -294,6 +295,7 @@ def _asset_revision(*relative_paths: str) -> str:
 def _executive_asset_revision() -> str:
     return _asset_revision(*_EXECUTIVE_ASSET_REV_FILES)
 app.include_router(twin_router)
+app.include_router(agent_runtime_router)
 
 ARTIFACT_PREVIEW_LIMIT_BYTES = 24_000
 ARTIFACT_JSON_PARSE_LIMIT_BYTES = 200_000
@@ -4911,7 +4913,19 @@ def _chat_threads_payload(
         ],
         "a2a": {
             "enabled": True,
-            "mode": "derived_handoff_only",
+            # design doc acceptance criteria: "a2a.mode reports
+            # durable_task_handoffs only when real persistence/execution is
+            # enabled" -- gated on all three per-PR feature flags being on
+            # together (conversations + handoffs + live UI), since that is
+            # the full vertical slice the mode name promises. Any single
+            # flag off means some part of the chain (durable conversation
+            # storage, real typed handoffs, or the live network/approval
+            # surface) is still the pre-agent-runtime derived behavior.
+            "mode": (
+                "durable_task_handoffs"
+                if (CONFIG.agent_conversations_enabled and CONFIG.agent_handoffs_enabled and CONFIG.agent_live_ui_enabled)
+                else "derived_handoff_only"
+            ),
             "items": [
                 {
                     "handoff_id": f"action:{index}",

@@ -342,9 +342,11 @@ def run_worker() -> None:
         raise RuntimeError(
             f"hatchet-sdk is required to start StrategyOS worker: {_HATCHET_IMPORT_ERROR}"
         )
+    from .agent_runtime.workflows import execute_agent_task
+
     worker = hatchet.worker(
         CONFIG.hatchet_worker_name,
         slots=max(1, int(CONFIG.hatchet_worker_slots)),
-        workflows=[execute_strategyos_run, execute_twin_cycle, execute_twin_events],
+        workflows=[execute_strategyos_run, execute_twin_cycle, execute_twin_events, execute_agent_task],
     )
     worker.start()
