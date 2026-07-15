@@ -320,13 +320,13 @@ def test_deploy_workflow_runs_boundary_validation() -> None:
     assert "bash deploy/scripts/validate_deploy_boundary.sh" in workflow
 
 
-def test_deploy_workflow_only_exposes_configured_live_environment() -> None:
+def test_deploy_workflow_exposes_pilot_and_fail_closed_production_environments() -> None:
     workflow = (REPO_ROOT / ".github/workflows/strategyos-deploy.yml").read_text(
         encoding="utf-8"
     )
     assert "default: hetzner-qa" in workflow
     assert "- hetzner-qa" in workflow
-    assert "- production" not in workflow
+    assert "- production" in workflow
 
 
 def test_deploy_workflow_pins_hosted_governance_flags() -> None:
@@ -334,10 +334,16 @@ def test_deploy_workflow_pins_hosted_governance_flags() -> None:
         encoding="utf-8"
     )
     assert "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: 'false'" in workflow
+    assert "STRATEGYOS_LOGIN_REQUIRED: 'true'" in workflow
     assert "STRATEGYOS_REQUIRE_HUMAN_REVIEW: 'true'" in workflow
     assert (
         '"STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": '
         'os.environ["STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED"]'
+        in workflow
+    )
+    assert (
+        '"STRATEGYOS_LOGIN_REQUIRED": '
+        'os.environ["STRATEGYOS_LOGIN_REQUIRED"]'
         in workflow
     )
     assert (
@@ -504,7 +510,8 @@ def test_caddy_sets_basic_security_headers() -> None:
     assert 'X-Frame-Options "DENY"' in caddyfile
     assert 'Referrer-Policy "strict-origin-when-cross-origin"' in caddyfile
     assert 'Content-Security-Policy' in caddyfile
-    assert 'frame-src https://www.youtube-nocookie.com https://www.youtube.com' in caddyfile
+    assert "frame-src 'none'" in caddyfile
+    assert "youtube" not in caddyfile.lower()
     assert "-Server" in caddyfile
     assert "header_down -Server" in caddyfile
     assert "@idp path /.well-known/openid-configuration /oauth/*" in caddyfile
@@ -562,6 +569,7 @@ def test_validate_deploy_boundary_rejects_insecure_production_flags(
                 "STRATEGYOS_IDP_ENABLED=true",
                 "STRATEGYOS_IDP_ISSUER=http://localhost:8089",
                 "STRATEGYOS_SITE_ADDRESS=:80",
+                "STRATEGYOS_LOGIN_REQUIRED=true",
             ]
         )
         + "\n",
@@ -603,6 +611,77 @@ def test_validate_deploy_boundary_rejects_insecure_production_flags(
     assert "BOUNDARY VALIDATION FAILED" in result.stderr
     assert "https://" in result.stderr
     assert "non-root deploy user" in result.stderr
+    assert "Production deploys require proxy_oidc customer SSO" in result.stderr
+
+
+def test_validate_deploy_boundary_rejects_test_users_in_production(
+    tmp_path: Path,
+) -> None:
+    env_path = tmp_path / ".env"
+    secrets_path = tmp_path / ".env.secrets"
+    env_path.write_text(
+        "\n".join(
+            [
+                "STRATEGYOS_API_AUTH_ENABLED=true",
+                "STRATEGYOS_AUTH_MODE=proxy_oidc",
+                "STRATEGYOS_TRUST_PROXY_AUTH=true",
+                "STRATEGYOS_LOGIN_REQUIRED=true",
+                "STRATEGYOS_REQUIRE_HUMAN_REVIEW=true",
+                "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED=false",
+                "STRATEGYOS_PUBLIC_HEALTH_ENABLED=false",
+                "STRATEGYOS_ENVIRONMENT_LABEL=production",
+                "STRATEGYOS_IDP_ISSUER=https://strategyos.example.test",
+                "STRATEGYOS_TENANT_SLUG=strategyos-production",
+                "STRATEGYOS_TENANT_NAME=StrategyOS Production",
+                "STRATEGYOS_SITE_ADDRESS=strategyos.example.test",
+                "STRATEGYOS_OPERATOR_EMAILS=operator@example.test",
+                "STRATEGYOS_REVIEWER_EMAILS=reviewer@example.test",
+                "OAUTH2_PROXY_OIDC_ISSUER_URL=https://identity.example.test",
+                "OAUTH2_PROXY_CLIENT_ID=strategyos-production",
+                "OAUTH2_PROXY_REDIRECT_URL=https://strategyos.example.test/oauth2/callback",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    secrets_path.write_text(
+        "\n".join(
+            [
+                "POSTGRES_PASSWORD=" + "a" * 48,
+                "NEO4J_PASSWORD=" + "b" * 48,
+                "STRATEGYOS_OBJECT_SECRET_ACCESS_KEY=" + "c" * 48,
+                "MINIO_ROOT_PASSWORD=" + "d" * 48,
+                "STRATEGYOS_IDP_CLIENT_SECRET=" + "e" * 48,
+                "STRATEGYOS_IDP_OPERATOR_PASSWORD=" + "f" * 48,
+                "STRATEGYOS_IDP_REVIEWER_PASSWORD=" + "1" * 48,
+                "STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY=" + "2" * 48,
+                "STRATEGYOS_TRUSTED_PROXY_AUTH_SECRET=" + "3" * 48,
+                "OAUTH2_PROXY_CLIENT_SECRET=" + "4" * 48,
+                "OAUTH2_PROXY_COOKIE_SECRET=" + "5" * 48,
+                "STRATEGYOS_IDP_TEST_USERS=executive.tester:password:executive",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", "deploy/scripts/validate_deploy_boundary.sh"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "ENV_FILE": str(env_path),
+            "SECRETS_FILE": str(secrets_path),
+            "TARGET_ENVIRONMENT": "production",
+            "TARGET_PUBLIC_URL": "https://strategyos.example.test",
+            "TARGET_DEPLOY_USER": "deployer",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "Production deploys must not include STRATEGYOS_IDP_TEST_USERS" in result.stderr
 
 
 def test_validate_deploy_boundary_allows_hardened_qa_config(tmp_path: Path) -> None:
@@ -623,6 +702,7 @@ def test_validate_deploy_boundary_allows_hardened_qa_config(tmp_path: Path) -> N
                 "STRATEGYOS_IDP_REVIEWER_USERNAME=reviewer.hosted",
                 "STRATEGYOS_ENVIRONMENT_LABEL=hetzner-qa",
                 "STRATEGYOS_SITE_ADDRESS=:80",
+                "STRATEGYOS_LOGIN_REQUIRED=true",
             ]
         )
         + "\n",
@@ -662,6 +742,66 @@ def test_validate_deploy_boundary_allows_hardened_qa_config(tmp_path: Path) -> N
     )
 
     assert "Deploy boundary validation passed." in result.stdout
+
+
+def test_validate_deploy_boundary_rejects_hosted_surface_without_forced_login(
+    tmp_path: Path,
+) -> None:
+    env_path = tmp_path / ".env"
+    secrets_path = tmp_path / ".env.secrets"
+    env_path.write_text(
+        "\n".join(
+            [
+                "STRATEGYOS_API_AUTH_ENABLED=true",
+                "STRATEGYOS_REQUIRE_HUMAN_REVIEW=true",
+                "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED=false",
+                "STRATEGYOS_LOGIN_REQUIRED=false",
+                "STRATEGYOS_IDP_ENABLED=true",
+                "STRATEGYOS_IDP_ISSUER=https://strategyos-qa.example.test",
+                "STRATEGYOS_TENANT_SLUG=strategyos-qa",
+                "STRATEGYOS_TENANT_NAME=StrategyOS QA",
+                "STRATEGYOS_IDP_OPERATOR_USERNAME=operator.hosted",
+                "STRATEGYOS_IDP_REVIEWER_USERNAME=reviewer.hosted",
+                "STRATEGYOS_ENVIRONMENT_LABEL=hetzner-qa",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    secrets_path.write_text(
+        "\n".join(
+            [
+                "POSTGRES_PASSWORD=" + "a" * 48,
+                "NEO4J_PASSWORD=" + "b" * 48,
+                "STRATEGYOS_OBJECT_SECRET_ACCESS_KEY=" + "c" * 48,
+                "MINIO_ROOT_PASSWORD=" + "d" * 48,
+                "STRATEGYOS_IDP_CLIENT_SECRET=" + "e" * 48,
+                "STRATEGYOS_IDP_OPERATOR_PASSWORD=" + "f" * 48,
+                "STRATEGYOS_IDP_REVIEWER_PASSWORD=" + "1" * 48,
+                "STRATEGYOS_SENSITIVE_IDENTIFIER_HMAC_KEY=" + "2" * 48,
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", "deploy/scripts/validate_deploy_boundary.sh"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "ENV_FILE": str(env_path),
+            "SECRETS_FILE": str(secrets_path),
+            "TARGET_ENVIRONMENT": "hetzner-qa",
+            "TARGET_PUBLIC_URL": "https://strategyos-qa.example.test",
+            "TARGET_DEPLOY_USER": "deployer",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "Every hosted deployment must set STRATEGYOS_LOGIN_REQUIRED=true" in result.stderr
 
 
 def test_validate_deploy_boundary_rejects_incomplete_proxy_oidc_config(
@@ -900,7 +1040,7 @@ def test_validate_deploy_boundary_rejects_llm_chat_without_external_approval(
     assert "STRATEGYOS_LLM_API_KEY" in result.stderr
 
 
-def test_validate_deploy_boundary_rejects_production_identity_over_http(
+def test_validate_deploy_boundary_rejects_internal_identity_provider_in_production(
     tmp_path: Path,
 ) -> None:
     env_path = tmp_path / ".env"
@@ -909,6 +1049,7 @@ def test_validate_deploy_boundary_rejects_production_identity_over_http(
         "\n".join(
             [
                 "STRATEGYOS_API_AUTH_ENABLED=true",
+                "STRATEGYOS_LOGIN_REQUIRED=true",
                 "STRATEGYOS_REQUIRE_HUMAN_REVIEW=true",
                 "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED=false",
                 "STRATEGYOS_PUBLIC_HEALTH_ENABLED=false",
@@ -953,8 +1094,7 @@ def test_validate_deploy_boundary_rejects_production_identity_over_http(
     )
 
     assert result.returncode == 1
-    assert "identity issuer" in result.stderr
-    assert "https://" in result.stderr
+    assert "Production deploys require proxy_oidc customer SSO" in result.stderr
 
 
 def test_validate_deploy_boundary_rejects_localish_environment_label_for_hosted_target(

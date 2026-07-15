@@ -379,6 +379,89 @@ def test_authenticated_free_text_kpi_and_release_route_before_fallback(monkeypat
         _restore_env(original)
 
 
+def test_authenticated_followup_reference_uses_history_for_kpi_component(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "build_executive_presentation",
+            lambda _read_model: {
+                "driver_grid": [
+                    {
+                        "key": "revenue",
+                        "label": "Revenue",
+                        "metric": "SAR 385.1M",
+                        "source_files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"],
+                        "executive_brief": {
+                            "readout": "Revenue recognised across four revenue groups.",
+                            "drivers": [
+                                {"label": "Revenue – Catering", "value": "SAR 123.0M", "share_pct": 31.9},
+                                {"label": "Revenue – Government", "value": "SAR 109.9M", "share_pct": 28.5},
+                            ],
+                            "calculation": {"formula": "Revenue = sum of scoped revenue-account balances."},
+                        },
+                    }
+                ]
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "Elaborate on SAR 109.9M",
+                "persona": "ceo",
+                "mode": "auto",
+                "history": [
+                    {
+                        "role": "assistant",
+                        "text": "Revenue – Government — SAR 109.9M · 28.5%",
+                        "payload": {"assistant_context": {"kpi_key": "revenue"}},
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_reference"
+        assert "Revenue – Government" in payload["answer"]
+        assert "28.5%" in payload["answer"]
+        assert "GL_Extract_H1_2026.csv" in payload["citations"][0]["source_path"]
+        assert payload["assistant_context"]["history_attached"] is True
+    finally:
+        _restore_env(original)
+
+
+def test_visible_answer_scrubber_repairs_governed_packet_phrase():
+    cleaned = api_module.llm_qa._clean_visible_answer("This depends on the current governed packet.")
+    assert "governed current view" not in cleaned
+    assert cleaned == "This depends on the current governed view."
+
+
+def test_authenticated_llm_supplemental_payload_includes_history():
+    payload = api_module._supplemental_grounding_payload(
+        assistant_history=[
+            {"role": "user", "text": "What is driving revenue?"},
+            {"role": "assistant", "text": "Revenue – Government — SAR 109.9M", "payload": {"reference": {"kpi_key": "revenue"}}},
+        ]
+    )
+    assert payload["conversation_history"][1]["payload_reference"]["kpi_key"] == "revenue"
+
+
 def test_external_decision_question_fails_closed_with_actual_governed_scope():
     bundle = type("Bundle", (), {"run_metadata": {"available_roles": ["ap_ledger", "ar_ledger", "gl_extract"]}})()
     result = api_module._unavailable_external_decision_result(
@@ -1101,8 +1184,8 @@ def test_assistant_chat_public_ceo_request_stays_public_safe_even_when_run_exist
         assert payload["llm_fallback_attempted"] is False
         assert payload["answered_by"] in {"packet", "scenario"}
         answer = payload["answer"].lower()
-        assert "current governed run" in answer
-        assert "no illustrative values were substituted" in answer
+        assert "current reviewed data" in answer
+        assert "no values were inferred or substituted" in answer
         assert all(marker.lower() not in answer for marker in ("19.2%", "SAR 8.6M", "60% EUR"))
     finally:
         _restore_env(original)
@@ -2292,9 +2375,9 @@ def test_public_safe_persona_variants_return_substantive_answers(monkeypatch):
         monkeypatch.setattr(api_module, "_latest_summary", lambda: {"run_id": "run-1", "dataset": "/tmp/private-dataset"})
         client = TestClient(api_module.app)
         cases = [
-            ("cfo", "Where is the SAR 8.6M?"),
+            ("cfo", "What is the current recovery opportunity?"),
             ("gm", "Where is capacity binding first?"),
-            ("bucfo", "What is the SAR 1.2M recovery path?"),
+            ("bucfo", "What is the current recovery path?"),
         ]
 
         for persona, question in cases:
@@ -2314,7 +2397,9 @@ def test_public_safe_persona_variants_return_substantive_answers(monkeypatch):
             assert payload.get("scenario_id") in {None, "public_exec_governed_packet"}, question
             assert "outside the current deterministic public-safe prompt set" not in payload["answer"], question
             assert "No findings available for leakage analysis" not in payload["answer"], question
-            assert "current governed" in payload["answer"].lower(), question
+            assert "current" in payload["answer"].lower(), question
+            assert "sar 8.6m" not in payload["answer"].lower(), question
+            assert "sar 1.2m" not in payload["answer"].lower(), question
             assert all(marker not in payload["answer"].lower() for marker in ("sar 8.6m", "sar 1.2m", "eastern hub")), question
 
         bucfo_payload = client.post(
@@ -3146,5 +3231,251 @@ def test_public_ceo_chat_models_target_margin_from_governed_dashboard_baseline(m
         assert "60.0%" in payload["answer"]
         assert "SAR 15.3M" in payload["answer"]
         assert "Current governed drivers" not in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_scenario_question_with_component_amount_reaches_scenario_engine(monkeypatch):
+    """A what-if quoting an on-screen amount must not be hijacked by the
+    governed reference resolver into a component-lookup answer."""
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "build_executive_presentation",
+            lambda _read_model: {
+                "driver_grid": [
+                    {
+                        "key": "revenue",
+                        "label": "Revenue",
+                        "metric": "SAR 385.1M",
+                        "source_files": ["gl.csv"],
+                        "executive_brief": {
+                            "readout": "readout",
+                            "drivers": [
+                                {"label": "Revenue – Modern Trade", "value": "SAR 103.2M", "share_pct": 26.8},
+                            ],
+                            "calculation": {"formula": "formula"},
+                        },
+                    }
+                ]
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "If we recover SAR 103.2M, what remains?",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload.get("answered_by") != "governed_reference", (
+            "scenario-intent questions must fall through to the scenario engine "
+            "even when they quote an amount visible on a KPI card"
+        )
+    finally:
+        _restore_env(original)
+
+
+def test_amount_reference_parser_requires_money_shape():
+    """Bare counts, years, and percents are not monetary references."""
+    parse = api_module._parse_amount_references
+
+    assert parse("Elaborate on SAR 109.9M") == [109_900_000.0]
+    assert parse("what about SAR 794,108") == [794_108.0]
+    assert parse("drill into 42.3m cash") == [42_300_000.0]
+    assert parse("top 3 cases in H1 2026") == []
+    assert parse("why is the share 28.5%?") == []
+
+
+def _governed_finding(**overrides):
+    """A real Finding dataclass -- the type the chat context actually holds.
+
+    _resolve_qa_context returns run_all_finance_skills() output, i.e. Finding
+    dataclasses, not dicts. Fixtures built from dicts hid a production bug
+    where the entity index skipped every finding.
+    """
+    from strategyos_mvp.models import Finding
+
+    defaults = dict(
+        finding_id="F-006",
+        title="FX hedge not applied for INV-2026-0577",
+        pattern_type="fx_hedge_missing",
+        vendor_id="V-900",
+        vendor_name="Bordeaux Wines & Spirits SARL",
+        leakage_sar=46488.0,
+        recoverable_sar=46488.0,
+        recoverable_usd=12396.0,
+        confidence=0.9,
+        classification="confirmed",
+        rationale="Invoice settled above an available hedge rate.",
+        remediation="Apply the treasury hedge rate and recover the difference.",
+        citations=[],
+        calculation={},
+        status="open",
+        challenges=[],
+    )
+    defaults.update(overrides)
+    return Finding(**defaults)
+
+
+def _findings_context(monkeypatch):
+    """Governed run carrying the finding rows the CEO surface shows."""
+    monkeypatch.setattr(
+        api_module,
+        "_resolve_qa_context",
+        lambda _run_id: {
+            "bundle": object(),
+            "findings": [
+                _governed_finding(),
+                _governed_finding(
+                    finding_id="F-001",
+                    title="Auto-renewal escalation at Gulf Logistics Services Co",
+                    recoverable_sar=250416.0,
+                    leakage_sar=250416.0,
+                    vendor_name="Gulf Logistics Services Co",
+                ),
+            ],
+            "kg_nodes": [],
+            "kg_edges": [],
+            "summary": {},
+            "run_id": "run-1",
+            "run_mode": "full",
+        },
+    )
+    monkeypatch.setattr(api_module, "build_executive_presentation", lambda _rm: {"driver_grid": []})
+
+
+def test_finding_id_reference_is_grounded_not_hallucinated(monkeypatch):
+    """"F-006" must resolve to its governed row.
+
+    It previously reached answer_general_question -- a model call with no
+    governed evidence -- which invented finance detail ("Q3 2025 revenue and
+    margin analysis") for the id.
+    """
+    original, client = _client_with_auth()
+    try:
+        _findings_context(monkeypatch)
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": "F-006", "persona": "ceo", "mode": "auto"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_reference"
+        assert "FX hedge not applied" in payload["answer"]
+        assert "46" in payload["answer"]
+        assert payload["citations"][0]["finding_id"] == "F-006"
+        assert "governed view" not in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_pronoun_followup_resolves_against_previous_assistant_turn(monkeypatch):
+    """"can you show me it?" must bind to the id named one turn earlier."""
+    original, client = _client_with_auth()
+    try:
+        _findings_context(monkeypatch)
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "can you show me it?",
+                "persona": "ceo",
+                "mode": "auto",
+                "history": [
+                    {"role": "user", "text": "What remains before this board packet can be released?"},
+                    {"role": "assistant", "text": "F-006 is still outstanding before release."},
+                ],
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_reference"
+        assert "FX hedge not applied" in payload["answer"]
+        assert "not sure what" not in payload["answer"].lower()
+    finally:
+        _restore_env(original)
+
+
+def test_document_identifier_in_finding_title_resolves(monkeypatch):
+    """An invoice number quoted from a finding title must resolve."""
+    original, client = _client_with_auth()
+    try:
+        _findings_context(monkeypatch)
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": "What is INV-2026-0577?", "persona": "ceo", "mode": "auto"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_reference"
+        assert "F-006" in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_finding_amount_reference_resolves_against_findings(monkeypatch):
+    """A SAR amount visible in the findings list must resolve there.
+
+    The first resolver searched KPI cards only, so a findings amount fell
+    through to the deflection fallback.
+    """
+    original, client = _client_with_auth()
+    try:
+        _findings_context(monkeypatch)
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": "What is the SAR 46,488 item?", "persona": "ceo", "mode": "auto"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_reference"
+        assert "F-006" in payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_unresolved_identifier_never_reaches_general_knowledge_model(monkeypatch):
+    """An id absent from the run must fail closed, never be described by the
+    general-knowledge model."""
+    original, client = _client_with_auth()
+    try:
+        _findings_context(monkeypatch)
+        called = {"general": False}
+
+        def _fail(*_args, **_kwargs):
+            called["general"] = True
+            raise AssertionError("general-knowledge model must not see a governed identifier")
+
+        monkeypatch.setattr(api_module.llm_qa, "answer_general_question", _fail)
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": "F-999", "persona": "ceo", "mode": "auto"},
+        )
+        assert response.status_code == 200
+        assert called["general"] is False
     finally:
         _restore_env(original)

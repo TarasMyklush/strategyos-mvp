@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import html
 import hashlib
 import json
@@ -222,6 +223,7 @@ class AssistantChatRequest(BaseModel):
     assistant_context: dict[str, Any] | None = None
     source: str | None = None
     entrypoint: str | None = None
+    history: list[dict[str, Any]] | None = None
 
 
 from .twins.api import (
@@ -229,6 +231,7 @@ from .twins.api import (
     router as twin_router,
     twin_operational_health_payload,
 )
+from .agent_runtime.api import router as agent_runtime_router
 
 @asynccontextmanager
 async def _app_lifespan(_: FastAPI):
@@ -293,6 +296,7 @@ def _asset_revision(*relative_paths: str) -> str:
 def _executive_asset_revision() -> str:
     return _asset_revision(*_EXECUTIVE_ASSET_REV_FILES)
 app.include_router(twin_router)
+app.include_router(agent_runtime_router)
 
 ARTIFACT_PREVIEW_LIMIT_BYTES = 24_000
 ARTIFACT_JSON_PARSE_LIMIT_BYTES = 200_000
@@ -4910,7 +4914,19 @@ def _chat_threads_payload(
         ],
         "a2a": {
             "enabled": True,
-            "mode": "derived_handoff_only",
+            # design doc acceptance criteria: "a2a.mode reports
+            # durable_task_handoffs only when real persistence/execution is
+            # enabled" -- gated on all three per-PR feature flags being on
+            # together (conversations + handoffs + live UI), since that is
+            # the full vertical slice the mode name promises. Any single
+            # flag off means some part of the chain (durable conversation
+            # storage, real typed handoffs, or the live network/approval
+            # surface) is still the pre-agent-runtime derived behavior.
+            "mode": (
+                "durable_task_handoffs"
+                if (CONFIG.agent_conversations_enabled and CONFIG.agent_handoffs_enabled and CONFIG.agent_live_ui_enabled)
+                else "derived_handoff_only"
+            ),
             "items": [
                 {
                     "handoff_id": f"action:{index}",
@@ -10721,11 +10737,52 @@ def _sanitize_assistant_visible_text(value: Any) -> str:
     return str(text or "").strip()
 
 
+def _assistant_history_from_request(request: AssistantChatRequest | QaRequest) -> list[dict[str, Any]]:
+    """Normalize client-supplied chat history for follow-up grounding.
+
+    The executive drawer owns thread history in browser storage.  The backend
+    still needs the previous answer payload to resolve follow-ups like
+    ``Elaborate on SAR 109.9M`` against the exact KPI row that produced the
+    prior answer, rather than re-deriving from a bare amount.
+    """
+    candidates: Any = getattr(request, "history", None)
+    if candidates is None:
+        request_context = getattr(request, "context", None)
+        if isinstance(request_context, Mapping):
+            candidates = request_context.get("history") or request_context.get("messages")
+    if candidates is None:
+        assistant_context = getattr(request, "assistant_context", None)
+        if isinstance(assistant_context, Mapping):
+            candidates = assistant_context.get("history") or assistant_context.get("messages")
+    if not isinstance(candidates, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for item in candidates[-8:]:
+        if not isinstance(item, Mapping):
+            continue
+        role = str(item.get("role") or item.get("speaker") or "").strip().lower()
+        text = str(item.get("text") or item.get("content") or item.get("answer") or "").strip()
+        payload = item.get("payload") or item.get("responsePayload") or item.get("response_payload")
+        provenance = item.get("assistant_context") or item.get("context") or item.get("provenance")
+        if not text and not isinstance(payload, Mapping) and not isinstance(provenance, Mapping):
+            continue
+        normalized.append(
+            {
+                "role": role if role in {"user", "assistant", "system"} else "assistant",
+                "text": text[:2000],
+                "payload": dict(payload) if isinstance(payload, Mapping) else None,
+                "assistant_context": dict(provenance) if isinstance(provenance, Mapping) else None,
+            }
+        )
+    return normalized
+
+
 _ASSISTANT_BUSINESS_TOKENS = (
     "margin", "ebitda", "profitability", "profit", "loss", "revenue", "income",
     "risk", "plan", "year", "quarter", "board", "packet", "prep", "session",
     "run", "summary", "summarize", "analysis", "diagnostic", "diagnostics",
-    "live", "closed", "tamween", "healthcare", "pharmacy", "fx", "hedge",
+    "live", "closed", "healthcare", "pharmacy", "fx", "hedge",
     "recoverable", "recovery", "evidence", "finding", "citation", "kpi",
     "driver", "ceo", "hermes", "assistant", "thread", "task", "follow-up",
     "invoice", "vendor", "spend", "ap", "working capital", "cash",
@@ -10892,6 +10949,7 @@ def _supplemental_grounding_payload(
     graph_result: dict[str, Any] | None = None,
     retrieval_result: dict[str, Any] | None = None,
     deterministic_result: dict[str, Any] | None = None,
+    assistant_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     if graph_result and graph_result.get("matched"):
@@ -10916,6 +10974,16 @@ def _supplemental_grounding_payload(
             "basis": deterministic_result.get("basis"),
             "citations": list(deterministic_result.get("citations") or [])[:8],
         }
+    if assistant_history:
+        payload["conversation_history"] = [
+            {
+                "role": item.get("role"),
+                "text": item.get("text"),
+                "assistant_context": item.get("assistant_context"),
+                "payload_reference": (item.get("payload") or {}).get("reference") if isinstance(item.get("payload"), Mapping) else None,
+            }
+            for item in assistant_history[-6:]
+        ]
     return payload
 
 
@@ -11403,6 +11471,429 @@ def _ceo_kpi_inline_result(
     }
 
 
+def _parse_amount_references(question: str) -> list[float]:
+    """Extract monetary references from a follow-up question.
+
+    Only SAR-prefixed or K/M/B-suffixed numbers qualify: a bare "3" in
+    "top 3 cases" or the "28.5" inside "28.5%" is not a money reference and
+    must not trigger component matching. Comma grouping ("SAR 794,108") is
+    accepted.
+    """
+    text = str(question or "")
+    values: list[float] = []
+    pattern = (
+        r"SAR\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*([kKmMbB])?(?![\d%])"
+        r"|\b(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*([kKmMbB])\b(?!%)"
+    )
+    for match in re.finditer(pattern, text):
+        raw_text = match.group(1) or match.group(3)
+        suffix = (match.group(2) or match.group(4) or "").lower()
+        if not raw_text:
+            continue
+        raw = float(raw_text.replace(",", ""))
+        multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(suffix, 1)
+        values.append(raw * multiplier)
+    return values
+
+
+def _parse_display_amount(value: Any) -> float | None:
+    text = str(value or "")
+    match = re.search(r"(?:SAR\s*)?(\d+(?:\.\d+)?)\s*([kKmMbB])?", text)
+    if not match:
+        return None
+    raw = float(match.group(1))
+    suffix = (match.group(2) or "").lower()
+    multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(suffix, 1)
+    return raw * multiplier
+
+
+def _amounts_match(left: float, right: float) -> bool:
+    tolerance = max(1.0, abs(right) * 0.006)
+    return abs(left - right) <= tolerance
+
+
+def _history_kpi_key(history: list[dict[str, Any]]) -> str | None:
+    for item in reversed(history):
+        payload = item.get("payload")
+        payload_context = payload.get("assistant_context") if isinstance(payload, Mapping) else None
+        for source in (item.get("assistant_context"), payload_context):
+            if isinstance(source, Mapping):
+                key = str(source.get("kpi_key") or source.get("driver_key") or "").strip()
+                if key and key != "board_packet":
+                    return key
+        if isinstance(payload, Mapping):
+            kpi = payload.get("kpi")
+            if isinstance(kpi, Mapping):
+                key = str(kpi.get("key") or kpi.get("driver_key") or "").strip()
+                if key:
+                    return key
+    return None
+
+
+def _governed_entity_index(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """One lookup over every entity the current governed run puts on screen.
+
+    The CEO references what they can see: a finding id ("F-006"), an invoice or
+    credit number carried in a finding title, a vendor, a KPI component, or a
+    bare amount. Resolving each surface separately is what left findings
+    unreachable while KPI rows resolved, so every surface is indexed here once
+    and matched by the same rules.
+    """
+    entities: list[dict[str, Any]] = []
+
+    for raw_row in list(context.get("findings") or []):
+        # The chat context carries Finding dataclasses straight from
+        # run_all_finance_skills(); other callers pass plain dict rows. Accept
+        # both -- an isinstance(Mapping) guard here silently indexed zero
+        # findings in production while dict-based tests passed.
+        if isinstance(raw_row, Mapping):
+            row: Mapping[str, Any] = raw_row
+        elif dataclasses.is_dataclass(raw_row) and not isinstance(raw_row, type):
+            row = dataclasses.asdict(raw_row)
+        elif hasattr(raw_row, "model_dump"):
+            row = raw_row.model_dump()
+        else:
+            continue
+        finding_id = str(row.get("finding_id") or row.get("case_id") or "").strip()
+        title = str(row.get("title") or "").strip()
+        if not finding_id and not title:
+            continue
+        amount = row.get("recoverable_sar")
+        tokens = {finding_id.casefold()} if finding_id else set()
+        # Titles carry the document identifiers a CEO quotes back
+        # ("INV-2026-0577", "CR-2024-091", "V-1142").
+        for doc_id in re.findall(r"\b[A-Z]{1,4}-[0-9]{2,4}-?[0-9]*\b", title):
+            tokens.add(doc_id.casefold())
+        vendor = str(row.get("vendor_name") or row.get("vendor") or "").strip()
+        if vendor:
+            tokens.add(vendor.casefold())
+        entities.append(
+            {
+                "kind": "finding",
+                "id": finding_id,
+                "label": title or finding_id,
+                "tokens": {token for token in tokens if token},
+                "phrase": title.casefold(),
+                "amount": _as_float_or_none(amount),
+                "row": dict(row),
+            }
+        )
+
+    read_model = _executive_read_model_from_available_truth(
+        dict(context.get("summary") if isinstance(context.get("summary"), Mapping) else {}),
+        [],
+        {},
+        {"report_count": 0},
+        {},
+        public_safe=False,
+    )
+    for card in list(build_executive_presentation(read_model).get("driver_grid") or []):
+        if not isinstance(card, Mapping):
+            continue
+        card_label = str(card.get("label") or "").strip()
+        card_key = str(card.get("key") or card.get("driver_key") or "").strip()
+        brief = card.get("executive_brief") if isinstance(card.get("executive_brief"), Mapping) else {}
+        entities.append(
+            {
+                "kind": "kpi",
+                "id": card_key,
+                "label": card_label,
+                "tokens": {token for token in {card_key.casefold(), card_label.casefold()} if token},
+                "phrase": card_label.casefold(),
+                "amount": _parse_display_amount(card.get("metric")),
+                "card": dict(card),
+                "brief": dict(brief),
+            }
+        )
+        for driver in list(brief.get("drivers") or []):
+            if not isinstance(driver, Mapping):
+                continue
+            driver_label = str(driver.get("label") or "").strip()
+            if not driver_label:
+                continue
+            entities.append(
+                {
+                    "kind": "kpi_component",
+                    "id": f"{card_key}:{driver_label}",
+                    "label": driver_label,
+                    "tokens": {driver_label.casefold()},
+                    "phrase": driver_label.casefold(),
+                    "amount": _parse_display_amount(driver.get("value")),
+                    "card": dict(card),
+                    "brief": dict(brief),
+                    "driver": dict(driver),
+                }
+            )
+    return entities
+
+
+_GOVERNED_IDENTIFIER_RE = re.compile(r"(?<![\w-])[A-Za-z]{1,4}-[0-9]{2,4}-?[0-9]*(?![\w-])")
+
+
+def _question_looks_like_governed_identifier(question: str) -> bool:
+    """True when the question is about a record id (F-006, INV-2026-0577).
+
+    Such a question carries no finance keyword, so the business-scope check
+    routes it to the general-knowledge model, which has no governed evidence
+    and will invent plausible finance detail for the id. An identifier that did
+    not resolve in the run must fail closed instead.
+    """
+    return bool(_GOVERNED_IDENTIFIER_RE.search(str(question or "")))
+
+
+def _as_float_or_none(value: Any) -> float | None:
+    try:
+        if value in (None, ""):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+_PRONOUN_ONLY_RE = re.compile(
+    r"^(?:can you |could you |please |now |and |so )*"
+    r"(?:show|tell|explain|elaborate|expand|detail|describe|give)?\s*"
+    r"(?:me|us)?\s*(?:more\s+)?(?:about\s+|on\s+)?"
+    r"\b(it|that|this|those|these|them|the one|the same)\b",
+)
+
+
+def _question_is_reference_followup(question: str) -> bool:
+    """A follow-up whose whole subject is a pronoun or a bare 'why'."""
+    norm = " ".join(str(question or "").casefold().split()).strip(" ?.!")
+    if not norm:
+        return False
+    if norm in {"why", "why?", "how", "and why", "explain", "elaborate", "more", "tell me more", "go on"}:
+        return True
+    return bool(_PRONOUN_ONLY_RE.match(norm))
+
+
+def _history_entity_tokens(history: list[dict[str, Any]]) -> list[str]:
+    """Identifiers the assistant most recently put on screen, newest first."""
+    tokens: list[str] = []
+    for item in reversed(history or []):
+        if str(item.get("role") or "") != "assistant":
+            continue
+        text = str(item.get("text") or "")
+        for doc_id in re.findall(r"\b[A-Z]{1,4}-[0-9]{2,4}-?[0-9]*\b", text):
+            if doc_id.casefold() not in tokens:
+                tokens.append(doc_id.casefold())
+    return tokens
+
+
+def _resolve_governed_entities(
+    entities: list[dict[str, Any]],
+    *,
+    question: str,
+    history: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Match a question against the entity index: identifier, phrase, amount,
+    then pronoun-carried reference from the previous assistant turn."""
+    norm = " ".join(str(question or "").casefold().split())
+    stripped = norm.strip(" ?.!,")
+    matches: list[dict[str, Any]] = []
+
+    for entity in entities:
+        for token in entity.get("tokens") or set():
+            if not token:
+                continue
+            # Identifier tokens must match as whole words so "F-006" never
+            # matches inside an unrelated string.
+            if re.search(r"(?<![\w-])" + re.escape(token) + r"(?![\w-])", norm):
+                matches.append(entity)
+                break
+    if matches:
+        return matches
+
+    for entity in entities:
+        phrase = entity.get("phrase") or ""
+        if len(phrase) >= 8 and phrase in norm:
+            matches.append(entity)
+    if matches:
+        return matches
+
+    amount_refs = _parse_amount_references(question)
+    if amount_refs:
+        for entity in entities:
+            amount = entity.get("amount")
+            if amount is None:
+                continue
+            if any(_amounts_match(ref, amount) for ref in amount_refs):
+                matches.append(entity)
+        if matches:
+            return matches
+
+    if _question_is_reference_followup(stripped):
+        for token in _history_entity_tokens(history):
+            for entity in entities:
+                if token in (entity.get("tokens") or set()):
+                    return [entity]
+    return []
+
+
+def _finding_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
+    """Answer a governed finding reference with what a CEO must decide on."""
+    row = entity.get("row") if isinstance(entity.get("row"), Mapping) else {}
+    finding_id = str(entity.get("id") or "")
+    title = str(entity.get("label") or finding_id)
+    amount = entity.get("amount")
+    citation_count = row.get("citation_count") or row.get("citations")
+    status_text = str(row.get("status") or row.get("state") or "").strip()
+    vendor = str(row.get("vendor_name") or row.get("vendor") or "").strip()
+
+    parts = [f"{finding_id} is {title}." if finding_id else f"{title}."]
+    if amount:
+        parts.append(f"Recoverable value: {_format_sar_brief(amount)}.")
+    if vendor:
+        parts.append(f"Counterparty: {vendor}.")
+    if status_text:
+        parts.append(f"Current status: {humanize_token(status_text) if 'humanize_token' in globals() else status_text}.")
+    try:
+        if citation_count not in (None, ""):
+            parts.append(f"Supporting evidence: {int(citation_count)} citation(s) attached.")
+    except (TypeError, ValueError):
+        pass
+    parts.append("Next step: open this case to review its evidence trail, or ask what it takes to close it before board release.")
+
+    citations = []
+    if finding_id:
+        citations.append(
+            {
+                "source_path": "run_artifacts://findings",
+                "locator": f"finding_id={finding_id}",
+                "excerpt": title,
+                "finding_id": finding_id,
+            }
+        )
+    return {
+        "matched": True,
+        "answer": " ".join(parts),
+        "basis": "Resolved a governed finding reference against the current run's finding rows.",
+        "citations": citations,
+        "suggestions": [
+            f"What evidence supports {finding_id}?" if finding_id else "What evidence supports this case?",
+            f"What is needed to close {finding_id}?" if finding_id else "What is needed to close this case?",
+            "Which governed cases create the largest recoverable value?",
+        ],
+        "answered_by": "governed_reference",
+        "assistant_mode": "governed_reference",
+        "grounding_status": "grounded",
+        "reference": {"kind": "finding", "finding_id": finding_id, "label": title, "recoverable_sar": amount},
+        "_orchestrator_force_answer": True,
+    }
+
+
+def _governed_reference_result(
+    context: Mapping[str, Any],
+    *,
+    question: str,
+    assistant_context: Mapping[str, Any],
+    history: list[dict[str, Any]],
+    public_safe: bool,
+) -> dict[str, Any] | None:
+    """Resolve any on-screen governed reference before the LLM fallback runs.
+
+    Scope is deliberately every entity the run exposes -- findings, document
+    identifiers carried in finding titles, vendors, KPI cards and their
+    component rows -- because an executive quotes whatever the surface showed
+    them. An earlier version indexed KPI cards only, which left "F-006" and
+    "INV-2026-0577" to the model and produced fabricated finance facts.
+    """
+    if public_safe:
+        return None
+    # A what-if that happens to quote an on-screen amount ("If we recover
+    # SAR 103.2M, what remains?") must reach the scenario engine, not be
+    # answered as a component lookup. _assistant_question_requests_modelling
+    # alone is not enough: recovery grammar carries no finance keyword, so the
+    # scenario-verb family the recovery engine owns is checked explicitly.
+    if _assistant_question_requests_modelling(question):
+        return None
+    scenario_norm = " ".join(str(question or "").casefold().split())
+    if re.search(
+        r"\b(?:recover|recovery|recovering|realize|realise|collect|collecting|remains|remaining|what if)\b",
+        scenario_norm,
+    ):
+        return None
+
+    try:
+        entities = _governed_entity_index(context)
+    except HTTPException:
+        return None
+    if not entities:
+        return None
+
+    matches = _resolve_governed_entities(entities, question=question, history=history)
+    if not matches:
+        return None
+
+    finding_match = next((item for item in matches if item.get("kind") == "finding"), None)
+    if finding_match is not None:
+        return _finding_reference_answer(finding_match)
+
+    component = next((item for item in matches if item.get("kind") == "kpi_component"), None)
+    if component is None:
+        return None
+
+    card = component.get("card") if isinstance(component.get("card"), Mapping) else {}
+    brief = component.get("brief") if isinstance(component.get("brief"), Mapping) else {}
+    driver = component.get("driver") if isinstance(component.get("driver"), Mapping) else {}
+    label = str(card.get("label") or "this KPI")
+    driver_label = str(driver.get("label") or "component")
+    driver_value = str(driver.get("value") or "").strip()
+    share = driver.get("share_pct")
+    share_text = ""
+    try:
+        if share not in (None, ""):
+            share_text = f"{float(share):.1f}%"
+    except (TypeError, ValueError):
+        share_text = str(share or "")
+    readout = str(brief.get("readout") or card.get("detail") or "").strip()
+    calculation = brief.get("calculation") if isinstance(brief.get("calculation"), Mapping) else {}
+    audit = brief.get("audit") if isinstance(brief.get("audit"), Mapping) else {}
+    source_files = [
+        str(item)
+        for item in list(card.get("source_files") or audit.get("source_files") or audit.get("source_titles") or [])
+        if str(item)
+    ]
+    answer = f"{driver_value or 'That amount'} is {driver_label} within {label}."
+    if share_text:
+        answer += f" It represents {share_text} of the current {label.lower()} composition."
+    if readout:
+        answer += f" {readout}"
+    if calculation.get("formula"):
+        answer += f" Calculation basis: {calculation.get('formula')}"
+    answer += " Next step: use the same KPI drill-down to compare this component with the other reported contributors or ask for the evidence trail."
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Resolved a follow-up reference against current CEO KPI component rows before LLM fallback.",
+        "citations": [
+            {
+                "source_path": source_file,
+                "locator": f"CEO {label} component: {driver_label}",
+                "excerpt": f"{driver_label} {driver_value} {share_text}".strip(),
+            }
+            for source_file in source_files[:6]
+        ],
+        "suggestions": [
+            f"Compare {driver_label} with other {label} contributors",
+            f"Show the evidence trail for {driver_label}",
+            f"What needs executive attention for {label}?",
+        ],
+        "answered_by": "governed_reference",
+        "assistant_mode": "governed_reference",
+        "grounding_status": "grounded",
+        "reference": {
+            "kpi_key": str(card.get("key") or card.get("driver_key") or ""),
+            "label": driver_label,
+            "value": driver_value,
+            "share_pct": share,
+        },
+        "_orchestrator_force_answer": True,
+    }
+
+
+
 def _assistant_question_requests_modelling(question: str) -> bool:
     """Let an explicit scenario override passive card/graph context.
 
@@ -11501,6 +11992,10 @@ async def _assistant_chat_response(
         **request_context,
         **dict(getattr(request, "assistant_context", None) or {}),
     }
+    conversation_history = _assistant_history_from_request(request)
+    if conversation_history:
+        assistant_context["history"] = conversation_history
+        assistant_context["history_attached"] = True
     if getattr(request, "source", None):
         assistant_context.setdefault("source", str(request.source))
         assistant_context.setdefault("assistant_source", str(request.source))
@@ -11588,18 +12083,21 @@ async def _assistant_chat_response(
             packet = {"source": "empty_packet", "public_safe": True}
         context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
-        history = assistant_context.get("conversation_history")
-        if isinstance(history, list):
+        # The public packet's conversation view is derived from the same
+        # normalized history channel the authenticated path uses, so there is
+        # exactly one client->server history contract.
+        if conversation_history:
             context["public_context_packet"]["conversation_history"] = [
                 {
                     "role": str(item.get("role") or "")[:16],
-                    "content": str(item.get("content") or "")[:2400],
+                    "content": str(item.get("text") or "")[:2400],
                 }
-                for item in history[-8:]
-                if isinstance(item, dict)
-                and str(item.get("role") or "") in {"user", "assistant"}
-                and str(item.get("content") or "").strip()
+                for item in conversation_history[-8:]
+                if str(item.get("role") or "") in {"user", "assistant"}
+                and str(item.get("text") or "").strip()
             ]
+    if conversation_history:
+        context["assistant_history"] = conversation_history
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if _assistant_question_is_release_gate(question):
@@ -11724,172 +12222,65 @@ async def _assistant_chat_response(
         return payload
 
     def _public_safe_unmatched_result(question_text: str, reason: str | None = None) -> dict[str, Any]:
-        norm = " ".join(str(question_text or "").lower().split())
         governed_packet = context.get("public_context_packet")
         if not isinstance(governed_packet, dict):
             governed_packet = {}
-        governed_suggestions: list[str] = []
-        if governed_packet.get("is_illustrative") is False:
-            for item in list(governed_packet.get("drivers") or [])[:2]:
-                if not isinstance(item, dict):
-                    continue
+        suggestions: list[str] = []
+        for item in list(governed_packet.get("drivers") or [])[:2]:
+            if isinstance(item, dict):
                 label = str(item.get("label") or item.get("key") or "").strip()
                 if label:
-                    governed_suggestions.append(f"Explain the current {label} signal")
-            for item in list(governed_packet.get("findings") or [])[:1]:
-                if not isinstance(item, dict):
-                    continue
+                    suggestions.append(f"Explain the current {label} signal")
+        for item in list(governed_packet.get("findings") or [])[:1]:
+            if isinstance(item, dict):
                 title = str(item.get("title") or "").strip()
                 if title:
-                    governed_suggestions.append(f"Why does “{title}” matter for the board?")
-            governed_suggestions.append("What should I prepare for the board?")
-        if "capital of france" in norm:
-            general_answer = _public_safe_general_answer(question_text)
-            if general_answer is not None:
-                general_answer["suggestions"] = governed_suggestions[:4] or general_answer.get("suggestions") or ["What should I prepare for the board?"]
-                return general_answer
-        if governed_packet.get("is_illustrative") is False:
-            return {
-                "matched": False,
-                "answer": (
-                    "I could not match that question to a quantified scenario in the current governed run. "
-                    "No illustrative values were substituted; ask about a visible driver, finding, or board-state item."
-                ),
-                "citations": [],
-                "suggestions": governed_suggestions[:4],
-                "basis": "Governed packet fallback refused to substitute illustrative scenario values.",
-            }
-        if (
-            "follow-up task" in norm
-            or "follow up task" in norm
-            or "set a task" in norm
-            or "create a task" in norm
-            or ("set" in norm and "task" in norm)
-        ):
-            return {
-                "matched": True,
-                "answer": (
-                    "I can help frame the follow-up, but I cannot create or assign tasks from the public board-safe Hermes surface. "
-                    "For this prompt, the safe next step is: create a follow-up for Iris on fulfilment capacity, link it to the current board-prep capacity risk, and confirm owner, due date, and escalation path in the operator workflow."
-                ),
-                "citations": [_public_packet_citation("board_portal", "Shared public executive packet")],
-                "suggestions": [
-                    "Should we pull forward e-Pharmacy fulfilment capacity?",
-                    "Help me prepare the board pack for the pre-board stage.",
-                    "What is driving margin pressure this quarter?",
-                ],
-                "basis": "Public executive surface is read-only for task creation, so the assistant must return an exact operational limitation instead of a canned packet summary.",
-            }
-        is_out_of_domain = not _assistant_question_has_business_scope(question_text)
-        if is_out_of_domain:
-            general_answer = _public_safe_general_answer(question_text)
-            if general_answer is not None:
-                general_answer["suggestions"] = governed_suggestions[:4] or general_answer.get("suggestions") or []
-                return general_answer
-            return {
-                "matched": False,
-                "answer": "I can answer general questions with the model after you sign in. On this public board-safe surface, I can only answer from the current StrategyOS board packet. Try asking about margin, risk, board prep, recoverable leakage, or a specific business driver visible in the packet.",
-                "citations": [],
-                "suggestions": [
-                    "What is driving margin pressure this quarter?",
-                    "Help me prepare the board pack for the pre-board stage.",
-                    "Show evidence for SAR 8.6M recoverable",
-                    "Risk to full-year plan?",
-                ],
-                "basis": "Out-of-domain question detected on the public executive surface — no LLM call is allowed for anonymous/public-safe users.",
-            }
-        # Board-prep / board meeting guidance: return matched=true with
-        # board lifecycle guidance instead of falling through to canned
-        # revenue/margin summary.
-        if (
-            "how should i prep for the board" in norm
-            or "prep for the board" in norm
-            or "board meeting" in norm
-            or ("board" in norm and any(token in norm for token in ("prepare", "prep", "pack")))
-        ):
-            return {
-                "matched": True,
-                "answer": (
-                    "From the current board lifecycle, you are in the Pre-board stage. The recommended next steps are: "
-                    "review the CEO-approved packet materials (current decks, supplementary questions, and evidence), "
-                    "close any challenged findings before the board session, and confirm the meeting posture and timeline. "
-                    "Once the packet is clean, transition to Live to run the room on approved material only."
-                ),
-                "citations": [_public_packet_citation("board_portal", "Shared public executive packet")],
-                "suggestions": [
-                    "What is driving margin pressure this quarter?",
-                    "Show evidence for SAR 8.6M recoverable",
-                    "Risk to full-year plan?",
-                    "Should I prepare for any challenged findings before going live?",
-                ],
-                "basis": "Board-prep question detected on the public executive surface — returned board lifecycle guidance instead of canned revenue/margin summary.",
-            }
-        # Hedge prompt: if the question is about hedge (without ebitda/margin
-        # qualifier), return the hedge-specific answer. The scenario parser also
-        # handles "fx" + "hedge" + "ebitda"/"margin" combos, but "hedge downside"
-        # only contains "hedge" and falls through to this fallback.
-        if any(token in norm for token in ("hedge", "currency", "eur")):
-            answer = (
-                "The public packet shows EBITDA margin at 19.2%, 20 bps below plan, with FX creating roughly SAR 9k of weekly drag. "
-                "The visible board narrative says a 60% EUR hedge neutralises most of that drag and recovers about 15 bps. "
-                "The hedge downside is that a partial (60%) cover leaves about 40% of EUR exposure unhedged — about SAR 6k/wk residual drag — "
-                "and if EUR strengthens further the board may need to re-evaluate coverage. The board action is to tighten the hedge response, "
-                "protect margin recovery, and convert the recovery pool into realized uplift."
-            )
-            basis = "Public packet hedge impact summary synthesized from visible CEO facts and current board narrative."
-        # JV / funded from cash prompt: if the question mentions joint venture,
-        # JV, funded from cash, or cash funding for the JV, return the
-        # JV-specific answer from the packet.
-        elif any(token in norm for token in ("jv", "joint venture", "joint-venture")) and (
-            any(token in norm for token in ("fund", "cash", "capital", "finance", "pay", "liquidity"))
-        ):
-            answer = (
-                "From the current public packet, the JV is structured with supply-lock terms that are agreed and cash headroom confirmed. "
-                "e-Pharmacy orders are +12% week on week on the GLP-1 refill cohort with fulfilment holding at a 2-day SLA, and the "
-                "week-ahead packet says the JV signature locks supply ahead of demand. The board implication is capacity timing, not "
-                "cash availability — the packet confirms sufficient liquidity for the JV commitment, but the board should monitor "
-                "fulfilment capacity to avoid supply chain bottlenecks as orders scale."
-            )
-            basis = "Public packet JV funding summary synthesized from visible CEO facts and e-Pharmacy growth narrative."
-        elif any(token in norm for token in ("margin", "ebitda", "profitability")):
-            answer = (
-                "From the current public packet, margin pressure is coming from FX drag, hot API input cost, Healthcare occupancy below plan, and Tamween still sitting behind its recovery path. "
-                "The board actions are to tighten the hedge response, protect occupancy recovery, and convert the recovery pool into realized uplift."
-            )
-            basis = "Public packet margin summary synthesized from visible CEO facts."
-        elif any(token in norm for token in ("risk", "plan", "year")):
-            answer = (
-                "From the current public packet, the main risk is still margin quality rather than demand: revenue is ahead, but FX, API cost, Healthcare occupancy, and Tamween timing are still shaping the board narrative."
-            )
-            basis = "Public packet risk summary synthesized from visible CEO facts."
-        else:
-            # Catch-all for business-token prompts that don't match a specific handler.
-            # Return scope-boundary message + matched=False so the frontend can
-            # distinguish unmatched from deterministic answers.
-            answer = (
-                "I'm Hermes, your board chief of staff. I can help with questions about the organization's "
-                "board pack, governed evidence, strategic decisions, and the current board lifecycle state. "
-                "Your question appears to be outside the available board context — try asking about margin, "
-                "risk, board prep, recoverable leakage, or a specific business driver visible in the packet."
-            )
-            basis = "Public executive surface: unmatched query caught in safety fallback — scope-boundary message returned instead of canned packet summary."
+                    suggestions.append(f"Why does {title} matter for the board?")
+        suggestions.append("What should I prepare for the board?")
         return {
             "matched": False,
-            "answer": answer,
-            "citations": [_public_packet_citation("facts[0]", "Shared public executive packet")],
-            "suggestions": [
-                "What is driving margin pressure this quarter?",
-                "Help me prepare the board pack for the pre-board stage.",
-                "Show evidence for SAR 8.6M recoverable",
-                "Risk to full-year plan?",
-            ],
-            "basis": basis,
+            "answer": (
+                "I could not match that question to a calculated result in the current reviewed data. "
+                "No values were inferred or substituted. Ask about a visible KPI, case, or board decision."
+            ),
+            "citations": [],
+            "suggestions": suggestions[:4],
+            "basis": reason or "No calculated result matched the current reviewed data.",
         }
+
     orchestrator = get_orchestrator()
     findings_payload = [
         finding.__dict__ if hasattr(finding, "__dict__") else finding
         for finding in context["findings"]
     ]
+
+    governed_reference_result = _governed_reference_result(
+        context,
+        question=question,
+        assistant_context=assistant_context,
+        history=conversation_history,
+        public_safe=public_safe,
+    )
+    if governed_reference_result is not None:
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=governed_reference_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=governed_reference_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     app_help_result = (
         None
@@ -11920,7 +12311,12 @@ async def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
-    if not public_safe and mode in {"auto", "llm"} and not _assistant_question_has_business_scope(question):
+    if (
+        not public_safe
+        and mode in {"auto", "llm"}
+        and not _assistant_question_has_business_scope(question)
+        and not _question_looks_like_governed_identifier(question)
+    ):
         general_status = llm_qa.chat_status(CONFIG)
         if general_status.get("enabled"):
             general_result = await asyncio.get_running_loop().run_in_executor(
@@ -11973,6 +12369,7 @@ async def _assistant_chat_response(
                 "run_mode": context["run_mode"],
                 "persona": persona,
                 "assistant_context": assistant_context,
+                "assistant_history": conversation_history,
                 "driver_context": driver_context,
             },
         )
@@ -12275,6 +12672,7 @@ async def _assistant_chat_response(
                 graph_result=graph_result,
                 retrieval_result=retrieval_result,
                 deterministic_result=deterministic_result,
+                assistant_history=conversation_history,
             ),
         )
     except RuntimeError as exc:
@@ -12418,6 +12816,7 @@ def data_qa(
             detail=f"Unsupported assistant persona '{persona}'.",
         )
     driver_context = request.driver_context or request_context.get("driver_context") or {}
+    conversation_history = _assistant_history_from_request(request)
     trace_id = (request.trace_id or "").strip() or uuid4().hex
     if mode not in {"auto", "deterministic", "llm"}:
         raise HTTPException(
@@ -12812,6 +13211,7 @@ def data_qa(
                 graph_result=graph_result,
                 retrieval_result=retrieval_result,
                 deterministic_result=deterministic_result,
+                assistant_history=conversation_history,
             ),
         )
     except RuntimeError as exc:

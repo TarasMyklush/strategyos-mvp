@@ -10,31 +10,6 @@
   var ASSISTANT_ENDPOINT = "/assistant/chat";
   var ASSISTANT_TRANSPORT_FALLBACK = "I couldn't reach the shared assistant service just now.";
   var BOOTSTRAP_ASSISTANT_CONTEXT = bootstrap.assistant_public_context || {};
-  var _leadersFallbackTimer = null;
-
-  // PostMessage listener for YouTube embed error detection (faster than timeout)
-  window.addEventListener('message', function (event) {
-    if (event.origin !== 'https://www.youtube-nocookie.com') return;
-    try {
-      var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-      if (data && data.event === 'onError') {
-        var frame = document.getElementById('leaders-featured-iframe');
-        if (frame) {
-          if (_leadersFallbackTimer) { window.clearTimeout(_leadersFallbackTimer); _leadersFallbackTimer = null; }
-          var wrapper = frame.parentNode;
-          var vidMatch = frame.src && frame.src.match(/\/embed\/([^/?]+)/);
-          var vid = vidMatch ? vidMatch[1] : '';
-          if (wrapper) {
-            wrapper.innerHTML = '<div class="leaders-fallback-card"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">This video is not available for inline playback.</p><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vid) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
-          }
-        }
-      }
-      if (data && data.event === 'onReady') {
-        if (_leadersFallbackTimer) { window.clearTimeout(_leadersFallbackTimer); _leadersFallbackTimer = null; }
-      }
-    } catch (_) {}
-  });
-
   function safeArray(value) {
     if (Array.isArray(value)) return value;
     if (value && typeof value.forEach === 'function') return Array.from(value);
@@ -786,7 +761,6 @@
 
   function _openHermesDrawer(returnFocusEl) {
     /* Guard: surfaces must not overlap — close video modal before opening drawer */
-    if (state.videoModalOpen) closeVideoModal();
     /* Guard: close A2A panel if open — only one surface at a time */
     if (state.a2aOpen) { state.a2aOpen = false; renderA2APanel(); }
     /* Guard: if already open, keep the visible conversation in sync. */
@@ -1648,6 +1622,10 @@
       return '<div class="driver-pct">' + escapeHtml(driverPercentValue(driver).toFixed(1)) + '<span class="pct-sign">%</span></div><div class="driver-ofplan">' + escapeHtml(driverRingCaption(driver)) + '</div>';
     }
     var metric = String(firstDefined(driver && driver.metric, '—')).trim();
+    var moneyMatch = metric.match(/^([A-Z]{3})\s+([+-]?\d[\d,.]*)([KMBT]?)$/i);
+    if (moneyMatch) {
+      return '<div class="driver-pct driver-pct--metric driver-pct--money"><span class="driver-pct__currency">' + escapeHtml(moneyMatch[1].toUpperCase()) + '</span><span class="driver-pct__amount"><span class="driver-pct__main">' + escapeHtml(moneyMatch[2]) + '</span>' + (moneyMatch[3] ? '<span class="driver-pct__magnitude">' + escapeHtml(moneyMatch[3].toUpperCase()) + '</span>' : '') + '</span></div>';
+    }
     var parts = metric.split(/\s+/);
     var main = parts.shift() || '—';
     var rest = parts.join(' ');
@@ -2141,7 +2119,6 @@
     if (element) {
       if (contextualKpiKey) entrypoint = "ceo_kpi_inline";
       else if (element.id === "kg-inspector-ask") entrypoint = "knowledge_graph";
-      else if (element.id === "leaders-hermes-cta" || element.id === "video-hermes-cta") entrypoint = "leaders_corner";
       else if (element.classList.contains("disco-browse")) entrypoint = "agents_discovery";
       else if (element.getAttribute("data-board-prompt") !== null || element.getAttribute("data-board-action") !== null) entrypoint = "board_portal";
       else if (element.closest(driverComposerSelector)) entrypoint = "driver_composer";
@@ -2170,6 +2147,21 @@
     };
   }
 
+  function assistantThreadHistory(limit) {
+    var thread = threadStore()[currentThreadKey()];
+    var messages = safeArray(thread && thread.messages).filter(function (item) {
+      return item && item.status !== "pending" && String(item.text || "").trim();
+    });
+    return messages.slice(-Math.max(1, limit || 8)).map(function (item) {
+      return {
+        role: item.role || "assistant",
+        text: String(item.text || "").slice(0, 2000),
+        payload: item.payload || null,
+        assistant_context: item.payload && item.payload.assistant_context ? item.payload.assistant_context : null
+      };
+    });
+  }
+
   async function buildAssistantReply(message, sourceEl) {
     var hiddenContext = arguments.length > 2 ? arguments[2] : null;
     var cleanMessage = String(message || "").trim();
@@ -2194,15 +2186,15 @@
       hiddenContext && typeof hiddenContext === "object" ? hiddenContext : {}
     );
     body.assistant_context = entrypointCtx;
-    var activeThread = threadStore()[currentThreadKey()];
-    body.assistant_context.conversation_history = safeArray(activeThread && activeThread.messages)
-      .filter(function (item) {
-        return item && item.status !== "pending" && (item.role === "user" || item.role === "assistant") && String(item.text || "").trim();
-      })
-      .slice(-8)
-      .map(function (item) {
-        return { role: item.role, content: String(item.text || "").trim().slice(0, 2400) };
-      });
+    // Single history channel: role/text/payload items. The server normalizes
+    // this once (_assistant_history_from_request) and derives the public
+    // packet's conversation_history view from it, so the older
+    // assistant_context.conversation_history emission is intentionally gone.
+    body.history = assistantThreadHistory(8);
+    if (body.history.length) {
+      body.assistant_context.history = body.history;
+      body.assistant_context.history_attached = true;
+    }
     // Board portal prompts must NOT carry hero/revenue driver_context, because
     // the board entrypoint_context already identifies board state/lifecycle and
     // stale driver metrics (e.g. driver_context.key="revenue") cause the backend
@@ -3293,11 +3285,13 @@
         var active = isNodeFocused(node, focused);
         var sizeClass = "";
         var nr = Number(node.r || 8);
+        var visualRadius = Math.max(node.synthetic ? 2.4 : 3.8, nr / (node.synthetic ? 1.05 : 1.65));
+        var interactionRadius = Math.max(7, visualRadius + 2.5);
         if (nr >= 12) sizeClass = " kg-node--major";
         else if (nr <= 7) sizeClass = " kg-node--minor";
         if (node.synthetic) sizeClass += ' kg-node--synthetic';
         var selClass = (isSelected === node.id) ? " is-selected" : "";
-        return '<g class="kg-node' + (active ? ' on' : ' off') + sizeClass + selClass + '" data-kg-id="' + escapeHtml(node.id) + '" tabindex="0" role="button" aria-label="' + escapeHtml(firstDefined(node.label, 'Node')) + ' — ' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || 'node')) + '"><circle class="kg-node-dot kg-node-dot--' + escapeHtml(node.category || 'default') + '" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(Math.max(node.synthetic ? 2.4 : 3.8, nr / (node.synthetic ? 1.05 : 1.65)))) + '"></circle></g>';
+        return '<g class="kg-node' + (active ? ' on' : ' off') + sizeClass + selClass + '" data-kg-id="' + escapeHtml(node.id) + '" tabindex="0" role="button" aria-label="' + escapeHtml(firstDefined(node.label, 'Node')) + ' — ' + escapeHtml(firstDefined(KG_CATEGORY_LABELS[node.category], node.category || 'node')) + '"><circle class="kg-node-hit" aria-hidden="true" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(interactionRadius)) + '"></circle><circle class="kg-node-dot kg-node-dot--' + escapeHtml(node.category || 'default') + '" cx="' + escapeHtml(String(node.x)) + '" cy="' + escapeHtml(String(node.y)) + '" r="' + escapeHtml(String(visualRadius)) + '"></circle></g>';
       }).join('')
       + '</svg>'
       /* Labels overlaid on SVG */
@@ -3583,7 +3577,7 @@
         ].join("")
         : [
           '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
-          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot">' + escapeHtml(firstDefined(driver.metric, '—')) + '<span class="driver-sub"> · ' + escapeHtml(firstDefined(driver.ring_label, driverSubLabel(driver))) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
+          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot"><span class="driver-foot__metric">' + escapeHtml(firstDefined(driver.metric, '—')) + '</span><span class="driver-sub">' + escapeHtml(firstDefined(driver.ring_label, driverSubLabel(driver))) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
         ].join("");
       // Native focus can scroll a partially visible tile before `click`
       // fires. Preserve the executive's position at pointer/keyboard intent,
@@ -4041,210 +4035,6 @@
         button.onclick = function () { askAssistant(button.getAttribute("data-chat-prompt") || "", button); };
       });
       return;
-      var vlogs = [
-        { id: 'uTRKdCY4HdE', title: 'Enterprise AI Strategy and CEO Leadership', speaker: 'McKinsey & Company', theme: 'CEO leadership · enterprise AI strategy', dur: '~45 min', summary: 'CXOTalk #851: How CEOs should think about AI strategy, governance, and organizational alignment.', transcript: 'Full discussion on CEO-level AI strategy: moving from experimentation to enterprise-wide adoption, building AI governance frameworks, and aligning AI initiatives with business strategy.' },
-        { id: 'sFSzPE2AOE0', title: 'Aligning AI with Enterprise Strategy', speaker: 'Leon Gordon, CEO at Onyx Data', theme: 'AI & data strategy alignment', dur: '~40 min', summary: 'How organizations can bridge the gap between AI capabilities and strategic goals.', transcript: 'Leon Gordon shares frameworks for aligning AI initiatives with enterprise strategy: data maturity assessment, capability mapping, and building a data-driven culture.' },
-        { id: 'pQtdQ6AHn_Q', title: 'Agentic AI Governance and Enterprise-Scale Execution', speaker: 'Industry Panel', theme: 'governance · data quality · enterprise execution', dur: '~50 min', summary: 'Governance models for agentic AI systems, data quality requirements, and scaling patterns.', transcript: 'Panel discussion: agentic AI governance control frameworks, data quality pipelines, human-in-the-loop patterns, and scaling AI execution while maintaining compliance.' },
-        { id: 't885M1WB1pg', title: 'Bridge Strategy and Execution with Decision-Ready Views', speaker: 'Strategy Execution Webinar', theme: 'strategy execution · decision-ready views', dur: '~35 min', summary: 'Creating decision-ready views that connect strategic plans to operational execution.', transcript: 'Building decision-ready dashboards, connecting plans to operations, and creating feedback loops that keep strategy alive.' }
-      ];
-      gravityPanel.innerHTML = [
-        '<div class="detail-head"><div><h3 class="detail-title">Explore scenarios</h3><p class="section-note">Ask what-if questions on your live data</p></div></div>',
-        '<div class="gravity-grid-v2"><section class="gravity-play-card">' + safeArray(gravity.prompts).slice(0, 3).map(function (prompt) { return '<button class="timeline-chip" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"><strong>' + escapeHtml(prompt) + '</strong><span>Send to assistant</span></button>'; }).join('') + '</section><section class="leaders-card"><div class="leaders-badge">Leaders\' Corner</div><div class="leaders-title">Short counsel, senior practitioners</div><div class="leaders-featured"><div class="leaders-fallback-card" id="leaders-featured-fallback"><p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Loading video...</p><p class="leaders-fallback-detail">' + escapeHtml(vlogs[0].title) + ' — ' + escapeHtml(vlogs[0].speaker) + '</p></div><div class="video-frame-wrapper" id="leaders-frame-wrapper" hidden><iframe id="leaders-featured-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen title=""></iframe></div></div><div class="leaders-video-info" id="leaders-video-info"><h4>' + escapeHtml(vlogs[0].title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(vlogs[0].speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(vlogs[0].theme) + '</span><p class="leaders-video-summary">' + escapeHtml(vlogs[0].summary) + '</p><details><summary>Summary</summary><p>' + escapeHtml(vlogs[0].transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><button class="leaders-video-open" type="button">Watch in player</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(vlogs[0].id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div></div>' +
-        '<div class="leaders-thumb-grid" id="leaders-thumb-grid">' +
-        vlogs.map(function (v, i) { return '<div class="leaders-thumb' + (i === 0 ? ' is-active' : '') + '" data-video-id="' + escapeHtml(v.id) + '" tabindex="0" role="button"><span class="leaders-thumb__img">▶</span><span class="leaders-thumb__title">' + escapeHtml(v.title) + '</span><span class="leaders-thumb__speaker">' + escapeHtml(v.speaker) + ' · ' + escapeHtml(v.dur) + '</span></div>'; }).join('') +
-        '</div></section></div>'
-      ].join("");
-      safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
-        button.onclick = function () {
-          askAssistant(button.getAttribute("data-chat-prompt") || "", button);
-        };
-      });
-      var leadersCard = gravityPanel.querySelector('.leaders-card');
-      // Wire inline thumbnail clicks
-      safeArray(gravityPanel.querySelectorAll('.leaders-thumb')).forEach(function (thumb) {
-        thumb.addEventListener('click', function () {
-          var videoId = thumb.getAttribute('data-video-id') || '';
-          var item = null;
-          safeArray(vlogs).forEach(function (v) {
-            if (v.id === videoId) item = v;
-          });
-          if (item) selectLeadersVideo(item, vlogs, leadersCard);
-        });
-      });
-      var hermesCta = leadersCard && leadersCard.querySelector('#leaders-hermes-cta');
-      if (hermesCta) {
-        hermesCta.onclick = function () {
-          var activeThumb = gravityPanel.querySelector('.leaders-thumb.is-active');
-          var item = null;
-          if (activeThumb) {
-            var vid = activeThumb.getAttribute('data-video-id');
-            safeArray(vlogs).forEach(function (v) {
-              if (v.id === vid) item = v;
-            });
-          }
-          if (!item) item = vlogs[0];
-          if (item) {
-            askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?', hermesCta);
-          }
-        };
-      }
-      // Initialize featured video on first load — switch from fallback card to embedded iframe player
-      selectLeadersVideo(vlogs[0], vlogs, leadersCard);
-    }
-  }
-
-  function selectLeadersVideo(item, vlogs, leadersCard) {
-    if (!leadersCard) return;
-    var fallback = leadersCard.querySelector('#leaders-featured-fallback');
-    var frameWrapper = leadersCard.querySelector('#leaders-frame-wrapper');
-    var iframe = leadersCard.querySelector('#leaders-featured-iframe');
-    var info = leadersCard.querySelector('#leaders-video-info');
-    var thumbGrid = leadersCard.querySelector('#leaders-thumb-grid');
-
-    if (_leadersFallbackTimer) {
-      window.clearTimeout(_leadersFallbackTimer);
-      _leadersFallbackTimer = null;
-    }
-    if (frameWrapper) frameWrapper.hidden = false;
-    if (iframe) {
-      iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(item.id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1';
-      iframe.title = item.title;
-      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen');
-      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-      iframe.allowFullscreen = true;
-    }
-    if (fallback) {
-      fallback.hidden = true;
-      fallback.innerHTML = '<p class="leaders-fallback-icon">▶</p><p class="leaders-fallback-msg">Embed unavailable.</p><p class="leaders-fallback-detail">' + escapeHtml(item.title) + ' — ' + escapeHtml(item.speaker) + '</p><div class="leaders-fallback-actions"><button class="leaders-fallback-watch" type="button">Watch in player</button><a class="leaders-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
-      var watchBtn = fallback.querySelector('.leaders-fallback-watch');
-      if (watchBtn) {
-        watchBtn.onclick = function () {
-          openVideoModal(item);
-        };
-      }
-    }
-
-    if (info) {
-      info.innerHTML = '<h4>' + escapeHtml(item.title) + '</h4><p class="leaders-video-speaker">' + escapeHtml(item.speaker) + '</p><span class="leaders-video-theme">' + escapeHtml(item.theme) + '</span><p class="leaders-video-summary">' + escapeHtml(item.summary) + '</p><details><summary>Summary</summary><p>' + escapeHtml(item.transcript) + '</p></details><div class="leaders-video-ctas"><button class="leaders-hermes-cta" id="leaders-hermes-cta">Ask Hermes about this topic</button><button class="leaders-video-open" type="button">Watch in player</button><a class="leaders-yt-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
-      var hermesCta = info.querySelector('#leaders-hermes-cta');
-      if (hermesCta) {
-        hermesCta.onclick = function () {
-          askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?', hermesCta);
-        };
-      }
-      var openBtn = info.querySelector('.leaders-video-open');
-      if (openBtn) {
-        openBtn.onclick = function () {
-          openVideoModal(item);
-        };
-      }
-    }
-
-    if (thumbGrid) {
-      safeArray(leadersCard.querySelectorAll('.leaders-thumb')).forEach(function (thumb) {
-        var vid = thumb.getAttribute('data-video-id');
-        if (vid === item.id) {
-          thumb.classList.add('is-active');
-        } else {
-          thumb.classList.remove('is-active');
-        }
-      });
-    }
-  }
-
-  function buildVideoModalHtml(item) {
-    return [
-      '<div class="video-modal-scrim" id="video-modal-scrim">',
-      '<div class="video-modal" role="dialog" aria-modal="true" aria-label="Video: ' + escapeHtml(item.title) + '">',
-      '<button class="video-modal-close" aria-label="Close video">×</button>',
-      '<div class="video-frame-wrapper">',
-      '<iframe id="video-modal-iframe" src="https://www.youtube-nocookie.com/embed/' + escapeHtml(item.id) + '?origin=' + encodeURIComponent(window.location.origin) + '&enablejsapi=1&rel=0&modestbranding=1"',
-      'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin"',
-      'allowfullscreen title="' + escapeHtml(item.title) + '"></iframe>',
-      '</div>',
-      '<div class="video-modal-body">',
-      '<h3>' + escapeHtml(item.title) + '</h3>',
-      '<p class="video-modal-speaker">' + escapeHtml(item.speaker) + '</p>',
-      '<span class="video-modal-theme">' + escapeHtml(item.theme) + '</span>',
-      '<p class="video-modal-summary">' + escapeHtml(item.summary) + '</p>',
-      '<details>',
-      '<summary>Summary</summary>',
-      '<p>' + escapeHtml(item.transcript) + '</p>',
-      '</details>',
-      '<button class="video-modal-cta" id="video-hermes-cta">Ask Hermes about this topic</button>',
-      '<div class="video-fallback" id="video-fallback" hidden>',
-      '<p>Embed unavailable</p>',
-      '<a class="video-fallback-link" href="https://www.youtube.com/watch?v=' + escapeHtml(item.id) + '" target="_blank" rel="noopener">Open on YouTube ↗</a>',
-      '</div>',
-      '</div>',
-      '</div>',
-      '</div>'
-    ].join("");
-  }
-
-  function closeVideoModal() {
-    var scrim = $("video-modal-scrim");
-    if (scrim) scrim.remove();
-    state.videoModalOpen = false;
-    document.removeEventListener("keydown", _videoModalKeydown);
-  }
-
-  var _videoModalKeydown = null;
-
-  function openVideoModal(item) {
-    /* Guard: surfaces must not overlap — close assistant drawer before opening video modal */
-    if (state.drawerOpen) _closeHermesDrawer();
-    closeVideoModal();
-    state.videoModalOpen = true;
-    var html = buildVideoModalHtml(item);
-    var wrapper = document.createElement("div");
-    wrapper.innerHTML = html;
-    var scrim = wrapper.firstChild;
-    document.body.appendChild(scrim);
-
-    var closeBtn = scrim.querySelector(".video-modal-close");
-    var hermesCta = scrim.querySelector("#video-hermes-cta");
-    var fallbackEl = scrim.querySelector("#video-fallback");
-    var iframe = scrim.querySelector("#video-modal-iframe");
-    var fallbackTimer = null;
-
-    scrim.onclick = function (event) {
-      if (event.target === scrim) closeVideoModal();
-    };
-
-    if (closeBtn) {
-      closeBtn.onclick = function () { closeVideoModal(); };
-      closeBtn.focus();
-    }
-
-    if (hermesCta) {
-      hermesCta.onclick = function () {
-        askAssistant('From the Leaders\' Corner video "' + item.title + '" — how does this apply to our strategy?', hermesCta);
-        closeVideoModal();
-      };
-    }
-
-    _videoModalKeydown = function (event) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        closeVideoModal();
-      }
-    };
-    document.addEventListener("keydown", _videoModalKeydown);
-
-    if (iframe && fallbackEl) {
-      fallbackTimer = window.setTimeout(function () {
-        fallbackEl.hidden = false;
-      }, 10000);
-
-      iframe.addEventListener("load", function () {
-        if (fallbackTimer) {
-          window.clearTimeout(fallbackTimer);
-          fallbackTimer = null;
-        }
-        fallbackEl.hidden = true;
-      });
     }
   }
 
@@ -5193,7 +4983,6 @@
       drawerOpen: false,
       drawerReturnFocusEl: null,
       failedAssistantAutoRetried: {},
-      videoModalOpen: false,
       theme: document.documentElement.getAttribute("data-theme") || "light",
       discoveryFilter: "all",
       discoveryQuery: "",

@@ -82,6 +82,16 @@ def test_local_identity_provider_issues_and_introspects_tokens():
         _restore_env(original)
 
 
+def test_openid_configuration_fails_closed_without_an_explicit_issuer():
+    original = _apply_env({"STRATEGYOS_IDP_ISSUER": None})
+    try:
+        response = TestClient(idp_module.app).get("/.well-known/openid-configuration")
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Identity issuer is not configured."}
+    finally:
+        _restore_env(original)
+
+
 def test_login_page_is_human_friendly_and_security_tagged():
     original = _apply_env(
         {
