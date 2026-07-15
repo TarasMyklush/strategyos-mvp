@@ -12248,6 +12248,13 @@ def _free_text_ceo_kpi_key(
     """Route names or uniquely displayed values to the governed KPI contract."""
     if _assistant_question_requests_modelling(question):
         return None
+    # The KPI contract states what a figure IS and how it is composed; it does
+    # not attribute movement. "Why did revenue drop 12%?" contains "revenue",
+    # and answering it from the Revenue card describes a figure while ignoring
+    # both the question and the false premise. Guarded here rather than at the
+    # call sites because two separate branches consume this key.
+    if _question_asks_for_causation(question):
+        return None
     norm = " ".join(str(question or "").casefold().split())
     if any(token in norm for token in ("cash versus floor", "cash-versus-floor", "cash vs floor", "cash floor", "cash position")):
         return "cash_vs_floor"

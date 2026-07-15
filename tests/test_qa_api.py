@@ -3675,3 +3675,41 @@ def test_answer_never_promises_suggestions_it_does_not_carry():
         suggestions=["What is F-006?"],
     )
     assert kept.endswith(":"), "the promise stands when suggestions are actually attached"
+
+
+def test_causal_question_does_not_claim_a_kpi_by_word_match():
+    """Two branches consume the free-text KPI key, so the rule lives at its source.
+
+    Guarding only _governed_reference_result left the second branch
+    (free_text_kpi_key -> governed_kpi) still answering "Why did our revenue
+    drop 12%?" by describing the Revenue card -- verified failing on a
+    deployed build.
+    """
+    assert api_module._free_text_ceo_kpi_key("Why did our revenue drop 12% last quarter?") is None
+    assert api_module._free_text_ceo_kpi_key("What is driving this result?") is None
+
+    # Plain lookups must still route to the KPI contract.
+    assert api_module._free_text_ceo_kpi_key("What is our revenue?") == "revenue"
+    assert api_module._free_text_ceo_kpi_key("Show me EBITDA margin") == "ebitda_margin"
+
+
+def test_kpi_card_buttons_still_route_when_the_card_supplies_the_key():
+    """The "What is driving this result?" button must keep working.
+
+    It is a real affordance on every KPI drill. It passes its kpi_key through
+    assistant_context, so the causation guard -- which only blocks keys
+    *inferred from words* -- must not disarm it.
+    """
+    assistant_context = {
+        "kpi_key": "revenue",
+        "kpi_question_intent": "drivers",
+        "entrypoint": "ceo_kpi_inline",
+    }
+    inferred = api_module._free_text_ceo_kpi_key("What is driving this result?")
+    contextual = inferred or str(assistant_context.get("kpi_key") or "").strip()
+
+    assert inferred is None, "the words alone must not claim a KPI"
+    assert contextual == "revenue", (
+        "a card that names its own KPI must still route; the guard applies to "
+        "inference, not to an explicit key supplied by the surface"
+    )
