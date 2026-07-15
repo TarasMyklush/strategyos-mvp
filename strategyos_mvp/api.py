@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import html
 import hashlib
 import json
@@ -11540,8 +11541,18 @@ def _governed_entity_index(context: Mapping[str, Any]) -> list[dict[str, Any]]:
     """
     entities: list[dict[str, Any]] = []
 
-    for row in list(context.get("findings") or []):
-        if not isinstance(row, Mapping):
+    for raw_row in list(context.get("findings") or []):
+        # The chat context carries Finding dataclasses straight from
+        # run_all_finance_skills(); other callers pass plain dict rows. Accept
+        # both -- an isinstance(Mapping) guard here silently indexed zero
+        # findings in production while dict-based tests passed.
+        if isinstance(raw_row, Mapping):
+            row: Mapping[str, Any] = raw_row
+        elif dataclasses.is_dataclass(raw_row) and not isinstance(raw_row, type):
+            row = dataclasses.asdict(raw_row)
+        elif hasattr(raw_row, "model_dump"):
+            row = raw_row.model_dump()
+        else:
             continue
         finding_id = str(row.get("finding_id") or row.get("case_id") or "").strip()
         title = str(row.get("title") or "").strip()

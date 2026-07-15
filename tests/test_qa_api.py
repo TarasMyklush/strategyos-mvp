@@ -3306,6 +3306,37 @@ def test_amount_reference_parser_requires_money_shape():
     assert parse("why is the share 28.5%?") == []
 
 
+def _governed_finding(**overrides):
+    """A real Finding dataclass -- the type the chat context actually holds.
+
+    _resolve_qa_context returns run_all_finance_skills() output, i.e. Finding
+    dataclasses, not dicts. Fixtures built from dicts hid a production bug
+    where the entity index skipped every finding.
+    """
+    from strategyos_mvp.models import Finding
+
+    defaults = dict(
+        finding_id="F-006",
+        title="FX hedge not applied for INV-2026-0577",
+        pattern_type="fx_hedge_missing",
+        vendor_id="V-900",
+        vendor_name="Bordeaux Wines & Spirits SARL",
+        leakage_sar=46488.0,
+        recoverable_sar=46488.0,
+        recoverable_usd=12396.0,
+        confidence=0.9,
+        classification="confirmed",
+        rationale="Invoice settled above an available hedge rate.",
+        remediation="Apply the treasury hedge rate and recover the difference.",
+        citations=[],
+        calculation={},
+        status="open",
+        challenges=[],
+    )
+    defaults.update(overrides)
+    return Finding(**defaults)
+
+
 def _findings_context(monkeypatch):
     """Governed run carrying the finding rows the CEO surface shows."""
     monkeypatch.setattr(
@@ -3314,19 +3345,14 @@ def _findings_context(monkeypatch):
         lambda _run_id: {
             "bundle": object(),
             "findings": [
-                {
-                    "finding_id": "F-006",
-                    "title": "FX hedge not applied for INV-2026-0577",
-                    "recoverable_sar": 46488.0,
-                    "vendor_name": "Gulf Trading Co",
-                    "citation_count": 4,
-                },
-                {
-                    "finding_id": "F-001",
-                    "title": "Auto-renewal escalation at Gulf Logistics Services Co",
-                    "recoverable_sar": 250416.0,
-                    "citation_count": 5,
-                },
+                _governed_finding(),
+                _governed_finding(
+                    finding_id="F-001",
+                    title="Auto-renewal escalation at Gulf Logistics Services Co",
+                    recoverable_sar=250416.0,
+                    leakage_sar=250416.0,
+                    vendor_name="Gulf Logistics Services Co",
+                ),
             ],
             "kg_nodes": [],
             "kg_edges": [],
