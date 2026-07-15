@@ -1457,3 +1457,25 @@ def test_transport_retries_transient_provider_failure_and_records_trace(monkeypa
     assert result["answer"] == "Recovered after retry."
     assert result["llm_status"]["transport"]["retries"] >= 1
     assert result["llm_status"]["transport"]["calls"][0]["outcome"] == "success"
+
+
+def test_prompt_does_not_narrate_evidence_scope_for_general_questions():
+    """"What is the capital of France?" must answer "Paris", not audit the run.
+
+    Making the governed model the only assistant left an older instruction --
+    "explain the nearest relevant evidence and the exact missing input" --
+    applying to every unmatched question. Live on prod that turned a one-word
+    fact into a paragraph about AP/AR ledgers and eight findings not containing
+    world capitals. The instruction is for company questions; a plain factual
+    question wants the fact.
+    """
+    import strategyos_mvp.llm_qa as llm_qa_module
+
+    prompt = llm_qa_module.SYSTEM_PROMPT
+    assert "ABOUT THIS BUSINESS" in prompt, (
+        "the nearest-evidence narration must be scoped to company questions"
+    )
+    assert "not an inventory of the run" in prompt
+    # The one-assistant contract and evidence discipline must both survive.
+    assert "ONLY assistant" in prompt
+    assert "must come from the JSON evidence" in prompt
