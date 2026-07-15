@@ -1013,7 +1013,10 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert "grid-template-columns: 128px minmax(0, 1fr);" in css
     assert "width: 128px;\n  height: 128px;" in css
     assert "stroke-width: 6;" in css
-    assert "width: calc(100% - 12px);\n  max-width: 116px;" in css
+    # Bounded by the square inscribed in the inner circle, not the ring's
+    # square: 116px on a 128px ring reached the corners where the circle has
+    # already curved away, so the status word sat on the stroke.
+    assert "width: calc((100% - 18px) * 0.707);" in css
     assert ".hero-score__value--compact" in css
     assert 'classList.toggle("hero-score__value--compact", heroScoreText.length > 4)' in _static_executive_js()
     assert ".kpi-brief-title-row" in css
@@ -3450,7 +3453,7 @@ def test_executive_ux_layout_contracts_are_guarded():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
 
     assert ".hero-score__label" in executive_css
-    assert "max-width: 116px" in executive_css
+    assert "0.707" in executive_css  # hero ring label bounded by the inscribed square
     assert ".hero-score__caption" in executive_css
     assert "white-space: nowrap" in executive_css
     assert ".twin-card-list" in executive_css

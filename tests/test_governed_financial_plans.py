@@ -125,3 +125,31 @@ def test_strategic_plan_is_context_not_like_for_like_variance() -> None:
         "note": "Annual Group progress reference; not a like-for-like H1 variance.",
         "source": "Board-approved Group Strategy 2026–2028",
     }
+
+
+def test_startup_backfill_revalidates_only_canonical_plan_sources(tmp_path, monkeypatch) -> None:
+    import json
+    from types import SimpleNamespace
+    from strategyos_mvp import api
+
+    plan_pack = tmp_path / "source_packs" / "plan-pack"
+    ordinary_pack = tmp_path / "source_packs" / "ordinary-pack"
+    plan_pack.mkdir(parents=True)
+    ordinary_pack.mkdir(parents=True)
+    (plan_pack / "summary.json").write_text(json.dumps({
+        "source_pack_id": "plan-pack",
+        "manifest": [{"relative_path": "04_Strategic_Context/01_Group_Strategy/plan.pdf"}],
+    }))
+    (ordinary_pack / "summary.json").write_text(json.dumps({
+        "source_pack_id": "ordinary-pack",
+        "manifest": [{"relative_path": "02_ERP_Extracts/GL.csv"}],
+    }))
+    validated: list[str] = []
+    monkeypatch.setattr(api, "CONFIG", SimpleNamespace(output_root=tmp_path))
+    monkeypatch.setattr(api, "validate_source_pack", lambda pack_id: validated.append(pack_id) or {"source_pack_id": pack_id})
+    monkeypatch.setattr(api.state_store, "ingest_approved_plans_from_source_pack", lambda _: {"count": 1})
+
+    result = api._backfill_approved_plans_from_staged_sources()
+
+    assert result == {"status": "ok", "checked": 1, "activated": 1}
+    assert validated == ["plan-pack"]

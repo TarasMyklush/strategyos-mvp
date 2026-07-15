@@ -639,6 +639,27 @@ SUGGESTIONS: tuple[str, ...] = (
 )
 
 
+def claims_question(question: str) -> bool:
+    """Public: does any governed QA intent claim this question?
+
+    Exported so the chat router can ask this engine whether it owns a question
+    instead of guessing from a keyword list. Uses the same intent matchers and
+    synonym expansion as answer_question, so the claim and the answer can never
+    drift apart.
+    """
+    norm = _normalize(question)
+    if not norm:
+        return False
+    match_text = _expand_synonyms(norm)
+    for intent in INTENTS:
+        try:
+            if intent.matcher(match_text):
+                return True
+        except Exception:  # pragma: no cover - a broken matcher must not gate scope
+            continue
+    return False
+
+
 def answer_question(question: str, *, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     norm = _normalize(question)
     if not norm:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
+from functools import lru_cache
 import html
 import hashlib
 import json
@@ -45,7 +47,7 @@ from .ingestion import load_dataset
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
-from .scenario_parser import SCENARIO_SUGGESTIONS, parse_scenario
+from .scenario_parser import SCENARIO_SUGGESTIONS, has_scenario_intent as scenario_has_intent, parse_scenario
 from .platform_foundation import (
     ARTIFACT_TITLES,
     DomainMetricContract,
@@ -133,6 +135,46 @@ ANONYMOUS_PUBLIC_BANNED_KEYS = {
     "owner",
     "_backing_run_id",
 }
+
+
+def _backfill_approved_plans_from_staged_sources() -> dict[str, Any]:
+    """Re-evaluate persisted source packs after plan-governance upgrades.
+
+    Browser uploads live on the persistent workspace volume. Older packs may
+    predate the approved-plan classifier, so startup safely reclassifies only
+    packs whose manifest already places a document in the canonical strategy
+    folder. Source hashes make this operation idempotent across every restart.
+    """
+    source_pack_root = CONFIG.output_root / "source_packs"
+    if not source_pack_root.exists():
+        return {"status": "none", "checked": 0, "activated": 0}
+    summary_paths = sorted(
+        source_pack_root.glob("*/summary.json"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )[:25]
+    checked = 0
+    activated = 0
+    for summary_path in summary_paths:
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        manifest = list(summary.get("manifest") or [])
+        has_plan_candidate = any(
+            (item.get("classification") or {}).get("role") == "approved_strategy_plan"
+            or "04_Strategic_Context/01_Group_Strategy" in str(item.get("relative_path") or "")
+            for item in manifest
+            if isinstance(item, Mapping)
+        )
+        if not has_plan_candidate:
+            continue
+        source_pack_id = str(summary.get("source_pack_id") or summary_path.parent.name)
+        checked += 1
+        refreshed = validate_source_pack(source_pack_id)
+        result = state_store.ingest_approved_plans_from_source_pack(refreshed)
+        activated += int(result.get("count") or 0)
+    return {"status": "ok", "checked": checked, "activated": activated}
 
 
 class RunRequest(BaseModel):
@@ -240,6 +282,7 @@ class AssistantChatRequest(BaseModel):
     assistant_context: dict[str, Any] | None = None
     source: str | None = None
     entrypoint: str | None = None
+    history: list[dict[str, Any]] | None = None
 
 
 from .twins.api import (
@@ -247,10 +290,23 @@ from .twins.api import (
     router as twin_router,
     twin_operational_health_payload,
 )
+from .agent_runtime.api import router as agent_runtime_router
 
 @asynccontextmanager
 async def _app_lifespan(_: FastAPI):
     """Reconcile durable Twin audit indexes before serving executive reads."""
+    try:
+        plan_backfill = _backfill_approved_plans_from_staged_sources()
+        if plan_backfill.get("checked"):
+            logger.info(
+                "Revalidated %s staged plan source pack(s); %s approved plan(s) activated",
+                plan_backfill["checked"],
+                plan_backfill["activated"],
+            )
+    except Exception:
+        # A historical revalidation problem must be visible in logs without
+        # preventing authentication and governed reads from starting.
+        logger.exception("Approved-plan source-pack backfill failed")
     try:
         result = reconcile_message_routing_audit()
         if result["created"]:
@@ -311,6 +367,7 @@ def _asset_revision(*relative_paths: str) -> str:
 def _executive_asset_revision() -> str:
     return _asset_revision(*_EXECUTIVE_ASSET_REV_FILES)
 app.include_router(twin_router)
+app.include_router(agent_runtime_router)
 
 ARTIFACT_PREVIEW_LIMIT_BYTES = 24_000
 ARTIFACT_JSON_PARSE_LIMIT_BYTES = 200_000
@@ -4963,7 +5020,19 @@ def _chat_threads_payload(
         ],
         "a2a": {
             "enabled": True,
-            "mode": "derived_handoff_only",
+            # design doc acceptance criteria: "a2a.mode reports
+            # durable_task_handoffs only when real persistence/execution is
+            # enabled" -- gated on all three per-PR feature flags being on
+            # together (conversations + handoffs + live UI), since that is
+            # the full vertical slice the mode name promises. Any single
+            # flag off means some part of the chain (durable conversation
+            # storage, real typed handoffs, or the live network/approval
+            # surface) is still the pre-agent-runtime derived behavior.
+            "mode": (
+                "durable_task_handoffs"
+                if (CONFIG.agent_conversations_enabled and CONFIG.agent_handoffs_enabled and CONFIG.agent_live_ui_enabled)
+                else "derived_handoff_only"
+            ),
             "items": [
                 {
                     "handoff_id": f"action:{index}",
@@ -10864,29 +10933,45 @@ def _sanitize_assistant_visible_text(value: Any) -> str:
     return str(text or "").strip()
 
 
-_ASSISTANT_BUSINESS_TOKENS = (
-    "margin", "ebitda", "profitability", "profit", "loss", "revenue", "income",
-    "risk", "plan", "year", "quarter", "board", "packet", "prep", "session",
-    "run", "summary", "summarize", "analysis", "diagnostic", "diagnostics",
-    "live", "closed", "healthcare", "pharmacy", "fx", "hedge",
-    "recoverable", "recovery", "evidence", "finding", "citation", "kpi",
-    "driver", "ceo", "hermes", "assistant", "thread", "task", "follow-up",
-    "invoice", "vendor", "spend", "ap", "working capital", "cash",
-    "balance", "budget", "forecast", "scenario", "what-if", "what if",
-)
+def _assistant_history_from_request(request: AssistantChatRequest | QaRequest) -> list[dict[str, Any]]:
+    """Normalize client-supplied chat history for follow-up grounding.
 
+    The executive drawer owns thread history in browser storage.  The backend
+    still needs the previous answer payload to resolve follow-ups like
+    ``Elaborate on SAR 109.9M`` against the exact KPI row that produced the
+    prior answer, rather than re-deriving from a bare amount.
+    """
+    candidates: Any = getattr(request, "history", None)
+    if candidates is None:
+        request_context = getattr(request, "context", None)
+        if isinstance(request_context, Mapping):
+            candidates = request_context.get("history") or request_context.get("messages")
+    if candidates is None:
+        assistant_context = getattr(request, "assistant_context", None)
+        if isinstance(assistant_context, Mapping):
+            candidates = assistant_context.get("history") or assistant_context.get("messages")
+    if not isinstance(candidates, list):
+        return []
 
-def _assistant_question_has_business_scope(question: str) -> bool:
-    norm = " ".join(str(question or "").lower().split())
-    if not norm:
-        return False
-    for token in _ASSISTANT_BUSINESS_TOKENS:
-        if " " in token:
-            if token in norm:
-                return True
-        elif re.search(r"\b" + re.escape(token) + r"\b", norm):
-            return True
-    return False
+    normalized: list[dict[str, Any]] = []
+    for item in candidates[-8:]:
+        if not isinstance(item, Mapping):
+            continue
+        role = str(item.get("role") or item.get("speaker") or "").strip().lower()
+        text = str(item.get("text") or item.get("content") or item.get("answer") or "").strip()
+        payload = item.get("payload") or item.get("responsePayload") or item.get("response_payload")
+        provenance = item.get("assistant_context") or item.get("context") or item.get("provenance")
+        if not text and not isinstance(payload, Mapping) and not isinstance(provenance, Mapping):
+            continue
+        normalized.append(
+            {
+                "role": role if role in {"user", "assistant", "system"} else "assistant",
+                "text": text[:2000],
+                "payload": dict(payload) if isinstance(payload, Mapping) else None,
+                "assistant_context": dict(provenance) if isinstance(provenance, Mapping) else None,
+            }
+        )
+    return normalized
 
 
 _EXTERNAL_DECISION_EVIDENCE_PATTERNS = (
@@ -11035,6 +11120,7 @@ def _supplemental_grounding_payload(
     graph_result: dict[str, Any] | None = None,
     retrieval_result: dict[str, Any] | None = None,
     deterministic_result: dict[str, Any] | None = None,
+    assistant_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     if graph_result and graph_result.get("matched"):
@@ -11059,6 +11145,16 @@ def _supplemental_grounding_payload(
             "basis": deterministic_result.get("basis"),
             "citations": list(deterministic_result.get("citations") or [])[:8],
         }
+    if assistant_history:
+        payload["conversation_history"] = [
+            {
+                "role": item.get("role"),
+                "text": item.get("text"),
+                "assistant_context": item.get("assistant_context"),
+                "payload_reference": (item.get("payload") or {}).get("reference") if isinstance(item.get("payload"), Mapping) else None,
+            }
+            for item in assistant_history[-6:]
+        ]
     return payload
 
 
@@ -11551,6 +11647,539 @@ def _ceo_kpi_inline_result(
     }
 
 
+def _parse_amount_references(question: str) -> list[float]:
+    """Extract monetary references from a follow-up question.
+
+    Only SAR-prefixed or K/M/B-suffixed numbers qualify: a bare "3" in
+    "top 3 cases" or the "28.5" inside "28.5%" is not a money reference and
+    must not trigger component matching. Comma grouping ("SAR 794,108") is
+    accepted.
+    """
+    text = str(question or "")
+    values: list[float] = []
+    pattern = (
+        r"SAR\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*([kKmMbB])?(?![\d%])"
+        r"|\b(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*([kKmMbB])\b(?!%)"
+    )
+    for match in re.finditer(pattern, text):
+        raw_text = match.group(1) or match.group(3)
+        suffix = (match.group(2) or match.group(4) or "").lower()
+        if not raw_text:
+            continue
+        raw = float(raw_text.replace(",", ""))
+        multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(suffix, 1)
+        values.append(raw * multiplier)
+    return values
+
+
+def _parse_display_amount(value: Any) -> float | None:
+    text = str(value or "")
+    match = re.search(r"(?:SAR\s*)?(\d+(?:\.\d+)?)\s*([kKmMbB])?", text)
+    if not match:
+        return None
+    raw = float(match.group(1))
+    suffix = (match.group(2) or "").lower()
+    multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(suffix, 1)
+    return raw * multiplier
+
+
+def _amounts_match(left: float, right: float) -> bool:
+    tolerance = max(1.0, abs(right) * 0.006)
+    return abs(left - right) <= tolerance
+
+
+def _history_kpi_key(history: list[dict[str, Any]]) -> str | None:
+    for item in reversed(history):
+        payload = item.get("payload")
+        payload_context = payload.get("assistant_context") if isinstance(payload, Mapping) else None
+        for source in (item.get("assistant_context"), payload_context):
+            if isinstance(source, Mapping):
+                key = str(source.get("kpi_key") or source.get("driver_key") or "").strip()
+                if key and key != "board_packet":
+                    return key
+        if isinstance(payload, Mapping):
+            kpi = payload.get("kpi")
+            if isinstance(kpi, Mapping):
+                key = str(kpi.get("key") or kpi.get("driver_key") or "").strip()
+                if key:
+                    return key
+    return None
+
+
+def _governed_entity_index(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """One lookup over every entity the current governed run puts on screen.
+
+    The CEO references what they can see: a finding id ("F-006"), an invoice or
+    credit number carried in a finding title, a vendor, a KPI component, or a
+    bare amount. Resolving each surface separately is what left findings
+    unreachable while KPI rows resolved, so every surface is indexed here once
+    and matched by the same rules.
+    """
+    entities: list[dict[str, Any]] = []
+
+    for raw_row in list(context.get("findings") or []):
+        # The chat context carries Finding dataclasses straight from
+        # run_all_finance_skills(); other callers pass plain dict rows. Accept
+        # both -- an isinstance(Mapping) guard here silently indexed zero
+        # findings in production while dict-based tests passed.
+        if isinstance(raw_row, Mapping):
+            row: Mapping[str, Any] = raw_row
+        elif dataclasses.is_dataclass(raw_row) and not isinstance(raw_row, type):
+            row = dataclasses.asdict(raw_row)
+        elif hasattr(raw_row, "model_dump"):
+            row = raw_row.model_dump()
+        else:
+            continue
+        finding_id = str(row.get("finding_id") or row.get("case_id") or "").strip()
+        title = str(row.get("title") or "").strip()
+        if not finding_id and not title:
+            continue
+        amount = row.get("recoverable_sar")
+        tokens = {finding_id.casefold()} if finding_id else set()
+        # Titles carry the document identifiers a CEO quotes back
+        # ("INV-2026-0577", "CR-2024-091", "V-1142").
+        for doc_id in re.findall(r"\b[A-Z]{1,4}-[0-9]{2,4}-?[0-9]*\b", title):
+            tokens.add(doc_id.casefold())
+        vendor = str(row.get("vendor_name") or row.get("vendor") or "").strip()
+        if vendor:
+            tokens.add(vendor.casefold())
+        entities.append(
+            {
+                "kind": "finding",
+                "id": finding_id,
+                "label": title or finding_id,
+                "tokens": {token for token in tokens if token},
+                "phrase": title.casefold(),
+                "amount": _as_float_or_none(amount),
+                "row": dict(row),
+            }
+        )
+
+    read_model = _executive_read_model_from_available_truth(
+        dict(context.get("summary") if isinstance(context.get("summary"), Mapping) else {}),
+        [],
+        {},
+        {"report_count": 0},
+        {},
+        public_safe=False,
+    )
+    for card in list(build_executive_presentation(read_model).get("driver_grid") or []):
+        if not isinstance(card, Mapping):
+            continue
+        card_label = str(card.get("label") or "").strip()
+        card_key = str(card.get("key") or card.get("driver_key") or "").strip()
+        brief = card.get("executive_brief") if isinstance(card.get("executive_brief"), Mapping) else {}
+        entities.append(
+            {
+                "kind": "kpi",
+                "id": card_key,
+                "label": card_label,
+                "tokens": {token for token in {card_key.casefold(), card_label.casefold()} if token},
+                "phrase": card_label.casefold(),
+                "amount": _parse_display_amount(card.get("metric")),
+                "card": dict(card),
+                "brief": dict(brief),
+            }
+        )
+        for driver in list(brief.get("drivers") or []):
+            if not isinstance(driver, Mapping):
+                continue
+            driver_label = str(driver.get("label") or "").strip()
+            if not driver_label:
+                continue
+            entities.append(
+                {
+                    "kind": "kpi_component",
+                    "id": f"{card_key}:{driver_label}",
+                    "label": driver_label,
+                    "tokens": {driver_label.casefold()},
+                    "phrase": driver_label.casefold(),
+                    "amount": _parse_display_amount(driver.get("value")),
+                    "card": dict(card),
+                    "brief": dict(brief),
+                    "driver": dict(driver),
+                }
+            )
+    return entities
+
+
+_GOVERNED_IDENTIFIER_RE = re.compile(r"(?<![\w-])[A-Za-z]{1,4}-[0-9]{2,4}-?[0-9]*(?![\w-])")
+
+
+def _question_is_governed_business_question(
+    question: str,
+    *,
+    context: Mapping[str, Any] | None = None,
+) -> bool:
+    """Should this question be answered from the customer's governed run?
+
+    The burden of proof runs the safe way round. An earlier version tried to
+    prove a question WAS governed -- by identifier, amount, engine claim, or
+    the run's own nouns -- and handed everything it could not prove to the
+    general-knowledge model, which holds no company data. That is unbounded:
+    an executive can phrase a question about their own business in endlessly
+    many ways, and every phrasing the checks missed produced "the board packet
+    is private company data and is not available in my general knowledge" --
+    read, correctly, as the assistant failing to reach its own evidence.
+
+    So: while a governed run is loaded, the governed model owns the question.
+    It has the evidence and can say honestly what it does not carry. Only a
+    question that is demonstrably general knowledge -- no run loaded, or an
+    engine-recognised general topic that names nothing in the business -- may
+    reach the general model.
+    """
+    text = str(question or "").strip()
+    if not text:
+        return False
+    if _question_looks_like_governed_identifier(text):
+        return True
+    if _parse_amount_references(text):
+        return True
+    try:
+        if scenario_has_intent(text):
+            return True
+    except Exception:  # pragma: no cover - scoping must never break a chat turn
+        pass
+    try:
+        if qa_engine.claims_question(text):
+            return True
+    except Exception:  # pragma: no cover - scoping must never break a chat turn
+        pass
+    if not isinstance(context, Mapping):
+        return False
+    # No run, nothing governed to protect: a general question is all it can be.
+    if not context.get("run_id") and not context.get("findings"):
+        return False
+    # A run is loaded. Anything that touches this business belongs to the
+    # governed model; only clearly external general knowledge may pass.
+    return not _question_is_general_knowledge(text)
+
+
+_GENERAL_KNOWLEDGE_RE = re.compile(
+    r"\b(?:capital of|population of|who (?:is|was|won|invented|wrote)|"
+    r"what year|when did|where is|translate|meaning of the word|"
+    r"weather|joke|poem|recipe|定义)\b",
+    re.IGNORECASE,
+)
+
+
+def _question_is_general_knowledge(question: str) -> bool:
+    """A question answerable from world knowledge, naming nothing in the run.
+
+    Deliberately narrow. A false positive here sends a question about the
+    customer's money to a model with no access to it, which is the failure this
+    guard exists to prevent; a false negative merely sends trivia to the
+    governed model, which answers it anyway.
+    """
+    text = " ".join(str(question or "").casefold().split())
+    if not text:
+        return False
+    return bool(_GENERAL_KNOWLEDGE_RE.search(text))
+
+
+def _question_is_about_the_loaded_run(question: str, context: Mapping[str, Any]) -> bool:
+    """True when the question names the governed artifacts this run exposes.
+
+    The subjects come from the run itself -- the artifact/section names the
+    context actually carries -- not from a list kept here. Asking about "the
+    run" or "the findings" while a run is loaded is a question about that run.
+    """
+    text = " ".join(str(question or "").casefold().split())
+    if not text:
+        return False
+    subjects: set[str] = set()
+    if context.get("run_id"):
+        subjects.add("run")
+    if context.get("findings"):
+        subjects.update({"finding", "findings", "case", "cases"})
+    for entity in _governed_entity_index_safe(context):
+        # Entity labels are the run's own nouns: KPI names ("Cash vs floor"),
+        # component rows, vendors. Their words are what this run is about.
+        for word in re.findall(r"[a-z]{3,}", str(entity.get("label") or "").casefold()):
+            subjects.add(word)
+    summary = context.get("summary")
+    if isinstance(summary, Mapping):
+        for key in summary.keys():
+            token = str(key).strip().casefold()
+            # Summary keys are the run's own section names (finance_kpi,
+            # publication, ...); their words are legitimate run subjects.
+            for word in re.findall(r"[a-z]{4,}", token):
+                subjects.add(word)
+    return any(re.search(r"\b" + re.escape(subject) + r"\b", text) for subject in subjects)
+
+
+def _governed_entity_index_safe(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """_governed_entity_index that never raises into a scoping decision."""
+    try:
+        return _governed_entity_index(context)
+    except Exception:  # pragma: no cover - defensive
+        return []
+
+
+def _question_looks_like_governed_identifier(question: str) -> bool:
+    """True when the question is about a record id (F-006, INV-2026-0577).
+
+    Such a question carries no finance keyword, so the business-scope check
+    routes it to the general-knowledge model, which has no governed evidence
+    and will invent plausible finance detail for the id. An identifier that did
+    not resolve in the run must fail closed instead.
+    """
+    return bool(_GOVERNED_IDENTIFIER_RE.search(str(question or "")))
+
+
+def _as_float_or_none(value: Any) -> float | None:
+    try:
+        if value in (None, ""):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+_PRONOUN_ONLY_RE = re.compile(
+    r"^(?:can you |could you |please |now |and |so )*"
+    r"(?:show|tell|explain|elaborate|expand|detail|describe|give)?\s*"
+    r"(?:me|us)?\s*(?:more\s+)?(?:about\s+|on\s+)?"
+    r"\b(it|that|this|those|these|them|the one|the same)\b",
+)
+
+
+def _question_is_reference_followup(question: str) -> bool:
+    """A follow-up whose whole subject is a pronoun or a bare 'why'."""
+    norm = " ".join(str(question or "").casefold().split()).strip(" ?.!")
+    if not norm:
+        return False
+    if norm in {"why", "why?", "how", "and why", "explain", "elaborate", "more", "tell me more", "go on"}:
+        return True
+    return bool(_PRONOUN_ONLY_RE.match(norm))
+
+
+def _history_entity_tokens(history: list[dict[str, Any]]) -> list[str]:
+    """Identifiers the assistant most recently put on screen, newest first."""
+    tokens: list[str] = []
+    for item in reversed(history or []):
+        if str(item.get("role") or "") != "assistant":
+            continue
+        text = str(item.get("text") or "")
+        for doc_id in re.findall(r"\b[A-Z]{1,4}-[0-9]{2,4}-?[0-9]*\b", text):
+            if doc_id.casefold() not in tokens:
+                tokens.append(doc_id.casefold())
+    return tokens
+
+
+def _resolve_governed_entities(
+    entities: list[dict[str, Any]],
+    *,
+    question: str,
+    history: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Match a question against the entity index: identifier, phrase, amount,
+    then pronoun-carried reference from the previous assistant turn."""
+    norm = " ".join(str(question or "").casefold().split())
+    stripped = norm.strip(" ?.!,")
+    matches: list[dict[str, Any]] = []
+
+    for entity in entities:
+        for token in entity.get("tokens") or set():
+            if not token:
+                continue
+            # Identifier tokens must match as whole words so "F-006" never
+            # matches inside an unrelated string.
+            if re.search(r"(?<![\w-])" + re.escape(token) + r"(?![\w-])", norm):
+                matches.append(entity)
+                break
+    if matches:
+        return matches
+
+    for entity in entities:
+        phrase = entity.get("phrase") or ""
+        if len(phrase) >= 8 and phrase in norm:
+            matches.append(entity)
+    if matches:
+        return matches
+
+    amount_refs = _parse_amount_references(question)
+    if amount_refs:
+        for entity in entities:
+            amount = entity.get("amount")
+            if amount is None:
+                continue
+            if any(_amounts_match(ref, amount) for ref in amount_refs):
+                matches.append(entity)
+        if matches:
+            return matches
+
+    if _question_is_reference_followup(stripped):
+        for token in _history_entity_tokens(history):
+            for entity in entities:
+                if token in (entity.get("tokens") or set()):
+                    return [entity]
+    return []
+
+
+def _finding_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
+    """Answer a governed finding reference with what a CEO must decide on."""
+    row = entity.get("row") if isinstance(entity.get("row"), Mapping) else {}
+    finding_id = str(entity.get("id") or "")
+    title = str(entity.get("label") or finding_id)
+    amount = entity.get("amount")
+    citation_count = row.get("citation_count") or row.get("citations")
+    status_text = str(row.get("status") or row.get("state") or "").strip()
+    vendor = str(row.get("vendor_name") or row.get("vendor") or "").strip()
+
+    parts = [f"{finding_id} is {title}." if finding_id else f"{title}."]
+    if amount:
+        parts.append(f"Recoverable value: {_format_sar_brief(amount)}.")
+    if vendor:
+        parts.append(f"Counterparty: {vendor}.")
+    if status_text:
+        parts.append(f"Current status: {humanize_token(status_text) if 'humanize_token' in globals() else status_text}.")
+    try:
+        if citation_count not in (None, ""):
+            parts.append(f"Supporting evidence: {int(citation_count)} citation(s) attached.")
+    except (TypeError, ValueError):
+        pass
+    parts.append("Next step: open this case to review its evidence trail, or ask what it takes to close it before board release.")
+
+    citations = []
+    if finding_id:
+        citations.append(
+            {
+                "source_path": "run_artifacts://findings",
+                "locator": f"finding_id={finding_id}",
+                "excerpt": title,
+                "finding_id": finding_id,
+            }
+        )
+    return {
+        "matched": True,
+        "answer": " ".join(parts),
+        "basis": "Resolved a governed finding reference against the current run's finding rows.",
+        "citations": citations,
+        "suggestions": [
+            f"What evidence supports {finding_id}?" if finding_id else "What evidence supports this case?",
+            f"What is needed to close {finding_id}?" if finding_id else "What is needed to close this case?",
+            "Which governed cases create the largest recoverable value?",
+        ],
+        "answered_by": "governed_reference",
+        "assistant_mode": "governed_reference",
+        "grounding_status": "grounded",
+        "reference": {"kind": "finding", "finding_id": finding_id, "label": title, "recoverable_sar": amount},
+        "_orchestrator_force_answer": True,
+    }
+
+
+def _governed_reference_result(
+    context: Mapping[str, Any],
+    *,
+    question: str,
+    assistant_context: Mapping[str, Any],
+    history: list[dict[str, Any]],
+    public_safe: bool,
+) -> dict[str, Any] | None:
+    """Resolve any on-screen governed reference before the LLM fallback runs.
+
+    Scope is deliberately every entity the run exposes -- findings, document
+    identifiers carried in finding titles, vendors, KPI cards and their
+    component rows -- because an executive quotes whatever the surface showed
+    them. An earlier version indexed KPI cards only, which left "F-006" and
+    "INV-2026-0577" to the model and produced fabricated finance facts.
+    """
+    if public_safe:
+        return None
+    # A what-if that happens to quote an on-screen amount ("If we recover
+    # SAR 103.2M, what remains?") must reach the scenario engine, not be
+    # answered as a component lookup. _assistant_question_requests_modelling
+    # alone is not enough: recovery grammar carries no finance keyword, so the
+    # scenario-verb family the recovery engine owns is checked explicitly.
+    if _assistant_question_requests_modelling(question):
+        return None
+    scenario_norm = " ".join(str(question or "").casefold().split())
+    if re.search(
+        r"\b(?:recover|recovery|recovering|realize|realise|collect|collecting|remains|remaining|what if)\b",
+        scenario_norm,
+    ):
+        return None
+
+    try:
+        entities = _governed_entity_index(context)
+    except HTTPException:
+        return None
+    if not entities:
+        return None
+
+    matches = _resolve_governed_entities(entities, question=question, history=history)
+    if not matches:
+        return None
+
+    finding_match = next((item for item in matches if item.get("kind") == "finding"), None)
+    if finding_match is not None:
+        return _finding_reference_answer(finding_match)
+
+    component = next((item for item in matches if item.get("kind") == "kpi_component"), None)
+    if component is None:
+        return None
+
+    card = component.get("card") if isinstance(component.get("card"), Mapping) else {}
+    brief = component.get("brief") if isinstance(component.get("brief"), Mapping) else {}
+    driver = component.get("driver") if isinstance(component.get("driver"), Mapping) else {}
+    label = str(card.get("label") or "this KPI")
+    driver_label = str(driver.get("label") or "component")
+    driver_value = str(driver.get("value") or "").strip()
+    share = driver.get("share_pct")
+    share_text = ""
+    try:
+        if share not in (None, ""):
+            share_text = f"{float(share):.1f}%"
+    except (TypeError, ValueError):
+        share_text = str(share or "")
+    readout = str(brief.get("readout") or card.get("detail") or "").strip()
+    calculation = brief.get("calculation") if isinstance(brief.get("calculation"), Mapping) else {}
+    audit = brief.get("audit") if isinstance(brief.get("audit"), Mapping) else {}
+    source_files = [
+        str(item)
+        for item in list(card.get("source_files") or audit.get("source_files") or audit.get("source_titles") or [])
+        if str(item)
+    ]
+    answer = f"{driver_value or 'That amount'} is {driver_label} within {label}."
+    if share_text:
+        answer += f" It represents {share_text} of the current {label.lower()} composition."
+    if readout:
+        answer += f" {readout}"
+    if calculation.get("formula"):
+        answer += f" Calculation basis: {calculation.get('formula')}"
+    answer += " Next step: use the same KPI drill-down to compare this component with the other reported contributors or ask for the evidence trail."
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Resolved a follow-up reference against current CEO KPI component rows before LLM fallback.",
+        "citations": [
+            {
+                "source_path": source_file,
+                "locator": f"CEO {label} component: {driver_label}",
+                "excerpt": f"{driver_label} {driver_value} {share_text}".strip(),
+            }
+            for source_file in source_files[:6]
+        ],
+        "suggestions": [
+            f"Compare {driver_label} with other {label} contributors",
+            f"Show the evidence trail for {driver_label}",
+            f"What needs executive attention for {label}?",
+        ],
+        "answered_by": "governed_reference",
+        "assistant_mode": "governed_reference",
+        "grounding_status": "grounded",
+        "reference": {
+            "kpi_key": str(card.get("key") or card.get("driver_key") or ""),
+            "label": driver_label,
+            "value": driver_value,
+            "share_pct": share,
+        },
+        "_orchestrator_force_answer": True,
+    }
+
+
+
 def _assistant_question_requests_modelling(question: str) -> bool:
     """Let an explicit scenario override passive card/graph context.
 
@@ -11649,6 +12278,10 @@ async def _assistant_chat_response(
         **request_context,
         **dict(getattr(request, "assistant_context", None) or {}),
     }
+    conversation_history = _assistant_history_from_request(request)
+    if conversation_history:
+        assistant_context["history"] = conversation_history
+        assistant_context["history_attached"] = True
     if getattr(request, "source", None):
         assistant_context.setdefault("source", str(request.source))
         assistant_context.setdefault("assistant_source", str(request.source))
@@ -11736,18 +12369,21 @@ async def _assistant_chat_response(
             packet = {"source": "empty_packet", "public_safe": True}
         context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
-        history = assistant_context.get("conversation_history")
-        if isinstance(history, list):
+        # The public packet's conversation view is derived from the same
+        # normalized history channel the authenticated path uses, so there is
+        # exactly one client->server history contract.
+        if conversation_history:
             context["public_context_packet"]["conversation_history"] = [
                 {
                     "role": str(item.get("role") or "")[:16],
-                    "content": str(item.get("content") or "")[:2400],
+                    "content": str(item.get("text") or "")[:2400],
                 }
-                for item in history[-8:]
-                if isinstance(item, dict)
-                and str(item.get("role") or "") in {"user", "assistant"}
-                and str(item.get("content") or "").strip()
+                for item in conversation_history[-8:]
+                if str(item.get("role") or "") in {"user", "assistant"}
+                and str(item.get("text") or "").strip()
             ]
+    if conversation_history:
+        context["assistant_history"] = conversation_history
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if _assistant_question_is_release_gate(question):
@@ -11904,6 +12540,34 @@ async def _assistant_chat_response(
         for finding in context["findings"]
     ]
 
+    governed_reference_result = _governed_reference_result(
+        context,
+        question=question,
+        assistant_context=assistant_context,
+        history=conversation_history,
+        public_safe=public_safe,
+    )
+    if governed_reference_result is not None:
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=governed_reference_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=governed_reference_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
+
     app_help_result = (
         None
         if public_safe
@@ -11933,7 +12597,14 @@ async def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
-    if not public_safe and mode in {"auto", "llm"} and not _assistant_question_has_business_scope(question):
+    # mode="llm" is an explicit request for the governed model path (bundle +
+    # findings). Only mode="auto" may fall through to general knowledge, and
+    # only for a question no governed component claims.
+    if (
+        not public_safe
+        and mode == "auto"
+        and not _question_is_governed_business_question(question, context=context)
+    ):
         general_status = llm_qa.chat_status(CONFIG)
         if general_status.get("enabled"):
             general_result = await asyncio.get_running_loop().run_in_executor(
@@ -11986,6 +12657,7 @@ async def _assistant_chat_response(
                 "run_mode": context["run_mode"],
                 "persona": persona,
                 "assistant_context": assistant_context,
+                "assistant_history": conversation_history,
                 "driver_context": driver_context,
             },
         )
@@ -12288,6 +12960,7 @@ async def _assistant_chat_response(
                 graph_result=graph_result,
                 retrieval_result=retrieval_result,
                 deterministic_result=deterministic_result,
+                assistant_history=conversation_history,
             ),
         )
     except RuntimeError as exc:
@@ -12431,6 +13104,7 @@ def data_qa(
             detail=f"Unsupported assistant persona '{persona}'.",
         )
     driver_context = request.driver_context or request_context.get("driver_context") or {}
+    conversation_history = _assistant_history_from_request(request)
     trace_id = (request.trace_id or "").strip() or uuid4().hex
     if mode not in {"auto", "deterministic", "llm"}:
         raise HTTPException(
@@ -12825,6 +13499,7 @@ def data_qa(
                 graph_result=graph_result,
                 retrieval_result=retrieval_result,
                 deterministic_result=deterministic_result,
+                assistant_history=conversation_history,
             ),
         )
     except RuntimeError as exc:

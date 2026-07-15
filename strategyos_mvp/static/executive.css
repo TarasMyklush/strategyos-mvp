@@ -3030,6 +3030,10 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   position: relative;
   width: 128px;
   height: 128px;
+  /* Makes the ring itself the sizing reference for the text inside it, so
+     .hero-score__value can use cqw and stay proportional to the circle
+     rather than to the viewport. */
+  container-type: inline-size;
 }
 
 .hero-score.is-status::before {
@@ -3077,7 +3081,14 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 
 .hero-score__label {
   position: absolute;
-  inset: 0;
+  /* The ring is a circle, but inset:0 gave this label the ring's *square*
+     bounding box, so a wide status word ("Review") ran out to the corners and
+     touched the stroke. Constrain the label to the square inscribed in the
+     inner circle instead: for radius r that square's half-width is r/sqrt(2),
+     i.e. an inset of r*(1 - 1/sqrt(2)) ~= 14.65% of the ring diameter, applied
+     on top of the 9px inner ring line. Text then stays clear of the curve at
+     every ring size, with no per-size magic numbers. */
+  inset: calc(9px + 14.65%);
   display: grid;
   place-content: center;
   text-align: center;
@@ -3095,9 +3106,16 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
 
 .hero-score__value {
   max-width: 100%;
-  font-size: clamp(25px, 3vw, 38px);
-  line-height: 1;
+  /* Sized from the ring, not the viewport: the ring is a fixed 128px, so a
+     vw-based clamp grew this text on wide screens while the circle stayed put
+     -- the direct cause of "Review" hitting the stroke. cqw resolves against
+     .hero-score (the container), so the text scales with the ring it lives in
+     at every viewport. The px clamp bounds keep it legible if a browser
+     ignores container queries. */
+  font-size: clamp(20px, 26cqw, 34px);
+  line-height: 1.05;
   overflow-wrap: anywhere;
+  hyphens: auto;
 }
 
 .hero-score__caption {
@@ -5750,8 +5768,12 @@ body {
 }
 
 .hero-score__label {
-  width: calc(100% - 12px);
-  max-width: 116px;
+  /* Was max-width:116px -- the ring's near-full square width, which let the
+     label reach the corners where the circle has already curved away. The
+     square inscribed in the inner circle is the real text area: half-width
+     r/sqrt(2), i.e. ~70.7% of the inner diameter. */
+  width: calc((100% - 18px) * 0.707);
+  max-width: calc((100% - 18px) * 0.707);
   justify-self: center;
   align-self: center;
   margin: auto;
@@ -5759,21 +5781,30 @@ body {
 }
 
 .hero-score__caption {
-  max-width: 116px;
+  /* Same circle-vs-square bound as the label: the caption sits below the
+     status word, further from the ring centre, so it has even less chord to
+     work with. nowrap is dropped for the same reason as the value -- a caption
+     that cannot wrap forces the whole label box wider than the circle. */
+  max-width: 100%;
   margin: 6px auto 0;
   line-height: 1.18;
   letter-spacing: 0.025em;
-  white-space: nowrap;
-  overflow-wrap: normal;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
+/* The hero status word ("Review", "Approved", "Blocked") is arbitrary-length
+   copy inside a fixed circle. It used to be pinned by nowrap plus a 31px
+   magic size for words over 4 characters, which is what pushed "Review" onto
+   the ring stroke. Let it wrap and scale with the ring instead: no per-word
+   sizes, and any future status word stays inside the curve. */
 .hero-score__value {
-  white-space: nowrap;
-  overflow-wrap: normal;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .hero-score__value--compact {
-  font-size: 31px;
+  font-size: clamp(15px, 20cqw, 28px);
 }
 
 .section:has(.agents-row) {
