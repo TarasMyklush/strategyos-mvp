@@ -16,6 +16,188 @@ from .evidence import row_locator, sha256_file
 from .ingestion import DataBundle
 from .models import AuditEvent, Finding
 from .oracle_finance import OracleCanonicalSnapshot
+from .governed_plans import validate_plan_payload
+
+
+def create_financial_plan(payload: dict[str, Any], *, actor: str, actor_role: str) -> dict[str, Any]:
+    normalized, exceptions = validate_plan_payload(payload)
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            tenant_id = upsert_tenant(cur)
+            cur.execute(
+                "select coalesce(max(version), 0) + 1 from strategyos_financial_plans where tenant_id = %s and plan_key = %s",
+                (tenant_id, normalized["plan_key"]),
+            )
+            version = int(cur.fetchone()[0])
+            cur.execute(
+                """
+                insert into strategyos_financial_plans
+                    (tenant_id, plan_key, version, title, reporting_period_key, period_start, period_end,
+                     currency, scope_json, source_json, targets_json, validation_json, status, created_by)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, 'draft', %s)
+                returning *
+                """,
+                (
+                    tenant_id, normalized["plan_key"], version, normalized["title"],
+                    normalized["reporting_period_key"], normalized["period_start"], normalized["period_end"],
+                    normalized["currency"], json_blob(normalized["scope"]), json_blob(normalized["source"]),
+                    json_blob(normalized["targets"]), json_blob(exceptions), actor,
+                ),
+            )
+            record = fetchone_dict(cur)
+            assert record is not None
+            _insert_plan_event(cur, str(record["id"]), "created", None, "draft", actor, actor_role, None, {"validation": exceptions})
+        conn.commit()
+    return _normalize_plan_record(record, events=[])
+
+
+def list_financial_plans(*, include_events: bool = False) -> list[dict[str, Any]] | dict[str, Any]:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            tenant_id = upsert_tenant(cur)
+            cur.execute("select * from strategyos_financial_plans where tenant_id = %s order by updated_at desc, version desc", (tenant_id,))
+            records = fetchall_dicts(cur)
+            result = []
+            for record in records:
+                events: list[dict[str, Any]] = []
+                if include_events:
+                    cur.execute("select * from strategyos_financial_plan_events where plan_id = %s order by created_at desc", (record["id"],))
+                    events = [normalize_record(item) for item in fetchall_dicts(cur)]
+                result.append(_normalize_plan_record(record, events=events))
+        conn.commit()
+    return result
+
+
+def update_financial_plan(plan_id: str, payload: dict[str, Any], *, actor: str, actor_role: str) -> dict[str, Any]:
+    normalized, exceptions = validate_plan_payload(payload)
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute("select * from strategyos_financial_plans where id = %s for update", (plan_id,))
+            current = fetchone_dict(cur)
+            if current is None:
+                return {"status": "missing", "plan_id": plan_id}
+            current_status = str(current.get("status") or "")
+            if current_status not in {"draft", "changes_requested"}:
+                return {"status": "conflict", "plan_id": plan_id, "reason": "Only draft or changes-requested plans can be edited."}
+            cur.execute(
+                """update strategyos_financial_plans set
+                       title = %s, reporting_period_key = %s, period_start = %s, period_end = %s,
+                       currency = %s, scope_json = %s::jsonb, source_json = %s::jsonb,
+                       targets_json = %s::jsonb, validation_json = %s::jsonb, updated_at = now()
+                   where id = %s returning *""",
+                (normalized["title"], normalized["reporting_period_key"], normalized["period_start"], normalized["period_end"],
+                 normalized["currency"], json_blob(normalized["scope"]), json_blob(normalized["source"]),
+                 json_blob(normalized["targets"]), json_blob(exceptions), plan_id),
+            )
+            updated = fetchone_dict(cur)
+            assert updated is not None
+            _insert_plan_event(cur, plan_id, "edited", current_status, current_status, actor, actor_role, None, {"validation": exceptions})
+        conn.commit()
+    return _normalize_plan_record(updated, events=[])
+
+
+def active_financial_plan() -> dict[str, Any] | None:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return None
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            tenant_id = upsert_tenant(cur)
+            cur.execute("select * from strategyos_financial_plans where tenant_id = %s and status = 'active' order by approved_at desc limit 1", (tenant_id,))
+            record = fetchone_dict(cur)
+        conn.commit()
+    return _normalize_plan_record(record, events=[]) if record else None
+
+
+def transition_financial_plan(
+    plan_id: str, *, action: str, actor: str, actor_role: str, comment: str | None = None
+) -> dict[str, Any]:
+    transitions = {
+        "submit": ({"draft", "changes_requested"}, "submitted"),
+        "finance_review": ({"submitted"}, "finance_reviewed"),
+        "approve": ({"finance_reviewed"}, "active"),
+        "request_changes": ({"submitted", "finance_reviewed"}, "changes_requested"),
+    }
+    if action not in transitions:
+        return {"status": "invalid", "reason": f"Unsupported plan action '{action}'."}
+    allowed, target = transitions[action]
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute("select * from strategyos_financial_plans where id = %s for update", (plan_id,))
+            record = fetchone_dict(cur)
+            if record is None:
+                return {"status": "missing", "plan_id": plan_id}
+            current = str(record.get("status") or "")
+            if current == target:
+                return _normalize_plan_record(record, events=[])
+            if current not in allowed:
+                return {"status": "conflict", "plan_id": plan_id, "reason": f"A {current} plan cannot be moved to {target}."}
+            validation = record.get("validation_json") or []
+            if action in {"submit", "finance_review", "approve"} and validation:
+                return {"status": "conflict", "plan_id": plan_id, "reason": "Resolve all plan validation exceptions before approval.", "validation": validation}
+            if action == "approve":
+                cur.execute(
+                    "update strategyos_financial_plans set status = 'superseded', updated_at = now() where tenant_id = %s and plan_key = %s and status = 'active' and id <> %s",
+                    (record["tenant_id"], record["plan_key"], plan_id),
+                )
+            role_column = {"submit": "submitted", "finance_review": "finance_reviewed", "approve": "approved"}.get(action)
+            if role_column:
+                cur.execute(
+                    f"update strategyos_financial_plans set status = %s, updated_at = now(), {role_column}_by = %s, {role_column}_at = now() where id = %s returning *",
+                    (target, actor, plan_id),
+                )
+            else:
+                cur.execute("update strategyos_financial_plans set status = %s, updated_at = now() where id = %s returning *", (target, plan_id))
+            updated = fetchone_dict(cur)
+            assert updated is not None
+            _insert_plan_event(cur, plan_id, action, current, target, actor, actor_role, comment, {})
+        conn.commit()
+    return _normalize_plan_record(updated, events=[])
+
+
+def _insert_plan_event(cur: Any, plan_id: str, event_type: str, from_status: str | None, to_status: str, actor: str, actor_role: str, comment: str | None, payload: dict[str, Any]) -> None:
+    cur.execute(
+        """insert into strategyos_financial_plan_events
+           (plan_id, event_type, from_status, to_status, actor, actor_role, comment, payload)
+           values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)""",
+        (plan_id, event_type, from_status, to_status, actor, actor_role, comment, json_blob(payload)),
+    )
+
+
+def _normalize_plan_record(record: dict[str, Any], *, events: list[dict[str, Any]]) -> dict[str, Any]:
+    item = normalize_record(record)
+    item["id"] = str(item.get("id") or "")
+    item["scope"] = item.pop("scope_json", {})
+    item["source"] = item.pop("source_json", {})
+    item["targets"] = item.pop("targets_json", {})
+    item["validation"] = item.pop("validation_json", [])
+    item["events"] = events
+    item["can_submit"] = item.get("status") in {"draft", "changes_requested"} and not item["validation"]
+    item["can_finance_review"] = item.get("status") == "submitted" and not item["validation"]
+    item["can_approve"] = item.get("status") == "finance_reviewed" and not item["validation"]
+    return item
 
 
 def create_run(

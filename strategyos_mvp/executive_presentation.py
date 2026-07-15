@@ -430,12 +430,14 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
     evidence = finance_payload.get("evidence") if isinstance(finance_payload.get("evidence"), Mapping) else {}
     dynamics = finance_payload.get("dynamics") if isinstance(finance_payload.get("dynamics"), Mapping) else {}
     actual_complete = finance_payload.get("actual_complete") if isinstance(finance_payload.get("actual_complete"), Mapping) else {}
+    active_plan = finance_payload.get("active_plan") if isinstance(finance_payload.get("active_plan"), Mapping) else None
     period = str(finance_payload.get("reporting_period_key") or "the selected period")
     provenance = {
         "source": "current finance records",
         "complete": bool(finance_payload),
         "reporting_period_key": finance_payload.get("reporting_period_key"),
         "computation_boundary": finance_payload.get("computation_boundary"),
+        "active_plan": dict(active_plan) if active_plan else None,
     }
     cards: list[dict[str, Any]] = []
 

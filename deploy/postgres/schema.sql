@@ -129,6 +129,46 @@ create table if not exists strategyos_source_systems (
     unique (tenant_id, name, system_type)
 );
 
+create table if not exists strategyos_financial_plans (
+    id uuid primary key default gen_random_uuid(),
+    tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
+    plan_key text not null,
+    version integer not null,
+    title text not null,
+    reporting_period_key text not null,
+    period_start date,
+    period_end date,
+    currency text not null,
+    scope_json jsonb not null default '{}'::jsonb,
+    source_json jsonb not null default '{}'::jsonb,
+    targets_json jsonb not null default '{}'::jsonb,
+    validation_json jsonb not null default '[]'::jsonb,
+    status text not null check (status in ('draft', 'submitted', 'finance_reviewed', 'active', 'changes_requested', 'superseded')),
+    created_by text not null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    submitted_by text,
+    submitted_at timestamptz,
+    finance_reviewed_by text,
+    finance_reviewed_at timestamptz,
+    approved_by text,
+    approved_at timestamptz,
+    unique (tenant_id, plan_key, version)
+);
+
+create table if not exists strategyos_financial_plan_events (
+    id uuid primary key default gen_random_uuid(),
+    plan_id uuid not null references strategyos_financial_plans(id) on delete cascade,
+    event_type text not null,
+    from_status text,
+    to_status text not null,
+    actor text not null,
+    actor_role text not null,
+    comment text,
+    payload jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now()
+);
+
 create table if not exists strategyos_ingestion_batches (
     id uuid primary key default gen_random_uuid(),
     tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
@@ -481,3 +521,6 @@ create index if not exists idx_strategyos_cutover_metrics_tenant_metric on strat
 create index if not exists idx_strategyos_finding_citations_run on strategyos_finding_citations(run_id);
 create index if not exists idx_strategyos_kg_nodes_label on strategyos_kg_nodes(label);
 create index if not exists idx_strategyos_kg_edges_label on strategyos_kg_edges(label);
+create index if not exists idx_strategyos_financial_plans_tenant_status on strategyos_financial_plans(tenant_id, status, updated_at desc);
+create unique index if not exists uq_strategyos_financial_plans_active on strategyos_financial_plans(tenant_id, plan_key) where status = 'active';
+create index if not exists idx_strategyos_financial_plan_events_plan on strategyos_financial_plan_events(plan_id, created_at desc);

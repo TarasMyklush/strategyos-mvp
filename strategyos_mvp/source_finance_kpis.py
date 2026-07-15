@@ -158,6 +158,7 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
         "derived_from": "deterministic_source_finance_kpi_engine",
         "reporting_period_key": period,
         "reporting_currency": "SAR",
+        "reporting_scope": {"entities": ["Group"]},
         "computation_boundary": (
             "Actuals are calculated only from the listed uploaded source extracts. "
             "No plan or board floor is inferred when it is absent."

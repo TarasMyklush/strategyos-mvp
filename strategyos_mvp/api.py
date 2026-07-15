@@ -92,6 +92,7 @@ from .oracle_finance import (
     snapshot_summary,
 )
 from . import state_store
+from .governed_plans import plan_comparators
 from .state_store import data_management_status, database_connection
 from .storage import ObjectStoreUnavailable, S3CompatibleStore, object_store_status
 from .source_pack import (
@@ -146,6 +147,22 @@ class RunRequest(BaseModel):
 class ReviewerDecisionRequest(BaseModel):
     comment: str | None = None
     payload: dict[str, Any] | None = None
+
+
+class FinancialPlanRequest(BaseModel):
+    plan_key: str = "group-financial-plan"
+    title: str
+    reporting_period_key: str
+    period_start: str
+    period_end: str
+    currency: str = "SAR"
+    scope: dict[str, Any]
+    source: dict[str, Any]
+    targets: dict[str, Any]
+
+
+class FinancialPlanDecisionRequest(BaseModel):
+    comment: str | None = None
 
 
 class SourcePackPathRequest(BaseModel):
@@ -4512,6 +4529,25 @@ def _executive_read_model_from_available_truth(
     *,
     public_safe: bool,
 ) -> dict[str, Any]:
+    def with_active_plan(read_model: dict[str, Any]) -> dict[str, Any]:
+        active_plan = state_store.active_financial_plan()
+        finance = read_model.get("finance_kpi") if isinstance(read_model.get("finance_kpi"), dict) else {}
+        if not active_plan or not finance:
+            read_model["financial_plan"] = active_plan
+            return read_model
+        comparison = plan_comparators(active_plan, finance)
+        read_model["financial_plan"] = {**active_plan, "comparison_alignment": comparison}
+        if not comparison.get("aligned"):
+            return read_model
+        enriched = dict(finance)
+        enriched["components"] = {**dict(finance.get("components") or {}), **dict(comparison.get("components") or {})}
+        source = active_plan.get("source") if isinstance(active_plan.get("source"), dict) else {}
+        enriched["active_plan"] = {
+            "id": active_plan.get("id"), "version": active_plan.get("version"),
+            "title": active_plan.get("title"), "source": source,
+        }
+        read_model["finance_kpi"] = enriched
+        return read_model
     backing_run_id = str(
         (summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or ""
     )
@@ -4546,20 +4582,20 @@ def _executive_read_model_from_available_truth(
             # Resolution state is intentionally not disclosed on the anonymous
             # executive surface. Preserve the unknown instead of rendering zero.
             database_audit = _public_latest_run_audit_summary_payload(database_summary)
-        return build_executive_read_model(
+        return with_active_plan(build_executive_read_model(
             database_summary,
             database_rows,
             database_audit,
             database_publication,
             database_agent_modules,
             truth_source="database",
-        )
+        ))
 
     fallback_reason = str(
         database_snapshot.get("reason")
         or "The database executive snapshot is unavailable."
     )
-    return build_executive_read_model(
+    return with_active_plan(build_executive_read_model(
         summary,
         finding_rows,
         audit_summary,
@@ -4571,7 +4607,7 @@ def _executive_read_model_from_available_truth(
             if summary
             else fallback_reason
         ),
-    )
+    ))
 
 
 def _executive_diagnostics_payload(
@@ -8286,12 +8322,96 @@ def guide_page(
 def plan_page(
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> Any:
-    """Serve the Digital Twin execution plan page."""
+    """Serve governed financial-plan review and approval."""
     login_redirect = _login_or_authorized_html(principal)
     if login_redirect is not None:
         return login_redirect
-    template_path = STATIC_DIR / "plan.html"
+    template_path = STATIC_DIR / "financial_plan.html"
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
+
+
+def _financial_plan_result(record: dict[str, Any]) -> dict[str, Any]:
+    state = str(record.get("status") or "")
+    if state == "missing":
+        raise HTTPException(status_code=404, detail="Financial plan was not found.")
+    if state in {"skipped", "failed"}:
+        raise HTTPException(status_code=503, detail=str(record.get("reason") or "Financial-plan store is unavailable."))
+    if state in {"conflict", "invalid"}:
+        raise HTTPException(status_code=409, detail={"message": record.get("reason"), "validation": record.get("validation") or []})
+    return record
+
+
+@app.get("/api/financial-plans")
+def financial_plans(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> dict[str, Any]:
+    _require_login_if_enabled(principal)
+    records = state_store.list_financial_plans(include_events=True)
+    if isinstance(records, dict):
+        _financial_plan_result(records)
+    role = str(principal.get("role") or "")
+    return {
+        "plans": records,
+        "active_plan": next((item for item in records if item.get("status") == "active"), None),
+        "role": role,
+        "capabilities": {
+            "create": role in {"operator", "tenant_operator", "tenant_admin"},
+            "submit": role in {"operator", "tenant_operator", "tenant_admin"},
+            "finance_review": role == "reviewer",
+            "approve": role in {"executive", "tenant_admin"},
+            "request_changes": role in {"reviewer", "executive", "tenant_admin"},
+        },
+    }
+
+
+@app.post("/api/financial-plans")
+def create_financial_plan(
+    request: FinancialPlanRequest,
+    principal: dict[str, Any] = require_role("operator", "tenant_operator", "tenant_admin"),
+) -> dict[str, Any]:
+    return _financial_plan_result(state_store.create_financial_plan(
+        request.model_dump(), actor=str(principal.get("subject") or "unknown"), actor_role=str(principal.get("role") or "unknown")
+    ))
+
+
+@app.put("/api/financial-plans/{plan_id}")
+def update_financial_plan(
+    plan_id: str,
+    request: FinancialPlanRequest,
+    principal: dict[str, Any] = require_role("operator", "tenant_operator", "tenant_admin"),
+) -> dict[str, Any]:
+    return _financial_plan_result(state_store.update_financial_plan(
+        plan_id, request.model_dump(), actor=str(principal.get("subject") or "unknown"),
+        actor_role=str(principal.get("role") or "unknown"),
+    ))
+
+
+def _transition_plan(plan_id: str, action: str, request: FinancialPlanDecisionRequest, principal: dict[str, Any]) -> dict[str, Any]:
+    return _financial_plan_result(state_store.transition_financial_plan(
+        plan_id, action=action, actor=str(principal.get("subject") or "unknown"),
+        actor_role=str(principal.get("role") or "unknown"), comment=request.comment,
+    ))
+
+
+@app.post("/api/financial-plans/{plan_id}/submit")
+def submit_financial_plan(plan_id: str, request: FinancialPlanDecisionRequest, principal: dict[str, Any] = require_role("operator", "tenant_operator", "tenant_admin")) -> dict[str, Any]:
+    return _transition_plan(plan_id, "submit", request, principal)
+
+
+@app.post("/api/financial-plans/{plan_id}/finance-review")
+def finance_review_plan(plan_id: str, request: FinancialPlanDecisionRequest, principal: dict[str, Any] = require_role("reviewer")) -> dict[str, Any]:
+    return _transition_plan(plan_id, "finance_review", request, principal)
+
+
+@app.post("/api/financial-plans/{plan_id}/approve")
+def approve_financial_plan(plan_id: str, request: FinancialPlanDecisionRequest, principal: dict[str, Any] = require_role("executive", "tenant_admin")) -> dict[str, Any]:
+    """Approve and atomically activate the reviewed plan, superseding its predecessor."""
+    return _transition_plan(plan_id, "approve", request, principal)
+
+
+@app.post("/api/financial-plans/{plan_id}/request-changes")
+def request_financial_plan_changes(plan_id: str, request: FinancialPlanDecisionRequest, principal: dict[str, Any] = require_role("reviewer", "executive", "tenant_admin")) -> dict[str, Any]:
+    return _transition_plan(plan_id, "request_changes", request, principal)
 
 
 def _plan_tracker_payload() -> dict[str, Any]:
@@ -11385,10 +11505,15 @@ def _ceo_kpi_inline_result(
         }
         for source_file in source_files[:6]
     ]
+    active_plan = (card.get("provenance") or {}).get("active_plan") if isinstance(card.get("provenance"), Mapping) else None
     return {
         "matched": True,
         "answer": answer,
-        "basis": "Current CEO finance records and approved strategic references",
+        "basis": (
+            f"Current CEO finance records and active approved plan v{active_plan.get('version')}"
+            if isinstance(active_plan, Mapping)
+            else "Current CEO finance records; no aligned active plan was used"
+        ),
         "citations": citations,
         "suggestions": [
             f"What needs executive attention for {label}?",
