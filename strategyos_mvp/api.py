@@ -4531,15 +4531,9 @@ def _executive_read_model_from_available_truth(
         database_summary = dict(database_snapshot.get("summary") or {})
         database_rows = list(database_snapshot.get("findings") or [])
         database_audit = dict(database_snapshot.get("audit_summary") or {})
-        # The persisted Analyst/Auditor steps for this run. These are records of
-        # work that happened, not a summary of it, which is why they carry a
-        # *_fact claim class downstream rather than a derived one.
-        database_agent_modules = {
-            **dict(agent_modules or {}),
-            "execution_log": build_execution_log(
-                list(database_snapshot.get("agent_events") or [])
-            ),
-        }
+        # The execution log is resolved per run inside _agent_modules_payload,
+        # so it arrives already attached and is not re-derived here.
+        database_agent_modules = dict(agent_modules or {})
         artifact_map = dict(database_snapshot.get("artifacts") or {})
         tenant_payload = (
             database_summary.get("tenant_context")
@@ -5559,6 +5553,32 @@ def _governed_module_state_contract_from_modules(
     }
 
 
+def _run_execution_log(summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Read this run's recorded assistant steps straight from the run.
+
+    The events are persisted per run, so they must be looked up per run rather
+    than inherited from whatever the caller happened to be holding. An earlier
+    cut of this attached the events only where the read model is built, which
+    left the payload the UI actually reads reporting "no steps recorded" for a
+    run whose database row plainly held twenty of them.
+
+    A run that has not been persisted has no events to read, and the empty
+    result says exactly that rather than guessing.
+    """
+    run_id = str((summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or "")
+    if not run_id or run_id == ANONYMOUS_PUBLIC_RUN_ID:
+        return build_execution_log([])
+    try:
+        snapshot = state_store.executive_snapshot_for_run(run_id)
+    except Exception:
+        # The log is an accountability surface, not a load-bearing one; a
+        # database wobble must not take the executive's page down with it.
+        return build_execution_log([])
+    if snapshot.get("status") != "ok":
+        return build_execution_log([])
+    return build_execution_log(list(snapshot.get("agent_events") or []))
+
+
 def _agent_modules_payload(
     summary: dict[str, Any] | None,
     rows: list[dict[str, Any]],
@@ -5736,9 +5756,7 @@ def _agent_modules_payload(
         "discoverable": discoverable,
         "approvals": approvals,
         "run_posture": run_posture,
-        # No governed run has been read here, so no assistant step is known yet.
-        # The database path below replaces this with the run's real events.
-        "execution_log": build_execution_log([]),
+        "execution_log": _run_execution_log(summary),
         "state_contract": _governed_module_state_contract_from_modules(
             modules,
             run_id=(summary or {}).get("run_id"),

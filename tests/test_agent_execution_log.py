@@ -146,3 +146,62 @@ def test_actors_and_rounds_are_counted_from_the_record():
     payload = build_execution_log(events)
     assert payload["actors"] == ["Analyst", "Auditor"]
     assert payload["round_count"] == 2
+
+
+def test_payload_reads_the_runs_events_not_an_empty_placeholder(monkeypatch):
+    """The bug this pins: 20 events in the database, "no steps" on the surface.
+
+    The first cut attached events only where the read model is built, which is
+    not the path the payload the UI reads goes through. Assert against
+    _agent_modules_payload itself -- the function every route actually calls.
+    """
+    import strategyos_mvp.api as api_module
+
+    monkeypatch.setattr(
+        api_module.state_store,
+        "executive_snapshot_for_run",
+        lambda run_id: {
+            "status": "ok",
+            "agent_events": [
+                {
+                    "round_no": 1,
+                    "actor": "analyst",
+                    "finding_id": "F-001",
+                    "action": "raise_finding",
+                    "detail": "Duplicate payment identified.",
+                    "event_json": {"total_tokens": 900},
+                }
+            ],
+        },
+    )
+    payload = api_module._agent_modules_payload(
+        {"run_id": "c0ae93f3-c247-4b4e-8703-455dea985f4c"}, [], None, {"role": "ceo"}
+    )
+    log = payload["execution_log"]
+    assert log["status"] == "available", "events exist in the run but the surface hid them"
+    assert log["total_count"] == 1
+    assert log["entries"][0]["actor"] == "Analyst"
+
+
+def test_payload_states_absence_when_the_run_has_no_events(monkeypatch):
+    import strategyos_mvp.api as api_module
+
+    monkeypatch.setattr(
+        api_module.state_store,
+        "executive_snapshot_for_run",
+        lambda run_id: {"status": "ok", "agent_events": []},
+    )
+    payload = api_module._agent_modules_payload({"run_id": "r-1"}, [], None, {"role": "ceo"})
+    assert payload["execution_log"]["status"] == "unavailable"
+
+
+def test_database_failure_does_not_take_the_page_down(monkeypatch):
+    """The log is an accountability surface, not a load-bearing one."""
+    import strategyos_mvp.api as api_module
+
+    def _boom(run_id):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(api_module.state_store, "executive_snapshot_for_run", _boom)
+    payload = api_module._agent_modules_payload({"run_id": "r-1"}, [], None, {"role": "ceo"})
+    assert payload["execution_log"]["status"] == "unavailable"
