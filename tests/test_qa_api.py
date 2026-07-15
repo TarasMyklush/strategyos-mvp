@@ -3953,6 +3953,11 @@ def _finance_run_context():
                                 "operating_cost": [
                                     {"label": "Salaries & Wages", "value_sar": "24650975.10", "share_pct": 26.3},
                                     {"label": "Rent Expense", "value_sar": "23731309.95", "share_pct": 25.3},
+                                    # A longer label sharing the word "expense": the live
+                                    # composition is full of these, and a fixture without
+                                    # one cannot catch a matcher that ranks by length.
+                                    {"label": "Insurance Expense", "value_sar": "426730.05", "share_pct": 0.5},
+                                    {"label": "Bad Debt Expense", "value_sar": "52953.78", "share_pct": 0.1},
                                     {"label": "Other 120 accounts", "value_sar": "100.00", "share_pct": 0.1},
                                 ]
                             }
@@ -4081,3 +4086,37 @@ def test_a_named_cost_line_engages_the_finance_guard_without_a_generic_keyword()
     assert "Rent Expense" in result.answer
     # 23,731,309.95 * 15% = 3,559,696.49
     assert "3.6M" in result.answer
+
+
+def test_a_shared_word_does_not_let_another_line_claim_the_question():
+    """The live failure: "reduce rent expense" was answered about Insurance Expense.
+
+    "Expense" is shared by many lines, so it identifies none of them; the old
+    matcher accepted it and then preferred the LONGEST label, handing a rent
+    question to insurance. The prompt names rent, so rent must answer.
+    """
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario("What if we reduce rent expense by 15%?", _finance_run_context())
+    assert result is not None
+    assert result.scenario_type == "deterministic"
+    assert "Rent Expense" in result.answer
+    assert "Insurance" not in result.answer
+    assert "3.6M" in result.answer
+
+
+def test_a_bare_shared_word_claims_no_line_at_all():
+    """"Cut expenses by 10%" names no line; it must not silently pick one."""
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario("What happens to EBITDA if we cut expenses by 10%?", _finance_run_context())
+    assert result is not None
+    assert result.scenario_type == "missing_data", result.answer
+
+
+def test_the_distinctive_word_still_reaches_its_line():
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario("What if we cut insurance by 20%?", _finance_run_context())
+    assert result.scenario_type == "deterministic"
+    assert "Insurance Expense" in result.answer

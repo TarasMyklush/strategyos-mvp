@@ -764,7 +764,13 @@ def _cost_line_reduction_from_prompt(
             continue
 
         norm = _normalize(prompt)
-        best: tuple[dict[str, Any], int] | None = None
+        # Words shared by many lines ("expense", "opex") identify none of them.
+        # Ranking must be by how much of the PROMPT a label explains, not by how
+        # long the label is: "reduce rent expense" matched "Insurance Expense" on
+        # the shared word "expense", and the longer label won -- answering a
+        # question about rent with a number about insurance. Derived from the
+        # run's own labels, so nothing is hardcoded.
+        label_rows: list[tuple[str, str, Decimal, Any]] = []
         for row in rows:
             label = str(row.get("label") or "").strip()
             if not label or label.casefold().startswith("other "):
@@ -772,17 +778,30 @@ def _cost_line_reduction_from_prompt(
             value = _decimal_or_none(row.get("value_sar"))
             if value is None or value <= 0:
                 continue
-            label_norm = _normalize(label)
-            # Whole words only: a three-letter fragment must not claim a line.
-            words = [word for word in re.split(r"[^a-z0-9]+", label_norm) if len(word) > 3]
-            hit = label_norm and label_norm in norm
-            if not hit:
-                hit = any(re.search(rf"\b{re.escape(word)}", norm) for word in words)
-            if not hit:
-                continue
-            # Prefer the most specific label when several match.
-            if best is None or len(label_norm) > best[1]:
-                best = ({"label": label, "value": value, "share_pct": row.get("share_pct")}, len(label_norm))
+            label_rows.append((label, _normalize(label), value, row.get("share_pct")))
+
+        word_frequency: dict[str, int] = {}
+        for _, label_norm, _, _ in label_rows:
+            for word in {w for w in re.split(r"[^a-z0-9]+", label_norm) if len(w) > 3}:
+                word_frequency[word] = word_frequency.get(word, 0) + 1
+
+        best: tuple[dict[str, Any], int] | None = None
+        for label, label_norm, value, share_pct in label_rows:
+            if label_norm and label_norm in norm:
+                score = len(label_norm) * 100  # the whole label, said exactly
+            else:
+                # Only words that distinguish this line from the others count.
+                distinctive = [
+                    word
+                    for word in re.split(r"[^a-z0-9]+", label_norm)
+                    if len(word) > 3 and word_frequency.get(word, 0) == 1
+                ]
+                matched = [word for word in distinctive if re.search(rf"\b{re.escape(word)}", norm)]
+                if not matched:
+                    continue
+                score = sum(len(word) for word in matched)
+            if best is None or score > best[1]:
+                best = ({"label": label, "value": value, "share_pct": share_pct}, score)
         if best is None:
             continue
 
