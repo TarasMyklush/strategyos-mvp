@@ -3484,11 +3484,11 @@ def test_unresolved_identifier_never_reaches_general_knowledge_model(monkeypatch
 def test_governed_scope_is_decided_by_engines_not_a_keyword_list():
     """A question the engines can answer must never be classed out-of-scope.
 
-    _assistant_question_has_business_scope matches a hand-maintained token
-    tuple that carries "recovery"/"recoverable" but not the verb "recover", so
-    "If we recover SAR 400,000, what remains?" was declared not-business and
-    handed to the general-knowledge model -- while the scenario engine that
-    owns the question never saw it. Scope now escalates to the engines.
+Scope used to be decided by a hand-maintained token tuple that carried
+    "recovery"/"recoverable" but not the verb "recover", so "If we recover SAR
+    400,000, what remains?" was declared not-business and handed to the
+    general-knowledge model -- while the scenario engine that owns the question
+    never saw it. The tuple is gone; the engines decide.
     """
     from strategyos_mvp.models import Finding
 
@@ -3541,10 +3541,10 @@ def test_recover_verb_is_scoped_to_the_scenario_engine():
     """
     question = "If we recover SAR 400,000, what remains?"
 
-    assert api_module._assistant_question_has_business_scope(question) is False, (
-        "guard premise: the keyword tuple does not carry the verb 'recover'; if "
-        "this starts passing, the tuple changed and this test no longer proves "
-        "the engine escalation is what saves the question"
+    assert not hasattr(api_module, "_ASSISTANT_BUSINESS_TOKENS"), (
+        "scope must not be decided by a hardcoded token list; reintroducing one "
+        "restores the class of bug where any unlisted phrasing about the "
+        "customer's own data is handed to the general-knowledge model"
     )
     assert api_module._question_is_governed_business_question(question) is True, (
         "the scenario engine claims this question, so scope resolution must "

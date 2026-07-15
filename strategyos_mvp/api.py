@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+from functools import lru_cache
 import html
 import hashlib
 import json
@@ -10778,31 +10779,6 @@ def _assistant_history_from_request(request: AssistantChatRequest | QaRequest) -
     return normalized
 
 
-_ASSISTANT_BUSINESS_TOKENS = (
-    "margin", "ebitda", "profitability", "profit", "loss", "revenue", "income",
-    "risk", "plan", "year", "quarter", "board", "packet", "prep", "session",
-    "run", "summary", "summarize", "analysis", "diagnostic", "diagnostics",
-    "live", "closed", "healthcare", "pharmacy", "fx", "hedge",
-    "recoverable", "recovery", "evidence", "finding", "citation", "kpi",
-    "driver", "ceo", "hermes", "assistant", "thread", "task", "follow-up",
-    "invoice", "vendor", "spend", "ap", "working capital", "cash",
-    "balance", "budget", "forecast", "scenario", "what-if", "what if",
-)
-
-
-def _assistant_question_has_business_scope(question: str) -> bool:
-    norm = " ".join(str(question or "").lower().split())
-    if not norm:
-        return False
-    for token in _ASSISTANT_BUSINESS_TOKENS:
-        if " " in token:
-            if token in norm:
-                return True
-        elif re.search(r"\b" + re.escape(token) + r"\b", norm):
-            return True
-    return False
-
-
 _EXTERNAL_DECISION_EVIDENCE_PATTERNS = (
     r"\bacquir(?:e|ing|ed|isition)\b",
     r"\bcompetitor\b",
@@ -11635,40 +11611,86 @@ def _question_is_governed_business_question(
     *,
     context: Mapping[str, Any] | None = None,
 ) -> bool:
-    """Decide out-of-scope by asking the governed engines, not a keyword list.
+    """Is this question answerable from the customer's governed run?
 
-    _assistant_question_has_business_scope matches a hand-maintained token
-    tuple. Any phrasing outside it is declared "not business" and handed to the
-    general-knowledge model, which has no governed evidence -- so a question the
-    deterministic engines could answer exactly gets an invented or deflecting
-    answer instead. "If we recover SAR 400,000, what remains?" is the standing
-    example: the tuple carries "recovery"/"recoverable" but not the verb
-    "recover", and the scenario engine that owns the question never sees it.
+    Decided only by asking the components that own the data. There is no
+    keyword list: a hand-maintained token tuple used to gate this, and every
+    phrasing it missed ("If we recover SAR 400,000, what remains?" -- the tuple
+    had "recovery" but not the verb "recover") was declared not-business and
+    handed to the general-knowledge model, which has no governed evidence and
+    answers about the company's own money by invention or deflection. A word
+    list cannot know what the engines can answer, so the engines are asked.
 
-    The keyword tuple stays as a fast accept, but a miss now escalates to the
-    engines themselves: if the scenario parser claims the question, or it
-    references an entity in the current run, or it carries a monetary amount,
-    it is governed business -- whatever words it happens to use.
+    A question is governed business when the scenario engine claims it, when it
+    names an entity in the current run, or when it carries a monetary
+    reference. Anything no component claims is genuinely general.
     """
-    if _assistant_question_has_business_scope(question):
+    text = str(question or "").strip()
+    if not text:
+        return False
+    if _question_looks_like_governed_identifier(text):
         return True
-    if _question_looks_like_governed_identifier(question):
-        return True
-    if _parse_amount_references(question):
+    if _parse_amount_references(text):
         return True
     try:
-        if scenario_has_intent(question):
+        if scenario_has_intent(text):
             return True
-    except Exception:  # pragma: no cover - never let scoping crash the chat turn
+    except Exception:  # pragma: no cover - scoping must never break a chat turn
         pass
+    try:
+        if qa_engine.claims_question(text):
+            return True
+    except Exception:  # pragma: no cover - scoping must never break a chat turn
+        pass
+    if isinstance(context, Mapping) and _question_is_about_the_loaded_run(text, context):
+        return True
     if isinstance(context, Mapping):
         try:
             entities = _governed_entity_index(context)
-        except (HTTPException, Exception):  # pragma: no cover - defensive
+        except Exception:  # pragma: no cover - defensive
             entities = []
-        if entities and _resolve_governed_entities(entities, question=question, history=[]):
+        if entities and _resolve_governed_entities(entities, question=text, history=[]):
             return True
     return False
+
+
+def _question_is_about_the_loaded_run(question: str, context: Mapping[str, Any]) -> bool:
+    """True when the question names the governed artifacts this run exposes.
+
+    The subjects come from the run itself -- the artifact/section names the
+    context actually carries -- not from a list kept here. Asking about "the
+    run" or "the findings" while a run is loaded is a question about that run.
+    """
+    text = " ".join(str(question or "").casefold().split())
+    if not text:
+        return False
+    subjects: set[str] = set()
+    if context.get("run_id"):
+        subjects.add("run")
+    if context.get("findings"):
+        subjects.update({"finding", "findings", "case", "cases"})
+    for entity in _governed_entity_index_safe(context):
+        # Entity labels are the run's own nouns: KPI names ("Cash vs floor"),
+        # component rows, vendors. Their words are what this run is about.
+        for word in re.findall(r"[a-z]{3,}", str(entity.get("label") or "").casefold()):
+            subjects.add(word)
+    summary = context.get("summary")
+    if isinstance(summary, Mapping):
+        for key in summary.keys():
+            token = str(key).strip().casefold()
+            # Summary keys are the run's own section names (finance_kpi,
+            # publication, ...); their words are legitimate run subjects.
+            for word in re.findall(r"[a-z]{4,}", token):
+                subjects.add(word)
+    return any(re.search(r"\b" + re.escape(subject) + r"\b", text) for subject in subjects)
+
+
+def _governed_entity_index_safe(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """_governed_entity_index that never raises into a scoping decision."""
+    try:
+        return _governed_entity_index(context)
+    except Exception:  # pragma: no cover - defensive
+        return []
 
 
 def _question_looks_like_governed_identifier(question: str) -> bool:
@@ -12352,9 +12374,12 @@ async def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
+    # mode="llm" is an explicit request for the governed model path (bundle +
+    # findings). Only mode="auto" may fall through to general knowledge, and
+    # only for a question no governed component claims.
     if (
         not public_safe
-        and mode in {"auto", "llm"}
+        and mode == "auto"
         and not _question_is_governed_business_question(question, context=context)
     ):
         general_status = llm_qa.chat_status(CONFIG)
