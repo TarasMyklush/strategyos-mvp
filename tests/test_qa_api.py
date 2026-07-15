@@ -3550,3 +3550,65 @@ def test_recover_verb_is_scoped_to_the_scenario_engine():
         "the scenario engine claims this question, so scope resolution must "
         "keep it away from the general-knowledge model"
     )
+
+
+def test_governed_run_owns_the_question_unless_it_is_general_knowledge():
+    """A CEO question must never be handed to the general-knowledge model.
+
+    "Summarize the board packet in plain English" was answered "the board
+    packet is private company data and is not available in my general
+    knowledge" -- the assistant apparently unable to reach its own evidence.
+    Scope tried to PROVE a question was governed and leaked everything it could
+    not prove. Proving governance is unbounded; proving general knowledge is
+    narrow. The burden now runs the safe way round.
+
+    The context here carries the real chat summary shape, which does NOT hold
+    the board_portal/publication keys that /runs/latest returns -- deriving
+    subjects from those keys is what let this leak past a passing test.
+    """
+    from strategyos_mvp.models import Finding
+
+    finding = Finding(
+        finding_id="F-006",
+        title="FX hedge not applied for INV-2026-0577",
+        pattern_type="fx_hedge_missing",
+        vendor_id="V-900",
+        vendor_name="Bordeaux Wines & Spirits SARL",
+        leakage_sar=46488.0,
+        recoverable_sar=46488.0,
+        recoverable_usd=12396.0,
+        confidence=0.9,
+        classification="confirmed",
+        rationale="r",
+        remediation="m",
+        citations=[],
+        calculation={},
+        status="open",
+        challenges=[],
+    )
+    context = {
+        "run_id": "run-1",
+        "findings": [finding],
+        "summary": {"run_id": "run-1", "requires_human_review": True},
+    }
+
+    for question in (
+        "Summarize the board packet in plain English",
+        "What should I worry about before the board meeting?",
+        "Explain our margin position",
+        "How are we doing?",
+    ):
+        assert api_module._question_is_governed_business_question(question, context=context) is True, (
+            f"{question!r} is about this business and must reach the governed "
+            "model, which holds the evidence"
+        )
+
+    for question in ("What is the capital of France?", "Write me a poem about the sea"):
+        assert api_module._question_is_governed_business_question(question, context=context) is False, (
+            f"{question!r} names nothing in the run and may reach general knowledge"
+        )
+
+    # With no run loaded there is nothing governed to protect.
+    assert api_module._question_is_governed_business_question(
+        "Summarize the board packet", context={"run_id": None, "findings": []}
+    ) is False

@@ -11611,19 +11611,22 @@ def _question_is_governed_business_question(
     *,
     context: Mapping[str, Any] | None = None,
 ) -> bool:
-    """Is this question answerable from the customer's governed run?
+    """Should this question be answered from the customer's governed run?
 
-    Decided only by asking the components that own the data. There is no
-    keyword list: a hand-maintained token tuple used to gate this, and every
-    phrasing it missed ("If we recover SAR 400,000, what remains?" -- the tuple
-    had "recovery" but not the verb "recover") was declared not-business and
-    handed to the general-knowledge model, which has no governed evidence and
-    answers about the company's own money by invention or deflection. A word
-    list cannot know what the engines can answer, so the engines are asked.
+    The burden of proof runs the safe way round. An earlier version tried to
+    prove a question WAS governed -- by identifier, amount, engine claim, or
+    the run's own nouns -- and handed everything it could not prove to the
+    general-knowledge model, which holds no company data. That is unbounded:
+    an executive can phrase a question about their own business in endlessly
+    many ways, and every phrasing the checks missed produced "the board packet
+    is private company data and is not available in my general knowledge" --
+    read, correctly, as the assistant failing to reach its own evidence.
 
-    A question is governed business when the scenario engine claims it, when it
-    names an entity in the current run, or when it carries a monetary
-    reference. Anything no component claims is genuinely general.
+    So: while a governed run is loaded, the governed model owns the question.
+    It has the evidence and can say honestly what it does not carry. Only a
+    question that is demonstrably general knowledge -- no run loaded, or an
+    engine-recognised general topic that names nothing in the business -- may
+    reach the general model.
     """
     text = str(question or "").strip()
     if not text:
@@ -11642,16 +11645,36 @@ def _question_is_governed_business_question(
             return True
     except Exception:  # pragma: no cover - scoping must never break a chat turn
         pass
-    if isinstance(context, Mapping) and _question_is_about_the_loaded_run(text, context):
-        return True
-    if isinstance(context, Mapping):
-        try:
-            entities = _governed_entity_index(context)
-        except Exception:  # pragma: no cover - defensive
-            entities = []
-        if entities and _resolve_governed_entities(entities, question=text, history=[]):
-            return True
-    return False
+    if not isinstance(context, Mapping):
+        return False
+    # No run, nothing governed to protect: a general question is all it can be.
+    if not context.get("run_id") and not context.get("findings"):
+        return False
+    # A run is loaded. Anything that touches this business belongs to the
+    # governed model; only clearly external general knowledge may pass.
+    return not _question_is_general_knowledge(text)
+
+
+_GENERAL_KNOWLEDGE_RE = re.compile(
+    r"\b(?:capital of|population of|who (?:is|was|won|invented|wrote)|"
+    r"what year|when did|where is|translate|meaning of the word|"
+    r"weather|joke|poem|recipe|定义)\b",
+    re.IGNORECASE,
+)
+
+
+def _question_is_general_knowledge(question: str) -> bool:
+    """A question answerable from world knowledge, naming nothing in the run.
+
+    Deliberately narrow. A false positive here sends a question about the
+    customer's money to a model with no access to it, which is the failure this
+    guard exists to prevent; a false negative merely sends trivia to the
+    governed model, which answers it anyway.
+    """
+    text = " ".join(str(question or "").casefold().split())
+    if not text:
+        return False
+    return bool(_GENERAL_KNOWLEDGE_RE.search(text))
 
 
 def _question_is_about_the_loaded_run(question: str, context: Mapping[str, Any]) -> bool:
