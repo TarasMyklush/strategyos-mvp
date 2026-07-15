@@ -1378,6 +1378,65 @@
     return shared.agent_activity || {};
   }
 
+  function getExecutionLog() {
+    var activity = getAgentActivitySummary();
+    if (activity.execution_log) return activity.execution_log;
+    return getAgentsModule().execution_log || {};
+  }
+
+  // The run's recorded assistant steps. Every line here exists because a step
+  // happened and was written to the run; when the run recorded nothing, the
+  // panel says so rather than filling the space with status prose.
+  function renderExecutionLog() {
+    var log = getExecutionLog();
+    var entries = safeArray(log.entries);
+    if (!entries.length) {
+      return '<div class="twin-detail"><span class="eyebrow">Execution log</span><p class="list-copy">'
+        + escapeHtml(firstDefined(log.reason, "This run recorded no assistant steps."))
+        + '</p></div>';
+    }
+
+    var rows = entries.map(function (entry) {
+      var round = entry.round_no === null || entry.round_no === undefined
+        ? ''
+        : 'Round ' + escapeHtml(String(entry.round_no));
+      var notes = [entry.confidence_note, entry.cost_note].filter(function (note) {
+        return note;
+      }).map(function (note) {
+        return '<span class="trail-note">' + escapeHtml(String(note)) + '</span>';
+      }).join('');
+      var challenge = entry.challenge
+        ? '<p class="trail-quote">Challenged: ' + escapeHtml(String(entry.challenge)) + '</p>'
+        : '';
+      var response = entry.response
+        ? '<p class="trail-quote">Answered: ' + escapeHtml(String(entry.response)) + '</p>'
+        : '';
+      var finding = entry.finding_id
+        ? '<span class="trail-note">' + escapeHtml(String(entry.finding_id)) + '</span>'
+        : '';
+      return '<li class="trail-item">'
+        + '<span class="trail-time">' + round + '</span>'
+        + '<span class="trail-dot"></span>'
+        + '<span class="trail-text"><strong>' + escapeHtml(String(entry.actor)) + '</strong> '
+        + escapeHtml(String(entry.action))
+        + (entry.detail ? '<p class="list-copy">' + escapeHtml(String(entry.detail)) + '</p>' : '')
+        + challenge + response
+        + (notes || finding ? '<span class="trail-notes">' + finding + notes + '</span>' : '')
+        + '</span></li>';
+    }).join('');
+
+    // A trimmed view must never read as a complete one.
+    var foot = log.truncated
+      ? '<li class="trail-foot">Showing ' + escapeHtml(String(entries.length))
+        + ' of ' + escapeHtml(String(firstDefined(log.total_count, entries.length)))
+        + ' recorded steps.</li>'
+      : '';
+
+    return '<div class="twin-detail"><span class="eyebrow">Execution log</span>'
+      + '<p class="list-copy">What your assistants did on this run, as recorded.</p>'
+      + '<ol class="agent-trail">' + rows + foot + '</ol></div>';
+  }
+
   function getRunningAgents() {
     var shared = getSharedAssistantContext();
     var modules = getAgentsModule();
@@ -3895,7 +3954,7 @@
       executiveContextMarkup,
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       compositionMarkup,
-      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div></section>',
+      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask anything about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
       '<details class="kpi-brief-audit"><summary>How this figure is calculated</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
@@ -3918,6 +3977,30 @@
         });
       });
     });
+
+    // Free-text ask, carrying the same context as the preset buttons above so
+    // the figure on screen stays the subject: whatever the executive types is
+    // answered about THIS KPI first, and only widens if the question plainly
+    // reaches past it.
+    var askForm = drillCard.querySelector("[data-kpi-ask-form]");
+    if (askForm) {
+      askForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var input = askForm.querySelector("[data-kpi-ask-input]");
+        var typed = String((input && input.value) || "").trim();
+        if (!typed) return;
+        input.value = "";
+        askAssistant(typed, askForm.querySelector("[data-kpi-ask-send]") || askForm, {
+          entrypoint: "ceo_kpi_inline",
+          source: "executive_surface",
+          kpi_key: key,
+          kpi_label: label,
+          kpi_question_intent: "free_text",
+          kpi_availability: availability,
+          active_view: "home"
+        });
+      });
+    }
   }
 
   function renderDriverDrillFidelity() {
@@ -4555,7 +4638,7 @@
         var id = String(firstDefined(item.role, item.twin_id, "twin"));
         var isOpen = state.openAgentId === id;
         var status = String(firstDefined(item.status, "ready"));
-        return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(firstDefined(item.current_activity, "Ready to support the next leadership review.")) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div><div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(firstDefined(item.authority, "Responsibilities will appear when available.")) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div>' + (item.route ? '<a class="btn secondary twin-open" href="' + escapeHtml(item.route) + '">Open team workspace</a>' : '') + '</div>' : '') + '</article>';
+        return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(firstDefined(item.current_activity, "Ready to support the next leadership review.")) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div><div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(firstDefined(item.authority, "Responsibilities will appear when available.")) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div>' + renderExecutionLog() + (item.route ? '<a class="btn secondary twin-open" href="' + escapeHtml(item.route) + '">Open team workspace</a>' : '') + '</div>' : '') + '</article>';
       }).join('') : '<div class="network-empty">No AI leaders match this search.</div>') + '</div>';
       var search = networkCard.querySelector('#twin-network-search');
       if (search) search.oninput = function () {

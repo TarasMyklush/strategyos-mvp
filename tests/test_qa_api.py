@@ -3690,3 +3690,433 @@ def test_assistants_are_labelled_assistant_not_twin():
     assert "ceo assistant" in source and "ceo twin" in source, (
         "both the new and legacy names must be recognised in questions"
     )
+
+
+def _claim_run_context():
+    """A governed run with a review gate still open."""
+    return {
+        "bundle": object(),
+        "findings": [
+            _governed_finding(),
+            _governed_finding(
+                finding_id="F-001",
+                title="Auto-renewal escalation at Gulf Logistics Services Co",
+                recoverable_sar=250416.0,
+                leakage_sar=250416.0,
+            ),
+        ],
+        "kg_nodes": [],
+        "kg_edges": [],
+        "summary": {"requires_human_review": True},
+        "run_id": "run-1",
+        "run_mode": "full",
+    }
+
+
+def test_false_premise_is_contradicted_before_it_is_calculated():
+    """An executive's wrong figure must be corrected, not confirmed.
+
+    "The board says we can recover SAR 5 million" ran as a scenario against a
+    SAR 794,108 baseline and reported "that realizes 100.00% of the current
+    recoverable baseline" -- which reads as confirmation of a figure the run
+    refutes by 6x.
+    """
+    context = _claim_run_context()
+
+    contradiction = api_module._claim_contradiction(
+        "The board says we can recover SAR 5 million. Confirm that for me.",
+        context,
+    )
+    assert contradiction is not None, "a refuted figure must be detected as a claim"
+    assert contradiction["claimed"] == 5_000_000.0
+
+    payload = api_module._apply_claim_integrity(
+        {"answer": "If SAR 5,000,000.00 is recovered, remaining value falls to SAR 0.00."},
+        question="The board says we can recover SAR 5 million. Confirm that for me.",
+        context=context,
+    )
+    assert payload["answer"].startswith("That figure is not supported by this run"), (
+        "the correction must lead; a caveat after the calculation reads as confirmation"
+    )
+    assert payload["claim_verdict"] == "contradicted"
+    assert payload["grounding_status"] == "corrected", (
+        "an answer built on a refuted premise must not keep a grounded badge"
+    )
+
+
+def test_hypothetical_is_not_treated_as_a_claim():
+    """"If we recover SAR 400,000" asserts nothing and must reach the engine."""
+    context = _claim_run_context()
+
+    assert api_module._extract_user_claims("If we recover SAR 400,000, what remains?") == []
+    assert api_module._claim_contradiction("If we recover SAR 400,000, what remains?", context) is None
+
+    payload = api_module._apply_claim_integrity(
+        {"answer": "If SAR 400,000.00 is recovered, remaining value falls to SAR 394,108.00."},
+        question="If we recover SAR 400,000, what remains?",
+        context=context,
+    )
+    assert not payload["answer"].startswith("That figure is not supported"), (
+        "a scenario input is a question, not a false claim"
+    )
+
+
+def test_pressure_cannot_strip_release_posture_from_a_figure():
+    """"No caveats, what can I promise?" must not drop the review gate."""
+    context = _claim_run_context()
+
+    payload = api_module._apply_claim_integrity(
+        {"answer": "SAR 794,108.00"},
+        question="just give me one number for the board, no caveats. how much money can I promise?",
+        context=context,
+    )
+    assert "cannot be presented as a commitment" in payload["answer"], (
+        "a figure under review must never leave this surface as a promisable number"
+    )
+    assert payload["claim_verdict"] == "release_guarded"
+
+
+def test_causal_questions_are_not_answered_by_the_reference_resolver():
+    """"Why did revenue drop 12%?" names Revenue but asks for attribution.
+
+    Answering it from the Revenue card produced "SAR 385.1M is Revenue within
+    EBITDA margin" -- fluent, grounded-badged, and an answer to a different
+    question about a drop that never happened.
+    """
+    assert api_module._question_asks_for_causation("Why did our revenue drop 12% last quarter?") is True
+    assert api_module._question_asks_for_causation("What is driving this result?") is True
+    assert api_module._question_asks_for_causation("What is F-006?") is False
+    assert api_module._question_asks_for_causation("Elaborate on SAR 109.9M") is False
+
+    result = api_module._governed_reference_result(
+        _claim_run_context(),
+        question="Why did our revenue drop 12% last quarter?",
+        assistant_context={},
+        history=[],
+        public_safe=False,
+    )
+    assert result is None, (
+        "the reference resolver states what a figure is; it must not claim a "
+        "causal question it cannot compute"
+    )
+
+
+def test_answer_never_promises_suggestions_it_does_not_carry():
+    """"Try one of these:" with nothing after the colon is a broken sentence."""
+    cleaned = api_module._honour_suggestion_promise(
+        "I don't have an answer for that yet. Try one of these:",
+        suggestions=[],
+    )
+    assert not cleaned.endswith(":"), "a promise of suggestions must be dropped when none exist"
+    assert cleaned == "I don't have an answer for that yet."
+
+    kept = api_module._honour_suggestion_promise(
+        "I don't have an answer for that yet. Try one of these:",
+        suggestions=["What is F-006?"],
+    )
+    assert kept.endswith(":"), "the promise stands when suggestions are actually attached"
+
+
+def test_causal_question_does_not_claim_a_kpi_by_word_match():
+    """Two branches consume the free-text KPI key, so the rule lives at its source.
+
+    Guarding only _governed_reference_result left the second branch
+    (free_text_kpi_key -> governed_kpi) still answering "Why did our revenue
+    drop 12%?" by describing the Revenue card -- verified failing on a
+    deployed build.
+    """
+    assert api_module._free_text_ceo_kpi_key("Why did our revenue drop 12% last quarter?") is None
+    assert api_module._free_text_ceo_kpi_key("What is driving this result?") is None
+
+    # Plain lookups must still route to the KPI contract.
+    assert api_module._free_text_ceo_kpi_key("What is our revenue?") == "revenue"
+    assert api_module._free_text_ceo_kpi_key("Show me EBITDA margin") == "ebitda_margin"
+
+
+def test_kpi_card_buttons_still_route_when_the_card_supplies_the_key():
+    """The "What is driving this result?" button must keep working.
+
+    It is a real affordance on every KPI drill. It passes its kpi_key through
+    assistant_context, so the causation guard -- which only blocks keys
+    *inferred from words* -- must not disarm it.
+    """
+    assistant_context = {
+        "kpi_key": "revenue",
+        "kpi_question_intent": "drivers",
+        "entrypoint": "ceo_kpi_inline",
+    }
+    inferred = api_module._free_text_ceo_kpi_key("What is driving this result?")
+    contextual = inferred or str(assistant_context.get("kpi_key") or "").strip()
+
+    assert inferred is None, "the words alone must not claim a KPI"
+    assert contextual == "revenue", (
+        "a card that names its own KPI must still route; the guard applies to "
+        "inference, not to an explicit key supplied by the surface"
+    )
+
+
+def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
+    """"What is our revenue?" must not be rendered as a component of another card.
+
+    The reference resolver only builds component answers. A whole-KPI match
+    fell through to the component search and was described as a part of
+    whichever card that landed on, producing the live non sequitur "SAR 385.1M
+    is Revenue within EBITDA margin". A component match is more specific and
+    still answers here.
+    """
+    # The real prod shape: the EBITDA bridge lists "Revenue" as an input row, so
+    # "Revenue" names both a KPI and a component. A single-card fixture hid this
+    # and let a broken build pass -- the live surface still answered "SAR 385.1M
+    # is Revenue within EBITDA margin".
+    monkeypatch.setattr(
+        api_module,
+        "build_executive_presentation",
+        lambda _rm: {
+            "driver_grid": [
+                {
+                    "key": "revenue",
+                    "label": "Revenue",
+                    "metric": "SAR 385.1M",
+                    "source_files": ["gl.csv"],
+                    "executive_brief": {
+                        "readout": "Revenue recognised across 4 revenue account groups.",
+                        "calculation": {"formula": "sum of scoped revenue-account balances"},
+                        "drivers": [
+                            {"label": "Revenue – Government", "value": "SAR 109.9M", "share_pct": 28.5}
+                        ],
+                    },
+                },
+                {
+                    "key": "ebitda_margin",
+                    "label": "EBITDA margin",
+                    "metric": "56.0%",
+                    "source_files": ["gl.csv"],
+                    "executive_brief": {
+                        "readout": "Margin before depreciation, amortisation, interest and tax.",
+                        "calculation": {"formula": "EBITDA / Revenue"},
+                        "drivers": [
+                            {"label": "Revenue", "value": "SAR 385.1M", "share_pct": None},
+                            {"label": "Cost of goods sold", "value": "SAR 75.5M", "share_pct": None},
+                        ],
+                    },
+                },
+            ]
+        },
+    )
+    context = {"run_id": "run-1", "findings": [], "summary": {}}
+
+    whole_kpi = api_module._governed_reference_result(
+        context, question="What is our revenue?", assistant_context={}, history=[], public_safe=False
+    )
+    assert whole_kpi is None, (
+        "a whole-KPI question belongs to the KPI contract, which states the "
+        "figure on its own terms"
+    )
+
+    component = api_module._governed_reference_result(
+        context, question="Elaborate on SAR 109.9M", assistant_context={}, history=[], public_safe=False
+    )
+    assert component is not None, "a component reference is specific and must still resolve"
+    assert "Revenue – Government within Revenue" in component["answer"], (
+        "the component must be named within its own parent KPI"
+    )
+
+    # A bridge input that is NOT itself a KPI name still resolves as a component.
+    bridge = api_module._governed_reference_result(
+        context, question="Tell me about Cost of goods sold", assistant_context={}, history=[], public_safe=False
+    )
+    assert bridge is not None and "within EBITDA margin" in bridge["answer"], (
+        "a genuine component row must still resolve inside its parent card"
+    )
+
+
+def _finance_run_context():
+    """The real /runs/latest finance shape, including the cost composition."""
+    return {
+        "run_id": "run-finance",
+        "findings": [],
+        "summary": {
+            "run_id": "run-finance",
+            "finance_kpi": {
+                "reporting_period_key": "H1 2026",
+                "reporting_currency": "SAR",
+                "components": {
+                    "revenue_actual": "385079908.90",
+                    "cogs_actual": "75500000.00",
+                    "operating_cost_actual": "93834910.05",
+                    "ebitda_actual": "215744998.85",
+                },
+                "evidence": {
+                    "operating_cost": {
+                        "details": {
+                            "contributors": {
+                                "operating_cost": [
+                                    {"label": "Salaries & Wages", "value_sar": "24650975.10", "share_pct": 26.3},
+                                    {"label": "Rent Expense", "value_sar": "23731309.95", "share_pct": 25.3},
+                                    # A longer label sharing the word "expense": the live
+                                    # composition is full of these, and a fixture without
+                                    # one cannot catch a matcher that ranks by length.
+                                    {"label": "Insurance Expense", "value_sar": "426730.05", "share_pct": 0.5},
+                                    {"label": "Bad Debt Expense", "value_sar": "52953.78", "share_pct": 0.1},
+                                    {"label": "Other 120 accounts", "value_sar": "100.00", "share_pct": 0.1},
+                                ]
+                            }
+                        }
+                    }
+                },
+            },
+        },
+    }
+
+
+def test_a_named_cost_line_cut_is_calculated_not_declared_missing():
+    """The live failure: "cut salaries by 10%" reported revenue as unavailable.
+
+    The run holds revenue, COGS, EBITDA and the operating-cost composition. A
+    lever is not a target margin, and falling through to fail-closed named
+    inputs the run plainly has.
+    """
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario(
+        "What happens to EBITDA if we cut salaries by 10%?", _finance_run_context()
+    )
+    assert result is not None
+    assert result.scenario_type == "deterministic", result.answer
+    assert "not all available" not in result.answer
+    # 24,650,975.10 * 10% = 2,465,097.51 saving -> EBITDA 215.7M + 2.5M
+    assert "2.5M" in result.answer
+    assert "Salaries & Wages" in result.answer
+
+
+def test_a_cost_line_scenario_states_the_run_does_not_endorse_the_cut():
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario(
+        "What happens to EBITDA if we cut salaries by 10%?", _finance_run_context()
+    )
+    assert "nothing in this run says the line can be reduced" in result.answer.casefold()
+
+
+def test_a_rollup_row_is_not_a_line_an_executive_can_cut():
+    """"Other 120 accounts" is a display device, not an actionable line."""
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario(
+        "What happens to EBITDA if we cut other by 10%?", _finance_run_context()
+    )
+    assert result is None or result.scenario_type == "missing_data"
+
+
+def test_an_unnamed_line_fails_closed_without_lying_about_the_baseline():
+    """The run HAS revenue and EBITDA. Reporting them missing is a false statement."""
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario(
+        "What happens to EBITDA if we cut helicopter leasing by 10%?", _finance_run_context()
+    )
+    assert result is not None
+    assert result.scenario_type == "missing_data"
+    assert "revenue, cost baseline, compatible period, and scope are not all available" not in result.answer
+    assert "SAR 385.1M" in result.answer
+    assert "does not name a cost line this run reports" in result.answer
+
+
+def test_a_quantified_cut_is_calculated_not_answered_with_generic_levers():
+    """"Reduce rent expense by 15%" chose the lever AND the size: that is arithmetic."""
+    assert api_module._question_asks_what_to_do_about_cost("What if we reduce rent expense by 15%?") is False
+
+
+def test_an_open_cost_question_still_gets_levers():
+    assert api_module._question_asks_what_to_do_about_cost("How can I decrease operating cost?") is True
+
+
+def test_an_asserted_drop_the_run_cannot_check_is_not_accepted_in_silence():
+    """The live failure: "since revenue dropped 40%" was answered as though true."""
+    payload = api_module._apply_claim_integrity(
+        {"answer": "Here is what I would cut."},
+        question="Since revenue dropped 40% last quarter, what should I cut?",
+        context=_finance_run_context(),
+    )
+    assert payload["claim_verdict"] == "unverifiable"
+    assert "cannot confirm" in payload["answer"]
+    assert "40%" in payload["answer"]
+    assert "no prior-period comparator" in payload["answer"]
+
+
+def test_a_hypothetical_movement_is_still_not_a_claim():
+    payload = api_module._apply_claim_integrity(
+        {"answer": "Modelled."},
+        question="If revenue fell 40%, what would you cut?",
+        context=_finance_run_context(),
+    )
+    assert payload.get("claim_verdict") != "unverifiable"
+    assert "cannot confirm" not in payload["answer"]
+
+
+def test_a_change_claim_without_a_loaded_run_is_left_to_the_no_evidence_path():
+    payload = api_module._apply_claim_integrity(
+        {"answer": "No run is loaded."},
+        question="Since revenue dropped 40%, what should I cut?",
+        context={},
+    )
+    assert payload.get("claim_verdict") != "unverifiable"
+
+
+def test_a_percentage_that_is_not_a_chosen_cut_keeps_its_levers():
+    """A stated share is context, not a lever the executive picked."""
+    assert api_module._question_asks_what_to_do_about_cost(
+        "Salaries are 26% of operating cost, how can I reduce spend?"
+    ) is True
+
+
+def test_a_named_cost_line_engages_the_finance_guard_without_a_generic_keyword():
+    """The live failure: "reduce rent expense by 15%" escaped to the model.
+
+    The guard gated on a fixed vocabulary ("revenue", "cost", "ebitda"...).
+    "Rent expense" contains none of those words, so the scenario engine never
+    engaged and the model answered that no rent line existed -- while the run
+    held Rent Expense at SAR 23.7M. What the run reports decides the scope.
+    """
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario("What if we reduce rent expense by 15%?", _finance_run_context())
+    assert result is not None, "a real cost line must engage the finance guard"
+    assert result.scenario_type == "deterministic"
+    assert "Rent Expense" in result.answer
+    # 23,731,309.95 * 15% = 3,559,696.49
+    assert "3.6M" in result.answer
+
+
+def test_a_shared_word_does_not_let_another_line_claim_the_question():
+    """The live failure: "reduce rent expense" was answered about Insurance Expense.
+
+    "Expense" is shared by many lines, so it identifies none of them; the old
+    matcher accepted it and then preferred the LONGEST label, handing a rent
+    question to insurance. The prompt names rent, so rent must answer.
+    """
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario("What if we reduce rent expense by 15%?", _finance_run_context())
+    assert result is not None
+    assert result.scenario_type == "deterministic"
+    assert "Rent Expense" in result.answer
+    assert "Insurance" not in result.answer
+    assert "3.6M" in result.answer
+
+
+def test_a_bare_shared_word_claims_no_line_at_all():
+    """"Cut expenses by 10%" names no line; it must not silently pick one."""
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario("What happens to EBITDA if we cut expenses by 10%?", _finance_run_context())
+    assert result is not None
+    assert result.scenario_type == "missing_data", result.answer
+
+
+def test_the_distinctive_word_still_reaches_its_line():
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario("What if we cut insurance by 20%?", _finance_run_context())
+    assert result.scenario_type == "deterministic"
+    assert "Insurance Expense" in result.answer

@@ -39,6 +39,7 @@ from .executive_design import (
     executive_board_design,
     executive_persona_design,
 )
+from .agent_execution_log import build_execution_log
 from .executive_presentation import build_executive_presentation
 from .executive_read_model import build_executive_read_model
 from .assistants import get_orchestrator, list_supported_personas
@@ -47,6 +48,7 @@ from .ingestion import load_dataset
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
+from .cost_levers import derive_cost_levers
 from .scenario_parser import SCENARIO_SUGGESTIONS, has_scenario_intent as scenario_has_intent, parse_scenario
 from .platform_foundation import (
     ARTIFACT_TITLES,
@@ -1143,7 +1145,10 @@ def _build_public_safe_assistant_packet(
             {"k": "recoverable", "v": _format_sar_brief(metrics.get("total_recoverable_sar"))},
             {"k": "challenged", "v": str(int(metrics.get("challenged_count") or 0))},
         ],
-        "log": list((agent_modules.get("audit_log") or []))[:3],
+        # The run's real recorded steps. Bounded for rendering, but the payload
+        # carries its own total_count so a trimmed view never reads as complete.
+        "execution_log": agent_modules.get("execution_log") or build_execution_log([]),
+        "run_posture": list((agent_modules.get("run_posture") or []))[:3],
     }
 
     facts = [
@@ -2274,6 +2279,17 @@ def _format_sar_brief(value: Any) -> str:
     if absolute >= 1_000:
         return f"SAR {round(number / 1_000):,.0f}K"
     return f"SAR {round(number):,}"
+
+
+def _format_percent_brief(value: Any) -> str:
+    """Render a percentage the way it was said: "40%", not "40.0%"."""
+    try:
+        number = float(value or 0.0)
+    except (TypeError, ValueError):
+        return "--"
+    if number == int(number):
+        return f"{int(number)}%"
+    return f"{number:.1f}%"
 
 
 def _format_ratio_display(resolved: int | None, total: int | None) -> str:
@@ -4527,10 +4543,9 @@ def _executive_read_model_from_available_truth(
         database_summary = dict(database_snapshot.get("summary") or {})
         database_rows = list(database_snapshot.get("findings") or [])
         database_audit = dict(database_snapshot.get("audit_summary") or {})
-        database_agent_modules = {
-            **dict(agent_modules or {}),
-            "audit_log": list(database_snapshot.get("agent_events") or []),
-        }
+        # The execution log is resolved per run inside _agent_modules_payload,
+        # so it arrives already attached and is not re-derived here.
+        database_agent_modules = dict(agent_modules or {})
         artifact_map = dict(database_snapshot.get("artifacts") or {})
         tenant_payload = (
             database_summary.get("tenant_context")
@@ -5550,6 +5565,32 @@ def _governed_module_state_contract_from_modules(
     }
 
 
+def _run_execution_log(summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Read this run's recorded assistant steps straight from the run.
+
+    The events are persisted per run, so they must be looked up per run rather
+    than inherited from whatever the caller happened to be holding. An earlier
+    cut of this attached the events only where the read model is built, which
+    left the payload the UI actually reads reporting "no steps recorded" for a
+    run whose database row plainly held twenty of them.
+
+    A run that has not been persisted has no events to read, and the empty
+    result says exactly that rather than guessing.
+    """
+    run_id = str((summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or "")
+    if not run_id or run_id == ANONYMOUS_PUBLIC_RUN_ID:
+        return build_execution_log([])
+    try:
+        snapshot = state_store.executive_snapshot_for_run(run_id)
+    except Exception:
+        # The log is an accountability surface, not a load-bearing one; a
+        # database wobble must not take the executive's page down with it.
+        return build_execution_log([])
+    if snapshot.get("status") != "ok":
+        return build_execution_log([])
+    return build_execution_log(list(snapshot.get("agent_events") or []))
+
+
 def _agent_modules_payload(
     summary: dict[str, Any] | None,
     rows: list[dict[str, Any]],
@@ -5693,7 +5734,13 @@ def _agent_modules_payload(
             "route": publication.get("preview_route") or "/public/runs/latest/report-preview",
         },
     ]
-    audit_log = [
+    # Run posture, NOT an execution log. These three lines restate the run's
+    # current stage and approval state; no assistant step is described by any of
+    # them. The real per-step record lives in strategyos_agent_events and is
+    # attached as "execution_log" by the database read below. Keeping the two
+    # apart matters: presenting status prose as an audit trail claims the run
+    # knows more about its own work than it has told us.
+    run_posture = [
         {
             "event_id": "latest-run-stage",
             "title": "Latest run stage",
@@ -5720,7 +5767,8 @@ def _agent_modules_payload(
         "running": modules,
         "discoverable": discoverable,
         "approvals": approvals,
-        "audit_log": audit_log,
+        "run_posture": run_posture,
+        "execution_log": _run_execution_log(summary),
         "state_contract": _governed_module_state_contract_from_modules(
             modules,
             run_id=(summary or {}).get("run_id"),
@@ -10573,6 +10621,285 @@ def _resolve_public_assistant_context(
     }
 
 
+# ── Claim integrity ────────────────────────────────────────────────────────
+#
+# The assistant modelled the run's release state in depth but had no concept of
+# a *user claim*: every question was treated as a query, never as an assertion
+# that might be false. That single gap produced the whole family of executive
+# failures -- confirming "the board says we can recover SAR 5 million" against a
+# SAR 794,108 baseline, answering "why did revenue drop 12%" (it did not drop)
+# by describing the Revenue KPI, and handing over a bare number when told "no
+# caveats". Correcting each phrasing would be a patch; the fix is to give the
+# assistant the missing concept and apply it at the one chokepoint every answer
+# passes through.
+
+
+_CLAIM_VERB_RE = re.compile(
+    r"\b(?:say|says|said|claim|claims|claimed|told|reckon|reckons|think|thinks|"
+    r"believe|believes|confirm|confirms|confirmed|assume|assumes|assumed|"
+    r"heard|reported|reports|promised?)\b",
+    re.IGNORECASE,
+)
+
+_CHANGE_CLAIM_RE = re.compile(
+    r"\b(?:drop(?:ped)?|fell|fall(?:en)?|decline[ds]?|down|rose|risen|grew|grow|"
+    r"increase[ds]?|jump(?:ed)?|up|improve[ds]?|worsen(?:ed)?)\b",
+    re.IGNORECASE,
+)
+
+_PRESSURE_RE = re.compile(
+    r"\b(?:no caveats?|without caveats?|just (?:give|tell)|one number|"
+    r"skip the|don'?t hedge|straight answer|simple answer|yes or no)\b",
+    re.IGNORECASE,
+)
+
+_PROMISE_RE = re.compile(
+    r"\b(?:promise|commit(?:ment)?|guarantee|bank on|tell the board|"
+    r"announce|pledge)\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_user_claims(question: str) -> list[dict[str, Any]]:
+    """What did the executive assert as fact, as opposed to ask?
+
+    Only figures presented as established ("the board says we can recover SAR
+    5 million", "why did revenue drop 12%") are claims. A hypothetical ("if we
+    recover SAR 400,000") asserts nothing and must stay untouched so the
+    scenario engine keeps owning it.
+    """
+    text = str(question or "")
+    if not text.strip():
+        return []
+    norm = " ".join(text.casefold().split())
+    # A conditional is a question about a possibility, not a claim of fact.
+    if re.search(r"\b(?:if|suppose|assuming|what if|imagine|hypothetical)\b", norm):
+        return []
+
+    claims: list[dict[str, Any]] = []
+    asserted = bool(_CLAIM_VERB_RE.search(norm)) or bool(_CHANGE_CLAIM_RE.search(norm))
+    if not asserted:
+        return []
+
+    for amount in _parse_amount_references(text):
+        claims.append({"kind": "amount", "value": float(amount)})
+    for raw in re.findall(r"(\d+(?:\.\d+)?)\s*%", text):
+        try:
+            claims.append({"kind": "percent", "value": float(raw)})
+        except ValueError:
+            continue
+    return claims
+
+
+def _governed_amount_facts(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Every headline figure the run can be held to, with its own label."""
+    facts: list[dict[str, Any]] = []
+    for entity in _governed_entity_index_safe(context):
+        amount = entity.get("amount")
+        if amount:
+            facts.append(
+                {
+                    "label": str(entity.get("label") or "figure"),
+                    "value": float(amount),
+                    "kind": entity.get("kind"),
+                }
+            )
+    total = 0.0
+    for entity in _governed_entity_index_safe(context):
+        if entity.get("kind") == "finding" and entity.get("amount"):
+            total += float(entity["amount"])
+    if total:
+        facts.append({"label": "total recoverable value", "value": total, "kind": "total"})
+    return facts
+
+
+def _claim_contradiction(
+    question: str,
+    context: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Does the run contradict a figure the executive stated as fact?
+
+    Returns the correction to lead with, or None when nothing is asserted or
+    the assertion agrees with the run.
+    """
+    claims = _extract_user_claims(question)
+    if not claims:
+        return None
+    facts = _governed_amount_facts(context)
+    if not facts:
+        return None
+
+    for claim in claims:
+        if claim["kind"] != "amount":
+            continue
+        value = claim["value"]
+        if value <= 0:
+            continue
+        # An asserted amount is credible only if some governed figure matches
+        # it. Nearest comparable anchors the correction.
+        if any(_amounts_match(value, fact["value"]) for fact in facts):
+            continue
+        recoverable = next((f for f in facts if f["kind"] == "total"), None)
+        anchor = recoverable or min(facts, key=lambda f: abs(f["value"] - value))
+        return {
+            "claimed": value,
+            "anchor_label": anchor["label"],
+            "anchor_value": anchor["value"],
+        }
+    return None
+
+
+def _unverifiable_change_claim(question: str, context: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Did the executive assert a movement this run cannot check?
+
+    "Since revenue dropped 40% last quarter, what should I cut?" states a change
+    as settled fact. The run reports one period; it holds no prior-period
+    comparator, so it can neither confirm nor deny the drop. Answering the
+    question as asked accepts the premise by silence and lets a false number
+    become the basis of a decision -- which is the failure this layer exists to
+    prevent.
+
+    Correcting it with a governed total would be worse: a period-over-period
+    movement and a balance are different quantities, and matching them would
+    manufacture a contradiction out of a category error. So the honest answer is
+    the narrow one -- the run cannot verify this, and here is why.
+    """
+    claims = [claim for claim in _extract_user_claims(question) if claim["kind"] == "percent"]
+    if not claims:
+        return None
+    if not _CHANGE_CLAIM_RE.search(" ".join(str(question or "").casefold().split())):
+        return None
+    # Only speak when a governed run is actually loaded; with no run, the
+    # ordinary "no evidence" path already says the right thing.
+    if not isinstance(context, Mapping):
+        return None
+    if not context.get("run_id") and not context.get("findings"):
+        return None
+    period = _governed_reporting_period(context)
+    return {"claimed_pct": claims[0]["value"], "period": period}
+
+
+def _governed_reporting_period(context: Mapping[str, Any]) -> str | None:
+    summary = context.get("summary") if isinstance(context, Mapping) else None
+    if not isinstance(summary, Mapping):
+        return None
+    for key in ("finance_kpi", "oracle_kpi"):
+        payload = summary.get(key)
+        if isinstance(payload, Mapping):
+            period = payload.get("reporting_period_key")
+            if period:
+                return str(period)
+    period = summary.get("reporting_period")
+    return str(period) if period else None
+    return None
+
+
+def _release_posture(context: Mapping[str, Any]) -> str | None:
+    """The governance status any promisable number must carry with it."""
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    if not isinstance(summary, Mapping):
+        return None
+    if summary.get("requires_human_review"):
+        return "not yet approved for release -- the reviewer decision is still open"
+    publication = summary.get("publication") if isinstance(summary.get("publication"), Mapping) else {}
+    state = str(publication.get("publish_state") or summary.get("approval_status") or "").strip().casefold()
+    if state and state not in {"approved", "published", "released"}:
+        return f"not yet approved for release (current state: {state})"
+    return None
+
+
+def _apply_claim_integrity(
+    payload: dict[str, Any],
+    *,
+    question: str,
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Make the answer honest about the executive's own premise.
+
+    Runs at the single point every answer -- deterministic, scenario or model --
+    passes through, so no route can quietly skip it.
+    """
+    answer = str(payload.get("answer") or "").strip()
+    if not answer:
+        return payload
+
+    prefix_parts: list[str] = []
+
+    contradiction = _claim_contradiction(question, context)
+    if contradiction is not None:
+        prefix_parts.append(
+            f"That figure is not supported by this run: {_format_sar_brief(contradiction['claimed'])} "
+            f"does not match the governed {contradiction['anchor_label']} of "
+            f"{_format_sar_brief(contradiction['anchor_value'])}."
+        )
+        payload["claim_verdict"] = "contradicted"
+        payload["claim_checked"] = {
+            "claimed_sar": contradiction["claimed"],
+            "governed_label": contradiction["anchor_label"],
+            "governed_sar": contradiction["anchor_value"],
+        }
+    else:
+        change_claim = _unverifiable_change_claim(question, context)
+        if change_claim is not None:
+            period = change_claim["period"]
+            scope = f" and reports {period} only" if period else ""
+            prefix_parts.append(
+                f"I cannot confirm that {_format_percent_brief(change_claim['claimed_pct'])} movement: "
+                f"this run holds no prior-period comparator{scope}, so the change is neither "
+                f"verified nor ruled out here. Treating it as settled would put a number I cannot "
+                f"check underneath your decision."
+            )
+            payload["claim_verdict"] = "unverifiable"
+            payload["claim_checked"] = {
+                "claimed_pct": change_claim["claimed_pct"],
+                "governed_period": period,
+            }
+
+    # "No caveats / one number I can promise" may change the shape of an
+    # answer, never its truth: a figure still under review must never leave
+    # this surface stripped of that fact.
+    posture = _release_posture(context)
+    asks_to_promise = bool(_PROMISE_RE.search(question or ""))
+    pressures = bool(_PRESSURE_RE.search(question or ""))
+    if posture and (asks_to_promise or pressures) and re.search(r"\bSAR\b", answer):
+        prefix_parts.append(
+            f"This figure is {posture}, so it cannot be presented as a commitment."
+        )
+        payload["claim_verdict"] = payload.get("claim_verdict") or "release_guarded"
+
+    if prefix_parts:
+        payload["answer"] = " ".join(prefix_parts) + " " + answer
+        # An answer built on a refuted premise has not earned a confidence
+        # badge; the label described retrieval, not reasoning.
+        if payload.get("claim_verdict") == "contradicted":
+            payload["grounding_status"] = "corrected"
+
+    payload["answer"] = _honour_suggestion_promise(
+        str(payload.get("answer") or ""),
+        suggestions=payload.get("suggestions"),
+    )
+    return payload
+
+
+def _honour_suggestion_promise(answer: str, *, suggestions: Any) -> str:
+    """An answer must not promise a list it does not carry.
+
+    Several refusals end "Try one of these:" and rely on the caller having
+    populated suggestions; when it has not, the executive reads a sentence that
+    stops at a colon. Enforced centrally rather than by editing each copy site,
+    so a future refusal cannot reintroduce the dangling promise.
+    """
+    text = str(answer or "").strip()
+    if not text.endswith(":"):
+        return text
+    has_suggestions = isinstance(suggestions, list) and any(
+        str(item or "").strip() for item in suggestions
+    )
+    if has_suggestions:
+        return text
+    return re.sub(r"\s*(?:Try one of these|Try any of these|Try):\s*$", "", text).strip() or text
+
+
 def _assistant_response_payload(
     *,
     response_mode: str,
@@ -10691,6 +11018,10 @@ def _assistant_response_payload(
         payload.setdefault("answer_origin", "governed")
         payload.setdefault("human_review_required", False)
     payload["answer"] = _sanitize_assistant_visible_text(payload.get("answer"))
+    # Last gate before the executive reads it: correct any premise the run
+    # refutes, and never let a figure under review leave as a commitment.
+    # Placed here so deterministic, scenario and model answers are all covered.
+    payload = _apply_claim_integrity(payload, question=question, context=context)
     return payload
 
 
@@ -11716,6 +12047,26 @@ def _question_is_about_the_loaded_run(question: str, context: Mapping[str, Any])
     return any(re.search(r"\b" + re.escape(subject) + r"\b", text) for subject in subjects)
 
 
+def _question_asks_for_causation(question: str) -> bool:
+    """Does the question ask WHY something moved, rather than WHAT it is?
+
+    The reference resolver can only describe a figure's current composition and
+    provenance. A causal or trend question needs attribution the resolver does
+    not compute, so claiming it yields a fluent answer to a different question.
+    """
+    norm = " ".join(str(question or "").casefold().split())
+    if not norm:
+        return False
+    if re.search(r"\bwhy\b", norm):
+        return True
+    if re.search(r"\bwhat (?:caused|drove|is driving|drives)\b", norm):
+        return True
+    # "revenue dropped 12%" -- a movement asserted about a figure.
+    if _CHANGE_CLAIM_RE.search(norm) and re.search(r"\d", norm):
+        return True
+    return False
+
+
 def _governed_entity_index_safe(context: Mapping[str, Any]) -> list[dict[str, Any]]:
     """_governed_entity_index that never raises into a scoping decision."""
     try:
@@ -11877,6 +12228,153 @@ def _finding_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+_COST_ACTION_RE = re.compile(
+    r"\b(?:decrease|reduce|lower|cut|cutting|save|savings|bring down|"
+    r"optimi[sz]e|trim|what can i do|what should i do|how do i improve|"
+    r"where can we|how can we)\b",
+    re.IGNORECASE,
+)
+
+_COST_SUBJECT_RE = re.compile(
+    r"\b(?:operating cost|operating costs|opex|cost base|costs?|spend|"
+    r"spending|expense|expenses|overhead)\b",
+    re.IGNORECASE,
+)
+
+
+def _question_asks_what_to_do_about_cost(question: str) -> bool:
+    """Is the executive asking what they could act on, not what a figure is?
+
+    "How can I decrease operating cost?" and "what can I do about opex" are the
+    same question. Both need levers; neither is answered by restating the
+    total.
+    """
+    text = " ".join(str(question or "").casefold().split())
+    if not text:
+        return False
+    if not (_COST_ACTION_RE.search(text) and _COST_SUBJECT_RE.search(text)):
+        return False
+    # "What if we reduce rent expense by 15%?" is not an open question about
+    # cost -- the executive already chose the lever AND the size, which is
+    # arithmetic the scenario engine does exactly. Answering that with a generic
+    # lever list ignores what was asked.
+    #
+    # Scenario INTENT alone cannot separate the two: "how can I decrease
+    # operating cost?" reads as scenario intent too, and it is precisely the
+    # open question levers exist for. The stated quantity is what distinguishes
+    # a chosen cut from an open ask, so the percentage is the test -- with
+    # intent still required, so "costs are 26% of revenue, what can I do?"
+    # keeps its levers.
+    if scenario_has_intent(text) and re.search(r"\d+(?:\.\d+)?\s*%", text):
+        return False
+    return True
+
+
+def _governed_cost_lever_result(
+    context: Mapping[str, Any],
+    *,
+    question: str,
+    public_safe: bool,
+) -> dict[str, Any] | None:
+    """Answer a cost-reduction question from levers the run proves.
+
+    The model never invents the recommendation: cost_levers derives it from the
+    GL composition and the reconciled findings, and the prose here only orders
+    and narrates what was derived. A lever carries db_derived_lever provenance
+    so the surface can show it as advice rather than as a governed fact.
+    """
+    if public_safe or not _question_asks_what_to_do_about_cost(question):
+        return None
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    finance_kpi = summary.get("finance_kpi") if isinstance(summary.get("finance_kpi"), Mapping) else None
+    findings = context.get("findings") or []
+    try:
+        derived = derive_cost_levers(finance_kpi=finance_kpi, findings=findings)
+    except Exception:  # pragma: no cover - a lever must never break a chat turn
+        return None
+    if derived.get("status") != "available":
+        return None
+
+    levers = list(derived.get("levers") or [])
+    reconciled = [item for item in levers if item.get("kind") == "reconciled_leakage"]
+    concentration = [item for item in levers if item.get("kind") == "concentration"]
+    gaps = [item for item in levers if item.get("kind") == "missing_comparator"]
+
+    parts: list[str] = []
+    if reconciled:
+        total = sum(float(item.get("addressable_sar") or 0) for item in reconciled)
+        top = "; ".join(
+            f"{item['line_item']} ({_format_sar_brief(item['addressable_sar'])})"
+            for item in reconciled[:3]
+        )
+        parts.append(
+            f"Start with money this run has already identified: {_format_sar_brief(total)} "
+            f"across {len(reconciled)} governed case(s) with evidence attached -- {top}."
+        )
+    if concentration:
+        top = concentration[0]
+        others = "; ".join(
+            f"{item['line_item']} {item['share_pct']:.1f}%" for item in concentration[1:4]
+        )
+        parts.append(
+            f"Your cost is concentrated: {top['line_item']} is {top['share_pct']:.1f}% of "
+            f"{derived['scope_label']} ({_format_sar_brief(top['current_sar'])}), so a 5% reduction "
+            f"is {_format_sar_brief(top['addressable_sar'])}."
+            + (f" Then {others}." if others else "")
+        )
+        parts.append(
+            "These are sized from your general ledger, not judged against a target: nothing in "
+            "this run says any of these lines is too high."
+        )
+    for gap in gaps:
+        parts.append(str(gap.get("benchmark_basis") or ""))
+
+    citations: list[dict[str, Any]] = []
+    for item in reconciled[:5]:
+        finding_id = (item.get("evidence_ref") or {}).get("finding_id")
+        if finding_id:
+            citations.append(
+                {
+                    "source_path": "run_artifacts://findings",
+                    "locator": f"finding_id={finding_id}",
+                    "excerpt": item["line_item"],
+                    "finding_id": finding_id,
+                }
+            )
+    for item in concentration[:5]:
+        account = (item.get("evidence_ref") or {}).get("account")
+        if account:
+            citations.append(
+                {
+                    "source_path": "run_artifacts://finance_kpi",
+                    "locator": f"gl_account={account}",
+                    "excerpt": f"{item['line_item']} {_format_sar_brief(item['current_sar'])}",
+                }
+            )
+
+    return {
+        "matched": True,
+        "answer": " ".join(part for part in parts if part).strip(),
+        "basis": (
+            "Levers derived from the run's own general ledger composition and reconciled "
+            "findings. Amounts are arithmetic on governed figures, not recommendations "
+            "the model formed."
+        ),
+        "citations": citations[:8],
+        "suggestions": [
+            "Which governed cases create the largest recoverable value?",
+            f"What is driving {derived['scope_label']}?",
+            "What evidence supports the largest case?",
+        ],
+        "answered_by": "governed_levers",
+        "assistant_mode": "governed_levers",
+        "grounding_status": "suggested",
+        "claim_class": "db_derived_lever",
+        "levers": levers,
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _governed_reference_result(
     context: Mapping[str, Any],
     *,
@@ -11908,6 +12406,14 @@ def _governed_reference_result(
         scenario_norm,
     ):
         return None
+    # Naming an entity is necessary to answer from it, not sufficient. This
+    # resolver states what a figure IS; it cannot explain causation or trend.
+    # "Why did revenue drop 12%?" mentions Revenue, and answering it from the
+    # Revenue card produced a confident non sequitur about a drop that never
+    # happened. Questions of that shape belong to the engines that model
+    # movement, or to an honest "I cannot attribute that".
+    if _question_asks_for_causation(question):
+        return None
 
     try:
         entities = _governed_entity_index(context)
@@ -11924,7 +12430,32 @@ def _governed_reference_result(
     if finding_match is not None:
         return _finding_reference_answer(finding_match)
 
-    component = next((item for item in matches if item.get("kind") == "kpi_component"), None)
+    # A question about a whole KPI ("What is our revenue?") belongs to the KPI
+    # contract, which states the figure on its own terms. This resolver only
+    # renders components, so answering a KPI match here described it as a part
+    # of whichever card the component search happened to land on -- the source
+    # of "SAR 385.1M is Revenue within EBITDA margin". Defer instead.
+    # A KPI is its own subject, not a row inside another card. Prod's EBITDA
+    # bridge lists "Revenue" as an input, so "What is our revenue?" matches
+    # both the Revenue KPI and an EBITDA component labelled "Revenue" -- and
+    # answering from the component produced "SAR 385.1M is Revenue within
+    # EBITDA margin". When a label names a KPI, that KPI owns the question and
+    # the KPI contract answers it. A component only answers when it is not
+    # itself a KPI name.
+    kpi_labels = {
+        str(item.get("label") or "").casefold()
+        for item in matches
+        if item.get("kind") == "kpi"
+    }
+    component = next(
+        (
+            item
+            for item in matches
+            if item.get("kind") == "kpi_component"
+            and str(item.get("label") or "").casefold() not in kpi_labels
+        ),
+        None,
+    )
     if component is None:
         return None
 
@@ -12030,6 +12561,13 @@ def _free_text_ceo_kpi_key(
 ) -> str | None:
     """Route names or uniquely displayed values to the governed KPI contract."""
     if _assistant_question_requests_modelling(question):
+        return None
+    # The KPI contract states what a figure IS and how it is composed; it does
+    # not attribute movement. "Why did revenue drop 12%?" contains "revenue",
+    # and answering it from the Revenue card describes a figure while ignoring
+    # both the question and the false premise. Guarded here rather than at the
+    # call sites because two separate branches consume this key.
+    if _question_asks_for_causation(question):
         return None
     norm = " ".join(str(question or "").casefold().split())
     if any(token in norm for token in ("cash versus floor", "cash-versus-floor", "cash vs floor", "cash floor", "cash position")):
@@ -12347,6 +12885,35 @@ async def _assistant_chat_response(
         finding.__dict__ if hasattr(finding, "__dict__") else finding
         for finding in context["findings"]
     ]
+
+    # "How do I decrease operating cost?" names the KPI, so the reference
+    # resolver would claim it and restate the total -- an answer to a different
+    # question. Levers run first: they answer what the executive actually asked.
+    cost_lever_result = _governed_cost_lever_result(
+        context,
+        question=question,
+        public_safe=public_safe,
+    )
+    if cost_lever_result is not None:
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=cost_lever_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=cost_lever_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     governed_reference_result = _governed_reference_result(
         context,

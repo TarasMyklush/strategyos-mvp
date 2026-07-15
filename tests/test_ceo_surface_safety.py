@@ -2177,3 +2177,58 @@ def test_hero_ring_text_is_bounded_by_the_circle_not_its_square():
         "the hero status word must scale in container query units so any status "
         "word stays inside the curve at every ring size"
     )
+
+
+def test_kpi_panel_free_text_ask_carries_the_active_figure_as_context():
+    """The free-text box under the preset questions must keep the figure first.
+
+    A CEO typing into the Revenue panel means Revenue. The input therefore
+    sends the same assistant_context the preset buttons send (kpi_key /
+    kpi_label), which is the explicit-key path the causation guard preserves --
+    so the figure on screen stays the subject rather than being inferred from
+    the words typed.
+    """
+    js = _static_executive_js()
+    css = _static_executive_css()
+
+    assert "data-kpi-ask-form" in js, "the KPI panel must expose a free-text ask"
+    assert 'kpi_question_intent: "free_text"' in js, (
+        "a typed question must be distinguishable from the preset intents"
+    )
+
+    form_start = js.index("[data-kpi-ask-form]")
+    handler = js[form_start:form_start + 900]
+    assert "kpi_key: key" in handler and "kpi_label: label" in handler, (
+        "the typed question must carry the active KPI as context, so the "
+        "figure on screen is answered first"
+    )
+    assert 'entrypoint: "ceo_kpi_inline"' in handler
+
+    assert ".kpi-inline-ask" in css, "the free-text ask must be styled with the panel"
+
+
+def test_execution_log_renderer_is_actually_wired_into_the_card():
+    """A renderer nothing calls is an inert fix.
+
+    The CSS for this panel shipped long before any code rendered it; the whole
+    point of this change is that the function is reachable from the card body,
+    so assert the call site, not just the definition.
+    """
+    js = _static_executive_js()
+    assert "function renderExecutionLog()" in js
+    # Defined once, called at least once: the definition alone proves nothing.
+    assert js.count("renderExecutionLog()") >= 2
+    assert "</p></div>' + renderExecutionLog() + (item.route" in js
+
+
+def test_execution_log_reads_real_events_not_the_synthesised_posture():
+    js = _static_executive_js()
+    assert "execution_log" in js
+    # The three synthesised status lines must never be dressed up as the trail.
+    assert "run_posture" not in js.split("function renderExecutionLog()")[1][:2000]
+
+
+def test_execution_log_styles_are_served():
+    css = _static_executive_css()
+    for selector in (".agent-trail", ".trail-item", ".trail-quote", ".trail-note", ".trail-foot"):
+        assert selector in css, f"missing style for {selector}"
