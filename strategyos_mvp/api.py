@@ -92,7 +92,7 @@ from .oracle_finance import (
     snapshot_summary,
 )
 from . import state_store
-from .governed_plans import plan_comparators
+from .governed_plans import plan_comparators, strategic_references
 from .state_store import data_management_status, database_connection
 from .storage import ObjectStoreUnavailable, S3CompatibleStore, object_store_status
 from .source_pack import (
@@ -150,6 +150,7 @@ class ReviewerDecisionRequest(BaseModel):
 
 
 class FinancialPlanRequest(BaseModel):
+    plan_type: str = "operating_budget"
     plan_key: str = "group-financial-plan"
     title: str
     reporting_period_key: str
@@ -4530,11 +4531,27 @@ def _executive_read_model_from_available_truth(
     public_safe: bool,
 ) -> dict[str, Any]:
     def with_active_plan(read_model: dict[str, Any]) -> dict[str, Any]:
-        active_plan = state_store.active_financial_plan()
+        active_plans = state_store.active_financial_plans()
+        active_plan = next(
+            (item for item in active_plans if item.get("plan_type") == "operating_budget"),
+            active_plans[0] if active_plans else None,
+        )
+        strategic_plan = next(
+            (item for item in active_plans if item.get("plan_type") == "strategic_reference"),
+            None,
+        )
         finance = read_model.get("finance_kpi") if isinstance(read_model.get("finance_kpi"), dict) else {}
         if not active_plan or not finance:
             read_model["financial_plan"] = active_plan
             return read_model
+        if strategic_plan:
+            finance = dict(finance)
+            finance["strategic_references"] = {
+                **dict(finance.get("strategic_references") or {}),
+                **strategic_references(strategic_plan),
+            }
+            read_model["finance_kpi"] = finance
+        read_model["financial_plans"] = active_plans
         comparison = plan_comparators(active_plan, finance)
         read_model["financial_plan"] = {**active_plan, "comparison_alignment": comparison}
         if not comparison.get("aligned"):
@@ -9123,12 +9140,18 @@ def resume_run(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
+def _source_pack_with_plan_ingestion(payload: dict[str, Any]) -> dict[str, Any]:
+    """Record any externally approved plan while preserving source-pack intake."""
+    result = state_store.ingest_approved_plans_from_source_pack(payload)
+    return {**payload, "financial_plan_ingestion": result}
+
+
 @app.post("/source-packs")
 def create_source_pack(
     files: list[UploadFile] = File(...),
     _: dict[str, Any] = require_role("operator"),
 ) -> dict[str, Any]:
-    return stage_source_pack_uploads(files)
+    return _source_pack_with_plan_ingestion(stage_source_pack_uploads(files))
 
 
 @app.post("/source-packs/from-path")
@@ -9136,7 +9159,7 @@ def create_source_pack_from_path(
     request: SourcePackPathRequest,
     _: dict[str, Any] = require_role("operator"),
 ) -> dict[str, Any]:
-    return stage_source_pack_from_path(request.folder_path)
+    return _source_pack_with_plan_ingestion(stage_source_pack_from_path(request.folder_path))
 
 
 @app.post("/source-packs/validate")
@@ -9144,7 +9167,7 @@ def validate_source_pack_endpoint(
     request: SourcePackValidateRequest,
     _: dict[str, Any] = require_role("operator"),
 ) -> dict[str, Any]:
-    return validate_source_pack(request.source_pack_id)
+    return _source_pack_with_plan_ingestion(validate_source_pack(request.source_pack_id))
 
 
 @app.post("/source-packs/confirm-mapping")

@@ -34,6 +34,7 @@ def test_data_role_registry_exposes_current_run_model_roles_in_order():
         "contract",
         "email_correspondence",
         "invoice_document",
+        "approved_strategy_plan",
     ]
     assert run_model_required_roles() == (
         "ap_ledger",

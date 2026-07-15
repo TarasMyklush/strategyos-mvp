@@ -739,6 +739,7 @@ def _classify_document_source(path: Path, item: dict[str, Any]) -> dict[str, Any
         )
 
     scores = {
+        "approved_strategy_plan": _text_role_score(compact, (r"\bboard[- ]approved\b", r"\bboard signed (off|the targets)\b", r"\bstrategic plan\b", r"\bplan period\b")),
         "invoice_document": _text_role_score(compact, (r"\binvoice\b", r"invoice\s*(number|no\.?|id)", r"\bbill to\b", r"\bamount due\b")),
         "bank_statement": _text_role_score(compact, (r"\bstatement\b", r"\bbank\b", r"\baccount\b", r"\bbalance\b")),
         "contract": _text_role_score(compact, (r"\bcontract\b", r"\bagreement\b", r"effective date", r"payment terms")),

@@ -133,6 +133,8 @@ create table if not exists strategyos_financial_plans (
     id uuid primary key default gen_random_uuid(),
     tenant_id uuid not null references strategyos_tenants(id) on delete cascade,
     plan_key text not null,
+    plan_type text not null default 'operating_budget' check (plan_type in ('operating_budget', 'strategic_reference')),
+    source_hash text,
     version integer not null,
     title text not null,
     reporting_period_key text not null,
@@ -155,6 +157,9 @@ create table if not exists strategyos_financial_plans (
     approved_at timestamptz,
     unique (tenant_id, plan_key, version)
 );
+
+alter table strategyos_financial_plans add column if not exists plan_type text not null default 'operating_budget';
+alter table strategyos_financial_plans add column if not exists source_hash text;
 
 create table if not exists strategyos_financial_plan_events (
     id uuid primary key default gen_random_uuid(),
@@ -523,4 +528,5 @@ create index if not exists idx_strategyos_kg_nodes_label on strategyos_kg_nodes(
 create index if not exists idx_strategyos_kg_edges_label on strategyos_kg_edges(label);
 create index if not exists idx_strategyos_financial_plans_tenant_status on strategyos_financial_plans(tenant_id, status, updated_at desc);
 create unique index if not exists uq_strategyos_financial_plans_active on strategyos_financial_plans(tenant_id, plan_key) where status = 'active';
+create unique index if not exists uq_strategyos_financial_plans_source_hash on strategyos_financial_plans(tenant_id, source_hash) where source_hash is not null;
 create index if not exists idx_strategyos_financial_plan_events_plan on strategyos_financial_plan_events(plan_id, created_at desc);

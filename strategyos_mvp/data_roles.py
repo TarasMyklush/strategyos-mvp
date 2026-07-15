@@ -232,6 +232,13 @@ DATA_ROLE_SPECS: tuple[DataRoleSpec, ...] = (
         kind="document",
         target_folder="08_Invoices",
     ),
+    DataRoleSpec(
+        role="approved_strategy_plan",
+        label="Board-approved strategy plan",
+        kind="document",
+        target_folder="04_Strategic_Context/01_Group_Strategy",
+        required_for_run=False,
+    ),
 )
 
 

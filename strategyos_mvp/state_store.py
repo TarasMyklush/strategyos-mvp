@@ -16,7 +16,7 @@ from .evidence import row_locator, sha256_file
 from .ingestion import DataBundle
 from .models import AuditEvent, Finding
 from .oracle_finance import OracleCanonicalSnapshot
-from .governed_plans import validate_plan_payload
+from .governed_plans import extract_approved_plan_candidates, validate_plan_payload
 
 
 def create_financial_plan(payload: dict[str, Any], *, actor: str, actor_role: str) -> dict[str, Any]:
@@ -37,13 +37,14 @@ def create_financial_plan(payload: dict[str, Any], *, actor: str, actor_role: st
             cur.execute(
                 """
                 insert into strategyos_financial_plans
-                    (tenant_id, plan_key, version, title, reporting_period_key, period_start, period_end,
+                    (tenant_id, plan_key, plan_type, source_hash, version, title, reporting_period_key, period_start, period_end,
                      currency, scope_json, source_json, targets_json, validation_json, status, created_by)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, 'draft', %s)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, 'draft', %s)
                 returning *
                 """,
                 (
-                    tenant_id, normalized["plan_key"], version, normalized["title"],
+                    tenant_id, normalized["plan_key"], normalized["plan_type"],
+                    str(normalized["source"].get("sha256") or "") or None, version, normalized["title"],
                     normalized["reporting_period_key"], normalized["period_start"], normalized["period_end"],
                     normalized["currency"], json_blob(normalized["scope"]), json_blob(normalized["source"]),
                     json_blob(normalized["targets"]), json_blob(exceptions), actor,
@@ -96,11 +97,12 @@ def update_financial_plan(plan_id: str, payload: dict[str, Any], *, actor: str, 
                 return {"status": "conflict", "plan_id": plan_id, "reason": "Only draft or changes-requested plans can be edited."}
             cur.execute(
                 """update strategyos_financial_plans set
-                       title = %s, reporting_period_key = %s, period_start = %s, period_end = %s,
+                       plan_type = %s, source_hash = %s, title = %s, reporting_period_key = %s, period_start = %s, period_end = %s,
                        currency = %s, scope_json = %s::jsonb, source_json = %s::jsonb,
                        targets_json = %s::jsonb, validation_json = %s::jsonb, updated_at = now()
                    where id = %s returning *""",
-                (normalized["title"], normalized["reporting_period_key"], normalized["period_start"], normalized["period_end"],
+                (normalized["plan_type"], str(normalized["source"].get("sha256") or "") or None,
+                 normalized["title"], normalized["reporting_period_key"], normalized["period_start"], normalized["period_end"],
                  normalized["currency"], json_blob(normalized["scope"]), json_blob(normalized["source"]),
                  json_blob(normalized["targets"]), json_blob(exceptions), plan_id),
             )
@@ -120,10 +122,96 @@ def active_financial_plan() -> dict[str, Any] | None:
         ensure_data_schema(conn)
         with conn.cursor() as cur:
             tenant_id = upsert_tenant(cur)
-            cur.execute("select * from strategyos_financial_plans where tenant_id = %s and status = 'active' order by approved_at desc limit 1", (tenant_id,))
+            cur.execute("select * from strategyos_financial_plans where tenant_id = %s and status = 'active' order by (plan_type = 'operating_budget') desc, approved_at desc limit 1", (tenant_id,))
             record = fetchone_dict(cur)
         conn.commit()
     return _normalize_plan_record(record, events=[]) if record else None
+
+
+def active_financial_plans() -> list[dict[str, Any]]:
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return []
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            tenant_id = upsert_tenant(cur)
+            cur.execute(
+                "select * from strategyos_financial_plans where tenant_id = %s and status = 'active' order by approved_at desc",
+                (tenant_id,),
+            )
+            records = fetchall_dicts(cur)
+        conn.commit()
+    return [_normalize_plan_record(record, events=[]) for record in records]
+
+
+def ingest_approved_plans_from_source_pack(source_pack: dict[str, Any]) -> dict[str, Any]:
+    """Idempotently activate plans carrying their own verifiable approval evidence."""
+    candidates = extract_approved_plan_candidates(source_pack)
+    if not candidates:
+        return {"status": "none", "activated": [], "message": "No explicitly approved plan source was detected."}
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return {"status": "unavailable", "activated": [], "reason": skipped.get("reason")}
+    assert connection is not None
+    activated: list[dict[str, Any]] = []
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            tenant_id = upsert_tenant(cur)
+            for candidate in candidates:
+                normalized, exceptions = validate_plan_payload(candidate)
+                source_hash = str(normalized["source"].get("sha256") or "").strip()
+                if exceptions or not source_hash:
+                    continue
+                cur.execute(
+                    "select pg_advisory_xact_lock(hashtext(%s))",
+                    (f"{tenant_id}:{source_hash}",),
+                )
+                cur.execute(
+                    "select * from strategyos_financial_plans where tenant_id = %s and source_hash = %s",
+                    (tenant_id, source_hash),
+                )
+                existing = fetchone_dict(cur)
+                if existing is not None:
+                    activated.append(_normalize_plan_record(existing, events=[]))
+                    continue
+                cur.execute(
+                    "select coalesce(max(version), 0) + 1 from strategyos_financial_plans where tenant_id = %s and plan_key = %s",
+                    (tenant_id, normalized["plan_key"]),
+                )
+                version = int(cur.fetchone()[0])
+                cur.execute(
+                    "update strategyos_financial_plans set status = 'superseded', updated_at = now() where tenant_id = %s and plan_key = %s and status = 'active'",
+                    (tenant_id, normalized["plan_key"]),
+                )
+                cur.execute(
+                    """insert into strategyos_financial_plans
+                       (tenant_id, plan_key, plan_type, source_hash, version, title, reporting_period_key,
+                        period_start, period_end, currency, scope_json, source_json, targets_json,
+                        validation_json, status, created_by, approved_by, approved_at)
+                       values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb,
+                               %s::jsonb, '[]'::jsonb, 'active', %s, %s, now()) returning *""",
+                    (
+                        tenant_id, normalized["plan_key"], normalized["plan_type"], source_hash,
+                        version, normalized["title"], normalized["reporting_period_key"],
+                        normalized["period_start"], normalized["period_end"], normalized["currency"],
+                        json_blob(normalized["scope"]), json_blob(normalized["source"]),
+                        json_blob(normalized["targets"]), "source-pack-ingestion", "Board of Directors",
+                    ),
+                )
+                record = fetchone_dict(cur)
+                assert record is not None
+                _insert_plan_event(
+                    cur, str(record["id"]), "auto_approved_from_source", None, "active",
+                    "source-pack-ingestion", "system",
+                    "Activated from explicit Board approval evidence embedded in the uploaded source.",
+                    {"source_pack_id": source_pack.get("source_pack_id"), "source_hash": source_hash},
+                )
+                activated.append(_normalize_plan_record(record, events=[]))
+        conn.commit()
+    return {"status": "activated", "activated": activated, "count": len(activated)}
 
 
 def transition_financial_plan(

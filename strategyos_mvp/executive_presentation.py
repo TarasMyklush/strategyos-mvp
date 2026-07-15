@@ -157,7 +157,7 @@ def _source_title(path: Any) -> str:
     return "Finance source"
 
 
-def _governed_strategic_reference(payload: Mapping[str, Any], key: str) -> dict[str, str] | None:
+def _governed_strategic_reference(payload: Mapping[str, Any], key: str) -> dict[str, Any] | None:
     """Return an optional strategic reference only when its source is supplied.
 
     A strategic target can provide useful context, but it must never be a
@@ -175,7 +175,11 @@ def _governed_strategic_reference(payload: Mapping[str, Any], key: str) -> dict[
     if not label or not value or not source:
         return None
     note = str(item.get("note") or "Reference only; not used as a period comparison.").strip()
-    return {"label": label, "value": value, "note": note, "source": source}
+    result: dict[str, Any] = {"label": label, "value": value, "note": note, "source": source}
+    numeric_value = _number_or_none(item.get("numeric_value"))
+    if numeric_value is not None:
+        result["numeric_value"] = numeric_value
+    return result
 
 
 def _executive_kpi_brief(
@@ -536,6 +540,17 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             "source_files": list(kpi_evidence.get("files") or []),
         }
         strategic_reference = _governed_strategic_reference(finance_payload, str(spec["key"]))
+        strategic_target = _number_or_none((strategic_reference or {}).get("numeric_value"))
+        if comparator is None and strategic_target not in {None, 0} and spec["key"] in {"revenue", "cash_vs_floor"}:
+            progress_pct = actual / strategic_target * 100
+            ring_pct = progress_pct
+            if spec["key"] == "revenue":
+                ring_label = "of FY2026 plan"
+                comparison = f"{progress_pct:.1f}% of approved FY2026 annual plan"
+            else:
+                ring_label = "of Group floor"
+                comparison = f"{progress_pct:.1f}% of Group floor · partial cash scope"
+            sub = comparison
         cards.append(
             {
                 "kpi_contract": True,
