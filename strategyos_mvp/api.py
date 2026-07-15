@@ -11529,6 +11529,249 @@ def _history_kpi_key(history: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def _governed_entity_index(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """One lookup over every entity the current governed run puts on screen.
+
+    The CEO references what they can see: a finding id ("F-006"), an invoice or
+    credit number carried in a finding title, a vendor, a KPI component, or a
+    bare amount. Resolving each surface separately is what left findings
+    unreachable while KPI rows resolved, so every surface is indexed here once
+    and matched by the same rules.
+    """
+    entities: list[dict[str, Any]] = []
+
+    for row in list(context.get("findings") or []):
+        if not isinstance(row, Mapping):
+            continue
+        finding_id = str(row.get("finding_id") or row.get("case_id") or "").strip()
+        title = str(row.get("title") or "").strip()
+        if not finding_id and not title:
+            continue
+        amount = row.get("recoverable_sar")
+        tokens = {finding_id.casefold()} if finding_id else set()
+        # Titles carry the document identifiers a CEO quotes back
+        # ("INV-2026-0577", "CR-2024-091", "V-1142").
+        for doc_id in re.findall(r"\b[A-Z]{1,4}-[0-9]{2,4}-?[0-9]*\b", title):
+            tokens.add(doc_id.casefold())
+        vendor = str(row.get("vendor_name") or row.get("vendor") or "").strip()
+        if vendor:
+            tokens.add(vendor.casefold())
+        entities.append(
+            {
+                "kind": "finding",
+                "id": finding_id,
+                "label": title or finding_id,
+                "tokens": {token for token in tokens if token},
+                "phrase": title.casefold(),
+                "amount": _as_float_or_none(amount),
+                "row": dict(row),
+            }
+        )
+
+    read_model = _executive_read_model_from_available_truth(
+        dict(context.get("summary") if isinstance(context.get("summary"), Mapping) else {}),
+        [],
+        {},
+        {"report_count": 0},
+        {},
+        public_safe=False,
+    )
+    for card in list(build_executive_presentation(read_model).get("driver_grid") or []):
+        if not isinstance(card, Mapping):
+            continue
+        card_label = str(card.get("label") or "").strip()
+        card_key = str(card.get("key") or card.get("driver_key") or "").strip()
+        brief = card.get("executive_brief") if isinstance(card.get("executive_brief"), Mapping) else {}
+        entities.append(
+            {
+                "kind": "kpi",
+                "id": card_key,
+                "label": card_label,
+                "tokens": {token for token in {card_key.casefold(), card_label.casefold()} if token},
+                "phrase": card_label.casefold(),
+                "amount": _parse_display_amount(card.get("metric")),
+                "card": dict(card),
+                "brief": dict(brief),
+            }
+        )
+        for driver in list(brief.get("drivers") or []):
+            if not isinstance(driver, Mapping):
+                continue
+            driver_label = str(driver.get("label") or "").strip()
+            if not driver_label:
+                continue
+            entities.append(
+                {
+                    "kind": "kpi_component",
+                    "id": f"{card_key}:{driver_label}",
+                    "label": driver_label,
+                    "tokens": {driver_label.casefold()},
+                    "phrase": driver_label.casefold(),
+                    "amount": _parse_display_amount(driver.get("value")),
+                    "card": dict(card),
+                    "brief": dict(brief),
+                    "driver": dict(driver),
+                }
+            )
+    return entities
+
+
+_GOVERNED_IDENTIFIER_RE = re.compile(r"(?<![\w-])[A-Za-z]{1,4}-[0-9]{2,4}-?[0-9]*(?![\w-])")
+
+
+def _question_looks_like_governed_identifier(question: str) -> bool:
+    """True when the question is about a record id (F-006, INV-2026-0577).
+
+    Such a question carries no finance keyword, so the business-scope check
+    routes it to the general-knowledge model, which has no governed evidence
+    and will invent plausible finance detail for the id. An identifier that did
+    not resolve in the run must fail closed instead.
+    """
+    return bool(_GOVERNED_IDENTIFIER_RE.search(str(question or "")))
+
+
+def _as_float_or_none(value: Any) -> float | None:
+    try:
+        if value in (None, ""):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+_PRONOUN_ONLY_RE = re.compile(
+    r"^(?:can you |could you |please |now |and |so )*"
+    r"(?:show|tell|explain|elaborate|expand|detail|describe|give)?\s*"
+    r"(?:me|us)?\s*(?:more\s+)?(?:about\s+|on\s+)?"
+    r"\b(it|that|this|those|these|them|the one|the same)\b",
+)
+
+
+def _question_is_reference_followup(question: str) -> bool:
+    """A follow-up whose whole subject is a pronoun or a bare 'why'."""
+    norm = " ".join(str(question or "").casefold().split()).strip(" ?.!")
+    if not norm:
+        return False
+    if norm in {"why", "why?", "how", "and why", "explain", "elaborate", "more", "tell me more", "go on"}:
+        return True
+    return bool(_PRONOUN_ONLY_RE.match(norm))
+
+
+def _history_entity_tokens(history: list[dict[str, Any]]) -> list[str]:
+    """Identifiers the assistant most recently put on screen, newest first."""
+    tokens: list[str] = []
+    for item in reversed(history or []):
+        if str(item.get("role") or "") != "assistant":
+            continue
+        text = str(item.get("text") or "")
+        for doc_id in re.findall(r"\b[A-Z]{1,4}-[0-9]{2,4}-?[0-9]*\b", text):
+            if doc_id.casefold() not in tokens:
+                tokens.append(doc_id.casefold())
+    return tokens
+
+
+def _resolve_governed_entities(
+    entities: list[dict[str, Any]],
+    *,
+    question: str,
+    history: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Match a question against the entity index: identifier, phrase, amount,
+    then pronoun-carried reference from the previous assistant turn."""
+    norm = " ".join(str(question or "").casefold().split())
+    stripped = norm.strip(" ?.!,")
+    matches: list[dict[str, Any]] = []
+
+    for entity in entities:
+        for token in entity.get("tokens") or set():
+            if not token:
+                continue
+            # Identifier tokens must match as whole words so "F-006" never
+            # matches inside an unrelated string.
+            if re.search(r"(?<![\w-])" + re.escape(token) + r"(?![\w-])", norm):
+                matches.append(entity)
+                break
+    if matches:
+        return matches
+
+    for entity in entities:
+        phrase = entity.get("phrase") or ""
+        if len(phrase) >= 8 and phrase in norm:
+            matches.append(entity)
+    if matches:
+        return matches
+
+    amount_refs = _parse_amount_references(question)
+    if amount_refs:
+        for entity in entities:
+            amount = entity.get("amount")
+            if amount is None:
+                continue
+            if any(_amounts_match(ref, amount) for ref in amount_refs):
+                matches.append(entity)
+        if matches:
+            return matches
+
+    if _question_is_reference_followup(stripped):
+        for token in _history_entity_tokens(history):
+            for entity in entities:
+                if token in (entity.get("tokens") or set()):
+                    return [entity]
+    return []
+
+
+def _finding_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
+    """Answer a governed finding reference with what a CEO must decide on."""
+    row = entity.get("row") if isinstance(entity.get("row"), Mapping) else {}
+    finding_id = str(entity.get("id") or "")
+    title = str(entity.get("label") or finding_id)
+    amount = entity.get("amount")
+    citation_count = row.get("citation_count") or row.get("citations")
+    status_text = str(row.get("status") or row.get("state") or "").strip()
+    vendor = str(row.get("vendor_name") or row.get("vendor") or "").strip()
+
+    parts = [f"{finding_id} is {title}." if finding_id else f"{title}."]
+    if amount:
+        parts.append(f"Recoverable value: {_format_sar_brief(amount)}.")
+    if vendor:
+        parts.append(f"Counterparty: {vendor}.")
+    if status_text:
+        parts.append(f"Current status: {humanize_token(status_text) if 'humanize_token' in globals() else status_text}.")
+    try:
+        if citation_count not in (None, ""):
+            parts.append(f"Supporting evidence: {int(citation_count)} citation(s) attached.")
+    except (TypeError, ValueError):
+        pass
+    parts.append("Next step: open this case to review its evidence trail, or ask what it takes to close it before board release.")
+
+    citations = []
+    if finding_id:
+        citations.append(
+            {
+                "source_path": "run_artifacts://findings",
+                "locator": f"finding_id={finding_id}",
+                "excerpt": title,
+                "finding_id": finding_id,
+            }
+        )
+    return {
+        "matched": True,
+        "answer": " ".join(parts),
+        "basis": "Resolved a governed finding reference against the current run's finding rows.",
+        "citations": citations,
+        "suggestions": [
+            f"What evidence supports {finding_id}?" if finding_id else "What evidence supports this case?",
+            f"What is needed to close {finding_id}?" if finding_id else "What is needed to close this case?",
+            "Which governed cases create the largest recoverable value?",
+        ],
+        "answered_by": "governed_reference",
+        "assistant_mode": "governed_reference",
+        "grounding_status": "grounded",
+        "reference": {"kind": "finding", "finding_id": finding_id, "label": title, "recoverable_sar": amount},
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _governed_reference_result(
     context: Mapping[str, Any],
     *,
@@ -11537,7 +11780,14 @@ def _governed_reference_result(
     history: list[dict[str, Any]],
     public_safe: bool,
 ) -> dict[str, Any] | None:
-    """Resolve visible KPI/component references before invoking LLM fallback."""
+    """Resolve any on-screen governed reference before the LLM fallback runs.
+
+    Scope is deliberately every entity the run exposes -- findings, document
+    identifiers carried in finding titles, vendors, KPI cards and their
+    component rows -- because an executive quotes whatever the surface showed
+    them. An earlier version indexed KPI cards only, which left "F-006" and
+    "INV-2026-0577" to the model and produced fabricated finance facts.
+    """
     if public_safe:
         return None
     # A what-if that happens to quote an on-screen amount ("If we recover
@@ -11553,81 +11803,84 @@ def _governed_reference_result(
         scenario_norm,
     ):
         return None
-    amount_refs = _parse_amount_references(question)
-    norm = " ".join(str(question or "").casefold().split())
-    contextual_key = str(assistant_context.get("kpi_key") or "").strip() or _history_kpi_key(history)
-    if not amount_refs and not contextual_key:
+
+    try:
+        entities = _governed_entity_index(context)
+    except HTTPException:
+        return None
+    if not entities:
         return None
 
-    read_model = _executive_read_model_from_available_truth(
-        dict(context.get("summary") if isinstance(context.get("summary"), Mapping) else {}),
-        [],
-        {},
-        {"report_count": 0},
-        {},
-        public_safe=False,
-    )
-    cards = list(build_executive_presentation(read_model).get("driver_grid") or [])
-    if contextual_key:
-        cards = [card for card in cards if str(card.get("key") or card.get("driver_key") or "") == contextual_key] or cards
+    matches = _resolve_governed_entities(entities, question=question, history=history)
+    if not matches:
+        return None
 
-    for card in cards:
-        if not isinstance(card, Mapping):
-            continue
-        label = str(card.get("label") or "this KPI")
-        brief = card.get("executive_brief") if isinstance(card.get("executive_brief"), Mapping) else {}
-        drivers = [item for item in list(brief.get("drivers") or []) if isinstance(item, Mapping)]
-        for driver in drivers:
-            driver_label = str(driver.get("label") or "component")
-            driver_value = str(driver.get("value") or "").strip()
-            display_amount = _parse_display_amount(driver_value)
-            label_match = bool(driver_label and driver_label.casefold() in norm)
-            amount_match = bool(display_amount is not None and any(_amounts_match(ref, display_amount) for ref in amount_refs))
-            if not (label_match or amount_match):
-                continue
-            share = driver.get("share_pct")
-            share_text = ""
-            try:
-                if share not in (None, ""):
-                    share_text = f"{float(share):.1f}%"
-            except (TypeError, ValueError):
-                share_text = str(share or "")
-            readout = str(brief.get("readout") or card.get("detail") or "").strip()
-            calculation = brief.get("calculation") if isinstance(brief.get("calculation"), Mapping) else {}
-            audit = brief.get("audit") if isinstance(brief.get("audit"), Mapping) else {}
-            source_files = [str(item) for item in list(card.get("source_files") or audit.get("source_files") or audit.get("source_titles") or []) if str(item)]
-            answer = f"{driver_value or 'That amount'} is {driver_label} within {label}."
-            if share_text:
-                answer += f" It represents {share_text} of the current {label.lower()} composition."
-            if readout:
-                answer += f" {readout}"
-            if calculation.get("formula"):
-                answer += f" Calculation basis: {calculation.get('formula')}"
-            answer += " Next step: use the same KPI drill-down to compare this component with the other reported contributors or ask for the evidence trail."
-            return {
-                "matched": True,
-                "answer": answer,
-                "basis": "Resolved a follow-up reference against current CEO KPI component rows before LLM fallback.",
-                "citations": [
-                    {
-                        "source_path": source_file,
-                        "locator": f"CEO {label} component: {driver_label}",
-                        "excerpt": f"{driver_label} {driver_value} {share_text}".strip(),
-                    }
-                    for source_file in source_files[:6]
-                ],
-                "suggestions": [
-                    f"Compare {driver_label} with other {label} contributors",
-                    f"Show the evidence trail for {driver_label}",
-                    f"What needs executive attention for {label}?",
-                ],
-                "answered_by": "governed_reference",
-                "assistant_mode": "governed_reference",
-                "grounding_status": "grounded",
-                "reference": {"kpi_key": str(card.get("key") or card.get("driver_key") or ""), "label": driver_label, "value": driver_value, "share_pct": share},
-                "_orchestrator_force_answer": True,
+    finding_match = next((item for item in matches if item.get("kind") == "finding"), None)
+    if finding_match is not None:
+        return _finding_reference_answer(finding_match)
+
+    component = next((item for item in matches if item.get("kind") == "kpi_component"), None)
+    if component is None:
+        return None
+
+    card = component.get("card") if isinstance(component.get("card"), Mapping) else {}
+    brief = component.get("brief") if isinstance(component.get("brief"), Mapping) else {}
+    driver = component.get("driver") if isinstance(component.get("driver"), Mapping) else {}
+    label = str(card.get("label") or "this KPI")
+    driver_label = str(driver.get("label") or "component")
+    driver_value = str(driver.get("value") or "").strip()
+    share = driver.get("share_pct")
+    share_text = ""
+    try:
+        if share not in (None, ""):
+            share_text = f"{float(share):.1f}%"
+    except (TypeError, ValueError):
+        share_text = str(share or "")
+    readout = str(brief.get("readout") or card.get("detail") or "").strip()
+    calculation = brief.get("calculation") if isinstance(brief.get("calculation"), Mapping) else {}
+    audit = brief.get("audit") if isinstance(brief.get("audit"), Mapping) else {}
+    source_files = [
+        str(item)
+        for item in list(card.get("source_files") or audit.get("source_files") or audit.get("source_titles") or [])
+        if str(item)
+    ]
+    answer = f"{driver_value or 'That amount'} is {driver_label} within {label}."
+    if share_text:
+        answer += f" It represents {share_text} of the current {label.lower()} composition."
+    if readout:
+        answer += f" {readout}"
+    if calculation.get("formula"):
+        answer += f" Calculation basis: {calculation.get('formula')}"
+    answer += " Next step: use the same KPI drill-down to compare this component with the other reported contributors or ask for the evidence trail."
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Resolved a follow-up reference against current CEO KPI component rows before LLM fallback.",
+        "citations": [
+            {
+                "source_path": source_file,
+                "locator": f"CEO {label} component: {driver_label}",
+                "excerpt": f"{driver_label} {driver_value} {share_text}".strip(),
             }
-    return None
+            for source_file in source_files[:6]
+        ],
+        "suggestions": [
+            f"Compare {driver_label} with other {label} contributors",
+            f"Show the evidence trail for {driver_label}",
+            f"What needs executive attention for {label}?",
+        ],
+        "answered_by": "governed_reference",
+        "assistant_mode": "governed_reference",
+        "grounding_status": "grounded",
+        "reference": {
+            "kpi_key": str(card.get("key") or card.get("driver_key") or ""),
+            "label": driver_label,
+            "value": driver_value,
+            "share_pct": share,
+        },
+        "_orchestrator_force_answer": True,
+    }
+
 
 
 def _assistant_question_requests_modelling(question: str) -> bool:
@@ -12047,7 +12300,12 @@ async def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
-    if not public_safe and mode in {"auto", "llm"} and not _assistant_question_has_business_scope(question):
+    if (
+        not public_safe
+        and mode in {"auto", "llm"}
+        and not _assistant_question_has_business_scope(question)
+        and not _question_looks_like_governed_identifier(question)
+    ):
         general_status = llm_qa.chat_status(CONFIG)
         if general_status.get("enabled"):
             general_result = await asyncio.get_running_loop().run_in_executor(
