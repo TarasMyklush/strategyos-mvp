@@ -715,6 +715,185 @@ def _target_margin_from_prompt(prompt: str, prompt_numbers: list[dict[str, Any]]
     return target if Decimal("0") < target < Decimal("1") else None
 
 
+def _cost_line_reduction_from_prompt(
+    prompt: str,
+    prompt_numbers: list[dict[str, Any]],
+    context: Mapping[str, Any],
+) -> tuple[dict[str, Any], Decimal] | None:
+    """Match a prompt against the cost lines this run actually proves.
+
+    "What happens to EBITDA if we cut salaries by 10%?" names a lever, not a
+    target margin, so the target-margin path never claimed it and the question
+    fell through to a fail-closed answer that listed revenue and cost baselines
+    as missing -- inputs the run plainly holds. The fail-closed posture was
+    right in general and wrong here: nothing was missing except a parser that
+    could see the line being named.
+
+    The candidate lines come from the run's own operating-cost composition, so
+    no vocabulary is hardcoded: whatever the general ledger calls a line is what
+    an executive can name. A line is matched only when the prompt contains its
+    label or a whole word from it, which keeps "salaries" -> "Salaries & Wages"
+    working without inventing a synonym table that would rot against the next
+    dataset.
+    """
+    percentages = [token for token in prompt_numbers if token.get("unit") == "%"]
+    if not percentages:
+        return None
+
+    summary = context.get("summary")
+    if not isinstance(summary, Mapping):
+        return None
+    for key in ("finance_kpi", "oracle_kpi"):
+        payload = summary.get(key)
+        if not isinstance(payload, Mapping):
+            continue
+        evidence = payload.get("evidence")
+        if not isinstance(evidence, Mapping):
+            continue
+        scope_evidence = evidence.get("operating_cost")
+        if not isinstance(scope_evidence, Mapping):
+            continue
+        details = scope_evidence.get("details")
+        if not isinstance(details, Mapping):
+            continue
+        contributors = details.get("contributors")
+        if not isinstance(contributors, Mapping):
+            continue
+        rows = [row for row in (contributors.get("operating_cost") or []) if isinstance(row, Mapping)]
+        if not rows:
+            continue
+
+        norm = _normalize(prompt)
+        best: tuple[dict[str, Any], int] | None = None
+        for row in rows:
+            label = str(row.get("label") or "").strip()
+            if not label or label.casefold().startswith("other "):
+                continue
+            value = _decimal_or_none(row.get("value_sar"))
+            if value is None or value <= 0:
+                continue
+            label_norm = _normalize(label)
+            # Whole words only: a three-letter fragment must not claim a line.
+            words = [word for word in re.split(r"[^a-z0-9]+", label_norm) if len(word) > 3]
+            hit = label_norm and label_norm in norm
+            if not hit:
+                hit = any(re.search(rf"\b{re.escape(word)}", norm) for word in words)
+            if not hit:
+                continue
+            # Prefer the most specific label when several match.
+            if best is None or len(label_norm) > best[1]:
+                best = ({"label": label, "value": value, "share_pct": row.get("share_pct")}, len(label_norm))
+        if best is None:
+            continue
+
+        line = best[0]
+        label_at = norm.find(_normalize(line["label"]).split()[0])
+        selected = min(
+            percentages,
+            key=lambda token: abs(int(token["span"][0]) - (label_at if label_at >= 0 else 0)),
+        )
+        reduction = Decimal(selected["value"]) / Decimal("100")
+        if not (Decimal("0") < reduction <= Decimal("1")):
+            return None
+        return line, reduction
+    return None
+
+
+def _finance_cost_line_scenario_result(
+    line: Mapping[str, Any],
+    reduction: Decimal,
+    baseline: Mapping[str, Any],
+    prompt_numbers: list[dict[str, Any]],
+) -> ScenarioResult:
+    """Model a stated reduction on one governed cost line, arithmetically.
+
+    Every number below is the run's own or follows from it by the same EBITDA
+    identity the dashboard uses. The model states what the arithmetic says and
+    stops: whether the line CAN be cut by this much is an operating judgement
+    the run holds no evidence for, and saying otherwise would be advice dressed
+    as a calculation.
+    """
+    revenue = Decimal(baseline["revenue"])
+    cogs = Decimal(baseline["cogs"])
+    operating_cost = Decimal(baseline["operating_cost"])
+    ebitda = Decimal(baseline["ebitda"])
+    citations = list(baseline["citations"])
+
+    current_line = Decimal(str(line["value"]))
+    saving = (current_line * reduction).quantize(Decimal("0.01"))
+    new_operating_cost = operating_cost - saving
+    new_ebitda = revenue - cogs - new_operating_cost
+    current_margin = ebitda / revenue
+    new_margin = new_ebitda / revenue
+
+    label = str(line["label"])
+    pct = _percent(float(reduction), 0 if reduction * 100 == (reduction * 100).to_integral_value() else 1)
+
+    baseline_step = CalculationStep(
+        step_id="governed_cost_line_baseline",
+        description=f"Read the governed {label} balance and the EBITDA baseline",
+        formula="EBITDA = revenue - COGS - operating cost",
+        inputs={
+            "line_item": label,
+            "line_sar": str(current_line),
+            "revenue_sar": str(revenue),
+            "cogs_sar": str(cogs),
+            "operating_cost_sar": str(operating_cost),
+            "period": baseline["period"],
+        },
+        result=_sar_decimal(ebitda),
+        unit="SAR",
+        citations=citations,
+    )
+    change_step = CalculationStep(
+        step_id="cost_line_reduction",
+        description=f"Apply the requested {pct} reduction to {label}",
+        formula="saving = line balance × reduction; new EBITDA = revenue - COGS - (operating cost - saving)",
+        inputs={
+            "line_sar": str(current_line),
+            "reduction": str(reduction),
+            "prompt_numbers": _serialized_prompt_numbers(prompt_numbers),
+        },
+        result=_sar_decimal(new_ebitda),
+        unit="SAR",
+        citations=citations,
+        assumptions=[
+            "The reduction is applied as stated in the question; the run holds no evidence that this line can be reduced by this amount.",
+            "Revenue and COGS are held at their governed baseline.",
+        ],
+    )
+
+    answer = (
+        f"Cutting {label} by {pct} would save {_sar_executive_decimal(saving)} against a governed "
+        f"{label} balance of {_sar_executive_decimal(current_line)} for {baseline['period']}. "
+        f"That lifts EBITDA from {_sar_executive_decimal(ebitda)} to {_sar_executive_decimal(new_ebitda)} "
+        f"({_percent(float(current_margin), 1)} to {_percent(float(new_margin), 1)} margin), holding revenue "
+        f"and COGS at their governed baseline. This is the arithmetic of the cut you named -- nothing in this "
+        f"run says the line can be reduced by that much, so treat the operating feasibility as an open question."
+    )
+    return ScenarioResult(
+        scenario_id="cost_line_reduction",
+        scenario_label=f"Finance - {label} Reduction",
+        matched=True,
+        answer=answer,
+        calculations=[baseline_step, change_step],
+        kg_context=[],
+        citations=citations,
+        assumptions=[
+            "Only the named line moves; every other governed component is held constant.",
+        ],
+        hallucination_risk=_risk_none(
+            "Current-run finance KPI components, the run's own operating-cost composition, and the deterministic EBITDA identity."
+        ),
+        suggestions=[
+            f"Show what makes up {label}",
+            "Show the reconciled leakage already identified in this run",
+        ],
+        scenario_type="deterministic",
+        basis="Calculated from the governed operating-cost composition and the same EBITDA identity the CEO dashboard uses.",
+    )
+
+
 def _asks_for_governed_ebitda_baseline(normalized_prompt: str) -> bool:
     """Identify factual EBITDA questions without swallowing forecast/FX intents."""
     if not any(token in normalized_prompt for token in ("ebitda", "operating margin", "margin bridge")):
@@ -930,6 +1109,14 @@ def _parse_financial_what_if_guard(prompt: str, context: dict[str, Any]) -> Scen
         target_margin = _target_margin_from_prompt(prompt, prompt_numbers)
         if baseline is not None and target_margin is not None:
             return _finance_target_margin_result(target_margin, baseline, prompt_numbers)
+        # A lever named against a real cost line is answerable arithmetic, and
+        # must be tried before declaring inputs missing -- otherwise the run
+        # reports revenue and cost baselines as unavailable while holding them.
+        if baseline is not None:
+            line_reduction = _cost_line_reduction_from_prompt(prompt, prompt_numbers, context)
+            if line_reduction is not None:
+                line, reduction = line_reduction
+                return _finance_cost_line_scenario_result(line, reduction, baseline, prompt_numbers)
         return _scenario_missing_data_result(
             scenario_id="ebitda_scenario",
             scenario_label="Finance - EBITDA Scenario",

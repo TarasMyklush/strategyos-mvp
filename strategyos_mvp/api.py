@@ -2281,6 +2281,17 @@ def _format_sar_brief(value: Any) -> str:
     return f"SAR {round(number):,}"
 
 
+def _format_percent_brief(value: Any) -> str:
+    """Render a percentage the way it was said: "40%", not "40.0%"."""
+    try:
+        number = float(value or 0.0)
+    except (TypeError, ValueError):
+        return "--"
+    if number == int(number):
+        return f"{int(number)}%"
+    return f"{number:.1f}%"
+
+
 def _format_ratio_display(resolved: int | None, total: int | None) -> str:
     if total in (None, 0):
         return "--"
@@ -10722,6 +10733,8 @@ def _claim_contradiction(
         if claim["kind"] != "amount":
             continue
         value = claim["value"]
+        if value <= 0:
+            continue
         # An asserted amount is credible only if some governed figure matches
         # it. Nearest comparable anchors the correction.
         if any(_amounts_match(value, fact["value"]) for fact in facts):
@@ -10733,6 +10746,51 @@ def _claim_contradiction(
             "anchor_label": anchor["label"],
             "anchor_value": anchor["value"],
         }
+    return None
+
+
+def _unverifiable_change_claim(question: str, context: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Did the executive assert a movement this run cannot check?
+
+    "Since revenue dropped 40% last quarter, what should I cut?" states a change
+    as settled fact. The run reports one period; it holds no prior-period
+    comparator, so it can neither confirm nor deny the drop. Answering the
+    question as asked accepts the premise by silence and lets a false number
+    become the basis of a decision -- which is the failure this layer exists to
+    prevent.
+
+    Correcting it with a governed total would be worse: a period-over-period
+    movement and a balance are different quantities, and matching them would
+    manufacture a contradiction out of a category error. So the honest answer is
+    the narrow one -- the run cannot verify this, and here is why.
+    """
+    claims = [claim for claim in _extract_user_claims(question) if claim["kind"] == "percent"]
+    if not claims:
+        return None
+    if not _CHANGE_CLAIM_RE.search(" ".join(str(question or "").casefold().split())):
+        return None
+    # Only speak when a governed run is actually loaded; with no run, the
+    # ordinary "no evidence" path already says the right thing.
+    if not isinstance(context, Mapping):
+        return None
+    if not context.get("run_id") and not context.get("findings"):
+        return None
+    period = _governed_reporting_period(context)
+    return {"claimed_pct": claims[0]["value"], "period": period}
+
+
+def _governed_reporting_period(context: Mapping[str, Any]) -> str | None:
+    summary = context.get("summary") if isinstance(context, Mapping) else None
+    if not isinstance(summary, Mapping):
+        return None
+    for key in ("finance_kpi", "oracle_kpi"):
+        payload = summary.get(key)
+        if isinstance(payload, Mapping):
+            period = payload.get("reporting_period_key")
+            if period:
+                return str(period)
+    period = summary.get("reporting_period")
+    return str(period) if period else None
     return None
 
 
@@ -10780,6 +10838,22 @@ def _apply_claim_integrity(
             "governed_label": contradiction["anchor_label"],
             "governed_sar": contradiction["anchor_value"],
         }
+    else:
+        change_claim = _unverifiable_change_claim(question, context)
+        if change_claim is not None:
+            period = change_claim["period"]
+            scope = f" and reports {period} only" if period else ""
+            prefix_parts.append(
+                f"I cannot confirm that {_format_percent_brief(change_claim['claimed_pct'])} movement: "
+                f"this run holds no prior-period comparator{scope}, so the change is neither "
+                f"verified nor ruled out here. Treating it as settled would put a number I cannot "
+                f"check underneath your decision."
+            )
+            payload["claim_verdict"] = "unverifiable"
+            payload["claim_checked"] = {
+                "claimed_pct": change_claim["claimed_pct"],
+                "governed_period": period,
+            }
 
     # "No caveats / one number I can promise" may change the shape of an
     # answer, never its truth: a figure still under review must never leave

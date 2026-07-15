@@ -3928,3 +3928,118 @@ def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
     assert bridge is not None and "within EBITDA margin" in bridge["answer"], (
         "a genuine component row must still resolve inside its parent card"
     )
+
+
+def _finance_run_context():
+    """The real /runs/latest finance shape, including the cost composition."""
+    return {
+        "run_id": "run-finance",
+        "findings": [],
+        "summary": {
+            "run_id": "run-finance",
+            "finance_kpi": {
+                "reporting_period_key": "H1 2026",
+                "reporting_currency": "SAR",
+                "components": {
+                    "revenue_actual": "385079908.90",
+                    "cogs_actual": "75500000.00",
+                    "operating_cost_actual": "93834910.05",
+                    "ebitda_actual": "215744998.85",
+                },
+                "evidence": {
+                    "operating_cost": {
+                        "details": {
+                            "contributors": {
+                                "operating_cost": [
+                                    {"label": "Salaries & Wages", "value_sar": "24650975.10", "share_pct": 26.3},
+                                    {"label": "Rent Expense", "value_sar": "23731309.95", "share_pct": 25.3},
+                                    {"label": "Other 120 accounts", "value_sar": "100.00", "share_pct": 0.1},
+                                ]
+                            }
+                        }
+                    }
+                },
+            },
+        },
+    }
+
+
+def test_a_named_cost_line_cut_is_calculated_not_declared_missing():
+    """The live failure: "cut salaries by 10%" reported revenue as unavailable.
+
+    The run holds revenue, COGS, EBITDA and the operating-cost composition. A
+    lever is not a target margin, and falling through to fail-closed named
+    inputs the run plainly has.
+    """
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario(
+        "What happens to EBITDA if we cut salaries by 10%?", _finance_run_context()
+    )
+    assert result is not None
+    assert result.scenario_type == "deterministic", result.answer
+    assert "not all available" not in result.answer
+    # 24,650,975.10 * 10% = 2,465,097.51 saving -> EBITDA 215.7M + 2.5M
+    assert "2.5M" in result.answer
+    assert "Salaries & Wages" in result.answer
+
+
+def test_a_cost_line_scenario_states_the_run_does_not_endorse_the_cut():
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario(
+        "What happens to EBITDA if we cut salaries by 10%?", _finance_run_context()
+    )
+    assert "nothing in this run says the line can be reduced" in result.answer.casefold()
+
+
+def test_a_rollup_row_is_not_a_line_an_executive_can_cut():
+    """"Other 120 accounts" is a display device, not an actionable line."""
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario(
+        "What happens to EBITDA if we cut other by 10%?", _finance_run_context()
+    )
+    assert result is None or result.scenario_type == "missing_data"
+
+
+def test_an_unnamed_line_still_fails_closed():
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario(
+        "What happens to EBITDA if we cut helicopter leasing by 10%?", _finance_run_context()
+    )
+    assert result is not None
+    assert result.scenario_type == "missing_data"
+
+
+def test_an_asserted_drop_the_run_cannot_check_is_not_accepted_in_silence():
+    """The live failure: "since revenue dropped 40%" was answered as though true."""
+    payload = api_module._apply_claim_integrity(
+        {"answer": "Here is what I would cut."},
+        question="Since revenue dropped 40% last quarter, what should I cut?",
+        context=_finance_run_context(),
+    )
+    assert payload["claim_verdict"] == "unverifiable"
+    assert "cannot confirm" in payload["answer"]
+    assert "40%" in payload["answer"]
+    assert "no prior-period comparator" in payload["answer"]
+
+
+def test_a_hypothetical_movement_is_still_not_a_claim():
+    payload = api_module._apply_claim_integrity(
+        {"answer": "Modelled."},
+        question="If revenue fell 40%, what would you cut?",
+        context=_finance_run_context(),
+    )
+    assert payload.get("claim_verdict") != "unverifiable"
+    assert "cannot confirm" not in payload["answer"]
+
+
+def test_a_change_claim_without_a_loaded_run_is_left_to_the_no_evidence_path():
+    payload = api_module._apply_claim_integrity(
+        {"answer": "No run is loaded."},
+        question="Since revenue dropped 40%, what should I cut?",
+        context={},
+    )
+    assert payload.get("claim_verdict") != "unverifiable"
