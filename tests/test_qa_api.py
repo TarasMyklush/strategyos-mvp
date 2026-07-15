@@ -3724,6 +3724,10 @@ def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
     is Revenue within EBITDA margin". A component match is more specific and
     still answers here.
     """
+    # The real prod shape: the EBITDA bridge lists "Revenue" as an input row, so
+    # "Revenue" names both a KPI and a component. A single-card fixture hid this
+    # and let a broken build pass -- the live surface still answered "SAR 385.1M
+    # is Revenue within EBITDA margin".
     monkeypatch.setattr(
         api_module,
         "build_executive_presentation",
@@ -3741,7 +3745,21 @@ def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
                             {"label": "Revenue – Government", "value": "SAR 109.9M", "share_pct": 28.5}
                         ],
                     },
-                }
+                },
+                {
+                    "key": "ebitda_margin",
+                    "label": "EBITDA margin",
+                    "metric": "56.0%",
+                    "source_files": ["gl.csv"],
+                    "executive_brief": {
+                        "readout": "Margin before depreciation, amortisation, interest and tax.",
+                        "calculation": {"formula": "EBITDA / Revenue"},
+                        "drivers": [
+                            {"label": "Revenue", "value": "SAR 385.1M", "share_pct": None},
+                            {"label": "Cost of goods sold", "value": "SAR 75.5M", "share_pct": None},
+                        ],
+                    },
+                },
             ]
         },
     )
@@ -3761,4 +3779,12 @@ def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
     assert component is not None, "a component reference is specific and must still resolve"
     assert "Revenue – Government within Revenue" in component["answer"], (
         "the component must be named within its own parent KPI"
+    )
+
+    # A bridge input that is NOT itself a KPI name still resolves as a component.
+    bridge = api_module._governed_reference_result(
+        context, question="Tell me about Cost of goods sold", assistant_context={}, history=[], public_safe=False
+    )
+    assert bridge is not None and "within EBITDA margin" in bridge["answer"], (
+        "a genuine component row must still resolve inside its parent card"
     )

@@ -12146,19 +12146,28 @@ def _governed_reference_result(
     # renders components, so answering a KPI match here described it as a part
     # of whichever card the component search happened to land on -- the source
     # of "SAR 385.1M is Revenue within EBITDA margin". Defer instead.
-    component = next((item for item in matches if item.get("kind") == "kpi_component"), None)
+    # A KPI is its own subject, not a row inside another card. Prod's EBITDA
+    # bridge lists "Revenue" as an input, so "What is our revenue?" matches
+    # both the Revenue KPI and an EBITDA component labelled "Revenue" -- and
+    # answering from the component produced "SAR 385.1M is Revenue within
+    # EBITDA margin". When a label names a KPI, that KPI owns the question and
+    # the KPI contract answers it. A component only answers when it is not
+    # itself a KPI name.
+    kpi_labels = {
+        str(item.get("label") or "").casefold()
+        for item in matches
+        if item.get("kind") == "kpi"
+    }
+    component = next(
+        (
+            item
+            for item in matches
+            if item.get("kind") == "kpi_component"
+            and str(item.get("label") or "").casefold() not in kpi_labels
+        ),
+        None,
+    )
     if component is None:
-        return None
-    # A whole-KPI question ("What is our revenue?") matched the card itself and
-    # no component: it belongs to the KPI contract, which states the figure on
-    # its own terms. Answering it here rendered it as a part of whichever card
-    # the component search landed on -- "SAR 385.1M is Revenue within EBITDA
-    # margin". A component match is more specific, so it still answers here.
-    if any(item.get("kind") == "kpi" for item in matches) and not _resolve_governed_entities(
-        [item for item in matches if item.get("kind") == "kpi_component"],
-        question=question,
-        history=history,
-    ):
         return None
 
     card = component.get("card") if isinstance(component.get("card"), Mapping) else {}
