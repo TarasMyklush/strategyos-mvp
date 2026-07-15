@@ -4063,3 +4063,21 @@ def test_a_percentage_that_is_not_a_chosen_cut_keeps_its_levers():
     assert api_module._question_asks_what_to_do_about_cost(
         "Salaries are 26% of operating cost, how can I reduce spend?"
     ) is True
+
+
+def test_a_named_cost_line_engages_the_finance_guard_without_a_generic_keyword():
+    """The live failure: "reduce rent expense by 15%" escaped to the model.
+
+    The guard gated on a fixed vocabulary ("revenue", "cost", "ebitda"...).
+    "Rent expense" contains none of those words, so the scenario engine never
+    engaged and the model answered that no rent line existed -- while the run
+    held Rent Expense at SAR 23.7M. What the run reports decides the scope.
+    """
+    from strategyos_mvp.scenario_parser import parse_scenario
+
+    result = parse_scenario("What if we reduce rent expense by 15%?", _finance_run_context())
+    assert result is not None, "a real cost line must engage the finance guard"
+    assert result.scenario_type == "deterministic"
+    assert "Rent Expense" in result.answer
+    # 23,731,309.95 * 15% = 3,559,696.49
+    assert "3.6M" in result.answer

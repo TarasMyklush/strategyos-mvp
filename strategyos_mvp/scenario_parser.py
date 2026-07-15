@@ -1104,7 +1104,16 @@ def _parse_financial_what_if_guard(prompt: str, context: dict[str, Any]) -> Scen
             suggestions=["Load EUR exposure and FX assumptions", "Ask for current FX risk evidence"],
         )
 
-    if any(token in norm for token in ("revenue", "cost", "costs", "ebitda", "margin", "opex", "cogs")):
+    # The finance guard engages when the prompt names a finance subject the run
+    # reports. The generic words are a fast path only; a prompt that names a
+    # real cost line ("reduce rent expense by 15%") is just as much a finance
+    # question, and gating solely on a fixed vocabulary let it escape to the
+    # model -- which then denied the line existed while the run held it at SAR
+    # 23.7M. What the run reports decides the scope, not a word list.
+    line_reduction = _cost_line_reduction_from_prompt(prompt, prompt_numbers, context)
+    if line_reduction is not None or any(
+        token in norm for token in ("revenue", "cost", "costs", "ebitda", "margin", "opex", "cogs")
+    ):
         baseline = _governed_finance_baseline(context)
         target_margin = _target_margin_from_prompt(prompt, prompt_numbers)
         if baseline is not None and target_margin is not None:
@@ -1112,11 +1121,10 @@ def _parse_financial_what_if_guard(prompt: str, context: dict[str, Any]) -> Scen
         # A lever named against a real cost line is answerable arithmetic, and
         # must be tried before declaring inputs missing -- otherwise the run
         # reports revenue and cost baselines as unavailable while holding them.
+        if baseline is not None and line_reduction is not None:
+            line, reduction = line_reduction
+            return _finance_cost_line_scenario_result(line, reduction, baseline, prompt_numbers)
         if baseline is not None:
-            line_reduction = _cost_line_reduction_from_prompt(prompt, prompt_numbers, context)
-            if line_reduction is not None:
-                line, reduction = line_reduction
-                return _finance_cost_line_scenario_result(line, reduction, baseline, prompt_numbers)
             # The baseline resolved, so revenue and costs are NOT missing. Saying
             # they are would be a false statement about the run's own data. What
             # is actually missing is a lever this run can price.
