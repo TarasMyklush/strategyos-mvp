@@ -2490,6 +2490,64 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
 }
 
+/* Free-text ask under the preset questions. Same pill language as the buttons
+   above it, so the panel reads as one affordance: pick a question, or write
+   your own about the figure on screen. */
+.kpi-inline-ask {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.kpi-inline-ask input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.kpi-inline-ask input::placeholder {
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+
+.kpi-inline-ask input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.kpi-inline-ask button {
+  padding: 10px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kpi-inline-ask button:hover,
+.kpi-inline-ask button:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+@media (max-width: 560px) {
+  .kpi-inline-ask {
+    flex-wrap: wrap;
+  }
+  .kpi-inline-ask input,
+  .kpi-inline-ask button {
+    flex: 1 1 100%;
+  }
+}
+
 .board-release-hold {
   display: grid;
   justify-items: start;
