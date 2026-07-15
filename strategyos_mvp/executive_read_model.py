@@ -8,10 +8,22 @@ ALLOWED_LIVE_CLAIM_CLASSES = {
     "db_fact",
     "db_aggregate",
     "db_derived",
+    # A lever is arithmetic on governed data offered as something to act on --
+    # "Salaries are 26.3% of opex; 5% is SAR 1.2M". The number is as real as any
+    # db_derived value, but the framing invites a decision, and no budget or
+    # benchmark in the run says the line is wrong. It therefore cannot wear the
+    # same badge as "Revenue is SAR 385.1M": a fact and a judgement must be
+    # distinguishable on the surface, or the badge stops meaning anything.
+    "db_derived_lever",
     "artifact_fact",
     "artifact_aggregate",
     "artifact_derived",
     "ui_copy",
+}
+
+# What a claim class is allowed to say about itself on the executive surface.
+CLAIM_CLASS_DISPLAY = {
+    "db_derived_lever": "Suggested · from your GL, not yet reviewed",
 }
 PUBLIC_RUN_ALIAS = "latest-public"
 TRUTH_SOURCES = {"database", "governed_artifacts"}

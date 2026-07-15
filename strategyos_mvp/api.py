@@ -47,6 +47,7 @@ from .ingestion import load_dataset
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
+from .cost_levers import derive_cost_levers
 from .scenario_parser import SCENARIO_SUGGESTIONS, has_scenario_intent as scenario_has_intent, parse_scenario
 from .platform_foundation import (
     ARTIFACT_TITLES,
@@ -11877,6 +11878,138 @@ def _finding_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+_COST_ACTION_RE = re.compile(
+    r"\b(?:decrease|reduce|lower|cut|cutting|save|savings|bring down|"
+    r"optimi[sz]e|trim|what can i do|what should i do|how do i improve|"
+    r"where can we|how can we)\b",
+    re.IGNORECASE,
+)
+
+_COST_SUBJECT_RE = re.compile(
+    r"\b(?:operating cost|operating costs|opex|cost base|costs?|spend|"
+    r"spending|expense|expenses|overhead)\b",
+    re.IGNORECASE,
+)
+
+
+def _question_asks_what_to_do_about_cost(question: str) -> bool:
+    """Is the executive asking what they could act on, not what a figure is?
+
+    "How can I decrease operating cost?" and "what can I do about opex" are the
+    same question. Both need levers; neither is answered by restating the
+    total.
+    """
+    text = " ".join(str(question or "").casefold().split())
+    if not text:
+        return False
+    return bool(_COST_ACTION_RE.search(text) and _COST_SUBJECT_RE.search(text))
+
+
+def _governed_cost_lever_result(
+    context: Mapping[str, Any],
+    *,
+    question: str,
+    public_safe: bool,
+) -> dict[str, Any] | None:
+    """Answer a cost-reduction question from levers the run proves.
+
+    The model never invents the recommendation: cost_levers derives it from the
+    GL composition and the reconciled findings, and the prose here only orders
+    and narrates what was derived. A lever carries db_derived_lever provenance
+    so the surface can show it as advice rather than as a governed fact.
+    """
+    if public_safe or not _question_asks_what_to_do_about_cost(question):
+        return None
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    finance_kpi = summary.get("finance_kpi") if isinstance(summary.get("finance_kpi"), Mapping) else None
+    findings = context.get("findings") or []
+    try:
+        derived = derive_cost_levers(finance_kpi=finance_kpi, findings=findings)
+    except Exception:  # pragma: no cover - a lever must never break a chat turn
+        return None
+    if derived.get("status") != "available":
+        return None
+
+    levers = list(derived.get("levers") or [])
+    reconciled = [item for item in levers if item.get("kind") == "reconciled_leakage"]
+    concentration = [item for item in levers if item.get("kind") == "concentration"]
+    gaps = [item for item in levers if item.get("kind") == "missing_comparator"]
+
+    parts: list[str] = []
+    if reconciled:
+        total = sum(float(item.get("addressable_sar") or 0) for item in reconciled)
+        top = "; ".join(
+            f"{item['line_item']} ({_format_sar_brief(item['addressable_sar'])})"
+            for item in reconciled[:3]
+        )
+        parts.append(
+            f"Start with money this run has already identified: {_format_sar_brief(total)} "
+            f"across {len(reconciled)} governed case(s) with evidence attached -- {top}."
+        )
+    if concentration:
+        top = concentration[0]
+        others = "; ".join(
+            f"{item['line_item']} {item['share_pct']:.1f}%" for item in concentration[1:4]
+        )
+        parts.append(
+            f"Your cost is concentrated: {top['line_item']} is {top['share_pct']:.1f}% of "
+            f"{derived['scope_label']} ({_format_sar_brief(top['current_sar'])}), so a 5% reduction "
+            f"is {_format_sar_brief(top['addressable_sar'])}."
+            + (f" Then {others}." if others else "")
+        )
+        parts.append(
+            "These are sized from your general ledger, not judged against a target: nothing in "
+            "this run says any of these lines is too high."
+        )
+    for gap in gaps:
+        parts.append(str(gap.get("benchmark_basis") or ""))
+
+    citations: list[dict[str, Any]] = []
+    for item in reconciled[:5]:
+        finding_id = (item.get("evidence_ref") or {}).get("finding_id")
+        if finding_id:
+            citations.append(
+                {
+                    "source_path": "run_artifacts://findings",
+                    "locator": f"finding_id={finding_id}",
+                    "excerpt": item["line_item"],
+                    "finding_id": finding_id,
+                }
+            )
+    for item in concentration[:5]:
+        account = (item.get("evidence_ref") or {}).get("account")
+        if account:
+            citations.append(
+                {
+                    "source_path": "run_artifacts://finance_kpi",
+                    "locator": f"gl_account={account}",
+                    "excerpt": f"{item['line_item']} {_format_sar_brief(item['current_sar'])}",
+                }
+            )
+
+    return {
+        "matched": True,
+        "answer": " ".join(part for part in parts if part).strip(),
+        "basis": (
+            "Levers derived from the run's own general ledger composition and reconciled "
+            "findings. Amounts are arithmetic on governed figures, not recommendations "
+            "the model formed."
+        ),
+        "citations": citations[:8],
+        "suggestions": [
+            "Which governed cases create the largest recoverable value?",
+            f"What is driving {derived['scope_label']}?",
+            "What evidence supports the largest case?",
+        ],
+        "answered_by": "governed_levers",
+        "assistant_mode": "governed_levers",
+        "grounding_status": "suggested",
+        "claim_class": "db_derived_lever",
+        "levers": levers,
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _governed_reference_result(
     context: Mapping[str, Any],
     *,
@@ -12347,6 +12480,35 @@ async def _assistant_chat_response(
         finding.__dict__ if hasattr(finding, "__dict__") else finding
         for finding in context["findings"]
     ]
+
+    # "How do I decrease operating cost?" names the KPI, so the reference
+    # resolver would claim it and restate the total -- an answer to a different
+    # question. Levers run first: they answer what the executive actually asked.
+    cost_lever_result = _governed_cost_lever_result(
+        context,
+        question=question,
+        public_safe=public_safe,
+    )
+    if cost_lever_result is not None:
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=cost_lever_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=cost_lever_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     governed_reference_result = _governed_reference_result(
         context,
