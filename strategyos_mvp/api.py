@@ -8442,11 +8442,35 @@ def financial_plans(
         "role": role,
         "capabilities": {
             "create": role in {"operator", "tenant_operator", "tenant_admin"},
+            "import_approved_source": role in {"executive", "tenant_admin"},
             "submit": role in {"operator", "tenant_operator", "tenant_admin"},
             "finance_review": role == "reviewer",
             "approve": role in {"executive", "tenant_admin"},
             "request_changes": role in {"reviewer", "executive", "tenant_admin"},
         },
+    }
+
+
+@app.post("/api/financial-plans/import-approved-source")
+def import_approved_financial_plan_source(
+    files: list[UploadFile] = File(...),
+    _: dict[str, Any] = require_role("executive", "tenant_admin"),
+) -> dict[str, Any]:
+    """Import an externally Board-approved plan without bypassing validation."""
+    payload = _source_pack_with_plan_ingestion(stage_source_pack_uploads(files))
+    ingestion = payload.get("financial_plan_ingestion") or {}
+    if ingestion.get("status") != "activated" or not ingestion.get("activated"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "The uploaded source was retained, but no plan was activated. "
+                "Activation requires explicit dated Board-approval evidence and at least one governed target."
+            ),
+        )
+    return {
+        "status": "activated",
+        "source_pack_id": payload.get("source_pack_id"),
+        "plans": ingestion.get("activated"),
     }
 
 

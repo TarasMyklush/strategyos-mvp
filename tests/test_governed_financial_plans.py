@@ -68,6 +68,8 @@ def test_plan_page_is_financial_governance_not_execution_tracker() -> None:
     html = open("strategyos_mvp/static/financial_plan.html", encoding="utf-8").read()
     assert "Approve the plan that drives the dashboard" in html
     assert "Approve & activate" in html
+    assert "Import Board-approved plan" in html
+    assert "/api/financial-plans/import-approved-source" in html
     assert "/api/financial-plans" in html
     assert "Only a validated, finance-reviewed and CEO-approved active plan" in html
 
