@@ -39,6 +39,7 @@ from .executive_design import (
     executive_board_design,
     executive_persona_design,
 )
+from .agent_execution_log import build_execution_log
 from .executive_presentation import build_executive_presentation
 from .executive_read_model import build_executive_read_model
 from .assistants import get_orchestrator, list_supported_personas
@@ -1144,7 +1145,10 @@ def _build_public_safe_assistant_packet(
             {"k": "recoverable", "v": _format_sar_brief(metrics.get("total_recoverable_sar"))},
             {"k": "challenged", "v": str(int(metrics.get("challenged_count") or 0))},
         ],
-        "log": list((agent_modules.get("audit_log") or []))[:3],
+        # The run's real recorded steps. Bounded for rendering, but the payload
+        # carries its own total_count so a trimmed view never reads as complete.
+        "execution_log": agent_modules.get("execution_log") or build_execution_log([]),
+        "run_posture": list((agent_modules.get("run_posture") or []))[:3],
     }
 
     facts = [
@@ -4528,10 +4532,9 @@ def _executive_read_model_from_available_truth(
         database_summary = dict(database_snapshot.get("summary") or {})
         database_rows = list(database_snapshot.get("findings") or [])
         database_audit = dict(database_snapshot.get("audit_summary") or {})
-        database_agent_modules = {
-            **dict(agent_modules or {}),
-            "audit_log": list(database_snapshot.get("agent_events") or []),
-        }
+        # The execution log is resolved per run inside _agent_modules_payload,
+        # so it arrives already attached and is not re-derived here.
+        database_agent_modules = dict(agent_modules or {})
         artifact_map = dict(database_snapshot.get("artifacts") or {})
         tenant_payload = (
             database_summary.get("tenant_context")
@@ -5551,6 +5554,32 @@ def _governed_module_state_contract_from_modules(
     }
 
 
+def _run_execution_log(summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Read this run's recorded assistant steps straight from the run.
+
+    The events are persisted per run, so they must be looked up per run rather
+    than inherited from whatever the caller happened to be holding. An earlier
+    cut of this attached the events only where the read model is built, which
+    left the payload the UI actually reads reporting "no steps recorded" for a
+    run whose database row plainly held twenty of them.
+
+    A run that has not been persisted has no events to read, and the empty
+    result says exactly that rather than guessing.
+    """
+    run_id = str((summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or "")
+    if not run_id or run_id == ANONYMOUS_PUBLIC_RUN_ID:
+        return build_execution_log([])
+    try:
+        snapshot = state_store.executive_snapshot_for_run(run_id)
+    except Exception:
+        # The log is an accountability surface, not a load-bearing one; a
+        # database wobble must not take the executive's page down with it.
+        return build_execution_log([])
+    if snapshot.get("status") != "ok":
+        return build_execution_log([])
+    return build_execution_log(list(snapshot.get("agent_events") or []))
+
+
 def _agent_modules_payload(
     summary: dict[str, Any] | None,
     rows: list[dict[str, Any]],
@@ -5694,7 +5723,13 @@ def _agent_modules_payload(
             "route": publication.get("preview_route") or "/public/runs/latest/report-preview",
         },
     ]
-    audit_log = [
+    # Run posture, NOT an execution log. These three lines restate the run's
+    # current stage and approval state; no assistant step is described by any of
+    # them. The real per-step record lives in strategyos_agent_events and is
+    # attached as "execution_log" by the database read below. Keeping the two
+    # apart matters: presenting status prose as an audit trail claims the run
+    # knows more about its own work than it has told us.
+    run_posture = [
         {
             "event_id": "latest-run-stage",
             "title": "Latest run stage",
@@ -5721,7 +5756,8 @@ def _agent_modules_payload(
         "running": modules,
         "discoverable": discoverable,
         "approvals": approvals,
-        "audit_log": audit_log,
+        "run_posture": run_posture,
+        "execution_log": _run_execution_log(summary),
         "state_contract": _governed_module_state_contract_from_modules(
             modules,
             run_id=(summary or {}).get("run_id"),
