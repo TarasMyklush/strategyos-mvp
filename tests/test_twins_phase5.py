@@ -17,7 +17,7 @@ class TestTwinApiEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert data["role"] == "ceo"
-        assert data["display_name"] == "CEO Twin"
+        assert data["display_name"] == "CEO Assistant"
         assert data["status"] == "active"
         assert "cycle_count" in data
         assert "active_investigations" in data

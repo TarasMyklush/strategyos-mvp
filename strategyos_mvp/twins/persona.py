@@ -17,7 +17,7 @@ class TwinPersona:
 
     Attributes:
         role: Unique role identifier (e.g. "ceo", "cfo", "group_manager").
-        display_name: Human-readable label (e.g. "CEO Twin").
+        display_name: Human-readable label (e.g. "CEO Assistant").
         kpis_owned: KPI node IDs this role is responsible for.
         authority: Description of what this twin can decide autonomously.
         escalation_path: Ordered list of roles to escalate unsolved issues to.
@@ -40,7 +40,7 @@ class TwinPersona:
 
 CEO_TWIN = TwinPersona(
     role="ceo",
-    display_name="CEO Twin",
+    display_name="CEO Assistant",
     kpis_owned=("strategic_objectives", "plan_health", "board_narrative"),
     authority=(
         "Request any data from any twin. Escalate to human executive "
@@ -61,11 +61,11 @@ CEO_TWIN = TwinPersona(
 
 CFO_TWIN = TwinPersona(
     role="cfo",
-    display_name="CFO Twin",
+    display_name="CFO Assistant",
     kpis_owned=("revenue", "margin", "cash_flow", "budget", "financial_controls"),
     authority=(
         "Approve financial decisions within configured budget thresholds. "
-        "Escalate to CEO Twin for above-threshold commitments or "
+        "Escalate to CEO Assistant for above-threshold commitments or "
         "cross-functional financial impact."
     ),
     escalation_path=("ceo",),
@@ -83,7 +83,7 @@ CFO_TWIN = TwinPersona(
 
 GROUP_MANAGER_TWIN = TwinPersona(
     role="group_manager",
-    display_name="Group Manager Twin",
+    display_name="Group Manager Assistant",
     kpis_owned=(
         "bu_revenue",
         "bu_growth",
@@ -93,7 +93,7 @@ GROUP_MANAGER_TWIN = TwinPersona(
     authority=(
         "Adjust BU-level targets within approved ranges. "
         "Request resources and flag operational blockers. "
-        "Escalate strategic or cross-BU issues to CFO Twin."
+        "Escalate strategic or cross-BU issues to CFO Assistant."
     ),
     escalation_path=("cfo",),
     communication_style=(
@@ -111,7 +111,7 @@ GROUP_MANAGER_TWIN = TwinPersona(
 
 STRATEGY_TWIN = TwinPersona(
     role="strategy",
-    display_name="Strategy Twin",
+    display_name="Strategy Assistant",
     kpis_owned=(
         "kpi_tree_structure",
         "value_drivers",
@@ -121,7 +121,7 @@ STRATEGY_TWIN = TwinPersona(
     authority=(
         "Maintain KPI tree structure and value driver mappings. "
         "Flag structural misalignment. Cannot make financial or "
-        "operational decisions — reports to CEO Twin."
+        "operational decisions — reports to CEO Assistant."
     ),
     escalation_path=("ceo",),
     communication_style=(
@@ -139,7 +139,7 @@ STRATEGY_TWIN = TwinPersona(
 
 ANALYST_TWIN = TwinPersona(
     role="analyst",
-    display_name="Analyst Twin",
+    display_name="Analyst Assistant",
     kpis_owned=(
         "data_readiness",
         "source_validation",
@@ -148,7 +148,7 @@ ANALYST_TWIN = TwinPersona(
     authority=(
         "Prepare and validate data. Assess evidence quality. "
         "Cannot make strategic or financial decisions. "
-        "Reports to Group Manager Twin."
+        "Reports to Group Manager Assistant."
     ),
     escalation_path=("group_manager",),
     communication_style=(
@@ -166,7 +166,7 @@ ANALYST_TWIN = TwinPersona(
 
 REVIEWER_TWIN = TwinPersona(
     role="reviewer",
-    display_name="Reviewer Twin",
+    display_name="Reviewer Assistant",
     kpis_owned=(
         "evidence_verification",
         "finding_adjudication",
@@ -175,7 +175,7 @@ REVIEWER_TWIN = TwinPersona(
     authority=(
         "Challenge findings and request additional evidence. "
         "Approve evidence packets that meet quality thresholds. "
-        "Reports to CFO Twin for compliance oversight."
+        "Reports to CFO Assistant for compliance oversight."
     ),
     escalation_path=("cfo",),
     communication_style=(

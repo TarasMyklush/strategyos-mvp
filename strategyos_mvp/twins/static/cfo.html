@@ -800,7 +800,7 @@ body {
     <div id="thread-msg-001" class="thread-view">
       <div class="thread-message">
         <div class="thread-message__header">
-          <span class="thread-message__role">CEO Twin</span>
+          <span class="thread-message__role">CEO Assistant</span>
           <span>1 hour ago</span>
           <span class="thread-message__status-badge responded">responded</span>
         </div>
@@ -810,7 +810,7 @@ body {
       </div>
       <div class="thread-message">
         <div class="thread-message__header">
-          <span class="thread-message__role">CFO Twin (you)</span>
+          <span class="thread-message__role">CFO Assistant (you)</span>
           <span>30 min ago</span>
           <span class="thread-message__status-badge delivered">delivered</span>
         </div>
@@ -827,7 +827,7 @@ body {
     <div id="thread-msg-002" class="thread-view">
       <div class="thread-message">
         <div class="thread-message__header">
-          <span class="thread-message__role">Group Manager Twin</span>
+          <span class="thread-message__role">Group Manager Assistant</span>
           <span>3 hours ago</span>
           <span class="thread-message__status-badge pending">pending</span>
         </div>
@@ -844,7 +844,7 @@ body {
     <div id="thread-msg-003" class="thread-view">
       <div class="thread-message">
         <div class="thread-message__header">
-          <span class="thread-message__role">Analyst Twin</span>
+          <span class="thread-message__role">Analyst Assistant</span>
           <span>1 day ago</span>
           <span class="thread-message__status-badge delivered">delivered</span>
         </div>
@@ -1223,7 +1223,7 @@ async function persistRouting(endpoint, itemId, title, targetRole, reason) {
     try {
       var resp = await fetch('/twin/api/investigate/' + ROLE + '?query=' + encodeURIComponent(q), { method: 'POST' });
       var data = await resp.json();
-      panel.innerHTML = '<h4>CFO Twin Response</h4><pre style="font-size:12px;">' + JSON.stringify(data.summary, null, 2) + '</pre>';
+      panel.innerHTML = '<h4>CFO Assistant Response</h4><pre style="font-size:12px;">' + JSON.stringify(data.summary, null, 2) + '</pre>';
     } catch(e) { panel.innerHTML = '<p style="color:var(--red);">Error: ' + e.message + '</p>'; }
   };
   document.addEventListener('DOMContentLoaded', loadData);

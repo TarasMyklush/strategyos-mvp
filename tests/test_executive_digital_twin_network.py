@@ -215,6 +215,6 @@ def test_hermes_specific_twin_answer_is_role_specific(tmp_path, monkeypatch):
     )
 
     assert result is not None
-    assert "Atlas (CFO Twin)" in result["answer"]
+    assert "Atlas (CFO Assistant)" in result["answer"]
     assert "Reconcile H1 EBITDA bridge" in result["answer"]
     assert "not currently flagged for executive intervention" in result["answer"]

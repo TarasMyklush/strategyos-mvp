@@ -60,7 +60,7 @@ class TestPersonaInstantiation:
     def test_ceo_twin_is_frozen_dataclass(self):
         assert isinstance(CEO_TWIN, TwinPersona)
         assert CEO_TWIN.role == "ceo"
-        assert CEO_TWIN.display_name == "CEO Twin"
+        assert CEO_TWIN.display_name == "CEO Assistant"
         assert "human" in CEO_TWIN.escalation_path
 
     def test_cfo_twin_escalates_to_ceo(self):

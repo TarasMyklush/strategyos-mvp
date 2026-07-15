@@ -5085,7 +5085,7 @@ def _agents_surface_payload(
             )
         elif pending_requests:
             latest = pending_requests[0]
-            current_activity = str(latest.get("subject") or "Waiting for another twin to respond.")
+            current_activity = str(latest.get("subject") or "Waiting for another assistant to respond.")
         elif last_wake:
             current_activity = "Monitoring its governed KPIs; no open investigation is recorded."
         current_activity = _executive_twin_activity(current_activity)
@@ -5172,7 +5172,7 @@ def _agents_surface_payload(
     payload = {
         "contract_version": "digital_twin_network.v1",
         "status": "ok" if CONFIG.twins_enabled else "disabled",
-        "label": "Digital twins & AI assistants",
+        "label": "Your AI assistants",
         "summary": {
             "configured_count": len(twins),
             "active_count": sum(1 for item in twins if item["status"] in {"active", "monitoring"}),
@@ -5292,7 +5292,15 @@ def _resolve_digital_twin_status(
         "agents" in normalized
         and any(token in normalized for token in ("doing", "status", "active", "attention", "blocked"))
     )
-    named_terms = ("hermes", "atlas", "iris", "ceo twin", "cfo twin", "group manager twin")
+    # The surface now labels these "CEO Assistant" etc., so an executive asks
+    # using that word. The legacy "twin" terms stay recognised: they are
+    # matching vocabulary, not display copy, and users who learned the old
+    # label must not lose the answer.
+    named_terms = (
+        "hermes", "atlas", "iris",
+        "ceo assistant", "cfo assistant", "group manager assistant",
+        "ceo twin", "cfo twin", "group manager twin",
+    )
     if not structured_twin and not any(term in normalized for term in (*network_terms, *named_terms)) and not asks_about_agents:
         return None
 
@@ -5330,14 +5338,14 @@ def _resolve_digital_twin_status(
 
     if selected:
         item = selected[0]
-        name = str(item.get("assistant_name") or item.get("display_name") or "Digital Twin")
-        role_label = str(item.get("display_name") or item.get("role") or "Digital Twin")
+        name = str(item.get("assistant_name") or item.get("display_name") or "Assistant")
+        role_label = str(item.get("display_name") or item.get("role") or "Assistant")
         status_label = _module_status_label(item.get("status") or "ready")
         attention = str(item.get("status") or "").lower() == "attention"
         executive_action = (
             "It is flagged for executive attention; open its governed workspace and review the recorded escalation."
             if attention
-            else "It is not currently flagged for executive intervention. Pending handoffs remain governed Twin-to-Twin dependencies unless an escalation changes the status to Attention."
+            else "It is not currently flagged for executive intervention. Pending handoffs remain governed assistant-to-assistant dependencies unless an escalation changes the status to Attention."
         )
         answer = (
             f"{name} ({role_label}) is {status_label.lower()}. "
@@ -12403,6 +12411,8 @@ async def _assistant_chat_response(
     if (
         not public_safe
         and mode == "auto"
+        and not context.get("run_id")
+        and not context.get("findings")
         and not _question_is_governed_business_question(question, context=context)
     ):
         general_status = llm_qa.chat_status(CONFIG)

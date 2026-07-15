@@ -906,7 +906,20 @@ def test_assistant_chat_llm_mode_sanitizes_raw_json_answer(monkeypatch):
         _restore_env(original)
 
 
-def test_authenticated_assistant_general_question_uses_llm(monkeypatch):
+def test_authenticated_general_question_is_answered_by_the_governed_model(monkeypatch):
+    """With a run loaded, the one assistant answers -- including general questions.
+
+    This test previously asserted the opposite: that "What is the capital of
+    France?" must reach answer_general_question and that answer_question must
+    NOT be called. That contract is what shipped the reported failure --
+    answer_general_question is blind by construction (no bundle, findings or
+    summary), so any question routed there is answered by a model that cannot
+    see the company, and questions like "summarize the board packet" leaked to
+    it and came back "that is private company data I do not hold".
+
+    There is one assistant now. It always holds the evidence, uses it for
+    company claims, and answers plain general questions from its own knowledge.
+    """
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -937,19 +950,21 @@ def test_authenticated_assistant_general_question_uses_llm(monkeypatch):
         monkeypatch.setattr(
             api_module.llm_qa,
             "answer_general_question",
-            lambda question, *, config, persona=None: {
-                "matched": True,
-                "answer": "Paris is the capital of France.",
-                "basis": "General assistant answer.",
-                "citations": [],
-                "suggestions": [],
-                "llm_status": {"enabled": True, "model": config.llm_model},
-            },
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("the blind general model must not be reachable while a run is loaded")
+            ),
         )
         monkeypatch.setattr(
             api_module.llm_qa,
             "answer_question",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("general prompt should use answer_general_question")),
+            lambda *_args, **_kwargs: {
+                "matched": True,
+                "answer": "Paris is the capital of France.",
+                "basis": "General knowledge; no company evidence was required.",
+                "citations": [],
+                "suggestions": [],
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            },
         )
 
         response = client.post(
@@ -960,14 +975,10 @@ def test_authenticated_assistant_general_question_uses_llm(monkeypatch):
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["mode"] == "llm"
-        assert payload["answered_by"] == "llm"
-        assert payload["llm_general_answer"] is True
-        assert "Paris" in payload["answer"]
-        assert payload["answer_origin"] == "llm"
-        assert payload["calculation_status"] == "not_calculated"
-        assert payload["review_status"] == "required"
-        assert payload["human_review_required"] is True
+        assert "Paris" in payload["answer"], (
+            "a plain general question must still be answered, by the assistant "
+            "that holds the evidence rather than one that cannot see it"
+        )
     finally:
         _restore_env(original)
 
@@ -3612,3 +3623,70 @@ def test_governed_run_owns_the_question_unless_it_is_general_knowledge():
     assert api_module._question_is_governed_business_question(
         "Summarize the board packet", context={"run_id": None, "findings": []}
     ) is False
+
+
+def test_general_model_is_unreachable_while_a_run_is_loaded():
+    """One assistant. It always holds the run's evidence.
+
+    answer_general_question is structurally blind -- its signature takes only
+    (question, config, persona), with no bundle, findings or summary -- so any
+    question routed there is answered by a model that cannot see the company.
+    That produced "the board packet is private company data and is not
+    available in my general knowledge". Proving a question "general" is not
+    something scope can do reliably, so the blind path is simply unreachable
+    once a run is loaded: the governed model answers everything, using the
+    evidence for company claims and its own knowledge for plain general ones.
+    """
+    import inspect
+
+    source = inspect.getsource(api_module._assistant_chat_response)
+    branch = source[source.index('mode == "auto"') - 200 : source.index("general_status = llm_qa.chat_status(CONFIG)")]
+
+    assert 'not context.get("run_id")' in branch and 'not context.get("findings")' in branch, (
+        "the general-knowledge model must not be reachable while a governed "
+        "run is loaded; it cannot see the company's data"
+    )
+
+    signature = inspect.signature(api_module.llm_qa.answer_general_question)
+    assert "bundle" not in signature.parameters and "findings" not in signature.parameters, (
+        "guard premise: answer_general_question is blind by construction. If it "
+        "ever gains evidence parameters, revisit whether this guard is still needed"
+    )
+
+
+def test_hermes_prompt_states_it_is_the_only_assistant_and_holds_evidence():
+    """The governed model must not defer to a model that does not exist."""
+    import strategyos_mvp.llm_qa as llm_qa_module
+
+    prompt = llm_qa_module.SYSTEM_PROMPT
+    assert "ONLY assistant" in prompt
+    assert "must come from the JSON evidence" in prompt, (
+        "company claims must still be evidence-bound"
+    )
+    assert "general knowledge" in prompt, (
+        "it must answer plain general questions itself rather than deferring"
+    )
+
+
+def test_assistants_are_labelled_assistant_not_twin():
+    """The executive surface says "assistant"; "twin" is internal vocabulary."""
+    from strategyos_mvp.twins import persona as persona_module
+
+    labels = [
+        getattr(value, "display_name", "")
+        for name, value in vars(persona_module).items()
+        if hasattr(value, "display_name")
+    ]
+    assert labels, "expected persona display labels"
+    for label in labels:
+        assert "Twin" not in label, f"user-visible label still says twin: {label!r}"
+    assert any("Assistant" in label for label in labels)
+
+    # Legacy phrasing must still be understood: a user who learned the old
+    # label keeps their answer.
+    import inspect
+
+    source = inspect.getsource(api_module._resolve_digital_twin_status)
+    assert "ceo assistant" in source and "ceo twin" in source, (
+        "both the new and legacy names must be recognised in questions"
+    )

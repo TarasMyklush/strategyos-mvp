@@ -94,7 +94,7 @@ class TestCEODashboardSections:
 
     def test_has_inbox(self):
         assert "Inbox" in self.html
-        assert "CFO Twin" in self.html
+        assert "CFO Assistant" in self.html
         assert "priority-badge" in self.html
 
     def test_has_ask_input(self):
@@ -162,7 +162,7 @@ class TestCFODashboardSections:
 
     def test_has_inbox(self):
         assert "Inbox" in self.html
-        assert "CEO Twin" in self.html
+        assert "CEO Assistant" in self.html
 
     def test_has_ask_input(self):
         assert "Ask Your CFO" in self.html
@@ -221,8 +221,8 @@ class TestGMDashboardSections:
 
     def test_has_escalations(self):
         assert "Escalations" in self.html
-        assert "Analyst Twin" in self.html
-        assert "Strategy Twin" in self.html
+        assert "Analyst Assistant" in self.html
+        assert "Strategy Assistant" in self.html
 
     def test_has_investigations(self):
         assert "Active Investigations" in self.html
@@ -230,8 +230,8 @@ class TestGMDashboardSections:
 
     def test_has_inbox(self):
         assert "Inbox" in self.html
-        assert "CEO Twin" in self.html
-        assert "CFO Twin" in self.html
+        assert "CEO Assistant" in self.html
+        assert "CFO Assistant" in self.html
 
     def test_has_ask_input(self):
         assert "Ask Your GM" in self.html
