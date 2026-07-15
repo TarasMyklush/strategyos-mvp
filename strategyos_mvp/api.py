@@ -39,6 +39,7 @@ from .executive_design import (
     executive_board_design,
     executive_persona_design,
 )
+from .agent_execution_log import build_execution_log
 from .executive_presentation import build_executive_presentation
 from .executive_read_model import build_executive_read_model
 from .assistants import get_orchestrator, list_supported_personas
@@ -1143,7 +1144,10 @@ def _build_public_safe_assistant_packet(
             {"k": "recoverable", "v": _format_sar_brief(metrics.get("total_recoverable_sar"))},
             {"k": "challenged", "v": str(int(metrics.get("challenged_count") or 0))},
         ],
-        "log": list((agent_modules.get("audit_log") or []))[:3],
+        # The run's real recorded steps. Bounded for rendering, but the payload
+        # carries its own total_count so a trimmed view never reads as complete.
+        "execution_log": agent_modules.get("execution_log") or build_execution_log([]),
+        "run_posture": list((agent_modules.get("run_posture") or []))[:3],
     }
 
     facts = [
@@ -4527,9 +4531,14 @@ def _executive_read_model_from_available_truth(
         database_summary = dict(database_snapshot.get("summary") or {})
         database_rows = list(database_snapshot.get("findings") or [])
         database_audit = dict(database_snapshot.get("audit_summary") or {})
+        # The persisted Analyst/Auditor steps for this run. These are records of
+        # work that happened, not a summary of it, which is why they carry a
+        # *_fact claim class downstream rather than a derived one.
         database_agent_modules = {
             **dict(agent_modules or {}),
-            "audit_log": list(database_snapshot.get("agent_events") or []),
+            "execution_log": build_execution_log(
+                list(database_snapshot.get("agent_events") or [])
+            ),
         }
         artifact_map = dict(database_snapshot.get("artifacts") or {})
         tenant_payload = (
@@ -5693,7 +5702,13 @@ def _agent_modules_payload(
             "route": publication.get("preview_route") or "/public/runs/latest/report-preview",
         },
     ]
-    audit_log = [
+    # Run posture, NOT an execution log. These three lines restate the run's
+    # current stage and approval state; no assistant step is described by any of
+    # them. The real per-step record lives in strategyos_agent_events and is
+    # attached as "execution_log" by the database read below. Keeping the two
+    # apart matters: presenting status prose as an audit trail claims the run
+    # knows more about its own work than it has told us.
+    run_posture = [
         {
             "event_id": "latest-run-stage",
             "title": "Latest run stage",
@@ -5720,7 +5735,10 @@ def _agent_modules_payload(
         "running": modules,
         "discoverable": discoverable,
         "approvals": approvals,
-        "audit_log": audit_log,
+        "run_posture": run_posture,
+        # No governed run has been read here, so no assistant step is known yet.
+        # The database path below replaces this with the run's real events.
+        "execution_log": build_execution_log([]),
         "state_contract": _governed_module_state_contract_from_modules(
             modules,
             run_id=(summary or {}).get("run_id"),

@@ -5326,6 +5326,38 @@ html[data-theme="dark"] .trend-axis {
 .trail-foot {
   padding-top: 10px;
   border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--muted);
+  font-style: italic;
+  list-style: none;
+}
+
+/* The quoted challenge/response of a step, set apart so an executive can see
+   the actual exchange rather than a paraphrase of it. */
+.trail-quote {
+  margin-top: 6px;
+  padding-left: 9px;
+  border-left: 2px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.trail-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.trail-note {
+  font-size: 10.5px;
+  color: var(--muted);
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
 }
 
 .subtools {
