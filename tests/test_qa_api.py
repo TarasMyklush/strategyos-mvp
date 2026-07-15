@@ -379,6 +379,89 @@ def test_authenticated_free_text_kpi_and_release_route_before_fallback(monkeypat
         _restore_env(original)
 
 
+def test_authenticated_followup_reference_uses_history_for_kpi_component(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "build_executive_presentation",
+            lambda _read_model: {
+                "driver_grid": [
+                    {
+                        "key": "revenue",
+                        "label": "Revenue",
+                        "metric": "SAR 385.1M",
+                        "source_files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"],
+                        "executive_brief": {
+                            "readout": "Revenue recognised across four revenue groups.",
+                            "drivers": [
+                                {"label": "Revenue – Catering", "value": "SAR 123.0M", "share_pct": 31.9},
+                                {"label": "Revenue – Government", "value": "SAR 109.9M", "share_pct": 28.5},
+                            ],
+                            "calculation": {"formula": "Revenue = sum of scoped revenue-account balances."},
+                        },
+                    }
+                ]
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "Elaborate on SAR 109.9M",
+                "persona": "ceo",
+                "mode": "auto",
+                "history": [
+                    {
+                        "role": "assistant",
+                        "text": "Revenue – Government — SAR 109.9M · 28.5%",
+                        "payload": {"assistant_context": {"kpi_key": "revenue"}},
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_reference"
+        assert "Revenue – Government" in payload["answer"]
+        assert "28.5%" in payload["answer"]
+        assert "GL_Extract_H1_2026.csv" in payload["citations"][0]["source_path"]
+        assert payload["assistant_context"]["history_attached"] is True
+    finally:
+        _restore_env(original)
+
+
+def test_visible_answer_scrubber_repairs_governed_packet_phrase():
+    cleaned = api_module.llm_qa._clean_visible_answer("This depends on the current governed packet.")
+    assert "governed current view" not in cleaned
+    assert cleaned == "This depends on the current governed view."
+
+
+def test_authenticated_llm_supplemental_payload_includes_history():
+    payload = api_module._supplemental_grounding_payload(
+        assistant_history=[
+            {"role": "user", "text": "What is driving revenue?"},
+            {"role": "assistant", "text": "Revenue – Government — SAR 109.9M", "payload": {"reference": {"kpi_key": "revenue"}}},
+        ]
+    )
+    assert payload["conversation_history"][1]["payload_reference"]["kpi_key"] == "revenue"
+
+
 def test_external_decision_question_fails_closed_with_actual_governed_scope():
     bundle = type("Bundle", (), {"run_metadata": {"available_roles": ["ap_ledger", "ar_ledger", "gl_extract"]}})()
     result = api_module._unavailable_external_decision_result(
@@ -3150,3 +3233,74 @@ def test_public_ceo_chat_models_target_margin_from_governed_dashboard_baseline(m
         assert "Current governed drivers" not in payload["answer"]
     finally:
         _restore_env(original)
+
+
+def test_scenario_question_with_component_amount_reaches_scenario_engine(monkeypatch):
+    """A what-if quoting an on-screen amount must not be hijacked by the
+    governed reference resolver into a component-lookup answer."""
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "build_executive_presentation",
+            lambda _read_model: {
+                "driver_grid": [
+                    {
+                        "key": "revenue",
+                        "label": "Revenue",
+                        "metric": "SAR 385.1M",
+                        "source_files": ["gl.csv"],
+                        "executive_brief": {
+                            "readout": "readout",
+                            "drivers": [
+                                {"label": "Revenue – Modern Trade", "value": "SAR 103.2M", "share_pct": 26.8},
+                            ],
+                            "calculation": {"formula": "formula"},
+                        },
+                    }
+                ]
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "If we recover SAR 103.2M, what remains?",
+                "persona": "ceo",
+                "mode": "auto",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload.get("answered_by") != "governed_reference", (
+            "scenario-intent questions must fall through to the scenario engine "
+            "even when they quote an amount visible on a KPI card"
+        )
+    finally:
+        _restore_env(original)
+
+
+def test_amount_reference_parser_requires_money_shape():
+    """Bare counts, years, and percents are not monetary references."""
+    parse = api_module._parse_amount_references
+
+    assert parse("Elaborate on SAR 109.9M") == [109_900_000.0]
+    assert parse("what about SAR 794,108") == [794_108.0]
+    assert parse("drill into 42.3m cash") == [42_300_000.0]
+    assert parse("top 3 cases in H1 2026") == []
+    assert parse("why is the share 28.5%?") == []

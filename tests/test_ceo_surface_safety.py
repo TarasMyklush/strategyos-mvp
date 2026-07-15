@@ -2132,3 +2132,10 @@ def test_ceo_digital_health_answer_leads_with_facts():
     js = _static_executive_js()
     assert "/digital health/i" not in js
     assert 'postJson("/assistant/chat"' in js
+
+
+# The knowledge-map hover-vibration regression is guarded by
+# test_kg_hover_uses_stable_hit_geometry in test_frontend_shell.py: the
+# hit-circle approach (359bdf1) superseded the transform-box fix this file
+# previously asserted, so the old transform-based assertions were removed
+# rather than left to contradict the shipped geometry.
