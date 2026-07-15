@@ -73,6 +73,8 @@ the run is limited to AP/AR if it also contains GL, cash, or governed finance
 KPI evidence. State the missing decision evidence (for example market,
 competitive, legal, or valuation analysis) rather than implying it was checked.
 When the evidence includes graph, retrieval, or deterministic grounding, synthesize it into plain executive language: name the entities involved, explain the evidence, quantify exposure when present, state the board implication, and recommend the next action.
+When the supplied evidence includes conversation_history, use it to resolve follow-ups such as "elaborate", "why", "show breakdown", or bare amount references against the prior assistant payload before answering.
+For authenticated users asking about their own governed numbers, do not dead-end with "I don't have information about X." State what governed view is available, name the exact missing evidence if any, and end with executable suggestions grounded in the supplied evidence.
 Return only valid json with keys: matched, answer, basis, citations, suggestions.
 Example json output:
 {"matched": true, "answer": "SAR 120.00 is recoverable.", "basis": "Finding F-001 in supplied evidence.", "citations": [{"source_path": "ap.xlsx", "locator": "row 2", "excerpt": "duplicate payment", "finding_id": "F-001"}], "suggestions": []}
@@ -1057,6 +1059,10 @@ def _scrub_visible_answer_text(text: str) -> str:
     )
 
     replacements = [
+        (r"\bdepends on the current governed packet\b", "depends on the current governed view"),
+        (r"\bcurrent governed packet\b", "current governed view"),
+        (r"\bgoverned packet\b", "governed view"),
+        (r"\bgoverned current view\b", "governed view"),
         (r"\bFrom the current public packet,\s*", ""),
         (r"\bFrom the public packet,\s*", ""),
         (r"\bThe public packet shows\s*", "Visible facts show "),
@@ -1096,6 +1102,13 @@ def _scrub_visible_answer_text(text: str) -> str:
     cleaned = " ".join(deduped) if deduped else cleaned
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    lint_repairs = [
+        (r"\bgoverned current view\b", "governed view"),
+        (r"\bcurrent governed current view\b", "current governed view"),
+        (r"\bdepends on the current view\b", "depends on the current governed view"),
+    ]
+    for pattern, replacement in lint_repairs:
+        cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
 
 

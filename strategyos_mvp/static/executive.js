@@ -2157,6 +2157,21 @@
     };
   }
 
+  function assistantThreadHistory(limit) {
+    var thread = threadStore()[currentThreadKey()];
+    var messages = safeArray(thread && thread.messages).filter(function (item) {
+      return item && item.status !== "pending" && String(item.text || "").trim();
+    });
+    return messages.slice(-Math.max(1, limit || 8)).map(function (item) {
+      return {
+        role: item.role || "assistant",
+        text: String(item.text || "").slice(0, 2000),
+        payload: item.payload || null,
+        assistant_context: item.payload && item.payload.assistant_context ? item.payload.assistant_context : null
+      };
+    });
+  }
+
   async function buildAssistantReply(message, sourceEl) {
     var hiddenContext = arguments.length > 2 ? arguments[2] : null;
     var cleanMessage = String(message || "").trim();
@@ -2181,6 +2196,11 @@
       hiddenContext && typeof hiddenContext === "object" ? hiddenContext : {}
     );
     body.assistant_context = entrypointCtx;
+    body.history = assistantThreadHistory(8);
+    if (body.history.length) {
+      body.assistant_context.history = body.history;
+      body.assistant_context.history_attached = true;
+    }
     // Board portal prompts must NOT carry hero/revenue driver_context, because
     // the board entrypoint_context already identifies board state/lifecycle and
     // stale driver metrics (e.g. driver_context.key="revenue") cause the backend

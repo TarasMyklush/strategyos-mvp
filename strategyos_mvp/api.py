@@ -222,6 +222,7 @@ class AssistantChatRequest(BaseModel):
     assistant_context: dict[str, Any] | None = None
     source: str | None = None
     entrypoint: str | None = None
+    history: list[dict[str, Any]] | None = None
 
 
 from .twins.api import (
@@ -10684,6 +10685,47 @@ def _sanitize_assistant_visible_text(value: Any) -> str:
     return str(text or "").strip()
 
 
+def _assistant_history_from_request(request: AssistantChatRequest | QaRequest) -> list[dict[str, Any]]:
+    """Normalize client-supplied chat history for follow-up grounding.
+
+    The executive drawer owns thread history in browser storage.  The backend
+    still needs the previous answer payload to resolve follow-ups like
+    ``Elaborate on SAR 109.9M`` against the exact KPI row that produced the
+    prior answer, rather than re-deriving from a bare amount.
+    """
+    candidates: Any = getattr(request, "history", None)
+    if candidates is None:
+        request_context = getattr(request, "context", None)
+        if isinstance(request_context, Mapping):
+            candidates = request_context.get("history") or request_context.get("messages")
+    if candidates is None:
+        assistant_context = getattr(request, "assistant_context", None)
+        if isinstance(assistant_context, Mapping):
+            candidates = assistant_context.get("history") or assistant_context.get("messages")
+    if not isinstance(candidates, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for item in candidates[-8:]:
+        if not isinstance(item, Mapping):
+            continue
+        role = str(item.get("role") or item.get("speaker") or "").strip().lower()
+        text = str(item.get("text") or item.get("content") or item.get("answer") or "").strip()
+        payload = item.get("payload") or item.get("responsePayload") or item.get("response_payload")
+        provenance = item.get("assistant_context") or item.get("context") or item.get("provenance")
+        if not text and not isinstance(payload, Mapping) and not isinstance(provenance, Mapping):
+            continue
+        normalized.append(
+            {
+                "role": role if role in {"user", "assistant", "system"} else "assistant",
+                "text": text[:2000],
+                "payload": dict(payload) if isinstance(payload, Mapping) else None,
+                "assistant_context": dict(provenance) if isinstance(provenance, Mapping) else None,
+            }
+        )
+    return normalized
+
+
 _ASSISTANT_BUSINESS_TOKENS = (
     "margin", "ebitda", "profitability", "profit", "loss", "revenue", "income",
     "risk", "plan", "year", "quarter", "board", "packet", "prep", "session",
@@ -10855,6 +10897,7 @@ def _supplemental_grounding_payload(
     graph_result: dict[str, Any] | None = None,
     retrieval_result: dict[str, Any] | None = None,
     deterministic_result: dict[str, Any] | None = None,
+    assistant_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     if graph_result and graph_result.get("matched"):
@@ -10879,6 +10922,16 @@ def _supplemental_grounding_payload(
             "basis": deterministic_result.get("basis"),
             "citations": list(deterministic_result.get("citations") or [])[:8],
         }
+    if assistant_history:
+        payload["conversation_history"] = [
+            {
+                "role": item.get("role"),
+                "text": item.get("text"),
+                "assistant_context": item.get("assistant_context"),
+                "payload_reference": (item.get("payload") or {}).get("reference") if isinstance(item.get("payload"), Mapping) else None,
+            }
+            for item in assistant_history[-6:]
+        ]
     return payload
 
 
@@ -11357,6 +11410,140 @@ def _ceo_kpi_inline_result(
     }
 
 
+def _parse_amount_references(question: str) -> list[float]:
+    """Extract SAR/percent-like numeric references from a follow-up question."""
+    text = str(question or "")
+    values: list[float] = []
+    for match in re.finditer(r"(?:SAR\s*)?(\d+(?:\.\d+)?)\s*([kKmMbB])?", text):
+        raw = float(match.group(1))
+        suffix = (match.group(2) or "").lower()
+        multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(suffix, 1)
+        values.append(raw * multiplier)
+    return values
+
+
+def _parse_display_amount(value: Any) -> float | None:
+    text = str(value or "")
+    match = re.search(r"(?:SAR\s*)?(\d+(?:\.\d+)?)\s*([kKmMbB])?", text)
+    if not match:
+        return None
+    raw = float(match.group(1))
+    suffix = (match.group(2) or "").lower()
+    multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(suffix, 1)
+    return raw * multiplier
+
+
+def _amounts_match(left: float, right: float) -> bool:
+    tolerance = max(1.0, abs(right) * 0.006)
+    return abs(left - right) <= tolerance
+
+
+def _history_kpi_key(history: list[dict[str, Any]]) -> str | None:
+    for item in reversed(history):
+        payload = item.get("payload")
+        payload_context = payload.get("assistant_context") if isinstance(payload, Mapping) else None
+        for source in (item.get("assistant_context"), payload_context):
+            if isinstance(source, Mapping):
+                key = str(source.get("kpi_key") or source.get("driver_key") or "").strip()
+                if key and key != "board_packet":
+                    return key
+        if isinstance(payload, Mapping):
+            kpi = payload.get("kpi")
+            if isinstance(kpi, Mapping):
+                key = str(kpi.get("key") or kpi.get("driver_key") or "").strip()
+                if key:
+                    return key
+    return None
+
+
+def _governed_reference_result(
+    context: Mapping[str, Any],
+    *,
+    question: str,
+    assistant_context: Mapping[str, Any],
+    history: list[dict[str, Any]],
+    public_safe: bool,
+) -> dict[str, Any] | None:
+    """Resolve visible KPI/component references before invoking LLM fallback."""
+    if public_safe:
+        return None
+    amount_refs = _parse_amount_references(question)
+    norm = " ".join(str(question or "").casefold().split())
+    contextual_key = str(assistant_context.get("kpi_key") or "").strip() or _history_kpi_key(history)
+    if not amount_refs and not contextual_key:
+        return None
+
+    read_model = _executive_read_model_from_available_truth(
+        dict(context.get("summary") if isinstance(context.get("summary"), Mapping) else {}),
+        [],
+        {},
+        {"report_count": 0},
+        {},
+        public_safe=False,
+    )
+    cards = list(build_executive_presentation(read_model).get("driver_grid") or [])
+    if contextual_key:
+        cards = [card for card in cards if str(card.get("key") or card.get("driver_key") or "") == contextual_key] or cards
+
+    for card in cards:
+        if not isinstance(card, Mapping):
+            continue
+        label = str(card.get("label") or "this KPI")
+        brief = card.get("executive_brief") if isinstance(card.get("executive_brief"), Mapping) else {}
+        drivers = [item for item in list(brief.get("drivers") or []) if isinstance(item, Mapping)]
+        for driver in drivers:
+            driver_label = str(driver.get("label") or "component")
+            driver_value = str(driver.get("value") or "").strip()
+            display_amount = _parse_display_amount(driver_value)
+            label_match = bool(driver_label and driver_label.casefold() in norm)
+            amount_match = bool(display_amount is not None and any(_amounts_match(ref, display_amount) for ref in amount_refs))
+            if not (label_match or amount_match):
+                continue
+            share = driver.get("share_pct")
+            share_text = ""
+            try:
+                if share not in (None, ""):
+                    share_text = f"{float(share):.1f}%"
+            except (TypeError, ValueError):
+                share_text = str(share or "")
+            readout = str(brief.get("readout") or card.get("detail") or "").strip()
+            calculation = brief.get("calculation") if isinstance(brief.get("calculation"), Mapping) else {}
+            audit = brief.get("audit") if isinstance(brief.get("audit"), Mapping) else {}
+            source_files = [str(item) for item in list(card.get("source_files") or audit.get("source_files") or audit.get("source_titles") or []) if str(item)]
+            answer = f"{driver_value or 'That amount'} is {driver_label} within {label}."
+            if share_text:
+                answer += f" It represents {share_text} of the current {label.lower()} composition."
+            if readout:
+                answer += f" {readout}"
+            if calculation.get("formula"):
+                answer += f" Calculation basis: {calculation.get('formula')}"
+            answer += " Next step: use the same KPI drill-down to compare this component with the other reported contributors or ask for the evidence trail."
+            return {
+                "matched": True,
+                "answer": answer,
+                "basis": "Resolved a follow-up reference against current CEO KPI component rows before LLM fallback.",
+                "citations": [
+                    {
+                        "source_path": source_file,
+                        "locator": f"CEO {label} component: {driver_label}",
+                        "excerpt": f"{driver_label} {driver_value} {share_text}".strip(),
+                    }
+                    for source_file in source_files[:6]
+                ],
+                "suggestions": [
+                    f"Compare {driver_label} with other {label} contributors",
+                    f"Show the evidence trail for {driver_label}",
+                    f"What needs executive attention for {label}?",
+                ],
+                "answered_by": "governed_reference",
+                "assistant_mode": "governed_reference",
+                "grounding_status": "grounded",
+                "reference": {"kpi_key": str(card.get("key") or card.get("driver_key") or ""), "label": driver_label, "value": driver_value, "share_pct": share},
+                "_orchestrator_force_answer": True,
+            }
+    return None
+
+
 def _assistant_question_requests_modelling(question: str) -> bool:
     """Let an explicit scenario override passive card/graph context.
 
@@ -11420,6 +11607,10 @@ async def _assistant_chat_response(
         **request_context,
         **dict(getattr(request, "assistant_context", None) or {}),
     }
+    conversation_history = _assistant_history_from_request(request)
+    if conversation_history:
+        assistant_context["history"] = conversation_history
+        assistant_context["history_attached"] = True
     if getattr(request, "source", None):
         assistant_context.setdefault("source", str(request.source))
         assistant_context.setdefault("assistant_source", str(request.source))
@@ -11507,6 +11698,8 @@ async def _assistant_chat_response(
             packet = {"source": "empty_packet", "public_safe": True}
         context["public_context_packet"] = dict(packet)
         context["public_context_packet"]["view_state"] = view_state
+    if conversation_history:
+        context["assistant_history"] = conversation_history
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if _assistant_question_is_release_gate(question):
@@ -11793,6 +11986,34 @@ async def _assistant_chat_response(
         for finding in context["findings"]
     ]
 
+    governed_reference_result = _governed_reference_result(
+        context,
+        question=question,
+        assistant_context=assistant_context,
+        history=conversation_history,
+        public_safe=public_safe,
+    )
+    if governed_reference_result is not None:
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=governed_reference_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=governed_reference_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
+
     app_help_result = (
         None
         if public_safe
@@ -11875,6 +12096,7 @@ async def _assistant_chat_response(
                 "run_mode": context["run_mode"],
                 "persona": persona,
                 "assistant_context": assistant_context,
+                "assistant_history": conversation_history,
                 "driver_context": driver_context,
             },
         )
@@ -12097,6 +12319,7 @@ async def _assistant_chat_response(
                 graph_result=graph_result,
                 retrieval_result=retrieval_result,
                 deterministic_result=deterministic_result,
+                assistant_history=conversation_history,
             ),
         )
     except RuntimeError as exc:
@@ -12232,6 +12455,7 @@ def data_qa(
             detail=f"Unsupported assistant persona '{persona}'.",
         )
     driver_context = request.driver_context or request_context.get("driver_context") or {}
+    conversation_history = _assistant_history_from_request(request)
     trace_id = (request.trace_id or "").strip() or uuid4().hex
     if mode not in {"auto", "deterministic", "llm"}:
         raise HTTPException(
@@ -12626,6 +12850,7 @@ def data_qa(
                 graph_result=graph_result,
                 retrieval_result=retrieval_result,
                 deterministic_result=deterministic_result,
+                assistant_history=conversation_history,
             ),
         )
     except RuntimeError as exc:

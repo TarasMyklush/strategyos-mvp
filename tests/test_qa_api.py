@@ -290,6 +290,89 @@ def test_authenticated_free_text_kpi_and_release_route_before_fallback(monkeypat
         _restore_env(original)
 
 
+def test_authenticated_followup_reference_uses_history_for_kpi_component(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(
+            api_module,
+            "build_executive_presentation",
+            lambda _read_model: {
+                "driver_grid": [
+                    {
+                        "key": "revenue",
+                        "label": "Revenue",
+                        "metric": "SAR 385.1M",
+                        "source_files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"],
+                        "executive_brief": {
+                            "readout": "Revenue recognised across four revenue groups.",
+                            "drivers": [
+                                {"label": "Revenue – Catering", "value": "SAR 123.0M", "share_pct": 31.9},
+                                {"label": "Revenue – Government", "value": "SAR 109.9M", "share_pct": 28.5},
+                            ],
+                            "calculation": {"formula": "Revenue = sum of scoped revenue-account balances."},
+                        },
+                    }
+                ]
+            },
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "Elaborate on SAR 109.9M",
+                "persona": "ceo",
+                "mode": "auto",
+                "history": [
+                    {
+                        "role": "assistant",
+                        "text": "Revenue – Government — SAR 109.9M · 28.5%",
+                        "payload": {"assistant_context": {"kpi_key": "revenue"}},
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_reference"
+        assert "Revenue – Government" in payload["answer"]
+        assert "28.5%" in payload["answer"]
+        assert "GL_Extract_H1_2026.csv" in payload["citations"][0]["source_path"]
+        assert payload["assistant_context"]["history_attached"] is True
+    finally:
+        _restore_env(original)
+
+
+def test_visible_answer_scrubber_repairs_governed_packet_phrase():
+    cleaned = api_module.llm_qa._clean_visible_answer("This depends on the current governed packet.")
+    assert "governed current view" not in cleaned
+    assert cleaned == "This depends on the current governed view."
+
+
+def test_authenticated_llm_supplemental_payload_includes_history():
+    payload = api_module._supplemental_grounding_payload(
+        assistant_history=[
+            {"role": "user", "text": "What is driving revenue?"},
+            {"role": "assistant", "text": "Revenue – Government — SAR 109.9M", "payload": {"reference": {"kpi_key": "revenue"}}},
+        ]
+    )
+    assert payload["conversation_history"][1]["payload_reference"]["kpi_key"] == "revenue"
+
+
 def test_external_decision_question_fails_closed_with_actual_governed_scope():
     bundle = type("Bundle", (), {"run_metadata": {"available_roles": ["ap_ledger", "ar_ledger", "gl_extract"]}})()
     result = api_module._unavailable_external_decision_result(
