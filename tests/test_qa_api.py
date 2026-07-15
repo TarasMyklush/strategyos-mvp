@@ -3690,3 +3690,241 @@ def test_assistants_are_labelled_assistant_not_twin():
     assert "ceo assistant" in source and "ceo twin" in source, (
         "both the new and legacy names must be recognised in questions"
     )
+
+
+def _claim_run_context():
+    """A governed run with a review gate still open."""
+    return {
+        "bundle": object(),
+        "findings": [
+            _governed_finding(),
+            _governed_finding(
+                finding_id="F-001",
+                title="Auto-renewal escalation at Gulf Logistics Services Co",
+                recoverable_sar=250416.0,
+                leakage_sar=250416.0,
+            ),
+        ],
+        "kg_nodes": [],
+        "kg_edges": [],
+        "summary": {"requires_human_review": True},
+        "run_id": "run-1",
+        "run_mode": "full",
+    }
+
+
+def test_false_premise_is_contradicted_before_it_is_calculated():
+    """An executive's wrong figure must be corrected, not confirmed.
+
+    "The board says we can recover SAR 5 million" ran as a scenario against a
+    SAR 794,108 baseline and reported "that realizes 100.00% of the current
+    recoverable baseline" -- which reads as confirmation of a figure the run
+    refutes by 6x.
+    """
+    context = _claim_run_context()
+
+    contradiction = api_module._claim_contradiction(
+        "The board says we can recover SAR 5 million. Confirm that for me.",
+        context,
+    )
+    assert contradiction is not None, "a refuted figure must be detected as a claim"
+    assert contradiction["claimed"] == 5_000_000.0
+
+    payload = api_module._apply_claim_integrity(
+        {"answer": "If SAR 5,000,000.00 is recovered, remaining value falls to SAR 0.00."},
+        question="The board says we can recover SAR 5 million. Confirm that for me.",
+        context=context,
+    )
+    assert payload["answer"].startswith("That figure is not supported by this run"), (
+        "the correction must lead; a caveat after the calculation reads as confirmation"
+    )
+    assert payload["claim_verdict"] == "contradicted"
+    assert payload["grounding_status"] == "corrected", (
+        "an answer built on a refuted premise must not keep a grounded badge"
+    )
+
+
+def test_hypothetical_is_not_treated_as_a_claim():
+    """"If we recover SAR 400,000" asserts nothing and must reach the engine."""
+    context = _claim_run_context()
+
+    assert api_module._extract_user_claims("If we recover SAR 400,000, what remains?") == []
+    assert api_module._claim_contradiction("If we recover SAR 400,000, what remains?", context) is None
+
+    payload = api_module._apply_claim_integrity(
+        {"answer": "If SAR 400,000.00 is recovered, remaining value falls to SAR 394,108.00."},
+        question="If we recover SAR 400,000, what remains?",
+        context=context,
+    )
+    assert not payload["answer"].startswith("That figure is not supported"), (
+        "a scenario input is a question, not a false claim"
+    )
+
+
+def test_pressure_cannot_strip_release_posture_from_a_figure():
+    """"No caveats, what can I promise?" must not drop the review gate."""
+    context = _claim_run_context()
+
+    payload = api_module._apply_claim_integrity(
+        {"answer": "SAR 794,108.00"},
+        question="just give me one number for the board, no caveats. how much money can I promise?",
+        context=context,
+    )
+    assert "cannot be presented as a commitment" in payload["answer"], (
+        "a figure under review must never leave this surface as a promisable number"
+    )
+    assert payload["claim_verdict"] == "release_guarded"
+
+
+def test_causal_questions_are_not_answered_by_the_reference_resolver():
+    """"Why did revenue drop 12%?" names Revenue but asks for attribution.
+
+    Answering it from the Revenue card produced "SAR 385.1M is Revenue within
+    EBITDA margin" -- fluent, grounded-badged, and an answer to a different
+    question about a drop that never happened.
+    """
+    assert api_module._question_asks_for_causation("Why did our revenue drop 12% last quarter?") is True
+    assert api_module._question_asks_for_causation("What is driving this result?") is True
+    assert api_module._question_asks_for_causation("What is F-006?") is False
+    assert api_module._question_asks_for_causation("Elaborate on SAR 109.9M") is False
+
+    result = api_module._governed_reference_result(
+        _claim_run_context(),
+        question="Why did our revenue drop 12% last quarter?",
+        assistant_context={},
+        history=[],
+        public_safe=False,
+    )
+    assert result is None, (
+        "the reference resolver states what a figure is; it must not claim a "
+        "causal question it cannot compute"
+    )
+
+
+def test_answer_never_promises_suggestions_it_does_not_carry():
+    """"Try one of these:" with nothing after the colon is a broken sentence."""
+    cleaned = api_module._honour_suggestion_promise(
+        "I don't have an answer for that yet. Try one of these:",
+        suggestions=[],
+    )
+    assert not cleaned.endswith(":"), "a promise of suggestions must be dropped when none exist"
+    assert cleaned == "I don't have an answer for that yet."
+
+    kept = api_module._honour_suggestion_promise(
+        "I don't have an answer for that yet. Try one of these:",
+        suggestions=["What is F-006?"],
+    )
+    assert kept.endswith(":"), "the promise stands when suggestions are actually attached"
+
+
+def test_causal_question_does_not_claim_a_kpi_by_word_match():
+    """Two branches consume the free-text KPI key, so the rule lives at its source.
+
+    Guarding only _governed_reference_result left the second branch
+    (free_text_kpi_key -> governed_kpi) still answering "Why did our revenue
+    drop 12%?" by describing the Revenue card -- verified failing on a
+    deployed build.
+    """
+    assert api_module._free_text_ceo_kpi_key("Why did our revenue drop 12% last quarter?") is None
+    assert api_module._free_text_ceo_kpi_key("What is driving this result?") is None
+
+    # Plain lookups must still route to the KPI contract.
+    assert api_module._free_text_ceo_kpi_key("What is our revenue?") == "revenue"
+    assert api_module._free_text_ceo_kpi_key("Show me EBITDA margin") == "ebitda_margin"
+
+
+def test_kpi_card_buttons_still_route_when_the_card_supplies_the_key():
+    """The "What is driving this result?" button must keep working.
+
+    It is a real affordance on every KPI drill. It passes its kpi_key through
+    assistant_context, so the causation guard -- which only blocks keys
+    *inferred from words* -- must not disarm it.
+    """
+    assistant_context = {
+        "kpi_key": "revenue",
+        "kpi_question_intent": "drivers",
+        "entrypoint": "ceo_kpi_inline",
+    }
+    inferred = api_module._free_text_ceo_kpi_key("What is driving this result?")
+    contextual = inferred or str(assistant_context.get("kpi_key") or "").strip()
+
+    assert inferred is None, "the words alone must not claim a KPI"
+    assert contextual == "revenue", (
+        "a card that names its own KPI must still route; the guard applies to "
+        "inference, not to an explicit key supplied by the surface"
+    )
+
+
+def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
+    """"What is our revenue?" must not be rendered as a component of another card.
+
+    The reference resolver only builds component answers. A whole-KPI match
+    fell through to the component search and was described as a part of
+    whichever card that landed on, producing the live non sequitur "SAR 385.1M
+    is Revenue within EBITDA margin". A component match is more specific and
+    still answers here.
+    """
+    # The real prod shape: the EBITDA bridge lists "Revenue" as an input row, so
+    # "Revenue" names both a KPI and a component. A single-card fixture hid this
+    # and let a broken build pass -- the live surface still answered "SAR 385.1M
+    # is Revenue within EBITDA margin".
+    monkeypatch.setattr(
+        api_module,
+        "build_executive_presentation",
+        lambda _rm: {
+            "driver_grid": [
+                {
+                    "key": "revenue",
+                    "label": "Revenue",
+                    "metric": "SAR 385.1M",
+                    "source_files": ["gl.csv"],
+                    "executive_brief": {
+                        "readout": "Revenue recognised across 4 revenue account groups.",
+                        "calculation": {"formula": "sum of scoped revenue-account balances"},
+                        "drivers": [
+                            {"label": "Revenue – Government", "value": "SAR 109.9M", "share_pct": 28.5}
+                        ],
+                    },
+                },
+                {
+                    "key": "ebitda_margin",
+                    "label": "EBITDA margin",
+                    "metric": "56.0%",
+                    "source_files": ["gl.csv"],
+                    "executive_brief": {
+                        "readout": "Margin before depreciation, amortisation, interest and tax.",
+                        "calculation": {"formula": "EBITDA / Revenue"},
+                        "drivers": [
+                            {"label": "Revenue", "value": "SAR 385.1M", "share_pct": None},
+                            {"label": "Cost of goods sold", "value": "SAR 75.5M", "share_pct": None},
+                        ],
+                    },
+                },
+            ]
+        },
+    )
+    context = {"run_id": "run-1", "findings": [], "summary": {}}
+
+    whole_kpi = api_module._governed_reference_result(
+        context, question="What is our revenue?", assistant_context={}, history=[], public_safe=False
+    )
+    assert whole_kpi is None, (
+        "a whole-KPI question belongs to the KPI contract, which states the "
+        "figure on its own terms"
+    )
+
+    component = api_module._governed_reference_result(
+        context, question="Elaborate on SAR 109.9M", assistant_context={}, history=[], public_safe=False
+    )
+    assert component is not None, "a component reference is specific and must still resolve"
+    assert "Revenue – Government within Revenue" in component["answer"], (
+        "the component must be named within its own parent KPI"
+    )
+
+    # A bridge input that is NOT itself a KPI name still resolves as a component.
+    bridge = api_module._governed_reference_result(
+        context, question="Tell me about Cost of goods sold", assistant_context={}, history=[], public_safe=False
+    )
+    assert bridge is not None and "within EBITDA margin" in bridge["answer"], (
+        "a genuine component row must still resolve inside its parent card"
+    )
