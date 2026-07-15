@@ -142,3 +142,61 @@ def test_every_lever_is_traceable_or_declares_its_absence():
             f"{lever['line_item']!r} cites nothing; a lever that cannot be traced "
             "to the run must not render"
         )
+
+
+def test_cost_action_question_is_answered_with_levers_not_the_total():
+    """"How do I decrease operating cost?" names the KPI but is not asking what it is.
+
+    The reference resolver would claim it on the word "operating cost" and
+    restate SAR 93.8M -- a fluent answer to a different question. Levers must
+    run first.
+    """
+    import strategyos_mvp.api as api_module
+
+    assert api_module._question_asks_what_to_do_about_cost("How can I decrease operating cost?") is True
+    assert api_module._question_asks_what_to_do_about_cost("what can I do about opex") is True
+    assert api_module._question_asks_what_to_do_about_cost("where can we cut spend") is True
+    # Not cost-action questions: these belong to the KPI contract.
+    assert api_module._question_asks_what_to_do_about_cost("What is our revenue?") is False
+    assert api_module._question_asks_what_to_do_about_cost("What is operating cost?") is False
+
+
+def test_lever_answer_leads_with_reconciled_money_and_declares_its_limits():
+    """Order and honesty are the product here, not the prose."""
+    import strategyos_mvp.api as api_module
+
+    context = {
+        "run_id": "run-1",
+        "findings": [_finding()],
+        "summary": {"run_id": "run-1", "finance_kpi": _finance_kpi()},
+    }
+    result = api_module._governed_cost_lever_result(
+        context, question="How can I decrease operating cost?", public_safe=False
+    )
+
+    assert result is not None
+    answer = result["answer"]
+    assert answer.index("already identified") < answer.index("concentrated"), (
+        "reconciled money must lead; concentration arithmetic is an estimate"
+    )
+    assert "nothing in this run says any of these lines is too high" in answer, (
+        "a lever must not imply the run judged the line"
+    )
+    assert "no line can be called overspent" in answer, (
+        "the missing budget is part of the honest answer"
+    )
+    assert result["claim_class"] == "db_derived_lever"
+    assert result["grounding_status"] == "suggested", (
+        "advice must not claim the grounded badge a fact carries"
+    )
+    assert result["citations"], "every lever answer must cite its accounts and findings"
+
+
+def test_lever_answer_is_withheld_when_the_run_proves_nothing():
+    """No evidence, no advice."""
+    import strategyos_mvp.api as api_module
+
+    context = {"run_id": "run-1", "findings": [], "summary": {"run_id": "run-1"}}
+    assert api_module._governed_cost_lever_result(
+        context, question="How can I decrease operating cost?", public_safe=False
+    ) is None
