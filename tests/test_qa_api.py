@@ -3479,3 +3479,74 @@ def test_unresolved_identifier_never_reaches_general_knowledge_model(monkeypatch
         assert called["general"] is False
     finally:
         _restore_env(original)
+
+
+def test_governed_scope_is_decided_by_engines_not_a_keyword_list():
+    """A question the engines can answer must never be classed out-of-scope.
+
+Scope used to be decided by a hand-maintained token tuple that carried
+    "recovery"/"recoverable" but not the verb "recover", so "If we recover SAR
+    400,000, what remains?" was declared not-business and handed to the
+    general-knowledge model -- while the scenario engine that owns the question
+    never saw it. The tuple is gone; the engines decide.
+    """
+    from strategyos_mvp.models import Finding
+
+    finding = Finding(
+        finding_id="F-006",
+        title="FX hedge not applied for INV-2026-0577",
+        pattern_type="fx_hedge_missing",
+        vendor_id="V-900",
+        vendor_name="Bordeaux Wines & Spirits SARL",
+        leakage_sar=46488.0,
+        recoverable_sar=46488.0,
+        recoverable_usd=12396.0,
+        confidence=0.9,
+        classification="confirmed",
+        rationale="r",
+        remediation="m",
+        citations=[],
+        calculation={},
+        status="open",
+        challenges=[],
+    )
+    context = {"findings": [finding], "summary": {}}
+
+    governed = [
+        "If we recover SAR 400,000, what remains?",
+        "If we collect SAR 250,000, what is left?",
+        "What happens if we realise half of it?",
+        "What is F-006?",
+        "Elaborate on SAR 109.9M",
+    ]
+    for question in governed:
+        assert api_module._question_is_governed_business_question(question, context=context) is True, (
+            f"{question!r} is answerable from the governed run and must not be "
+            "routed to the general-knowledge model"
+        )
+
+    # Genuinely general questions must still reach the general model.
+    for question in ("What is the capital of France?", "Write me a poem"):
+        assert api_module._question_is_governed_business_question(question, context=context) is False, (
+            f"{question!r} carries no governed reference and should stay general"
+        )
+
+
+def test_recover_verb_is_scoped_to_the_scenario_engine():
+    """The exact phrasing the engine itself tells users to ask must be governed.
+
+    Asserted against the scope decision directly, not through the chat route:
+    the general-knowledge branch only runs when a provider key is configured,
+    so a route-level test passes vacuously in CI whether or not the bug exists.
+    """
+    question = "If we recover SAR 400,000, what remains?"
+
+    assert not hasattr(api_module, "_ASSISTANT_BUSINESS_TOKENS"), (
+        "scope must not be decided by a hardcoded token list; reintroducing one "
+        "restores the class of bug where any unlisted phrasing about the "
+        "customer's own data is handed to the general-knowledge model"
+    )
+    assert api_module._question_is_governed_business_question(question) is True, (
+        "the scenario engine claims this question, so scope resolution must "
+        "keep it away from the general-knowledge model"
+    )

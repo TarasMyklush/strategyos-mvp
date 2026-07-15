@@ -246,6 +246,15 @@ _NUMBER_RE = re.compile(
 )
 
 
+def has_scenario_intent(prompt: str) -> bool:
+    """Public: does this prompt ask the scenario engine to model something?
+
+    Exported so the chat router can ask the engine that owns scenarios whether
+    it claims a question, instead of guessing from a keyword list.
+    """
+    return _has_scenario_intent(prompt)
+
+
 def _has_scenario_intent(prompt: str) -> bool:
     return bool(_SCENARIO_INTENT_RE.search(prompt or ""))
 

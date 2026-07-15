@@ -259,7 +259,11 @@ def test_deterministic_engine_surface_area():
         name for name in dir(qa)
         if not name.startswith("_") and callable(getattr(qa, name))
     )
-    expected = {"answer_question"}
+    # claims_question was added deliberately: the chat router asks this engine
+    # whether it owns a question instead of gating scope on a keyword list.
+    # It runs the same intent matchers as answer_question and calls no model,
+    # so the deterministic guarantee this test protects still holds.
+    expected = {"answer_question", "claims_question"}
     assert set(public) == expected, (
         f"Deterministic engine public API changed.\n"
         f"  Got:      {public}\n"
@@ -315,3 +319,24 @@ def test_deterministic_qa_has_no_llm_fallback_path(monkeypatch):
         assert result.get("llm_status") is None, (
             f"Deterministic result for '{question}' has llm_status"
         )
+
+
+def test_claims_question_is_deterministic_and_model_free(monkeypatch):
+    """claims_question must never reach a model: it gates scope, so a model
+    call here would put the LLM in front of the very decision that protects
+    governed questions from the LLM."""
+    import strategyos_mvp.llm_qa as llm_qa_module
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("claims_question must not call a model")
+
+    for name in ("answer_question", "answer_general_question"):
+        if hasattr(llm_qa_module, name):
+            monkeypatch.setattr(llm_qa_module, name, _boom)
+
+    # A question the intent table owns; and one it does not. "summarize the
+    # run" is deliberately absent: that question belongs to the governed model
+    # path, not this engine, and claims_question must report only what this
+    # engine can actually answer.
+    assert qa.claims_question("how much are we losing") is True
+    assert qa.claims_question("What is the capital of France?") is False
