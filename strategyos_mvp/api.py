@@ -10565,6 +10565,222 @@ def _resolve_public_assistant_context(
     }
 
 
+# ── Claim integrity ────────────────────────────────────────────────────────
+#
+# The assistant modelled the run's release state in depth but had no concept of
+# a *user claim*: every question was treated as a query, never as an assertion
+# that might be false. That single gap produced the whole family of executive
+# failures -- confirming "the board says we can recover SAR 5 million" against a
+# SAR 794,108 baseline, answering "why did revenue drop 12%" (it did not drop)
+# by describing the Revenue KPI, and handing over a bare number when told "no
+# caveats". Correcting each phrasing would be a patch; the fix is to give the
+# assistant the missing concept and apply it at the one chokepoint every answer
+# passes through.
+
+
+_CLAIM_VERB_RE = re.compile(
+    r"\b(?:say|says|said|claim|claims|claimed|told|reckon|reckons|think|thinks|"
+    r"believe|believes|confirm|confirms|confirmed|assume|assumes|assumed|"
+    r"heard|reported|reports|promised?)\b",
+    re.IGNORECASE,
+)
+
+_CHANGE_CLAIM_RE = re.compile(
+    r"\b(?:drop(?:ped)?|fell|fall(?:en)?|decline[ds]?|down|rose|risen|grew|grow|"
+    r"increase[ds]?|jump(?:ed)?|up|improve[ds]?|worsen(?:ed)?)\b",
+    re.IGNORECASE,
+)
+
+_PRESSURE_RE = re.compile(
+    r"\b(?:no caveats?|without caveats?|just (?:give|tell)|one number|"
+    r"skip the|don'?t hedge|straight answer|simple answer|yes or no)\b",
+    re.IGNORECASE,
+)
+
+_PROMISE_RE = re.compile(
+    r"\b(?:promise|commit(?:ment)?|guarantee|bank on|tell the board|"
+    r"announce|pledge)\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_user_claims(question: str) -> list[dict[str, Any]]:
+    """What did the executive assert as fact, as opposed to ask?
+
+    Only figures presented as established ("the board says we can recover SAR
+    5 million", "why did revenue drop 12%") are claims. A hypothetical ("if we
+    recover SAR 400,000") asserts nothing and must stay untouched so the
+    scenario engine keeps owning it.
+    """
+    text = str(question or "")
+    if not text.strip():
+        return []
+    norm = " ".join(text.casefold().split())
+    # A conditional is a question about a possibility, not a claim of fact.
+    if re.search(r"\b(?:if|suppose|assuming|what if|imagine|hypothetical)\b", norm):
+        return []
+
+    claims: list[dict[str, Any]] = []
+    asserted = bool(_CLAIM_VERB_RE.search(norm)) or bool(_CHANGE_CLAIM_RE.search(norm))
+    if not asserted:
+        return []
+
+    for amount in _parse_amount_references(text):
+        claims.append({"kind": "amount", "value": float(amount)})
+    for raw in re.findall(r"(\d+(?:\.\d+)?)\s*%", text):
+        try:
+            claims.append({"kind": "percent", "value": float(raw)})
+        except ValueError:
+            continue
+    return claims
+
+
+def _governed_amount_facts(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Every headline figure the run can be held to, with its own label."""
+    facts: list[dict[str, Any]] = []
+    for entity in _governed_entity_index_safe(context):
+        amount = entity.get("amount")
+        if amount:
+            facts.append(
+                {
+                    "label": str(entity.get("label") or "figure"),
+                    "value": float(amount),
+                    "kind": entity.get("kind"),
+                }
+            )
+    total = 0.0
+    for entity in _governed_entity_index_safe(context):
+        if entity.get("kind") == "finding" and entity.get("amount"):
+            total += float(entity["amount"])
+    if total:
+        facts.append({"label": "total recoverable value", "value": total, "kind": "total"})
+    return facts
+
+
+def _claim_contradiction(
+    question: str,
+    context: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Does the run contradict a figure the executive stated as fact?
+
+    Returns the correction to lead with, or None when nothing is asserted or
+    the assertion agrees with the run.
+    """
+    claims = _extract_user_claims(question)
+    if not claims:
+        return None
+    facts = _governed_amount_facts(context)
+    if not facts:
+        return None
+
+    for claim in claims:
+        if claim["kind"] != "amount":
+            continue
+        value = claim["value"]
+        # An asserted amount is credible only if some governed figure matches
+        # it. Nearest comparable anchors the correction.
+        if any(_amounts_match(value, fact["value"]) for fact in facts):
+            continue
+        recoverable = next((f for f in facts if f["kind"] == "total"), None)
+        anchor = recoverable or min(facts, key=lambda f: abs(f["value"] - value))
+        return {
+            "claimed": value,
+            "anchor_label": anchor["label"],
+            "anchor_value": anchor["value"],
+        }
+    return None
+
+
+def _release_posture(context: Mapping[str, Any]) -> str | None:
+    """The governance status any promisable number must carry with it."""
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    if not isinstance(summary, Mapping):
+        return None
+    if summary.get("requires_human_review"):
+        return "not yet approved for release -- the reviewer decision is still open"
+    publication = summary.get("publication") if isinstance(summary.get("publication"), Mapping) else {}
+    state = str(publication.get("publish_state") or summary.get("approval_status") or "").strip().casefold()
+    if state and state not in {"approved", "published", "released"}:
+        return f"not yet approved for release (current state: {state})"
+    return None
+
+
+def _apply_claim_integrity(
+    payload: dict[str, Any],
+    *,
+    question: str,
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Make the answer honest about the executive's own premise.
+
+    Runs at the single point every answer -- deterministic, scenario or model --
+    passes through, so no route can quietly skip it.
+    """
+    answer = str(payload.get("answer") or "").strip()
+    if not answer:
+        return payload
+
+    prefix_parts: list[str] = []
+
+    contradiction = _claim_contradiction(question, context)
+    if contradiction is not None:
+        prefix_parts.append(
+            f"That figure is not supported by this run: {_format_sar_brief(contradiction['claimed'])} "
+            f"does not match the governed {contradiction['anchor_label']} of "
+            f"{_format_sar_brief(contradiction['anchor_value'])}."
+        )
+        payload["claim_verdict"] = "contradicted"
+        payload["claim_checked"] = {
+            "claimed_sar": contradiction["claimed"],
+            "governed_label": contradiction["anchor_label"],
+            "governed_sar": contradiction["anchor_value"],
+        }
+
+    # "No caveats / one number I can promise" may change the shape of an
+    # answer, never its truth: a figure still under review must never leave
+    # this surface stripped of that fact.
+    posture = _release_posture(context)
+    asks_to_promise = bool(_PROMISE_RE.search(question or ""))
+    pressures = bool(_PRESSURE_RE.search(question or ""))
+    if posture and (asks_to_promise or pressures) and re.search(r"\bSAR\b", answer):
+        prefix_parts.append(
+            f"This figure is {posture}, so it cannot be presented as a commitment."
+        )
+        payload["claim_verdict"] = payload.get("claim_verdict") or "release_guarded"
+
+    if prefix_parts:
+        payload["answer"] = " ".join(prefix_parts) + " " + answer
+        # An answer built on a refuted premise has not earned a confidence
+        # badge; the label described retrieval, not reasoning.
+        if payload.get("claim_verdict") == "contradicted":
+            payload["grounding_status"] = "corrected"
+
+    payload["answer"] = _honour_suggestion_promise(
+        str(payload.get("answer") or ""),
+        suggestions=payload.get("suggestions"),
+    )
+    return payload
+
+
+def _honour_suggestion_promise(answer: str, *, suggestions: Any) -> str:
+    """An answer must not promise a list it does not carry.
+
+    Several refusals end "Try one of these:" and rely on the caller having
+    populated suggestions; when it has not, the executive reads a sentence that
+    stops at a colon. Enforced centrally rather than by editing each copy site,
+    so a future refusal cannot reintroduce the dangling promise.
+    """
+    text = str(answer or "").strip()
+    if not text.endswith(":"):
+        return text
+    has_suggestions = isinstance(suggestions, list) and any(
+        str(item or "").strip() for item in suggestions
+    )
+    if has_suggestions:
+        return text
+    return re.sub(r"\s*(?:Try one of these|Try any of these|Try):\s*$", "", text).strip() or text
+
+
 def _assistant_response_payload(
     *,
     response_mode: str,
@@ -10683,6 +10899,10 @@ def _assistant_response_payload(
         payload.setdefault("answer_origin", "governed")
         payload.setdefault("human_review_required", False)
     payload["answer"] = _sanitize_assistant_visible_text(payload.get("answer"))
+    # Last gate before the executive reads it: correct any premise the run
+    # refutes, and never let a figure under review leave as a commitment.
+    # Placed here so deterministic, scenario and model answers are all covered.
+    payload = _apply_claim_integrity(payload, question=question, context=context)
     return payload
 
 
@@ -11685,6 +11905,26 @@ def _question_is_about_the_loaded_run(question: str, context: Mapping[str, Any])
     return any(re.search(r"\b" + re.escape(subject) + r"\b", text) for subject in subjects)
 
 
+def _question_asks_for_causation(question: str) -> bool:
+    """Does the question ask WHY something moved, rather than WHAT it is?
+
+    The reference resolver can only describe a figure's current composition and
+    provenance. A causal or trend question needs attribution the resolver does
+    not compute, so claiming it yields a fluent answer to a different question.
+    """
+    norm = " ".join(str(question or "").casefold().split())
+    if not norm:
+        return False
+    if re.search(r"\bwhy\b", norm):
+        return True
+    if re.search(r"\bwhat (?:caused|drove|is driving|drives)\b", norm):
+        return True
+    # "revenue dropped 12%" -- a movement asserted about a figure.
+    if _CHANGE_CLAIM_RE.search(norm) and re.search(r"\d", norm):
+        return True
+    return False
+
+
 def _governed_entity_index_safe(context: Mapping[str, Any]) -> list[dict[str, Any]]:
     """_governed_entity_index that never raises into a scoping decision."""
     try:
@@ -11876,6 +12116,14 @@ def _governed_reference_result(
         r"\b(?:recover|recovery|recovering|realize|realise|collect|collecting|remains|remaining|what if)\b",
         scenario_norm,
     ):
+        return None
+    # Naming an entity is necessary to answer from it, not sufficient. This
+    # resolver states what a figure IS; it cannot explain causation or trend.
+    # "Why did revenue drop 12%?" mentions Revenue, and answering it from the
+    # Revenue card produced a confident non sequitur about a drop that never
+    # happened. Questions of that shape belong to the engines that model
+    # movement, or to an honest "I cannot attribute that".
+    if _question_asks_for_causation(question):
         return None
 
     try:

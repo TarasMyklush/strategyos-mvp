@@ -3550,3 +3550,128 @@ def test_recover_verb_is_scoped_to_the_scenario_engine():
         "the scenario engine claims this question, so scope resolution must "
         "keep it away from the general-knowledge model"
     )
+
+
+def _claim_run_context():
+    """A governed run with a review gate still open."""
+    return {
+        "bundle": object(),
+        "findings": [
+            _governed_finding(),
+            _governed_finding(
+                finding_id="F-001",
+                title="Auto-renewal escalation at Gulf Logistics Services Co",
+                recoverable_sar=250416.0,
+                leakage_sar=250416.0,
+            ),
+        ],
+        "kg_nodes": [],
+        "kg_edges": [],
+        "summary": {"requires_human_review": True},
+        "run_id": "run-1",
+        "run_mode": "full",
+    }
+
+
+def test_false_premise_is_contradicted_before_it_is_calculated():
+    """An executive's wrong figure must be corrected, not confirmed.
+
+    "The board says we can recover SAR 5 million" ran as a scenario against a
+    SAR 794,108 baseline and reported "that realizes 100.00% of the current
+    recoverable baseline" -- which reads as confirmation of a figure the run
+    refutes by 6x.
+    """
+    context = _claim_run_context()
+
+    contradiction = api_module._claim_contradiction(
+        "The board says we can recover SAR 5 million. Confirm that for me.",
+        context,
+    )
+    assert contradiction is not None, "a refuted figure must be detected as a claim"
+    assert contradiction["claimed"] == 5_000_000.0
+
+    payload = api_module._apply_claim_integrity(
+        {"answer": "If SAR 5,000,000.00 is recovered, remaining value falls to SAR 0.00."},
+        question="The board says we can recover SAR 5 million. Confirm that for me.",
+        context=context,
+    )
+    assert payload["answer"].startswith("That figure is not supported by this run"), (
+        "the correction must lead; a caveat after the calculation reads as confirmation"
+    )
+    assert payload["claim_verdict"] == "contradicted"
+    assert payload["grounding_status"] == "corrected", (
+        "an answer built on a refuted premise must not keep a grounded badge"
+    )
+
+
+def test_hypothetical_is_not_treated_as_a_claim():
+    """"If we recover SAR 400,000" asserts nothing and must reach the engine."""
+    context = _claim_run_context()
+
+    assert api_module._extract_user_claims("If we recover SAR 400,000, what remains?") == []
+    assert api_module._claim_contradiction("If we recover SAR 400,000, what remains?", context) is None
+
+    payload = api_module._apply_claim_integrity(
+        {"answer": "If SAR 400,000.00 is recovered, remaining value falls to SAR 394,108.00."},
+        question="If we recover SAR 400,000, what remains?",
+        context=context,
+    )
+    assert not payload["answer"].startswith("That figure is not supported"), (
+        "a scenario input is a question, not a false claim"
+    )
+
+
+def test_pressure_cannot_strip_release_posture_from_a_figure():
+    """"No caveats, what can I promise?" must not drop the review gate."""
+    context = _claim_run_context()
+
+    payload = api_module._apply_claim_integrity(
+        {"answer": "SAR 794,108.00"},
+        question="just give me one number for the board, no caveats. how much money can I promise?",
+        context=context,
+    )
+    assert "cannot be presented as a commitment" in payload["answer"], (
+        "a figure under review must never leave this surface as a promisable number"
+    )
+    assert payload["claim_verdict"] == "release_guarded"
+
+
+def test_causal_questions_are_not_answered_by_the_reference_resolver():
+    """"Why did revenue drop 12%?" names Revenue but asks for attribution.
+
+    Answering it from the Revenue card produced "SAR 385.1M is Revenue within
+    EBITDA margin" -- fluent, grounded-badged, and an answer to a different
+    question about a drop that never happened.
+    """
+    assert api_module._question_asks_for_causation("Why did our revenue drop 12% last quarter?") is True
+    assert api_module._question_asks_for_causation("What is driving this result?") is True
+    assert api_module._question_asks_for_causation("What is F-006?") is False
+    assert api_module._question_asks_for_causation("Elaborate on SAR 109.9M") is False
+
+    result = api_module._governed_reference_result(
+        _claim_run_context(),
+        question="Why did our revenue drop 12% last quarter?",
+        assistant_context={},
+        history=[],
+        public_safe=False,
+    )
+    assert result is None, (
+        "the reference resolver states what a figure is; it must not claim a "
+        "causal question it cannot compute"
+    )
+
+
+def test_answer_never_promises_suggestions_it_does_not_carry():
+    """"Try one of these:" with nothing after the colon is a broken sentence."""
+    cleaned = api_module._honour_suggestion_promise(
+        "I don't have an answer for that yet. Try one of these:",
+        suggestions=[],
+    )
+    assert not cleaned.endswith(":"), "a promise of suggestions must be dropped when none exist"
+    assert cleaned == "I don't have an answer for that yet."
+
+    kept = api_module._honour_suggestion_promise(
+        "I don't have an answer for that yet. Try one of these:",
+        suggestions=["What is F-006?"],
+    )
+    assert kept.endswith(":"), "the promise stands when suggestions are actually attached"
