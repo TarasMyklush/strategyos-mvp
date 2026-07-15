@@ -46,7 +46,7 @@ from .ingestion import load_dataset
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
-from .scenario_parser import SCENARIO_SUGGESTIONS, parse_scenario
+from .scenario_parser import SCENARIO_SUGGESTIONS, has_scenario_intent as scenario_has_intent, parse_scenario
 from .platform_foundation import (
     ARTIFACT_TITLES,
     DomainMetricContract,
@@ -11630,6 +11630,47 @@ def _governed_entity_index(context: Mapping[str, Any]) -> list[dict[str, Any]]:
 _GOVERNED_IDENTIFIER_RE = re.compile(r"(?<![\w-])[A-Za-z]{1,4}-[0-9]{2,4}-?[0-9]*(?![\w-])")
 
 
+def _question_is_governed_business_question(
+    question: str,
+    *,
+    context: Mapping[str, Any] | None = None,
+) -> bool:
+    """Decide out-of-scope by asking the governed engines, not a keyword list.
+
+    _assistant_question_has_business_scope matches a hand-maintained token
+    tuple. Any phrasing outside it is declared "not business" and handed to the
+    general-knowledge model, which has no governed evidence -- so a question the
+    deterministic engines could answer exactly gets an invented or deflecting
+    answer instead. "If we recover SAR 400,000, what remains?" is the standing
+    example: the tuple carries "recovery"/"recoverable" but not the verb
+    "recover", and the scenario engine that owns the question never sees it.
+
+    The keyword tuple stays as a fast accept, but a miss now escalates to the
+    engines themselves: if the scenario parser claims the question, or it
+    references an entity in the current run, or it carries a monetary amount,
+    it is governed business -- whatever words it happens to use.
+    """
+    if _assistant_question_has_business_scope(question):
+        return True
+    if _question_looks_like_governed_identifier(question):
+        return True
+    if _parse_amount_references(question):
+        return True
+    try:
+        if scenario_has_intent(question):
+            return True
+    except Exception:  # pragma: no cover - never let scoping crash the chat turn
+        pass
+    if isinstance(context, Mapping):
+        try:
+            entities = _governed_entity_index(context)
+        except (HTTPException, Exception):  # pragma: no cover - defensive
+            entities = []
+        if entities and _resolve_governed_entities(entities, question=question, history=[]):
+            return True
+    return False
+
+
 def _question_looks_like_governed_identifier(question: str) -> bool:
     """True when the question is about a record id (F-006, INV-2026-0577).
 
@@ -12314,8 +12355,7 @@ async def _assistant_chat_response(
     if (
         not public_safe
         and mode in {"auto", "llm"}
-        and not _assistant_question_has_business_scope(question)
-        and not _question_looks_like_governed_identifier(question)
+        and not _question_is_governed_business_question(question, context=context)
     ):
         general_status = llm_qa.chat_status(CONFIG)
         if general_status.get("enabled"):
