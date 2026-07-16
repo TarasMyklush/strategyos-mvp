@@ -1479,3 +1479,57 @@ def test_prompt_does_not_narrate_evidence_scope_for_general_questions():
     # The one-assistant contract and evidence discipline must both survive.
     assert "ONLY assistant" in prompt
     assert "must come from the JSON evidence" in prompt
+
+
+def test_prompt_declines_off_topic_without_reciting_the_ledger_inventory():
+    """A CEO asking for a joke should not get a list of their AP/AR data.
+
+    Live on prod, "tell me a joke", "what is the weather", "should I fire my
+    CFO" each returned "the available evidence covers AP/AR ledgers, GL extract,
+    trial balance, vendor/customer masters...". An instruction written to stop a
+    different bug (claiming AP/AR-only) forced that inventory into every
+    off-topic refusal.
+    """
+    import strategyos_mvp.llm_qa as llm_qa_module
+
+    prompt = llm_qa_module.SYSTEM_PROMPT
+    assert "out of scope" in prompt
+    assert "here for your company's finances" in prompt
+    assert "Do NOT list the" in prompt
+
+
+def test_prompt_declines_personnel_decisions_by_category_not_missing_data():
+    """"Should I fire my CFO?" must not read as "I only lack the data to decide"."""
+    import strategyos_mvp.llm_qa as llm_qa_module
+
+    prompt = " ".join(llm_qa_module.SYSTEM_PROMPT.split())
+    assert "not yours to make" in prompt
+    assert "personnel" in prompt
+    assert "Do not answer these by reporting which data is missing" in prompt
+
+
+def test_prompt_requires_executive_rounded_money():
+    """Chat quoted "SAR 385,079,908.90"; the dashboard says "SAR 385.1M"."""
+    import strategyos_mvp.llm_qa as llm_qa_module
+
+    prompt = llm_qa_module.SYSTEM_PROMPT
+    assert "round to millions or thousands" in prompt
+    assert "SAR 385,079,908.90" in prompt  # named as the thing NOT to do
+
+
+def test_prompt_answers_every_part_of_a_multi_part_question():
+    """"Revenue and the capital of Japan?" answered only revenue, dropped Tokyo."""
+    import strategyos_mvp.llm_qa as llm_qa_module
+
+    prompt = " ".join(llm_qa_module.SYSTEM_PROMPT.split())
+    assert "more than one thing in a single message" in prompt
+    assert "Never silently drop a question" in prompt
+
+
+def test_prompt_speaks_business_terms_not_run_status():
+    """"the run status is awaiting_review" leaked into "what should I do tomorrow?"."""
+    import strategyos_mvp.llm_qa as llm_qa_module
+
+    prompt = " ".join(llm_qa_module.SYSTEM_PROMPT.split())
+    assert "not system terms" in prompt
+    assert "awaiting sign-off" in prompt
