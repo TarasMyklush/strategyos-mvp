@@ -181,6 +181,16 @@ def _finding_claims(
                     source=_source(truth_source, "strategyos_findings.pattern_type", "governed_artifact.findings.pattern_type"),
                     derivation="controlled_pattern_label",
                 ),
+                # An executive knows their vendors; they do not know their
+                # invoice numbers. The finding carries the counterparty and the
+                # assistant already quotes it -- the card had no way to.
+                "counterparty": claim(
+                    str(row.get("vendor_name") or "").strip() or None,
+                    claim_class=_claim_class(truth_source, "fact"),
+                    run_id=run_id,
+                    as_of=as_of,
+                    source=_source(truth_source, "strategyos_findings.vendor_name", "governed_artifact.findings.vendor_name"),
+                ),
                 "recoverable_sar": claim(
                     recoverable,
                     claim_class=_claim_class(truth_source, "fact"),

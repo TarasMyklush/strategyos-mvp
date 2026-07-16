@@ -278,24 +278,24 @@
       pre: {
         state: 'pre',
         title: 'Pre-board preparation',
-        summary: 'Prepare one board-safe packet for CEO review by resolving challenged evidence, tightening supplementary answers, and confirming the release posture.',
-        note: 'Keep the packet inside the executive lane until challenged evidence is closed and supplementary answers are board-ready.',
+        summary: 'Get one board-ready pack together: close out the questioned items, tighten the follow-up answers, and confirm who has signed it off.',
+        note: 'Keep the pack to this executive view until the questioned items are closed and the follow-up answers are ready for the board.',
         primary_actions: ['prepare_board_pack', 'capture_reviewer_decision'],
         secondary_actions: ['inspect_report_preview', 'review_supplementary_questions']
       },
       live: {
         state: 'live',
         title: 'Live board session',
-        summary: 'Operate only inside the approved packet while questions stay linked to challenged evidence and governed release posture.',
-        note: 'Stay inside the approved packet while the room is live and route every answer back to governed evidence.',
+        summary: 'Work only inside the approved board pack, keeping every answer linked to its evidence and its sign-off status.',
+        note: 'Stay inside the approved board pack while the meeting is live, and trace every answer back to its source.',
         primary_actions: ['capture_reviewer_decision', 'inspect_board_pack_status'],
         secondary_actions: ['open_supplementary_rail', 'freeze_live_answers']
       },
       closed: {
         state: 'closed',
-        title: 'Closed / frozen snapshot',
-        summary: 'Keep the board memory frozen and bounded to approved outputs after the session closes.',
-        note: 'The room is closed now; preserve the frozen record and work follow-ups outside the board surface.',
+        title: 'Closed — record kept as it was',
+        summary: 'After the meeting closes, the record is kept exactly as it was and shows only what was approved.',
+        note: 'The meeting is closed. The record stays as it was; take any follow-ups outside this view.',
         primary_actions: ['inspect_frozen_snapshot', 'review_board_memory'],
         secondary_actions: ['compare_packet_release', 'check_follow_up_obligations']
       }
@@ -1064,19 +1064,28 @@
     return (state.latestPacket && state.latestPacket.publication) || {};
   }
 
+  // This page counts MODULES -- capabilities of the product, like the board
+  // room memory or the reviewer console. The AI team page counts ASSISTANTS --
+  // Hermes, Atlas, Iris and the rest. Both used to say "working", so the two
+  // pages reported "3 working" and "0 working now" about the same company at
+  // the same moment, and an executive who noticed had every reason to stop
+  // trusting the arithmetic. They are different things and are now named as
+  // different things.
   function getAssistantNetworkMeta() {
     var modules = getAgentsModule();
     var summary = modules.summary || {};
-    var activity = getAgentActivitySummary();
     var runningCount = Number(firstDefined(summary.running_count, safeArray(getRunningAgents()).length, 0)) || 0;
     var discoverableCount = Number(firstDefined(summary.discoverable_count, safeArray(modules.discoverable).length, 0)) || 0;
     var approvalCount = Number(firstDefined(summary.approval_count, safeArray(modules.approvals).length, 0)) || 0;
     return {
-      label: "Governed Assistant Network",
+      label: "What this workspace covers",
       hint: firstDefined(
-        activity.line,
-        runningCount ? runningCount + " active module" + (runningCount === 1 ? "" : "s") + " · " + discoverableCount + " discoverable · " + approvalCount + " approval gate" + (approvalCount === 1 ? "" : "s") : "",
-        "Assistant status is not available yet."
+        runningCount
+          ? runningCount + " capability" + (runningCount === 1 ? "" : " areas") + " switched on · "
+            + discoverableCount + " available to add · "
+            + approvalCount + " step" + (approvalCount === 1 ? "" : "s") + " waiting on a person"
+          : "",
+        "Coverage is not available yet."
       ),
       running_count: runningCount,
       discoverable_count: discoverableCount,
@@ -1779,9 +1788,9 @@
     }
     var executiveBasis = executiveEvidenceBasis(basis);
     var confidence = groundingStatus === "grounded"
-      ? "Grounded"
+      ? "Traced to source"
       : (groundingStatus === "needs_evidence" || groundingStatus === "not_grounded"
-        ? "Needs evidence"
+        ? "Source missing"
         : executiveEvidenceConfidence(riskLevel, citations.length));
     if (executiveBasis && !modelProvided) parts.push("Evidence basis: " + executiveBasis);
     if (!modelProvided && calculations.length) parts.push("Calculation: " + calculations.length + " check" + (calculations.length === 1 ? "" : "s") + " reconciled");
@@ -2017,20 +2026,54 @@
     console.error("[Hermes] assistant transport failure", details);
   }
 
+  // A failure the reader can act on has to say what actually failed. Every
+  // failure used to read "could not reach the shared assistant service" -- so
+  // an expired sign-in, which is fixed by signing in again, was reported as a
+  // service outage the executive could only wait out. Retrying forever was the
+  // one thing that could not work.
+  function assistantFailureCopy(errorType, statusCode) {
+    var status = Number(statusCode) || 0;
+    if (errorType === "auth_error" || status === 401) {
+      return {
+        answer: "Your sign-in has expired. Sign in again to carry on the conversation.",
+        retryable: false
+      };
+    }
+    if (errorType === "forbidden" || status === 403) {
+      return {
+        answer: "Your account does not have access to this. Ask your administrator to grant it.",
+        retryable: false
+      };
+    }
+    if (errorType === "timeout") {
+      return {
+        answer: "That took too long to come back. Ask again, or try a narrower question.",
+        retryable: true
+      };
+    }
+    return {
+      answer: "Hermes could not reach the shared assistant service. Retry now once the service is reachable.",
+      retryable: true
+    };
+  }
+
   function makeAssistantFailureResult(message, details) {
     var metadata = details || {};
+    var errorType = firstDefined(metadata.errorType, "transport_failure");
+    var statusCode = firstDefined(metadata.statusCode, "");
+    var copy = assistantFailureCopy(errorType, statusCode);
     var result = {
       ok: false,
-      answer: "Hermes could not reach the shared assistant service. Retry now once the service is reachable.",
+      answer: copy.answer,
       endpoint: firstDefined(metadata.endpoint, "/assistant/chat"),
-      statusCode: firstDefined(metadata.statusCode, ""),
+      statusCode: statusCode,
       requestId: firstDefined(metadata.requestId, ""),
-      errorType: firstDefined(metadata.errorType, "transport_failure"),
+      errorType: errorType,
       retryPrompt: String(message || "").trim(),
-      retryable: true,
-      needsRetry: true,
+      retryable: copy.retryable,
+      needsRetry: copy.retryable,
       autoRetryEligible: false,
-      transient: true
+      transient: copy.retryable
     };
     logAssistantTransportFailure({
       endpoint: result.endpoint,
@@ -2923,7 +2966,7 @@
       var pendingCount = network.filter(function (item) { return Number(item.statusRank) === 1; }).length;
       var blockedCount = network.filter(function (item) { return Number(item.statusRank) >= 2; }).length;
       var activeFilter = state.networkStatusFilter || "all";
-      var filterLabels = { all: "All AI leaders", running: "Working", pending: "Waiting", blocked: "Needs review" };
+      var filterLabels = { all: "All capabilities", running: "Switched on", pending: "Waiting on a person", blocked: "Needs review" };
       function networkStatusKey(item) {
         return Number(item.statusRank) === 0 ? "running" : Number(item.statusRank) === 1 ? "pending" : "blocked";
       }
@@ -2937,11 +2980,11 @@
           }).join('') + '</div></div>'
         : '';
       card.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">AI leadership team</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'Your AI leadership team')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'AI leaders supporting the current board review.')) + '</p></div><div class="network-filter-wrap"><button type="button" class="pill-inline ok network-module-toggle" id="network-module-toggle" aria-haspopup="menu" aria-expanded="' + (state.networkFilterMenuOpen ? 'true' : 'false') + '">' + escapeHtml(filterLabels[activeFilter] || 'All AI leaders') + ' · ' + escapeHtml(String(filteredNetwork.length)) + '</button>' + (state.networkFilterMenuOpen ? '<div class="network-filter-menu" role="menu" aria-label="Filter AI leaders"><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'all' ? 'true' : 'false') + '" data-network-menu-filter="all">All AI leaders</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'running' ? 'true' : 'false') + '" data-network-menu-filter="running">Working</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'pending' ? 'true' : 'false') + '" data-network-menu-filter="pending">Waiting</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'blocked' ? 'true' : 'false') + '" data-network-menu-filter="blocked">Needs review</button></div>' : '') + '</div></div>',
-        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? runningCount : '—')) + '</strong><span>Working now</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="running">' + escapeHtml(String(runningCount)) + ' working</span><span class="pill-inline warn" data-network-filter="pending">' + escapeHtml(String(pendingCount)) + ' waiting</span><span class="pill-inline danger" data-network-filter="blocked">' + escapeHtml(String(blockedCount)) + ' need review</span></div></div>',
+        '<div class="detail-head"><div><p class="detail-eyebrow">Workspace coverage</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'What this workspace covers')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'AI leaders supporting the current board review.')) + '</p></div><div class="network-filter-wrap"><button type="button" class="pill-inline ok network-module-toggle" id="network-module-toggle" aria-haspopup="menu" aria-expanded="' + (state.networkFilterMenuOpen ? 'true' : 'false') + '">' + escapeHtml(filterLabels[activeFilter] || 'All capabilities') + ' · ' + escapeHtml(String(filteredNetwork.length)) + '</button>' + (state.networkFilterMenuOpen ? '<div class="network-filter-menu" role="menu" aria-label="Filter AI leaders"><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'all' ? 'true' : 'false') + '" data-network-menu-filter="all">All capabilities</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'running' ? 'true' : 'false') + '" data-network-menu-filter="running">Working</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'pending' ? 'true' : 'false') + '" data-network-menu-filter="pending">Waiting</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'blocked' ? 'true' : 'false') + '" data-network-menu-filter="blocked">Needs review</button></div>' : '') + '</div></div>',
+        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? runningCount : '—')) + '</strong><span>Switched on</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="running">' + escapeHtml(String(runningCount)) + ' switched on</span><span class="pill-inline warn" data-network-filter="pending">' + escapeHtml(String(pendingCount)) + ' waiting on a person</span><span class="pill-inline danger" data-network-filter="blocked">' + escapeHtml(String(blockedCount)) + ' need review</span></div></div>',
         '<div class="network-list" id="network-module-list" data-active-filter="' + escapeHtml(activeFilter) + '"><div class="network-list-head"><span class="sr-only">Status</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">State</span><span class="network-list-head__stat">Business output</span><span class="network-list-head__stat">Decision / scope</span></div></div>' + filteredNetwork.map(function (item, index) {
           return '<div class="network-row" data-network-idx="' + index + '" data-network-status="' + escapeHtml(networkStatusKey(item)) + '" role="button" tabindex="0" title="Ask ' + escapeHtml(firstDefined(item.assistant, 'this assistant')) + ' about its current work"><div class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(statusLabel(item.tone)) + '"><strong>●</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="State"><span class="network-stat-value">' + escapeHtml(firstDefined(item.stateLabel, 'Current')) + '</span></span><span aria-label="Business output"><span class="network-stat-value">' + escapeHtml(firstDefined(item.businessOutput, 'No output reported')) + '</span></span><span aria-label="Decision or scope"><span class="network-stat-value">' + escapeHtml(firstDefined(item.decisionScope, 'No action needed')) + '</span></span></div></div>';
-        }).join('') + (!network.length ? '<div class="network-row"><div class="network-score-badge tone-warn"><strong>—</strong></div><div class="network-row__main"><div class="network-row__head"><strong>No current team activity</strong><span>· Ready for review</span></div><p class="list-copy">Your AI leaders have no new work to present for this board review.</p></div><div class="network-stats"><span><span class="network-stat-value">Ready</span></span><span><span class="network-stat-value">No update</span></span><span><span class="network-stat-value">No action needed</span></span></div></div>' : '') + (network.length && !filteredNetwork.length ? '<div class="network-empty">No AI leaders match this filter.</div>' : '') + '</div>' + catalogueHtml
+        }).join('') + (!network.length ? '<div class="network-row"><div class="network-score-badge tone-warn"><strong>—</strong></div><div class="network-row__main"><div class="network-row__head"><strong>No capabilities are switched on</strong><span>· Nothing to show</span></div><p class="list-copy">This workspace has no capability areas running for this review.</p></div><div class="network-stats"><span><span class="network-stat-value">Ready</span></span><span><span class="network-stat-value">No update</span></span><span><span class="network-stat-value">No action needed</span></span></div></div>' : '') + (network.length && !filteredNetwork.length ? '<div class="network-empty">No capabilities match this filter.</div>' : '') + '</div>' + catalogueHtml
       ].join('');
       // Bug 3 fix: bind click handlers to network rows so they open the
       // Hermes drawer with a contextual prompt about the clicked module.
@@ -3529,7 +3572,7 @@
     // Board-gate labels must remain a single, centred word inside the same
     // 128px reference ring across every governed state (DB, RUN, OPEN, REVIEW).
     $("hero-score").classList.toggle("hero-score__value--compact", heroScoreText.length > 4);
-    $("hero-cap").textContent = reviewGate ? "human gate" : firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "plan health");
+    $("hero-cap").textContent = reviewGate ? "needs sign-off" : firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "status");
     var scoreMedallion = $("hero-score").closest ? $("hero-score").closest(".hero-score") : null;
     if (scoreMedallion) {
       scoreMedallion.classList.toggle("is-status", !hasScore);
@@ -3598,10 +3641,10 @@
     var source = firstDefined(explicit.source, provenance && provenance.source, "");
     var explicitStatus = String(firstDefined(explicit.status, "")).toLowerCase();
     var grounded = explicitStatus === "grounded" || (!explicitStatus && provenance && provenance.complete === true && source);
-    var label = grounded ? "Grounded ✓" : "Needs evidence ⚠";
+    var label = grounded ? "Traced to source ✓" : "Source missing ⚠";
     var title = grounded
-      ? "Traceable to " + String(source || "the governed source")
-      : "This metric is not fully traceable to governed evidence yet.";
+      ? "Traced to " + String(source || "its source document")
+      : "This figure cannot yet be traced back to a source document.";
     return '<span class="grounding-badge grounding-badge--' + (grounded ? 'grounded' : 'needs-evidence') + '" title="' + escapeHtml(title) + '">' + label + '</span>';
   }
 
@@ -3821,7 +3864,7 @@
         return (index ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
       }).join(' ');
     };
-    var accessibleLabels = labels.length === actual.length ? labels.join(', ') : actual.length + ' governed reporting periods';
+    var accessibleLabels = labels.length === actual.length ? labels.join(', ') : actual.length + ' reporting periods';
     var latestIndex = actual.length - 1;
     var priorIndex = actual.length - 2;
     var latest = actual[latestIndex];
@@ -3863,7 +3906,7 @@
         return '<div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--down">↘</span><strong>' + escapeHtml(firstDefined(item && item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item && item.delta, '')) + '</small></div>';
       }).join('') + '</div>');
     }
-    return '<section class="kpi-movement' + (rows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><span class="kpi-brief-label">What changed</span><small>Contribution by account in the two latest governed periods</small></div>' + (rows.length ? rows.join('') : '<p>No category-level movement is available for the selected reporting periods.</p>') + '</section>';
+    return '<section class="kpi-movement' + (rows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><span class="kpi-brief-label">What changed</span><small>Contribution by account in the two most recent periods</small></div>' + (rows.length ? rows.join('') : '<p>No category-level movement is available for the selected reporting periods.</p>') + '</section>';
   }
 
   function kpiCompositionMarkup(key, brief, drivers) {
@@ -3923,7 +3966,7 @@
     var auditSources = safeArray(audit.source_titles);
     var trendMarkup = kpiTrendChartMarkup(driver);
     if (!trendMarkup) {
-      trendMarkup = '<section class="kpi-trend kpi-trend--empty"><span class="kpi-brief-label">Reporting trajectory</span><p>At least two governed reporting periods are needed before StrategyOS can show movement. No plan line has been supplied.</p></section>';
+      trendMarkup = '<section class="kpi-trend kpi-trend--empty"><span class="kpi-brief-label">Reporting trajectory</span><p>At least two reporting periods are needed before a trend can be shown. No approved budget has been supplied.</p></section>';
     }
     // Use the same governed percentage contract as the dashboard gauge. Some
     // KPIs intentionally leave the legacy `pct` field null and expose their
@@ -4332,7 +4375,7 @@
     var boardReleased = Boolean(reconciliation.publish_gate_passed) && /^(approved|published|released|frozen)$/.test(String(firstDefined(publication.publish_state, "")).toLowerCase());
     if (state.activePersona === "board" && !boardReleased) {
       if (note) note.textContent = "This packet has not been released to the Board Room.";
-      portal.innerHTML = '<div class="board-release-hold"><p class="detail-eyebrow">Release gate</p><h3 class="board-title">Packet awaiting CEO release</h3><p class="board-copy">No live diagnostics, working evidence, or pre-board figures are visible in Board Room. The approved packet will appear here only after the governed release decision is recorded.</p><span class="pill-inline warn">Not released</span></div>';
+      portal.innerHTML = '<div class="board-release-hold"><p class="detail-eyebrow">Release gate</p><h3 class="board-title">Board pack awaiting your sign-off</h3><p class="board-copy">No live diagnostics, working evidence, or pre-board figures are visible in Board Room. The approved board pack will appear here only after someone signs it off.</p><span class="pill-inline warn">Not released</span></div>';
       return;
     }
     var stateSpecific = '';
@@ -4499,7 +4542,7 @@
     var displayedFindingCount = Number(firstDefined(reconciliation.displayed_finding_count, findings.length)) || findings.length;
     var reconciliationHtml = '';
     if (totalFindingCount > displayedFindingCount || remainingRecoverable > 0) {
-      reconciliationHtml = '<div class="rail-reconcile"><span>Showing ' + escapeHtml(String(displayedFindingCount)) + ' of ' + escapeHtml(String(totalFindingCount)) + ' cases: ' + escapeHtml(formatSar(displayedRecoverable)) + '</span>' + (remainingRecoverable > 0 ? '<span>' + escapeHtml(String(totalFindingCount - displayedFindingCount)) + ' other governed cases: ' + escapeHtml(formatSar(remainingRecoverable)) + '</span>' : '') + '<strong>Total recoverable value: ' + escapeHtml(formatSar(totalRecoverable)) + '</strong></div>';
+      reconciliationHtml = '<div class="rail-reconcile"><span>Showing ' + escapeHtml(String(displayedFindingCount)) + ' of ' + escapeHtml(String(totalFindingCount)) + ' cases: ' + escapeHtml(formatSar(displayedRecoverable)) + '</span>' + (remainingRecoverable > 0 ? '<span>' + escapeHtml(String(totalFindingCount - displayedFindingCount)) + ' other checked cases: ' + escapeHtml(formatSar(remainingRecoverable)) + '</span>' : '') + '<strong>Total recoverable value: ' + escapeHtml(formatSar(totalRecoverable)) + '</strong></div>';
     }
     var renderToggleList = function (items, kind) {
       return items.map(function (item, index) {

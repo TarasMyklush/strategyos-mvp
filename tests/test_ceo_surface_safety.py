@@ -1088,7 +1088,10 @@ def test_board_portal_state_note_uses_unique_support_copy():
     assert "function boardStateSupportNote(board)" in js, (
         "Board Portal should derive a distinct support note for lifecycle guidance"
     )
-    assert "Keep the packet inside the executive lane until challenged evidence is closed" in js, (
+    # The invariant is that each stage's note is DISTINCT from its summary --
+    # not that it uses one particular sentence. Pinning the sentence made a
+    # plain-English rewrite look like a regression while the guarantee held.
+    assert "Keep the pack to this executive view until the questioned items are closed" in js, (
         "Pre-board support note should give unique CEO guidance instead of repeating the card summary"
     )
     assert "return boardStateDetailForRender(resolveBoardState(), board).note;" in js, (
@@ -2232,3 +2235,146 @@ def test_execution_log_styles_are_served():
     css = _static_executive_css()
     for selector in (".agent-trail", ".trail-item", ".trail-quote", ".trail-note", ".trail-foot"):
         assert selector in css, f"missing style for {selector}"
+
+
+def test_capability_page_and_ai_team_page_never_share_the_word_working():
+    """The bug: "3 WORKING" on one page, "0 working now" on the other.
+
+    One page counts product capabilities (board room memory, reviewer console);
+    the other counts assistants (Hermes, Atlas, Iris). Both said "working", so
+    they contradicted each other about the same company at the same moment. An
+    executive who notices has every reason to stop trusting the arithmetic.
+    """
+    js = _static_executive_js()
+    # The capability card must not borrow the AI team's vocabulary.
+    assert "Governed Assistant Network" not in js
+    assert "All AI leaders" not in js
+    assert "What this workspace covers" in js
+    assert "capability" in js
+    # The AI team page keeps "working now" -- it really does count assistants.
+    assert "working now" in js
+
+
+def test_executive_surface_speaks_english_not_pipeline():
+    """Words an executive cannot be expected to know, on their own dashboard."""
+    js = _static_executive_js()
+    for jargon in (
+        "Grounded ✓",
+        "Needs evidence ⚠",
+        "bounded KPI layer",
+        "release posture",
+        "human gate",
+    ):
+        assert jargon not in js, f"pipeline jargon on the CEO surface: {jargon}"
+
+
+def test_grounding_badge_says_what_it_means():
+    js = _static_executive_js()
+    assert "Traced to source ✓" in js
+    assert "Source missing ⚠" in js
+
+
+def test_expired_sign_in_is_reported_as_expired_sign_in():
+    """The live failure: an expired token read as a service outage.
+
+    Every assistant failure said "could not reach the shared assistant
+    service", so a session that had simply timed out looked like a broken
+    product, and the advice -- retry -- was the one thing that could never fix
+    it.
+    """
+    js = _static_executive_js()
+    assert "function assistantFailureCopy(errorType, statusCode)" in js
+    assert "Your sign-in has expired. Sign in again to carry on the conversation." in js
+    # An expired sign-in is not retryable: retrying is what wasted the reader's time.
+    assert 'if (errorType === "auth_error" || status === 401)' in js
+    # The failure builder must consult it rather than hardcoding one sentence.
+    assert "var copy = assistantFailureCopy(errorType, statusCode);" in js
+    assert "answer: copy.answer," in js
+
+
+def test_forbidden_and_timeout_say_what_they_are():
+    js = _static_executive_js()
+    assert "Your account does not have access to this." in js
+    assert "That took too long to come back." in js
+
+
+def _ready_hero_read_model(recoverable: float, finding_count: int):
+    return {
+        "data_status": "ready",
+        "metrics": {
+            "recoverable_total": {"value": recoverable},
+            "challenged_count": {"value": 0},
+            "report_count": {"value": 1},
+            "citation_resolution": {"value": {"total": 41, "resolved": 40}},
+        },
+        "lifecycle": {"approval_status": {"value": "pending"}},
+        "findings": [{"finding_id": {"value": f"F-{i:03d}"}} for i in range(finding_count)],
+    }
+
+
+def test_hero_leads_with_the_business_not_our_workflow():
+    """"Reviewer decision is still open" is our process, not their company."""
+    from strategyos_mvp.executive_presentation import _hero
+
+    hero = _hero(_ready_hero_read_model(794108.0, 8), drivers=[{"availability": "available"}])
+    assert hero["label"] == "SAR 794K identified across 8 issues"
+    # The sign-off is the qualifier, and it keeps its place in the body.
+    assert "sign it off" in hero["body"]
+
+
+def test_hero_does_not_manufacture_a_headline_when_nothing_was_found():
+    from strategyos_mvp.executive_presentation import _hero
+
+    hero = _hero(_ready_hero_read_model(0.0, 0), drivers=[{"availability": "available"}])
+    assert hero["label"] == "Reviewer decision is still open"
+
+
+def test_a_finding_names_the_counterparty_an_executive_recognises():
+    """"INV-2026-0341" tells a CEO nothing; the vendor tells them who to call."""
+    from strategyos_mvp.executive_read_model import build_executive_read_model
+    from strategyos_mvp.executive_presentation import build_executive_presentation
+
+    read_model = build_executive_read_model(
+        summary={"run_id": "r1", "approval_status": "pending"},
+        finding_rows=[{
+            "finding_id": "F-002",
+            "title": "Duplicate payment for invoice INV-2026-0341",
+            "pattern_type": "duplicate_payment",
+            "vendor_name": "Premier Packaging LLC",
+            "recoverable_sar": 177188.0,
+            "citation_count": 6,
+            "challenged": False,
+        }],
+        audit_summary={},
+        publication={},
+        agent_modules={},
+        truth_source="database",
+    )
+    item = build_executive_presentation(read_model)["sections"]["findings"]["items"][0]
+    assert item["counterparty"] == "Premier Packaging LLC"
+    assert item["detail"].startswith("Premier Packaging LLC · SAR 177K recoverable")
+
+
+def test_a_finding_without_a_counterparty_states_no_counterparty():
+    """Never infer a vendor the run does not carry."""
+    from strategyos_mvp.executive_read_model import build_executive_read_model
+    from strategyos_mvp.executive_presentation import build_executive_presentation
+
+    read_model = build_executive_read_model(
+        summary={"run_id": "r1", "approval_status": "pending"},
+        finding_rows=[{
+            "finding_id": "F-009",
+            "title": "Unallocated variance",
+            "pattern_type": "variance",
+            "recoverable_sar": 1000.0,
+            "citation_count": 1,
+            "challenged": False,
+        }],
+        audit_summary={},
+        publication={},
+        agent_modules={},
+        truth_source="database",
+    )
+    item = build_executive_presentation(read_model)["sections"]["findings"]["items"][0]
+    assert item["counterparty"] is None
+    assert item["detail"].startswith("SAR 1K recoverable")

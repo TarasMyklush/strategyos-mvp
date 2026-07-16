@@ -31,6 +31,40 @@ def _format_sar(value: Any) -> str:
     return f"SAR {round(number):,}"
 
 
+def _as_money(value: Any) -> float | None:
+    """A money figure the run actually carries, or nothing."""
+    if value in (None, ""):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _headline_with_value(
+    recoverable_total: float | None,
+    finding_count: int,
+    *,
+    fallback: str,
+) -> str:
+    """Lead the hero with what was found, not with where it sits in our workflow.
+
+    "Reviewer decision is still open" describes the state of this product. An
+    executive opening the page wants the state of their business: money
+    identified, and how many issues carry it. The sign-off is the qualifier and
+    belongs in the sentence below, not in the headline.
+
+    When the run proves no recoverable value, there is no business fact to lead
+    with and the workflow sentence is the honest headline -- so the caller's
+    fallback stands rather than a manufactured number.
+    """
+    if not recoverable_total or finding_count <= 0:
+        return fallback
+    issue_word = "issue" if finding_count == 1 else "issues"
+    return f"{_format_sar(recoverable_total)} identified across {finding_count} {issue_word}"
+
+
 def _ratio_display(value: Any) -> str:
     if not isinstance(value, Mapping):
         return "--"
@@ -600,6 +634,8 @@ def _hero(
     challenged = int(_claim_value(metrics.get("challenged_count"), 0) or 0)
     reports = int(_claim_value(metrics.get("report_count"), 0) or 0)
     approval_status = str(_claim_value(lifecycle.get("approval_status"), "pending") or "pending").lower()
+    recoverable_total = _as_money(_claim_value(metrics.get("recoverable_total"), None))
+    finding_count = len(list(read_model.get("findings") or []))
     citation_value = _claim_value(metrics.get("citation_resolution"), {}) or {}
     citation_total = int(citation_value.get("total") or 0) if isinstance(citation_value, Mapping) else 0
     citation_resolved = citation_value.get("resolved") if isinstance(citation_value, Mapping) else None
@@ -621,16 +657,27 @@ def _hero(
         )
         status = "finance_data_required"
     elif challenged:
-        label = "Board pack is not yet clean for release"
-        body = f"{challenged} {'item' if challenged == 1 else 'items'} still need evidence closure before executive release."
+        label = _headline_with_value(
+            recoverable_total,
+            finding_count,
+            fallback="Board pack is not yet clean for release",
+        )
+        body = (
+            f"{challenged} {'item' if challenged == 1 else 'items'} still need their evidence closed "
+            "before this can be released to the board."
+        )
         status = "needs_reviewer_closure"
     elif approval_status == "approved" and reports:
         label = "Board pack is approved for release"
         body = f"Approval is recorded and {reports} {'report' if reports == 1 else 'reports'} are ready."
         status = "release_ready"
     elif approval_status in {"pending", "awaiting_review", ""}:
-        label = "Reviewer decision is still open"
-        body = "The finance evidence is ready, but release still depends on human review."
+        label = _headline_with_value(
+            recoverable_total,
+            finding_count,
+            fallback="Reviewer decision is still open",
+        )
+        body = "The finance evidence is ready. A reviewer still has to sign it off before release."
         status = "review_gate"
     else:
         label = "Board pack needs follow-up"
@@ -673,13 +720,19 @@ def _findings(read_model: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict
         displayed_total += recoverable
         citations = int(_claim_value(item.get("citation_count"), 0) or 0)
         challenged = bool(_claim_value(item.get("challenged"), False))
+        # The counterparty is the part an executive recognises. "INV-2026-0341"
+        # means nothing to them; "Premier Packaging LLC" tells them who to call.
+        # Stated only when the run carries it -- never inferred.
+        counterparty = str(_claim_value(item.get("counterparty"), "") or "").strip()
         rows.append(
             {
                 "finding_id": _claim_value(item.get("finding_id"), ""),
                 "title": _claim_value(item.get("title"), "Governed finance finding"),
                 "tag": _claim_value(item.get("pattern_label"), "Governed Finance Finding"),
+                "counterparty": counterparty or None,
                 "detail": (
-                    f"{_format_sar(recoverable)} recoverable"
+                    (f"{counterparty} · " if counterparty else "")
+                    + f"{_format_sar(recoverable)} recoverable"
                     + f" · {citations} supporting {'document' if citations == 1 else 'documents'}"
                     + (" · needs closure" if challenged else "")
                 ),
@@ -706,13 +759,19 @@ def _case_index(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
         recoverable = float(_claim_value(item.get("recoverable_sar"), 0.0) or 0.0)
         citations = int(_claim_value(item.get("citation_count"), 0) or 0)
         challenged = bool(_claim_value(item.get("challenged"), False))
+        # The counterparty is the part an executive recognises. "INV-2026-0341"
+        # means nothing to them; "Premier Packaging LLC" tells them who to call.
+        # Stated only when the run carries it -- never inferred.
+        counterparty = str(_claim_value(item.get("counterparty"), "") or "").strip()
         rows.append(
             {
                 "finding_id": _claim_value(item.get("finding_id"), ""),
                 "title": _claim_value(item.get("title"), "Governed finance finding"),
                 "tag": _claim_value(item.get("pattern_label"), "Governed Finance Finding"),
+                "counterparty": counterparty or None,
                 "detail": (
-                    f"{_format_sar(recoverable)} recoverable"
+                    (f"{counterparty} · " if counterparty else "")
+                    + f"{_format_sar(recoverable)} recoverable"
                     + f" · {citations} supporting {'document' if citations == 1 else 'documents'}"
                     + (" · needs closure" if challenged else "")
                 ),

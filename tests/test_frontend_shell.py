@@ -1079,7 +1079,10 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert 'data-kpi-label=' in js
     assert 'nodeProperties.kpi_key' in js
     assert 'payload.grounding_status' in js
-    assert '? "Grounded"' in js
+    # The badge must be driven by grounding_status. Its wording is copy, not
+    # contract -- pinning the exact word made a plain-English rewrite look like
+    # a regression.
+    assert '? "Traced to source"' in js
     assert "kpi_key:" in js
     assert "How this figure is calculated" in js
     assert "data-kpi-question" in js
@@ -2254,7 +2257,7 @@ console.log(JSON.stringify({{ liveHtml, closedHtml }}));
     assert "What is the downside if EUR strengthens after a 60% hedge?" not in result["liveHtml"], (
         "Selected Live stage must switch out the pre-board supplementary-question panel"
     )
-    assert "Closed / frozen snapshot" in result["closedHtml"]
+    assert "Closed — record kept as it was" in result["closedHtml"]
 
 
 def test_board_portal_pre_board_preserves_visible_lifecycle_actions_and_supplementary_questions():
@@ -2913,7 +2916,11 @@ console.log(JSON.stringify({{
     result = json.loads(completed.stdout.strip())
     assert result["networkCount"] == 4
     assert result["exchangeCount"] == 4
-    assert "4 active module" in result["metaHint"]
+    # The COUNT is the contract; the noun is copy. This page counts product
+    # capabilities, not people -- calling them "working" made it contradict the
+    # AI team page, which counts assistants.
+    assert result["metaHint"].startswith("4 capability")
+    assert "working" not in result["metaHint"]
     assert "Cash recovery watch" in result["html"]
     # Honesty contract: every number on the card is a count of real module
     # states. The old card fabricated per-module "readiness scores"
@@ -2921,11 +2928,15 @@ console.log(JSON.stringify({{
     # the data model.
     assert "Team readiness score" not in result["html"]
     assert "target 80" not in result["html"]
-    assert "Working now" in result["html"]
+    # This card counts capabilities. "Working now" belongs to the AI team page,
+    # which counts assistants; sharing the phrase is what made the two pages
+    # report 3 and 0 about the same moment.
+    assert "Switched on" in result["html"]
+    assert "Working now" not in result["html"]
     # Fixture: running + protected = 2 running; preview_only = 1 pending;
     # blocked = 1 blocked/idle.
-    assert "2 working" in result["html"]
-    assert "1 waiting" in result["html"]
+    assert "2 switched on" in result["html"]
+    assert "1 waiting on a person" in result["html"]
     assert "1 need review" in result["html"]
     for fabricated in ("92", "76", "62", "45"):
         assert ">" + fabricated + "<" not in result["html"], (
@@ -3442,8 +3453,9 @@ def test_persona_title_grounding_badges_and_native_agent_actions_are_visible():
     assert 'moduleId === "board-room-memory"' in executive_js
     assert "CEO brief opened in Assistants" in executive_js
     assert "Board room memory opened" in executive_js
-    assert "Grounded ✓" in executive_js
-    assert "Needs evidence ⚠" in executive_js
+    # Plain English for an executive: "grounded" reads as electrical wiring.
+    assert "Traced to source ✓" in executive_js
+    assert "Source missing ⚠" in executive_js
     assert ".grounding-badge--grounded" in executive_css
     assert ".grounding-badge--needs-evidence" in executive_css
 

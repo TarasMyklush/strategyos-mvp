@@ -2465,27 +2465,27 @@ def _bounded_plan_health_payload(
         return artifact_contracts_payload(contract)
     if challenged_count:
         status = "needs_reviewer_closure"
-        badge = "human gate"
-        label = "Needs reviewer closure"
-        summary_text = f"{challenged_count} challenged case{'s' if challenged_count != 1 else ''} keep the broader plan readout bounded by evidence closure."
+        badge = "needs sign-off"
+        label = "Waiting on a reviewer"
+        summary_text = f"{challenged_count} case{'s' if challenged_count != 1 else ''} still {'need' if challenged_count != 1 else 'needs'} evidence closed before the full picture can be shown."
         tone = "warn"
     elif approval_status == "approved" and artifact_count:
         status = "release_posture_clear"
-        badge = "release posture"
-        label = "Release posture is clear"
-        summary_text = "Finance signal, evidence posture, and board-output readiness are aligned enough for a bounded executive release view."
+        badge = "signed off"
+        label = "Approved for release"
+        summary_text = "The figures, their evidence, and the board pack are all ready to release."
         tone = "ok"
     elif approval_status in {"pending", "awaiting_review", ""}:
         status = "review_gate_visible"
-        badge = "bounded KPI layer"
-        label = "Review gate visible"
-        summary_text = "Value, evidence, and release signals exist, but the workflow is still waiting for human sign-off."
+        badge = "needs sign-off"
+        label = "Waiting on a reviewer"
+        summary_text = "The figures and their evidence are ready. A reviewer still has to sign them off."
         tone = "neutral"
     else:
         status = "bounded_actionable"
-        badge = "bounded KPI layer"
-        label = "Finance signal is actionable"
-        summary_text = "The current packet supports a truthful next-move readout without claiming portfolio-wide strategic compilation."
+        badge = "ready"
+        label = "Figures are ready to act on"
+        summary_text = "These figures are ready to act on. They cover this reporting period only."
         tone = "ok"
     contract = PlanHealthContract(
         status=status,
@@ -3847,9 +3847,9 @@ def _board_portal_payload(
     }.get(presentation_state, {})
     lifecycle_flow = []
     for state_id, label, detail in (
-        ("pre", "Pre-board", "Prepare governed packet"),
-        ("live", "Live", "Run the room inside approved material"),
-        ("closed", "Closed", "Freeze memory after the room closes"),
+        ("pre", "Pre-board", "Get the board pack ready"),
+        ("live", "Live", "Run the meeting on approved material only"),
+        ("closed", "Closed", "Keep the record as it was"),
     ):
         lifecycle_flow.append(
             {
