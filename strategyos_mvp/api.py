@@ -152,6 +152,11 @@ class ReviewerDecisionRequest(BaseModel):
     payload: dict[str, Any] | None = None
 
 
+class FindingDirectiveRequest(BaseModel):
+    finding_id: str
+    note: str | None = None
+
+
 class SourcePackPathRequest(BaseModel):
     folder_path: str
 
@@ -9020,6 +9025,75 @@ def reject_run(
         request=request,
         principal=principal,
     )
+
+
+@app.post("/executive/findings/request-recovery")
+def request_finding_recovery(
+    request: FindingDirectiveRequest,
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> dict[str, Any]:
+    """Record a CEO's directive to recover a finding, for the reviewer to action.
+
+    This is not an approval -- the reviewer gate still owns the status
+    transition. It is the executive putting their intent on the record: "recover
+    this", logged to the run's audit trail with who and when, so the request
+    reaches the reviewer through the governed flow instead of a UI toast that
+    vanishes. A read-only list becomes something the CEO can act on without
+    bypassing the review that makes the number defensible.
+    """
+    if not principal.get("authenticated"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in to request recovery.",
+        )
+    finding_id = str(request.finding_id or "").strip()
+    if not finding_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A finding id is required.",
+        )
+    summary = load_latest_run_summary()
+    run_id = str((summary or {}).get("run_id") or "").strip()
+    if not run_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No current run is loaded to attach this request to.",
+        )
+    # Only accept a directive against a finding this run actually holds; never
+    # log a request for an id the run cannot show.
+    snapshot = state_store.executive_snapshot_for_run(run_id)
+    known_ids = {
+        str(row.get("finding_id") or "")
+        for row in (snapshot.get("findings") or [])
+        if isinstance(row, dict)
+    }
+    if snapshot.get("status") == "ok" and finding_id not in known_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Finding '{finding_id}' is not part of the current run.",
+        )
+    actor = str(principal.get("subject") or principal.get("role") or "executive")
+    note = str(request.note or "").strip()
+    detail = f"Executive requested recovery of {finding_id}."
+    if note:
+        detail = f"{detail} Note: {note}"
+    result = state_store.record_executive_directive(
+        run_id,
+        finding_id=finding_id,
+        action="request_recovery",
+        actor=actor,
+        detail=detail,
+    )
+    if result.get("status") not in {"recorded", "skipped"}:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(result.get("reason") or "Could not record the recovery request."),
+        )
+    return {
+        "status": "requested",
+        "finding_id": finding_id,
+        "message": "Recovery requested. Your reviewer will see this on the finding's audit trail.",
+    }
 
 
 @app.post("/operator/runs/{run_id}/resume")

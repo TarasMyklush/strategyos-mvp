@@ -541,6 +541,14 @@ def executive_snapshot_for_run(run_id: str) -> dict[str, Any]:
                 "recoverable_sar": row.get("recoverable_sar"),
                 "leakage_sar": row.get("leakage_sar"),
                 "owner": str(row.get("vendor_name") or row.get("vendor_id") or ""),
+                # The recommended action and who owns it are written into
+                # finding_json by persist_findings (asdict of the whole Finding),
+                # but were never read back, so the card could only show a value
+                # with no next step. Both are real generated text -- e.g. "AP
+                # should immediately recover the duplicate payment..." -- not
+                # inferred here.
+                "remediation": str(finding_payload.get("remediation") or ""),
+                "rationale": str(finding_payload.get("rationale") or ""),
                 "citation_count": int(row.get("citation_count") or 0),
                 "resolved_citation_count": int(row.get("resolved_citation_count") or 0),
                 "challenged": bool(row.get("challenged")),
@@ -1996,6 +2004,64 @@ def persist_audit_events(cur: Any, run_id: str, audit_events: list[AuditEvent]) 
             ),
         )
     return len(audit_events)
+
+
+def record_executive_directive(
+    run_id: str,
+    *,
+    finding_id: str,
+    action: str,
+    actor: str,
+    detail: str,
+) -> dict[str, Any]:
+    """Log an executive's directive on a finding to the run's audit trail.
+
+    A CEO does not approve recovery -- that gate belongs to the reviewer -- but
+    a CEO can direct that a finding be recovered, and that directive is itself
+    an accountable event: who asked, for what, when. It lands in the same
+    strategyos_agent_events trail the execution log renders, so the request is
+    visible to the reviewer and to the audit record rather than lost in a UI
+    toast. The finding's status is not written here; the governed review flow
+    still owns that transition.
+    """
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+    assert connection is not None
+    normalized_run_id = str(run_id or "").strip()
+    if not normalized_run_id:
+        return {"status": "failed", "reason": "A run id is required to record a directive."}
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into strategyos_agent_events
+                    (run_id, round_no, actor, finding_id, action, detail, event_json)
+                values (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                returning id, created_at
+                """,
+                (
+                    normalized_run_id,
+                    0,
+                    actor,
+                    str(finding_id or ""),
+                    action,
+                    detail,
+                    json_blob(
+                        {
+                            "kind": "executive_directive",
+                            "finding_id": str(finding_id or ""),
+                            "action": action,
+                            "actor": actor,
+                            "detail": detail,
+                        }
+                    ),
+                ),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    return {"status": "recorded", "event": normalize_record(record) if record else None}
 
 
 def persist_artifacts(

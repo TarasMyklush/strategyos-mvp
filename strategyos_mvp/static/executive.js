@@ -816,6 +816,41 @@
     return title;
   }
 
+  // Record the CEO's directive to recover a finding. The button reports its own
+  // outcome inline -- success, an expired sign-in, or a transient failure --
+  // rather than leaving the executive guessing whether the click did anything.
+  async function requestFindingRecovery(button) {
+    var findingId = button.getAttribute("data-finding-approve") || "";
+    if (!findingId || button.disabled) return;
+    var title = button.getAttribute("data-finding-title") || "this finding";
+    var original = button.textContent;
+    button.disabled = true;
+    button.textContent = "Requesting…";
+    try {
+      var headers = authHeaders({});
+      headers["Content-Type"] = "application/json";
+      var response = await fetch("/executive/findings/request-recovery", {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({ finding_id: findingId })
+      });
+      if (response.ok) {
+        button.textContent = "Recovery requested ✓";
+        button.classList.add("rail-inline-action--done");
+        return;
+      }
+      button.disabled = false;
+      if (response.status === 401) {
+        button.textContent = "Sign in again to request";
+      } else {
+        button.textContent = "Couldn't request — retry";
+      }
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = "Couldn't request — retry";
+    }
+  }
+
   async function askAssistant(prompt, sourceChip) {
     var hiddenContext = arguments.length > 2 ? arguments[2] : null;
     var cleanPrompt = String(prompt || "").trim();
@@ -4553,7 +4588,22 @@
           ? 'Project the impact of “' + firstDefined(item.title, 'this development') + '” on the current plan and what I should prepare for the board.'
           : 'Explain why “' + firstDefined(item.title, 'this finding') + '” matters for the board review and what action I should consider.';
         var actionLabel = kind === 'development' ? 'Project impact on plan' : 'Ask why this matters';
-        return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '"' + (findingId ? ' data-finding-id="' + escapeHtml(findingId) + '"' : '') + ' aria-expanded="' + (open ? 'true' : 'false') + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span><span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + '<div class="rail-toggle__actions"><button type="button" class="rail-inline-action" data-rail-prompt="' + escapeHtml(actionPrompt) + '">' + escapeHtml(actionLabel) + '</button></div></div>' : '');
+        // A finding is not a dead end. When the run carries a recommended
+        // action and a state, show them, and offer an approve-recovery control
+        // so the executive can act rather than only read. Both come from the
+        // governed finding; nothing is shown that the run did not provide.
+        var recommended = kind === 'finding' ? firstDefined(item.recommended_action, '') : '';
+        var findingState = kind === 'finding' ? firstDefined(item.state, '') : '';
+        var stateHtml = findingState
+          ? '<span class="rail-state" data-finding-state="' + escapeHtml(findingState.toLowerCase().replace(/[^a-z]+/g, '-')) + '">' + escapeHtml(findingState) + '</span>'
+          : '';
+        var recommendedHtml = recommended
+          ? '<div class="rail-recommended"><span class="rail-recommended__label">Recommended action</span><p>' + escapeHtml(recommended) + '</p></div>'
+          : '';
+        var approveHtml = (kind === 'finding' && findingId)
+          ? '<button type="button" class="rail-inline-action rail-inline-action--primary" data-finding-approve="' + escapeHtml(findingId) + '" data-finding-title="' + escapeHtml(firstDefined(item.title, 'this finding')) + '">Approve recovery</button>'
+          : '';
+        return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '"' + (findingId ? ' data-finding-id="' + escapeHtml(findingId) + '"' : '') + ' aria-expanded="' + (open ? 'true' : 'false') + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span>' + stateHtml + '<span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + recommendedHtml + '<div class="rail-toggle__actions">' + approveHtml + '<button type="button" class="rail-inline-action" data-rail-prompt="' + escapeHtml(actionPrompt) + '">' + escapeHtml(actionLabel) + '</button></div></div>' : '');
       }).join('');
     };
 
@@ -4587,6 +4637,12 @@
           button.onclick = function (event) {
             event.stopPropagation();
             askAssistant(button.getAttribute('data-rail-prompt') || '', button);
+          };
+        });
+        safeArray(panel && panel.querySelectorAll('[data-finding-approve]')).forEach(function (button) {
+          button.onclick = function (event) {
+            event.stopPropagation();
+            requestFindingRecovery(button);
           };
         });
       });

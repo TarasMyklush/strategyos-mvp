@@ -83,6 +83,28 @@ def _safe_label(value: Any, fallback: str) -> str:
     return text.title() if text else fallback
 
 
+# The finding status enum is written for the pipeline (draft, locked,
+# challenged...). An executive reads where a decision sits, not the internal
+# token. Unknown states fall through to a title-cased form rather than being
+# dropped, so a new status never renders blank.
+_FINDING_STATE_LABELS = {
+    "draft": "Ready for your review",
+    "locked": "Ready for your review",
+    "challenged": "Being checked",
+    "disputed": "Being checked",
+    "approved": "Approved for recovery",
+    "rejected": "Set aside",
+    "blocked": "Blocked — evidence needed",
+}
+
+
+def _finding_state_label(status: Any) -> str | None:
+    text = str(status or "").strip().casefold()
+    if not text:
+        return None
+    return _FINDING_STATE_LABELS.get(text) or _safe_label(text, "Ready for your review")
+
+
 def _iso_or_none(value: Any) -> str | None:
     if value is None:
         return None
@@ -202,6 +224,24 @@ def _finding_claims(
                     run_id=run_id,
                     as_of=as_of,
                     source=_source(truth_source, "strategyos_findings.recoverable_sar", "governed_artifact.findings.recoverable_sar"),
+                ),
+                # The recommended action, generated with the finding and stored
+                # in it. Surfacing it is what turns a read-only value into
+                # something the executive can act on.
+                "recommended_action": claim(
+                    str(row.get("remediation") or "").strip() or None,
+                    claim_class=_claim_class(truth_source, "fact"),
+                    run_id=run_id,
+                    as_of=as_of,
+                    source=_source(truth_source, "strategyos_findings.finding_json.remediation", "governed_artifact.findings.remediation"),
+                ),
+                # The finding's own lifecycle state, in words an executive reads.
+                "state": claim(
+                    _finding_state_label(row.get("status")),
+                    claim_class=_claim_class(truth_source, "fact"),
+                    run_id=run_id,
+                    as_of=as_of,
+                    source=_source(truth_source, "strategyos_findings.status", "governed_artifact.audit_log.current_state"),
                 ),
                 "citation_count": claim(
                     citation_count,

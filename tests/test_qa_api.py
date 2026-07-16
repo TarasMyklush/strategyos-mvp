@@ -4137,3 +4137,73 @@ def test_a_compound_question_defers_so_both_parts_are_answered():
     # Plain KPI questions are unaffected.
     assert api_module._free_text_ceo_kpi_key("What is our revenue?", {}) == "revenue"
     assert api_module._free_text_ceo_kpi_key("What is our EBITDA margin?", {}) == "ebitda_margin"
+
+
+def test_request_recovery_requires_sign_in():
+    """An unauthenticated caller cannot log a directive against the run."""
+    client = TestClient(api_module.app)
+    response = client.post(
+        "/executive/findings/request-recovery",
+        json={"finding_id": "F-002"},
+    )
+    assert response.status_code == 401
+
+
+def test_request_recovery_records_a_directive_for_a_known_finding(monkeypatch):
+    """The CEO's click lands on the run's audit trail via record_executive_directive."""
+    original, client = _client_with_public_ceo_surface()
+    try:
+        monkeypatch.setattr(
+            auth_module, "_introspect_identity_token",
+            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": "strategyos"},
+        )
+        monkeypatch.setattr(api_module, "load_latest_run_summary", lambda: {"run_id": "run-x"})
+        monkeypatch.setattr(
+            api_module.state_store, "executive_snapshot_for_run",
+            lambda run_id: {"status": "ok", "findings": [{"finding_id": "F-002"}]},
+        )
+        recorded = {}
+        def _fake_directive(run_id, *, finding_id, action, actor, detail):
+            recorded.update({"run_id": run_id, "finding_id": finding_id, "action": action, "actor": actor})
+            return {"status": "recorded", "event": {"id": "evt-1"}}
+        monkeypatch.setattr(api_module.state_store, "record_executive_directive", _fake_directive)
+
+        response = client.post(
+            "/executive/findings/request-recovery",
+            json={"finding_id": "F-002"},
+            headers={"Authorization": "Bearer executive-token"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "requested"
+        assert recorded == {"run_id": "run-x", "finding_id": "F-002", "action": "request_recovery", "actor": "idp:ceo"}
+    finally:
+        _restore_env(original)
+
+
+def test_request_recovery_rejects_a_finding_not_in_the_run(monkeypatch):
+    """Never log a directive for an id the current run does not hold."""
+    original, client = _client_with_public_ceo_surface()
+    try:
+        monkeypatch.setattr(
+            auth_module, "_introspect_identity_token",
+            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": "strategyos"},
+        )
+        monkeypatch.setattr(api_module, "load_latest_run_summary", lambda: {"run_id": "run-x"})
+        monkeypatch.setattr(
+            api_module.state_store, "executive_snapshot_for_run",
+            lambda run_id: {"status": "ok", "findings": [{"finding_id": "F-002"}]},
+        )
+        called = {"n": 0}
+        monkeypatch.setattr(
+            api_module.state_store, "record_executive_directive",
+            lambda *a, **k: called.update(n=called["n"] + 1) or {"status": "recorded"},
+        )
+        response = client.post(
+            "/executive/findings/request-recovery",
+            json={"finding_id": "F-999"},
+            headers={"Authorization": "Bearer executive-token"},
+        )
+        assert response.status_code == 404
+        assert called["n"] == 0, "must not record a directive for an unknown finding"
+    finally:
+        _restore_env(original)
