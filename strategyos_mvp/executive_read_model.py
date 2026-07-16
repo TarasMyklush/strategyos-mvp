@@ -184,8 +184,13 @@ def _finding_claims(
                 # An executive knows their vendors; they do not know their
                 # invoice numbers. The finding carries the counterparty and the
                 # assistant already quotes it -- the card had no way to.
+                #
+                # The two truth sources name it differently: the database reader
+                # projects vendor_name to "owner", while the governed artifact
+                # keeps "vendor_name". Reading only one is how this arrived live
+                # as a fix that worked in tests and did nothing on the page.
                 "counterparty": claim(
-                    str(row.get("vendor_name") or "").strip() or None,
+                    str(row.get("vendor_name") or row.get("owner") or "").strip() or None,
                     claim_class=_claim_class(truth_source, "fact"),
                     run_id=run_id,
                     as_of=as_of,

@@ -2378,3 +2378,41 @@ def test_a_finding_without_a_counterparty_states_no_counterparty():
     item = build_executive_presentation(read_model)["sections"]["findings"]["items"][0]
     assert item["counterparty"] is None
     assert item["detail"].startswith("SAR 1K recoverable")
+
+
+def test_counterparty_is_read_from_the_database_row_shape():
+    """The live failure: the fix worked in tests and did nothing on the page.
+
+    state_store projects Finding.vendor_name into a key called "owner" for the
+    database path, while the governed-artifact path keeps "vendor_name". My
+    fixture used vendor_name only, so the test passed while prod -- which reads
+    the database -- showed no counterparty at all.
+    """
+    from strategyos_mvp.executive_read_model import build_executive_read_model
+    from strategyos_mvp.executive_presentation import build_executive_presentation
+
+    read_model = build_executive_read_model(
+        summary={"run_id": "r1", "approval_status": "pending"},
+        # Exactly what state_store.executive_snapshot_for_run emits.
+        finding_rows=[{
+            "finding_id": "F-002",
+            "title": "Duplicate payment for invoice INV-2026-0341",
+            "pattern_type": "duplicate_payment",
+            "classification": "",
+            "confidence": "HIGH",
+            "status": "draft",
+            "recoverable_sar": 177188.0,
+            "leakage_sar": 177188.0,
+            "owner": "Premier Packaging LLC",
+            "citation_count": 6,
+            "resolved_citation_count": 6,
+            "challenged": False,
+        }],
+        audit_summary={},
+        publication={},
+        agent_modules={},
+        truth_source="database",
+    )
+    item = build_executive_presentation(read_model)["sections"]["findings"]["items"][0]
+    assert item["counterparty"] == "Premier Packaging LLC"
+    assert item["detail"].startswith("Premier Packaging LLC · SAR 177K recoverable")
