@@ -2416,3 +2416,32 @@ def test_counterparty_is_read_from_the_database_row_shape():
     item = build_executive_presentation(read_model)["sections"]["findings"]["items"][0]
     assert item["counterparty"] == "Premier Packaging LLC"
     assert item["detail"].startswith("Premier Packaging LLC · SAR 177K recoverable")
+
+
+def test_no_pipeline_vocabulary_in_the_strings_a_ceo_reads():
+    """Words that are ours, not the company's, on surfaces an executive reads.
+
+    Scoped to the strings that actually render. A live walk of the CEO views
+    found exactly four survivors after the first pass -- grep over every source
+    string would have flagged dozens that no executive ever sees, and chasing
+    those would churn internal contracts for no reader.
+    """
+    js = _static_executive_js()
+    for jargon in (
+        "Which governed cases create",
+        "this board packet can be released",
+        "governed report posture",
+        "Governed board packet",
+        "Governed Assistant Network",
+    ):
+        assert jargon not in js, f"pipeline vocabulary a CEO would read: {jargon}"
+
+
+def test_agent_module_summaries_do_not_say_governed():
+    """These render verbatim on the Assistants page."""
+    import strategyos_mvp.api as api_module
+    import inspect
+
+    source = inspect.getsource(api_module._agent_modules_payload)
+    assert "governed case" not in source
+    assert "governed report posture" not in source

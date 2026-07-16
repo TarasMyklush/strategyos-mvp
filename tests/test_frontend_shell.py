@@ -606,7 +606,7 @@ def test_ui_session_and_workspace_contract_use_governed_routes_for_authenticated
         assert payload["domain_tree"]["nodes"][0]["domain_id"] == "finance"
         assert payload["strategy_substrate"]["intent"]["label"] == "Convert governed finance signal into executive action"
         assert payload["strategy_substrate"]["intent"]["guardrails"]
-        assert payload["board_portal"]["meeting"]["title"] == "Governed board packet"
+        assert payload["board_portal"]["meeting"]["title"] == "Board pack"
         assert payload["executive_modes"]["active_persona_id"] == "board"
         assert payload["executive_modes"]["active_board_state"] == "closed"
         assert payload["executive_modes"]["active_driver_key"] == "owed_upward"
