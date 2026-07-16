@@ -30,11 +30,14 @@ def test_data_role_registry_exposes_current_run_model_roles_in_order():
         "purchase_orders",
         "cash_forecast",
         "calendar",
+        "revenue_plan",
         "bank_statement",
         "contract",
         "email_correspondence",
         "invoice_document",
     ]
+    # revenue_plan is normalized into the run model but is NOT required to start
+    # a run -- a dataset without an approved budget still runs and shows no plan.
     assert run_model_required_roles() == (
         "ap_ledger",
         "ar_ledger",
@@ -71,3 +74,23 @@ def test_ingestion_and_detector_contracts_are_registry_derived():
         "vendor_cf_forecast",
         "notes",
     )
+
+
+def test_revenue_plan_role_is_normalized_but_not_required():
+    """The approved-plan role must reach the run model without gating a run.
+
+    A plan file lands in the current-run-model directory so the finance engine
+    can read it, but a dataset without one still runs and simply shows no plan
+    comparison. This is the fix for a plan that classified as unclassified,
+    never copied into the normalized model, so the dashboard said "unavailable".
+    """
+    from strategyos_mvp.data_roles import (
+        run_model_role_specs,
+        run_model_required_roles,
+        role_target_paths,
+    )
+
+    plan = next((s for s in run_model_role_specs() if s.role == "revenue_plan"), None)
+    assert plan is not None, "revenue_plan must be normalized into the run model"
+    assert "revenue_plan" not in run_model_required_roles(), "a plan must never gate a run"
+    assert role_target_paths().get("revenue_plan"), "the plan needs a normalize target path"

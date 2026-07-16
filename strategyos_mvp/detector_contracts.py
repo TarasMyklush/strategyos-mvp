@@ -19,6 +19,10 @@ class DetectorRoleContract:
     date_columns: tuple[str, ...] = ()
     column_aliases: dict[str, tuple[str, ...]] | None = None
     expected_sheet_names: tuple[str, ...] = ()
+    # Whether a run requires this role. Optional roles (an approved plan) are
+    # resolved when present and simply skipped when absent -- their absence must
+    # not fail contract resolution.
+    required_for_run: bool = True
 
 
 @dataclass(frozen=True)
@@ -55,6 +59,7 @@ def _build_detector_role_contracts() -> tuple[DetectorRoleContract, ...]:
             date_columns=spec.date_columns,
             column_aliases=dict(spec.column_aliases),
             expected_sheet_names=spec.expected_sheet_names,
+            required_for_run=spec.required_for_run,
         )
         for spec in run_model_role_specs()
     )
@@ -142,10 +147,18 @@ def _candidate_paths(dataset_root: Path, contract: DetectorRoleContract) -> list
 
 def resolve_detector_contracts(dataset_root: Path) -> dict[str, ResolvedDetectorContract]:
     resolved, unresolved = resolve_detector_contracts_partial(dataset_root)
-    if unresolved:
+    # Only a missing REQUIRED role is a failure. An optional role (an approved
+    # plan) that the dataset does not carry is resolved as absent and skipped --
+    # a dataset without a budget must still run.
+    required_unresolved = [
+        role
+        for role in unresolved
+        if getattr(CONTRACTS_BY_ROLE.get(role), "required_for_run", True)
+    ]
+    if required_unresolved:
         raise FileNotFoundError(
             "Could not resolve detector data contracts for roles "
-            f"{sorted(unresolved)} under '{dataset_root}'."
+            f"{sorted(required_unresolved)} under '{dataset_root}'."
         )
     return resolved
 

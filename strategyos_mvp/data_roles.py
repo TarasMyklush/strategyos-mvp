@@ -209,6 +209,26 @@ DATA_ROLE_SPECS: tuple[DataRoleSpec, ...] = (
         required_for_run=False,
     ),
     DataRoleSpec(
+        # The division-to-group reconciliation carries the approved forward
+        # budget (a "<year>F" forecast column) for the division the ERP data
+        # covers. It is a structured role so the classifier copies it into the
+        # run model where the finance engine can read the plan; it is not
+        # required for a run, so a dataset without a budget still runs and simply
+        # shows no plan comparison.
+        role="revenue_plan",
+        label="Approved revenue plan",
+        kind="structured",
+        attribute_name="revenue_plan",
+        target_path="11_Strategic_Analytics/Division_to_Group_Reconciliation.xlsx",
+        required_columns=("SAR M", "2026F"),
+        column_aliases={
+            "SAR M": ("sar m", "sar millions", "line", "metric"),
+            "2026F": ("2026f", "2026 f", "2026 forecast", "fy2026f"),
+        },
+        expected_sheet_names=("division_to_group", "reconciliation"),
+        required_for_run=False,
+    ),
+    DataRoleSpec(
         role="bank_statement",
         label="Bank statement",
         kind="document",
@@ -253,10 +273,19 @@ def registered_data_role_specs() -> tuple[DataRoleSpec, ...]:
 
 
 def run_model_role_specs() -> tuple[DataRoleSpec, ...]:
+    """Structured roles the classifier normalizes into the run model.
+
+    This is the set of files copied into the current-run-model directory the
+    finance engine reads -- it deliberately includes structured roles that are
+    NOT required for a run (an approved plan, for example). Whether a role is
+    required to START a run is a separate question answered by
+    ``run_model_required_roles``; conflating the two would make every optional
+    context file block a run when absent.
+    """
     return tuple(
         spec
         for spec in registered_data_role_specs()
-        if spec.kind == "structured" and spec.target_path and spec.required_for_run
+        if spec.kind == "structured" and spec.target_path
     )
 
 
@@ -301,7 +330,17 @@ def document_target_folders() -> dict[str, str]:
 
 
 def run_model_required_roles() -> tuple[str, ...]:
-    return tuple(spec.role for spec in run_model_role_specs())
+    """Roles that must classify exactly once before a run can start.
+
+    Only genuinely required structured roles gate a run. Optional context roles
+    (an approved plan) are normalized when present but never block a run when
+    absent.
+    """
+    return tuple(
+        spec.role
+        for spec in run_model_role_specs()
+        if spec.required_for_run
+    )
 
 
 def tabular_role_columns() -> dict[str, tuple[str, ...]]:
