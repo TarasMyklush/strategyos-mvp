@@ -724,6 +724,11 @@ def _findings(read_model: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict
         # means nothing to them; "Premier Packaging LLC" tells them who to call.
         # Stated only when the run carries it -- never inferred.
         counterparty = str(_claim_value(item.get("counterparty"), "") or "").strip()
+        # What to do about it, and where it sits. Both are governed facts read
+        # from the finding, so a card is no longer a dead end: it names the
+        # recommended action and its state, and the recovery it is worth.
+        action = str(_claim_value(item.get("recommended_action"), "") or "").strip()
+        state = str(_claim_value(item.get("state"), "") or "").strip()
         rows.append(
             {
                 "finding_id": _claim_value(item.get("finding_id"), ""),
@@ -736,6 +741,8 @@ def _findings(read_model: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict
                     + f" · {citations} supporting {'document' if citations == 1 else 'documents'}"
                     + (" · needs closure" if challenged else "")
                 ),
+                "recommended_action": action or None,
+                "state": state or None,
                 "tone": "flat" if challenged else "up",
                 "recoverable_sar": recoverable,
                 "citation_count": citations,

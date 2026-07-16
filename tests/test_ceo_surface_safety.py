@@ -2445,3 +2445,57 @@ def test_agent_module_summaries_do_not_say_governed():
     source = inspect.getsource(api_module._agent_modules_payload)
     assert "governed case" not in source
     assert "governed report posture" not in source
+
+
+def test_a_finding_carries_its_recommended_action_and_state():
+    """A finding was a dead end -- a value with no next step. It now names the
+    recommended action and where it sits, both read from the governed finding."""
+    from strategyos_mvp.executive_read_model import build_executive_read_model
+    from strategyos_mvp.executive_presentation import build_executive_presentation
+
+    read_model = build_executive_read_model(
+        summary={"run_id": "r1", "approval_status": "pending"},
+        finding_rows=[{
+            "finding_id": "F-002",
+            "title": "Duplicate payment for invoice INV-2026-0341",
+            "pattern_type": "duplicate_payment",
+            "owner": "Premier Packaging LLC",
+            "status": "draft",
+            "remediation": "AP should immediately recover the duplicate payment from the vendor.",
+            "recoverable_sar": 177188.0,
+            "citation_count": 6,
+            "challenged": False,
+        }],
+        audit_summary={}, publication={}, agent_modules={}, truth_source="database",
+    )
+    item = build_executive_presentation(read_model)["sections"]["findings"]["items"][0]
+    assert item["state"] == "Ready for your review"
+    assert item["recommended_action"].startswith("AP should immediately recover")
+
+
+def test_a_finding_with_no_recommended_action_shows_none_not_a_blank():
+    from strategyos_mvp.executive_read_model import build_executive_read_model
+    from strategyos_mvp.executive_presentation import build_executive_presentation
+
+    read_model = build_executive_read_model(
+        summary={"run_id": "r1", "approval_status": "pending"},
+        finding_rows=[{
+            "finding_id": "F-009", "title": "Unallocated variance",
+            "pattern_type": "variance", "status": "draft",
+            "recoverable_sar": 1000.0, "citation_count": 1, "challenged": False,
+        }],
+        audit_summary={}, publication={}, agent_modules={}, truth_source="database",
+    )
+    item = build_executive_presentation(read_model)["sections"]["findings"]["items"][0]
+    assert item["recommended_action"] is None
+
+
+def test_finding_card_renders_action_state_and_an_approve_control():
+    js = _static_executive_js()
+    assert "function requestFindingRecovery(button)" in js
+    assert "data-finding-approve=" in js
+    assert "Approve recovery" in js
+    assert "rail-recommended" in js
+    # The control must actually call the endpoint, not be decorative.
+    assert '"/executive/findings/request-recovery"' in js
+    assert 'button.querySelectorAll' not in js.split("requestFindingRecovery")[0][-200:]
