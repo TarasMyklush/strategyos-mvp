@@ -4120,3 +4120,20 @@ def test_the_distinctive_word_still_reaches_its_line():
     result = parse_scenario("What if we cut insurance by 20%?", _finance_run_context())
     assert result.scenario_type == "deterministic"
     assert "Insurance Expense" in result.answer
+
+
+def test_a_compound_question_defers_so_both_parts_are_answered():
+    """The live failure: "revenue and the capital of Japan?" answered only revenue.
+
+    The KPI card intercepts any question containing "revenue", answers the
+    first half from the governed figure, and silently drops the rest. When
+    general-knowledge intent rides alongside the KPI term the question is
+    compound, and the reviewed LLM path -- which answers every part -- must own
+    it. A plain KPI question still routes to the card.
+    """
+    assert api_module._free_text_ceo_kpi_key(
+        "What is revenue and also what is the capital of Japan?", {}
+    ) is None
+    # Plain KPI questions are unaffected.
+    assert api_module._free_text_ceo_kpi_key("What is our revenue?", {}) == "revenue"
+    assert api_module._free_text_ceo_kpi_key("What is our EBITDA margin?", {}) == "ebitda_margin"

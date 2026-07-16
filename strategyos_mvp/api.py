@@ -12569,6 +12569,15 @@ def _free_text_ceo_kpi_key(
     # call sites because two separate branches consume this key.
     if _question_asks_for_causation(question):
         return None
+    # A compound question -- "what is revenue AND the capital of Japan?" -- names
+    # a KPI but also carries a second, unrelated ask. The KPI card answers the
+    # first half cleanly and silently drops the rest, so the executive never
+    # sees their second question acknowledged. When general-knowledge intent
+    # rides alongside the KPI term, defer to the reviewed LLM path, which
+    # answers every part. A plain "what is revenue?" carries no such intent and
+    # still routes here.
+    if _question_is_general_knowledge(question):
+        return None
     norm = " ".join(str(question or "").casefold().split())
     if any(token in norm for token in ("cash versus floor", "cash-versus-floor", "cash vs floor", "cash floor", "cash position")):
         return "cash_vs_floor"
