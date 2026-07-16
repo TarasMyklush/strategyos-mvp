@@ -9072,7 +9072,12 @@ def request_finding_recovery(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Finding '{finding_id}' is not part of the current run.",
         )
-    actor = str(principal.get("subject") or principal.get("role") or "executive")
+    # The audit trail renders the actor to the executive. A raw IdP subject
+    # ("https://strategyos.live/:executive.tester") is not a name; log the role
+    # as a clean label and keep the exact subject in the event payload for the
+    # record.
+    subject = str(principal.get("subject") or "")
+    actor = "Executive"
     note = str(request.note or "").strip()
     detail = f"Executive requested recovery of {finding_id}."
     if note:
@@ -9083,6 +9088,7 @@ def request_finding_recovery(
         action="request_recovery",
         actor=actor,
         detail=detail,
+        subject=subject,
     )
     if result.get("status") not in {"recorded", "skipped"}:
         raise HTTPException(
