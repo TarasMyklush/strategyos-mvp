@@ -318,7 +318,7 @@ def build_board_context(surface: dict[str, Any] | None) -> dict[str, Any]:
         "report_count": _safe_int(publication.get("report_count")),
         "evidence_count": _safe_int(publication.get("evidence_count")),
         "preview_route": board_pack.get("preview_route") or publication.get("preview_route"),
-        "meeting_title": meeting.get("title") or board_portal.get("state_label") or "Governed board packet",
+        "meeting_title": meeting.get("title") or board_portal.get("state_label") or "Board pack",
         "summary": state_detail.get("summary") or board_portal.get("governance_note"),
         "allowed_actions": list(board_pack.get("allowed_actions") or []),
         "deck_release": board_portal.get("deck_release"),
@@ -426,7 +426,7 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
             "summary": (
                 f"Latest StrategyOS run {run_context.get('run_id') or 'latest'} is "
                 f"{str(run_context.get('approval_status') or 'pending').replace('_', ' ')}. "
-                f"It currently carries SAR {recoverable:,.0f} recoverable value across {finding_count} governed cases, "
+                f"It currently carries SAR {recoverable:,.0f} recoverable value across {finding_count} cases, "
                 f"{resolved}/{citations} citation resolution, and {report_count} surfaced board/report artifacts."
                 f" Plan health: {plan_health.get('label') or plan_health.get('status') or 'bounded'}."
                 f"{lead_text}"

@@ -3871,10 +3871,10 @@ def _board_portal_payload(
         "state_label": state_label,
         "state_hint": state_hint,
         "publish_state": publication.get("publish_state"),
-        "governance_note": "Nothing reaches the board surface until the governed approval lane clears it.",
+        "governance_note": "Nothing reaches the board until someone has signed it off.",
         "meeting": {
             "mode": state_hint,
-            "title": "Governed board packet",
+            "title": "Board pack",
             "tenant_label": _summary_tenant_context(summary, {"role": role}).get(
                 "tenant_name"
             ),
@@ -4436,7 +4436,7 @@ def _drilldown_contract_payload(
             "prompts": gravity_prompts
             or [
                 "What is still owed upward before this packet is board-safe?",
-                "Which governed case most changes the board-room narrative?",
+                "Which case most changes the board-room story?",
                 "Show the cash pulse without leaving the approved packet.",
             ],
             "sandbox": {
@@ -5625,7 +5625,7 @@ def _agent_modules_payload(
             "label": "Cash recovery watch",
             "status": "running" if rows else "idle",
             "lane": "executive",
-            "summary": f"Tracks recoverable value across {len(rows)} governed case{'s' if len(rows) != 1 else ''}.",
+            "summary": f"Tracks recoverable value across {len(rows)} case{'s' if len(rows) != 1 else ''}.",
             "route": "/public/runs/latest/findings" if public_safe else "/runs/latest/findings",
             "output_metric": _format_sar_brief(sum(float(row.get("recoverable_sar") or 0.0) for row in rows)),
             "approval_dependency": "none",
@@ -5645,7 +5645,7 @@ def _agent_modules_payload(
             "label": "Board-pack compiler",
             "status": str((publication.get("board_pack") or {}).get("status") or "pending"),
             "lane": "executive",
-            "summary": "Translates governed report posture into a board-safe packet without exposing restricted artifacts.",
+            "summary": "Turns the reviewed reports into a board-safe pack, without exposing restricted material.",
             "route": publication.get("preview_route") or "/public/runs/latest/report-preview",
             "output_metric": f"{publication.get('report_count') or 0} report surfaces",
             "approval_dependency": str((publication.get("approval") or {}).get("next_action") or workflow.get("next_action") or "awaiting_action"),
@@ -7460,7 +7460,7 @@ def _ui_bootstrap(
     agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
     return {
         "product_name": "StrategyOS",
-        "shell_title": "StrategyOS Governed Operations",
+        "shell_title": "StrategyOS",
         "environment": _ui_environment_label(),
         "workspace_root": str(CONFIG.workspace_root),
         "default_run_dir": str(CONFIG.default_run_dir),
@@ -12218,7 +12218,7 @@ def _finding_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
         "suggestions": [
             f"What evidence supports {finding_id}?" if finding_id else "What evidence supports this case?",
             f"What is needed to close {finding_id}?" if finding_id else "What is needed to close this case?",
-            "Which governed cases create the largest recoverable value?",
+            "Which cases create the largest recoverable value?",
         ],
         "answered_by": "governed_reference",
         "assistant_mode": "governed_reference",
@@ -12362,7 +12362,7 @@ def _governed_cost_lever_result(
         ),
         "citations": citations[:8],
         "suggestions": [
-            "Which governed cases create the largest recoverable value?",
+            "Which cases create the largest recoverable value?",
             f"What is driving {derived['scope_label']}?",
             "What evidence supports the largest case?",
         ],

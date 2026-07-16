@@ -4146,8 +4146,8 @@
       var brief = executiveKpiBrief(driver);
       var governedPrompts = [
         firstDefined(brief.decision_question, "What is driving " + currentLabel + " and what decision does it require?"),
-        "What remains before this board packet can be released, who owns it, and what evidence is missing?",
-        "Which governed cases create the largest recoverable value, and what should be acted on first?"
+        "What remains before this board pack can be released, who owns it, and what evidence is missing?",
+        "Which cases create the largest recoverable value, and what should be acted on first?"
       ];
       gravityPanel.innerHTML = [
         '<div class="detail-head"><div><p class="detail-eyebrow">CEO agenda</p><h3 class="detail-title">Questions worth answering now</h3><p class="section-note">Each question opens the executive assistant with the relevant KPI, board approval stage or case already attached.</p></div></div>',
