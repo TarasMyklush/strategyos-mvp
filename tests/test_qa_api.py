@@ -4163,8 +4163,8 @@ def test_request_recovery_records_a_directive_for_a_known_finding(monkeypatch):
             lambda run_id: {"status": "ok", "findings": [{"finding_id": "F-002"}]},
         )
         recorded = {}
-        def _fake_directive(run_id, *, finding_id, action, actor, detail):
-            recorded.update({"run_id": run_id, "finding_id": finding_id, "action": action, "actor": actor})
+        def _fake_directive(run_id, *, finding_id, action, actor, detail, subject=""):
+            recorded.update({"run_id": run_id, "finding_id": finding_id, "action": action, "actor": actor, "subject": subject})
             return {"status": "recorded", "event": {"id": "evt-1"}}
         monkeypatch.setattr(api_module.state_store, "record_executive_directive", _fake_directive)
 
@@ -4175,7 +4175,10 @@ def test_request_recovery_records_a_directive_for_a_known_finding(monkeypatch):
         )
         assert response.status_code == 200, response.text
         assert response.json()["status"] == "requested"
-        assert recorded == {"run_id": "run-x", "finding_id": "F-002", "action": "request_recovery", "actor": "idp:ceo"}
+        # The actor is a clean label; the exact IdP subject is kept separately.
+        assert recorded["actor"] == "Executive"
+        assert recorded["subject"] == "idp:ceo"
+        assert recorded["action"] == "request_recovery"
     finally:
         _restore_env(original)
 

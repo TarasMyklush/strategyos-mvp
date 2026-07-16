@@ -2013,6 +2013,7 @@ def record_executive_directive(
     action: str,
     actor: str,
     detail: str,
+    subject: str = "",
 ) -> dict[str, Any]:
     """Log an executive's directive on a finding to the run's audit trail.
 
@@ -2054,6 +2055,7 @@ def record_executive_directive(
                             "finding_id": str(finding_id or ""),
                             "action": action,
                             "actor": actor,
+                            "subject": str(subject or ""),
                             "detail": detail,
                         }
                     ),
