@@ -72,12 +72,19 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     operating_cost = sum((balances[account] for account in operating_cost_accounts), Decimal())
     ebitda = revenue - cogs - operating_cost
     period = _period_label(dates)
+    # Derive the like-for-like plan before the trend so the revenue movement can
+    # carry a phased plan line when an aligned budget exists.
+    plan = _reconciliation_plan(root, period)
+    revenue_plan = plan.get("revenue_plan") if plan else None
+    plan_basis = plan.get("basis") if plan else None
+    revenue_plan_total = _decimal_or_none(revenue_plan)
     finance_dynamics = _finance_dynamics(
         gl,
         revenue_accounts,
         cogs_accounts,
         operating_cost_accounts,
         accounts,
+        revenue_plan_total=revenue_plan_total,
     )
     gl_evidence = {
         "file": _relative(gl_path, root),
@@ -109,7 +116,7 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     cash_evidence = cash.pop("evidence", {})
     components: dict[str, str | None] = {
         "revenue_actual": _number(revenue),
-        "revenue_plan": None,
+        "revenue_plan": revenue_plan,
         "cogs_actual": _number(cogs),
         "ebitda_actual": _number(ebitda),
         "ebitda_plan": None,
@@ -127,9 +134,16 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     evidence = {
         "revenue": {
             "summary": f"{row_count:,} GL rows across {len(revenue_accounts)} scoped revenue accounts.",
-            "files": [gl_evidence["file"], gl_evidence["chart_of_accounts_file"]],
+            "files": (
+                [gl_evidence["file"], gl_evidence["chart_of_accounts_file"], plan_basis["source_file"]]
+                if plan_basis
+                else [gl_evidence["file"], gl_evidence["chart_of_accounts_file"]]
+            ),
             "actual_complete": True,
             "details": gl_evidence,
+            # When a like-for-like plan was derived, its full provenance rides
+            # with the revenue KPI so the comparison can be defended.
+            "plan_basis": plan_basis,
         },
         "ebitda_margin": {
             "summary": (
@@ -181,6 +195,8 @@ def _finance_dynamics(
     cogs_accounts: Iterable[str],
     operating_cost_accounts: Iterable[str],
     account_master: Mapping[str, Mapping[str, str]],
+    *,
+    revenue_plan_total: Decimal | None = None,
 ) -> dict[str, Any]:
     """Calculate governed monthly finance movement from the GL.
 
@@ -235,14 +251,34 @@ def _finance_dynamics(
         ebitda_margin_labels.append(label)
         ebitda_margin_actual.append((ebitda / revenue) * Decimal("100"))
 
-    def actual_trend(series_labels: list[str], values: list[Decimal], *, unit: str) -> dict[str, Any]:
-        return {
+    def actual_trend(
+        series_labels: list[str],
+        values: list[Decimal],
+        *,
+        unit: str,
+        plan_total: Decimal | None = None,
+        plan_note: str | None = None,
+    ) -> dict[str, Any]:
+        # A monthly plan line is only drawn when a period plan total exists AND
+        # the dataset gives no monthly plan of its own -- in which case the
+        # annual figure is spread evenly across the actual months and labelled
+        # as straight-line phasing, never passed off as a real monthly budget.
+        plan_series: list[str] = []
+        has_plan_series = False
+        if plan_total is not None and series_labels:
+            per_month = (plan_total / Decimal(len(series_labels))).quantize(Decimal("0.01"))
+            plan_series = [_number(per_month) for _ in series_labels]
+            has_plan_series = True
+        payload: dict[str, Any] = {
             "labels": series_labels,
             "actual": [_number(value) for value in values],
-            "plan": [],
-            "has_plan_series": False,
+            "plan": plan_series,
+            "has_plan_series": has_plan_series,
             "unit": unit,
         }
+        if plan_note:
+            payload["plan_note"] = plan_note
+        return payload
 
     movers: dict[str, list[dict[str, str]]] = {"lifting": [], "dragging": []}
     if len(labels) >= 2:
@@ -264,7 +300,18 @@ def _finance_dynamics(
             movers["dragging"].append({"name": label, "delta": _sar_delta(delta)})
     return {
         "trend": {
-            "revenue": actual_trend(labels, revenue_actual, unit="sar"),
+            "revenue": actual_trend(
+                labels,
+                revenue_actual,
+                unit="sar",
+                plan_total=revenue_plan_total,
+                plan_note=(
+                    "Plan line is the approved period budget spread evenly across the months; "
+                    "the dataset supplies an annual budget, not a monthly one."
+                    if revenue_plan_total is not None
+                    else None
+                ),
+            ),
             "ebitda_margin": actual_trend(ebitda_margin_labels, ebitda_margin_actual, unit="percent"),
             "operating_cost": actual_trend(labels, operating_cost_actual, unit="sar"),
         },
@@ -484,6 +531,120 @@ def _sar_delta(value: Decimal) -> str:
     else:
         amount = f"{absolute.quantize(Decimal('1')):,.0f}"
     return f"{sign}SAR {amount}"
+
+
+def _plan_period_fraction(period: str | None) -> Decimal | None:
+    """How much of an annual plan applies to the run's reporting period.
+
+    An annual budget is a full-year figure; the actuals here are H1. The plan
+    must be scaled to the same window before the two can be compared, and the
+    fraction is derived from the period label rather than assumed -- an H2 or
+    full-year run must not silently borrow the H1 halving. Only period shapes
+    the engine can align are accepted; anything else returns None and the plan
+    stays unavailable rather than being compared across mismatched windows.
+    """
+    text = " ".join(str(period or "").strip().casefold().split())
+    if not text:
+        return None
+    if "h1" in text or "h2" in text:
+        return Decimal("0.5")
+    if "q1" in text or "q2" in text or "q3" in text or "q4" in text:
+        return Decimal("0.25")
+    if "fy" in text or "full year" in text or "annual" in text:
+        return Decimal("1")
+    return None
+
+
+def _plan_year_from_period(period: str | None) -> str | None:
+    import re
+
+    match = re.search(r"(20\d{2})", str(period or ""))
+    return match.group(1) if match else None
+
+
+def _reconciliation_plan(root: Path, period: str | None) -> dict[str, Any] | None:
+    """Derive the like-for-like revenue plan from the governed reconciliation file.
+
+    The dataset carries a division-to-group reconciliation stating the Central
+    Region division's annual net revenue by year, including the forward budget
+    (e.g. 2026F). The ERP actuals cover exactly that division, so the division
+    forecast -- not the whole-BU number -- is the aligned comparator. This reads
+    it, scales the matching year's forecast to the reporting window, and returns
+    the plan with its own evidence.
+
+    Every guard fails closed: no file, no forecast column, no row that names the
+    division, no year match, or an unscalable period each yields None, and the
+    dashboard keeps saying the comparator is unavailable rather than inventing
+    one. Nothing here is derived from the actuals.
+    """
+    fraction = _plan_period_fraction(period)
+    year = _plan_year_from_period(period)
+    if fraction is None or year is None:
+        return None
+    path = _first_matching(root, "reconciliation", ".xlsx")
+    if path is None:
+        return None
+    try:
+        sheet = load_workbook(path, data_only=True, read_only=True).active
+        rows = list(sheet.values)
+    except Exception:
+        return None
+    if not rows:
+        return None
+
+    header = [str(c or "").strip() for c in rows[0]]
+    # The forecast column is the one whose label carries the run's year and an
+    # 'F' (forecast) marker -- "2026F". Actual columns ("2026A") are not a plan.
+    forecast_col = None
+    for idx, label in enumerate(header):
+        cell = label.casefold().replace(" ", "")
+        if year in cell and cell.endswith("f"):
+            forecast_col = idx
+            break
+    if forecast_col is None:
+        return None
+
+    # The division line is the one the ERP data actually covers.
+    division_annual: Decimal | None = None
+    division_label = ""
+    for values in rows[1:]:
+        label = str((values[0] if values else "") or "")
+        low = label.casefold()
+        if "division" in low and "net revenue" in low and "this erp" in low:
+            raw = values[forecast_col] if forecast_col < len(values) else None
+            division_annual = _decimal_or_none(raw)
+            division_label = label.strip()
+            break
+    if division_annual is None or division_annual <= 0:
+        return None
+
+    # Reconciliation states figures in SAR millions; the actuals are in SAR.
+    annual_sar = (division_annual * Decimal("1000000")).quantize(Decimal("0.01"))
+    period_plan = (annual_sar * fraction).quantize(Decimal("0.01"))
+    return {
+        "revenue_plan": _number(period_plan),
+        "basis": {
+            "source_file": _relative(path, root),
+            "sha256": _sha256(path),
+            "forecast_column": header[forecast_col],
+            "division_line": division_label,
+            "annual_plan_sar": _number(annual_sar),
+            "period_fraction": str(fraction),
+            "derivation": (
+                f"{header[forecast_col]} division net revenue {_number(annual_sar)} SAR "
+                f"× {fraction} of the year = {_number(period_plan)} SAR for {period}."
+            ),
+        },
+    }
+
+
+def _decimal_or_none(value: Any) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
 
 
 def _sha256(path: Path) -> str:

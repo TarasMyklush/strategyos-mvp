@@ -112,3 +112,67 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
     assert cards[2]["executive_brief"]["readout"].startswith("Operating expenditure across 126")
     assert cards[2]["executive_brief"]["drivers"][0]["label"] == "Salaries & Wages"
     assert cards[2]["executive_brief"]["decision_context"].startswith("Current H1 operating cost is SAR 93.8M")
+
+
+def _write_reconciliation(path: Path, *, division_2026f: str = "775") -> None:
+    """A minimal division-to-group reconciliation, matching the real file's shape."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Division_to_Group"
+    ws.append(["SAR M", "2023A", "2024A", "2025A", "2026F"])
+    ws.append(["Central Region division net revenue (this ERP dataset)", 590, 633, 697, division_2026f])
+    ws.append(["Tamween Pharma Distribution BU total", 1940, 2120, 2340, 2540])
+    wb.save(path)
+
+
+def test_reconciliation_plan_derives_the_aligned_h1_budget(tmp_path):
+    """The dataset carries a division 2026F forecast; the H1 plan is half of it.
+
+    This is the fix for the live "plan comparison unavailable" -- the budget was
+    there all along in the reconciliation file, just never read.
+    """
+    from strategyos_mvp.source_finance_kpis import _reconciliation_plan
+
+    _write_reconciliation(tmp_path / "Division_to_Group_Reconciliation.xlsx")
+    plan = _reconciliation_plan(tmp_path, "H1 2026")
+    assert plan is not None
+    # 775M annual x 0.5 for H1
+    assert plan["revenue_plan"] == "387500000.00"
+    assert plan["basis"]["forecast_column"] == "2026F"
+    assert plan["basis"]["annual_plan_sar"] == "775000000.00"
+    assert plan["basis"]["period_fraction"] == "0.5"
+
+
+def test_plan_is_absent_when_the_dataset_carries_no_reconciliation(tmp_path):
+    """No file -> fail closed, exactly as the old dataset does."""
+    from strategyos_mvp.source_finance_kpis import _reconciliation_plan
+
+    assert _reconciliation_plan(tmp_path, "H1 2026") is None
+
+
+def test_plan_is_absent_for_a_period_it_cannot_align(tmp_path):
+    """An unknown period shape must not silently borrow the H1 halving."""
+    from strategyos_mvp.source_finance_kpis import _reconciliation_plan
+
+    _write_reconciliation(tmp_path / "Division_to_Group_Reconciliation.xlsx")
+    assert _reconciliation_plan(tmp_path, "mystery period") is None
+    # A different year has no matching forecast column.
+    assert _reconciliation_plan(tmp_path, "H1 2029") is None
+
+
+def test_a_full_year_period_takes_the_whole_plan_not_half(tmp_path):
+    from strategyos_mvp.source_finance_kpis import _reconciliation_plan
+
+    _write_reconciliation(tmp_path / "Division_to_Group_Reconciliation.xlsx")
+    plan = _reconciliation_plan(tmp_path, "FY 2026")
+    assert plan["revenue_plan"] == "775000000.00"
+    assert plan["basis"]["period_fraction"] == "1"
+
+
+def test_existing_dataset_without_a_plan_still_reports_none():
+    """The shared fixture has no reconciliation file: plan must stay None."""
+    payload = derive_source_finance_kpis(DATASET)
+    assert payload["components"]["revenue_plan"] is None
+    assert payload["trend"]["revenue"]["has_plan_series"] is False
