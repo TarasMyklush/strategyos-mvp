@@ -385,7 +385,7 @@ def test_revenue_plan_target_estimates_from_ceo_stated_attainment_when_plan_is_m
     assert "CEO action:" in result.answer
     assert "not an approved plan comparison" in result.answer
     assert "CRM pipeline and order-backlog evidence" in result.answer
-    assert result.hallucination_risk.level.value == "low"
+    assert result.hallucination_risk.level.value == "medium"
     assert {step.step_id for step in result.calculations} == {
         "implied_revenue_plan",
         "estimated_revenue_target_gap",
@@ -393,6 +393,63 @@ def test_revenue_plan_target_estimates_from_ceo_stated_attainment_when_plan_is_m
     assert {citation["source_path"] for citation in result.citations} == {
         "02_ERP_Extracts/GL_Extract_H1_2026.csv",
     }
+
+
+def test_revenue_gap_followup_stays_on_revenue_and_returns_a_ceo_action_plan():
+    result = parse_scenario(
+        "Fine. What do I decide today, who owns it, and what must be on my desk by tomorrow morning? Give me a 3-step CEO action plan.",
+        {
+            "bundle": object(),
+            "findings": [
+                {
+                    "finding_id": "F-002",
+                    "title": "Duplicate payment",
+                    "amount": 177188,
+                }
+            ],
+            "kg_nodes": [],
+            "public_context_packet": {},
+            "assistant_context": {"driver_key": "revenue", "entrypoint": "drawer_input"},
+            "assistant_history": [
+                {
+                    "role": "user",
+                    "text": "revenue actual is SAR 385.1M. 99.4% of plan. - how to make it 100%?",
+                    "assistant_context": {"kpi_key": "revenue"},
+                },
+                {
+                    "role": "assistant",
+                    "text": "The estimated gap to 100.0% is SAR 2.3M.",
+                    "payload": {"scenario_id": "revenue_plan_attainment"},
+                },
+            ],
+            "summary": {
+                "finance_kpi": {
+                    "authoritative": True,
+                    "reporting_period_key": "H1 2026",
+                    "reporting_currency": "SAR",
+                    "components": {"revenue_actual": "385079908.90"},
+                    "evidence": {
+                        "revenue": {
+                            "files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"]
+                        }
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.scenario_id == "revenue_plan_attainment_action_plan"
+    assert result.scenario_type == "deterministic"
+    assert "Decision today:" in result.answer
+    assert "SAR 2.3M" in result.answer
+    assert "Group commercial/revenue executive" in result.answer
+    assert "CFO/Finance" in result.answer
+    assert result.answer.count("By tomorrow morning") == 2
+    assert "daily gap review" in result.answer
+    assert "cannot prove: which revenue stream or deal can close it" in result.answer
+    assert "Duplicate payment" not in result.answer
+    assert "accounts payable" not in result.answer.lower()
+    assert result.hallucination_risk.level.value == "medium"
 
 
 def test_revenue_card_context_turns_make_it_100_percent_into_target_calculation():

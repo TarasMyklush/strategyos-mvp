@@ -3392,7 +3392,98 @@ def test_ceo_revenue_make_it_100_uses_labelled_estimate_when_live_plan_is_unavai
         assert "estimated gap to 100.0% is SAR 2.3M" in payload["answer"]
         assert "not an approved plan comparison" in payload["answer"]
         assert "CEO action:" in payload["answer"]
-        assert payload["hallucination_risk"]["level"] == "low"
+        assert payload["hallucination_risk"]["level"] == "medium"
+    finally:
+        _restore_env(original)
+
+
+def test_authenticated_ceo_revenue_followup_preserves_gap_context_and_bypasses_llm(monkeypatch):
+    """The production drawer follow-up must not jump from Revenue to AP findings."""
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [
+                    {
+                        "finding_id": "F-002",
+                        "title": "Duplicate payment",
+                        "amount": 177188,
+                    }
+                ],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {
+                    "run_id": "run-live-shape",
+                    "finance_kpi": {
+                        "authoritative": True,
+                        "reporting_period_key": "H1 2026",
+                        "reporting_currency": "SAR",
+                        "components": {"revenue_actual": "385079908.90"},
+                        "evidence": {
+                            "revenue": {
+                                "files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"]
+                            }
+                        },
+                    },
+                },
+                "run_id": "run-live-shape",
+                "run_mode": "full",
+                "public_context_packet": {},
+            },
+        )
+
+        async def forbidden_llm(*_args, **_kwargs):
+            raise AssertionError("Revenue action follow-ups must remain deterministic")
+
+        monkeypatch.setattr(api_module, "_llm_answer_question_async", forbidden_llm)
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Fine. What do I decide today, who owns it, and what must be on my desk by tomorrow morning? Give me a 3-step CEO action plan.",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "source": "executive_surface",
+                    "entrypoint": "drawer_input",
+                    "driver_key": "revenue",
+                },
+                "driver_context": {
+                    "key": "revenue",
+                    "label": "Revenue",
+                    "metric": "SAR 385.1M",
+                },
+                "history": [
+                    {
+                        "role": "user",
+                        "text": "revenue actual is SAR 385.1M. 99.4% of plan. - how to make it 100%?",
+                        "assistant_context": {"kpi_key": "revenue"},
+                    },
+                    {
+                        "role": "assistant",
+                        "text": "The estimated gap to 100.0% is SAR 2.3M.",
+                        "payload": {"scenario_id": "revenue_plan_attainment"},
+                    },
+                ],
+            },
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["scenario_id"] == "revenue_plan_attainment_action_plan"
+        assert payload["scenario_type"] == "deterministic"
+        assert payload.get("llm_fallback_attempted", False) is False
+        assert payload["answer_origin"] == "governed"
+        assert payload["human_review_required"] is False
+        assert "Decision today:" in payload["answer"]
+        assert "SAR 2.3M" in payload["answer"]
+        assert "Group commercial/revenue executive" in payload["answer"]
+        assert "CFO/Finance" in payload["answer"]
+        assert "Duplicate payment" not in payload["answer"]
+        assert payload["hallucination_risk"]["level"] == "medium"
     finally:
         _restore_env(original)
 

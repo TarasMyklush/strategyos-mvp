@@ -3828,7 +3828,7 @@ const payload = {{
   basis: "Scenario parser matched 'finance_leakage'; computed from run findings.",
   calculations: [1, 2, 3, 4, 5, 6],
   citations: [{{ source_path: 'public_packet://latest-public', locator: 'findings' }}],
-  hallucination_risk: {{ level: 'partial' }},
+  hallucination_risk: {{ level: 'medium' }},
 }};
 console.log(JSON.stringify({{
   answerText: harness.qaAnswerText(payload),
