@@ -109,9 +109,13 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
         {"label": "Less operating cost", "value": "SAR 93.8M"},
         {"label": "EBITDA", "value": "SAR 215.7M"},
     ]
-    assert cards[2]["executive_brief"]["readout"].startswith("Operating expenditure across 126")
+    assert cards[2]["executive_brief"]["readout"] == (
+        "The current actual is available, but a CEO performance conclusion is not yet safe."
+    )
+    assert cards[2]["executive_brief"]["executive_signal"]["posture"] == "Comparison pending"
+    assert "Group CFO" in cards[2]["executive_brief"]["decision_context"]
     assert cards[2]["executive_brief"]["drivers"][0]["label"] == "Salaries & Wages"
-    assert cards[2]["executive_brief"]["decision_context"].startswith("Current H1 operating cost is SAR 93.8M")
+    assert cards[2]["executive_brief"]["decision_context"].startswith("Keep this with the Group CFO")
 
 
 def _write_reconciliation(path: Path, *, division_2026f: str = "775") -> None:

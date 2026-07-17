@@ -70,8 +70,8 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     assert "Diagnostics" in executive_html
     assert "Assistants" in executive_html
     assert "Knowledge" in executive_html
-    assert "The group index" in executive_html
-    assert "Decision questions" in executive_html
+    assert "Enterprise performance" in executive_html
+    assert "Prepare the next move" in executive_html
 
 
 def test_phase14_plan_data_marks_phase14_complete_after_phase15_closes() -> None:

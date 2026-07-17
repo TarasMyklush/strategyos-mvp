@@ -160,7 +160,7 @@ def test_citation_ratio_uses_audit_total_and_rejects_impossible_counts():
         "total": 5,
     }
     assert presentation["driver_grid"][2]["metric"] == "Not available"
-    assert presentation["hero"]["score_note"] == "Governed artifact board readiness"
+    assert presentation["hero"]["score_note"] == "current posture"
 
     impossible = build_executive_read_model(
         {"run_id": "local-run"},
@@ -394,8 +394,10 @@ def test_executive_js_live_database_mode_does_not_fallback_to_synthetic_rails():
     assert 'diagnostics.mode === "live" && ["database", "governed_artifacts"]' in js
     assert "liveGovernedMode\n      ? safeArray(developmentsSection.items)" in js
     assert "liveGovernedMode\n      ? safeArray(weekSection.items)" in js
-    assert "developmentsPanel.hidden = liveGovernedMode && !developments.length" in js
-    assert "No executive calendar is connected for this reporting period" in js
+    assert "developmentsPanel.hidden = false" in js
+    assert "Signals to watch" in js
+    assert "No case-level decision is escalated to the CEO" in js
+    assert "No governed calendar is available for this reporting period" in js
     assert "findingsSection.case_index" in js
     assert "state.selectedFindingId = targetId" in js
     assert 'diagnostics.source === "governed_artifacts" ? "RUN"' in js

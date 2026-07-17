@@ -2974,13 +2974,13 @@
     var drivers = getVisibleDrivers();
     var hasPercentDrivers = drivers.some(function (driver) { return driverHasPercent(driver); });
     if (state.activePersona === "ceo") {
-      if (driverHeading) driverHeading.textContent = "The group index";
-      if (driverHint) driverHint.textContent = "Four CEO indicators. Select a KPI to see its contributors, decision implication, and supporting sources.";
+      if (driverHeading) driverHeading.textContent = "Enterprise performance";
+      if (driverHint) driverHint.textContent = "The four measures that determine whether executive intervention is required.";
     } else {
       if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
       if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current measures";
     }
-    if (lowerHeading) lowerHeading.textContent = "What matters now";
+    if (lowerHeading) lowerHeading.textContent = state.activePersona === "ceo" ? "Decisions and commitments" : "What matters now";
     var boardOnly = state.activePersona === "board";
     ["hero", "kpi-index-section", "kpi-detail-section", "priority-section", "decision-questions-section"].forEach(function (id) {
       var element = $(id);
@@ -2989,7 +2989,7 @@
     var boardWorkspace = $("board-workspace");
     if (boardWorkspace) boardWorkspace.hidden = !boardOnly;
     var gravityHeading = $("gravity-heading");
-    if (gravityHeading) gravityHeading.textContent = "Decision questions";
+    if (gravityHeading) gravityHeading.textContent = state.activePersona === "ceo" ? "Prepare the next move" : "Decision questions";
     var footer = $("composed-footer");
     if (footer) footer.hidden = false;
   }
@@ -3609,12 +3609,12 @@
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
     // The former `reviewGate ? "OPEN"` / `reviewGate ? "reviewer decision"`
     // treatment falsely rendered a workflow status as a progress score.
-    var heroScoreText = hasScore ? String(clampedScore || 0) : (reviewGate ? "Review" : truthSourceBadge);
+    var heroScoreText = hasScore ? String(clampedScore || 0) : firstDefined(hero.executive_posture, reviewGate ? "Review" : truthSourceBadge);
     $("hero-score").textContent = heroScoreText;
     // Board-gate labels must remain a single, centred word inside the same
     // 128px reference ring across every governed state (DB, RUN, OPEN, REVIEW).
     $("hero-score").classList.toggle("hero-score__value--compact", heroScoreText.length > 4);
-    $("hero-cap").textContent = reviewGate ? "needs sign-off" : firstDefined(preferredHero.scoreNote, preferredHero.score_note, hero.score_note, getPlanHealth().badge, "status");
+    $("hero-cap").textContent = firstDefined(hero.score_note, reviewGate ? "needs sign-off" : preferredHero.scoreNote, preferredHero.score_note, getPlanHealth().badge, "current posture");
     var scoreMedallion = $("hero-score").closest ? $("hero-score").closest(".hero-score") : null;
     if (scoreMedallion) {
       scoreMedallion.classList.toggle("is-status", !hasScore);
@@ -3683,7 +3683,7 @@
     var source = firstDefined(explicit.source, provenance && provenance.source, "");
     var explicitStatus = String(firstDefined(explicit.status, "")).toLowerCase();
     var grounded = explicitStatus === "grounded" || (!explicitStatus && provenance && provenance.complete === true && source);
-    var label = grounded ? "Traced to source ✓" : "Source missing ⚠";
+    var label = grounded ? "Evidence verified" : "Evidence gap";
     var title = grounded
       ? "Traced to " + String(source || "its source document")
       : "This figure cannot yet be traced back to a source document.";
@@ -3980,16 +3980,32 @@
   }
 
   function kpiExecutiveContextMarkup(brief, comparison, strategicReference) {
+    var signal = brief.executive_signal && typeof brief.executive_signal === "object" ? brief.executive_signal : {};
     var comparisonAvailable = comparison && comparison.available === true;
     var audit = brief.audit || {};
     var missing = safeArray(audit.missing_inputs);
-    var comparisonHeading = comparisonAvailable ? 'Plan comparison' : 'Plan comparison unavailable';
     var comparisonDetail = firstDefined(comparison.note, comparisonAvailable ? 'A like-for-like approved comparator is connected.' : 'No like-for-like approved comparator is connected.');
     var missingDetail = missing.length ? '<small>Needed to compare: ' + escapeHtml(missing.join(' · ')) + '</small>' : '';
     var referenceMarkup = strategicReference
       ? '<div class="kpi-comparison__reference"><span>' + escapeHtml(firstDefined(strategicReference.label, 'Approved strategic reference')) + '</span><strong>' + escapeHtml(firstDefined(strategicReference.value, '—')) + '</strong><small>' + escapeHtml(firstDefined(strategicReference.note, 'Reference only; not treated as a period comparison.')) + '</small></div>'
       : '';
-    return '<div class="kpi-executive-context"><section class="kpi-decision-context"><span class="kpi-brief-label">What this means for you</span><strong>' + escapeHtml(firstDefined(brief.decision_context, 'No decision implication is available.')) + '</strong></section><section class="kpi-comparison ' + (comparisonAvailable ? 'is-available' : 'is-withheld') + '"><span class="kpi-brief-label">' + escapeHtml(comparisonHeading) + '</span><strong>' + escapeHtml(firstDefined(comparison.value, comparisonAvailable ? 'Available' : 'Withheld')) + '</strong><p>' + escapeHtml(comparisonDetail) + '</p>' + missingDetail + referenceMarkup + '</section></div>';
+    var posture = firstDefined(signal.posture, comparisonAvailable ? 'Position available' : 'Comparison pending');
+    var variance = firstDefined(signal.variance_label, comparison.value, comparisonAvailable ? 'Compared with plan' : 'No like-for-like comparator');
+    var tone = ['critical', 'watch', 'positive', 'neutral'].indexOf(String(signal.tone)) >= 0 ? String(signal.tone) : 'neutral';
+    var actionRequired = signal.action_required === true;
+    return [
+      '<section class="ceo-kpi-readout tone-' + escapeHtml(tone) + '">',
+      '<div class="ceo-kpi-readout__head"><span class="kpi-brief-label">CEO readout</span><span class="ceo-posture-chip tone-' + escapeHtml(tone) + '">' + escapeHtml(posture) + '</span></div>',
+      '<p class="ceo-kpi-readout__summary">' + escapeHtml(firstDefined(signal.readout, brief.readout, 'No executive readout is available.')) + '</p>',
+      '<div class="ceo-kpi-next-move"><span>' + (actionRequired ? 'Decision required' : 'Executive posture') + '</span><strong>' + escapeHtml(firstDefined(signal.decision, brief.decision_context, 'No CEO action is currently identified.')) + '</strong></div>',
+      '</section>',
+      '<div class="ceo-kpi-facts">',
+      '<div><span>Position</span><strong>' + escapeHtml(variance) + '</strong></div>',
+      '<div><span>Intervention</span><strong>' + (actionRequired ? 'CEO action required' : 'No immediate CEO action') + '</strong></div>',
+      '<div><span>Evidence</span><strong>' + (comparisonAvailable ? 'Current actual and comparator aligned' : 'Current actual verified; comparator pending') + '</strong></div>',
+      '</div>',
+      (!comparisonAvailable || referenceMarkup ? '<details class="ceo-comparison-note"><summary>Comparison boundary</summary><p>' + escapeHtml(comparisonDetail) + '</p>' + missingDetail + referenceMarkup + '</details>' : '')
+    ].join('');
   }
 
   function renderInlineKpiDrill(driver, drillCard) {
@@ -3999,6 +4015,7 @@
     var assistantName = assistantNameForState();
     var brief = executiveKpiBrief(driver);
     var comparison = brief.comparison || {};
+    var executiveSignal = brief.executive_signal || {};
     var strategicReference = brief.strategic_reference || null;
     var calculation = brief.calculation || {};
     var coverage = brief.coverage || {};
@@ -4013,17 +4030,6 @@
     // Use the same governed percentage contract as the dashboard gauge. Some
     // KPIs intentionally leave the legacy `pct` field null and expose their
     // audited ratio as `ring_pct`; Number(null) would incorrectly render 0.0%.
-    var headlinePctRaw = firstDefined(driver && driver.ring_pct, driver && driver.pct, null);
-    var headlinePct = headlinePctRaw === null || headlinePctRaw === undefined || headlinePctRaw === ""
-      ? NaN
-      : Number(headlinePctRaw);
-    var headlineRatioLabel = String(firstDefined(driver && driver.ring_label, driverSubLabel(driver), "of plan"));
-    // A long-horizon board reference is useful context, but it is never a
-    // substitute for a period-aligned performance comparison.
-    var referenceOnlyRatio = comparison.available !== true && /(plan|floor)/i.test(headlineRatioLabel);
-    var headlineRatio = Number.isFinite(headlinePct) && headlineRatioLabel !== "current margin"
-      ? headlinePct.toFixed(1) + "% " + headlineRatioLabel + (referenceOnlyRatio ? " · reference only" : "")
-      : "";
     var calculationMarkup = steps.length
       ? '<div class="kpi-brief-steps">' + steps.map(function (step) {
         return '<div class="kpi-brief-step"><span>' + escapeHtml(firstDefined(step.label, "Component")) + '</span><strong>' + escapeHtml(firstDefined(step.value, "—")) + '</strong></div>';
@@ -4034,22 +4040,21 @@
     var executiveContextMarkup = kpiExecutiveContextMarkup(brief, comparison, strategicReference);
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
-      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3>' + (headlineRatio ? '<span class="kpi-brief-ratio">' + escapeHtml(headlineRatio) + '</span>' : '') + '<strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong></div></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
-      '<div class="kpi-brief-summary"><p>' + escapeHtml(firstDefined(brief.readout, "No explanation is available.")) + '</p></div>',
+      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><span class="kpi-brief-variance tone-' + escapeHtml(firstDefined(executiveSignal.tone, 'neutral')) + '">' + escapeHtml(firstDefined(executiveSignal.variance_label, comparison.value, 'Current position')) + '</span></div></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
       executiveContextMarkup,
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
-      compositionMarkup,
-      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Discuss this figure</span><strong>Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</strong><p>Continue in the shared conversation with this figure already in context.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">What needs my attention?</button><button type="button" data-kpi-question="drivers">What is driving this result?</button><button type="button" data-kpi-question="comparison">How does this compare with the approved plan?</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask anything about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
-      '<details class="kpi-brief-audit"><summary>How this figure is calculated</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
+      (compositionMarkup ? '<details class="kpi-supporting-analysis"><summary>Supporting analysis</summary>' + compositionMarkup + '</details>' : ''),
+      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Decision support</span><strong>Pressure-test the executive position with ' + escapeHtml(assistantName) + '</strong><p>The selected KPI, current posture and evidence boundary are already attached.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">Do I need to intervene?</button><button type="button" data-kpi-question="drivers">Which leader owns the outcome?</button><button type="button" data-kpi-question="comparison">What changes the outlook?</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask a decision question about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
+      '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
     safeArray(drillCard.querySelectorAll("[data-kpi-question]")).forEach(function (button) {
       button.addEventListener("click", function () {
         var questionType = button.getAttribute("data-kpi-question");
         var prompts = {
-          decision: "For " + label + ", what requires my decision or attention now?",
-          drivers: "What is driving the current " + label + " result, and where is concentration highest?",
-          comparison: "Explain how " + label + " relates to the approved plan, and why any direct comparison is currently withheld."
+          decision: "For " + label + ", do I need to intervene now? Give me the decision, owner and deadline only if the executive threshold is crossed.",
+          drivers: "Which executive owns the current " + label + " outcome, what are the two largest business drivers, and what commitment should I request?",
+          comparison: "What would materially change the current " + label + " outlook before the next executive review?"
         };
         askAssistant(prompts[questionType] || prompts.decision, button, {
           entrypoint: "ceo_kpi_inline",
@@ -4188,13 +4193,13 @@
       var brief = executiveKpiBrief(driver);
       var governedPrompts = [
         firstDefined(brief.decision_question, "What is driving " + currentLabel + " and what decision does it require?"),
-        "What remains before this board pack can be released, who owns it, and what evidence is missing?",
-        "Which cases create the largest recoverable value, and what should be acted on first?"
+        "What are the three decisions I need to make before the next commitment, with one owner and deadline for each?",
+        "What changed since the last executive review, and which item now crosses the CEO materiality threshold?"
       ];
       gravityPanel.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">CEO agenda</p><h3 class="detail-title">Questions worth answering now</h3><p class="section-note">Each question opens the executive assistant with the relevant KPI, board approval stage or case already attached.</p></div></div>',
+        '<div class="detail-head"><div><p class="detail-eyebrow">Executive preparation</p><h3 class="detail-title">Pressure-test the next move</h3><p class="section-note">Each question opens Hermes with the current performance position, commitments and materiality boundary attached.</p></div></div>',
         '<div class="decision-question-grid">' + governedPrompts.map(function (prompt, index) {
-          var labels = [currentLabel + ' drivers', 'Board release gate', 'Value at stake'];
+          var labels = [currentLabel + ' decision', 'Next commitments', 'Material changes'];
           var kpiAttribute = index === 0 ? ' data-kpi-key="' + escapeHtml(String(firstDefined(driver.driver_key, driver.key, ""))) + '"' : '';
           return '<button class="decision-question-card" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"' + kpiAttribute + '><span>' + escapeHtml(labels[index]) + '</span><strong>' + escapeHtml(prompt) + '</strong><small>Ask Hermes with this context →</small></button>';
         }).join('') + '</div>'
@@ -4552,105 +4557,73 @@
     var findingsPanel = $("findings-panel");
     var developmentsPanel = $("developments-panel");
     var weekPanel = $("week-panel");
+    var priorities = sections.executive_priorities || {};
     var findingsSection = sections.findings || {};
     var developmentsSection = sections.developments || {};
     var weekSection = sections.week_ahead || {};
-    var primaryFindings = safeArray(findingsSection.items).length ? safeArray(findingsSection.items).slice(0, 3) : safeArray(blueprint.findings).slice(0, 3);
-    var caseIndex = safeArray(findingsSection.case_index).length ? safeArray(findingsSection.case_index) : primaryFindings;
-    var selectedFinding = caseIndex.find(function (item) {
-      return String(firstDefined(item && item.finding_id, '')) === String(state.selectedFindingId || '');
-    });
-    var selectedOutsidePrimary = selectedFinding && !primaryFindings.some(function (item) {
-      return String(firstDefined(item && item.finding_id, '')) === String(state.selectedFindingId || '');
-    });
-    var findings = selectedOutsidePrimary
-      ? [selectedFinding].concat(primaryFindings.filter(function (item) {
-          return String(firstDefined(item && item.finding_id, '')) !== String(state.selectedFindingId || '');
-        }).slice(0, 2))
-      : primaryFindings;
+    var decisions = safeArray(priorities.decisions).slice(0, 3);
+    var signals = safeArray(priorities.signals).slice(0, 3);
+    var delegated = priorities.delegated_summary || null;
+    var fallbackFindings = safeArray(findingsSection.items).length ? safeArray(findingsSection.items) : safeArray(blueprint.findings);
     var developments = liveGovernedMode
       ? safeArray(developmentsSection.items).slice(0, 3)
       : (safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3));
     var weekAhead = liveGovernedMode
       ? safeArray(weekSection.items).slice(0, 3)
       : (safeArray(blueprint.week).length ? safeArray(blueprint.week).slice(0, 3) : safeArray(lowerRail.week_ahead).slice(0, 3));
-    var reconciliation = findingsSection.reconciliation || getSharedAssistantContext().findings_reconciliation || {};
-    var displayedRecoverable = selectedOutsidePrimary
-      ? findings.reduce(function (total, item) { return total + (Number(item && item.recoverable_sar) || 0); }, 0)
-      : (Number(firstDefined(reconciliation.displayed_recoverable_sar, 0)) || 0);
-    var totalRecoverable = Number(firstDefined(reconciliation.total_recoverable_sar, displayedRecoverable)) || displayedRecoverable;
-    var remainingRecoverable = Math.max(0, totalRecoverable - displayedRecoverable);
-    var totalFindingCount = Number(firstDefined(reconciliation.total_finding_count, findings.length)) || findings.length;
-    var displayedFindingCount = Number(firstDefined(reconciliation.displayed_finding_count, findings.length)) || findings.length;
-    var reconciliationHtml = '';
-    if (totalFindingCount > displayedFindingCount || remainingRecoverable > 0) {
-      reconciliationHtml = '<div class="rail-reconcile"><span>Showing ' + escapeHtml(String(displayedFindingCount)) + ' of ' + escapeHtml(String(totalFindingCount)) + ' cases: ' + escapeHtml(formatSar(displayedRecoverable)) + '</span>' + (remainingRecoverable > 0 ? '<span>' + escapeHtml(String(totalFindingCount - displayedFindingCount)) + ' other checked cases: ' + escapeHtml(formatSar(remainingRecoverable)) + '</span>' : '') + '<strong>Total recoverable value: ' + escapeHtml(formatSar(totalRecoverable)) + '</strong></div>';
+    if (!decisions.length && fallbackFindings.length) {
+      decisions = [{
+        key: 'delegated_controls',
+        title: 'No case-level decision is escalated to the CEO',
+        summary: 'Finance-control items remain with the Group CFO. Hermes can surface only the aggregate exposure if it crosses the executive threshold.',
+        decision: 'No CEO action is required unless the aggregate exposure or release risk becomes material.',
+        owner: 'Group CFO', timing: 'Delegated', priority: 'neutral', action_required: false,
+        prompt: 'Do any finance-control items cross the CEO materiality threshold? Answer at portfolio level, not invoice level.'
+      }];
     }
-    var renderToggleList = function (items, kind) {
-      return items.map(function (item, index) {
-        var findingId = kind === 'finding' ? String(firstDefined(item.finding_id, '')) : '';
-        var key = kind + ':' + (findingId || index);
-        var open = state.openDriverNoteKey === key;
-        var actionPrompt = kind === 'development'
-          ? 'Project the impact of “' + firstDefined(item.title, 'this development') + '” on the current plan and what I should prepare for the board.'
-          : 'Explain why “' + firstDefined(item.title, 'this finding') + '” matters for the board review and what action I should consider.';
-        var actionLabel = kind === 'development' ? 'Project impact on plan' : 'Ask why this matters';
-        // A finding is not a dead end. When the run carries a recommended
-        // action and a state, show them, and offer an approve-recovery control
-        // so the executive can act rather than only read. Both come from the
-        // governed finding; nothing is shown that the run did not provide.
-        var recommended = kind === 'finding' ? firstDefined(item.recommended_action, '') : '';
-        var findingState = kind === 'finding' ? firstDefined(item.state, '') : '';
-        var stateHtml = findingState
-          ? '<span class="rail-state" data-finding-state="' + escapeHtml(findingState.toLowerCase().replace(/[^a-z]+/g, '-')) + '">' + escapeHtml(findingState) + '</span>'
-          : '';
-        var recommendedHtml = recommended
-          ? '<div class="rail-recommended"><span class="rail-recommended__label">Recommended action</span><p>' + escapeHtml(recommended) + '</p></div>'
-          : '';
-        var approveHtml = (kind === 'finding' && findingId)
-          ? '<button type="button" class="rail-inline-action rail-inline-action--primary" data-finding-approve="' + escapeHtml(findingId) + '" data-finding-title="' + escapeHtml(firstDefined(item.title, 'this finding')) + '">Approve recovery</button>'
-          : '';
-        return '<button type="button" class="rail-toggle' + (open ? ' is-open' : '') + '" data-rail-toggle="' + escapeHtml(key) + '"' + (findingId ? ' data-finding-id="' + escapeHtml(findingId) + '"' : '') + ' aria-expanded="' + (open ? 'true' : 'false') + '"><span class="rail-toggle__copy"><strong>' + escapeHtml(firstDefined(item.title, kind === 'finding' ? 'Finding' : 'Development')) + '</strong><span>' + escapeHtml(firstDefined(kind === 'finding' ? item.tag : item.meta, kind === 'finding' ? 'signal' : 'update')) + '</span></span>' + stateHtml + '<span class="rail-toggle__plus">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="rail-toggle__detail">' + escapeHtml(firstDefined(kind === 'finding' ? item.detail : item.impact, item.detail, 'Awaiting detail.')) + recommendedHtml + '<div class="rail-toggle__actions">' + approveHtml + '<button type="button" class="rail-inline-action" data-rail-prompt="' + escapeHtml(actionPrompt) + '">' + escapeHtml(actionLabel) + '</button></div></div>' : '');
-      }).join('');
-    };
+    if (!signals.length && developments.length) {
+      signals = developments.map(function (item, index) {
+        return {
+          key: 'development-' + index,
+          title: firstDefined(item.title, 'Business signal'),
+          summary: firstDefined(item.impact, item.detail, 'No executive implication is available.'),
+          implication: 'Confirm whether this changes the current outlook or any leadership commitment.',
+          tone: 'neutral',
+          prompt: 'Does “' + firstDefined(item.title, 'this business signal') + '” change the current outlook or require executive intervention?'
+        };
+      }).slice(0, 3);
+    }
+
+    var decisionMarkup = decisions.length ? decisions.map(function (item) {
+      var priority = ['critical', 'watch', 'positive', 'neutral'].indexOf(String(item.priority)) >= 0 ? String(item.priority) : 'neutral';
+      return '<article class="executive-decision tone-' + escapeHtml(priority) + '"><div class="executive-decision__head"><span>' + (item.action_required === false ? 'Delegated' : 'Decision required') + '</span><strong>' + escapeHtml(firstDefined(item.timing, 'Current review')) + '</strong></div><h4>' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</h4><p>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'Confirm the owner and next move.')) + '</strong></div><div class="executive-decision__foot"><span>Owner · ' + escapeHtml(firstDefined(item.owner, 'Executive team')) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Open decision brief</button></div></article>';
+    }).join('') : '<div class="executive-empty-state"><strong>No CEO decision is waiting</strong><p>Operational work remains delegated and no material escalation is attached to this review.</p></div>';
+
+    var signalMarkup = signals.length ? signals.map(function (item) {
+      var tone = ['critical', 'watch', 'positive', 'neutral'].indexOf(String(item.tone)) >= 0 ? String(item.tone) : 'neutral';
+      return '<article class="executive-signal tone-' + escapeHtml(tone) + '"><div class="executive-signal__head"><span class="executive-signal__dot"></span><strong>' + escapeHtml(firstDefined(item.title, 'Business signal')) + '</strong></div><p>' + escapeHtml(firstDefined(item.summary, '')) + '</p><small>' + escapeHtml(firstDefined(item.implication, 'Keep this under review.')) + '</small><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Explain the executive implication.')) + '">Pressure-test with Hermes</button></article>';
+    }).join('') : '<div class="executive-empty-state"><strong>No material performance exception</strong><p>The current headline measures remain within the executive tolerance.</p></div>';
 
     if (findingsPanel) {
-      findingsPanel.innerHTML = '<div class="detail-head"><div><h3 class="detail-title">Findings &amp; concerns</h3></div></div><div class="rail-toggle-list">' + renderToggleList(findings, 'finding') + '</div>' + reconciliationHtml;
+      findingsPanel.hidden = false;
+      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Your call</p><h3 class="detail-title">Decisions for you</h3><p class="section-note">Aggregated at enterprise level; execution detail stays with the accountable leader.</p></div></div><div class="executive-decision-list">' + decisionMarkup + '</div>' + (delegated ? '<div class="delegated-portfolio"><span>' + escapeHtml(firstDefined(delegated.title, 'Delegated portfolio')) + '</span><p>' + escapeHtml(firstDefined(delegated.summary, '')) + '</p><strong>' + escapeHtml(firstDefined(delegated.owner, 'Group CFO')) + '</strong></div>' : '');
     }
 
     if (developmentsPanel) {
-      developmentsPanel.hidden = liveGovernedMode && !developments.length;
-      developmentsPanel.innerHTML = developments.length
-        ? '<div class="detail-head"><div><h3 class="detail-title">Developments since you were here</h3></div></div><div class="rail-toggle-list">' + renderToggleList(developments, 'development') + '</div>'
-        : '';
+      developmentsPanel.hidden = false;
+      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Enterprise outlook</p><h3 class="detail-title">Signals to watch</h3><p class="section-note">Only changes that can alter the outlook or a leadership commitment.</p></div></div><div class="executive-signal-list">' + signalMarkup + '</div>';
     }
 
     if (weekPanel) {
       weekPanel.hidden = false;
       var openIndex = Math.min(state.openWeekIndex || 0, Math.max(weekAhead.length - 1, 0));
       var activeEvent = weekAhead[openIndex] || null;
-      weekPanel.innerHTML = weekAhead.length ? '<div class="detail-head"><div><h3 class="detail-title">CEO agenda</h3></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
+      weekPanel.innerHTML = weekAhead.length ? '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">What to walk in having decided</h3><p class="section-note">Meetings are shown only when the current run carries a governed calendar.</p></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Open thinking mode for ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ': model the options and what I should walk in having decided."><strong>Explore scenarios</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ', what data am I missing and who should I request it from?"><strong>Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line..." /><button type="submit">Send</button></form></div>' : '') : '<div class="detail-head"><div><h3 class="detail-title">CEO agenda</h3></div></div><p class="section-note">No executive calendar is connected for this reporting period. Your operations team can add the upcoming meetings and preparation milestones when they are confirmed.</p>';
+      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">Decision brief</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Prepare the CEO decision brief for ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ': decision, options, recommendation, owner and what I should walk in having decided."><strong>Prepare decision brief</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ', identify only the missing decision inputs, their owner and the deadline to obtain them."><strong>Identify missing inputs</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask Hermes to prepare something for this commitment</label><input id="week-input" class="driver-input" type="text" placeholder="Ask a decision question about this commitment..." /><button type="submit">Ask</button></form></div>' : '') : '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">No executive calendar connected</h3></div></div><p class="section-note">No governed calendar is available for this reporting period. No meetings or deadlines have been inferred.</p>';
       safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
-        safeArray(panel && panel.querySelectorAll('[data-rail-toggle]')).forEach(function (button) {
-          button.onclick = function () {
-            var key = button.getAttribute('data-rail-toggle') || '';
-            state.openDriverNoteKey = state.openDriverNoteKey === key ? '' : key;
-            renderLowerRailFidelity();
-          };
-        });
-        safeArray(panel && panel.querySelectorAll('[data-rail-prompt]')).forEach(function (button) {
-          button.onclick = function (event) {
-            event.stopPropagation();
-            askAssistant(button.getAttribute('data-rail-prompt') || '', button);
-          };
-        });
-        safeArray(panel && panel.querySelectorAll('[data-finding-approve]')).forEach(function (button) {
-          button.onclick = function (event) {
-            event.stopPropagation();
-            requestFindingRecovery(button);
-          };
+        safeArray(panel && panel.querySelectorAll('[data-executive-prompt]')).forEach(function (button) {
+          button.onclick = function () { askAssistant(button.getAttribute('data-executive-prompt') || '', button); };
         });
       });
       safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {

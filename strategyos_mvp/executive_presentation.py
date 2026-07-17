@@ -212,6 +212,116 @@ def _governed_strategic_reference(payload: Mapping[str, Any], key: str) -> dict[
     return {"label": label, "value": value, "note": note, "source": source}
 
 
+def _executive_kpi_signal(
+    spec: Mapping[str, Any],
+    *,
+    actual: float,
+    components: Mapping[str, Any],
+    missing_inputs: list[str],
+    actual_complete: bool,
+) -> dict[str, Any]:
+    """Translate a finance calculation into a CEO posture and next move.
+
+    The calculation remains available in the audit trail.  This contract is
+    intentionally about intervention: whether the position is material, what
+    direction it is moving in, and whether the CEO needs to act.
+    """
+    key = str(spec["key"])
+    if missing_inputs or not actual_complete:
+        return {
+            "posture": "Comparison pending",
+            "variance_label": "No like-for-like comparator",
+            "tone": "neutral",
+            "action_required": False,
+            "readout": "The current actual is available, but a CEO performance conclusion is not yet safe.",
+            "decision": "Keep this with the Group CFO until the period, scope and comparator are aligned.",
+        }
+
+    if key == "ebitda_margin":
+        revenue = _number_or_none(components.get("revenue_actual"))
+        plan_ebitda = _number_or_none(components.get("ebitda_plan"))
+        plan_revenue = _number_or_none(components.get("revenue_plan"))
+        actual_margin = (actual / revenue) * 100 if revenue else None
+        plan_margin = (plan_ebitda / plan_revenue) * 100 if plan_ebitda is not None and plan_revenue else None
+        gap_bps = (actual_margin - plan_margin) * 100 if actual_margin is not None and plan_margin is not None else 0.0
+        within_tolerance = abs(gap_bps) <= 25
+        favourable = gap_bps >= 0
+        posture = "Broadly on plan" if within_tolerance else "Ahead of plan" if favourable else "Below plan"
+        tone = "neutral" if within_tolerance else "positive" if favourable else "critical" if gap_bps <= -150 else "watch"
+        variance_label = f"{abs(round(gap_bps))} bps {'above' if favourable else 'below'} plan"
+        readout = (
+            f"EBITDA margin is broadly on plan, within {abs(round(gap_bps))} basis points of the approved level."
+            if within_tolerance
+            else f"EBITDA margin is {abs(round(gap_bps))} basis points {'above' if favourable else 'below'} plan."
+        )
+        decision = (
+            "No immediate CEO intervention; ask the CFO to keep the margin bridge under watch."
+            if within_tolerance
+            else "Validate whether the upside is repeatable before changing guidance."
+            if favourable
+            else "Confirm the margin recovery owner, the two largest levers and the date the gap will close."
+        )
+        return {
+            "posture": posture,
+            "variance_label": variance_label,
+            "tone": tone,
+            "action_required": not within_tolerance and not favourable,
+            "readout": readout,
+            "decision": decision,
+        }
+
+    comparator = _number_or_none(components.get(spec.get("comparator")))
+    ratio = (actual / comparator) if comparator not in {None, 0} else 1.0
+    gap_pct = (ratio - 1) * 100
+    inverse = bool(spec.get("inverse"))
+    favourable = gap_pct <= 0 if inverse else gap_pct >= 0
+    within_tolerance = abs(gap_pct) <= 1
+
+    if key == "cash_vs_floor":
+        gap_amount = actual - float(comparator or 0)
+        favourable = gap_amount >= 0
+        posture = "Above floor" if favourable else "Below floor"
+        tone = "positive" if favourable else "critical"
+        variance_label = f"{_format_sar(abs(gap_amount))} {'above' if favourable else 'below'} floor"
+        return {
+            "posture": posture,
+            "variance_label": variance_label,
+            "tone": tone,
+            "action_required": not favourable,
+            "readout": f"Liquidity is {variance_label.lower()} for the current reporting scope.",
+            "decision": (
+                "No liquidity intervention is required; keep the headroom protected against committed uses."
+                if favourable
+                else "Confirm the liquidity action, accountable owner and deadline before the next commitment is made."
+            ),
+        }
+
+    posture = "Broadly on plan" if within_tolerance else "Ahead of plan" if favourable else "Off plan"
+    tone = "neutral" if within_tolerance else "positive" if favourable else "critical" if abs(gap_pct) >= 5 else "watch"
+    variance_label = f"{abs(gap_pct):.1f}% {'below' if gap_pct < 0 else 'above'} plan"
+    subject = "Operating cost" if key == "operating_cost" else "Revenue"
+    readout = (
+        f"{subject} is broadly on plan for the current period ({variance_label})."
+        if within_tolerance
+        else f"{subject} is {variance_label} for the current period."
+    )
+    decision = (
+        "No immediate CEO intervention. Keep the run-rate under watch and escalate only if the gap widens next period."
+        if within_tolerance
+        else "Validate whether the favourable variance is repeatable before changing guidance."
+        if favourable
+        else "Confirm the recovery owner, the largest contributing business line and the date the gap will close."
+    )
+    return {
+        "posture": posture,
+        "variance_label": variance_label,
+        "tone": tone,
+        "action_required": not within_tolerance and not favourable,
+        "readout": readout,
+        "decision": decision,
+    }
+
+
 def _executive_kpi_brief(
     spec: Mapping[str, Any],
     *,
@@ -224,6 +334,7 @@ def _executive_kpi_brief(
     actual_complete: bool,
     comparison: str,
     strategic_reference: Mapping[str, Any] | None,
+    executive_signal: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Separate the CEO decision brief from the expandable calculation trail.
 
@@ -244,9 +355,6 @@ def _executive_kpi_brief(
         if missing_inputs
         else "Compared with the approved comparator supplied for this period."
     )
-    scoped_accounts = {}
-    if isinstance(evidence_details.get("account_scopes"), Mapping):
-        scoped_accounts = evidence_details["account_scopes"]
     contributors = evidence_details.get("contributors") if isinstance(evidence_details.get("contributors"), Mapping) else {}
 
     def contributor_rows(scope: str, limit: int = 5) -> list[dict[str, Any]]:
@@ -271,29 +379,19 @@ def _executive_kpi_brief(
 
     calculation_steps: list[dict[str, str]] = []
     driver_rows: list[dict[str, Any]] = []
-    narrative = ""
-    implication = ""
+    narrative = str(executive_signal.get("readout") or "Current performance is available for review.")
+    implication = str(executive_signal.get("decision") or "No CEO action is currently identified.")
     decision_question = ""
     if key == "revenue":
-        account_count = len((scoped_accounts.get("revenue") or {}).get("accounts") or [])
-        narrative = "Revenue recognised in the H1 general ledger."
         calculation_steps = [{"label": "Recognised revenue", "value": metric}]
-        if account_count:
-            narrative = f"Revenue recognised across {account_count} revenue account groups in the H1 general ledger."
         driver_rows = contributor_rows("revenue")
-        implication = (
-            f"Current H1 revenue is {metric}. An approved H1 revenue budget for the same entities and period has not been supplied, so no plan comparison is shown."
-            if missing_inputs
-            else comparison
-        )
-        decision_question = "Which revenue streams account for the current result, and where is concentration risk highest?"
+        decision_question = "Does the current revenue position require intervention, and which business line should own it?"
     elif key == "ebitda_margin":
         revenue = _number_or_none(components.get("revenue_actual"))
         cogs = _number_or_none(components.get("cogs_actual"))
         operating_cost = _number_or_none(components.get("operating_cost_actual"))
         ebitda = _number_or_none(components.get("ebitda_actual"))
         display_component = lambda value: _format_sar(value) if value is not None else "Not supplied"
-        narrative = "Margin before depreciation, amortisation, interest and tax."
         calculation_steps = [
             {"label": "Revenue", "value": display_component(revenue)},
             {"label": "Less cost of goods sold", "value": display_component(cogs)},
@@ -306,31 +404,12 @@ def _executive_kpi_brief(
             {"label": "Operating cost", "value": display_component(operating_cost), "share_pct": (operating_cost / revenue * 100) if revenue and operating_cost is not None else None},
             {"label": "EBITDA", "value": display_component(ebitda), "share_pct": (ebitda / revenue * 100) if revenue and ebitda is not None else None},
         ]
-        implication = (
-            f"Current H1 EBITDA margin is {metric}. Approved H1 EBITDA and revenue budgets for the same entities and period have not been supplied, so no plan comparison is shown."
-            if missing_inputs
-            else comparison
-        )
-        decision_question = "What is the EBITDA bridge from revenue through direct and operating costs?"
+        decision_question = "Does the margin gap require intervention, and which two levers will close it?"
     elif key == "operating_cost":
-        account_count = len((scoped_accounts.get("operating_cost") or {}).get("accounts") or [])
-        narrative = "Operating expenditure before depreciation, amortisation and interest."
         calculation_steps = [{"label": "Operating cost", "value": metric}]
-        if account_count:
-            narrative = f"Operating expenditure across {account_count} expense accounts; depreciation, amortisation and interest excluded."
         driver_rows = contributor_rows("operating_cost")
-        implication = (
-            f"Current H1 operating cost is {metric}. An approved H1 operating-cost budget for the same entities and period has not been supplied, so no plan comparison is shown."
-            if missing_inputs
-            else comparison
-        )
-        decision_question = "Which operating-cost accounts create the largest spend concentration and merit review?"
+        decision_question = "Does the cost position require intervention, and which owner has the largest controllable gap?"
     elif key == "cash_vs_floor":
-        as_of = str(evidence_details.get("as_of") or "the latest reported date")
-        missing_accounts = list(evidence_details.get("missing_accounts") or [])
-        narrative = f"Latest reported treasury cash position as at {as_of}."
-        if missing_accounts:
-            narrative += " One balance remains outstanding and has not been estimated."
         calculation_steps = [{"label": "Reported cash position", "value": metric}]
         reported_accounts = list(evidence_details.get("reported_accounts") or [])
         cash_total = sum((_number_or_none(row.get("balance_sar")) or 0) for row in reported_accounts if isinstance(row, Mapping))
@@ -342,12 +421,7 @@ def _executive_kpi_brief(
             }
             for row in reported_accounts if isinstance(row, Mapping)
         ]
-        implication = (
-            "The latest cash extract is partial. An approved cash floor for the same scope has not been supplied, so no floor comparison is shown."
-            if missing_inputs
-            else comparison
-        )
-        decision_question = "What cash is reported, what remains missing, and what floor is required for a board-safe comparison?"
+        decision_question = "Is liquidity headroom sufficient for the next commitments, and what needs protecting?"
 
     return {
         "period_label": f"{period} actual",
@@ -357,6 +431,7 @@ def _executive_kpi_brief(
         "driver_title": "What makes up this figure" if key != "ebitda_margin" else "EBITDA bridge",
         "decision_context": implication,
         "decision_question": decision_question,
+        "executive_signal": dict(executive_signal),
         "comparison": {
             "label": comparison_name,
             "value": comparison_value,
@@ -568,6 +643,13 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             "source_files": list(kpi_evidence.get("files") or []),
         }
         strategic_reference = _governed_strategic_reference(finance_payload, str(spec["key"]))
+        executive_signal = _executive_kpi_signal(
+            spec,
+            actual=actual,
+            components=components,
+            missing_inputs=missing_inputs,
+            actual_complete=actual_is_complete,
+        )
         cards.append(
             {
                 "kpi_contract": True,
@@ -580,10 +662,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "ring_pct": round(ring_pct, 1) if ring_pct is not None else None,
                 "ring_label": ring_label,
                 "status": status,
-                # The source pack does not provide aligned H1 plan comparators
-                # for these four measures. Use the reference design's neutral
-                # amber treatment instead of implying favourable/adverse performance.
-                "tone": "flat",
+                "tone": executive_signal["tone"],
                 "sub": sub,
                 "detail": detail,
                 "story": detail,
@@ -618,6 +697,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                     actual_complete=actual_is_complete,
                     comparison=comparison,
                     strategic_reference=strategic_reference,
+                    executive_signal=executive_signal,
                 ),
             }
         )
@@ -634,8 +714,6 @@ def _hero(
     challenged = int(_claim_value(metrics.get("challenged_count"), 0) or 0)
     reports = int(_claim_value(metrics.get("report_count"), 0) or 0)
     approval_status = str(_claim_value(lifecycle.get("approval_status"), "pending") or "pending").lower()
-    recoverable_total = _as_money(_claim_value(metrics.get("recoverable_total"), None))
-    finding_count = len(list(read_model.get("findings") or []))
     citation_value = _claim_value(metrics.get("citation_resolution"), {}) or {}
     citation_total = int(citation_value.get("total") or 0) if isinstance(citation_value, Mapping) else 0
     citation_resolved = citation_value.get("resolved") if isinstance(citation_value, Mapping) else None
@@ -645,6 +723,14 @@ def _hero(
         str(driver.get("availability") or "") == "unavailable"
         for driver in drivers or []
     )
+    driver_signals: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
+    for driver in drivers or []:
+        brief = driver.get("executive_brief") if isinstance(driver.get("executive_brief"), Mapping) else {}
+        signal = brief.get("executive_signal") if isinstance(brief.get("executive_signal"), Mapping) else {}
+        if signal:
+            driver_signals.append((driver, signal))
+    intervention = next((item for item in driver_signals if item[1].get("action_required") is True), None)
+    comparable_signals = [item for item in driver_signals if item[1].get("posture") != "Comparison pending"]
     if read_model.get("data_status") != "ready":
         label = "Board readiness is unavailable"
         body = read_model.get("status_reason") or "Current reporting information is not available."
@@ -656,28 +742,34 @@ def _hero(
             "are withheld because the required finance information is not available for this reporting period."
         )
         status = "finance_data_required"
+    elif intervention:
+        driver, signal = intervention
+        label = f"{driver.get('label') or 'Performance'} needs executive intervention"
+        body = f"{signal.get('readout')} {signal.get('decision')}"
+        if challenged:
+            body += f" Board release is also blocked by {challenged} evidence {'issue' if challenged == 1 else 'issues'}."
+        status = "intervention_required"
+    elif comparable_signals:
+        label = "Enterprise performance is broadly on plan"
+        body = "No headline measure currently crosses the CEO intervention threshold."
+        if challenged:
+            body += f" Board release remains blocked by {challenged} evidence {'issue' if challenged == 1 else 'issues'}."
+        elif approval_status in {"pending", "awaiting_review", "in_review", ""}:
+            body += " The board pack remains with the reviewer for final sign-off."
+        elif approval_status == "approved" and reports:
+            body += f" The board pack is approved and {reports} {'report is' if reports == 1 else 'reports are'} ready."
+        status = "on_plan"
     elif challenged:
-        label = _headline_with_value(
-            recoverable_total,
-            finding_count,
-            fallback="Board pack is not yet clean for release",
-        )
-        body = (
-            f"{challenged} {'item' if challenged == 1 else 'items'} still need their evidence closed "
-            "before this can be released to the board."
-        )
+        label = "Board release needs executive attention"
+        body = f"{challenged} evidence {'issue is' if challenged == 1 else 'issues are'} still blocking a clean release."
         status = "needs_reviewer_closure"
     elif approval_status == "approved" and reports:
         label = "Board pack is approved for release"
         body = f"Approval is recorded and {reports} {'report' if reports == 1 else 'reports'} are ready."
         status = "release_ready"
     elif approval_status in {"pending", "awaiting_review", ""}:
-        label = _headline_with_value(
-            recoverable_total,
-            finding_count,
-            fallback="Reviewer decision is still open",
-        )
-        body = "The finance evidence is ready. A reviewer still has to sign it off before release."
+        label = "Board pack is waiting for final sign-off"
+        body = "The reviewer decision is still open; distribution remains blocked until it is recorded."
         status = "review_gate"
     else:
         label = "Board pack needs follow-up"
@@ -697,11 +789,16 @@ def _hero(
         "summary": label,
         "body": body,
         "score": None,
-        "score_note": (
-            "Database-backed board readiness"
-            if read_model.get("source") == "database"
-            else "Governed artifact board readiness"
+        "executive_posture": (
+            "Action"
+            if status in {"intervention_required", "needs_reviewer_closure"}
+            else "On plan"
+            if status == "on_plan"
+            else "Ready"
+            if status == "release_ready"
+            else "Review"
         ),
+        "score_note": "current posture",
         "secondary_fact": f"As of {read_model.get('as_of')}" if read_model.get("as_of") else "Current reporting period",
         "readiness_operands": readiness_operands,
     }
@@ -792,10 +889,156 @@ def _case_index(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _executive_priorities(
+    read_model: Mapping[str, Any],
+    *,
+    drivers: list[Mapping[str, Any]],
+    reconciliation: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Aggregate operational findings into CEO decisions and business signals.
+
+    Individual invoices, citations and recovery cases remain available to the
+    finance/review lanes and Hermes.  The CEO home receives only material
+    enterprise implications, explicit ownership and the required decision.
+    """
+    metrics = read_model.get("metrics") if isinstance(read_model.get("metrics"), Mapping) else {}
+    lifecycle = read_model.get("lifecycle") if isinstance(read_model.get("lifecycle"), Mapping) else {}
+    approval_status = str(_claim_value(lifecycle.get("approval_status"), "pending") or "pending").lower()
+    challenged_count = int(_claim_value(metrics.get("challenged_count"), 0) or 0)
+    report_count = int(_claim_value(metrics.get("report_count"), 0) or 0)
+    total_recoverable = float(reconciliation.get("total_recoverable_sar") or 0.0)
+    total_finding_count = int(reconciliation.get("total_finding_count") or 0)
+    finance_payload = _finance_kpi_payload(read_model)
+    components = finance_payload.get("components") if isinstance(finance_payload.get("components"), Mapping) else {}
+    revenue_actual = _number_or_none(components.get("revenue_actual"))
+    materiality_threshold = max(1_000_000.0, (revenue_actual or 0.0) * 0.005)
+    material_recovery = total_recoverable >= materiality_threshold
+
+    calendar = read_model.get("week_ahead") if isinstance(read_model.get("week_ahead"), Mapping) else {}
+    calendar_items = list(calendar.get("items") or [])
+    board_event = next(
+        (item for item in calendar_items if "board" in str((item or {}).get("title") or "").lower()),
+        None,
+    )
+    board_timing = (
+        f"Before {str(board_event.get('title') or 'the board meeting').lower()}"
+        if isinstance(board_event, Mapping)
+        else "Before board release"
+    )
+
+    decisions: list[dict[str, Any]] = []
+    if challenged_count:
+        decisions.append(
+            {
+                "key": "evidence_gate",
+                "title": "Clear the board evidence gate",
+                "summary": (
+                    f"{challenged_count} {'issue is' if challenged_count == 1 else 'issues are'} blocking a clean release. "
+                    "The CEO decision is the escalation mandate, not the case-by-case review."
+                ),
+                "decision": "Confirm the accountable executive and the deadline for closure.",
+                "owner": "Group CFO and Reviewer",
+                "timing": board_timing,
+                "priority": "critical",
+                "action_required": True,
+                "prompt": "Give me the shortest evidence-closure plan for the board pack: accountable owner, deadline, and only the items that require CEO escalation.",
+            }
+        )
+    elif approval_status in {"pending", "awaiting_review", "in_review", ""}:
+        decisions.append(
+            {
+                "key": "board_signoff",
+                "title": "Hold the board pack for final sign-off",
+                "summary": (
+                    f"The evidence review is open and {report_count} {'report is' if report_count == 1 else 'reports are'} prepared. "
+                    "Distribution should remain blocked until the reviewer decision is recorded."
+                ),
+                "decision": "Confirm who will sign off and when the pack can be released.",
+                "owner": "Reviewer",
+                "timing": board_timing,
+                "priority": "watch",
+                "action_required": True,
+                "prompt": "What remains before final board-pack sign-off, who owns it, and when can the pack be released?",
+            }
+        )
+
+    if material_recovery:
+        materiality_pct = (total_recoverable / revenue_actual * 100) if revenue_actual else None
+        scale_note = f" ({materiality_pct:.1f}% of current revenue)" if materiality_pct is not None else ""
+        decisions.append(
+            {
+                "key": "recovery_mandate",
+                "title": f"Set the mandate for {_format_sar(total_recoverable)} of recovery",
+                "summary": (
+                    f"The opportunity is aggregated across {total_finding_count} finance-control cases{scale_note}. "
+                    "Keep invoice-level execution with Finance; set the target and escalation threshold here."
+                ),
+                "decision": "Confirm the recovery target, executive owner and exceptions that return to you.",
+                "owner": "Group CFO",
+                "timing": "Next executive review",
+                "priority": "watch",
+                "action_required": True,
+                "prompt": "Frame the finance recovery programme for a CEO decision: target, owner, deadline, and escalation threshold. Do not list individual invoices unless material.",
+            }
+        )
+
+    performance_signals: list[dict[str, Any]] = []
+    for driver in drivers:
+        brief = driver.get("executive_brief") if isinstance(driver.get("executive_brief"), Mapping) else {}
+        signal = brief.get("executive_signal") if isinstance(brief.get("executive_signal"), Mapping) else {}
+        if not signal or signal.get("tone") not in {"critical", "watch", "positive"}:
+            continue
+        performance_signals.append(
+            {
+                "key": str(driver.get("driver_key") or driver.get("key") or "performance"),
+                "title": f"{driver.get('label')}: {signal.get('posture')}",
+                "summary": str(signal.get("readout") or ""),
+                "implication": str(signal.get("decision") or ""),
+                "tone": str(signal.get("tone") or "neutral"),
+                "action_required": bool(signal.get("action_required")),
+                "prompt": str(brief.get("decision_question") or "Explain the executive implication and required owner."),
+            }
+        )
+    performance_signals.sort(
+        key=lambda item: ({"critical": 0, "watch": 1, "positive": 2}.get(str(item.get("tone")), 3), str(item.get("title")))
+    )
+    if not performance_signals:
+        performance_signals.append(
+            {
+                "key": "performance_within_tolerance",
+                "title": "No material headline variance requires CEO intervention",
+                "summary": "The current four enterprise measures do not show an exception above the executive threshold.",
+                "implication": "Keep the operating review delegated and watch for a change in direction next period.",
+                "tone": "neutral",
+                "action_required": False,
+                "prompt": "Confirm whether any headline performance measure requires CEO intervention now, and explain why.",
+            }
+        )
+
+    delegated_summary = None
+    if total_finding_count and not material_recovery:
+        delegated_summary = {
+            "title": "Operational controls remain delegated",
+            "summary": (
+                f"{total_finding_count} finance-control {'case is' if total_finding_count == 1 else 'cases are'} below the CEO materiality threshold "
+                f"of {_format_sar(materiality_threshold)} and remain with the Group CFO."
+            ),
+            "owner": "Group CFO",
+        }
+
+    return {
+        "decisions": decisions[:3],
+        "signals": performance_signals[:3],
+        "delegated_summary": delegated_summary,
+        "materiality_threshold_sar": round(materiality_threshold, 2),
+    }
+
+
 def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
     drivers = _ceo_kpi_cards(read_model)
     hero = _hero(read_model, drivers=drivers)
     findings, reconciliation = _findings(read_model)
+    executive_priorities = _executive_priorities(read_model, drivers=drivers, reconciliation=reconciliation)
     developments = list((read_model.get("developments") or {}).get("items") or [])
     week = list((read_model.get("week_ahead") or {}).get("items") or [])
     sections = {
@@ -805,6 +1048,7 @@ def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
             "case_index": _case_index(read_model),
             "reconciliation": reconciliation,
         },
+        "executive_priorities": executive_priorities,
         "developments": {
             "items": developments,
             "status": (read_model.get("developments") or {}).get("status"),

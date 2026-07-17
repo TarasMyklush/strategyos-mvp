@@ -88,7 +88,7 @@ def test_executive_has_a_dedicated_agents_tab_and_honest_calendar_empty_state():
     twin_render = js[js.index("function renderAgentsDiscovery"):js.index("function renderAssistantStudio")]
     assert "switchView('assistants')" not in twin_render
     assert "data-twin-toggle" in twin_render
-    assert "No executive calendar is connected for this reporting period" in js
+    assert "No governed calendar is available for this reporting period" in js
 
 
 def test_executive_static_js_switches_latest_run_route_by_session_mode():
@@ -186,12 +186,12 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     # Driver grid
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
     # Home composition parity
-    assert "The group index" in html
+    assert "Enterprise performance" in html
     assert 'id="driver-drill"' in html
     assert 'id="findings-panel"' in html
     assert 'id="developments-panel"' in html
     assert 'id="week-panel"' in html
-    assert "Decision questions" in html
+    assert "Prepare the next move" in html
     assert 'id="board-portal"' in html
     assert 'id="agents-activity"' in html
     assert 'id="assistant-network-card"' in html
@@ -231,7 +231,7 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="hero-score"' in html or 'class="hero-score__value"' in html
     assert 'id="hero-head"' in html or 'class="hero-title"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
-    assert "The group index" in html
+    assert "Enterprise performance" in html
     assert 'id="decision-questions-section"' in html
     assert 'id="driver-drill"' in html
     assert 'id="findings-panel"' in html
@@ -290,7 +290,7 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert ">KA<" not in html
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
-    assert "The group index" in html
+    assert "Enterprise performance" in html
     assert 'id="decision-questions-section"' in html
     assert 'id="driver-drill"' in html
     assert 'id="findings-panel"' in html
@@ -1025,8 +1025,8 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert "font-size: 12.5px;\n  font-weight: 400;" in css
     assert "font-size: 15.5px;" in css
     assert 'class="kpi-brief-title-row"' in _static_executive_js()
-    assert "var headlinePctRaw = firstDefined(driver && driver.ring_pct, driver && driver.pct, null);" in _static_executive_js()
-    assert 'headlinePctRaw === null || headlinePctRaw === undefined || headlinePctRaw === ""' in _static_executive_js()
+    assert "var executiveSignal = brief.executive_signal || {};" in _static_executive_js()
+    assert 'class="kpi-brief-variance tone-' in _static_executive_js()
 
 
 def test_driver_card_money_and_metadata_typography_is_structured():
@@ -1082,11 +1082,11 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     # The badge must be driven by grounding_status. Its wording is copy, not
     # contract -- pinning the exact word made a plain-English rewrite look like
     # a regression.
-    assert '? "Traced to source"' in js
+    assert '? "Evidence verified"' in js
     assert "kpi_key:" in js
-    assert "How this figure is calculated" in js
+    assert "Evidence and calculation" in js
     assert "data-kpi-question" in js
-    assert 'decision: "For " + label + ", what requires my decision or attention now?"' in js
+    assert 'decision: "For " + label + ", do I need to intervene now?' in js
     assert "kpi_question_intent: questionType" in js
     assert "function assistantAnswerCacheKey(question, assistantContext)" in js
     assert 'String(firstDefined(context.kpi_question_intent, "free_text"))' in js
@@ -1099,8 +1099,10 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "kpiMovementMarkup(driver)" in js
     assert "What changed" in js
     assert "kpiExecutiveContextMarkup(brief, comparison, strategicReference)" in js
-    assert "Plan comparison unavailable" in js
-    assert "referenceOnlyRatio" in js
+    assert "Comparison boundary" in js
+    assert "referenceOnlyRatio" not in js
+    assert "CEO readout" in js
+    assert "Supporting analysis" in js
     assert "kpi-mix-chart" not in js
     assert ".kpi-executive-grid" in css
     assert ".kpi-trend svg {\n  display: block;\n  width: 100%;\n  height: 164px;" in css
@@ -1122,8 +1124,9 @@ def test_ceo_information_architecture_separates_board_and_operational_surfaces()
     assert 'data-view-panel="agents"' in html
     assert 'state.activePersona === "board" && !boardReleased' in js
     assert "No live diagnostics, working evidence, or pre-board figures" in js
-    assert "Questions worth answering now" in js
-    assert "What drives the four headline figures" in js
+    assert "Pressure-test the next move" in js
+    assert "Enterprise performance" in js
+    assert "Decisions for you" in js
 
 
 def test_kpi_questions_use_the_shared_assistant_drawer():
@@ -1134,8 +1137,8 @@ def test_kpi_questions_use_the_shared_assistant_drawer():
 
     assert "askAssistant(" in drill_body
     assert "buildAssistantReply(question, null" not in drill_body
-    assert "shared conversation" in drill_body
-    assert "What needs my attention?" in drill_body
+    assert "current posture and evidence boundary" in drill_body
+    assert "Do I need to intervene?" in drill_body
     assert "kpi-inline-retry" not in drill_body
 
 
@@ -3209,8 +3212,9 @@ main().catch((error) => {{
 
 def test_exact_fx_cta_thread_is_preserved_as_retryable_flow():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
-    assert 'Explain why “' in executive_js
-    assert 'matters for the board review and what action I should consider.' in executive_js
+    assert "data-executive-prompt" in executive_js
+    assert "cross the CEO materiality threshold" in executive_js
+    assert "askAssistant(button.getAttribute('data-executive-prompt')" in executive_js
     assert 'markThreadTransportFailuresRetryable(current);' in executive_js
     assert 'data-assistant-retry-latest' in executive_js
 
@@ -3454,8 +3458,8 @@ def test_persona_title_grounding_badges_and_native_agent_actions_are_visible():
     assert "CEO brief opened in Assistants" in executive_js
     assert "Board room memory opened" in executive_js
     # Plain English for an executive: "grounded" reads as electrical wiring.
-    assert "Traced to source ✓" in executive_js
-    assert "Source missing ⚠" in executive_js
+    assert "Evidence verified" in executive_js
+    assert "Evidence gap" in executive_js
     assert ".grounding-badge--grounded" in executive_css
     assert ".grounding-badge--needs-evidence" in executive_css
 

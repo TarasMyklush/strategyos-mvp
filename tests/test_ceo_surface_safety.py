@@ -291,10 +291,9 @@ def test_ceo_status_tokens_humanized():
         "statusLabel must map 'N challenged' → 'N items need review'"
     )
 
-    # Verify the simplified Explore scenarios card does not leak raw publish_state tokens
-    # (the pill was removed in CEO UI simplification — gravity now has no status pill)
-    think_pill_context = js[js.index("Explore scenarios"):js.index("Explore scenarios") + 600] if "Explore scenarios" in js else ""
-    assert "Explore scenarios" in think_pill_context, "Explore scenarios card must exist"
+    # Verify the CEO preparation action does not leak raw publish-state tokens.
+    think_pill_context = js[js.index("Prepare decision brief"):js.index("Prepare decision brief") + 600] if "Prepare decision brief" in js else ""
+    assert "Prepare decision brief" in think_pill_context, "CEO decision brief action must exist"
     # Raw status tokens must not appear near the simplified gravity card
     for raw_token in ["AWAITING_REVIEW", "CHALLENGED"]:
         assert raw_token not in think_pill_context, (
@@ -1256,26 +1255,19 @@ def test_evidence_footer_css_no_display_flex_override():
 # ── "Ask why this matters" CTA + assistant drawer regression tests ──
 
 
-def test_ask_why_cta_calls_ask_assistant():
-    """Clicking 'Ask why this matters' must call askAssistant with the finding prompt."""
+def test_executive_priority_cta_calls_ask_assistant():
+    """CEO priority cards must open Hermes with an aggregated decision prompt."""
     js = _static_executive_js()
 
-    # The CTA button is rendered with data-rail-prompt attribute
-    assert "data-rail-prompt" in js, (
-        "Findings CTA button must have data-rail-prompt attribute"
+    assert "data-executive-prompt" in js, (
+        "Executive priority CTA must have data-executive-prompt"
     )
-    assert "rail-inline-action" in js, (
-        "Findings CTA button must use rail-inline-action class"
-    )
-
-    # The onclick handler calls askAssistant with the prompt
-    assert "askAssistant(button.getAttribute('data-rail-prompt')" in js, (
-        "Findings CTA onclick must call askAssistant with rail-prompt"
+    assert "Open decision brief" in js, (
+        "Executive priority must describe the decision-support action"
     )
 
-    # The prompt must contain board-contextual language
-    assert "matters for the board" in js, (
-        "Finding prompt must include board-contextual language"
+    assert "askAssistant(button.getAttribute('data-executive-prompt')" in js, (
+        "Executive priority CTA must call the shared assistant"
     )
 
 
@@ -1480,22 +1472,22 @@ def test_cta_enum_board_actions():
     js = _static_executive_js()
     assert "data-board-action" in js
 
-def test_cta_enum_findings_ask_why():
-    """CTA 9: Findings 'Ask why this matters' [data-rail-prompt]."""
+def test_cta_enum_executive_decision_brief():
+    """CTA 9: Aggregated CEO priority opens a decision brief."""
     js = _static_executive_js()
-    assert "data-rail-prompt" in js
-    assert "Ask why this matters" in js
+    assert "data-executive-prompt" in js
+    assert "Open decision brief" in js
 
-def test_cta_enum_developments_impact():
-    """CTA 10: Developments 'Project impact on plan' [data-rail-prompt]."""
+def test_cta_enum_business_signal_pressure_test():
+    """CTA 10: Material business signals can be pressure-tested."""
     js = _static_executive_js()
-    assert "Project impact on plan" in js
+    assert "Pressure-test with Hermes" in js
 
-def test_cta_enum_week_explore_request():
-    """CTA 11: Week ahead 'Explore scenarios' / 'Request missing data'."""
+def test_cta_enum_week_decision_preparation():
+    """CTA 11: Commitments support decision briefs and missing inputs."""
     js = _static_executive_js()
-    assert "Explore scenarios" in js
-    assert "Request missing data" in js
+    assert "Prepare decision brief" in js
+    assert "Identify missing inputs" in js
 
 def test_cta_enum_week_composer():
     """CTA 12: Week composer form #week-composer."""
@@ -2270,8 +2262,8 @@ def test_executive_surface_speaks_english_not_pipeline():
 
 def test_grounding_badge_says_what_it_means():
     js = _static_executive_js()
-    assert "Traced to source ✓" in js
-    assert "Source missing ⚠" in js
+    assert "Evidence verified" in js
+    assert "Evidence gap" in js
 
 
 def test_expired_sign_in_is_reported_as_expired_sign_in():
@@ -2313,20 +2305,29 @@ def _ready_hero_read_model(recoverable: float, finding_count: int):
 
 
 def test_hero_leads_with_the_business_not_our_workflow():
-    """"Reviewer decision is still open" is our process, not their company."""
+    """The headline leads with enterprise posture, not cases or workflow."""
     from strategyos_mvp.executive_presentation import _hero
 
-    hero = _hero(_ready_hero_read_model(794108.0, 8), drivers=[{"availability": "available"}])
-    assert hero["label"] == "SAR 794K identified across 8 issues"
-    # The sign-off is the qualifier, and it keeps its place in the body.
-    assert "sign it off" in hero["body"]
+    hero = _hero(_ready_hero_read_model(794108.0, 8), drivers=[{
+        "availability": "verified",
+        "label": "Revenue",
+        "executive_brief": {"executive_signal": {
+            "posture": "Broadly on plan",
+            "action_required": False,
+            "readout": "Revenue is broadly on plan.",
+            "decision": "No intervention required.",
+        }},
+    }])
+    assert hero["label"] == "Enterprise performance is broadly on plan"
+    assert "No headline measure" in hero["body"]
+    assert hero["executive_posture"] == "On plan"
 
 
 def test_hero_does_not_manufacture_a_headline_when_nothing_was_found():
     from strategyos_mvp.executive_presentation import _hero
 
     hero = _hero(_ready_hero_read_model(0.0, 0), drivers=[{"availability": "available"}])
-    assert hero["label"] == "Reviewer decision is still open"
+    assert hero["label"] == "Board pack is waiting for final sign-off"
 
 
 def test_a_finding_names_the_counterparty_an_executive_recognises():
@@ -2490,12 +2491,90 @@ def test_a_finding_with_no_recommended_action_shows_none_not_a_blank():
     assert item["recommended_action"] is None
 
 
-def test_finding_card_renders_action_state_and_an_approve_control():
+def test_ceo_home_aggregates_findings_instead_of_approving_cases():
     js = _static_executive_js()
     assert "function requestFindingRecovery(button)" in js
-    assert "data-finding-approve=" in js
-    assert "Approve recovery" in js
-    assert "rail-recommended" in js
-    # The control must actually call the endpoint, not be decorative.
+    lower = js[js.index("function renderLowerRailFidelity"):js.index("function renderAgentsDiscovery")]
+    assert "data-finding-approve=" not in lower
+    assert "Approve recovery" not in lower
+    assert "Decisions for you" in lower
+    assert "No case-level decision is escalated to the CEO" in lower
+    assert "Owner · " in lower
+    # The lower-level endpoint remains available outside the CEO home.
     assert '"/executive/findings/request-recovery"' in js
-    assert 'button.querySelectorAll' not in js.split("requestFindingRecovery")[0][-200:]
+
+
+def test_sub_threshold_findings_remain_delegated_to_the_group_cfo():
+    """Operational cases must not become CEO decisions merely because they exist."""
+    from strategyos_mvp.executive_read_model import build_executive_read_model
+    from strategyos_mvp.executive_presentation import build_executive_presentation
+
+    read_model = build_executive_read_model(
+        summary={"run_id": "r1", "approval_status": "approved"},
+        finding_rows=[
+            {
+                "finding_id": "F-001",
+                "title": "Duplicate payment",
+                "recoverable_sar": 400_000.0,
+                "citation_count": 2,
+            },
+            {
+                "finding_id": "F-002",
+                "title": "Unallocated variance",
+                "recoverable_sar": 350_000.0,
+                "citation_count": 1,
+            },
+        ],
+        audit_summary={},
+        publication={"report_count": 1},
+        agent_modules={},
+        truth_source="database",
+    )
+
+    priorities = build_executive_presentation(read_model)["sections"]["executive_priorities"]
+
+    assert priorities["materiality_threshold_sar"] == 1_000_000.0
+    assert not any(item["key"] == "recovery_mandate" for item in priorities["decisions"])
+    assert priorities["delegated_summary"] == {
+        "title": "Operational controls remain delegated",
+        "summary": "2 finance-control cases are below the CEO materiality threshold of SAR 1.0M and remain with the Group CFO.",
+        "owner": "Group CFO",
+    }
+
+
+def test_material_findings_become_one_aggregated_ceo_mandate():
+    """The CEO sees the material programme, never a queue of invoice decisions."""
+    from strategyos_mvp.executive_read_model import build_executive_read_model
+    from strategyos_mvp.executive_presentation import build_executive_presentation
+
+    read_model = build_executive_read_model(
+        summary={"run_id": "r1", "approval_status": "approved"},
+        finding_rows=[
+            {
+                "finding_id": "F-001",
+                "title": "Duplicate payment for INV-100",
+                "recoverable_sar": 700_000.0,
+                "citation_count": 2,
+            },
+            {
+                "finding_id": "F-002",
+                "title": "Duplicate payment for INV-200",
+                "recoverable_sar": 600_000.0,
+                "citation_count": 2,
+            },
+        ],
+        audit_summary={},
+        publication={"report_count": 1},
+        agent_modules={},
+        truth_source="database",
+    )
+
+    priorities = build_executive_presentation(read_model)["sections"]["executive_priorities"]
+    mandate = next(item for item in priorities["decisions"] if item["key"] == "recovery_mandate")
+
+    assert mandate["title"] == "Set the mandate for SAR 1.3M of recovery"
+    assert mandate["owner"] == "Group CFO"
+    assert "aggregated across 2 finance-control cases" in mandate["summary"]
+    assert "INV-100" not in json.dumps(priorities)
+    assert "INV-200" not in json.dumps(priorities)
+    assert priorities["delegated_summary"] is None
