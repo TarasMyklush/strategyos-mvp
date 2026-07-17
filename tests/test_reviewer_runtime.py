@@ -45,14 +45,6 @@ def test_resume_preserves_the_approved_finance_calendar_and_source_context(
     )
     monkeypatch.setattr(
         reviewer_runtime,
-        "approval_status_for_run",
-        lambda run_id: {
-            "approved_by": "reviewer.hosted",
-            "approved_at": "2026-07-17T11:59:00+00:00",
-        },
-    )
-    monkeypatch.setattr(
-        reviewer_runtime,
         "update_run_summary",
         lambda run_id, summary: {"status": "updated", "run_id": run_id},
     )
@@ -81,6 +73,25 @@ def test_resume_preserves_the_approved_finance_calendar_and_source_context(
         },
         "task_readiness": {"ready_for_run": True},
     }
+    monkeypatch.setattr(
+        reviewer_runtime,
+        "approval_status_for_run",
+        lambda run_id: {
+            "approved_by": "reviewer.hosted",
+            "approved_at": "2026-07-17T11:59:00+00:00",
+            # This is the hosted/Postgres shape: the runtime checkpoint was
+            # written before these post-processing payloads existed, while the
+            # approved run record contains the complete enriched summary.
+            "summary_json": {
+                "finance_kpi": approved_finance,
+                "calendar_agenda": approved_calendar,
+                "historic_context": {"status": "ready", "periods": [2023, 2024, 2025]},
+                "source_pack": approved_source_pack,
+                "detector_report": {"status": "complete"},
+                "run_mode": "full",
+            },
+        },
+    )
     checkpoint = {
         "checkpoint_id": "cp-review",
         "run_id": "run-1",
@@ -101,12 +112,6 @@ def test_resume_preserves_the_approved_finance_calendar_and_source_context(
             "status": "awaiting_review",
             "current_stage": "awaiting_review",
             "checkpoint_count": 1,
-            "finance_kpi": approved_finance,
-            "calendar_agenda": approved_calendar,
-            "historic_context": {"status": "ready", "periods": [2023, 2024, 2025]},
-            "source_pack": approved_source_pack,
-            "detector_report": {"status": "complete"},
-            "run_mode": "full",
         },
     }
 

@@ -107,9 +107,15 @@ def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, An
         "approval_status": "approved",
         "checkpoints": [],
     }
-    prior_summary = checkpoint.get("summary_json") or {}
-    if not isinstance(prior_summary, dict):
-        prior_summary = {}
+    approval = approval_status_for_run(run_id)
+    checkpoint_summary = checkpoint.get("summary_json") or {}
+    prior_summary = dict(checkpoint_summary) if isinstance(checkpoint_summary, dict) else {}
+    if isinstance(approval, dict) and isinstance(approval.get("summary_json"), dict):
+        # Hosted checkpoints are written inside the workflow before run_poc
+        # attaches finance, calendar, history, and source-pack governance to
+        # the persisted run summary.  The approved run record is therefore the
+        # authoritative superset; it must win over the earlier checkpoint copy.
+        prior_summary.update(approval["summary_json"])
     summary = build_run_summary(resumed_state)
     _preserve_approved_context(summary, prior_summary)
     summary["checkpoint_count"] = int(prior_summary.get("checkpoint_count") or 0) + 1
@@ -125,7 +131,6 @@ def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, An
         checkpoint_state(resumed_state),
         summary,
     )
-    approval = approval_status_for_run(run_id)
     if isinstance(approval, dict):
         summary["approved_by"] = approval.get("approved_by")
         summary["approved_at"] = approval.get("approved_at")

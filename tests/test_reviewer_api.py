@@ -1047,6 +1047,24 @@ def test_resume_run_uses_latest_local_checkpoint_when_store_skipped(monkeypatch,
     client = TestClient(api_module.app)
     try:
         local = _write_local_review_summary(tmp_path, approval_status="approved")
+        approved_summary = json.loads(local["summary_path"].read_text(encoding="utf-8"))
+        approved_summary["finance_kpi"] = {
+            "derived_from": "deterministic_source_finance_kpi_engine",
+            "components": {"revenue_actual": "385100000"},
+        }
+        approved_summary["calendar_agenda"] = {
+            "status": "ready",
+            "items": [{"date": "2026-07-22", "title": "Executive Committee"}],
+        }
+        approved_summary["source_pack"] = {
+            "source_pack_id": "pack-81",
+            "file_accounting": {
+                "file_count": 81,
+                "accounted_file_count": 81,
+                "silent_omission_count": 0,
+            },
+        }
+        local["summary_path"].write_text(json.dumps(approved_summary, indent=2), encoding="utf-8")
         captured = {}
 
         def fake_resume(run_id, checkpoint):
@@ -1072,6 +1090,9 @@ def test_resume_run_uses_latest_local_checkpoint_when_store_skipped(monkeypatch,
         assert captured["run_id"] == local["run_id"]
         assert captured["checkpoint"]["persistence"] == "local"
         assert captured["checkpoint"]["state_json"]["current_stage"] == "awaiting_review"
+        assert captured["checkpoint"]["summary_json"]["finance_kpi"]["derived_from"] == "deterministic_source_finance_kpi_engine"
+        assert len(captured["checkpoint"]["summary_json"]["calendar_agenda"]["items"]) == 1
+        assert captured["checkpoint"]["summary_json"]["source_pack"]["file_accounting"]["accounted_file_count"] == 81
     finally:
         _restore_env(original)
 
@@ -1540,6 +1561,24 @@ def test_resume_run_completes_latest_local_summary_without_circular_reference(mo
     client = TestClient(api_module.app)
     try:
         local = _write_local_review_summary(tmp_path, approval_status="approved")
+        approved_summary = json.loads(local["summary_path"].read_text(encoding="utf-8"))
+        approved_summary["finance_kpi"] = {
+            "derived_from": "deterministic_source_finance_kpi_engine",
+            "components": {"revenue_actual": "385100000"},
+        }
+        approved_summary["calendar_agenda"] = {
+            "status": "ready",
+            "items": [{"date": "2026-07-22", "title": "Executive Committee"}],
+        }
+        approved_summary["source_pack"] = {
+            "source_pack_id": "pack-81",
+            "file_accounting": {
+                "file_count": 81,
+                "accounted_file_count": 81,
+                "silent_omission_count": 0,
+            },
+        }
+        local["summary_path"].write_text(json.dumps(approved_summary, indent=2), encoding="utf-8")
 
         class FakeBundle:
             pass
@@ -1572,9 +1611,13 @@ def test_resume_run_completes_latest_local_summary_without_circular_reference(mo
         assert response.status_code == 200
         payload = response.json()
         assert payload["status"] == "completed"
+        assert payload["finance_kpi"]["derived_from"] == "deterministic_source_finance_kpi_engine"
+        assert payload["calendar_agenda"]["items"][0]["title"] == "Executive Committee"
+        assert payload["source_pack"]["file_accounting"]["accounted_file_count"] == 81
         updated = json.loads(local["summary_path"].read_text(encoding="utf-8"))
         assert updated["status"] == "completed"
         assert updated["current_stage"] == "writer"
+        assert updated["calendar_agenda"]["status"] == "ready"
         assert updated["resume"]["checkpoint"]["checkpoint_id"] is None
     finally:
         _restore_env(original)

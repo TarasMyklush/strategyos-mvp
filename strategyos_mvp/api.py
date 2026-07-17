@@ -1595,7 +1595,21 @@ def _local_review_checkpoint_for_run(run_id: str) -> dict[str, Any] | None:
     normalized.setdefault("stage", summary.get("current_stage") or "awaiting_review")
     normalized.setdefault("status", summary.get("status") or "awaiting_review")
     normalized.setdefault("state_json", {})
-    normalized.setdefault("summary_json", summary)
+    checkpoint_summary = normalized.get("summary_json")
+    merged_summary = dict(checkpoint_summary) if isinstance(checkpoint_summary, dict) else {}
+    # The local/Hatchet fallback checkpoint is created inside the workflow,
+    # before run_poc attaches finance KPIs, calendar agenda, historic context,
+    # and the complete source-pack accounting to the outer run summary.  Merge
+    # the latest approved summary into the checkpoint presented to resume so
+    # writer completion cannot erase those post-processing payloads.
+    merged_summary.update(
+        {
+            key: value
+            for key, value in summary.items()
+            if key not in {"local_review_checkpoint", "pointer_metadata", "latest_pointer"}
+        }
+    )
+    normalized["summary_json"] = merged_summary
     normalized["persistence"] = "local"
     return normalized
 
