@@ -11425,8 +11425,12 @@ def _governed_calendar_result(
                 "The latest supplied item is:"
             )
     else:
-        selected = dated_items[:3] if dated_items else [(None, item) for item in items[:3]]
-        status_sentence = f"The governed calendar is connected with {len(items)} supplied agenda item(s)."
+        selected = [(_calendar_item_date(item), item) for item in items[:3]]
+        total_item_count = int(agenda.get("total_item_count") or len(items))
+        status_sentence = (
+            f"The governed calendar is connected with {total_item_count} processed agenda item(s); "
+            f"{len(items)} are in the current CEO projection."
+        )
 
     detail_lines: list[str] = []
     citations: list[dict[str, Any]] = []
@@ -11441,8 +11445,16 @@ def _governed_calendar_result(
         prep = str(item.get("prep") or "No preparation request was supplied.")
         related_bu = str(item.get("related_bu") or "").strip()
         bu_suffix = f"; related business unit: {related_bu}" if related_bu else ""
+        location = str(item.get("location") or "").strip()
+        location_suffix = f"; location: {location}" if location else ""
+        attendees = str(item.get("attendees") or "").strip()
+        attendees_suffix = f"; attendees: {attendees}" if attendees else ""
+        ends_at = str(item.get("ends_at") or "").strip()
+        if time_suffix and ends_at:
+            time_suffix = f"{time_suffix}–{ends_at}"
         detail_lines.append(
-            f"{date_label}{time_suffix} — {title} ({event_type}){bu_suffix}. Preparation: {prep}"
+            f"{date_label}{time_suffix} — {title} ({event_type}){bu_suffix}{location_suffix}"
+            f"{attendees_suffix}. Preparation: {prep}"
         )
         citations.append(
             {
@@ -11474,7 +11486,8 @@ def _governed_calendar_result(
         "answer_origin": "governed",
         "intent": "calendar_agenda",
         "calendar_status": "ready",
-        "calendar_item_count": len(items),
+        "calendar_item_count": int(agenda.get("total_item_count") or len(items)),
+        "calendar_projection_item_count": len(items),
         "_orchestrator_force_answer": True,
     }
 
