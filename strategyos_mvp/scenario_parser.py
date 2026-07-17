@@ -764,6 +764,38 @@ def _stated_current_revenue_attainment_from_prompt(prompt: str) -> Decimal | Non
     return attainment if Decimal("0") < attainment <= Decimal("2") else None
 
 
+def _assistant_history_items(context: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    history = context.get("assistant_history")
+    if not isinstance(history, list):
+        assistant_context = context.get("assistant_context")
+        history = assistant_context.get("history") if isinstance(assistant_context, Mapping) else None
+    return [item for item in (history or []) if isinstance(item, Mapping)]
+
+
+def _prior_revenue_attainment_prompt(context: Mapping[str, Any]) -> str | None:
+    """Recover the latest explicit Revenue target from the shared chat thread."""
+    revenue_context = {"assistant_context": {"kpi_key": "revenue"}}
+    for item in reversed(_assistant_history_items(context)):
+        if str(item.get("role") or "").strip().lower() != "user":
+            continue
+        text = str(item.get("text") or item.get("content") or "").strip()
+        if not text:
+            continue
+        numbers = _parse_numeric_tokens(text)
+        if _target_revenue_attainment_from_prompt(text, numbers, revenue_context) is not None:
+            return text
+    return None
+
+
+def _asks_for_revenue_ceo_action_plan(prompt: str) -> bool:
+    norm = _normalize(prompt)
+    return (
+        "action plan" in norm
+        or ("decide" in norm and any(token in norm for token in ("who owns", "owner", "tomorrow", "on my desk")))
+        or ("who owns" in norm and any(token in norm for token in ("tomorrow", "next step", "deliver")))
+    )
+
+
 def _target_revenue_attainment_from_prompt(
     prompt: str,
     prompt_numbers: list[dict[str, Any]],
@@ -1001,8 +1033,8 @@ def _finance_revenue_attainment_from_stated_baseline(
             "The implied plan is an estimate until Finance confirms the aligned comparator.",
         ],
         hallucination_risk=HallucinationRisk(
-            level=HallucinationRiskLevel.LOW,
-            score=0.15,
+            level=HallucinationRiskLevel.MEDIUM,
+            score=0.35,
             factors=[
                 {
                     "name": "user_supplied_attainment",
@@ -1025,6 +1057,69 @@ def _finance_revenue_attainment_from_stated_baseline(
         scenario_type="deterministic",
         basis="Calculated from governed Revenue actual and the CEO-stated attainment; the implied plan is explicitly estimated.",
     )
+
+
+def _finance_revenue_ceo_action_plan_result(
+    base_result: ScenarioResult,
+    target_attainment: Decimal,
+    baseline: Mapping[str, Any],
+    *,
+    stated_current_attainment: Decimal | None = None,
+) -> ScenarioResult:
+    """Turn the Revenue gap into an accountable CEO operating instruction."""
+    revenue = Decimal(baseline["revenue"])
+    approved_plan = baseline.get("revenue_plan")
+    estimated = approved_plan is None
+    if approved_plan is not None:
+        revenue_plan = Decimal(approved_plan)
+    elif stated_current_attainment is not None:
+        revenue_plan = revenue / stated_current_attainment
+    else:
+        return base_result
+
+    gap = max((revenue_plan * target_attainment) - revenue, Decimal("0"))
+    gap_label = "provisional estimated gap" if estimated else "governed gap"
+    plan_status = (
+        "The CFO must replace this estimate with the approved like-for-like plan before any external commitment."
+        if estimated
+        else "The target is calculated from the approved like-for-like plan already aligned to the governed actual."
+    )
+    base_result.scenario_id = "revenue_plan_attainment_action_plan"
+    base_result.scenario_label = "Finance - Revenue Plan Attainment Action Plan"
+    base_result.answer = (
+        f"Decision today: approve a Revenue closure sprint against the {gap_label} of "
+        f"{_sar_executive_decimal(gap)} to reach {_percent(float(target_attainment), 1)} for "
+        f"{baseline['period']}. Treat it as an internal operating target, not committed revenue. {plan_status}\n\n"
+        "1. Accountable owner — assign the Group commercial/revenue executive. By tomorrow morning, that owner must "
+        f"submit a ranked recognition schedule totaling at least {_sar_executive_decimal(gap)}. Every item must show "
+        "business unit or revenue stream, customer/order or contract reference, amount, named owner, expected recognition "
+        "date, probability, and source evidence.\n\n"
+        "2. Validation owner — CFO/Finance. By tomorrow morning, Finance must confirm the aligned plan, reconcile the "
+        "governed Revenue actual, validate recognition eligibility for every submitted item, and state the exact residual "
+        "gap after rejecting unsupported items.\n\n"
+        "3. CEO control — start a daily gap review until closure. The commercial owner maintains the item-level tracker; "
+        "the CFO signs off recognized revenue; only exceptions, slippage, and decisions requiring CEO intervention come "
+        "back to your desk.\n\n"
+        "What the current run can prove: the governed Revenue actual and the arithmetic size of the target gap. What it "
+        "cannot prove: which revenue stream or deal can close it, because the current sources do not contain an aligned "
+        "plan by stream, CRM pipeline, order backlog, recognition dates, or named revenue owners. Do not prioritize a "
+        "stream merely because it is currently the largest; require the missing conversion evidence first."
+    )
+    base_result.suggestions = [
+        "Show the required tomorrow-morning revenue schedule",
+        "List the evidence needed to validate each revenue item",
+        "Confirm the approved aligned Revenue plan",
+    ]
+    base_result.basis = (
+        f"{base_result.basis} Converted the calculated gap into proposed CEO accountabilities and deadlines; "
+        "role assignments are management instructions, not observed owner records."
+    )
+    base_result.assumptions = [
+        *base_result.assumptions,
+        "The CEO assigns accountable roles because the governed run does not name individual revenue owners.",
+        "No deal or revenue stream is claimed as closable without CRM, backlog, and recognition evidence.",
+    ]
+    return base_result
 
 
 def _finance_baseline_result(baseline: Mapping[str, Any]) -> ScenarioResult:
@@ -2839,23 +2934,56 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
         recovery_result = _parse_recovery_realization(prompt, context)
         if recovery_result is not None:
             return _hydrate_scenario_result(recovery_result)
+        revenue_prompt = prompt
+        revenue_prompt_numbers = prompt_numbers
+        revenue_action_followup = False
         revenue_target = _target_revenue_attainment_from_prompt(prompt, prompt_numbers, context)
+        if revenue_target is None and _asks_for_revenue_ceo_action_plan(prompt):
+            prior_revenue_prompt = _prior_revenue_attainment_prompt(context)
+            if prior_revenue_prompt:
+                revenue_prompt = prior_revenue_prompt
+                revenue_prompt_numbers = _parse_numeric_tokens(prior_revenue_prompt)
+                revenue_target = _target_revenue_attainment_from_prompt(
+                    prior_revenue_prompt,
+                    revenue_prompt_numbers,
+                    context,
+                )
+                revenue_action_followup = revenue_target is not None
         if revenue_target is not None:
             revenue_baseline = _governed_revenue_baseline(context)
             if revenue_baseline is not None:
+                revenue_result = _finance_revenue_attainment_result(
+                    revenue_target,
+                    revenue_baseline,
+                    revenue_prompt_numbers,
+                )
+                if revenue_action_followup:
+                    revenue_result = _finance_revenue_ceo_action_plan_result(
+                        revenue_result,
+                        revenue_target,
+                        revenue_baseline,
+                    )
                 return _hydrate_scenario_result(
-                    _finance_revenue_attainment_result(revenue_target, revenue_baseline, prompt_numbers)
+                    revenue_result
                 )
             revenue_actual = _governed_revenue_actual(context)
-            stated_current_attainment = _stated_current_revenue_attainment_from_prompt(prompt)
+            stated_current_attainment = _stated_current_revenue_attainment_from_prompt(revenue_prompt)
             if revenue_actual is not None and stated_current_attainment is not None:
-                return _hydrate_scenario_result(
-                    _finance_revenue_attainment_from_stated_baseline(
+                revenue_result = _finance_revenue_attainment_from_stated_baseline(
+                    revenue_target,
+                    stated_current_attainment,
+                    revenue_actual,
+                    revenue_prompt_numbers,
+                )
+                if revenue_action_followup:
+                    revenue_result = _finance_revenue_ceo_action_plan_result(
+                        revenue_result,
                         revenue_target,
-                        stated_current_attainment,
                         revenue_actual,
-                        prompt_numbers,
+                        stated_current_attainment=stated_current_attainment,
                     )
+                return _hydrate_scenario_result(
+                    revenue_result
                 )
             return _hydrate_scenario_result(
                 _scenario_missing_data_result(
