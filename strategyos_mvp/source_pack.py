@@ -35,6 +35,21 @@ from .platform_foundation import (
 )
 from .plugins import load_configured_plugins
 from .prompt_injection import guard_untrusted_document_text, raw_document_text
+from .source_governance import (
+    CONTROL_PLANE,
+    CURRENT_EVIDENCE,
+    EVALUATOR_ONLY,
+    HISTORIC_CONTEXT,
+    HISTORIC_CONTEXT_DIR,
+    QUARANTINED_CONTEXT,
+    RESTRICTED_CONTEXT,
+    UNSUPPORTED,
+    disposition_summary,
+    final_source_disposition,
+    governed_context_path,
+    initial_source_disposition,
+)
+from .source_quality import build_acceptance_readiness, build_source_quality_report
 from .tasks import (
     blocked_task_items_for_empty_source_pack,
     evaluate_task_readiness_items,
@@ -68,11 +83,6 @@ DOCUMENT_TARGET_FOLDERS = document_target_folders()
 RUN_MODEL_REQUIRED_ROLES = run_model_required_roles()
 TABULAR_ROLE_COLUMNS = tabular_role_columns()
 ROLE_DATE_COLUMNS = role_date_columns()
-
-# Where an older duplicate of a required role is kept when a more recent file
-# wins the current role. The finance detectors never read this subtree, but the
-# evidence store does, so the agents can answer multi-year questions.
-HISTORIC_CONTEXT_DIR = "99_Historic_Context"
 
 TABULAR_ROLE_SIGNATURES = {
     role: set(columns) for role, columns in TABULAR_ROLE_COLUMNS.items()
@@ -151,6 +161,14 @@ def _mapping_overrides_path(source_pack_id: str) -> Path:
     return _source_pack_dir(source_pack_id) / OVERRIDE_FILENAME
 
 
+def _control_plane_root(source_pack_id: str) -> Path:
+    return _source_pack_dir(source_pack_id) / "control_plane"
+
+
+def _evaluator_only_root(source_pack_id: str) -> Path:
+    return _source_pack_dir(source_pack_id) / "evaluator_only"
+
+
 def _normalize_upload_path(filename: str) -> PurePosixPath:
     normalized = (filename or "").replace("\\", "/").strip()
     path = PurePosixPath(normalized)
@@ -202,8 +220,12 @@ def _file_type_hint(path: Path) -> str:
 
 def _extraction_status(path: Path) -> str:
     hint = _file_type_hint(path)
-    if hint in {"pdf", "image", "text", "markdown"}:
+    if hint in {"pdf", "image"}:
         return "pending"
+    # Plain text and Markdown require no OCR/extraction tranche. Classification
+    # reads their raw content directly, so reporting them as pending is false.
+    if hint in {"text", "markdown"}:
+        return "ok"
     if hint == "unsupported":
         return "unsupported"
     return "not_requested"
@@ -245,6 +267,10 @@ def _build_manifest(raw_root: Path, *, source_pack_id: str) -> list[dict[str, An
                 "mime_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
                 "file_type_hint": hint,
                 "supported": supported,
+                "source_disposition": initial_source_disposition(
+                    rel,
+                    supported=supported,
+                ),
                 "extraction_status": _extraction_status(path),
                 "issues": [] if supported else ["Unsupported file type."],
                 "ingested_at": ingested_at,
@@ -786,6 +812,22 @@ def _classify_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, source
     _attach_text_extraction(manifest, raw_root)
     overrides = _load_mapping_overrides(source_pack_id)
     for item in manifest:
+        disposition = str(item.get("source_disposition") or "")
+        if disposition in {CONTROL_PLANE, EVALUATOR_ONLY}:
+            label = "Control-plane instruction" if disposition == CONTROL_PLANE else "Evaluator-only material"
+            item["classification"] = _classified_entry(
+                status_value="excluded",
+                role=None,
+                confidence=1.0,
+                basis=(
+                    f"{label} is governed by source path and cannot enter business evidence classification."
+                ),
+                issues=[f"{label} is retained and processed outside the governed run evidence set."],
+            )
+            for issue in item["classification"].get("issues") or []:
+                if issue not in item["issues"]:
+                    item["issues"].append(issue)
+            continue
         if not item.get("supported"):
             item["classification"] = _classified_entry(
                 status_value="unsupported",
@@ -830,6 +872,8 @@ def _classify_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, source
         for issue in classification.get("issues") or []:
             if issue not in item["issues"]:
                 item["issues"].append(issue)
+    for item in manifest:
+        item["source_disposition"] = final_source_disposition(item)
 
 
 def _classification_summary(manifest: list[dict[str, Any]]) -> dict[str, Any]:
@@ -848,9 +892,62 @@ def _classification_summary(manifest: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _control_plane_registry(manifest: list[dict[str, Any]]) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    for item in manifest:
+        disposition = str(item.get("source_disposition") or "")
+        if disposition not in {CONTROL_PLANE, EVALUATOR_ONLY}:
+            continue
+        rel = str(item.get("relative_path") or "")
+        kind = (
+            "agent_definition"
+            if "agent_jds" in rel.lower()
+            else "task_specification"
+            if "sample_tasks" in rel.lower()
+            else "evaluation_material"
+        )
+        headings: list[str] = []
+        governed_path = Path(str(item.get("governed_path") or ""))
+        if (
+            disposition == CONTROL_PLANE
+            and governed_path.suffix.lower() == ".md"
+            and governed_path.exists()
+        ):
+            try:
+                headings = [
+                    line.lstrip("#").strip()
+                    for line in governed_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+                    if line.startswith("#")
+                ][:24]
+            except OSError:
+                headings = []
+        entries.append(
+            {
+                "relative_path": rel,
+                "kind": kind,
+                "source_disposition": disposition,
+                "processing_status": item.get("processing_status"),
+                "governed_path": item.get("governed_path"),
+                "sha256": item.get("sha256"),
+                "headings": headings,
+                "content_redacted": disposition == EVALUATOR_ONLY,
+                "available_to_run_evidence": False,
+            }
+        )
+    return {
+        "file_count": len(entries),
+        "agent_definition_count": sum(1 for item in entries if item["kind"] == "agent_definition"),
+        "task_specification_count": sum(1 for item in entries if item["kind"] == "task_specification"),
+        "evaluation_material_count": sum(1 for item in entries if item["kind"] == "evaluation_material"),
+        "entries": entries,
+    }
+
+
 def _role_inventory(manifest: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     inventory: dict[str, list[dict[str, Any]]] = {}
     for item in manifest:
+        if str(item.get("source_disposition") or CURRENT_EVIDENCE) != CURRENT_EVIDENCE:
+            continue
         classification = item.get("classification") or {}
         if classification.get("status") != "classified" or not classification.get("role"):
             continue
@@ -980,7 +1077,15 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
         shutil.rmtree(normalized_root)
     normalized_root.mkdir(parents=True, exist_ok=True)
 
+    control_plane_root = _control_plane_root(source_pack_id)
+    evaluator_only_root = _evaluator_only_root(source_pack_id)
+    for governed_root in (control_plane_root, evaluator_only_root):
+        if governed_root.exists():
+            shutil.rmtree(governed_root)
+        governed_root.mkdir(parents=True, exist_ok=True)
+
     copied_targets: dict[str, str] = {}
+    governed_targets: dict[str, str] = {}
     inventory = _run_model_role_inventory(manifest, raw_root=raw_root)
     duplicates = sorted(role for role, items in inventory.items() if role in ROLE_TARGET_PATHS and len(items) > 1)
     selected_run_model_source_ids = {
@@ -990,43 +1095,61 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
     }
 
     for item in manifest:
+        rel = str(item.get("relative_path") or "")
+        source_path = raw_root / rel
         classification = item.get("classification") or {}
         status_value = classification.get("status")
-        # An unclassified-but-supported file (a strategic-analytics workbook, a
-        # board-pack memo, a group P&L) matches no structured role, but it is
-        # still readable evidence the agents should see. Copy it under a context
-        # path rather than dropping it, so "everything supplied" reaches the run.
-        # README stays excluded -- it is guidance for humans, not run evidence.
-        if status_value == "unclassified":
-            rel = str(item.get("relative_path") or "")
-            name = PurePosixPath(rel).name
-            if not rel or name.strip().lower().startswith("readme"):
-                continue
-            hint = str(item.get("file_type_hint") or "")
-            if hint in {"unsupported", ""}:
-                continue
-            source_path = raw_root / rel
-            if not source_path.exists():
-                continue
-            context_rel = f"{HISTORIC_CONTEXT_DIR}/{name}"
+        disposition = str(item.get("source_disposition") or CURRENT_EVIDENCE)
+
+        if disposition == UNSUPPORTED:
+            item["processing_status"] = "retained_raw_unsupported"
+            item["governed_path"] = str(source_path)
+            continue
+
+        if disposition in {CONTROL_PLANE, EVALUATOR_ONLY}:
+            governed_root = control_plane_root if disposition == CONTROL_PLANE else evaluator_only_root
+            destination = governed_root / rel
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, destination)
+            item["governed_path"] = str(destination)
+            item["processing_status"] = (
+                "processed_control_plane"
+                if disposition == CONTROL_PLANE
+                else "processed_evaluator_only"
+            )
+            governed_targets[f"{disposition}/{rel}"] = rel
+            continue
+
+        if disposition in {HISTORIC_CONTEXT, RESTRICTED_CONTEXT, QUARANTINED_CONTEXT}:
+            context_rel = governed_context_path(disposition, rel)
             destination = normalized_root / context_rel
-            if destination.exists():
-                destination = destination.with_name(f"{item['source_id']}__{destination.name}")
-                context_rel = destination.relative_to(normalized_root).as_posix()
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_path, destination)
             classification["normalized_rel_path"] = context_rel
             item["normalized_path"] = str(destination)
+            item["governed_path"] = str(destination)
+            item["processing_status"] = {
+                HISTORIC_CONTEXT: "indexed_historic_context",
+                RESTRICTED_CONTEXT: "indexed_restricted_context",
+                QUARANTINED_CONTEXT: "quarantined_for_review",
+            }[disposition]
             copied_targets[context_rel] = rel
             continue
+
         if status_value != "classified":
+            item["processing_status"] = "mapping_or_classification_required"
+            item["governed_path"] = str(source_path)
             continue
         normalized_rel_path = classification.get("normalized_rel_path")
         role = classification.get("role")
         if not normalized_rel_path:
+            item["processing_status"] = "mapping_or_classification_required"
+            item["governed_path"] = str(source_path)
             continue
         if role in duplicates:
             item["issues"].append(f"Multiple files classified as {ROLE_LABELS[role].lower()}; run normalization requires exactly one.")
+            item["processing_status"] = "duplicate_role_review_required"
+            item["governed_path"] = str(source_path)
             continue
         # A required-role file that was NOT selected as the current period is a
         # historic version -- an older AP ledger, a prior-year GL. It does not
@@ -1038,20 +1161,19 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
             and str(item.get("source_id")) not in selected_run_model_source_ids
         )
         if is_historic_variant:
-            source_path = raw_root / str(item["relative_path"])
-            historic_rel = f"{HISTORIC_CONTEXT_DIR}/{PurePosixPath(str(item['relative_path'])).name}"
+            historic_rel = governed_context_path(HISTORIC_CONTEXT, rel)
             destination = normalized_root / historic_rel
-            if destination.exists():
-                destination = destination.with_name(f"{item['source_id']}__{destination.name}")
-                historic_rel = destination.relative_to(normalized_root).as_posix()
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_path, destination)
             item["issues"].append(
                 f"Kept as historic context; the current-period {ROLE_LABELS[role].lower()} was normalized for the run."
             )
             classification["normalized_rel_path"] = historic_rel
+            item["source_disposition"] = HISTORIC_CONTEXT
             item["normalized_path"] = str(destination)
-            copied_targets[historic_rel] = str(item["relative_path"])
+            item["governed_path"] = str(destination)
+            item["processing_status"] = "indexed_historic_context"
+            copied_targets[historic_rel] = rel
             continue
         destination = normalized_root / str(normalized_rel_path)
         final_rel_path = str(normalized_rel_path)
@@ -1067,13 +1189,16 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
             shutil.copy2(source_path, destination)
         classification["normalized_rel_path"] = final_rel_path
         item["normalized_path"] = str(destination)
-        copied_targets[final_rel_path] = str(item["relative_path"])
+        item["governed_path"] = str(destination)
+        item["processing_status"] = "indexed_current_evidence"
+        copied_targets[final_rel_path] = rel
 
     present_required = {role for role in RUN_MODEL_REQUIRED_ROLES if role in inventory and len(inventory[role]) == 1}
     missing_required = sorted(role for role in RUN_MODEL_REQUIRED_ROLES if role not in present_required)
     return {
         "normalized_dataset_root": str(normalized_root),
         "normalized_files": copied_targets,
+        "governed_files": governed_targets,
         "missing_required_roles": missing_required,
         "duplicate_required_roles": duplicates,
     }
@@ -1143,6 +1268,8 @@ def _unconfirmed_roles(manifest: list[dict[str, Any]]) -> list[str]:
     """
     flagged: set[str] = set()
     for item in manifest:
+        if str(item.get("source_disposition") or CURRENT_EVIDENCE) != CURRENT_EVIDENCE:
+            continue
         classification = item.get("classification") or {}
         proposal = classification.get("column_mapping_proposal") or {}
         role = proposal.get("role") or classification.get("role")
@@ -1183,10 +1310,21 @@ def build_task_readiness(
         tasks = evaluate_task_readiness_items(has_role=has_role, run_ready=run_ready)
         overall = "ready" if run_ready else "partial"
         ready_for_run = run_ready
+        classifiable_items = [
+            item
+            for item in manifest
+            if item.get("supported")
+            and str(item.get("source_disposition") or CURRENT_EVIDENCE)
+            not in {CONTROL_PLANE, EVALUATOR_ONLY}
+        ]
         classified_count = sum(
-            1 for item in manifest if (item.get("classification") or {}).get("status") == "classified"
+            1
+            for item in classifiable_items
+            if (item.get("classification") or {}).get("status") == "classified"
         )
-        classification_status = "complete" if classified_count == supported_count else "partial"
+        classification_status = (
+            "complete" if classified_count == len(classifiable_items) else "partial"
+        )
         blocking_reasons = []
         if missing_run_roles:
             blocking_reasons.append(
@@ -1220,6 +1358,7 @@ def build_validation(
     raw_root: Path | None = None,
 ) -> dict[str, Any]:
     summary = _manifest_summary(manifest)
+    accounting = disposition_summary(manifest)
     readiness = build_task_readiness(manifest, raw_root=raw_root)
     issues: list[str] = []
     if summary["file_count"] == 0:
@@ -1231,6 +1370,10 @@ def build_validation(
     if summary["pending_extraction_count"]:
         issues.append(
             f"{summary['pending_extraction_count']} files are staged with extraction pending for a later tranche."
+        )
+    if accounting["silent_omission_count"]:
+        issues.append(
+            f"{accounting['silent_omission_count']} files have no governed processing disposition."
         )
     if readiness["missing_run_model_roles"]:
         issues.append(
@@ -1251,6 +1394,7 @@ def build_validation(
         "notes": [
             "Validation confirms staging, content-based classification coverage, and normalization into the current run model.",
             "A source pack is runnable only when the required structured roles classify exactly once into the current run model.",
+            "Every staged file must receive a governed processing disposition, including files excluded from run evidence.",
         ],
     }
 
@@ -1279,6 +1423,13 @@ def _payload_for(
     manifest = _build_manifest(raw_root, source_pack_id=source_pack_id)
     _classify_manifest(manifest, raw_root, source_pack_id=source_pack_id)
     normalization = _normalize_manifest(manifest, raw_root, source_pack_id=source_pack_id)
+    file_accounting = disposition_summary(manifest)
+    source_quality = build_source_quality_report(manifest, raw_root)
+    acceptance_readiness = build_acceptance_readiness(
+        manifest,
+        file_accounting=file_accounting,
+        source_quality=source_quality,
+    )
     tenant_context = build_tenant_context()
     ingestion_job = build_source_pack_ingestion_job(
         source_pack_id=source_pack_id,
@@ -1299,6 +1450,10 @@ def _payload_for(
         "manifest": manifest,
         "manifest_summary": _manifest_summary(manifest),
         "classification_summary": _classification_summary(manifest),
+        "file_accounting": file_accounting,
+        "control_plane_registry": _control_plane_registry(manifest),
+        "source_quality": source_quality,
+        "acceptance_readiness": acceptance_readiness,
         "task_readiness": build_task_readiness(manifest, raw_root=raw_root),
         "validation": build_validation(manifest, raw_root=raw_root),
         "tenant_context": artifact_contracts_payload(tenant_context),

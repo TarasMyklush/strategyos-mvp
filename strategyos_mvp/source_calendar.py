@@ -8,6 +8,8 @@ from typing import Any
 
 from openpyxl import load_workbook
 
+from .source_governance import RESTRICTED_CONTEXT_DIR
+
 
 def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
     root = Path(dataset_root)
@@ -15,6 +17,8 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
     if not candidates:
         return {"status": "unavailable", "items": [], "reason": "No governed calendar workbook was supplied for this run."}
     path = candidates[0]
+    relative_source = path.relative_to(root).as_posix()
+    restricted = RESTRICTED_CONTEXT_DIR in path.relative_to(root).parts
     workbook = load_workbook(path, data_only=True, read_only=True)
     sheet = next((item for item in workbook.worksheets if item.title.strip().lower() in {"calendar", "agenda"}), workbook.active)
     rows = iter(sheet.values)
@@ -39,13 +43,16 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
             "type": event_type,
             "prep": prep,
             "related_bu": str(value(values, "related_bu", "business_unit") or "").strip() or None,
+            "evidence_scope": "calendar_agenda_only" if restricted else "governed_calendar",
         })
     return {
         "status": "ready" if items else "unavailable",
         "items": items[:12],
         "reason": "Calendar workbook contains no complete Event_Date, Title and Type rows." if not items else None,
-        "source_file": str(path.relative_to(root)),
+        "source_file": relative_source,
         "sheet": sheet.title,
+        "restricted": restricted,
+        "evidence_scope": "calendar_agenda_only" if restricted else "governed_calendar",
     }
 
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .config import CONFIG, ObjectStoreConfig
+from .source_governance import is_agent_evidence_path
 
 
 class ObjectStoreUnavailable(RuntimeError):
@@ -66,7 +67,14 @@ def sync_artifacts(run_dir: Path, artifact_paths: Iterable[Path]) -> list[dict]:
 def sync_source_files(dataset_root: Path) -> list[dict]:
     if not CONFIG.object_store.enabled or not CONFIG.sync_source_files:
         return []
-    return S3CompatibleStore().upload_directory(dataset_root, "source")
+    store = S3CompatibleStore()
+    uploaded: list[dict] = []
+    for path in sorted(item for item in dataset_root.rglob("*") if item.is_file()):
+        rel = path.relative_to(dataset_root).as_posix()
+        if not is_agent_evidence_path(rel):
+            continue
+        uploaded.append({"path": str(path), "uri": store.upload_file(path, f"source/{rel}")})
+    return uploaded
 
 
 def object_store_status() -> dict:

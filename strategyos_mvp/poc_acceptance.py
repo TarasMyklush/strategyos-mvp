@@ -288,12 +288,14 @@ def render_acceptance_report(report: dict[str, Any]) -> str:
 def run_poc_acceptance(
     *,
     dataset: Path = SOURCE_DATASET,
+    source_pack_id: str | None = None,
     run_dir: Path = DEFAULT_RUN_DIR,
     tolerance_sar: float = TOTAL_RECOVERABLE_TOLERANCE_SAR,
     sync_artifacts: bool = False,
 ) -> dict[str, Any]:
     summary, result = _execute_strategyos_workflow(
-        dataset=dataset,
+        dataset=None if source_pack_id else dataset,
+        source_pack_id=source_pack_id,
         run_dir=run_dir,
         skip_prepare=True,
         sync_artifacts=sync_artifacts,
@@ -333,6 +335,11 @@ def main() -> None:
         description="Run the canonical StrategyOS POC acceptance harness."
     )
     parser.add_argument("--dataset", type=Path, default=SOURCE_DATASET)
+    parser.add_argument(
+        "--source-pack-id",
+        default=None,
+        help="Run acceptance against a staged source pack instead of --dataset.",
+    )
     parser.add_argument("--run-dir", type=Path, default=DEFAULT_RUN_DIR)
     parser.add_argument(
         "--tolerance-sar",
@@ -348,6 +355,7 @@ def main() -> None:
     args = parser.parse_args()
     payload = run_poc_acceptance(
         dataset=args.dataset,
+        source_pack_id=args.source_pack_id,
         run_dir=args.run_dir,
         tolerance_sar=args.tolerance_sar,
         sync_artifacts=args.sync_artifacts,
