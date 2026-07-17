@@ -3323,6 +3323,80 @@ def test_public_ceo_revenue_make_it_100_returns_governed_gap_not_llm_restatement
         _restore_env(original)
 
 
+def test_ceo_revenue_make_it_100_uses_labelled_estimate_when_live_plan_is_unavailable(monkeypatch):
+    """Match the deployed CEO pack: governed actual, but no aligned plan."""
+    original, client = _client_with_public_ceo_surface(llm_enabled=True)
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_public_assistant_context",
+            lambda _run_id, **_kwargs: {
+                "bundle": {"public_safe": True},
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "public_context_packet": {
+                    "is_illustrative": False,
+                    "public_safe": True,
+                    "drivers": [],
+                    "findings": [],
+                },
+                "summary": {
+                    "run_id": "latest-public",
+                    "finance_kpi": {
+                        "authoritative": True,
+                        "reporting_period_key": "H1 2026",
+                        "reporting_currency": "SAR",
+                        "components": {"revenue_actual": "385079908.90"},
+                        "evidence": {
+                            "revenue": {
+                                "files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"]
+                            }
+                        },
+                    },
+                },
+                "run_id": "latest-public",
+                "run_mode": "public-safe",
+            },
+        )
+
+        async def forbidden_llm(*_args, **_kwargs):
+            raise AssertionError("The stated-attainment estimate must be calculated before LLM fallback")
+
+        monkeypatch.setattr(api_module, "_llm_answer_question_async", forbidden_llm)
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "revenue actual is SAR 385.1M. 99.4% of plan. - how to make it 100%?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "source": "executive_surface",
+                    "entrypoint": "drawer_input",
+                    "driver_key": "revenue",
+                },
+                "driver_context": {
+                    "key": "revenue",
+                    "label": "Revenue",
+                    "metric": "SAR 385.1M",
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["scenario_id"] == "revenue_plan_attainment"
+        assert payload["scenario_type"] == "deterministic"
+        assert payload.get("llm_fallback_attempted", False) is False
+        assert "implied plan is approximately SAR 387.4M" in payload["answer"]
+        assert "estimated gap to 100.0% is SAR 2.3M" in payload["answer"]
+        assert "not an approved plan comparison" in payload["answer"]
+        assert "CEO action:" in payload["answer"]
+        assert payload["hallucination_risk"]["level"] == "low"
+    finally:
+        _restore_env(original)
+
+
 def test_scenario_question_with_component_amount_reaches_scenario_engine(monkeypatch):
     """A what-if quoting an on-screen amount must not be hijacked by the
     governed reference resolver into a component-lookup answer."""

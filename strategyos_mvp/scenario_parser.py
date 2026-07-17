@@ -697,6 +697,73 @@ def _governed_revenue_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
     return None
 
 
+def _governed_revenue_actual(context: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Resolve the governed Revenue actual even when no aligned plan exists."""
+    summary = context.get("summary")
+    if not isinstance(summary, Mapping):
+        return None
+
+    for key in ("finance_kpi", "oracle_kpi"):
+        payload = summary.get(key)
+        if not isinstance(payload, Mapping):
+            continue
+        components = payload.get("components")
+        if not isinstance(components, Mapping):
+            components = payload
+        revenue = _decimal_or_none(components.get("revenue_actual"))
+        if revenue is None or revenue < 0:
+            continue
+
+        evidence = payload.get("evidence") if isinstance(payload.get("evidence"), Mapping) else {}
+        revenue_evidence = evidence.get("revenue") if isinstance(evidence, Mapping) else {}
+        files = revenue_evidence.get("files") if isinstance(revenue_evidence, Mapping) else []
+        citations = [
+            {
+                "source_path": str(source_path),
+                "locator": "Governed revenue actual",
+                "excerpt": "",
+            }
+            for source_path in (files or [])
+            if source_path
+        ]
+        if not citations:
+            citations = [{
+                "source_path": f"run_summary://{key}",
+                "locator": "components.revenue_actual",
+                "excerpt": "",
+            }]
+        return {
+            "source_key": key,
+            "period": str(payload.get("reporting_period_key") or summary.get("reporting_period") or "current governed period"),
+            "currency": str(payload.get("reporting_currency") or "SAR"),
+            "revenue": revenue,
+            "citations": citations,
+        }
+    return None
+
+
+def _stated_current_revenue_attainment_from_prompt(prompt: str) -> Decimal | None:
+    """Read an explicit current percent-of-plan assertion from the question.
+
+    This is deliberately narrower than the target parser: only text that calls
+    a percentage "of plan" may supply the missing comparison baseline.
+    """
+    matches = list(
+        re.finditer(
+            r"(?P<value>\d+(?:\.\d+)?)\s*%\s*(?:of\s+(?:the\s+)?plan|plan\s+attainment)",
+            str(prompt or ""),
+            re.IGNORECASE,
+        )
+    )
+    if not matches:
+        return None
+    try:
+        attainment = Decimal(matches[-1].group("value")) / Decimal("100")
+    except (InvalidOperation, ValueError):
+        return None
+    return attainment if Decimal("0") < attainment <= Decimal("2") else None
+
+
 def _target_revenue_attainment_from_prompt(
     prompt: str,
     prompt_numbers: list[dict[str, Any]],
@@ -836,6 +903,127 @@ def _finance_revenue_attainment_result(
         suggestions=suggestions,
         scenario_type="deterministic",
         basis="Calculated from the same governed revenue actual and aligned plan rendered by the CEO KPI card.",
+    )
+
+
+def _finance_revenue_attainment_from_stated_baseline(
+    target_attainment: Decimal,
+    current_attainment: Decimal,
+    baseline: Mapping[str, Any],
+    prompt_numbers: list[dict[str, Any]],
+) -> ScenarioResult:
+    """Estimate the gap when the CEO supplies attainment but the plan is absent.
+
+    The actual remains governed. The implied plan and gap are deterministic,
+    but explicitly presented as management estimates because the percentage is
+    user-supplied and may be rounded for display.
+    """
+    revenue = Decimal(baseline["revenue"])
+    implied_plan = revenue / current_attainment
+    target_revenue = implied_plan * target_attainment
+    gap = target_revenue - revenue
+    citations = list(baseline["citations"])
+
+    implied_plan_step = CalculationStep(
+        step_id="implied_revenue_plan",
+        description="Infer the plan implied by governed Revenue actual and the CEO-stated current attainment",
+        formula="implied revenue plan = governed revenue actual / user-stated current attainment",
+        inputs={
+            "period": baseline["period"],
+            "revenue_actual_sar": str(revenue),
+            "user_stated_current_attainment": str(current_attainment),
+            "prompt_numbers": _serialized_prompt_numbers(prompt_numbers),
+        },
+        result={"implied_revenue_plan_sar": _sar_decimal(implied_plan)},
+        unit="SAR",
+        citations=citations,
+        assumptions=["The stated current attainment is a management input and may be rounded."],
+    )
+    gap_step = CalculationStep(
+        step_id="estimated_revenue_target_gap",
+        description="Estimate additional recognized revenue required for the requested attainment",
+        formula="estimated gap = (implied revenue plan x requested attainment) - governed revenue actual",
+        inputs={
+            "implied_revenue_plan_sar": str(implied_plan),
+            "target_attainment": str(target_attainment),
+        },
+        result={
+            "target_revenue_sar": _sar_decimal(target_revenue),
+            "estimated_revenue_gap_sar": _sar_decimal(max(gap, Decimal("0"))),
+        },
+        unit="SAR",
+        citations=citations,
+        assumptions=["The requested attainment is a management target, not a forecast."],
+    )
+
+    estimate_prefix = (
+        f"Using the governed Revenue actual of {_sar_executive_decimal(revenue)} and your stated "
+        f"{_percent(float(current_attainment), 1)} attainment, the implied plan is approximately "
+        f"{_sar_executive_decimal(implied_plan)}. "
+    )
+    if gap <= 0:
+        answer = (
+            estimate_prefix
+            + f"Revenue is already at or above the requested {_percent(float(target_attainment), 1)} attainment; "
+            "no additional recognized revenue is required on this estimate.\n\n"
+            "This is not an approved plan comparison. Finance should load or confirm the like-for-like plan before it is used externally."
+        )
+        suggestions = ["Load the aligned revenue plan", "Model a higher revenue target"]
+    else:
+        answer = (
+            estimate_prefix
+            + f"The estimated gap to {_percent(float(target_attainment), 1)} is "
+            f"{_sar_executive_decimal(gap)} of additional recognized revenue in {baseline['period']}.\n\n"
+            f"CEO action: require revenue owners to submit named, recognition-eligible items totaling at least "
+            f"{_sar_executive_decimal(gap)}, each with an owner, expected recognition date, and source evidence; "
+            "then track recognized revenue against the remaining gap.\n\n"
+            "This is a management estimate, not an approved plan comparison: the attainment percentage was supplied "
+            "in your question and may be rounded. Finance should load or confirm the aligned plan. The governed run "
+            "also lacks CRM pipeline and order-backlog evidence, so connect those sources before naming which deals will close."
+        )
+        suggestions = [
+            "Load the aligned revenue plan",
+            "Break the estimated gap down by owner",
+            "Connect CRM pipeline and order backlog",
+        ]
+
+    return ScenarioResult(
+        scenario_id="revenue_plan_attainment",
+        scenario_label="Finance - Revenue Plan Attainment",
+        matched=True,
+        answer=answer,
+        calculations=[implied_plan_step, gap_step],
+        kg_context=[],
+        citations=citations,
+        assumptions=[
+            "Revenue actual is taken from the current governed run.",
+            "Current attainment is user-supplied and may be rounded.",
+            "The implied plan is an estimate until Finance confirms the aligned comparator.",
+        ],
+        hallucination_risk=HallucinationRisk(
+            level=HallucinationRiskLevel.LOW,
+            score=0.15,
+            factors=[
+                {
+                    "name": "user_supplied_attainment",
+                    "detail": "The current percent-of-plan input comes from the user's question, not the governed run.",
+                },
+                {
+                    "name": "rounded_input",
+                    "detail": "A displayed percentage can imply a small range of exact plan values.",
+                },
+            ],
+            traceable=True,
+            mitigations=[
+                "The answer labels the implied plan and gap as estimates.",
+                "The governed revenue actual and every formula remain traceable.",
+                "The answer asks Finance to confirm the aligned plan before external use.",
+            ],
+            verification_path="Confirm the like-for-like Revenue plan for the governed period and rerun the exact gap calculation.",
+        ),
+        suggestions=suggestions,
+        scenario_type="deterministic",
+        basis="Calculated from governed Revenue actual and the CEO-stated attainment; the implied plan is explicitly estimated.",
     )
 
 
@@ -2657,6 +2845,17 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
             if revenue_baseline is not None:
                 return _hydrate_scenario_result(
                     _finance_revenue_attainment_result(revenue_target, revenue_baseline, prompt_numbers)
+                )
+            revenue_actual = _governed_revenue_actual(context)
+            stated_current_attainment = _stated_current_revenue_attainment_from_prompt(prompt)
+            if revenue_actual is not None and stated_current_attainment is not None:
+                return _hydrate_scenario_result(
+                    _finance_revenue_attainment_from_stated_baseline(
+                        revenue_target,
+                        stated_current_attainment,
+                        revenue_actual,
+                        prompt_numbers,
+                    )
                 )
             return _hydrate_scenario_result(
                 _scenario_missing_data_result(

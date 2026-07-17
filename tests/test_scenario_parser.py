@@ -345,6 +345,56 @@ def test_revenue_plan_target_returns_exact_gap_and_ceo_action():
     }
 
 
+def test_revenue_plan_target_estimates_from_ceo_stated_attainment_when_plan_is_missing():
+    """The live pack has actual Revenue but no aligned plan.
+
+    A CEO who supplies the displayed attainment has supplied enough information
+    for a labelled estimate; Hermes should help without presenting it as an
+    approved comparator.
+    """
+    result = parse_scenario(
+        "revenue actual is SAR 385.1M. 99.4% of plan. - how to make it 100%?",
+        {
+            "bundle": object(),
+            "findings": [],
+            "kg_nodes": [],
+            "public_context_packet": {},
+            "assistant_context": {"kpi_key": "revenue"},
+            "summary": {
+                "finance_kpi": {
+                    "authoritative": True,
+                    "reporting_period_key": "H1 2026",
+                    "reporting_currency": "SAR",
+                    "components": {"revenue_actual": "385079908.90"},
+                    "evidence": {
+                        "revenue": {
+                            "files": ["02_ERP_Extracts/GL_Extract_H1_2026.csv"]
+                        }
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.matched is True
+    assert result.scenario_id == "revenue_plan_attainment"
+    assert result.scenario_type == "deterministic"
+    assert "your stated 99.4% attainment" in result.answer
+    assert "implied plan is approximately SAR 387.4M" in result.answer
+    assert "estimated gap to 100.0% is SAR 2.3M" in result.answer
+    assert "CEO action:" in result.answer
+    assert "not an approved plan comparison" in result.answer
+    assert "CRM pipeline and order-backlog evidence" in result.answer
+    assert result.hallucination_risk.level.value == "low"
+    assert {step.step_id for step in result.calculations} == {
+        "implied_revenue_plan",
+        "estimated_revenue_target_gap",
+    }
+    assert {citation["source_path"] for citation in result.citations} == {
+        "02_ERP_Extracts/GL_Extract_H1_2026.csv",
+    }
+
+
 def test_revenue_card_context_turns_make_it_100_percent_into_target_calculation():
     result = parse_scenario(
         "how to make it 100%?",
