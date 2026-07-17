@@ -1097,6 +1097,88 @@ def test_resume_run_uses_latest_local_checkpoint_when_store_skipped(monkeypatch,
         _restore_env(original)
 
 
+def test_resume_run_enriches_hosted_checkpoint_with_latest_approved_summary(monkeypatch, tmp_path):
+    original = _apply_env(
+        {
+            "DATABASE_URL": None,
+            "STRATEGYOS_OUTPUT_ROOT": str(tmp_path / "outputs"),
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+        }
+    )
+    client = TestClient(api_module.app)
+    try:
+        local = _write_local_review_summary(tmp_path, approval_status="approved")
+        approved_summary = json.loads(local["summary_path"].read_text(encoding="utf-8"))
+        approved_summary["finance_kpi"] = {
+            "derived_from": "deterministic_source_finance_kpi_engine",
+            "components": {"revenue_actual": "385100000"},
+        }
+        approved_summary["calendar_agenda"] = {
+            "status": "ready",
+            "items": [{"date": "2026-07-22", "title": "Executive Committee"}],
+        }
+        approved_summary["source_pack"] = {
+            "source_pack_id": "pack-81",
+            "file_accounting": {
+                "file_count": 81,
+                "accounted_file_count": 81,
+                "silent_omission_count": 0,
+            },
+        }
+        local["summary_path"].write_text(json.dumps(approved_summary, indent=2), encoding="utf-8")
+        hosted_checkpoint = dict(approved_summary["local_review_checkpoint"])
+        hosted_checkpoint["checkpoint_id"] = "hosted-checkpoint-1"
+        hosted_checkpoint["persistence"] = "postgres"
+        hosted_checkpoint["summary_json"] = {
+            "run_id": local["run_id"],
+            "status": "awaiting_review",
+        }
+        captured = {}
+
+        monkeypatch.setattr(
+            api_module.state_store,
+            "approval_status_for_run",
+            lambda run_id: {
+                "run_id": run_id,
+                "approval_status": "approved",
+                "run_status": "awaiting_review",
+                "current_stage": "awaiting_review",
+            },
+        )
+        monkeypatch.setattr(
+            api_module.state_store,
+            "latest_checkpoint",
+            lambda run_id: hosted_checkpoint,
+        )
+
+        def fake_resume(run_id, checkpoint):
+            captured["checkpoint"] = checkpoint
+            return {
+                "run_id": run_id,
+                "status": "completed",
+                "current_stage": "writer",
+                "approval_status": "approved",
+            }
+
+        monkeypatch.setattr(api_module, "resume_reviewed_run", fake_resume)
+
+        response = client.post(
+            f"/operator/runs/{local['run_id']}/resume",
+            headers=_auth_header("operator-secret"),
+            json={},
+        )
+
+        assert response.status_code == 200
+        assert captured["checkpoint"]["checkpoint_id"] == "hosted-checkpoint-1"
+        assert captured["checkpoint"]["persistence"] == "postgres"
+        assert captured["checkpoint"]["summary_json"]["finance_kpi"]["derived_from"] == "deterministic_source_finance_kpi_engine"
+        assert captured["checkpoint"]["summary_json"]["calendar_agenda"]["items"][0]["title"] == "Executive Committee"
+        assert captured["checkpoint"]["summary_json"]["source_pack"]["file_accounting"]["accounted_file_count"] == 81
+    finally:
+        _restore_env(original)
+
+
 def test_unclaim_run_returns_conflict_when_claimed_by_another_reviewer(monkeypatch):
     original, client = _client_with_auth_env()
     try:

@@ -1614,6 +1614,35 @@ def _local_review_checkpoint_for_run(run_id: str) -> dict[str, Any] | None:
     return normalized
 
 
+def _checkpoint_with_latest_run_summary(
+    run_id: str,
+    checkpoint: dict[str, Any],
+) -> dict[str, Any]:
+    """Overlay post-workflow enrichment onto any review checkpoint.
+
+    Hosted execution persists its checkpoint before ``run_poc`` attaches the
+    finance KPIs, governed calendar, historic context, and final source-pack
+    accounting to ``run_summary.json``.  Unlike the local fallback, a hosted
+    checkpoint is returned directly by the state store, so it must receive the
+    same latest-summary overlay before writer resume.
+    """
+    summary = _latest_local_summary_for_run(run_id)
+    if not isinstance(summary, dict):
+        return checkpoint
+    enriched = dict(checkpoint)
+    checkpoint_summary = enriched.get("summary_json")
+    merged_summary = dict(checkpoint_summary) if isinstance(checkpoint_summary, dict) else {}
+    merged_summary.update(
+        {
+            key: value
+            for key, value in summary.items()
+            if key not in {"local_review_checkpoint", "pointer_metadata", "latest_pointer"}
+        }
+    )
+    enriched["summary_json"] = merged_summary
+    return enriched
+
+
 def _local_approval_status_for_run(run_id: str) -> dict[str, Any] | None:
     summary = _latest_summary()
     if not summary or str(summary.get("run_id") or "") != str(run_id):
@@ -9156,6 +9185,7 @@ def resume_run(
         missing_detail=f"No checkpoint found for run '{run_id}'.",
     )
     assert isinstance(checkpoint, dict)
+    checkpoint = _checkpoint_with_latest_run_summary(run_id, checkpoint)
     checkpoint_stage = _normalize_lifecycle_stage(checkpoint.get("stage"))
     if checkpoint_stage != "awaiting_review":
         raise HTTPException(
