@@ -37,6 +37,7 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
         prep = str(value(values, "prep_needed", "preparation", "prep") or "No preparation request was supplied.").strip()
         items.append({
             "event_id": f"calendar-{event_date.isoformat()}-{len(items) + 1}",
+            "date": event_date.isoformat(),
             "day": event_date.strftime("%a %d %b"),
             "when": str(value(values, "start_time", "time") or event_date.isoformat()),
             "title": title,

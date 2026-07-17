@@ -1062,6 +1062,106 @@ def test_authenticated_executive_app_help_calls_out_operator_role(monkeypatch):
         _restore_env(original)
 
 
+def test_authenticated_calendar_question_uses_governed_agenda_without_llm(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {
+                    "run_id": "run-calendar",
+                    "calendar_agenda": {
+                        "status": "ready",
+                        "source_file": "98_Restricted_Context/CEO_Calendar.xlsx",
+                        "sheet": "Calendar",
+                        "restricted": True,
+                        "evidence_scope": "calendar_agenda_only",
+                        "items": [
+                            {
+                                "event_id": "calendar-2099-07-21-1",
+                                "date": "2099-07-21",
+                                "day": "Tue 21 Jul",
+                                "when": "09:00:00",
+                                "title": "Executive Committee",
+                                "type": "Decision meeting",
+                                "prep": "Review the cash-leakage decision brief.",
+                                "related_bu": "Group",
+                                "evidence_scope": "calendar_agenda_only",
+                            }
+                        ],
+                    },
+                },
+                "run_id": run_id or "run-calendar",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("a governed calendar question must not reach the LLM")
+            ),
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "What is the next item on my CEO calendar, and how should I prepare?",
+                "persona": "ceo",
+                "mode": "auto",
+                "run_id": "run-calendar",
+            },
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["matched"] is True
+        assert payload["answered_by"] == "governed_calendar"
+        assert payload["assistant_mode"] == "governed_calendar"
+        assert payload["answer_origin"] == "governed"
+        assert payload["llm_fallback_attempted"] is False
+        assert "Executive Committee" in payload["answer"]
+        assert "cash-leakage decision brief" in payload["answer"]
+        assert payload["citations"][0]["source_path"].endswith("CEO_Calendar.xlsx")
+        assert payload["citations"][0]["evidence_scope"] == "calendar_agenda_only"
+        assert payload["hallucination_risk"]["level"] == "none"
+    finally:
+        _restore_env(original)
+
+
+def test_governed_calendar_never_labels_past_item_as_upcoming():
+    result = api_module._governed_calendar_result(
+        "What is my next meeting?",
+        {
+            "calendar_agenda": {
+                "status": "ready",
+                "source_file": "CEO_Calendar.xlsx",
+                "sheet": "Calendar",
+                "items": [
+                    {
+                        "event_id": "calendar-2026-04-01-1",
+                        "title": "Historical Executive Committee",
+                        "type": "Decision meeting",
+                        "prep": "Archive the signed minutes.",
+                    }
+                ],
+            }
+        },
+        today=api_module.date(2026, 7, 17),
+    )
+
+    assert result is not None
+    assert "contains no event on or after 17 Jul 2026" in result["answer"]
+    assert "will not present a past item as upcoming" in result["answer"]
+    assert "Historical Executive Committee" in result["answer"]
+
+
 def test_assistant_chat_golden_prompt_works_without_completed_run(monkeypatch):
     original, client = _client_with_auth()
     try:

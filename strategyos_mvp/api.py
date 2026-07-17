@@ -12,7 +12,7 @@ import socket
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, closing
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Mapping
@@ -11339,6 +11339,146 @@ def _authenticated_app_help_result(question: str, *, role: str) -> dict[str, Any
     }
 
 
+def _assistant_question_is_calendar_agenda(question: str) -> bool:
+    """Return true only for an explicit CEO calendar/meeting request."""
+    norm = " ".join(str(question or "").casefold().split())
+    if any(term in norm for term in ("calendar", "agenda")):
+        return True
+    asks_about_meeting = bool(re.search(r"\b(meeting|appointment)\b", norm))
+    asks_about_timing = any(
+        term in norm
+        for term in ("next", "upcoming", "today", "tomorrow", "scheduled", "prepare")
+    )
+    return asks_about_meeting and asks_about_timing
+
+
+def _calendar_item_date(item: Mapping[str, Any]) -> date | None:
+    raw_date = str(item.get("date") or item.get("event_date") or "").strip()
+    if not raw_date:
+        match = re.search(r"calendar-(\d{4}-\d{2}-\d{2})-", str(item.get("event_id") or ""))
+        raw_date = match.group(1) if match else ""
+    try:
+        return date.fromisoformat(raw_date)
+    except ValueError:
+        return None
+
+
+def _governed_calendar_result(
+    question: str,
+    summary: Mapping[str, Any] | None,
+    *,
+    today: date | None = None,
+) -> dict[str, Any] | None:
+    """Answer calendar questions from the run-scoped governed agenda only."""
+    if not _assistant_question_is_calendar_agenda(question):
+        return None
+    agenda = summary.get("calendar_agenda") if isinstance(summary, Mapping) else None
+    if not isinstance(agenda, Mapping):
+        agenda = {}
+    items = [item for item in list(agenda.get("items") or []) if isinstance(item, Mapping)]
+    if str(agenda.get("status") or "").casefold() != "ready" or not items:
+        reason = str(agenda.get("reason") or "No governed calendar workbook was supplied for this run.")
+        return {
+            "matched": True,
+            "answer": f"The governed calendar is not available for this run. {reason}",
+            "basis": "The run-scoped calendar agenda is unavailable; no schedule was inferred.",
+            "citations": [],
+            "suggestions": ["Which governed run is currently loaded?", "What should I prepare for the board?"],
+            "assistant_mode": "governed_calendar",
+            "answered_by": "governed_calendar",
+            "answer_origin": "governed",
+            "intent": "calendar_agenda",
+            "_orchestrator_force_answer": True,
+        }
+
+    current_day = today or date.today()
+    dated_items = [(item_date, item) for item in items if (item_date := _calendar_item_date(item)) is not None]
+    dated_items.sort(key=lambda pair: pair[0])
+    norm = " ".join(str(question or "").casefold().split())
+    selected: list[tuple[date | None, Mapping[str, Any]]]
+    status_sentence = ""
+    if "tomorrow" in norm:
+        target_day = current_day + timedelta(days=1)
+        selected = [pair for pair in dated_items if pair[0] == target_day]
+        status_sentence = (
+            f"The governed agenda has no item for {target_day.strftime('%d %b %Y')}."
+            if not selected
+            else f"The governed agenda has {len(selected)} item(s) for tomorrow, {target_day.strftime('%d %b %Y')}."
+        )
+    elif "today" in norm:
+        selected = [pair for pair in dated_items if pair[0] == current_day]
+        status_sentence = (
+            f"The governed agenda has no item for today, {current_day.strftime('%d %b %Y')}."
+            if not selected
+            else f"The governed agenda has {len(selected)} item(s) for today, {current_day.strftime('%d %b %Y')}."
+        )
+    elif any(term in norm for term in ("next", "upcoming")):
+        upcoming = [pair for pair in dated_items if pair[0] >= current_day]
+        if upcoming:
+            selected = upcoming[:1]
+            status_sentence = "The next item in the governed agenda is:"
+        else:
+            selected = dated_items[-1:] if dated_items else [(None, items[-1])]
+            status_sentence = (
+                f"The governed calendar is connected, but it contains no event on or after "
+                f"{current_day.strftime('%d %b %Y')}. I will not present a past item as upcoming. "
+                "The latest supplied item is:"
+            )
+    else:
+        selected = dated_items[:3] if dated_items else [(None, item) for item in items[:3]]
+        status_sentence = f"The governed calendar is connected with {len(items)} supplied agenda item(s)."
+
+    detail_lines: list[str] = []
+    citations: list[dict[str, Any]] = []
+    source_file = str(agenda.get("source_file") or "governed calendar workbook")
+    sheet = str(agenda.get("sheet") or "Calendar")
+    for item_date, item in selected:
+        title = str(item.get("title") or "Untitled event")
+        event_type = str(item.get("type") or "meeting")
+        date_label = item_date.strftime("%a %d %b %Y") if item_date else str(item.get("day") or "date not supplied")
+        when = str(item.get("when") or "").strip()
+        time_suffix = f" at {when}" if when and when not in {date_label, item_date.isoformat() if item_date else ""} else ""
+        prep = str(item.get("prep") or "No preparation request was supplied.")
+        related_bu = str(item.get("related_bu") or "").strip()
+        bu_suffix = f"; related business unit: {related_bu}" if related_bu else ""
+        detail_lines.append(
+            f"{date_label}{time_suffix} — {title} ({event_type}){bu_suffix}. Preparation: {prep}"
+        )
+        citations.append(
+            {
+                "source_path": source_file,
+                "locator": f"{sheet} / {item.get('event_id') or date_label}",
+                "excerpt": f"{title}; {date_label}; preparation: {prep}",
+                "evidence_scope": str(item.get("evidence_scope") or agenda.get("evidence_scope") or "governed_calendar"),
+            }
+        )
+
+    answer = status_sentence
+    if detail_lines:
+        answer = f"{status_sentence}\n" + "\n".join(f"- {line}" for line in detail_lines)
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": (
+            f"Run-scoped governed calendar agenda from {source_file}; "
+            "restricted calendar data is used only for calendar/agenda answers."
+        ),
+        "citations": citations,
+        "suggestions": [
+            "What preparation is required for the next listed meeting?",
+            "What is on my governed agenda today?",
+            "Which calendar items relate to a business unit?",
+        ],
+        "assistant_mode": "governed_calendar",
+        "answered_by": "governed_calendar",
+        "answer_origin": "governed",
+        "intent": "calendar_agenda",
+        "calendar_status": "ready",
+        "calendar_item_count": len(items),
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _supplemental_grounding_payload(
     *,
     graph_result: dict[str, Any] | None = None,
@@ -12830,6 +12970,32 @@ async def _assistant_chat_response(
     if conversation_history:
         context["assistant_history"] = conversation_history
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    calendar_result = (
+        None
+        if public_safe
+        else _governed_calendar_result(question, context.get("summary"))
+    )
+    if calendar_result is not None:
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=calendar_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=calendar_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     if _assistant_question_is_release_gate(question):
         release_result = _governed_release_gate_result(
