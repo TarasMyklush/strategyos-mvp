@@ -65,11 +65,12 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     assert "Loading governed execution tracker truth" in plan_html
     assert "fetch('/api/plan/latest')" in plan_html
     assert "/static/plan_data.js" not in plan_html
-    assert "Group CEO Diagnostics" in executive_html
+    assert "Group CEO Briefing" in executive_html
     assert "window payload as execution truth" in _plan_data()
-    assert "Diagnostics" in executive_html
-    assert "Assistants" in executive_html
-    assert "Knowledge" in executive_html
+    assert "Briefing" in executive_html
+    assert "Calendar" in executive_html
+    assert "Hermes" in executive_html
+    assert "Evidence" in executive_html
     assert "Enterprise performance" in executive_html
     assert "Prepare the next move" in executive_html
 
