@@ -853,8 +853,14 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     # filename-oriented derivation).
     vendor_prefix_words = [w for w in re.findall(r"[A-Za-z0-9]+", vendor_name) if w][:2]
     vendor_prefix = " ".join(vendor_prefix_words)
-    bank_required_terms = [invoice_id, applied_rate_text]
-    bank_preferred_terms = [term for term in (vendor_prefix, eur_amount_text, applied_rate_text) if term]
+    # Bank statements commonly carry the beneficiary, settled amount and rate,
+    # but not the AP invoice identifier. The AP row and correspondence provide
+    # the invoice-reference bridge; requiring that identifier inside the bank
+    # scan made valid OCR evidence impossible to verify. Amount and settlement
+    # rate form the hard bank anchor; counterparty identity remains a preferred
+    # term because source-quality QA separately reports identity conflicts.
+    bank_required_terms = [eur_amount_text, applied_rate_text]
+    bank_preferred_terms = [term for term in (vendor_prefix, invoice_id) if term]
 
     citations = [
         excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(target.name), f"{target.Invoice_ID}; EUR {target.Amount_Original_Currency:,.2f}; SAR {target.Amount_SAR:,.2f}; applied rate {target.applied_rate:.4f}"),

@@ -6,9 +6,31 @@ from strategyos_mvp.poc_acceptance import evaluate_poc_acceptance, load_tamween_
 from strategyos_mvp.run_poc import _execute_strategyos_workflow
 from strategyos_mvp.ingestion import load_dataset
 from strategyos_mvp.skills.finance_controls import run_all_finance_skills
+import strategyos_mvp.skills.finance_controls as finance_controls_module
 
 
-def test_poc_acceptance_full_writer_run_fails_closed_when_required_ocr_is_unavailable(tmp_path: Path):
+def test_poc_acceptance_full_writer_run_fails_closed_when_required_ocr_is_unavailable(
+    tmp_path: Path,
+    monkeypatch,
+):
+    # Simulate the governed OCR verifier being unable to resolve the required
+    # bank row. The test must not depend on whether local Tesseract happens to
+    # be installed or how it tokenizes the synthetic scan.
+    monkeypatch.setattr(
+        finance_controls_module,
+        "missing_ocr_required_evidence",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        finance_controls_module,
+        "pdf_citation_with_anchor",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        finance_controls_module,
+        "_find_pdf_by_anchor",
+        lambda *_args, **_kwargs: None,
+    )
     try:
         _execute_strategyos_workflow(
             dataset=SOURCE_DATASET,

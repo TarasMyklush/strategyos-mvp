@@ -13,6 +13,7 @@ from .file_traversal import iter_files
 from .models import Citation
 from .ocr import ocr_empty_pdf_pages
 from .prompt_injection import guard_untrusted_document_text
+from .source_governance import is_agent_evidence_path
 
 
 IGNORED_NAMES = {".DS_Store"}
@@ -101,7 +102,11 @@ class EvidenceStore:
 
 
 def iter_source_files(dataset_root: Path) -> list[Path]:
-    return iter_files(dataset_root, ignored_names=IGNORED_NAMES)
+    return [
+        path
+        for path in iter_files(dataset_root, ignored_names=IGNORED_NAMES)
+        if is_agent_evidence_path(path.relative_to(dataset_root).as_posix())
+    ]
 
 
 def sha256_file(path: Path) -> str:

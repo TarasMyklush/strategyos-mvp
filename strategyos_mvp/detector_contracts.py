@@ -8,6 +8,7 @@ import pandas as pd
 
 from .data_roles import run_model_role_specs
 from .file_traversal import iter_files
+from .source_governance import is_detector_candidate_path
 
 
 @dataclass(frozen=True)
@@ -138,6 +139,8 @@ def _candidate_paths(dataset_root: Path, contract: DetectorRoleContract) -> list
     )
     for path in discovered_paths:
         if path == default_path:
+            continue
+        if not is_detector_candidate_path(path.relative_to(dataset_root).as_posix()):
             continue
         if path.suffix.lower() not in {".csv", ".tsv", ".json", ".xls", ".xlsx"}:
             continue

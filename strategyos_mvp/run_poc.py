@@ -231,6 +231,10 @@ def _write_source_pack_run_context(dataset_root: Path, source_pack_payload: dict
                 "available_roles": available_roles,
                 "missing_roles": missing_roles,
                 "duplicate_roles": duplicate_roles,
+                "file_accounting": source_pack_payload.get("file_accounting") or {},
+                "control_plane_registry": source_pack_payload.get("control_plane_registry") or {},
+                "source_quality": source_pack_payload.get("source_quality") or {},
+                "acceptance_readiness": source_pack_payload.get("acceptance_readiness") or {},
                 "tenant_context": source_pack_payload.get("tenant_context") or {},
                 "ingestion_job": source_pack_payload.get("ingestion_job") or {},
             },
@@ -334,6 +338,10 @@ def _execute_strategyos_workflow(
             "normalized_dataset_root": source_pack_payload.get("normalized_dataset_root"),
             "task_readiness": source_pack_payload.get("task_readiness"),
             "run_resolution": source_pack_payload.get("run_resolution"),
+            "file_accounting": source_pack_payload.get("file_accounting"),
+            "control_plane_registry": source_pack_payload.get("control_plane_registry"),
+            "source_quality": source_pack_payload.get("source_quality"),
+            "acceptance_readiness": source_pack_payload.get("acceptance_readiness"),
         }
     # Surface detector coverage (which detectors ran vs were skipped for missing
     # roles) and the run mode in machine-readable output, not only the prose
