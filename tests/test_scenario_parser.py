@@ -295,6 +295,81 @@ def test_ebitda_target_margin_uses_governed_dashboard_baseline():
     }
 
 
+def test_revenue_plan_target_returns_exact_gap_and_ceo_action():
+    result = parse_scenario(
+        "revenue actual is SAR 385.1M. 99.4% of plan. - how to make it 100%?",
+        {
+            "bundle": object(),
+            "findings": [],
+            "kg_nodes": [],
+            "public_context_packet": {},
+            "summary": {
+                "finance_kpi": {
+                    "authoritative": True,
+                    "reporting_period_key": "H1 2026",
+                    "reporting_currency": "SAR",
+                    "components": {
+                        "revenue_actual": "385079908.90",
+                        "revenue_plan": "387500000.00",
+                    },
+                    "evidence": {
+                        "revenue": {
+                            "files": [
+                                "02_ERP_Extracts/GL_Extract_H1_2026.csv",
+                                "01_Planning/Revenue_Plan_H1_2026.xlsx",
+                            ]
+                        }
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.matched is True
+    assert result.scenario_id == "revenue_plan_attainment"
+    assert result.scenario_type == "deterministic"
+    assert "SAR 385.1M" in result.answer
+    assert "SAR 387.5M" in result.answer
+    assert "99.4%" in result.answer
+    assert "gap to 100.0% is SAR 2.4M" in result.answer
+    assert "CEO action:" in result.answer
+    assert "CRM pipeline or order-backlog evidence" in result.answer
+    assert result.hallucination_risk.level.value == "none"
+    assert {step.step_id for step in result.calculations} == {
+        "governed_revenue_attainment",
+        "revenue_target_gap",
+    }
+    assert {citation["source_path"] for citation in result.citations} == {
+        "02_ERP_Extracts/GL_Extract_H1_2026.csv",
+        "01_Planning/Revenue_Plan_H1_2026.xlsx",
+    }
+
+
+def test_revenue_card_context_turns_make_it_100_percent_into_target_calculation():
+    result = parse_scenario(
+        "how to make it 100%?",
+        {
+            "bundle": object(),
+            "findings": [],
+            "kg_nodes": [],
+            "public_context_packet": {},
+            "assistant_context": {"kpi_key": "revenue"},
+            "summary": {
+                "finance_kpi": {
+                    "reporting_period_key": "H1 2026",
+                    "components": {
+                        "revenue_actual": "385079908.90",
+                        "revenue_plan": "387500000.00",
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.scenario_id == "revenue_plan_attainment"
+    assert "gap to 100.0% is SAR 2.4M" in result.answer
+
+
 def test_governed_public_ceo_surface_models_target_margin_from_same_dashboard_baseline():
     result = parse_scenario(
         "Model what needs to happen to reach a 60% EBITDA margin using the current governed revenue and cost baseline.",

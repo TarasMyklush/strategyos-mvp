@@ -12619,6 +12619,16 @@ def _assistant_question_requests_modelling(question: str) -> bool:
         norm,
     ):
         return True
+    # Natural executive phrasing such as "how do we make it 100%?" is still
+    # a target calculation.  Without this branch an open Revenue card captures
+    # the question as a passive comparison and merely repeats "99.4% of plan".
+    # Keep the verbs percentage-gated so ordinary uses of make/get/bring do not
+    # turn unrelated finance questions into scenarios.
+    if re.search(r"\b(make|get|bring)\s+(?:it|revenue|sales)\b|\bclose\s+the\s+gap\b", norm) and re.search(
+        r"\d+(?:\.\d+)?\s*%",
+        norm,
+    ):
+        return True
     return False
 
 
