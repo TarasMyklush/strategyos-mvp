@@ -182,6 +182,9 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
     )
 
     assert decision["kpi_question_intent"] == "decision"
+    assert "Current position:" in decision["answer"]
+    assert "Accountable owner: Group CFO and the accountable business-line CEO." in decision["answer"]
+    assert "Next decision:" in decision["answer"]
     assert "Movement requiring attention: Revenue – Government (-SAR 5)" in decision["answer"]
     assert "immediate governance gap" in decision["answer"]
     assert "Current composition" not in decision["answer"]
@@ -1160,6 +1163,35 @@ def test_governed_calendar_never_labels_past_item_as_upcoming():
     assert "contains no event on or after 17 Jul 2026" in result["answer"]
     assert "will not present a past item as upcoming" in result["answer"]
     assert "Historical Executive Committee" in result["answer"]
+
+
+def test_governed_calendar_respects_requested_upcoming_quantity():
+    result = api_module._governed_calendar_result(
+        "What are my next three calendar commitments and how should I prepare for each?",
+        {
+            "calendar_agenda": {
+                "status": "ready",
+                "source_file": "CEO_Calendar.xlsx",
+                "sheet": "Calendar",
+                "items": [
+                    {
+                        "event_id": f"calendar-2026-07-{day:02d}-{day}",
+                        "date": f"2026-07-{day:02d}",
+                        "title": f"Executive commitment {day}",
+                        "type": "Decision meeting",
+                        "prep": f"Prepare brief {day}.",
+                    }
+                    for day in range(18, 23)
+                ],
+            }
+        },
+        today=api_module.date(2026, 7, 17),
+    )
+
+    assert result is not None
+    assert "next 3 items" in result["answer"]
+    assert result["answer"].count("Executive commitment") == 3
+    assert len(result["citations"]) == 3
 
 
 def test_assistant_chat_golden_prompt_works_without_completed_run(monkeypatch):

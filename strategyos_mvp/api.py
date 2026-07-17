@@ -11407,6 +11407,37 @@ def _calendar_item_date(item: Mapping[str, Any]) -> date | None:
         return None
 
 
+def _requested_calendar_item_count(question: str, *, default: int = 1) -> int:
+    """Return an explicit bounded quantity from a calendar request."""
+    norm = " ".join(str(question or "").casefold().split())
+    word_numbers = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+    }
+    quantity_match = re.search(
+        r"\b(?:next|upcoming|first)\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\b",
+        norm,
+    )
+    if not quantity_match:
+        return default
+    raw = quantity_match.group(1)
+    value = word_numbers.get(raw)
+    if value is None:
+        try:
+            value = int(raw)
+        except ValueError:
+            return default
+    return max(1, min(value, 10))
+
+
 def _governed_calendar_result(
     question: str,
     summary: Mapping[str, Any] | None,
@@ -11459,8 +11490,16 @@ def _governed_calendar_result(
     elif any(term in norm for term in ("next", "upcoming")):
         upcoming = [pair for pair in dated_items if pair[0] >= current_day]
         if upcoming:
-            selected = upcoming[:1]
-            status_sentence = "The next item in the governed agenda is:"
+            requested_count = _requested_calendar_item_count(norm)
+            selected = upcoming[:requested_count]
+            if requested_count == 1:
+                status_sentence = "The next item in the governed agenda is:"
+            else:
+                status_sentence = (
+                    f"The next {len(selected)} item(s) in the governed agenda are:"
+                    if len(selected) < requested_count
+                    else f"The next {requested_count} items in the governed agenda are:"
+                )
         else:
             selected = dated_items[-1:] if dated_items else [(None, items[-1])]
             status_sentence = (
@@ -11999,7 +12038,18 @@ def _ceo_kpi_inline_result(
     else:
         if resolved_intent == "decision":
             decision_context = str(brief.get("decision_context") or "").strip()
-            answer = (decision_context or f"{label} is {metric} for the selected period.") + " "
+            readout = str(brief.get("readout") or card.get("detail") or "").strip()
+            accountable_owner = {
+                "revenue": "Group CFO and the accountable business-line CEO",
+                "ebitda_margin": "Group CFO",
+                "operating_cost": "Group CFO and the accountable operating executives",
+                "cash_vs_floor": "Group CFO and Group Treasury",
+            }.get(kpi_key, "Group CFO")
+            answer = (
+                f"Current position: {readout or f'{label} is {metric} for the selected period.'} "
+                f"Accountable owner: {accountable_owner}. "
+                f"Next decision: {decision_context or 'Keep the position delegated unless a governed exception crosses the CEO threshold.'} "
+            )
             if dragging:
                 answer += _movement_sentence(decision_only=True) + " "
             if missing:
