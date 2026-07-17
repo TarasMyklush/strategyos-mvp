@@ -5,7 +5,7 @@ import mimetypes
 import re
 import shutil
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
@@ -18,6 +18,7 @@ from .config import CONFIG
 from .data_roles import (
     cash_forecast_sheet_names,
     document_target_folders,
+    role_date_columns,
     role_labels,
     role_target_paths,
     run_model_required_roles,
@@ -66,6 +67,12 @@ ROLE_TARGET_PATHS = role_target_paths()
 DOCUMENT_TARGET_FOLDERS = document_target_folders()
 RUN_MODEL_REQUIRED_ROLES = run_model_required_roles()
 TABULAR_ROLE_COLUMNS = tabular_role_columns()
+ROLE_DATE_COLUMNS = role_date_columns()
+
+# Where an older duplicate of a required role is kept when a more recent file
+# wins the current role. The finance detectors never read this subtree, but the
+# evidence store does, so the agents can answer multi-year questions.
+HISTORIC_CONTEXT_DIR = "99_Historic_Context"
 
 TABULAR_ROLE_SIGNATURES = {
     role: set(columns) for role, columns in TABULAR_ROLE_COLUMNS.items()
@@ -84,11 +91,13 @@ def refresh_source_pack_role_constants() -> None:
     global TABULAR_ROLE_SIGNATURES
     global ROLE_COLUMN_ALIASES
     global CASH_FORECAST_SHEET_NAMES
+    global ROLE_DATE_COLUMNS
     ROLE_LABELS = role_labels()
     ROLE_TARGET_PATHS = role_target_paths()
     DOCUMENT_TARGET_FOLDERS = document_target_folders()
     RUN_MODEL_REQUIRED_ROLES = run_model_required_roles()
     TABULAR_ROLE_COLUMNS = tabular_role_columns()
+    ROLE_DATE_COLUMNS = role_date_columns()
     TABULAR_ROLE_SIGNATURES = {
         role: set(columns) for role, columns in TABULAR_ROLE_COLUMNS.items()
     }
@@ -853,17 +862,81 @@ def _manifest_path_depth(item: dict[str, Any]) -> int:
     return len(PurePosixPath(str(item.get("relative_path") or "")).parts)
 
 
-def _run_model_role_inventory(manifest: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+def _latest_date_for_role(raw_root: Path, item: dict[str, Any], role: str) -> date | None:
+    """The most recent date in a file's role-defining date columns, or None.
+
+    Two files can carry the identical AP-ledger shape -- one for H1 2026, one for
+    FY2024. Their columns are the same, so only the data distinguishes them. The
+    newest date is the signal that a file is the current period rather than
+    history. Unreadable or dateless files return None and fall back to the
+    path-depth rule, so this never regresses a dataset that has one file per
+    role.
+    """
+    path = raw_root / str(item.get("relative_path") or "")
+    if not path.exists():
+        return None
+    date_columns = ROLE_DATE_COLUMNS.get(role) or ()
+    latest: date | None = None
+    if date_columns:
+        try:
+            frame = _load_structured_frame(path)
+        except Exception:
+            frame = None
+        if frame is not None:
+            for column in date_columns:
+                if column not in frame.columns:
+                    continue
+                parsed = pd.to_datetime(frame[column], errors="coerce").dropna()
+                if parsed.empty:
+                    continue
+                candidate = parsed.max().date()
+                if latest is None or candidate > latest:
+                    latest = candidate
+    if latest is not None:
+        return latest
+    # Some current-vs-historic files carry no date in their data -- a trial
+    # balance is a point-in-time snapshot. The filename then holds the only
+    # signal (Trial_Balance_June_2026 vs _Dec_2024). Fall back to the latest
+    # four-digit year in the name, dated to year-end so it orders after nothing
+    # real but consistently across files.
+    years = re.findall(r"(20\d{2})", PurePosixPath(str(item.get("relative_path") or "")).name)
+    if years:
+        return date(max(int(y) for y in years), 12, 31)
+    return None
+
+
+def _run_model_role_inventory(
+    manifest: list[dict[str, Any]],
+    *,
+    raw_root: Path | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Select the single current-period file for each required role.
+
+    When several files claim the same role, the most recent one by data date
+    wins the current role and the rest are historic. Recency is the right
+    discriminator because the files are structurally identical -- only their
+    period differs. When dates are unavailable (or raw_root is not supplied) the
+    original shallowest-path rule stands, so nothing regresses.
+    """
     inventory = _role_inventory(manifest)
     selected = dict(inventory)
     for role in ROLE_TARGET_PATHS:
         items = inventory.get(role, [])
         if len(items) <= 1:
             continue
-        min_depth = min(_manifest_path_depth(item) for item in items)
-        selected[role] = [
-            item for item in items if _manifest_path_depth(item) == min_depth
-        ]
+        dated: list[tuple[dict[str, Any], date | None]] = []
+        if raw_root is not None:
+            dated = [(item, _latest_date_for_role(raw_root, item, role)) for item in items]
+        if dated and any(d is not None for _, d in dated):
+            newest = max(d for _, d in dated if d is not None)
+            selected[role] = [item for item, d in dated if d == newest] or [
+                item for item, _ in dated[:1]
+            ]
+        else:
+            min_depth = min(_manifest_path_depth(item) for item in items)
+            selected[role] = [
+                item for item in items if _manifest_path_depth(item) == min_depth
+            ]
     return selected
 
 
@@ -908,7 +981,7 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
     normalized_root.mkdir(parents=True, exist_ok=True)
 
     copied_targets: dict[str, str] = {}
-    inventory = _run_model_role_inventory(manifest)
+    inventory = _run_model_role_inventory(manifest, raw_root=raw_root)
     duplicates = sorted(role for role, items in inventory.items() if role in ROLE_TARGET_PATHS and len(items) > 1)
     selected_run_model_source_ids = {
         str(items[0].get("source_id"))
@@ -918,7 +991,35 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
 
     for item in manifest:
         classification = item.get("classification") or {}
-        if classification.get("status") != "classified":
+        status_value = classification.get("status")
+        # An unclassified-but-supported file (a strategic-analytics workbook, a
+        # board-pack memo, a group P&L) matches no structured role, but it is
+        # still readable evidence the agents should see. Copy it under a context
+        # path rather than dropping it, so "everything supplied" reaches the run.
+        # README stays excluded -- it is guidance for humans, not run evidence.
+        if status_value == "unclassified":
+            rel = str(item.get("relative_path") or "")
+            name = PurePosixPath(rel).name
+            if not rel or name.strip().lower().startswith("readme"):
+                continue
+            hint = str(item.get("file_type_hint") or "")
+            if hint in {"unsupported", ""}:
+                continue
+            source_path = raw_root / rel
+            if not source_path.exists():
+                continue
+            context_rel = f"{HISTORIC_CONTEXT_DIR}/{name}"
+            destination = normalized_root / context_rel
+            if destination.exists():
+                destination = destination.with_name(f"{item['source_id']}__{destination.name}")
+                context_rel = destination.relative_to(normalized_root).as_posix()
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, destination)
+            classification["normalized_rel_path"] = context_rel
+            item["normalized_path"] = str(destination)
+            copied_targets[context_rel] = rel
+            continue
+        if status_value != "classified":
             continue
         normalized_rel_path = classification.get("normalized_rel_path")
         role = classification.get("role")
@@ -927,10 +1028,30 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
         if role in duplicates:
             item["issues"].append(f"Multiple files classified as {ROLE_LABELS[role].lower()}; run normalization requires exactly one.")
             continue
-        if role in ROLE_TARGET_PATHS and str(item.get("source_id")) not in selected_run_model_source_ids:
+        # A required-role file that was NOT selected as the current period is a
+        # historic version -- an older AP ledger, a prior-year GL. It does not
+        # feed the finance detectors (only the current-period file does), but it
+        # is kept under a historic path so the evidence store can read it and the
+        # agents can answer multi-year questions. It was previously discarded.
+        is_historic_variant = (
+            role in ROLE_TARGET_PATHS
+            and str(item.get("source_id")) not in selected_run_model_source_ids
+        )
+        if is_historic_variant:
+            source_path = raw_root / str(item["relative_path"])
+            historic_rel = f"{HISTORIC_CONTEXT_DIR}/{PurePosixPath(str(item['relative_path'])).name}"
+            destination = normalized_root / historic_rel
+            if destination.exists():
+                destination = destination.with_name(f"{item['source_id']}__{destination.name}")
+                historic_rel = destination.relative_to(normalized_root).as_posix()
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, destination)
             item["issues"].append(
-                f"Skipped for current run-model normalization because a shallower {ROLE_LABELS[role].lower()} source was selected."
+                f"Kept as historic context; the current-period {ROLE_LABELS[role].lower()} was normalized for the run."
             )
+            classification["normalized_rel_path"] = historic_rel
+            item["normalized_path"] = str(destination)
+            copied_targets[historic_rel] = str(item["relative_path"])
             continue
         destination = normalized_root / str(normalized_rel_path)
         final_rel_path = str(normalized_rel_path)
@@ -1032,10 +1153,14 @@ def _unconfirmed_roles(manifest: list[dict[str, Any]]) -> list[str]:
     return sorted(flagged)
 
 
-def build_task_readiness(manifest: list[dict[str, Any]]) -> dict[str, Any]:
+def build_task_readiness(
+    manifest: list[dict[str, Any]],
+    *,
+    raw_root: Path | None = None,
+) -> dict[str, Any]:
     summary = _manifest_summary(manifest)
     supported_count = int(summary["supported_file_count"])
-    inventory = _run_model_role_inventory(manifest)
+    inventory = _run_model_role_inventory(manifest, raw_root=raw_root)
     unconfirmed_roles = _unconfirmed_roles(manifest)
     structured_duplicates = sorted(
         role for role, items in inventory.items() if role in ROLE_TARGET_PATHS and len(items) > 1
@@ -1089,9 +1214,13 @@ def build_task_readiness(manifest: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def build_validation(manifest: list[dict[str, Any]]) -> dict[str, Any]:
+def build_validation(
+    manifest: list[dict[str, Any]],
+    *,
+    raw_root: Path | None = None,
+) -> dict[str, Any]:
     summary = _manifest_summary(manifest)
-    readiness = build_task_readiness(manifest)
+    readiness = build_task_readiness(manifest, raw_root=raw_root)
     issues: list[str] = []
     if summary["file_count"] == 0:
         issues.append("The selected source pack was empty.")
@@ -1170,8 +1299,8 @@ def _payload_for(
         "manifest": manifest,
         "manifest_summary": _manifest_summary(manifest),
         "classification_summary": _classification_summary(manifest),
-        "task_readiness": build_task_readiness(manifest),
-        "validation": build_validation(manifest),
+        "task_readiness": build_task_readiness(manifest, raw_root=raw_root),
+        "validation": build_validation(manifest, raw_root=raw_root),
         "tenant_context": artifact_contracts_payload(tenant_context),
         "ingestion_job": artifact_contracts_payload(ingestion_job),
     }
