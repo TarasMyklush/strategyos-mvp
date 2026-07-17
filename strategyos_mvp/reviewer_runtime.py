@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,42 @@ from .runtime_governance import (
     governance_fingerprint_for_checkpoint_state,
 )
 from .state_store import approval_status_for_run, persist_checkpoint, update_run_summary
+
+
+_APPROVED_CONTEXT_KEYS = (
+    "finance_kpi",
+    "oracle_kpi",
+    "calendar_agenda",
+    "historic_context",
+    "source_pack",
+    "detector_report",
+    "run_mode",
+    "available_roles",
+    "missing_roles",
+    "tenant_context",
+    "ingestion_job",
+    "runtime",
+    "plugins",
+    "run_policy",
+    "external_modes",
+)
+
+
+def _preserve_approved_context(
+    summary: dict[str, Any],
+    prior_summary: dict[str, Any],
+) -> None:
+    """Carry approved source-derived context across the writer resume boundary.
+
+    The writer rebuilds the lifecycle summary from checkpoint state, which does
+    not contain the enriched finance, calendar, history, or source-governance
+    payloads attached after the initial workflow invocation.  Those values are
+    part of the exact summary the reviewer approved, so resume must retain them
+    without re-reading or re-interpreting the source pack.
+    """
+    for key in _APPROVED_CONTEXT_KEYS:
+        if key in prior_summary:
+            summary[key] = deepcopy(prior_summary[key])
 
 
 def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, Any]:
@@ -70,14 +107,17 @@ def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, An
         "approval_status": "approved",
         "checkpoints": [],
     }
-    summary = build_run_summary(resumed_state)
     prior_summary = checkpoint.get("summary_json") or {}
+    if not isinstance(prior_summary, dict):
+        prior_summary = {}
+    summary = build_run_summary(resumed_state)
+    _preserve_approved_context(summary, prior_summary)
     summary["checkpoint_count"] = int(prior_summary.get("checkpoint_count") or 0) + 1
     if resumed_state.get("source_pack_id"):
-        summary["source_pack"] = {
-            "source_pack_id": resumed_state.get("source_pack_id"),
-            "normalized_dataset_root": str(dataset_root),
-        }
+        source_pack = dict(summary.get("source_pack") or {})
+        source_pack.setdefault("source_pack_id", resumed_state.get("source_pack_id"))
+        source_pack.setdefault("normalized_dataset_root", str(dataset_root))
+        summary["source_pack"] = source_pack
     checkpoint_record = persist_checkpoint(
         run_id,
         "writer",
