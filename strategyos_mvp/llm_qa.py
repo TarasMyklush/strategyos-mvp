@@ -71,6 +71,12 @@ outside your knowledge, never suggest the answer lies elsewhere, and never
 answer a question about this business without using the evidence below.
 Every claim about the company's own numbers, findings, vendors, or documents
 must come from the JSON evidence supplied by the application.
+When ``evidence.historic_context.available`` is true, it carries the multi-year
+revenue trend and its drivers read from the dataset's own strategic files. Use
+it to answer questions about prior years, growth over time, and what drove
+change -- never say historic data is unavailable while that block is present.
+When it is absent, the run genuinely holds only the current period; say so
+plainly.
 For a question that is plainly general knowledge and names nothing in the
 business (a definition, arithmetic, a well-known fact), answer it directly and
 briefly from your own knowledge; do not force it through the evidence.
@@ -454,6 +460,7 @@ def _build_evidence_payload(
             "data_contracts": bundle.data_contracts or {},
         },
         "finance_kpis": _finance_kpi_evidence(summary),
+        "historic_context": _historic_context_evidence(summary),
         "findings": [_finding_summary(finding) for finding in findings[:12]],
     }
     if supplemental_evidence:
@@ -512,6 +519,27 @@ def _run_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "citation_resolution_rate",
     ]
     return {key: summary.get(key) for key in allowed_keys if key in summary}
+
+
+def _historic_context_evidence(summary: dict[str, Any]) -> dict[str, Any]:
+    """Give Hermes the multi-year trend the dataset supplies, when present.
+
+    Without this the assistant only ever sees the current-period ledgers and
+    answers "no historic data" to a three-year revenue question the dataset can
+    in fact answer. This passes through the governed historic-context summary
+    unchanged -- annual revenue, drivers, source files -- and stays absent when
+    the run carries no history.
+    """
+    payload = summary.get("historic_context")
+    if not isinstance(payload, dict) or not payload.get("available"):
+        return {"available": False}
+    return {
+        "available": True,
+        "basis": payload.get("basis"),
+        "source_files": payload.get("source_files") or [],
+        "annual_revenue": payload.get("annual_revenue") or [],
+        "revenue_drivers": payload.get("revenue_drivers") or [],
+    }
 
 
 def _finance_kpi_evidence(summary: dict[str, Any]) -> dict[str, Any]:
