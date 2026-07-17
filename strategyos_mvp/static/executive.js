@@ -1773,6 +1773,13 @@
   function qaAnswerText(payload) {
     if (!payload) return "I could not reach the Q&A service. Try again from an authenticated session.";
     var answer = scrubExecutiveTechnicalLanguage(cleanVisibleQaAnswer(firstDefined(payload.answer, "")));
+    if (String(firstDefined(payload.scenario_id, "")) === "revenue_plan_attainment_action_plan") {
+      answer = answer
+        .replace(/\s+1\. Accountable owner\s+—\s+/i, "\n\n**1. Accountable owner** — ")
+        .replace(/\s+2\. Validation owner\s+—\s+/i, "\n\n**2. Validation owner** — ")
+        .replace(/\s+3\. CEO control\s+—\s+/i, "\n\n**3. CEO control** — ")
+        .replace(/\s+What the current run can prove:\s+/i, "\n\n**Evidence boundary** — What the current run can prove: ");
+    }
     return answer || "No answer returned at this time.";
   }
 

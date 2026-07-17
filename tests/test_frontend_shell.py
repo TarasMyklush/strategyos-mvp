@@ -3830,9 +3830,14 @@ const payload = {{
   citations: [{{ source_path: 'public_packet://latest-public', locator: 'findings' }}],
   hallucination_risk: {{ level: 'medium' }},
 }};
+const actionPayload = {{
+  scenario_id: 'revenue_plan_attainment_action_plan',
+  answer: 'Decision today: approve a Revenue closure sprint. 1. Accountable owner — assign the Group commercial/revenue executive. 2. Validation owner — CFO/Finance confirms the aligned plan. 3. CEO control — start a daily gap review. What the current run can prove: the governed Revenue actual.',
+}};
 console.log(JSON.stringify({{
   answerText: harness.qaAnswerText(payload),
   answerMeta: harness.qaAnswerMeta(payload),
+  actionText: harness.qaAnswerText(actionPayload),
 }}));
 """
 
@@ -3859,6 +3864,10 @@ console.log(JSON.stringify({{
     assert "Evidence basis: Calculated from current reviewed findings" in result["answerMeta"]
     assert "Calculation: 6 checks reconciled" in result["answerMeta"]
     assert "Evidence confidence: Partial" in result["answerMeta"]
+    assert "\n\n**1. Accountable owner** —" in result["actionText"]
+    assert "\n\n**2. Validation owner** —" in result["actionText"]
+    assert "\n\n**3. CEO control** —" in result["actionText"]
+    assert "\n\n**Evidence boundary** —" in result["actionText"]
     for banned in (
         "auto_renewal_escalation",
         "duplicate_payment",
