@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>StrategyOS — Group CEO Diagnostics</title>
+  <title>StrategyOS — Group CEO Briefing</title>
   <link rel="stylesheet" href="/static/executive.css?v=__EXECUTIVE_ASSET_REV__" />
 </head>
 <body>
@@ -27,10 +27,11 @@
       </div>
       <span class="tb-div" aria-hidden="true"></span>
       <nav class="view-nav" id="view-nav" aria-label="Executive views" role="tablist">
-        <button class="view-tile is-active" type="button" role="tab" data-view-target="home" aria-controls="view-home" aria-selected="true">Diagnostics</button>
-        <button class="view-tile" type="button" role="tab" data-view-target="assistants" aria-controls="view-assistants" aria-selected="false">Assistants</button>
+        <button class="view-tile is-active" type="button" role="tab" data-view-target="home" aria-controls="view-home" aria-selected="true">Briefing</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="calendar" aria-controls="view-calendar" aria-selected="false">Calendar</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="assistants" aria-controls="view-assistants" aria-selected="false">Hermes</button>
         <button class="view-tile" type="button" role="tab" data-view-target="agents" aria-controls="view-agents" aria-selected="false">AI team</button>
-        <button class="view-tile" type="button" role="tab" data-view-target="knowledge" aria-controls="view-knowledge" aria-selected="false">Knowledge</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="knowledge" aria-controls="view-knowledge" aria-selected="false">Evidence</button>
       </nav>
     </div>
 
@@ -75,7 +76,7 @@
 
       <section class="hero card" id="hero" aria-labelledby="hero-head">
         <div class="hero-copy">
-          <p class="eyebrow" id="hero-eyebrow">Group CEO diagnostics</p>
+          <p class="eyebrow" id="hero-eyebrow">Group CEO briefing</p>
           <h1 class="hero-title" id="hero-head">Oracle-backed finance overview</h1>
           <p class="hero-body" id="hero-body">Loading Oracle-backed executive diagnostics from the latest governed run…</p>
           <blockquote class="hero-quote" id="hero-quote" hidden></blockquote>
@@ -135,6 +136,16 @@
 
     </section>
 
+    <section class="view-panel" data-view-panel="calendar" id="view-calendar" role="tabpanel" aria-hidden="true" hidden>
+      <section class="section" aria-labelledby="calendar-view-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="calendar-view-heading">Executive calendar</h2>
+          <p class="section-note">The commitments ahead, what to prepare, and the decisions they may require.</p>
+        </div>
+        <article class="card detail-card executive-calendar" id="calendar-agenda-panel"></article>
+      </section>
+    </section>
+
     <section class="view-panel" data-view-panel="agents" id="view-agents" role="tabpanel" aria-hidden="true" hidden>
       <section class="section" id="agents-section" aria-labelledby="agents-heading">
         <div class="section-head">
@@ -155,8 +166,8 @@
     <section class="view-panel" data-view-panel="assistants" id="view-assistants" role="tabpanel" aria-hidden="true" hidden>
       <section class="section" aria-labelledby="assistant-view-heading">
         <div class="section-head">
-          <h2 class="section-title" id="assistant-view-heading">Executive coverage</h2>
-          <p class="section-note">What the AI team is doing, what it has produced, and where a human decision is waiting.</p>
+          <h2 class="section-title" id="assistant-view-heading">Hermes and your AI leadership team</h2>
+          <p class="section-note">Hermes coordinates named AI specialists and brings you only the work or decisions that need your attention.</p>
         </div>
         <article class="card assistant-network-card" id="assistant-network-card"></article>
       </section>
@@ -191,7 +202,7 @@
     <div class="a2a-shell" id="a2a-shell">
       <button class="a2a-fab" id="a2a-fab" type="button" aria-expanded="false" aria-controls="a2a-panel">
         <span class="a2a-fab-mark" aria-hidden="true">⇄</span>
-        <span class="a2a-fab-text" id="a2a-fab-text">Hermes ↔ assistants</span>
+        <span class="a2a-fab-text" id="a2a-fab-text">Hermes team</span>
         <span class="a2a-fab-badge" id="a2a-fab-badge" hidden>0</span>
       </button>
       <aside class="a2a-panel" id="a2a-panel" hidden aria-labelledby="a2a-panel-title">
@@ -199,11 +210,11 @@
           <div class="a2a-h-id">
             <span class="a2a-h-mark" aria-hidden="true">⇄</span>
             <div>
-              <strong class="a2a-h-title" id="a2a-panel-title">Hermes ↔ assistant network</strong>
-              <p class="a2a-h-sub" id="a2a-panel-subtitle">Your chief of staff, gathering for you · live</p>
+              <strong class="a2a-h-title" id="a2a-panel-title">Hermes and your AI leadership team</strong>
+              <p class="a2a-h-sub" id="a2a-panel-subtitle">Your chief of staff coordinating specialist AI assistants for you.</p>
             </div>
           </div>
-          <button class="a2a-min" id="a2a-min" type="button" aria-label="Minimise assistant network">▾</button>
+          <button class="a2a-min" id="a2a-min" type="button" aria-label="Minimise Hermes team">▾</button>
         </header>
         <div class="a2a-tabs" id="a2a-tabs" role="tablist" aria-label="Assistant exchanges"></div>
         <div class="a2a-topic" id="a2a-topic"></div>

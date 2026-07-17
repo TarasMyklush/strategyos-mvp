@@ -1057,6 +1057,16 @@
     )).trim();
   }
 
+  function executiveWorkspaceName() {
+    var name = tenantDisplayName();
+    // Deployment/environment labels belong in operations, not in the CEO's
+    // workspace. Keep a real company name when supplied; otherwise use a
+    // clear, non-technical workspace label.
+    return /(?:branch\s+preview|strategyos[-\s]?branch)/i.test(name)
+      ? "Executive workspace"
+      : name;
+  }
+
   function executiveIdentityInitials(personaId) {
     // Identity comes from the authenticated session, never from a fixture
     // person -- there is no real person behind a persona in the data model.
@@ -1099,109 +1109,143 @@
     return (state.latestPacket && state.latestPacket.publication) || {};
   }
 
-  // This page counts MODULES -- capabilities of the product, like the board
-  // room memory or the reviewer console. The AI team page counts ASSISTANTS --
-  // Hermes, Atlas, Iris and the rest. Both used to say "working", so the two
-  // pages reported "3 working" and "0 working now" about the same company at
-  // the same moment, and an executive who noticed had every reason to stop
-  // trusting the arithmetic. They are different things and are now named as
-  // different things.
+  // Hermes' network is a people-like leadership surface: named AI assistants
+  // with responsibilities, current work and escalation paths. Product
+  // capabilities and runtime guardrails remain in the operator surface; they
+  // are not an executive's "team" and must never be rendered as one here.
+  function getLeadershipTeam() {
+    var agents = (state.latestPacket && state.latestPacket.agents) || bootstrap.agents || {};
+    return safeArray(agents.digital_twins);
+  }
+
+  function leadershipStatusLabel(status) {
+    var labels = {
+      attention: "Needs your review",
+      active: "Working",
+      monitoring: "Monitoring",
+      ready: "Ready",
+      disabled: "Unavailable"
+    };
+    return labels[String(status || "ready").toLowerCase()] || humanizeToken(status || "ready");
+  }
+
+  function leadershipRoleLabel(item) {
+    var key = String(firstDefined(item && item.twin_id, item && item.role, "")).toLowerCase();
+    var labels = {
+      ceo: "Chief of Staff",
+      cfo: "Group CFO",
+      gm: "Group Manager",
+      group_manager: "Group Manager",
+      strategy: "Strategy Lead",
+      analyst: "Analyst",
+      reviewer: "Reviewer"
+    };
+    var matchingKey = Object.keys(labels).find(function (label) {
+      return key === label || key.indexOf(label + "_") === 0 || key.indexOf("_" + label) >= 0;
+    });
+    var suppliedLabel = String(firstDefined(item && item.display_name, item && item.role, "AI leader"));
+    return firstDefined(labels[matchingKey], suppliedLabel.replace(/\s+Assistant$/i, ""), "AI leader");
+  }
+
+  function leadershipActivityCopy(item) {
+    var activity = String(firstDefined(
+      item && item.current_activity,
+      "Ready for the next leadership review."
+    )).trim();
+    // Runtime controls are valuable evidence but are not a CEO status update.
+    if (/(runtime\s+governance|policy\s+gate|object\s+storage\s+sync|model_provider|batch_apis|hosted_ocr|external\s+mode)/i.test(activity)) {
+      return "Monitoring the operating environment; no executive action is currently required.";
+    }
+    return activity
+      .replace(/governed\s+KPIs?/gi, "key performance measures")
+      .replace(/no open investigation is recorded/gi, "no issue is currently escalated");
+  }
+
+  function leadershipPriorityCopy(count) {
+    if (!count) return "No open priorities";
+    if (count > 5) return "Portfolio under review";
+    return count === 1 ? "1 priority in progress" : count + " priorities in progress";
+  }
+
+  function leadershipDecisionCopy(count) {
+    if (!count) return "No decision needed";
+    return count + " decision" + (count === 1 ? " needs" : "s need") + " your review";
+  }
+
   function getAssistantNetworkMeta() {
-    var modules = getAgentsModule();
-    var summary = modules.summary || {};
-    var runningCount = Number(firstDefined(summary.running_count, safeArray(getRunningAgents()).length, 0)) || 0;
-    var discoverableCount = Number(firstDefined(summary.discoverable_count, safeArray(modules.discoverable).length, 0)) || 0;
-    var approvalCount = Number(firstDefined(summary.approval_count, safeArray(modules.approvals).length, 0)) || 0;
+    var team = getLeadershipTeam();
+    var activeCount = team.filter(function (item) {
+      return ["active", "monitoring"].indexOf(String(firstDefined(item.status, "ready")).toLowerCase()) >= 0;
+    }).length;
+    var attentionCount = team.filter(function (item) {
+      return String(firstDefined(item.status, "ready")).toLowerCase() === "attention";
+    }).length;
     return {
-      label: "What this workspace covers",
-      hint: firstDefined(
-        runningCount
-          ? runningCount + " capability" + (runningCount === 1 ? "" : " areas") + " switched on · "
-            + discoverableCount + " available to add · "
-            + approvalCount + " step" + (approvalCount === 1 ? "" : "s") + " waiting on a person"
-          : "",
-        "Coverage is not available yet."
-      ),
-      running_count: runningCount,
-      discoverable_count: discoverableCount,
-      approval_count: approvalCount
+      label: "Hermes' AI leadership team",
+      hint: team.length
+        ? activeCount + " assistant" + (activeCount === 1 ? " is" : "s are") + " active" + (attentionCount ? " · " + attentionCount + " assistant" + (attentionCount === 1 ? " needs" : "s need") + " your review" : " · nothing needs your decision")
+        : "No AI leadership team is configured for this workspace yet.",
+      active_count: activeCount,
+      attention_count: attentionCount,
+      configured_count: team.length
     };
   }
 
   // Presentational ordering only -- ranks are never rendered as numbers.
   // Modules show their REAL status; no synthetic "readiness score" exists
   // in the data model, so none is displayed.
-  function assistantModuleStatusRank(status) {
+  function assistantStatusRank(status) {
     var value = String(status || "").toLowerCase();
-    if (/(running|ready|ok|healthy|live|protected)/.test(value)) return 0;
-    if (/(preview|pending|waiting|draft|queued)/.test(value)) return 1;
-    if (/(blocked|challenged|review|held)/.test(value)) return 2;
+    if (/(active|monitoring|running|ok|healthy|live|protected)/.test(value)) return 0;
+    if (/(ready|preview|pending|waiting|draft|queued)/.test(value)) return 1;
+    if (/(attention|blocked|challenged|review|held)/.test(value)) return 2;
     if (/(idle|missing|unavailable)/.test(value)) return 3;
     return 4;
   }
 
   function getAssistantNetwork() {
-    var modules = getAgentsModule();
-    var stateContract = modules.state_contract || {};
-    var running = safeArray(stateContract.modules);
-    if (!running.length) running = safeArray(getRunningAgents());
-    if (!running.length) running = safeArray(modules.running);
-    return running.map(function (item, index) {
-      var status = firstDefined(item && item.status, "running");
-      var lane = firstDefined(item && item.lane, item && item.tag, "governed");
+    return getLeadershipTeam().map(function (item, index) {
+      var status = firstDefined(item && item.status, "ready");
+      var openPriorities = Number(firstDefined(item && item.active_investigation_count, 0)) || 0;
+      var decisionsNeeded = Number(firstDefined(item && item.pending_request_count, 0)) || 0;
+      var role = leadershipRoleLabel(item);
       return {
-        moduleId: firstDefined(item && item.module_id, item && item.id, ""),
-        statusRank: assistantModuleStatusRank(status),
+        assistantId: firstDefined(item && item.twin_id, item && item.role, "assistant-" + index),
+        statusRank: assistantStatusRank(status),
         tone: status,
-        assistant: firstDefined(item && item.label, item && item.name, item && item.module_id, "Assistant module " + (index + 1)),
-        who: humanizeToken(lane),
-        unit: firstDefined(item && item.current_activity, item && item.summary, item && item.doing, item && item.output, item && item.output_metric, tenantDisplayName()),
-        stateLabel: firstDefined(statusLabel(status), status, "Current"),
-        businessOutput: firstDefined(item && item.output, item && item.output_metric, item && item.current_activity, item && item.summary, "No output reported yet"),
-        decisionScope: (function () {
-          var dependency = firstDefined(item && item.approval_dependency, "");
-          if (!dependency || String(dependency).toLowerCase() === "none") return "No action needed";
-          return humanizeToken(dependency);
-        }()),
+        assistant: firstDefined(item && item.assistant_name, item && item.display_name, "AI assistant " + (index + 1)),
+        who: role,
+        unit: leadershipActivityCopy(item),
+        stateLabel: leadershipStatusLabel(status),
+        businessOutput: leadershipPriorityCopy(openPriorities),
+        decisionScope: leadershipDecisionCopy(decisionsNeeded),
+        authority: firstDefined(item && item.authority, "Responsibilities are not yet defined."),
+        escalationPath: safeArray(item && item.escalation_path).map(humanizeToken).join(" → "),
+        openPriorities: openPriorities,
+        decisionsNeeded: decisionsNeeded,
+        completedReviews: Number(firstDefined(item && item.cycle_count, 0)) || 0,
         route: firstDefined(item && item.route, "")
       };
     });
   }
 
   function getAssistantExchanges() {
-    var modules = getAgentsModule();
-    var running = safeArray(getRunningAgents());
-    if (!running.length) running = safeArray(modules.running);
-    var exchanges = running.map(function (item, index) {
-      var name = firstDefined(item && item.label, item && item.name, item && item.module_id, "Assistant module " + (index + 1));
-      var status = firstDefined(item && item.status, "active");
+    var exchanges = getAssistantNetwork().map(function (item, index) {
+      var name = firstDefined(item.assistant, "AI assistant " + (index + 1));
+      var status = firstDefined(item.tone, "ready");
       return {
-        id: firstDefined(item && item.module_id, item && item.id, "module-" + index),
+        id: firstDefined(item.assistantId, "assistant-" + index),
         with: name,
-        unit: humanizeToken(firstDefined(item && item.lane, item && item.tag, "governed lane")),
+        unit: firstDefined(item.who, "AI leadership team"),
         status: status,
-        topic: firstDefined(item && item.summary, item && item.doing, "Governed module activity"),
+        topic: firstDefined(item.unit, "Current leadership priority"),
         messages: [
-          { from: "StrategyOS", text: firstDefined(item && item.summary, item && item.doing, "Assistant is active.") },
-          { from: name, text: firstDefined(item && item.output_metric, statusLabel(status), "Current") }
+          { from: "Hermes", text: name + " is " + leadershipStatusLabel(status).toLowerCase() + "." },
+          { from: name, text: firstDefined(item.unit, "Ready for the next leadership review.") }
         ]
       };
     });
-    if (exchanges.length) return exchanges;
-    return safeArray(modules.approvals).map(function (item, index) {
-      var label = firstDefined(item && item.label, item && item.approval_id, "Approval gate " + (index + 1));
-      return {
-        id: firstDefined(item && item.approval_id, "approval-" + index),
-        with: label,
-        unit: "Approval",
-        status: firstDefined(item && item.status, "pending"),
-        topic: firstDefined(item && item.next_action, "Approval gate"),
-        messages: [
-          { from: "StrategyOS", text: "The approval gate is ready for review." },
-          { from: label, text: firstDefined(item && item.next_action, item && item.status, "pending") }
-        ]
-      };
-    });
+    return exchanges;
   }
 
   function normalizeKgCategory(value) {
@@ -1479,6 +1523,18 @@
     return '<div class="twin-detail"><span class="eyebrow">Execution log</span>'
       + '<p class="list-copy">What your assistants did on this run, as recorded.</p>'
       + '<ol class="agent-trail">' + rows + foot + '</ol></div>';
+  }
+
+  function renderLeadershipStatus(item) {
+    var status = leadershipStatusLabel(firstDefined(item && item.status, "ready"));
+    var currentActivity = leadershipActivityCopy(item);
+    var openPriorities = Number(firstDefined(item && item.active_investigation_count, 0)) || 0;
+    var decisionsNeeded = Number(firstDefined(item && item.pending_request_count, 0)) || 0;
+    var outcome = leadershipPriorityCopy(openPriorities);
+    var decision = leadershipDecisionCopy(decisionsNeeded);
+    return '<div class="twin-detail twin-status-detail"><span class="eyebrow">Current status</span><p>'
+      + escapeHtml(status + ". " + currentActivity)
+      + '</p><div class="twin-status-summary"><span><strong>Focus</strong>' + escapeHtml(outcome) + '</span><span><strong>Decision</strong>' + escapeHtml(decision) + '</span></div></div>';
   }
 
   function getRunningAgents() {
@@ -2798,7 +2854,7 @@
     var assistantGlyph = firstDefined(activePersona.assistant_glyph, blueprint.assistantGlyph, "◆");
     var initials = executiveIdentityInitials(state.activePersona);
 
-    if (org) org.textContent = tenantDisplayName();
+    if (org) org.textContent = executiveWorkspaceName();
     // Logo click → reset to home view
     var brandEl = document.querySelector('.brand');
     if (brandEl) {
@@ -2951,7 +3007,10 @@
     }
     safeArray(document.querySelectorAll("[data-view-target]")).forEach(function (link) {
       var target = link.getAttribute("data-view-target") || "home";
-      if (target === "home") link.textContent = state.activePersona === "board" ? "Portal" : "Diagnostics";
+      if (target === "home") link.textContent = state.activePersona === "board" ? "Portal" : "Briefing";
+      if (target === "calendar") link.textContent = "Calendar";
+      if (target === "assistants") link.textContent = "Hermes";
+      if (target === "knowledge") link.textContent = "Evidence";
       link.classList.toggle("is-active", target === state.activeView);
       link.setAttribute("aria-selected", target === state.activeView ? "true" : "false");
     });
@@ -2997,55 +3056,48 @@
   function renderAssistantNetwork() {
     var card = $("assistant-network-card");
     var meta = getAssistantNetworkMeta();
-    // Order by real status (running first); ranks are presentational only.
+    // Order by live assistant state; ranks are presentational only.
     var network = getAssistantNetwork().slice().sort(function (left, right) {
       return Number(left.statusRank || 0) - Number(right.statusRank || 0);
     });
     if (card) {
-      // Every number on this card is a count of real module states -- no
-      // synthetic "readiness score" or invented target exists in the data.
-      var runningCount = network.filter(function (item) { return Number(item.statusRank) === 0; }).length;
-      var pendingCount = network.filter(function (item) { return Number(item.statusRank) === 1; }).length;
-      var blockedCount = network.filter(function (item) { return Number(item.statusRank) >= 2; }).length;
+      var activeCount = network.filter(function (item) { return ["active", "monitoring"].indexOf(String(item.tone || "").toLowerCase()) >= 0; }).length;
+      var readyCount = network.filter(function (item) { return String(item.tone || "").toLowerCase() === "ready"; }).length;
+      var attentionCount = network.filter(function (item) { return String(item.tone || "").toLowerCase() === "attention"; }).length;
       var activeFilter = state.networkStatusFilter || "all";
-      var filterLabels = { all: "All capabilities", running: "Switched on", pending: "Waiting on a person", blocked: "Needs review" };
+      var filterLabels = { all: "All assistants", active: "Working", ready: "Ready", attention: "Needs your review" };
       function networkStatusKey(item) {
-        return Number(item.statusRank) === 0 ? "running" : Number(item.statusRank) === 1 ? "pending" : "blocked";
+        var status = String(item.tone || "ready").toLowerCase();
+        return status === "attention" ? "attention" : ["active", "monitoring"].indexOf(status) >= 0 ? "active" : "ready";
       }
       var filteredNetwork = activeFilter === "all"
         ? network
         : network.filter(function (item) { return networkStatusKey(item) === activeFilter; });
-      var catalogueAgents = getDiscoverableAgents();
-      var catalogueHtml = state.assistantCatalogueOpen
-        ? '<div class="assistant-catalogue" id="assistant-catalogue"><div class="agents-col-head"><span class="ach-title">Available AI support</span><span class="ach-hint">' + escapeHtml(String(catalogueAgents.length)) + ' available</span></div><div class="disco-list">' + catalogueAgents.map(function (item, index) {
-            return '<div class="disco-card"><span class="disco-glyph">' + escapeHtml(firstDefined(item.glyph, '\u25c7')) + '</span><div class="disco-meta"><div class="disco-name-line"><span class="disco-name">' + escapeHtml(firstDefined(item.name, item.label, item.module_id, 'Agent ' + (index + 1))) + '</span><span class="disco-src native">' + escapeHtml(firstDefined(item.connector, item.source, 'StrategyOS')) + '</span></div><div class="disco-desc">' + escapeHtml(firstDefined(item.desc, item.summary, 'Discoverable agent surface.')) + '</div></div></div>';
-          }).join('') + '</div></div>'
-        : '';
       card.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">Workspace coverage</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'What this workspace covers')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'AI leaders supporting the current board review.')) + '</p></div><div class="network-filter-wrap"><button type="button" class="pill-inline ok network-module-toggle" id="network-module-toggle" aria-haspopup="menu" aria-expanded="' + (state.networkFilterMenuOpen ? 'true' : 'false') + '">' + escapeHtml(filterLabels[activeFilter] || 'All capabilities') + ' · ' + escapeHtml(String(filteredNetwork.length)) + '</button>' + (state.networkFilterMenuOpen ? '<div class="network-filter-menu" role="menu" aria-label="Filter AI leaders"><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'all' ? 'true' : 'false') + '" data-network-menu-filter="all">All capabilities</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'running' ? 'true' : 'false') + '" data-network-menu-filter="running">Working</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'pending' ? 'true' : 'false') + '" data-network-menu-filter="pending">Waiting</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'blocked' ? 'true' : 'false') + '" data-network-menu-filter="blocked">Needs review</button></div>' : '') + '</div></div>',
-        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? runningCount : '—')) + '</strong><span>Switched on</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="running">' + escapeHtml(String(runningCount)) + ' switched on</span><span class="pill-inline warn" data-network-filter="pending">' + escapeHtml(String(pendingCount)) + ' waiting on a person</span><span class="pill-inline danger" data-network-filter="blocked">' + escapeHtml(String(blockedCount)) + ' need review</span></div></div>',
+        '<div class="detail-head"><div><p class="detail-eyebrow">Hermes’ team</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'AI leadership team')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'AI assistants Hermes coordinates for your current review.')) + '</p></div><div class="network-filter-wrap"><button type="button" class="pill-inline ok network-module-toggle" id="network-module-toggle" aria-haspopup="menu" aria-expanded="' + (state.networkFilterMenuOpen ? 'true' : 'false') + '">' + escapeHtml(filterLabels[activeFilter] || 'All assistants') + ' · ' + escapeHtml(String(filteredNetwork.length)) + '</button>' + (state.networkFilterMenuOpen ? '<div class="network-filter-menu" role="menu" aria-label="Filter AI assistants"><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'all' ? 'true' : 'false') + '" data-network-menu-filter="all">All assistants</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'active' ? 'true' : 'false') + '" data-network-menu-filter="active">Working</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'ready' ? 'true' : 'false') + '" data-network-menu-filter="ready">Ready</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'attention' ? 'true' : 'false') + '" data-network-menu-filter="attention">Needs your review</button></div>' : '') + '</div></div>',
+        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? activeCount : '—')) + '</strong><span>working now</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="active">' + escapeHtml(String(activeCount)) + ' working</span><span class="pill-inline" data-network-filter="ready">' + escapeHtml(String(readyCount)) + ' ready</span><span class="pill-inline ' + (attentionCount ? 'warn' : 'ok') + '" data-network-filter="attention">' + escapeHtml(String(attentionCount)) + ' need your review</span></div></div>',
         '<div class="network-list" id="network-module-list" data-active-filter="' + escapeHtml(activeFilter) + '"><div class="network-list-head"><span class="sr-only">Status</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">State</span><span class="network-list-head__stat">Business output</span><span class="network-list-head__stat">Decision / scope</span></div></div>' + filteredNetwork.map(function (item, index) {
-          return '<div class="network-row" data-network-idx="' + index + '" data-network-status="' + escapeHtml(networkStatusKey(item)) + '" role="button" tabindex="0" title="Ask ' + escapeHtml(firstDefined(item.assistant, 'this assistant')) + ' about its current work"><div class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(statusLabel(item.tone)) + '"><strong>●</strong></div><div class="network-row__main"><div class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'Leader')) + '</span></div><p class="list-copy">' + escapeHtml(firstDefined(item.unit, tenantDisplayName())) + '</p></div><div class="network-stats"><span aria-label="State"><span class="network-stat-value">' + escapeHtml(firstDefined(item.stateLabel, 'Current')) + '</span></span><span aria-label="Business output"><span class="network-stat-value">' + escapeHtml(firstDefined(item.businessOutput, 'No output reported')) + '</span></span><span aria-label="Decision or scope"><span class="network-stat-value">' + escapeHtml(firstDefined(item.decisionScope, 'No action needed')) + '</span></span></div></div>';
-        }).join('') + (!network.length ? '<div class="network-row"><div class="network-score-badge tone-warn"><strong>—</strong></div><div class="network-row__main"><div class="network-row__head"><strong>No capabilities are switched on</strong><span>· Nothing to show</span></div><p class="list-copy">This workspace has no capability areas running for this review.</p></div><div class="network-stats"><span><span class="network-stat-value">Ready</span></span><span><span class="network-stat-value">No update</span></span><span><span class="network-stat-value">No action needed</span></span></div></div>' : '') + (network.length && !filteredNetwork.length ? '<div class="network-empty">No capabilities match this filter.</div>' : '') + '</div>' + catalogueHtml
+          var isOpen = state.openNetworkAssistantId === item.assistantId;
+          return '<article class="network-row network-row--assistant" data-network-status="' + escapeHtml(networkStatusKey(item)) + '"><button type="button" class="network-row__toggle" data-network-status-toggle="' + escapeHtml(item.assistantId) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '" title="Show ' + escapeHtml(firstDefined(item.assistant, 'this assistant')) + ' status"><span class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(firstDefined(item.stateLabel, 'Current')) + '"><strong>●</strong></span><span class="network-row__main"><span class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'AI leader')) + '</span></span><span class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Ready for the next leadership review.')) + '</span></span><span class="network-stats"><span aria-label="State"><span class="network-stat-value">' + escapeHtml(firstDefined(item.stateLabel, 'Current')) + '</span></span><span aria-label="Business output"><span class="network-stat-value">' + escapeHtml(firstDefined(item.businessOutput, 'No output reported')) + '</span></span><span aria-label="Decision or scope"><span class="network-stat-value">' + escapeHtml(firstDefined(item.decisionScope, 'No decision requested')) + '</span></span></span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="network-assistant-detail"><div><span>Responsibility</span><strong>' + escapeHtml(item.authority) + '</strong></div><div><span>Escalation</span><strong>' + escapeHtml(item.escalationPath || 'No escalation is currently required') + '</strong></div><button type="button" class="timeline-chip" data-network-ask="' + escapeHtml(item.assistantId) + '"><strong>Ask Hermes for a brief</strong></button></div>' : '') + '</article>';
+        }).join('') + (!network.length ? '<div class="network-empty">Your AI leadership team has not been configured for this workspace yet.</div>' : '') + (network.length && !filteredNetwork.length ? '<div class="network-empty">No assistants match this filter.</div>' : '') + '</div>'
       ].join('');
-      // Bug 3 fix: bind click handlers to network rows so they open the
-      // Hermes drawer with a contextual prompt about the clicked module.
-      safeArray(card.querySelectorAll('.network-row[data-network-idx]')).forEach(function (row) {
-        var handler = function () {
-          var idx = Number(row.getAttribute('data-network-idx') || 0);
-          var moduleItem = filteredNetwork[idx];
-          if (!moduleItem) return;
-          var moduleName = firstDefined(moduleItem.assistant, 'this assistant');
-          var moduleWho = firstDefined(moduleItem.who, '');
-          var prompt = 'Tell me about the "' + moduleName + '" module' + (moduleWho ? ' (in the ' + moduleWho + ' lane)' : '') + ': what is it doing right now, is it blocked, and what does it need from me?';
-          askAssistant(prompt, row, {
-            module_id: moduleItem.moduleId,
-            entity_type: "governed_module",
-            entrypoint: "assistant_network"
+      safeArray(card.querySelectorAll('[data-network-status-toggle]')).forEach(function (button) {
+        button.onclick = function () {
+          var assistantId = button.getAttribute('data-network-status-toggle') || '';
+          state.openNetworkAssistantId = state.openNetworkAssistantId === assistantId ? '' : assistantId;
+          renderAssistantNetwork();
+        };
+      });
+      safeArray(card.querySelectorAll('[data-network-ask]')).forEach(function (button) {
+        button.onclick = function () {
+          var assistantId = button.getAttribute('data-network-ask') || '';
+          var assistant = network.find(function (item) { return item.assistantId === assistantId; });
+          if (!assistant) return;
+          askAssistant('Give me a CEO brief from ' + firstDefined(assistant.assistant, 'this assistant') + ': current priority, any decision I need to make, and the next milestone.', button, {
+            assistant_id: assistant.assistantId,
+            entrypoint: "ai_team_brief"
           });
         };
-        row.onclick = handler;
-        row.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } };
       });
       var toggleBtn = $("network-module-toggle");
       if (toggleBtn) {
@@ -3097,23 +3149,23 @@
     var exchanges = getAssistantExchanges();
     var assistantName = assistantNameForState();
     var active = exchanges.find(function (item) { return item.id === state.activeA2AExchange; }) || exchanges[0] || null;
-    var liveCount = exchanges.filter(function (item) { return String(firstDefined(item.status, "active")).toLowerCase() !== "done"; }).length;
+    var liveCount = exchanges.filter(function (item) {
+      return ["active", "monitoring", "attention"].indexOf(String(firstDefined(item.status, "ready")).toLowerCase()) >= 0;
+    }).length;
 
-    if (fabText) fabText.textContent = assistantName + " network · " + liveCount + " active";
-    if (title) title.textContent = assistantName + " ↔ assistant network";
-    if (subtitle) subtitle.textContent = "Your chief of staff, gathering for you · live";
+    if (fabText) fabText.textContent = assistantName + " team · " + liveCount + " active";
+    if (title) title.textContent = assistantName + " and your AI leadership team";
+    if (subtitle) subtitle.textContent = "Your chief of staff coordinates specialists and brings only decisions or exceptions to you.";
     if (fabBadge) {
-      // This is the active-module count, not a failed-request queue. The
-      // visible launcher label above carries the count in plain language.
       fabBadge.hidden = true;
       fabBadge.textContent = String(liveCount || 0);
-      fabBadge.title = String(liveCount) + " active assistant module" + (liveCount === 1 ? "" : "s");
+      fabBadge.title = String(liveCount) + " active AI assistant" + (liveCount === 1 ? "" : "s");
       fabBadge.setAttribute("aria-label", fabBadge.title);
     }
     if (fab) {
       fab.setAttribute("aria-expanded", state.a2aOpen ? "true" : "false");
-      fab.setAttribute("aria-label", assistantName + " assistant network: " + liveCount + " active module" + (liveCount === 1 ? "" : "s"));
-      fab.title = assistantName + " assistant network: " + liveCount + " active module" + (liveCount === 1 ? "" : "s");
+      fab.setAttribute("aria-label", assistantName + " AI leadership team: " + liveCount + " active assistant" + (liveCount === 1 ? "" : "s"));
+      fab.title = assistantName + " AI leadership team: " + liveCount + " active assistant" + (liveCount === 1 ? "" : "s");
       fab.onclick = function () {
         state.a2aOpen = !state.a2aOpen;
         renderA2APanel();
@@ -3130,7 +3182,7 @@
 
     tabs.innerHTML = exchanges.map(function (exchange) {
       var status = String(firstDefined(exchange.status, "active"));
-      return '<button type="button" class="a2a-tab' + (exchange.id === active.id ? ' is-active' : '') + '" data-a2a-id="' + escapeHtml(exchange.id) + '"><span class="a2a-dot ' + escapeHtml(status.toLowerCase()) + '"></span>' + escapeHtml(firstDefined(exchange.with, 'Assistant')) + '<span class="a2a-tab-unit"> · ' + escapeHtml(firstDefined(exchange.unit, 'governed lane')) + '</span></button>';
+      return '<button type="button" class="a2a-tab' + (exchange.id === active.id ? ' is-active' : '') + '" data-a2a-id="' + escapeHtml(exchange.id) + '"><span class="a2a-dot ' + escapeHtml(status.toLowerCase()) + '"></span>' + escapeHtml(firstDefined(exchange.with, 'Assistant')) + '<span class="a2a-tab-unit"> · ' + escapeHtml(firstDefined(exchange.unit, 'AI leadership team')) + '</span></button>';
     }).join('');
     safeArray(tabs.querySelectorAll("[data-a2a-id]")).forEach(function (button) {
       button.onclick = function () {
@@ -3139,16 +3191,16 @@
       };
     });
 
-    topic.innerHTML = '<span class="a2a-topic-label">re:</span> ' + escapeHtml(firstDefined(active.topic, 'coordination')) + ' <span class="a2a-status ' + escapeHtml(String(firstDefined(active.status, 'active')).toLowerCase()) + '">' + escapeHtml(firstDefined(active.status, 'active')) + '</span>';
+    topic.innerHTML = '<span class="a2a-topic-label">Current focus:</span> ' + escapeHtml(firstDefined(active.topic, 'coordination')) + ' <span class="a2a-status ' + escapeHtml(String(firstDefined(active.status, 'ready')).toLowerCase()) + '">' + escapeHtml(leadershipStatusLabel(firstDefined(active.status, 'ready'))) + '</span>';
     var exchangeMessages = safeArray(active.messages).filter(function (message) {
       return String(firstDefined(message && message.text, '')).trim().length > 0;
     });
     scroll.innerHTML = exchangeMessages.length ? exchangeMessages.map(function (message) {
       var mine = firstDefined(message.from, '') === assistantName;
       return '<div class="a2a-msg' + (mine ? ' mine' : '') + '"><span class="a2a-from">' + escapeHtml(firstDefined(message.from, 'Assistant')) + '</span><div class="a2a-bubble">' + escapeHtml(firstDefined(message.text, '')) + '</div></div>';
-    }).join('') : '<div class="a2a-msg"><span class="a2a-from">StrategyOS</span><div class="a2a-bubble">No assistant exchange is visible yet. Ask for a follow-up and the routed replies will appear here.</div></div>';
+    }).join('') : '<div class="a2a-msg"><span class="a2a-from">Hermes</span><div class="a2a-bubble">No assistant status is visible yet. Hermes will show named AI specialists here once the leadership team is configured.</div></div>';
     scroll.scrollTop = scroll.scrollHeight;
-    if (footNote) footNote.textContent = '⇄ ' + assistantName + ' is following up automatically';
+    if (footNote) footNote.textContent = '⇄ ' + assistantName + ' will bring you only decisions or exceptions';
     if (followup) {
       followup.onclick = function () {
         askAssistant('Set a follow-up task for ' + firstDefined(active.with, 'the assistant') + ' on ' + firstDefined(active.topic, 'the active coordination thread') + '.');
@@ -4548,6 +4600,44 @@
     return firstDefined((getChatContract().assistant || {}).name, persona.assistant, blueprint.assistant, 'Hermes');
   }
 
+  function renderCalendarAgenda() {
+    var panel = $("calendar-agenda-panel");
+    if (!panel) return;
+    var diagnostics = getExecutiveDiagnostics();
+    var sections = diagnostics.sections || {};
+    var calendar = sections.week_ahead || {};
+    var items = safeArray(calendar.items).filter(function (item) {
+      return item && firstDefined(item.title, item.label, "");
+    }).slice(0, 12);
+    var status = String(firstDefined(calendar.status, "unavailable")).toLowerCase();
+    if (status !== "ready" || !items.length) {
+      panel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Executive calendar</p><h3 class="detail-title">Calendar not connected</h3><p class="section-note">' + escapeHtml(firstDefined(calendar.reason, "No calendar is available for this review.")) + '</p></div></div>';
+      return;
+    }
+    var openIndex = Number(state.openCalendarIndex);
+    if (!Number.isFinite(openIndex) || openIndex < 0 || openIndex >= items.length) openIndex = 0;
+    var active = items[openIndex];
+    panel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">Your executive calendar</h3><p class="section-note">Select a commitment to see what to prepare and what may need your decision.</p></div><span class="pill-inline ok">' + escapeHtml(String(items.length)) + ' upcoming</span></div><div class="calendar-agenda-list">' + items.map(function (item, index) {
+      return '<button type="button" class="calendar-agenda-item' + (index === openIndex ? ' is-open' : '') + '" data-calendar-index="' + index + '" aria-expanded="' + (index === openIndex ? 'true' : 'false') + '"><span class="calendar-agenda-date">' + escapeHtml(firstDefined(item.day, item.date, 'Date to confirm')) + '</span><span class="calendar-agenda-copy"><strong>' + escapeHtml(firstDefined(item.title, item.label, 'Commitment')) + '</strong><small>' + escapeHtml(firstDefined(item.when, item.type, '')) + '</small></span><span class="agent-caret' + (index === openIndex ? ' is-open' : '') + '">›</span></button>';
+    }).join('') + '</div><div class="calendar-prep"><div><span class="eyebrow">Prepare for</span><h4>' + escapeHtml(firstDefined(active.title, active.label, 'This commitment')) + '</h4><p>' + escapeHtml(firstDefined(active.prep, active.foot, 'No preparation note was supplied.')) + '</p></div><div class="calendar-prep__meta"><span>' + escapeHtml(firstDefined(active.type, 'Executive commitment')) + '</span><span>' + escapeHtml(firstDefined(active.related_bu, 'Group')) + '</span></div><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-prompt="brief"><strong>Prepare decision brief</strong></button><button class="timeline-chip" type="button" data-calendar-prompt="inputs"><strong>Identify missing inputs</strong></button></div></div>';
+    safeArray(panel.querySelectorAll('[data-calendar-index]')).forEach(function (button) {
+      button.onclick = function () {
+        state.openCalendarIndex = Number(button.getAttribute('data-calendar-index') || 0) || 0;
+        renderCalendarAgenda();
+      };
+    });
+    safeArray(panel.querySelectorAll('[data-calendar-prompt]')).forEach(function (button) {
+      button.onclick = function () {
+        var promptType = button.getAttribute('data-calendar-prompt') || 'brief';
+        var title = firstDefined(active.title, active.label, 'this commitment');
+        var prompt = promptType === 'inputs'
+          ? 'For “' + title + '”, identify only the missing decision inputs, their owner and the deadline to obtain them.'
+          : 'Prepare the CEO decision brief for “' + title + '”: decision, options, recommendation, owner and what I should walk in having decided.';
+        askAssistant(prompt, button, { entrypoint: "calendar", event_title: title });
+      };
+    });
+  }
+
   function renderLowerRailFidelity() {
     var blueprint = getPersonaBlueprint(state.activePersona);
     var diagnostics = getExecutiveDiagnostics();
@@ -4717,7 +4807,7 @@
         var id = String(firstDefined(item.role, item.twin_id, "twin"));
         var isOpen = state.openAgentId === id;
         var status = String(firstDefined(item.status, "ready"));
-        return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(firstDefined(item.current_activity, "Ready to support the next leadership review.")) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div><div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(firstDefined(item.authority, "Responsibilities will appear when available.")) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div>' + renderExecutionLog() + (item.route ? '<a class="btn secondary twin-open" href="' + escapeHtml(item.route) + '">Open team workspace</a>' : '') + '</div>' : '') + '</article>';
+        return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(firstDefined(item.current_activity, "Ready to support the next leadership review.")) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div>' + renderLeadershipStatus(item) + '<div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(firstDefined(item.authority, "Responsibilities will appear when available.")) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div>' + (item.route ? '<a class="btn secondary twin-open" href="' + escapeHtml(item.route) + '">Open team workspace</a>' : '') + '</div>' : '') + '</article>';
       }).join('') : '<div class="network-empty">No AI leaders match this search.</div>') + '</div>';
       var search = networkCard.querySelector('#twin-network-search');
       if (search) search.oninput = function () {
@@ -5027,10 +5117,11 @@
   function updateDocumentTitle() {
     var personaLabel = state.activePersona === "board" ? "Board Room" : getPersonaLabel(state.activePersona);
     var viewLabels = {
-      home: state.activePersona === "board" ? "Portal" : "Diagnostics",
-      assistants: "Assistants",
+      home: state.activePersona === "board" ? "Portal" : "Briefing",
+      calendar: "Calendar",
+      assistants: "Hermes",
       agents: "AI team",
-      knowledge: "Knowledge",
+      knowledge: "Evidence",
       reports: "Reports"
     };
     document.title = "StrategyOS — " + personaLabel + " " + firstDefined(viewLabels[state.activeView], "Workspace");
@@ -5048,6 +5139,7 @@
     renderDriverDrillFidelity();
     renderBoardStateTabs();
     renderBoardPortal();
+    renderCalendarAgenda();
     renderLowerRailFidelity();
     renderAgentsDiscovery();
     renderAssistantNetwork();
@@ -5151,6 +5243,7 @@
       assistantCatalogueOpen: false,
       networkStatusFilter: "all",
       networkFilterMenuOpen: false,
+      openNetworkAssistantId: "",
       selectedAgentModuleKey: "",
       knowledgeQuestionIndex: 0,
       kgDensityMode: "compact",
@@ -5166,6 +5259,7 @@
       openDriverNoteKey: "",
       selectedFindingId: "",
       openWeekIndex: 0,
+      openCalendarIndex: 0,
       agentSummaryOpen: false,
       openAgentId: firstDefined(requested.agent, ""),
       openAgentLogId: "",

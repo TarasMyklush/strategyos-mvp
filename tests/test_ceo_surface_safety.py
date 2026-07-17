@@ -2202,25 +2202,24 @@ def test_kpi_panel_free_text_ask_carries_the_active_figure_as_context():
     assert ".kpi-inline-ask" in css, "the free-text ask must be styled with the panel"
 
 
-def test_execution_log_renderer_is_actually_wired_into_the_card():
-    """A renderer nothing calls is an inert fix.
-
-    The CSS for this panel shipped long before any code rendered it; the whole
-    point of this change is that the function is reachable from the card body,
-    so assert the call site, not just the definition.
-    """
+def test_ai_team_card_renders_leadership_status_not_raw_execution_log():
+    """CEO AI-team cards must not expose technical audit/runtime events."""
     js = _static_executive_js()
     assert "function renderExecutionLog()" in js
-    # Defined once, called at least once: the definition alone proves nothing.
-    assert js.count("renderExecutionLog()") >= 2
-    assert "</p></div>' + renderExecutionLog() + (item.route" in js
+    assert "function renderLeadershipStatus(item)" in js
+    assert "+ renderLeadershipStatus(item) +" in js
+    assert "renderExecutionLog() + (item.route" not in js
 
 
-def test_execution_log_reads_real_events_not_the_synthesised_posture():
+def test_leadership_status_does_not_read_raw_execution_events():
     js = _static_executive_js()
-    assert "execution_log" in js
-    # The three synthesised status lines must never be dressed up as the trail.
-    assert "run_posture" not in js.split("function renderExecutionLog()")[1][:2000]
+    status_block = js.split("function renderLeadershipStatus(item)")[1][:1800]
+    assert "getExecutionLog" not in status_block
+    assert "Execution log" not in status_block
+    assert "Current status" in status_block
+    assert "function leadershipActivityCopy(item)" in js
+    assert "key performance measures" in js
+    assert "Portfolio under review" in js
 
 
 def test_execution_log_styles_are_served():
@@ -2229,21 +2228,14 @@ def test_execution_log_styles_are_served():
         assert selector in css, f"missing style for {selector}"
 
 
-def test_capability_page_and_ai_team_page_never_share_the_word_working():
-    """The bug: "3 WORKING" on one page, "0 working now" on the other.
-
-    One page counts product capabilities (board room memory, reviewer console);
-    the other counts assistants (Hermes, Atlas, Iris). Both said "working", so
-    they contradicted each other about the same company at the same moment. An
-    executive who notices has every reason to stop trusting the arithmetic.
-    """
+def test_hermes_network_is_a_named_ai_leadership_team_not_product_modules():
     js = _static_executive_js()
-    # The capability card must not borrow the AI team's vocabulary.
     assert "Governed Assistant Network" not in js
-    assert "All AI leaders" not in js
-    assert "What this workspace covers" in js
-    assert "capability" in js
-    # The AI team page keeps "working now" -- it really does count assistants.
+    assert "Hermes' AI leadership team" in js
+    assert "function getLeadershipTeam()" in js
+    assert "agents.digital_twins" in js
+    assert "data-network-status-toggle" in js
+    assert 'entrypoint: "ai_team_brief"' in js
     assert "working now" in js
 
 

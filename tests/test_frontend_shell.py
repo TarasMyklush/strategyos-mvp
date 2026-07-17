@@ -154,7 +154,7 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     html = _homepage_response()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS — Group CEO Diagnostics" in html
+    assert "StrategyOS — Group CEO Briefing" in html
     assert marker in html
     assert 'href="/guide"' in html
     assert "How it works" in html
@@ -171,7 +171,8 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
     # 22.06 top bar / nav parity
     assert 'id="view-nav"' in html
-    assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
+    assert "Briefing" in html and "Calendar" in html and "Hermes" in html and "Evidence" in html
+    assert 'id="view-calendar"' in html and 'id="calendar-agenda-panel"' in html
     assert "Mizan Group" not in html
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
@@ -212,7 +213,7 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     js = _static_executive_js()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS — Group CEO Diagnostics" in html
+    assert "StrategyOS — Group CEO Briefing" in html
     assert marker in html
     assert 'href="/guide"' in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
@@ -222,7 +223,8 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
     assert 'id="view-nav"' in html
-    assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
+    assert "Briefing" in html and "Calendar" in html and "Hermes" in html and "Evidence" in html
+    assert 'id="view-calendar"' in html and 'id="calendar-agenda-panel"' in html
     assert "Mizan Group" not in html
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
@@ -264,8 +266,8 @@ def test_app_entry_routes_render_executive_shell():
 
     assert app_response.status_code == 200
     assert alias_response.status_code == 200
-    assert "StrategyOS — Group CEO Diagnostics" in app_response.text
-    assert "StrategyOS — Group CEO Diagnostics" in alias_response.text
+    assert "StrategyOS — Group CEO Briefing" in app_response.text
+    assert "StrategyOS — Group CEO Briefing" in alias_response.text
     assert '<script id="strategyos-executive-bootstrap"' in app_response.text
     assert '<script id="strategyos-executive-bootstrap"' in alias_response.text
     assert '<script id="strategyos-bootstrap"' not in app_response.text
@@ -278,12 +280,12 @@ def test_app_entry_uses_design_faithful_executive_surface():
     html = _app_entry_response()
     js = _static_executive_js()
 
-    assert "StrategyOS — Group CEO Diagnostics" in html
+    assert "StrategyOS — Group CEO Briefing" in html
     assert "StrategyOS" in html
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
     assert 'id="view-nav"' in html
-    assert "Diagnostics" in html and "Assistants" in html and "Knowledge" in html
+    assert "Briefing" in html and "Calendar" in html and "Hermes" in html and "Evidence" in html
     assert "Mizan Group" not in html
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
@@ -2784,22 +2786,23 @@ def test_assistant_requests_include_shared_entrypoint_metadata():
         assert token in executive_js
 
 
-def test_assistant_network_sends_structured_governed_module_context():
+def test_hermes_network_uses_named_assistants_and_status_before_chat():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
     network_start = executive_js.index("function getAssistantNetwork()")
     network_end = executive_js.index("function getAssistantExchanges()", network_start)
     network_block = executive_js[network_start:network_end]
-    assert "var stateContract = modules.state_contract || {}" in network_block
-    assert "safeArray(stateContract.modules)" in network_block
-    assert "moduleId: firstDefined(item && item.module_id" in network_block
+    assert "getLeadershipTeam().map" in network_block
+    assert "assistantId:" in network_block
+    assert "item && item.module_id" not in network_block
 
-    prompt_start = executive_js.index("Tell me about the \"")
-    prompt_block = executive_js[prompt_start:prompt_start + 700]
-    assert "module_id: moduleItem.moduleId" in prompt_block
-    assert 'entity_type: "governed_module"' in prompt_block
-    assert 'entrypoint: "assistant_network"' in prompt_block
-    assert "led by" not in prompt_block
-    assert "in the " in prompt_block and " lane" in prompt_block
+    render_start = executive_js.index("function renderAssistantNetwork()")
+    render_block = executive_js[render_start:render_start + 9000]
+    assert "data-network-status-toggle" in render_block
+    assert "state.openNetworkAssistantId" in render_block
+    assert "data-network-ask" in render_block
+    assert "Ask Hermes for a brief" in render_block
+    assert 'entrypoint: "ai_team_brief"' in render_block
+    assert "assistant_id: assistant.assistantId" in render_block
 
 
 def test_executive_surface_prefers_shared_assistant_packet_for_visible_facts():
@@ -2855,6 +2858,14 @@ const bootstrapPayload = {{
       {{ module_id: 'evidence-closure-monitor', label: 'Evidence closure monitor', status: 'blocked', lane: 'review', summary: 'Watches citation resolution and challenged cases.', output_metric: '39 / 24', approval_dependency: 'reviewer_release' }},
       {{ module_id: 'board-pack-compiler', label: 'Board-pack compiler', status: 'preview_only', lane: 'executive', summary: 'Builds the board-safe packet.', output_metric: '3 report surfaces', approval_dependency: 'close_challenged_cases' }},
       {{ module_id: 'runtime-guardrail', label: 'Runtime guardrail', status: 'protected', lane: 'system', summary: 'Keeps tenant runtime boundaries protected.', output_metric: 'langgraph', approval_dependency: 'system_boundary' }},
+    ],
+  }},
+  agents: {{
+    digital_twins: [
+      {{ twin_id: 'ceo', role: 'ceo', display_name: 'Chief of Staff', assistant_name: 'Hermes', status: 'active', current_activity: 'Preparing the board briefing', active_investigation_count: 1, pending_request_count: 0, cycle_count: 3, authority: 'Coordinate the executive agenda and synthesise leadership inputs.', escalation_path: ['Group CEO'] }},
+      {{ twin_id: 'cfo', role: 'cfo', display_name: 'Group CFO', assistant_name: 'Atlas', status: 'attention', current_activity: 'Validating the cash recovery recommendation', active_investigation_count: 2, pending_request_count: 1, cycle_count: 2, authority: 'Own finance analysis and surface material exceptions.', escalation_path: ['Group CEO', 'Group CFO'] }},
+      {{ twin_id: 'gm', role: 'gm', display_name: 'Group Manager', assistant_name: 'Iris', status: 'monitoring', current_activity: 'Monitoring operating commitments', active_investigation_count: 1, pending_request_count: 0, cycle_count: 4, authority: 'Track operating commitments across the group.', escalation_path: ['Group Manager'] }},
+      {{ twin_id: 'strategy', role: 'strategy', display_name: 'Strategy Lead', assistant_name: 'Nora', status: 'ready', current_activity: 'Ready to prepare the next strategy review', active_investigation_count: 0, pending_request_count: 0, cycle_count: 1, authority: 'Maintain the strategy review and decision record.', escalation_path: ['Group CEO'] }},
     ],
   }},
 }};
@@ -2919,28 +2930,19 @@ console.log(JSON.stringify({{
     result = json.loads(completed.stdout.strip())
     assert result["networkCount"] == 4
     assert result["exchangeCount"] == 4
-    # The COUNT is the contract; the noun is copy. This page counts product
-    # capabilities, not people -- calling them "working" made it contradict the
-    # AI team page, which counts assistants.
-    assert result["metaHint"].startswith("4 capability")
-    assert "working" not in result["metaHint"]
-    assert "Cash recovery watch" in result["html"]
-    # Honesty contract: every number on the card is a count of real module
-    # states. The old card fabricated per-module "readiness scores"
-    # (status -> 92/76/62/45/70) and a target of 80 that existed nowhere in
-    # the data model.
+    assert result["metaHint"] == "2 assistants are active · 1 assistant needs your review"
+    assert "Hermes" in result["html"] and "Atlas" in result["html"]
+    assert "Cash recovery watch" not in result["html"]
+    # The network is an honest status view of named AI assistants; it must not
+    # invent readiness scores or expose product-module internals.
     assert "Team readiness score" not in result["html"]
     assert "target 80" not in result["html"]
-    # This card counts capabilities. "Working now" belongs to the AI team page,
-    # which counts assistants; sharing the phrase is what made the two pages
-    # report 3 and 0 about the same moment.
-    assert "Switched on" in result["html"]
-    assert "Working now" not in result["html"]
-    # Fixture: running + protected = 2 running; preview_only = 1 pending;
-    # blocked = 1 blocked/idle.
-    assert "2 switched on" in result["html"]
-    assert "1 waiting on a person" in result["html"]
-    assert "1 need review" in result["html"]
+    assert "working now" in result["html"]
+    assert "2 working" in result["html"]
+    assert "1 ready" in result["html"]
+    assert "1 need your review" in result["html"]
+    assert "data-network-status-toggle" in result["html"]
+    assert "Runtime Governance" not in result["html"]
     for fabricated in ("92", "76", "62", "45"):
         assert ">" + fabricated + "<" not in result["html"], (
             f"fabricated readiness score {fabricated} leaked back into the card"
@@ -2979,8 +2981,9 @@ def test_assistant_transport_failures_log_visible_diagnostics():
 def test_assistant_network_count_is_labeled_not_presented_as_failed_requests():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
 
-    assert 'assistantName + " network · " + liveCount + " active"' in executive_js
-    assert 'active assistant module' in executive_js
+    assert "function getAssistantNetworkMeta()" in executive_js
+    assert "Hermes' AI leadership team" in executive_js
+    assert '" assistant" + (activeCount === 1 ? " is" : "s are") + " active"' in executive_js
     assert 'fabBadge.hidden = true' in executive_js
 
 
