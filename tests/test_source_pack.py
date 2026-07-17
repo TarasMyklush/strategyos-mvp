@@ -453,3 +453,58 @@ def test_iter_source_files_follows_symlinked_directories(tmp_path):
     ]
 
     assert discovered == ["contracts/terms.pdf"]
+
+
+def _write_ap(path, year):
+    import pandas as pd
+    pd.DataFrame({
+        "Invoice_ID": [f"INV-{year}-0001"],
+        "Vendor_ID": ["V-1"],
+        "Amount_SAR": [100.0],
+        "Payment_Date": [f"{year}-03-01"],
+        "PO_Reference": ["PO-1"],
+    }).to_excel(path, index=False)
+
+
+def test_historic_duplicate_of_a_required_role_is_kept_as_context_not_dropped(tmp_path):
+    """When two files claim the AP role, the newest wins; the older is context.
+
+    The pharma pack ships FY2023-25 AP ledgers alongside the H1 2026 one. Their
+    columns are identical, so only the data date distinguishes them. Recency
+    picks the current period; the historic file must be kept (under a historic
+    path) rather than discarded, so multi-year questions can be answered.
+    """
+    import strategyos_mvp.source_pack as sp
+    sp.refresh_source_pack_role_constants()
+
+    raw = tmp_path / "raw"
+    (raw / "02_ERP_Extracts").mkdir(parents=True)
+    (raw / "09_Historic_ERP").mkdir(parents=True)
+    _write_ap(raw / "02_ERP_Extracts" / "AP_Invoices_H1_2026.xlsx", 2026)
+    _write_ap(raw / "09_Historic_ERP" / "AP_Invoices_FY2024.xlsx", 2024)
+
+    man = sp._build_manifest(raw, source_pack_id="ctx-test")
+    sp._classify_manifest(man, raw, source_pack_id="ctx-test")
+    inv = sp._run_model_role_inventory(man, raw_root=raw)
+    selected = inv.get("ap_ledger", [])
+    assert len(selected) == 1, "exactly one AP file wins the current role"
+    assert "H1_2026" in str(selected[0]["relative_path"]), "the 2026 file must win, not FY2024"
+
+
+def test_latest_date_falls_back_to_the_filename_year_when_data_has_no_date(tmp_path):
+    """A trial balance is a point-in-time snapshot with no date column.
+
+    Its filename (June_2026 vs Dec_2024) is the only signal, and the resolver
+    must use it -- otherwise the historic TB collides with the current one.
+    """
+    import strategyos_mvp.source_pack as sp
+    from datetime import date
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    import pandas as pd
+    pd.DataFrame({"Account": ["1000"], "Debit_Total": [1], "Credit_Total": [0], "Net": [1]}).to_excel(
+        raw / "Trial_Balance_June_2026.xlsx", index=False
+    )
+    item = {"relative_path": "Trial_Balance_June_2026.xlsx"}
+    assert sp._latest_date_for_role(raw, item, "trial_balance") == date(2026, 12, 31)
