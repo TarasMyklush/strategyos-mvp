@@ -120,6 +120,8 @@ def test_executive_ui_distinguishes_assistants_from_functions_and_status_panel()
     assert "Assistant collaboration" in js
     assert "Who each assistant represents" in js
     assert "executive twins" not in js.lower()
+    assert 'String(getLeadershipTeam().length) + " assistants"' in js
+    assert "scrubExecutiveTechnicalLanguage(firstDefined(item.authority" in js
     assert "in progress" in js
     assert "need your attention" in js
     assert "legacy request" not in js

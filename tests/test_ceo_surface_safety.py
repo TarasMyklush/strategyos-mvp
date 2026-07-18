@@ -108,7 +108,7 @@ def test_ceo_jargon_replacements():
         "Report surface must be rebadged as 'Board reports'"
     )
     assert '{ label: "Calendar", value: String(upcomingCommitments) + " upcoming" }' in js
-    assert '" assistants"' in js, (
+    assert 'String(getLeadershipTeam().length) + " assistants"' in js, (
         "Hero mini-stats must describe the AI team as assistants, not technical agents"
     )
 
