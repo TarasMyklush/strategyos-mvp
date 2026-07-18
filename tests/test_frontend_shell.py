@@ -2935,6 +2935,7 @@ console.log(JSON.stringify({{
   functionStuckCount: functionReview.stuck_count,
   functionRoundCount: functionReview.round_count,
   functionNames: functionReview.functions.map((item) => item.name),
+  functionLatestActions: functionReview.functions.map((item) => item.entries[0] && item.entries[0].action),
   html: nodes['assistant-network-card'].innerHTML,
 }}));
 """
@@ -2960,6 +2961,7 @@ console.log(JSON.stringify({{
     assert result["functionStuckCount"] == 1
     assert result["functionRoundCount"] == 2
     assert result["functionNames"] == ["Finance Analyst", "Finance Auditor"]
+    assert result["functionLatestActions"] == ["response", "lock"]
     assert result["metaHint"] == "2 assistants are active · 1 assistant needs your review"
     assert "Hermes" in result["html"] and "Atlas" in result["html"]
     assert "Cash recovery watch" not in result["html"]

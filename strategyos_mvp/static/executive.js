@@ -1540,6 +1540,9 @@
       .replace(/finding payload/gi, "finding record")
       .replace(/fail-closed evidence verification/gi, "required evidence check")
       .replace(/audit loop hit max rounds before lock/gi, "Review reached its limit before the finding could be closed")
+      .replace(/acceptance-sensitive/gi, "independent")
+      .replace(/citation\(s\)/gi, "citations")
+      .replace(/confidence HIGH/gi, "high confidence")
       .trim();
   }
 
@@ -1588,7 +1591,7 @@
       return entry && isFinanceFunctionActor(entry.actor);
     }).map(function (entry) {
       return Object.assign({}, entry, { function_name: financeFunctionName(entry.actor) });
-    });
+    }).sort(sortFunctionEventsNewestFirst);
     var findingsById = {};
     entries.forEach(function (entry) {
       var findingId = String(firstDefined(entry.finding_id, "")).trim();
@@ -1725,7 +1728,7 @@
     if (roster) {
       var activeCards = review.functions.map(function (item) {
         var latest = item.entries[0] || {};
-        return '<article class="function-card"><div class="function-card__head"><span class="function-card__icon" aria-hidden="true">' + escapeHtml(item.name === "Finance Auditor" ? "A" : "F") + '</span><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.purpose) + '</span></div><em class="function-state tone-' + escapeHtml(functionStateTone(item.state)) + '">' + escapeHtml(functionStateLabel(item.state)) + '</em></div><div class="function-card__facts"><span><strong>' + escapeHtml(String(item.entries.length)) + '</strong> recorded steps</span><span>' + escapeHtml(item.output) + '</span></div><div class="function-card__latest"><span>Latest recorded work</span><p>' + escapeHtml(functionAuditCopy(latest.detail || (item.entries.length ? functionActionLabel(latest.action) : "No work recorded for this run."))) + '</p>' + (latest.round_no !== null && latest.round_no !== undefined ? '<small>Round ' + escapeHtml(String(latest.round_no)) + '</small>' : '') + '</div></article>';
+        return '<article class="function-card"><div class="function-card__head"><span class="function-card__icon" aria-hidden="true">' + escapeHtml(item.name === "Finance Auditor" ? "A" : "F") + '</span><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.purpose) + '</span></div><em class="function-state tone-' + escapeHtml(functionStateTone(item.state)) + '">' + escapeHtml(functionStateLabel(item.state)) + '</em></div><div class="function-card__facts"><span><strong>' + escapeHtml(String(item.entries.length)) + '</strong> recorded step' + (item.entries.length === 1 ? '' : 's') + '</span><span>' + escapeHtml(item.output) + '</span></div><div class="function-card__latest"><span>Latest recorded work</span><p>' + escapeHtml(functionAuditCopy(latest.detail || (item.entries.length ? functionActionLabel(latest.action) : "No work recorded for this run."))) + '</p>' + (latest.round_no !== null && latest.round_no !== undefined ? '<small>Round ' + escapeHtml(String(latest.round_no)) + '</small>' : '') + '</div></article>';
       }).join('');
       roster.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Active functions</span><span class="ach-hint">Specialists working on the current run</span></div></div><div class="function-card-list">' + activeCards + '</div><div class="planned-functions"><span class="eyebrow">Coming next</span><div><span>Presentation composer <em>Planned · not enabled</em></span><span>Meeting booker <em>Planned · not enabled</em></span></div></div>';
     }
@@ -1734,7 +1737,7 @@
       var findingRows = review.findings.length ? review.findings.map(function (finding) {
         var isOpen = state.openFunctionFindingId === finding.id;
         var latest = finding.latest || {};
-        return '<article class="function-finding state-' + escapeHtml(finding.state) + '"><button type="button" class="function-finding__head" data-function-finding-toggle="' + escapeHtml(finding.id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span><strong>' + escapeHtml(finding.id) + '</strong><small>' + escapeHtml(String(finding.entries.length)) + ' recorded steps · ' + escapeHtml(String(finding.round_count)) + ' round' + (finding.round_count === 1 ? '' : 's') + '</small></span><em class="function-state tone-' + escapeHtml(functionStateTone(finding.state)) + '">' + escapeHtml(functionStateLabel(finding.state)) + '</em><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="function-finding__body"><p class="function-finding__latest"><span>Current recorded state</span><strong>' + escapeHtml(functionAuditCopy(latest.detail || functionActionLabel(firstDefined(latest.action, latest.status, "Recorded")))) + '</strong></p><ol class="function-step-list">' + finding.entries.slice().reverse().map(renderFunctionStep).join('') + '</ol></div>' : '') + '</article>';
+        return '<article class="function-finding state-' + escapeHtml(finding.state) + '"><button type="button" class="function-finding__head" data-function-finding-toggle="' + escapeHtml(finding.id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span><strong>' + escapeHtml(finding.id) + '</strong><small>' + escapeHtml(String(finding.entries.length)) + ' recorded step' + (finding.entries.length === 1 ? '' : 's') + ' · ' + escapeHtml(String(finding.round_count)) + ' round' + (finding.round_count === 1 ? '' : 's') + '</small></span><em class="function-state tone-' + escapeHtml(functionStateTone(finding.state)) + '">' + escapeHtml(functionStateLabel(finding.state)) + '</em><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="function-finding__body"><p class="function-finding__latest"><span>Current recorded state</span><strong>' + escapeHtml(functionAuditCopy(latest.detail || functionActionLabel(firstDefined(latest.action, latest.status, "Recorded")))) + '</strong></p><ol class="function-step-list">' + finding.entries.slice().reverse().map(renderFunctionStep).join('') + '</ol></div>' : '') + '</article>';
       }).join('') : '<div class="function-empty"><strong>No specialist audit recorded</strong><p>' + escapeHtml(review.reason) + '</p></div>';
       audit.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Analyst–Auditor audit trail</span><span class="ach-hint">What was done, challenged and closed</span></div><button type="button" class="function-brief-btn" data-function-ask>Ask Hermes for CEO brief</button></div><p class="function-audit-intro">Open a finding to see the real sequence between the Finance Analyst and Finance Auditor. A finding marked “Stuck” has not reached a recorded lock or resolution.</p><div class="function-finding-list">' + findingRows + '</div>' + (review.truncated ? '<p class="trail-foot">Showing the available audit excerpt; ' + escapeHtml(String(review.total_count)) + ' total steps were recorded.</p>' : '');
       safeArray(audit.querySelectorAll('[data-function-finding-toggle]')).forEach(function (button) {
