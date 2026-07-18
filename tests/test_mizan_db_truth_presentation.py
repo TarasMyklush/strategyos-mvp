@@ -400,4 +400,5 @@ def test_executive_js_live_database_mode_does_not_fallback_to_synthetic_rails():
     assert "No governed calendar is available for this reporting period" in js
     assert "findingsSection.case_index" in js
     assert "state.selectedFindingId = targetId" in js
-    assert 'diagnostics.source === "governed_artifacts" ? "RUN"' in js
+    assert "truthSourceBadge" not in js
+    assert '"Business view ready"' in js
