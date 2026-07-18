@@ -290,8 +290,8 @@ def test_ceo_status_tokens_humanized():
     )
 
     # Verify the CEO preparation action does not leak raw publish-state tokens.
-    think_pill_context = js[js.index("Prepare decision brief"):js.index("Prepare decision brief") + 600] if "Prepare decision brief" in js else ""
-    assert "Prepare decision brief" in think_pill_context, "CEO decision brief action must exist"
+    think_pill_context = js[js.index("Prepare me"):js.index("Prepare me") + 600] if "Prepare me" in js else ""
+    assert "Prepare me" in think_pill_context, "CEO preparation action must exist"
     # Raw status tokens must not appear near the simplified gravity card
     for raw_token in ["AWAITING_REVIEW", "CHALLENGED"]:
         assert raw_token not in think_pill_context, (
@@ -1469,10 +1469,12 @@ def test_cta_enum_business_signal_pressure_test():
     assert "Pressure-test with Hermes" in js
 
 def test_cta_enum_week_decision_preparation():
-    """CTA 11: Commitments support decision briefs and missing inputs."""
+    """CTA 11: Commitments provide executable preparation actions."""
     js = _static_executive_js()
-    assert "Prepare decision brief" in js
-    assert "Identify missing inputs" in js
+    assert "Prepare me" in js
+    assert "Draft input request" in js
+    assert 'entrypoint: "calendar_quick_action"' in js
+    assert "calendarQuickActionContext" in js
 
 def test_cta_enum_week_composer():
     """CTA 12: Week composer form #week-composer."""

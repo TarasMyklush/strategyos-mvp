@@ -1296,6 +1296,85 @@ def test_authenticated_calendar_question_uses_governed_agenda_without_llm(monkey
         _restore_env(original)
 
 
+def test_calendar_quick_action_returns_executable_input_request_without_llm(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {
+                    "run_id": "run-calendar-action",
+                    "calendar_agenda": {
+                        "status": "ready",
+                        "source_file": "98_Restricted_Context/CEO_Calendar.xlsx",
+                        "sheet": "Calendar",
+                        "total_item_count": 1,
+                        "items": [
+                            {
+                                "event_id": "calendar-2099-07-21-1",
+                                "date": "2099-07-21",
+                                "day": "Tue 21 Jul",
+                                "when": "09:00",
+                                "title": "E-Pharmacy dark-store network expansion gate",
+                                "type": "Decision gate",
+                                "prep": "Review the investment case and launch readiness.",
+                                "related_bu": "Digital Health",
+                                "evidence_scope": "calendar_agenda_only",
+                            }
+                        ],
+                    },
+                },
+                "run_id": run_id or "run-calendar-action",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("a calendar quick action must not reach the LLM")
+            ),
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Draft the input request for this commitment.",
+                "persona": "ceo",
+                "mode": "auto",
+                "run_id": "run-calendar-action",
+                "assistant_context": {
+                    "entrypoint": "calendar_quick_action",
+                    "calendar_action": "input_request",
+                    "event_title": "E-Pharmacy dark-store network expansion gate",
+                    "event_date": "2099-07-21",
+                },
+            },
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_calendar"
+        assert payload["assistant_mode"] == "governed_calendar"
+        assert payload["intent"] == "calendar_input_request"
+        assert payload["llm_fallback_attempted"] is False
+        assert "Draft input request — E-Pharmacy dark-store network expansion gate" in payload["answer"]
+        assert "To: Digital Health leadership" in payload["answer"]
+        assert "Due: before Tue 21 Jul 2099 at 09:00" in payload["answer"]
+        assert "the exact decision required from the CEO" in payload["answer"]
+        assert "does not name the accountable input owner" in payload["answer"]
+        assert "supplied evidence does not contain" not in payload["answer"].lower()
+        assert payload["citations"][0]["source_path"].endswith("CEO_Calendar.xlsx")
+    finally:
+        _restore_env(original)
+
+
 def test_governed_calendar_never_labels_past_item_as_upcoming():
     result = api_module._governed_calendar_result(
         "What is my next meeting?",

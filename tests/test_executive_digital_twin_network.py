@@ -99,13 +99,13 @@ def test_agents_surface_reads_persistent_digital_twin_runtime(tmp_path, monkeypa
     assert payload["running"] == []  # Workflow modules are never relabelled as twins.
 
 
-def test_executive_ui_distinguishes_twins_from_automations_and_status_ring():
+def test_executive_ui_distinguishes_assistants_from_functions_and_status_panel():
     root = Path(api_module.STATIC_DIR)
     js = (root / "executive.js").read_text(encoding="utf-8")
     css = (root / "executive.css").read_text(encoding="utf-8")
     html = (root / "executive.html").read_text(encoding="utf-8")
 
-    assert "AI assistants and executive twins" in html
+    assert '<h2 class="section-title" id="agents-heading">AI assistants</h2>' in html
     assert "AI assistants by executive role" in js
     assert "Specialist work such as analysis or audit is tracked separately under Functions." in js
     assert 'data-view-target="functions"' in html
@@ -116,7 +116,10 @@ def test_executive_ui_distinguishes_twins_from_automations_and_status_ring():
     assert ".agents-col-head .ach-title" in css
     assert ".agents-col-head .ach-hint" in css
     assert "text-align: left" in css
-    assert "This view shows coordination between executive twins" in js
+    assert "This view shows coordination between AI assistants" in js
+    assert "Assistant collaboration" in js
+    assert "Who each assistant represents" in js
+    assert "executive twins" not in js.lower()
     assert "in progress" in js
     assert "need your attention" in js
     assert "legacy request" not in js
@@ -193,14 +196,14 @@ def test_hermes_ai_team_answer_uses_same_persistent_runtime(tmp_path, monkeypatc
     assert result is not None
     assert result["matched"] is True
     assert result["answered_by"] == "digital_twin_runtime"
-    assert "4 configured Digital Twins" in result["answer"]
+    assert "4 configured AI assistants" in result["answer"]
     assert [item["role"] for item in result["digital_twin_network"]["digital_twins"]] == [
         "ceo",
         "cfo",
         "group_manager",
         "strategy",
     ]
-    assert "No Twin is currently flagged for executive attention" in result["answer"]
+    assert "No AI assistant is currently flagged for executive attention" in result["answer"]
     assert "unknown_node" not in result["answer"]
     assert result["digital_twin_network"]["contract_version"] == "digital_twin_network.v1"
 

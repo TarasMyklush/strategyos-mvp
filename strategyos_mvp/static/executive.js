@@ -131,12 +131,18 @@
     });
     return text
       .replace(/\bScenario parser matched ['"]?[^'";.]+['"]?;?\s*/gi, "")
+      .replace(/\bdigital twins\b/gi, "AI assistants")
+      .replace(/\bdigital twin\b/gi, "AI assistant")
+      .replace(/\btwins\b/gi, "AI assistants")
+      .replace(/\btwin\b/gi, "AI assistant")
       .replace(/\brecoverable leakage\b/gi, "recoverable value")
       .replace(/\bcomputed from run findings\b/gi, "calculated from governed findings")
       .replace(/\brun findings\b/gi, "governed findings")
       .replace(/\bformula steps\b/gi, "calculation checks")
       .replace(/\bgrounding level\b/gi, "evidence confidence")
-      .replace(/\s+/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/ *\n */g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
       .replace(/\s+([,.;:!?])/g, "$1")
       .trim();
   }
@@ -1589,7 +1595,7 @@
     return rightKey.action_rank - leftKey.action_rank;
   }
 
-  // Functions are specialist workers, not executive twins. Their state is
+  // Functions are specialist workers, not executive-role assistants. Their state is
   // read from persisted Analyst/Auditor events so the CEO sees what actually
   // happened, where the review stopped and whether every case was closed.
   function getFinanceFunctionReview() {
@@ -1727,7 +1733,7 @@
     var openCount = review.stuck_count + review.working_count;
 
     if (overview) {
-      overview.innerHTML = '<div class="function-separation"><div class="function-separation__copy"><span class="eyebrow">Two different kinds of AI</span><h3>Assistants represent roles. Functions perform work.</h3><p><strong>AI team</strong> contains executive twins—the AI interfaces aligned to real leadership roles such as the Group CFO. <strong>Functions</strong> are specialist workers such as the Finance Analyst and Finance Auditor. Every function must show its work and current state.</p></div><button type="button" class="function-team-link" data-function-view-team>View AI team</button></div><div class="function-review-summary"><div class="function-review-state tone-' + escapeHtml(statusTone) + '"><span>Current finance review</span><strong>' + escapeHtml(statusLabel) + '</strong><small>' + escapeHtml(review.status === "complete" ? "Every recorded finding is locked." : review.status === "stuck" ? review.stuck_count + " finding" + (review.stuck_count === 1 ? " is" : "s are") + " waiting for resolution." : review.status === "working" ? openCount + " finding" + (openCount === 1 ? " remains" : "s remain") + " open." : review.reason) + '</small></div><div><strong>' + escapeHtml(String(review.findings.length)) + '</strong><span>findings reviewed</span></div><div><strong>' + escapeHtml(String(review.locked_count)) + '</strong><span>locked</span></div><div class="' + (openCount ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(openCount)) + '</strong><span>open or stuck</span></div><div><strong>' + escapeHtml(String(review.round_count)) + '</strong><span>review rounds</span></div></div>';
+      overview.innerHTML = '<div class="function-separation"><div class="function-separation__copy"><span class="eyebrow">Two different kinds of AI</span><h3>Assistants represent roles. Functions perform work.</h3><p><strong>AI team</strong> contains AI assistants aligned to real leadership roles such as the Group CFO. <strong>Functions</strong> are specialist workers such as the Finance Analyst and Finance Auditor. Every function must show its work and current state.</p></div><button type="button" class="function-team-link" data-function-view-team>View AI team</button></div><div class="function-review-summary"><div class="function-review-state tone-' + escapeHtml(statusTone) + '"><span>Current finance review</span><strong>' + escapeHtml(statusLabel) + '</strong><small>' + escapeHtml(review.status === "complete" ? "Every recorded finding is locked." : review.status === "stuck" ? review.stuck_count + " finding" + (review.stuck_count === 1 ? " is" : "s are") + " waiting for resolution." : review.status === "working" ? openCount + " finding" + (openCount === 1 ? " remains" : "s remain") + " open." : review.reason) + '</small></div><div><strong>' + escapeHtml(String(review.findings.length)) + '</strong><span>findings reviewed</span></div><div><strong>' + escapeHtml(String(review.locked_count)) + '</strong><span>locked</span></div><div class="' + (openCount ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(openCount)) + '</strong><span>open or stuck</span></div><div><strong>' + escapeHtml(String(review.round_count)) + '</strong><span>review rounds</span></div></div>';
       var teamLink = overview.querySelector('[data-function-view-team]');
       if (teamLink) teamLink.onclick = function () { switchView("agents"); };
     }
@@ -2111,9 +2117,16 @@
     var riskLevel = cleanMetaText(firstDefined(risk.level, ""));
     var groundingStatus = String(firstDefined(payload.grounding_status, "")).trim().toLowerCase();
     var scenarioType = cleanMetaText(firstDefined(payload.scenario_type, ""));
+    var assistantMode = String(firstDefined(payload.assistant_mode, "")).trim().toLowerCase();
     var modelProvided = String(firstDefined(payload.answer_origin, "")).toLowerCase() === "llm"
       || String(firstDefined(payload.answered_by, "")).toLowerCase() === "llm"
-      || String(firstDefined(payload.assistant_mode, "")).toLowerCase() === "llm";
+      || assistantMode === "llm";
+
+    if (assistantMode === "governed_calendar") {
+      parts.push("Calendar source checked");
+      if (citations.length) parts.push(citations.length + (citations.length === 1 ? " calendar entry verified" : " calendar entries verified"));
+      return parts.join(" · ");
+    }
 
     if (modelProvided) {
       parts.push("AI-generated answer");
@@ -4838,6 +4851,30 @@
     return firstDefined((getChatContract().assistant || {}).name, persona.assistant, blueprint.assistant, 'Hermes');
   }
 
+  function calendarQuickActionContext(item, action) {
+    var event = item || {};
+    return {
+      entrypoint: "calendar_quick_action",
+      calendar_action: action,
+      event_title: firstDefined(event.title, event.label, "This commitment"),
+      event_date: firstDefined(event.date, ""),
+      event_when: firstDefined(event.when, ""),
+      event_type: firstDefined(event.type, "Executive commitment"),
+      prep_context: String(firstDefined(event.prep, event.foot, "")).slice(0, 500),
+      related_bu: firstDefined(event.related_bu, ""),
+      attendees: firstDefined(event.attendees, ""),
+      location: firstDefined(event.location, "")
+    };
+  }
+
+  function calendarQuickActionPrompt(item, action) {
+    var title = firstDefined(item && item.title, item && item.label, "this commitment");
+    if (action === "input_request") {
+      return 'Draft the input request for the calendar event “' + title + '”: recipient, required content and the due point before the event. Do not invent a named owner.';
+    }
+    return 'Prepare a concise CEO brief for the calendar event “' + title + '” using the calendar entry: when, purpose, what to bring, the decision to enter with and any ownership gap.';
+  }
+
   function renderCalendarAgenda() {
     var panel = $("calendar-agenda-panel");
     if (!panel) return;
@@ -4867,7 +4904,7 @@
     var active = items[openIndex];
     panel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">Your executive calendar</h3><p class="section-note">Select a commitment to see what to prepare and what may need your decision.</p></div><span class="pill-inline ok">' + escapeHtml(String(items.length)) + ' upcoming</span></div><div class="calendar-agenda-list">' + items.map(function (item, index) {
       return '<button type="button" class="calendar-agenda-item' + (index === openIndex ? ' is-open' : '') + '" data-calendar-index="' + index + '" aria-expanded="' + (index === openIndex ? 'true' : 'false') + '"><span class="calendar-agenda-date">' + escapeHtml(firstDefined(item.day, item.date, 'Date to confirm')) + '</span><span class="calendar-agenda-copy"><strong>' + escapeHtml(firstDefined(item.title, item.label, 'Commitment')) + '</strong><small>' + escapeHtml(firstDefined(item.when, item.type, '')) + '</small></span><span class="agent-caret' + (index === openIndex ? ' is-open' : '') + '">›</span></button>';
-    }).join('') + '</div><div class="calendar-prep"><div><span class="eyebrow">Prepare for</span><h4>' + escapeHtml(firstDefined(active.title, active.label, 'This commitment')) + '</h4><p>' + escapeHtml(firstDefined(active.prep, active.foot, 'No preparation note was supplied.')) + '</p></div><div class="calendar-prep__meta"><span>' + escapeHtml(firstDefined(active.type, 'Executive commitment')) + '</span><span>' + escapeHtml(firstDefined(active.related_bu, 'Group')) + '</span></div><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-prompt="brief"><strong>Prepare decision brief</strong></button><button class="timeline-chip" type="button" data-calendar-prompt="inputs"><strong>Identify missing inputs</strong></button></div></div>';
+    }).join('') + '</div><div class="calendar-prep"><div><span class="eyebrow">Prepare for</span><h4>' + escapeHtml(firstDefined(active.title, active.label, 'This commitment')) + '</h4><p>' + escapeHtml(firstDefined(active.prep, active.foot, 'No preparation note was supplied.')) + '</p></div><div class="calendar-prep__meta"><span>' + escapeHtml(firstDefined(active.type, 'Executive commitment')) + '</span><span>' + escapeHtml(firstDefined(active.related_bu, 'Group')) + '</span></div><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-prompt="brief"><strong>Prepare me</strong></button><button class="timeline-chip" type="button" data-calendar-prompt="input_request"><strong>Draft input request</strong></button></div></div>';
     safeArray(panel.querySelectorAll('[data-calendar-index]')).forEach(function (button) {
       button.onclick = function () {
         state.openCalendarIndex = Number(button.getAttribute('data-calendar-index') || 0) || 0;
@@ -4876,12 +4913,12 @@
     });
     safeArray(panel.querySelectorAll('[data-calendar-prompt]')).forEach(function (button) {
       button.onclick = function () {
-        var promptType = button.getAttribute('data-calendar-prompt') || 'brief';
-        var title = firstDefined(active.title, active.label, 'this commitment');
-        var prompt = promptType === 'inputs'
-          ? 'For “' + title + '”, identify only the missing decision inputs, their owner and the deadline to obtain them.'
-          : 'Prepare the CEO decision brief for “' + title + '”: decision, options, recommendation, owner and what I should walk in having decided.';
-        askAssistant(prompt, button, { entrypoint: "calendar", event_title: title });
+        var action = button.getAttribute('data-calendar-prompt') || 'brief';
+        askAssistant(
+          calendarQuickActionPrompt(active, action),
+          button,
+          calendarQuickActionContext(active, action)
+        );
       };
     });
   }
@@ -4958,7 +4995,7 @@
       var activeEvent = weekAhead[openIndex] || null;
       weekPanel.innerHTML = weekAhead.length ? '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">What to walk in having decided</h3><p class="section-note">Meetings are shown only when the current run carries a governed calendar.</p></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">Decision brief</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-chat-prompt="Prepare the CEO decision brief for ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ': decision, options, recommendation, owner and what I should walk in having decided."><strong>Prepare decision brief</strong></button><button class="timeline-chip" type="button" data-chat-prompt="For ' + escapeHtml(firstDefined(activeEvent.title, 'this event')) + ', identify only the missing decision inputs, their owner and the deadline to obtain them."><strong>Identify missing inputs</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask Hermes to prepare something for this commitment</label><input id="week-input" class="driver-input" type="text" placeholder="Ask a decision question about this commitment..." /><button type="submit">Ask</button></form></div>' : '') : '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">No executive calendar connected</h3></div></div><p class="section-note">No governed calendar is available for this reporting period. No meetings or deadlines have been inferred.</p>';
+      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">Decision brief</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>Prepare me</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>Draft input request</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask Hermes to prepare something for this commitment</label><input id="week-input" class="driver-input" type="text" placeholder="Ask a decision question about this commitment..." /><button type="submit">Ask</button></form></div>' : '') : '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">No executive calendar connected</h3></div></div><p class="section-note">No governed calendar is available for this reporting period. No meetings or deadlines have been inferred.</p>';
       safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
         safeArray(panel && panel.querySelectorAll('[data-executive-prompt]')).forEach(function (button) {
           button.onclick = function () { askAssistant(button.getAttribute('data-executive-prompt') || '', button); };
@@ -4971,30 +5008,14 @@
           renderLowerRailFidelity();
         };
       });
-      safeArray(weekPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
+      safeArray(weekPanel.querySelectorAll("[data-calendar-quick-action]")).forEach(function (button) {
         button.onclick = function () {
-          var rawPrompt = button.getAttribute("data-chat-prompt") || "";
-          var hiddenContext = null;
-          if (rawPrompt.indexOf("missing") !== -1 && activeEvent) {
-            var eventContext = firstDefined(activeEvent.title, "this event");
-            var prepNotes = firstDefined(activeEvent.prep, activeEvent.foot, "");
-            var eventWhen = firstDefined(activeEvent.when, "");
-            var boardState = state.activeBoard || "pre";
-            var activeDriver = getActiveDriver();
-            var driverLabel = activeDriver ? firstDefined(activeDriver.label, activeDriver.driver_key, "") : "";
-            var driverMetric = activeDriver ? firstDefined(activeDriver.metric, activeDriver.value, "") : "";
-            hiddenContext = {
-              entrypoint: "missing_data_cta",
-              event_title: eventContext,
-              event_when: eventWhen,
-              board_state: boardState,
-              driver_label: driverLabel,
-              driver_metric: driverMetric,
-              prep_context: prepNotes.slice(0, 300),
-              guidance: "identify dashboard-backed gaps"
-            };
-          }
-          askAssistant(rawPrompt, button, hiddenContext);
+          var action = button.getAttribute("data-calendar-quick-action") || "brief";
+          askAssistant(
+            calendarQuickActionPrompt(activeEvent, action),
+            button,
+            calendarQuickActionContext(activeEvent, action)
+          );
         };
       });
       var weekComposer = weekPanel.querySelector('#week-composer');
@@ -5004,7 +5025,11 @@
           event.preventDefault();
           var message = String(weekInput.value || '').trim();
           if (!message) return;
-          askAssistant('For “' + firstDefined(activeEvent.title, 'this event') + '”: ' + message, weekComposer);
+          askAssistant(
+            'For the calendar event “' + firstDefined(activeEvent.title, 'this event') + '”: ' + message,
+            weekComposer,
+            calendarQuickActionContext(activeEvent, "brief")
+          );
           weekInput.value = '';
         });
       }
@@ -5049,11 +5074,11 @@
     if (activityCard) {
       var activeLeadershipCount = leadershipTwins.filter(function (item) { return /^(active|monitoring)$/i.test(String(item && item.status || "")); }).length;
       var attentionLeadershipCount = leadershipTwins.filter(function (item) { return /^attention$/i.test(String(item && item.status || "")); }).length;
-      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Executive twins</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist work such as analysis or audit is tracked separately under Functions.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
+      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Executive assistants</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist work such as analysis or audit is tracked separately under Functions.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
     }
 
     if (networkCard) {
-      networkCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">AI assistants by executive role</span><span class="ach-hint">Who each twin represents and its current state</span></div><label class="disco-search twin-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search AI assistants</span><input id="twin-network-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search roles, responsibilities or KPIs…" autocomplete="off" /></label></div><div class="twin-card-list">' + (twins.length ? twins.map(function (item) {
+      networkCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">AI assistants by executive role</span><span class="ach-hint">Who each assistant represents and its current state</span></div><label class="disco-search twin-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search AI assistants</span><input id="twin-network-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search roles, responsibilities or KPIs…" autocomplete="off" /></label></div><div class="twin-card-list">' + (twins.length ? twins.map(function (item) {
         var id = String(firstDefined(item.role, item.twin_id, "twin"));
         var isOpen = state.openAgentId === id;
         var status = String(firstDefined(item.status, "ready"));
@@ -5090,7 +5115,7 @@
       var noEventCopy = openHandoffs
         ? 'Items are progressing; no decision is requested from you yet.'
         : 'No recent leadership-team activity needs review.';
-      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Twin collaboration</span><span class="ach-hint">Items moving between executive-role interfaces</span></div></div><p class="twin-explainer">This view shows coordination between executive twins. Work performed by specialist functions is recorded separately in the Functions audit trail.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>') + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
+      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Items moving between executive-role assistants</span></div></div><p class="twin-explainer">This view shows coordination between AI assistants. Work performed by specialist functions is recorded separately in the Functions audit trail.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>') + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
     }
 
     if (automationCard) {

@@ -564,7 +564,7 @@ body {
     <span class="brand-mark" aria-hidden="true"></span>
     <div>
       <div class="brand-name">StrategyOS</div>
-      <div class="brand-subtitle">CFO surface · Oracle EBS pilot (twin history preserved)</div>
+      <div class="brand-subtitle">CFO assistant · Oracle EBS pilot</div>
     </div>
   </div>
   <div class="topbar-status">
@@ -582,7 +582,7 @@ body {
 <main class="page">
 
   <!-- Twin Status Bar -->
-  <div class="status-bar" aria-label="Twin status bar">
+  <div class="status-bar" aria-label="Assistant status bar">
     <div class="status-bar-item">
       <span class="status-bar-label">Status</span>
       <span class="status-bar-value" id="twin-status-value">Active</span>
@@ -867,7 +867,7 @@ body {
     <div class="override-controls">
       <span class="text-sm" style="font-weight:600;color:var(--accent);">Redirect Investigation:</span>
       <input type="text" id="redirect-input" placeholder="Investigation ID e.g. inv-001" style="min-width:140px;" />
-      <input type="text" id="redirect-target-input" placeholder="Target twin (gm, analyst, strategy)" style="min-width:160px;" />
+      <input type="text" id="redirect-target-input" placeholder="Target assistant (GM, analyst, strategy)" style="min-width:160px;" />
       <button class="btn-secondary" onclick="redirectInvestigation()">Redirect</button>
     </div>
 
@@ -1121,7 +1121,7 @@ function rejectDecision(decId) {
 function redirectInvestigation() {
   var invId = document.getElementById('redirect-input').value.trim();
   var target = document.getElementById('redirect-target-input').value.trim();
-  if (!invId || !target) { alert('Please enter both investigation ID and target twin.'); return; }
+  if (!invId || !target) { alert('Please enter both investigation ID and target assistant.'); return; }
   var reason = window.prompt('Redirect reason:', '') || '';
   persistRouting('/twin/api/redirect/' + ROLE, invId, 'Investigation ' + invId, target, reason);
   document.getElementById('redirect-input').value = '';

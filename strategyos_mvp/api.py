@@ -5449,7 +5449,7 @@ def _resolve_digital_twin_status(
         )
         suggestions = [
             f"What KPIs does {name} own?",
-            "Which Digital Twin needs executive attention?",
+            "Which AI assistant needs executive attention?",
         ]
     else:
         active = int(summary_payload.get("active_count") or 0)
@@ -5462,24 +5462,24 @@ def _resolve_digital_twin_status(
                 f"{name}: {_module_status_label(item.get('status') or 'ready')} — {item.get('current_activity') or 'No current governed activity is recorded.'}"
             )
         attention_sentence = (
-            f"{attention} Twin(s) are explicitly flagged for executive attention."
+            f"{attention} AI assistant(s) are explicitly flagged for executive attention."
             if attention
-            else "No Twin is currently flagged for executive attention."
+            else "No AI assistant is currently flagged for executive attention."
         )
         answer = (
-            f"Your AI Team has {len(twins)} configured Digital Twins; {active} are active or monitoring. "
-            f"{attention_sentence} The network has {pending} pending governed handoff(s); these are not executive approvals unless a Twin is marked Attention. "
+            f"Your AI team has {len(twins)} configured AI assistants; {active} are active or monitoring. "
+            f"{attention_sentence} The network has {pending} pending governed handoff(s); these are not executive approvals unless an assistant is marked Attention. "
             "Current activity — " + " ".join(activity_lines)
         )
         suggestions = [
             "What is Atlas doing now?",
-            "Which Digital Twin needs executive attention?",
+            "Which AI assistant needs executive attention?",
         ]
 
     return {
         "matched": True,
         "answer": answer,
-        "basis": "Persistent Digital Twin repositories used by the authenticated CEO AI Team surface.",
+        "basis": "Current assistant status and collaboration records from the authenticated CEO AI team.",
         "citations": citations,
         "suggestions": suggestions,
         "assistant_mode": "digital_twin_runtime",
@@ -11650,14 +11650,96 @@ def _requested_calendar_item_count(question: str, *, default: int = 1) -> int:
     return max(1, min(value, 10))
 
 
+def _calendar_quick_action_result(
+    item: Mapping[str, Any],
+    agenda: Mapping[str, Any],
+    *,
+    action: str,
+) -> dict[str, Any]:
+    """Turn a governed calendar row into an executable CEO preparation output."""
+    title = str(item.get("title") or "Executive commitment")
+    item_date = _calendar_item_date(item)
+    date_label = item_date.strftime("%a %d %b %Y") if item_date else str(item.get("day") or "Date not supplied")
+    when = str(item.get("when") or "").strip()
+    due_label = f"before {date_label}" + (f" at {when}" if when and when != str(item.get("date") or "") else "")
+    event_type = str(item.get("type") or "Executive commitment")
+    prep = str(item.get("prep") or "No preparation note was supplied.")
+    related_bu = str(item.get("related_bu") or "").strip()
+    attendees = str(item.get("attendees") or "").strip()
+    recipient = attendees or (f"{related_bu} leadership" if related_bu else "the meeting sponsor and CEO Office")
+    owner_gap = f"The calendar does not name the accountable input owner; confirm ownership with {recipient}."
+
+    if action == "input_request":
+        answer = "\n".join(
+            [
+                f"Draft input request — {title}",
+                f"To: {recipient}",
+                f"Due: {due_label}",
+                "Please provide:",
+                "- the exact decision required from the CEO;",
+                "- the recommended option and the strongest alternative;",
+                "- financial impact, execution risk and dependencies;",
+                "- the accountable owner and the next dated milestone.",
+                f"Calendar preparation note: {prep}",
+                owner_gap,
+            ]
+        )
+        intent = "calendar_input_request"
+    else:
+        answer = "\n".join(
+            [
+                f"{title} — CEO preparation brief",
+                f"When: {date_label}" + (f" at {when}" if when and when != str(item.get("date") or "") else ""),
+                f"Purpose: {event_type}" + (f" · {related_bu}" if related_bu else ""),
+                f"Bring: {prep}",
+                "Enter with: the decision sought, the recommended option, the downside of delay and a named execution owner.",
+                f"Due point: {due_label}",
+                owner_gap,
+            ]
+        )
+        intent = "calendar_decision_brief"
+
+    source_file = str(agenda.get("source_file") or "governed calendar workbook")
+    sheet = str(agenda.get("sheet") or "Calendar")
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "The requested preparation action was built from the selected calendar entry.",
+        "citations": [
+            {
+                "source_path": source_file,
+                "locator": f"{sheet} / {item.get('event_id') or date_label}",
+                "excerpt": f"{title}; {date_label}; preparation: {prep}",
+                "evidence_scope": str(item.get("evidence_scope") or agenda.get("evidence_scope") or "governed_calendar"),
+            }
+        ],
+        "suggestions": [],
+        "assistant_mode": "governed_calendar",
+        "answered_by": "governed_calendar",
+        "answer_origin": "governed",
+        "intent": intent,
+        "calendar_status": "ready",
+        "calendar_item_count": int(agenda.get("total_item_count") or len(list(agenda.get("items") or []))),
+        "calendar_projection_item_count": len(list(agenda.get("items") or [])),
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _governed_calendar_result(
     question: str,
     summary: Mapping[str, Any] | None,
     *,
     today: date | None = None,
+    assistant_context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Answer calendar questions from the run-scoped governed agenda only."""
-    if not _assistant_question_is_calendar_agenda(question):
+    action_context = assistant_context if isinstance(assistant_context, Mapping) else {}
+    quick_action = (
+        str(action_context.get("calendar_action") or "").strip().casefold()
+        if str(action_context.get("entrypoint") or "").strip().casefold() == "calendar_quick_action"
+        else ""
+    )
+    if not _assistant_question_is_calendar_agenda(question) and quick_action not in {"brief", "input_request"}:
         return None
     agenda = summary.get("calendar_agenda") if isinstance(summary, Mapping) else None
     if not isinstance(agenda, Mapping):
@@ -11677,6 +11759,33 @@ def _governed_calendar_result(
             "intent": "calendar_agenda",
             "_orchestrator_force_answer": True,
         }
+
+    if quick_action in {"brief", "input_request"}:
+        requested_title = " ".join(str(action_context.get("event_title") or "").casefold().split())
+        requested_date = str(action_context.get("event_date") or "").strip()
+        selected_item = next(
+            (
+                item
+                for item in items
+                if " ".join(str(item.get("title") or "").casefold().split()) == requested_title
+                and (not requested_date or str(item.get("date") or "") == requested_date)
+            ),
+            None,
+        )
+        if selected_item is None:
+            return {
+                "matched": True,
+                "answer": "That calendar commitment is no longer in the current approved agenda. Refresh Calendar before preparing it.",
+                "basis": "The selected event could not be matched to the current calendar source.",
+                "citations": [],
+                "suggestions": [],
+                "assistant_mode": "governed_calendar",
+                "answered_by": "governed_calendar",
+                "answer_origin": "governed",
+                "intent": "calendar_item_not_found",
+                "_orchestrator_force_answer": True,
+            }
+        return _calendar_quick_action_result(selected_item, agenda, action=quick_action)
 
     current_day = today or date.today()
     dated_items = [(item_date, item) for item in items if (item_date := _calendar_item_date(item)) is not None]
@@ -13341,7 +13450,11 @@ async def _assistant_chat_response(
     calendar_result = (
         None
         if public_safe
-        else _governed_calendar_result(question, context.get("summary"))
+        else _governed_calendar_result(
+            question,
+            context.get("summary"),
+            assistant_context=assistant_context,
+        )
     )
     if calendar_result is not None:
         orchestrated = get_orchestrator().process(

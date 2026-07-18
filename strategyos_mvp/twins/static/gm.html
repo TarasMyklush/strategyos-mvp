@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Group Manager Assistant · StrategyOS Digital Twin</title>
+<title>Group Manager AI Assistant · StrategyOS</title>
 <style>
 :root {
   --bg: #f4f2ed;
@@ -579,7 +579,7 @@ body {
 <main class="page">
 
   <!-- Twin Status Bar -->
-  <div class="status-bar" aria-label="Twin status bar">
+  <div class="status-bar" aria-label="Assistant status bar">
     <div class="status-bar-item">
       <span class="status-bar-label">Status</span>
       <span class="status-bar-value" id="twin-status-value">Active</span>
@@ -722,7 +722,7 @@ body {
   <!-- Escalations -->
   <section class="card" aria-label="Escalations">
     <h2 class="card-title">Escalations</h2>
-    <p class="card-subtitle">Items escalated from Analyst and Strategy twins</p>
+    <p class="card-subtitle">Items escalated from Analyst and Strategy assistants</p>
     <ul class="initiative-list" id="escalation-list">
       <li class="initiative-item">
         <div class="initiative-item__header">
@@ -776,7 +776,7 @@ body {
   <!-- Inbox -->
   <section class="card" aria-label="Inbox">
     <h2 class="card-title">Inbox</h2>
-    <p class="card-subtitle">Recent twin-to-twin messages</p>
+    <p class="card-subtitle">Recent assistant collaboration</p>
     <ul class="inbox-list" id="inbox-list">
       <li class="inbox-item" data-msg-id="msg-001" onclick="toggleThread('msg-001')">
         <div class="inbox-item__icon">C</div>
@@ -832,7 +832,7 @@ body {
           <span class="thread-message__status-badge delivered">delivered</span>
         </div>
         <div class="thread-message__body">
-          All raw materials suppliers have confirmed their Q2 cost data. I've attached the consolidated spreadsheet. No discrepancies found vs forecast, but the Analyst twin flagged 3 records for validation.
+          All raw materials suppliers have confirmed their Q2 cost data. I've attached the consolidated spreadsheet. No discrepancies found vs forecast, but the Analyst assistant flagged 3 records for validation.
         </div>
         <div class="thread-message__citations">
           <a class="citation-link" href="#" onclick="return false;">Evidence: Supplier Confirmation Log</a>
@@ -883,7 +883,7 @@ body {
     <div class="override-controls">
       <span class="text-sm" style="font-weight:600;color:var(--accent);">Redirect Investigation:</span>
       <input type="text" id="redirect-input" placeholder="Investigation ID e.g. inv-001" style="min-width:140px;" />
-      <input type="text" id="redirect-target-input" placeholder="Target twin (analyst, strategy)" style="min-width:160px;" />
+      <input type="text" id="redirect-target-input" placeholder="Target assistant (analyst, strategy)" style="min-width:160px;" />
       <button class="btn-secondary" onclick="redirectInvestigation()">Redirect</button>
     </div>
 
@@ -918,7 +918,7 @@ body {
   <!-- Ask Your GM -->
   <section class="card" aria-label="Ask your GM">
     <h2 class="card-title">Ask Your GM</h2>
-    <p class="card-subtitle">Query the Group Manager twin about BU performance, initiatives, or operations</p>
+    <p class="card-subtitle">Ask the Group Manager assistant about BU performance, initiatives, or operations</p>
     <div class="query-area">
       <div class="input-wrapper">
         <input type="text" id="query-input" placeholder="e.g. How is North America performing?" autocomplete="off" />
@@ -1115,7 +1115,7 @@ function toggleThread(msgId) {
 function redirectInvestigation() {
   var invId = document.getElementById('redirect-input').value.trim();
   var target = document.getElementById('redirect-target-input').value.trim();
-  if (!invId || !target) { alert('Please enter both investigation ID and target twin.'); return; }
+  if (!invId || !target) { alert('Please enter both investigation ID and target assistant.'); return; }
   var reason = window.prompt('Redirect reason:', '') || '';
   persistRouting('/twin/api/redirect/' + ROLE, invId, 'Investigation ' + invId, target, reason);
   document.getElementById('redirect-input').value = '';

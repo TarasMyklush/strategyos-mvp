@@ -538,7 +538,7 @@ body {
     <span class="brand-mark" aria-hidden="true"></span>
     <div>
       <div class="brand-name">StrategyOS</div>
-      <div class="brand-subtitle">CEO surface · Oracle-backed finance pilot (twin history preserved)</div>
+      <div class="brand-subtitle">CEO assistant · Oracle-backed finance pilot</div>
     </div>
   </div>
   <div class="topbar-status">
@@ -556,7 +556,7 @@ body {
 <main class="page">
 
   <!-- Twin Status Bar -->
-  <div class="status-bar" aria-label="Twin status bar">
+  <div class="status-bar" aria-label="Assistant status bar">
     <div class="status-bar-item">
       <span class="status-bar-label">Status</span>
       <span class="status-bar-value" id="twin-status-value">Active</span>
@@ -586,7 +586,7 @@ body {
   <!-- KPI Health Overview -->
   <section class="card" aria-label="KPI health summary">
     <h2 class="card-title">Oracle-backed financial rings</h2>
-    <p class="card-subtitle">CEO finance summaries now mirror deterministic Oracle pilot outputs rather than generic twin-era placeholders.</p>
+    <p class="card-subtitle">CEO finance summaries mirror deterministic Oracle pilot outputs.</p>
     <div class="kpi-grid" id="kpi-grid">
       <div class="kpi-card">
         <span class="kpi-dot green" id="kpi-dot-margin"></span>
@@ -728,7 +728,7 @@ body {
         <div class="inbox-item__icon">S</div>
         <div class="inbox-item__body">
           <div class="inbox-item__sender">Plan surface</div>
-          <div class="inbox-item__subject">Digital-twin delivery history preserved while Oracle pilot becomes active narrative</div>
+          <div class="inbox-item__subject">Assistant delivery history retained while the Oracle pilot becomes the active narrative</div>
           <div class="inbox-item__meta">
             <span>1 day ago</span>
             <span class="priority-badge low">low</span>
@@ -816,7 +816,7 @@ body {
           <span class="thread-message__status-badge pending">pending</span>
         </div>
         <div class="thread-message__body">
-          Plan and UI copy now preserve the completed twin-platform history while making current execution explicitly Oracle pilot conformance work.
+          Plan and UI copy preserve completed assistant delivery history while making current execution explicitly Oracle pilot conformance work.
         </div>
         <div class="thread-message__citations">
           <a class="citation-link" href="#" onclick="return false;">Plan: Value Driver Updates Q3</a>
@@ -851,7 +851,7 @@ body {
     <div class="override-controls">
       <span class="text-sm" style="font-weight:600;color:var(--accent);">Redirect Investigation:</span>
       <input type="text" id="redirect-input" placeholder="Investigation ID e.g. inv-001" style="min-width:140px;" />
-      <input type="text" id="redirect-target-input" placeholder="Target twin (cfo, gm, strategy)" style="min-width:160px;" />
+      <input type="text" id="redirect-target-input" placeholder="Target assistant (CFO, GM, strategy)" style="min-width:160px;" />
       <button class="btn-secondary" onclick="redirectInvestigation()">Redirect</button>
     </div>
 
@@ -883,9 +883,9 @@ body {
     </div>
   </section>
 
-  <!-- Ask Your Twin -->
-  <section class="card" aria-label="Ask your twin">
-    <h2 class="card-title">Ask Your Twin</h2>
+  <!-- Ask Your AI Assistant -->
+  <section class="card" aria-label="Ask your AI assistant">
+    <h2 class="card-title">Ask Your AI Assistant</h2>
     <p class="card-subtitle">Query the CEO surface about Oracle-backed finance posture while keeping operational context clearly manual / deferred.</p>
     <div class="query-area">
       <div class="input-wrapper">
@@ -963,7 +963,7 @@ body {
           + '• EBITDA margin: 25.00%\n'
           + '• Cash vs board floor: 120%\n'
           + '• Covenant headroom: 1.48x\n'
-          + 'These are deterministic pilot outputs, not generic twin placeholders.';
+          + 'These are deterministic pilot outputs from the current assistant workflow.';
       } else if (q.indexOf('risk') !== -1) {
         response = 'Top 3 Oracle pilot risks:\n'
           + '1. Manual input drift across budget, board-floor, covenant, and hedge packs\n'
@@ -1119,7 +1119,7 @@ function redirectInvestigation() {
   var invId = document.getElementById('redirect-input').value.trim();
   var target = document.getElementById('redirect-target-input').value.trim();
   if (!invId || !target) {
-    alert('Please enter both investigation ID and target twin.');
+    alert('Please enter both investigation ID and target assistant.');
     return;
   }
   var reason = window.prompt('Redirect reason:', '') || '';
@@ -1237,12 +1237,12 @@ async function persistRouting(endpoint, itemId, title, targetRole, reason) {
     try {
       var resp = await fetch('/twin/api/investigate/' + ROLE + '?query=' + encodeURIComponent(query), { method: 'POST' });
       var data = await resp.json();
-      panel.innerHTML = '<div class="response-card"><h4>Twin Response</h4>'
+      panel.innerHTML = '<div class="response-card"><h4>Assistant Response</h4>'
         + '<p>Cycle: ' + (data.cycle_count || 0) + ' | Issues found: ' + (data.issues_found || 0) + ' | Actions: ' + (data.actions_taken || 0) + '</p>'
         + '<pre style="font-size:12px;white-space:pre-wrap;">' + JSON.stringify(data.summary, null, 2) + '</pre>'
         + '</div>';
     } catch(e) {
-      panel.innerHTML = '<p style="color:var(--red);">Failed to reach twin: ' + e.message + '</p>';
+      panel.innerHTML = '<p style="color:var(--red);">Failed to reach the assistant: ' + e.message + '</p>';
     }
   };
 

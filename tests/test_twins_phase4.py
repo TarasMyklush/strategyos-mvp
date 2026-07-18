@@ -98,7 +98,7 @@ class TestCEODashboardSections:
         assert "priority-badge" in self.html
 
     def test_has_ask_input(self):
-        assert "Ask Your Twin" in self.html
+        assert "Ask Your AI Assistant" in self.html
         assert "query-input" in self.html
         assert "prompt-suggestions" in self.html
 

@@ -73,7 +73,7 @@
     $("inv-count") && ($("inv-count").textContent = details.length + " active investigations");
     $("inv-count-bar") && ($("inv-count-bar").textContent = String(details.length));
     if (!details.length) {
-      list.innerHTML = '<li class="inv-item"><div class="inv-item__info"><div class="inv-item__title">No active investigations</div><div class="inv-item__assignee">Twin state is clear.</div></div><span class="inv-item__status resolved">clear</span></li>';
+      list.innerHTML = '<li class="inv-item"><div class="inv-item__info"><div class="inv-item__title">No active investigations</div><div class="inv-item__assignee">Assistant state is clear.</div></div><span class="inv-item__status resolved">clear</span></li>';
       return;
     }
     list.innerHTML = details.slice(-6).reverse().map(function (item) {
@@ -96,7 +96,7 @@
     if (!list || !payload) return;
     $("unread-count-bar") && ($("unread-count-bar").textContent = String(payload.message_count || 0));
     list.innerHTML = safeArray(payload.messages).slice(0, 6).map(function (item) {
-      var sender = text(item.from, 'Twin');
+      var sender = text(item.from, 'Assistant');
       return ""
         + '<li class="inbox-item">'
         + '  <div class="inbox-item__icon">' + escapeHtml(sender.charAt(0).toUpperCase()) + '</div>'
@@ -137,7 +137,7 @@
     var response = data.response || {};
     target.innerHTML = ''
       + '<div class="response-card">'
-      + '  <h4>Twin Response</h4>'
+      + '  <h4>Assistant Response</h4>'
       + '  <p>' + escapeHtml(text(response.summary, 'No response available.')) + '</p>'
       + '  <p><strong>Run:</strong> ' + escapeHtml(text(runContext.run_id, 'none')) + ' · <strong>Approval:</strong> ' + escapeHtml(text(runContext.approval_status, 'pending')) + ' · <strong>Board:</strong> ' + escapeHtml(text(board.status, 'pending')) + '</p>'
       + '  <p><strong>Board preview:</strong> ' + escapeHtml(text(board.preview_route, 'not available')) + '</p>'
@@ -169,7 +169,7 @@
     function run() {
       var query = String(input.value || "").trim();
       if (!query) return;
-      responseBox.innerHTML = '<span class="text-muted">Twin is investigating live StrategyOS data…</span>';
+      responseBox.innerHTML = '<span class="text-muted">The assistant is checking live StrategyOS data…</span>';
       submitInvestigation(query).then(function (data) {
         renderStructuredResponse(responseBox, data);
         input.value = "";
