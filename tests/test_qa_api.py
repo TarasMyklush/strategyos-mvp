@@ -169,6 +169,12 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
         public_safe=False,
         question="How does revenue compare with the approved plan?",
     )
+    briefing = api_module._ceo_kpi_inline_result(
+        {"summary": {}},
+        kpi_key="revenue",
+        public_safe=False,
+        question="What does revenue's 99.4% of plan mean, what is its largest driver, and what decision do I need to make?",
+    )
     numeric_key = api_module._free_text_ceo_kpi_key(
         "explainwhere 385,1 is coming from",
         {"summary": {}},
@@ -200,6 +206,11 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
     assert "No period-aligned revenue plan series is connected" in comparison["answer"]
     assert "H1 budget aligned to this reporting scope" in comparison["answer"]
     assert "Current composition" not in comparison["answer"]
+
+    assert briefing["kpi_question_intent"] == "briefing"
+    assert "Current position:" in briefing["answer"]
+    assert "Largest reported contributor: Revenue – Catering — SAR 123.0M (31.9%)." in briefing["answer"]
+    assert "CEO decision:" in briefing["answer"]
 
     assert len({decision["answer"], drivers["answer"], comparison["answer"]}) == 3
     assert numeric_key == "revenue"
@@ -288,6 +299,9 @@ def test_ceo_kpi_intent_contract_handles_free_text_and_declared_ui_intent():
     assert api_module._ceo_kpi_question_intent("What needs my attention?") == "decision"
     assert api_module._ceo_kpi_question_intent("Where does this result come from?") == "drivers"
     assert api_module._ceo_kpi_question_intent("What is the variance to budget?") == "comparison"
+    assert api_module._ceo_kpi_question_intent(
+        "What does revenue's 99.4% of plan mean, what is its largest driver, and what decision do I need to make?"
+    ) == "briefing"
     assert api_module._ceo_kpi_question_intent("Explain this figure", "drivers") == "drivers"
     # Explicit wording wins over inconsistent client metadata.
     assert api_module._ceo_kpi_question_intent("How does this compare to plan?", "decision") == "comparison"

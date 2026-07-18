@@ -11904,14 +11904,28 @@ def _ceo_kpi_question_intent(question: str, requested_intent: str | None = None)
     prompts.  This changes answer shape, never the server-resolved KPI facts.
     """
     norm = " ".join(str(question or "").casefold().split())
-    if re.search(r"\b(plan|budget|comparator|comparison|compare|variance|versus|vs\.?|target|baseline)\b", norm):
+    comparison_requested = bool(
+        re.search(r"\b(plan|budget|comparator|comparison|compare|variance|versus|vs\.?|target|baseline)\b", norm)
+    )
+    drivers_requested = bool(
+        re.search(r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|movement|moved|make up|come from|comes from|coming from)\b", norm)
+    )
+    decision_requested = bool(
+        re.search(r"\b(attention|action|decision|decide|approve|approval|intervene|escalat|need from me|should i|next step)\b", norm)
+    )
+    # A CEO will often ask for the plan position, its material driver and the
+    # decision in one sentence. Do not let the first matching keyword silently
+    # discard the other requested parts.
+    if sum((comparison_requested, drivers_requested, decision_requested)) > 1:
+        return "briefing"
+    if comparison_requested:
         return "comparison"
-    if re.search(r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|movement|moved|make up|come from|comes from|coming from)\b", norm):
+    if drivers_requested:
         return "drivers"
-    if re.search(r"\b(attention|action|decision|decide|approve|approval|intervene|escalat|need from me|should i|next step)\b", norm):
+    if decision_requested:
         return "decision"
     declared = str(requested_intent or "").strip().lower()
-    return declared if declared in {"decision", "drivers", "comparison", "overview"} else "overview"
+    return declared if declared in {"decision", "drivers", "comparison", "overview", "briefing"} else "overview"
 
 
 def _ceo_kpi_cards(context: Mapping[str, Any], *, public_safe: bool) -> list[dict[str, Any]]:
@@ -12006,6 +12020,28 @@ def _ceo_kpi_inline_result(
             sentence += f" The largest reported contributor is {largest_label} at {largest_share:.1f}%."
         return sentence
 
+    def _largest_component_sentence() -> str:
+        ranked: list[tuple[float, str, str]] = []
+        for item in drivers:
+            try:
+                share = float(item.get("share_pct"))
+            except (TypeError, ValueError):
+                continue
+            if share <= 0:
+                continue
+            ranked.append(
+                (
+                    share,
+                    str(item.get("label") or "Component"),
+                    str(item.get("value") or "").strip(),
+                )
+            )
+        if not ranked:
+            return "No component-level driver is available for this figure."
+        share, component_label, component_value = max(ranked)
+        value_suffix = f" — {component_value}" if component_value else ""
+        return f"Largest reported contributor: {component_label}{value_suffix} ({share:.1f}%)."
+
     def _movement_sentence(*, decision_only: bool = False) -> str:
         if not (lifting or dragging):
             return "No category-level movement requiring interpretation is recorded for the available periods."
@@ -12036,7 +12072,19 @@ def _ceo_kpi_inline_result(
             answer += f" Needed to answer this {resolved_intent} question: {'; '.join(missing)}."
         grounding = "needs_evidence"
     else:
-        if resolved_intent == "decision":
+        if resolved_intent == "briefing":
+            decision_context = str(brief.get("decision_context") or "").strip()
+            readout = str(brief.get("readout") or card.get("detail") or "").strip()
+            answer = f"Current position: {readout or f'{label} is {metric} for the selected period.'} "
+            if comparison.get("available") is True:
+                answer += f"Plan position: {comparison.get('value') or 'A like-for-like approved comparator is available'}. "
+            elif comparison.get("note"):
+                answer += f"Plan position: {comparison.get('note')} "
+            answer += _largest_component_sentence() + " "
+            answer += f"CEO decision: {decision_context or 'Keep the position delegated unless a governed exception crosses the CEO threshold.'}"
+            if missing:
+                answer += f" The immediate governance gap is {'; '.join(missing)}."
+        elif resolved_intent == "decision":
             decision_context = str(brief.get("decision_context") or "").strip()
             readout = str(brief.get("readout") or card.get("detail") or "").strip()
             accountable_owner = {
