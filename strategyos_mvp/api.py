@@ -5927,6 +5927,12 @@ def _resolve_finance_function_review(
 
     agent_modules = summary.get("agent_modules")
     execution_log = agent_modules.get("execution_log") if isinstance(agent_modules, Mapping) else None
+    if not isinstance(execution_log, Mapping) or not list(execution_log.get("entries") or []):
+        # Q&A resolves the stored run summary directly, while the executive
+        # endpoint decorates that summary with per-run accountability data.
+        # Read through the same governed helper so Hermes and the Functions UI
+        # can never disagree about whether recorded work exists.
+        execution_log = _run_execution_log(dict(summary))
     raw_entries = execution_log.get("entries") if isinstance(execution_log, Mapping) else None
     finance_entries = [
         dict(item)

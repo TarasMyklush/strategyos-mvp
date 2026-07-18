@@ -655,6 +655,32 @@ def test_finance_function_review_reports_latest_block_as_stuck():
     assert "CEO intervention: review the stuck findings" in result["answer"]
 
 
+def test_finance_function_review_loads_run_log_when_chat_summary_is_undecorated(monkeypatch):
+    monkeypatch.setattr(
+        api_module,
+        "_run_execution_log",
+        lambda summary: {
+            "entries": [
+                {"round_no": 1, "actor": "Finance Auditor", "action": "challenge", "status": "challenged", "finding_id": "F-001"},
+                {"round_no": 1, "actor": "Finance Analyst", "action": "response", "status": "responded", "finding_id": "F-001"},
+                {"round_no": 2, "actor": "Finance Auditor", "action": "lock", "status": "locked", "finding_id": "F-001"},
+            ]
+        },
+    )
+
+    result = api_module._resolve_finance_function_review(
+        "Summarise the Finance Analyst–Finance Auditor review.",
+        summary={"run_id": "run-undecorated", "total_recoverable_sar": 10_000},
+        assistant_context={"entrypoint": "function_review"},
+        public_safe=False,
+    )
+
+    assert result is not None
+    assert result["function_review"]["recorded_step_count"] == 3
+    assert result["function_review"]["complete_count"] == 1
+    assert result["function_review"]["status"] == "complete"
+
+
 def test_assistant_chat_routes_function_review_before_finance_scenario(monkeypatch):
     original, client = _client_with_auth()
     try:
