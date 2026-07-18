@@ -5852,6 +5852,189 @@ def _module_executive_action(dependency: Any) -> str:
     return f"Required governed action: {_module_status_label(key)}."
 
 
+def _finance_function_event_sort_key(entry: Mapping[str, Any]) -> tuple[int, float, int]:
+    """Return a stable newest-first key for recorded Analyst/Auditor work."""
+    try:
+        round_no = int(entry.get("round_no"))
+    except (TypeError, ValueError):
+        round_no = -1
+    occurred_at = -1.0
+    raw_occurred_at = str(entry.get("occurred_at") or "").strip()
+    if raw_occurred_at:
+        try:
+            occurred_at = datetime.fromisoformat(raw_occurred_at.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            occurred_at = -1.0
+    state_text = f"{entry.get('action') or ''} {entry.get('status') or ''}".casefold()
+    if re.search(
+        r"\b(?:lock(?:ed)?|resolv(?:e|ed)|approv(?:e|ed)|complet(?:e|ed)|clos(?:e|ed)|accept(?:ed)?|block(?:ed)?|fail(?:ed)?|reject(?:ed)?|max[ _-]?rounds)\b",
+        state_text,
+    ):
+        action_rank = 3
+    elif re.search(r"\b(?:response|responded|answer|answered)\b", state_text):
+        action_rank = 2
+    elif re.search(r"\b(?:challenge|challenged)\b", state_text):
+        action_rank = 1
+    else:
+        action_rank = 0
+    return round_no, occurred_at, action_rank
+
+
+def _resolve_finance_function_review(
+    question: str,
+    *,
+    summary: dict[str, Any] | None,
+    assistant_context: dict[str, Any] | None,
+    public_safe: bool,
+) -> dict[str, Any] | None:
+    """Answer the CEO from the persisted Finance Analyst/Auditor audit trail."""
+    if public_safe or not isinstance(summary, Mapping):
+        return None
+    context = dict(assistant_context or {})
+    normalized = " ".join(str(question or "").casefold().split())
+    entrypoint = str(context.get("entrypoint") or "").strip().casefold()
+    source = str(context.get("source") or "").strip().casefold()
+    structured_request = entrypoint == "function_review" or source == "functions_workspace"
+    typed_request = (
+        ("finance analyst" in normalized or "finance auditor" in normalized)
+        and any(term in normalized for term in ("review", "status", "stuck", "blocked", "completed", "done", "intervene"))
+    )
+    if not structured_request and not typed_request:
+        return None
+
+    agent_modules = summary.get("agent_modules")
+    execution_log = agent_modules.get("execution_log") if isinstance(agent_modules, Mapping) else None
+    raw_entries = execution_log.get("entries") if isinstance(execution_log, Mapping) else None
+    finance_entries = [
+        dict(item)
+        for item in list(raw_entries or [])
+        if isinstance(item, Mapping)
+        and str(item.get("actor") or "").strip().casefold() in {"finance analyst", "finance auditor"}
+    ]
+    by_finding: dict[str, list[dict[str, Any]]] = {}
+    for entry in finance_entries:
+        finding_id = str(entry.get("finding_id") or "").strip()
+        if finding_id:
+            by_finding.setdefault(finding_id, []).append(entry)
+
+    finding_states: list[dict[str, Any]] = []
+    for finding_id, entries in sorted(by_finding.items()):
+        entries.sort(key=_finance_function_event_sort_key, reverse=True)
+        latest = entries[0]
+        state_text = f"{latest.get('status') or ''} {latest.get('action') or ''}".casefold()
+        if re.search(r"\b(?:locked|resolved|approved|complete|completed|closed|accepted)\b", state_text):
+            state = "complete"
+        elif re.search(r"\b(?:blocked|stuck|failed|rejected|challenge|challenged)\b", state_text):
+            state = "stuck"
+        else:
+            state = "working"
+        finding_states.append(
+            {
+                "finding_id": finding_id,
+                "state": state,
+                "latest_actor": str(latest.get("actor") or ""),
+                "latest_action": str(latest.get("action") or latest.get("status") or "recorded"),
+                "round_count": len({entry.get("round_no") for entry in entries if entry.get("round_no") is not None}),
+                "recorded_step_count": len(entries),
+            }
+        )
+
+    complete_ids = [item["finding_id"] for item in finding_states if item["state"] == "complete"]
+    stuck_ids = [item["finding_id"] for item in finding_states if item["state"] == "stuck"]
+    working_ids = [item["finding_id"] for item in finding_states if item["state"] == "working"]
+    open_ids = [*stuck_ids, *working_ids]
+    rounds = {
+        entry.get("round_no")
+        for entry in finance_entries
+        if entry.get("round_no") is not None
+    }
+    analyst_responses = sum(
+        1
+        for entry in finance_entries
+        if str(entry.get("actor") or "").casefold() == "finance analyst"
+        and re.search(r"\b(?:respond|response|answer|answered)\b", f"{entry.get('action') or ''} {entry.get('status') or ''}".casefold())
+    )
+    auditor_challenges = sum(
+        1
+        for entry in finance_entries
+        if str(entry.get("actor") or "").casefold() == "finance auditor"
+        and "challenge" in f"{entry.get('action') or ''} {entry.get('status') or ''}".casefold()
+    )
+
+    if not finance_entries:
+        overall_state = "Not started"
+        completion_sentence = "No Finance Analyst or Finance Auditor work is recorded for this run."
+        intervention = "CEO intervention: none can be determined until specialist work is recorded."
+    elif stuck_ids:
+        overall_state = "Stuck"
+        completion_sentence = (
+            f"{len(complete_ids)} of {len(finding_states)} findings are complete; "
+            f"{len(stuck_ids)} are stuck ({', '.join(stuck_ids[:5])}{'…' if len(stuck_ids) > 5 else ''})."
+        )
+        intervention = "CEO intervention: review the stuck findings and assign ownership for the unresolved evidence or decision."
+    elif working_ids:
+        overall_state = "In progress"
+        completion_sentence = (
+            f"{len(complete_ids)} of {len(finding_states)} findings are complete; "
+            f"{len(working_ids)} remain in progress ({', '.join(working_ids[:5])}{'…' if len(working_ids) > 5 else ''})."
+        )
+        intervention = "CEO intervention: none is currently flagged; monitor the open review until it reaches a recorded lock or exception."
+    else:
+        overall_state = "Complete"
+        completion_sentence = f"All {len(finding_states)} reviewed findings are complete and locked; 0 are open or stuck."
+        intervention = "CEO intervention: none is currently required by the recorded review state."
+
+    try:
+        recoverable = float(summary.get("total_recoverable_sar") or 0)
+    except (TypeError, ValueError):
+        recoverable = 0.0
+    material_sentence = (
+        f"The governed findings identify SAR {recoverable:,.0f} of recoverable value."
+        if recoverable
+        else "No recoverable-value total is recorded for this run."
+    )
+    answer = (
+        f"Finance review status: {overall_state}. {completion_sentence} "
+        f"The Finance Analyst recorded {analyst_responses} audit response(s); the Finance Auditor recorded "
+        f"{auditor_challenges} challenge(s) and {len(complete_ids)} final lock(s) across {len(rounds)} review round(s). "
+        f"{material_sentence} {intervention}"
+    )
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "Persisted Finance Analyst and Finance Auditor execution events from the current governed run.",
+        "citations": [
+            {
+                "source_path": "governance://finance-function-review",
+                "locator": "agent_modules.execution_log",
+                "excerpt": (
+                    f"{len(finance_entries)} recorded specialist steps; {len(complete_ids)} complete; "
+                    f"{len(open_ids)} open or stuck; {len(rounds)} review rounds"
+                ),
+            }
+        ],
+        "suggestions": [
+            "Show the material findings by recoverable value",
+            "Open the Analyst–Auditor audit trail",
+            "What should I prepare for the next calendar commitment?",
+        ],
+        "assistant_mode": "governed_function_review",
+        "answered_by": "governed_function_review",
+        "grounding_status": "grounded",
+        "function_review": {
+            "status": overall_state.casefold().replace(" ", "_"),
+            "recorded_step_count": len(finance_entries),
+            "finding_count": len(finding_states),
+            "complete_count": len(complete_ids),
+            "stuck_count": len(stuck_ids),
+            "working_count": len(working_ids),
+            "round_count": len(rounds),
+            "findings": finding_states,
+        },
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _governed_module_state_contract(
     summary: dict[str, Any] | None,
     *,
@@ -13200,6 +13383,33 @@ async def _assistant_chat_response(
             persona=persona,
             orchestrated=orchestrated,
             base_result=digital_twin_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
+
+    function_review_result = _resolve_finance_function_review(
+        question,
+        summary=context.get("summary"),
+        assistant_context=assistant_context,
+        public_safe=public_safe,
+    )
+    if function_review_result is not None:
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=function_review_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=function_review_result,
             llm_status=llm_status,
             assistant_context=assistant_context,
         )

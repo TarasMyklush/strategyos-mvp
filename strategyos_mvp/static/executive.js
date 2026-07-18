@@ -1555,6 +1555,30 @@
     return labels[key] || humanizeToken(action || "step recorded");
   }
 
+  function functionEventSortValue(entry) {
+    var round = Number(entry && entry.round_no);
+    if (!Number.isFinite(round)) round = -1;
+    var occurredAt = Date.parse(String(firstDefined(entry && entry.occurred_at, "")));
+    if (!Number.isFinite(occurredAt)) occurredAt = -1;
+    var stateText = String(firstDefined(entry && entry.action, "")) + " " + String(firstDefined(entry && entry.status, ""));
+    var actionRank = /\b(lock|locked|resolve|resolved|approve|approved|complete|completed|close|closed|accept|accepted|block|blocked|fail|failed|reject|rejected|max.rounds)\b/i.test(stateText)
+      ? 3
+      : /\b(response|responded|answer|answered)\b/i.test(stateText)
+      ? 2
+      : /\b(challenge|challenged)\b/i.test(stateText)
+      ? 1
+      : 0;
+    return { round: round, occurred_at: occurredAt, action_rank: actionRank };
+  }
+
+  function sortFunctionEventsNewestFirst(left, right) {
+    var leftKey = functionEventSortValue(left);
+    var rightKey = functionEventSortValue(right);
+    if (leftKey.round !== rightKey.round) return rightKey.round - leftKey.round;
+    if (leftKey.occurred_at !== rightKey.occurred_at) return rightKey.occurred_at - leftKey.occurred_at;
+    return rightKey.action_rank - leftKey.action_rank;
+  }
+
   // Functions are specialist workers, not executive twins. Their state is
   // read from persisted Analyst/Auditor events so the CEO sees what actually
   // happened, where the review stopped and whether every case was closed.
@@ -1574,8 +1598,10 @@
     });
     var findings = Object.keys(findingsById).map(function (findingId) {
       var finding = findingsById[findingId];
-      // The database returns newest events first and the execution-log reader
-      // preserves that order. The first event is therefore the current state.
+      // API and database adapters do not promise the same ordering. Normalize
+      // every finding here so the CEO's current-state badge is based on the
+      // actual terminal event, not whichever adapter happened to return first.
+      finding.entries.sort(sortFunctionEventsNewestFirst);
       var latest = finding.entries[0] || {};
       var stateText = [latest.status, latest.action].join(" ").toLowerCase();
       var stateKey = /\b(locked|resolved|approved|complete|completed|closed|accepted)\b/.test(stateText)

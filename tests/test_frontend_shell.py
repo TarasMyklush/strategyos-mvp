@@ -2857,11 +2857,13 @@ const bootstrapPayload = {{
         round_count: 2,
         total_count: 6,
         entries: [
-          {{ round_no: 2, actor: 'Finance Auditor', finding_id: 'F-001', action: 'lock', status: 'locked', detail: 'Finding locked after analyst response.' }},
-          {{ round_no: 2, actor: 'Finance Auditor', finding_id: 'F-002', action: 'block', status: 'blocked', detail: 'Finding remains blocked by required evidence verification.' }},
-          {{ round_no: 1, actor: 'Finance Analyst', finding_id: 'F-001', action: 'response', status: 'responded', detail: 'Analyst supplied the evidence response.' }},
+          // Production currently returns oldest-first; the UI must derive the
+          // terminal state rather than trusting adapter order.
           {{ round_no: 1, actor: 'Finance Auditor', finding_id: 'F-001', action: 'challenge', status: 'challenged', detail: 'Citation support was challenged.' }},
+          {{ round_no: 1, actor: 'Finance Analyst', finding_id: 'F-001', action: 'response', status: 'responded', detail: 'Analyst supplied the evidence response.' }},
+          {{ round_no: 2, actor: 'Finance Auditor', finding_id: 'F-001', action: 'lock', status: 'locked', detail: 'Finding locked after analyst response.' }},
           {{ round_no: 1, actor: 'Finance Auditor', finding_id: 'F-002', action: 'challenge', status: 'challenged', detail: 'Calculation support was challenged.' }},
+          {{ round_no: 2, actor: 'Finance Auditor', finding_id: 'F-002', action: 'block', status: 'blocked', detail: 'Finding remains blocked by required evidence verification.' }},
           {{ round_no: 0, actor: 'Runtime Governance', action: 'policy gate', status: 'approved', detail: 'Technical runtime event.' }},
         ]
       }}

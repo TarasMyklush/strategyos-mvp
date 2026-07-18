@@ -595,6 +595,124 @@ def test_governed_module_resolver_uses_server_contract_not_client_state():
     assert "running with no blockers" not in result["answer"]
 
 
+def test_finance_function_review_uses_terminal_event_not_api_order():
+    summary = {
+        "run_id": "run-functions",
+        "total_recoverable_sar": 794_108,
+        "agent_modules": {
+            "execution_log": {
+                # Oldest-first mirrors the production response adapter.
+                "entries": [
+                    {"round_no": 1, "actor": "Finance Auditor", "action": "challenge", "status": "challenged", "finding_id": "F-001"},
+                    {"round_no": 1, "actor": "Finance Analyst", "action": "response", "status": "responded", "finding_id": "F-001"},
+                    {"round_no": 2, "actor": "Finance Auditor", "action": "lock", "status": "locked", "finding_id": "F-001"},
+                    {"round_no": 0, "actor": "Runtime Governance", "action": "policy_gate", "status": "approved", "finding_id": None},
+                ]
+            }
+        },
+    }
+
+    result = api_module._resolve_finance_function_review(
+        "What was completed or stuck in the Finance Analyst–Finance Auditor review?",
+        summary=summary,
+        assistant_context={"source": "functions_workspace", "entrypoint": "function_review"},
+        public_safe=False,
+    )
+
+    assert result is not None
+    assert result["answered_by"] == "governed_function_review"
+    assert result["function_review"]["status"] == "complete"
+    assert result["function_review"]["complete_count"] == 1
+    assert result["function_review"]["stuck_count"] == 0
+    assert result["function_review"]["recorded_step_count"] == 3
+    assert "All 1 reviewed findings are complete and locked" in result["answer"]
+    assert "SAR 794,108" in result["answer"]
+    assert "Runtime Governance" not in result["answer"]
+
+
+def test_finance_function_review_reports_latest_block_as_stuck():
+    summary = {
+        "agent_modules": {
+            "execution_log": {
+                "entries": [
+                    {"round_no": 1, "actor": "Finance Auditor", "action": "lock", "status": "locked", "finding_id": "F-009"},
+                    {"round_no": 2, "actor": "Finance Auditor", "action": "block", "status": "blocked", "finding_id": "F-009"},
+                ]
+            }
+        }
+    }
+
+    result = api_module._resolve_finance_function_review(
+        "Is the Finance Auditor stuck?",
+        summary=summary,
+        assistant_context={},
+        public_safe=False,
+    )
+
+    assert result is not None
+    assert result["function_review"]["status"] == "stuck"
+    assert result["function_review"]["stuck_count"] == 1
+    assert "CEO intervention: review the stuck findings" in result["answer"]
+
+
+def test_assistant_chat_routes_function_review_before_finance_scenario(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        summary = {
+            "run_id": "run-functions",
+            "run_mode": "full",
+            "total_recoverable_sar": 794_108,
+            "agent_modules": {
+                "execution_log": {
+                    "entries": [
+                        {"round_no": 1, "actor": "Finance Auditor", "action": "challenge", "status": "challenged", "finding_id": "F-001"},
+                        {"round_no": 1, "actor": "Finance Analyst", "action": "response", "status": "responded", "finding_id": "F-001"},
+                        {"round_no": 2, "actor": "Finance Auditor", "action": "lock", "status": "locked", "finding_id": "F-001"},
+                    ]
+                }
+            },
+        }
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "summary": summary,
+                "run_id": "run-functions",
+                "run_mode": "full",
+                "kg_nodes": [],
+                "kg_edges": [],
+            },
+        )
+        monkeypatch.setattr(
+            api_module.qa_engine,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("function review must precede tabular Q&A")),
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "Summarise the Finance Analyst–Finance Auditor review: what was completed, what remains open or stuck, and whether the CEO needs to intervene.",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {"source": "functions_workspace", "entrypoint": "function_review"},
+            },
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_function_review"
+        assert payload["assistant_mode"] == "governed_function_review"
+        assert payload["function_review"]["status"] == "complete"
+        assert "0 are open or stuck" in payload["answer"]
+        assert payload["llm_fallback_attempted"] is False
+    finally:
+        _restore_env(original)
+
+
 def test_governed_module_resolver_answers_every_registered_module():
     contract = api_module._governed_module_state_contract(
         None,
