@@ -195,9 +195,9 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert "Prepare the next move" in html
     assert 'id="board-portal"' in html
     assert 'id="agents-activity"' in html
-    assert 'id="assistant-network-card"' in html
-    assert 'id="a2a-fab"' in html
-    assert 'id="a2a-panel"' in html
+    assert 'id="functions-overview"' in html
+    assert 'id="functions-roster"' in html
+    assert 'id="functions-audit"' in html
     assert 'id="assistant-studio"' in html
     assert 'id="assistant-form"' in html
     assert 'id="assistant-drawer"' in html
@@ -242,9 +242,9 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="board-portal"' in html
     assert 'id="agents-activity"' in html
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
-    assert 'id="assistant-network-card"' in html
-    assert 'id="a2a-fab"' in html
-    assert 'id="a2a-panel"' in html
+    assert 'id="functions-overview"' in html
+    assert 'id="functions-roster"' in html
+    assert 'id="functions-audit"' in html
     assert 'id="knowledge-graph-card"' in html
     assert 'id="assistant-studio"' in html
     assert 'id="assistant-drawer"' in html
@@ -300,9 +300,9 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert 'id="week-panel"' in html
     assert 'id="board-portal"' in html
     assert 'id="agents-activity"' in html
-    assert 'id="assistant-network-card"' in html
-    assert 'id="a2a-fab"' in html
-    assert 'id="a2a-panel"' in html
+    assert 'id="functions-overview"' in html
+    assert 'id="functions-roster"' in html
+    assert 'id="functions-audit"' in html
     assert 'id="knowledge-graph-card"' in html
     assert 'id="assistant-studio"' in html
     assert 'id="assistant-drawer"' in html
@@ -2830,7 +2830,7 @@ def test_assistant_network_uses_live_agent_modules_instead_of_zero_score():
     )
     harness_js = harness_js.replace(
         suffix,
-        '  return { state: state, getAssistantNetwork: getAssistantNetwork, getAssistantNetworkMeta: getAssistantNetworkMeta, getAssistantExchanges: getAssistantExchanges, renderAssistantNetwork: renderAssistantNetwork };\n'
+        '  return { state: state, getAssistantNetwork: getAssistantNetwork, getAssistantNetworkMeta: getAssistantNetworkMeta, getAssistantExchanges: getAssistantExchanges, renderAssistantNetwork: renderAssistantNetwork, getFinanceFunctionReview: getFinanceFunctionReview };\n'
         '}\n'
         'module.exports = __executiveNetworkHarness;\n',
         1,
@@ -2851,7 +2851,20 @@ const bootstrapPayload = {{
     persona_id: 'ceo',
     assistant: 'Hermes',
     agent_activity: {{
-      line: '4 active module(s) · 5 discoverable · 3 approval gate(s)'
+      line: '4 active module(s) · 5 discoverable · 3 approval gate(s)',
+      execution_log: {{
+        status: 'available',
+        round_count: 2,
+        total_count: 6,
+        entries: [
+          {{ round_no: 2, actor: 'Finance Auditor', finding_id: 'F-001', action: 'lock', status: 'locked', detail: 'Finding locked after analyst response.' }},
+          {{ round_no: 2, actor: 'Finance Auditor', finding_id: 'F-002', action: 'block', status: 'blocked', detail: 'Finding remains blocked by required evidence verification.' }},
+          {{ round_no: 1, actor: 'Finance Analyst', finding_id: 'F-001', action: 'response', status: 'responded', detail: 'Analyst supplied the evidence response.' }},
+          {{ round_no: 1, actor: 'Finance Auditor', finding_id: 'F-001', action: 'challenge', status: 'challenged', detail: 'Citation support was challenged.' }},
+          {{ round_no: 1, actor: 'Finance Auditor', finding_id: 'F-002', action: 'challenge', status: 'challenged', detail: 'Calculation support was challenged.' }},
+          {{ round_no: 0, actor: 'Runtime Governance', action: 'policy gate', status: 'approved', detail: 'Technical runtime event.' }},
+        ]
+      }}
     }},
     running_agents: [
       {{ module_id: 'cash-recovery-watch', label: 'Cash recovery watch', status: 'running', lane: 'executive', summary: 'Tracks recoverable value across 8 governed cases.', output_metric: 'SAR 794K', approval_dependency: 'none' }},
@@ -2906,12 +2919,20 @@ const factory = require(tempFile);
 const harness = factory();
 const network = harness.getAssistantNetwork();
 const exchanges = harness.getAssistantExchanges();
+const functionReview = harness.getFinanceFunctionReview();
 harness.renderAssistantNetwork();
 console.log(JSON.stringify({{
   networkCount: network.length,
   statusRanks: network.map((item) => item.statusRank),
   metaHint: harness.getAssistantNetworkMeta().hint,
   exchangeCount: exchanges.length,
+  functionStatus: functionReview.status,
+  functionEntryCount: functionReview.entries.length,
+  functionFindingCount: functionReview.findings.length,
+  functionLockedCount: functionReview.locked_count,
+  functionStuckCount: functionReview.stuck_count,
+  functionRoundCount: functionReview.round_count,
+  functionNames: functionReview.functions.map((item) => item.name),
   html: nodes['assistant-network-card'].innerHTML,
 }}));
 """
@@ -2930,6 +2951,13 @@ console.log(JSON.stringify({{
     result = json.loads(completed.stdout.strip())
     assert result["networkCount"] == 4
     assert result["exchangeCount"] == 4
+    assert result["functionStatus"] == "stuck"
+    assert result["functionEntryCount"] == 5
+    assert result["functionFindingCount"] == 2
+    assert result["functionLockedCount"] == 1
+    assert result["functionStuckCount"] == 1
+    assert result["functionRoundCount"] == 2
+    assert result["functionNames"] == ["Finance Analyst", "Finance Auditor"]
     assert result["metaHint"] == "2 assistants are active · 1 assistant needs your review"
     assert "Hermes" in result["html"] and "Atlas" in result["html"]
     assert "Cash recovery watch" not in result["html"]
@@ -3458,7 +3486,7 @@ def test_persona_title_grounding_badges_and_native_agent_actions_are_visible():
     assert 'personaLabel = state.activePersona === "board" ? "Board Room"' in executive_js
     assert 'moduleId === "ceo-brief"' in executive_js
     assert 'moduleId === "board-room-memory"' in executive_js
-    assert "CEO brief opened in Assistants" in executive_js
+    assert "CEO brief opened in Hermes" in executive_js
     assert "Board room memory opened" in executive_js
     # Plain English for an executive: "grounded" reads as electrical wiring.
     assert "Evidence verified" in executive_js

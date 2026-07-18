@@ -29,8 +29,8 @@
       <nav class="view-nav" id="view-nav" aria-label="Executive views" role="tablist">
         <button class="view-tile is-active" type="button" role="tab" data-view-target="home" aria-controls="view-home" aria-selected="true">Briefing</button>
         <button class="view-tile" type="button" role="tab" data-view-target="calendar" aria-controls="view-calendar" aria-selected="false">Calendar</button>
-        <button class="view-tile" type="button" role="tab" data-view-target="assistants" aria-controls="view-assistants" aria-selected="false">Hermes</button>
         <button class="view-tile" type="button" role="tab" data-view-target="agents" aria-controls="view-agents" aria-selected="false">AI team</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="functions" aria-controls="view-functions" aria-selected="false">Functions</button>
         <button class="view-tile" type="button" role="tab" data-view-target="knowledge" aria-controls="view-knowledge" aria-selected="false">Evidence</button>
       </nav>
     </div>
@@ -150,8 +150,8 @@
       <section class="section" id="agents-section" aria-labelledby="agents-heading">
         <div class="section-head">
           <div>
-            <h2 class="section-title" id="agents-heading">AI leadership team</h2>
-            <p class="section-note">Your AI leadership team, the priorities it is covering, and anything that needs your decision.</p>
+            <h2 class="section-title" id="agents-heading">AI assistants and executive twins</h2>
+            <p class="section-note">Role-based interfaces aligned to your real leadership structure. They help the CEO work with the Group CFO, business leaders and other accountable executives.</p>
           </div>
         </div>
         <article class="card detail-card" id="agents-activity"></article>
@@ -163,13 +163,17 @@
       </section>
     </section>
 
-    <section class="view-panel" data-view-panel="assistants" id="view-assistants" role="tabpanel" aria-hidden="true" hidden>
-      <section class="section" aria-labelledby="assistant-view-heading">
+    <section class="view-panel" data-view-panel="functions" id="view-functions" role="tabpanel" aria-hidden="true" hidden>
+      <section class="section" aria-labelledby="functions-view-heading">
         <div class="section-head">
-          <h2 class="section-title" id="assistant-view-heading">Hermes and your AI leadership team</h2>
-          <p class="section-note">Hermes coordinates named AI specialists and brings you only the work or decisions that need your attention.</p>
+          <h2 class="section-title" id="functions-view-heading">AI functions</h2>
+          <p class="section-note">Specialist workers that perform a defined task. They do not represent an executive; they analyse, audit or prepare work and leave a trace of what they did.</p>
         </div>
-        <article class="card assistant-network-card" id="assistant-network-card"></article>
+        <article class="card detail-card" id="functions-overview"></article>
+        <div class="functions-layout">
+          <article class="card detail-card" id="functions-roster"></article>
+          <article class="card detail-card" id="functions-audit"></article>
+        </div>
       </section>
     </section>
 
@@ -198,36 +202,6 @@
       <span class="chat-launcher__prompt">Ask anything or run any scenario on your actual data</span>
       <span class="chat-launcher__cta" id="chat-launcher-cta">Ask Hermes</span>
     </button>
-
-    <div class="a2a-shell" id="a2a-shell">
-      <button class="a2a-fab" id="a2a-fab" type="button" aria-expanded="false" aria-controls="a2a-panel">
-        <span class="a2a-fab-mark" aria-hidden="true">⇄</span>
-        <span class="a2a-fab-text" id="a2a-fab-text">Hermes team</span>
-        <span class="a2a-fab-badge" id="a2a-fab-badge" hidden>0</span>
-      </button>
-      <aside class="a2a-panel" id="a2a-panel" hidden aria-labelledby="a2a-panel-title">
-        <header class="a2a-head">
-          <div class="a2a-h-id">
-            <span class="a2a-h-mark" aria-hidden="true">⇄</span>
-            <div>
-              <strong class="a2a-h-title" id="a2a-panel-title">Hermes and your AI leadership team</strong>
-              <p class="a2a-h-sub" id="a2a-panel-subtitle">Your chief of staff coordinating specialist AI assistants for you.</p>
-            </div>
-          </div>
-          <button class="a2a-min" id="a2a-min" type="button" aria-label="Minimise Hermes team">▾</button>
-        </header>
-        <div class="a2a-tabs" id="a2a-tabs" role="tablist" aria-label="Assistant exchanges"></div>
-        <div class="a2a-topic" id="a2a-topic"></div>
-        <div class="a2a-scroll" id="a2a-scroll"></div>
-          <div class="a2a-foot">
-            <span class="a2a-foot-note" id="a2a-foot-note">Hermes is following up automatically</span>
-            <div class="a2a-foot-actions">
-              <button class="a2a-foot-btn" id="a2a-followup" type="button">Set a follow-up task</button>
-              <button class="a2a-foot-btn a2a-foot-btn--ghost" id="a2a-report-bug" type="button">Feedback</button>
-            </div>
-          </div>
-      </aside>
-    </div>
   </div>
 
   <div class="assistant-scrim" id="assistant-scrim" hidden></div>

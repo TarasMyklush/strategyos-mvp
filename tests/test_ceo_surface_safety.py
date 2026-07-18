@@ -91,7 +91,7 @@ def test_ceo_jargon_replacements():
     assert "Runs on your infrastructure" not in js, (
         "Sovereign text must be CEO-friendly"
     )
-    assert "Your executive AI team" in js, (
+    assert "Your AI interfaces to the leadership team" in js, (
         "AI team must use CEO-friendly leadership vocabulary"
     )
     for internal_copy in (
@@ -2209,6 +2209,47 @@ def test_ai_team_card_renders_leadership_status_not_raw_execution_log():
     assert "function renderLeadershipStatus(item)" in js
     assert "+ renderLeadershipStatus(item) +" in js
     assert "renderExecutionLog() + (item.route" not in js
+
+
+def test_twins_and_specialist_functions_are_separate_ceo_surfaces():
+    html = (Path(api_module.STATIC_DIR) / "executive.html").read_text(encoding="utf-8")
+    js = _static_executive_js()
+
+    assert 'data-view-target="agents"' in html
+    assert 'data-view-target="functions"' in html
+    assert 'id="view-functions"' in html
+    assert 'id="functions-roster"' in html
+    assert 'id="functions-audit"' in html
+    assert 'data-view-target="assistants"' not in html
+    assert 'id="assistant-network-card"' not in html
+    assert 'id="a2a-fab"' not in html
+    assert 'id="a2a-panel"' not in html
+    assert 'id="assistant-drawer"' in html
+    assert "Assistants represent roles. Functions perform work." in js
+    assert "Specialist work such as analysis or audit is tracked separately under Functions." in js
+
+
+def test_finance_function_workspace_uses_recorded_audit_events_and_exposes_stuck_state():
+    js = _static_executive_js()
+    review_block = js.split("function getFinanceFunctionReview()")[1].split(
+        "function functionStateLabel", 1
+    )[0]
+    render_block = js.split("function renderFunctionsWorkspace()")[1].split(
+        "function renderLeadershipStatus", 1
+    )[0]
+
+    assert "getExecutionLog()" in review_block
+    assert "isFinanceFunctionActor(entry.actor)" in review_block
+    assert 'name: "Finance Analyst"' in review_block
+    assert 'name: "Finance Auditor"' in review_block
+    assert 'stateKey = /\\b(locked|resolved|approved|complete|completed|closed|accepted)\\b/' in review_block
+    assert '"stuck"' in review_block
+    assert "Analyst–Auditor audit trail" in render_block
+    assert "Current recorded state" in render_block
+    assert "data-function-finding-toggle" in render_block
+    assert 'entrypoint: "function_review"' in render_block
+    assert "Presentation composer" in render_block and "Meeting booker" in render_block
+    assert "Planned · not enabled" in render_block
 
 
 def test_leadership_status_does_not_read_raw_execution_events():

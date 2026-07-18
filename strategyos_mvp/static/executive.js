@@ -936,7 +936,6 @@
     if (previousView !== state.activeView && typeof window.scrollTo === "function") {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     }
-    if (state.activeView === "assistants") focusAssistantInput();
     // When switching to the knowledge view, re-assert the board tab UI to ensure
     // the browser's CSSOM and accessibility tree reflect the active state. The
     // renderPersonaView call above already renders board state tabs, but some
@@ -1523,6 +1522,213 @@
     return '<div class="twin-detail"><span class="eyebrow">Execution log</span>'
       + '<p class="list-copy">What your assistants did on this run, as recorded.</p>'
       + '<ol class="agent-trail">' + rows + foot + '</ol></div>';
+  }
+
+  function isFinanceFunctionActor(actor) {
+    return /^(finance\s+)?(analyst|auditor)$/i.test(String(actor || "").trim());
+  }
+
+  function financeFunctionName(actor) {
+    return /auditor/i.test(String(actor || "")) ? "Finance Auditor" : "Finance Analyst";
+  }
+
+  function functionAuditCopy(value) {
+    return String(value || "")
+      .replace(/Phase 3 keeps scope to analyst\/auditor review without adding new evidence-chain work\.?/gi, "No additional evidence was added during this review.")
+      .replace(/acceptance-sensitive verification sample/gi, "independent verification")
+      .replace(/deterministic draft/gi, "recorded finding")
+      .replace(/finding payload/gi, "finding record")
+      .replace(/fail-closed evidence verification/gi, "required evidence check")
+      .replace(/audit loop hit max rounds before lock/gi, "Review reached its limit before the finding could be closed")
+      .trim();
+  }
+
+  function functionActionLabel(action) {
+    var key = String(action || "").toLowerCase().replace(/[_\s-]+/g, "_");
+    var labels = {
+      challenge: "Challenged the evidence",
+      response: "Responded to the challenge",
+      lock: "Locked the finding",
+      block: "Blocked the finding",
+      max_rounds: "Review limit reached"
+    };
+    return labels[key] || humanizeToken(action || "step recorded");
+  }
+
+  // Functions are specialist workers, not executive twins. Their state is
+  // read from persisted Analyst/Auditor events so the CEO sees what actually
+  // happened, where the review stopped and whether every case was closed.
+  function getFinanceFunctionReview() {
+    var log = getExecutionLog();
+    var entries = safeArray(log.entries).filter(function (entry) {
+      return entry && isFinanceFunctionActor(entry.actor);
+    }).map(function (entry) {
+      return Object.assign({}, entry, { function_name: financeFunctionName(entry.actor) });
+    });
+    var findingsById = {};
+    entries.forEach(function (entry) {
+      var findingId = String(firstDefined(entry.finding_id, "")).trim();
+      if (!findingId) return;
+      if (!findingsById[findingId]) findingsById[findingId] = { id: findingId, entries: [] };
+      findingsById[findingId].entries.push(entry);
+    });
+    var findings = Object.keys(findingsById).map(function (findingId) {
+      var finding = findingsById[findingId];
+      // The database returns newest events first and the execution-log reader
+      // preserves that order. The first event is therefore the current state.
+      var latest = finding.entries[0] || {};
+      var stateText = [latest.status, latest.action].join(" ").toLowerCase();
+      var stateKey = /\b(locked|resolved|approved|complete|completed|closed|accepted)\b/.test(stateText)
+        ? "complete"
+        : /\b(blocked|stuck|failed|rejected|challenge|challenged)\b/.test(stateText)
+        ? "stuck"
+        : "working";
+      var rounds = finding.entries.map(function (entry) { return entry.round_no; }).filter(function (round) {
+        return round !== null && round !== undefined;
+      });
+      return {
+        id: findingId,
+        entries: finding.entries,
+        latest: latest,
+        state: stateKey,
+        round_count: Array.from(new Set(rounds)).length
+      };
+    });
+    var lockedCount = findings.filter(function (finding) { return finding.state === "complete"; }).length;
+    var stuckCount = findings.filter(function (finding) { return finding.state === "stuck"; }).length;
+    var workingCount = Math.max(0, findings.length - lockedCount - stuckCount);
+    var overallState = !entries.length
+      ? "not_started"
+      : stuckCount
+      ? "stuck"
+      : findings.length && lockedCount === findings.length
+      ? "complete"
+      : "working";
+    var roleEntries = function (name) {
+      return entries.filter(function (entry) { return entry.function_name === name; });
+    };
+    var analystEntries = roleEntries("Finance Analyst");
+    var auditorEntries = roleEntries("Finance Auditor");
+    var specialistRounds = entries.map(function (entry) { return entry.round_no; }).filter(function (round) {
+      return round !== null && round !== undefined;
+    });
+    var actionCount = function (rows, pattern) {
+      return rows.filter(function (entry) {
+        return pattern.test(String(firstDefined(entry.action, "")) + " " + String(firstDefined(entry.status, "")));
+      }).length;
+    };
+    var roleState = function (rows) {
+      if (!rows.length) return "not_started";
+      if (overallState === "complete") return "complete";
+      if (overallState === "stuck") return "stuck";
+      return "working";
+    };
+    return {
+      status: overallState,
+      entries: entries,
+      total_count: entries.length,
+      truncated: Boolean(log.truncated),
+      round_count: Array.from(new Set(specialistRounds)).length,
+      findings: findings,
+      locked_count: lockedCount,
+      stuck_count: stuckCount,
+      working_count: workingCount,
+      functions: [
+        {
+          id: "finance-analyst",
+          name: "Finance Analyst",
+          purpose: "Builds evidence-backed findings and answers audit challenges.",
+          state: roleState(analystEntries),
+          entries: analystEntries,
+          output: actionCount(analystEntries, /(respond|answer)/i) + " audit response" + (actionCount(analystEntries, /(respond|answer)/i) === 1 ? "" : "s")
+        },
+        {
+          id: "finance-auditor",
+          name: "Finance Auditor",
+          purpose: "Independently challenges the evidence and locks only supported findings.",
+          state: roleState(auditorEntries),
+          entries: auditorEntries,
+          output: actionCount(auditorEntries, /challenge/i) + " challenges · " + lockedCount + " findings locked"
+        }
+      ],
+      reason: firstDefined(log.reason, "No Finance Analyst or Finance Auditor work has been recorded for this run.")
+    };
+  }
+
+  function functionStateLabel(stateKey) {
+    var labels = {
+      complete: "Complete",
+      working: "In progress",
+      stuck: "Stuck",
+      not_started: "Not started",
+      planned: "Planned"
+    };
+    return labels[String(stateKey || "not_started")] || humanizeToken(stateKey);
+  }
+
+  function functionStateTone(stateKey) {
+    if (stateKey === "complete") return "ok";
+    if (stateKey === "stuck") return "danger";
+    if (stateKey === "working") return "warn";
+    return "neutral";
+  }
+
+  function renderFunctionStep(entry) {
+    var round = entry.round_no === null || entry.round_no === undefined ? "" : "Round " + entry.round_no;
+    var challenge = entry.challenge ? '<p class="function-step__quote"><strong>Challenge</strong>' + escapeHtml(functionAuditCopy(entry.challenge)) + '</p>' : '';
+    var response = entry.response ? '<p class="function-step__quote"><strong>Response</strong>' + escapeHtml(functionAuditCopy(entry.response)) + '</p>' : '';
+    return '<li class="function-step"><div class="function-step__meta"><span>' + escapeHtml(round || "Recorded step") + '</span><strong>' + escapeHtml(entry.function_name) + '</strong></div><p><strong>' + escapeHtml(functionActionLabel(firstDefined(entry.action, "step recorded"))) + '</strong>' + (entry.detail ? ' · ' + escapeHtml(functionAuditCopy(entry.detail)) : '') + '</p>' + challenge + response + '</li>';
+  }
+
+  function renderFunctionsWorkspace() {
+    var overview = $("functions-overview");
+    var roster = $("functions-roster");
+    var audit = $("functions-audit");
+    if (!overview && !roster && !audit) return;
+    var review = getFinanceFunctionReview();
+    var statusLabel = functionStateLabel(review.status);
+    var statusTone = functionStateTone(review.status);
+    var openCount = review.stuck_count + review.working_count;
+
+    if (overview) {
+      overview.innerHTML = '<div class="function-separation"><div class="function-separation__copy"><span class="eyebrow">Two different kinds of AI</span><h3>Assistants represent roles. Functions perform work.</h3><p><strong>AI team</strong> contains executive twins—the AI interfaces aligned to real leadership roles such as the Group CFO. <strong>Functions</strong> are specialist workers such as the Finance Analyst and Finance Auditor. Every function must show its work and current state.</p></div><button type="button" class="function-team-link" data-function-view-team>View AI team</button></div><div class="function-review-summary"><div class="function-review-state tone-' + escapeHtml(statusTone) + '"><span>Current finance review</span><strong>' + escapeHtml(statusLabel) + '</strong><small>' + escapeHtml(review.status === "complete" ? "Every recorded finding is locked." : review.status === "stuck" ? review.stuck_count + " finding" + (review.stuck_count === 1 ? " is" : "s are") + " waiting for resolution." : review.status === "working" ? openCount + " finding" + (openCount === 1 ? " remains" : "s remain") + " open." : review.reason) + '</small></div><div><strong>' + escapeHtml(String(review.findings.length)) + '</strong><span>findings reviewed</span></div><div><strong>' + escapeHtml(String(review.locked_count)) + '</strong><span>locked</span></div><div class="' + (openCount ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(openCount)) + '</strong><span>open or stuck</span></div><div><strong>' + escapeHtml(String(review.round_count)) + '</strong><span>review rounds</span></div></div>';
+      var teamLink = overview.querySelector('[data-function-view-team]');
+      if (teamLink) teamLink.onclick = function () { switchView("agents"); };
+    }
+
+    if (roster) {
+      var activeCards = review.functions.map(function (item) {
+        var latest = item.entries[0] || {};
+        return '<article class="function-card"><div class="function-card__head"><span class="function-card__icon" aria-hidden="true">' + escapeHtml(item.name === "Finance Auditor" ? "A" : "F") + '</span><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.purpose) + '</span></div><em class="function-state tone-' + escapeHtml(functionStateTone(item.state)) + '">' + escapeHtml(functionStateLabel(item.state)) + '</em></div><div class="function-card__facts"><span><strong>' + escapeHtml(String(item.entries.length)) + '</strong> recorded steps</span><span>' + escapeHtml(item.output) + '</span></div><div class="function-card__latest"><span>Latest recorded work</span><p>' + escapeHtml(functionAuditCopy(latest.detail || (item.entries.length ? functionActionLabel(latest.action) : "No work recorded for this run."))) + '</p>' + (latest.round_no !== null && latest.round_no !== undefined ? '<small>Round ' + escapeHtml(String(latest.round_no)) + '</small>' : '') + '</div></article>';
+      }).join('');
+      roster.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Active functions</span><span class="ach-hint">Specialists working on the current run</span></div></div><div class="function-card-list">' + activeCards + '</div><div class="planned-functions"><span class="eyebrow">Coming next</span><div><span>Presentation composer <em>Planned · not enabled</em></span><span>Meeting booker <em>Planned · not enabled</em></span></div></div>';
+    }
+
+    if (audit) {
+      var findingRows = review.findings.length ? review.findings.map(function (finding) {
+        var isOpen = state.openFunctionFindingId === finding.id;
+        var latest = finding.latest || {};
+        return '<article class="function-finding state-' + escapeHtml(finding.state) + '"><button type="button" class="function-finding__head" data-function-finding-toggle="' + escapeHtml(finding.id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span><strong>' + escapeHtml(finding.id) + '</strong><small>' + escapeHtml(String(finding.entries.length)) + ' recorded steps · ' + escapeHtml(String(finding.round_count)) + ' round' + (finding.round_count === 1 ? '' : 's') + '</small></span><em class="function-state tone-' + escapeHtml(functionStateTone(finding.state)) + '">' + escapeHtml(functionStateLabel(finding.state)) + '</em><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="function-finding__body"><p class="function-finding__latest"><span>Current recorded state</span><strong>' + escapeHtml(functionAuditCopy(latest.detail || functionActionLabel(firstDefined(latest.action, latest.status, "Recorded")))) + '</strong></p><ol class="function-step-list">' + finding.entries.slice().reverse().map(renderFunctionStep).join('') + '</ol></div>' : '') + '</article>';
+      }).join('') : '<div class="function-empty"><strong>No specialist audit recorded</strong><p>' + escapeHtml(review.reason) + '</p></div>';
+      audit.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Analyst–Auditor audit trail</span><span class="ach-hint">What was done, challenged and closed</span></div><button type="button" class="function-brief-btn" data-function-ask>Ask Hermes for CEO brief</button></div><p class="function-audit-intro">Open a finding to see the real sequence between the Finance Analyst and Finance Auditor. A finding marked “Stuck” has not reached a recorded lock or resolution.</p><div class="function-finding-list">' + findingRows + '</div>' + (review.truncated ? '<p class="trail-foot">Showing the available audit excerpt; ' + escapeHtml(String(review.total_count)) + ' total steps were recorded.</p>' : '');
+      safeArray(audit.querySelectorAll('[data-function-finding-toggle]')).forEach(function (button) {
+        button.onclick = function () {
+          var id = button.getAttribute('data-function-finding-toggle') || '';
+          state.openFunctionFindingId = state.openFunctionFindingId === id ? '' : id;
+          renderFunctionsWorkspace();
+        };
+      });
+      var askButton = audit.querySelector('[data-function-ask]');
+      if (askButton) askButton.onclick = function () {
+        askAssistant('Give me a CEO brief on the Finance Analyst–Finance Auditor review: what was completed, what remains open or stuck, the material implication, and whether I need to intervene.', askButton, {
+          entrypoint: "function_review",
+          function_ids: ["finance-analyst", "finance-auditor"],
+          finding_count: review.findings.length,
+          locked_count: review.locked_count,
+          stuck_count: review.stuck_count
+        });
+      };
+    }
   }
 
   function renderLeadershipStatus(item) {
@@ -2704,12 +2910,12 @@
     var moduleId = String(firstDefined(item.module_id, item.id, ""));
     if (item.permitted !== false && moduleId === "ceo-brief") {
       state.activePersona = "ceo";
-      state.activeView = "assistants";
+      state.activeView = "home";
       state.activeThreadKey = "";
       updateHistory();
       renderPersonaView();
       openAssistantDrawer(sourceEl);
-      showToast("CEO brief opened in Assistants.");
+      showToast("CEO brief opened in Hermes.");
       return;
     }
     if (item.permitted !== false && moduleId === "board-room-memory") {
@@ -3009,7 +3215,7 @@
       var target = link.getAttribute("data-view-target") || "home";
       if (target === "home") link.textContent = state.activePersona === "board" ? "Portal" : "Briefing";
       if (target === "calendar") link.textContent = "Calendar";
-      if (target === "assistants") link.textContent = "Hermes";
+      if (target === "functions") link.textContent = "Functions";
       if (target === "knowledge") link.textContent = "Evidence";
       link.classList.toggle("is-active", target === state.activeView);
       link.setAttribute("aria-selected", target === state.activeView ? "true" : "false");
@@ -4799,16 +5005,16 @@
     }
 
     if (activityCard) {
-      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">AI leadership team</span><h3>Your executive AI team</h3><p>Each AI leader has defined responsibilities, key measures and a clear escalation path. This page highlights current priorities and anything that needs your decision.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(firstDefined(summary.configured_count, 0))) + '</strong><span>AI leaders</span></div><div><strong>' + escapeHtml(String(firstDefined(summary.active_count, 0))) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(firstDefined(summary.attention_count, 0))) + '</strong><span>need review</span></div></div></div>';
+      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Executive twins</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist work such as analysis or audit is tracked separately under Functions.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(firstDefined(summary.configured_count, 0))) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(firstDefined(summary.active_count, 0))) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(firstDefined(summary.attention_count, 0))) + '</strong><span>need review</span></div></div></div>';
     }
 
     if (networkCard) {
-      networkCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Your AI leadership team</span><span class="ach-hint">Executive roles and responsibilities</span></div><label class="disco-search twin-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search AI leaders</span><input id="twin-network-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search leaders, responsibilities or KPIs…" autocomplete="off" /></label></div><div class="twin-card-list">' + (twins.length ? twins.map(function (item) {
+      networkCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">AI assistants by executive role</span><span class="ach-hint">Who each twin represents and its current state</span></div><label class="disco-search twin-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search AI assistants</span><input id="twin-network-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search roles, responsibilities or KPIs…" autocomplete="off" /></label></div><div class="twin-card-list">' + (twins.length ? twins.map(function (item) {
         var id = String(firstDefined(item.role, item.twin_id, "twin"));
         var isOpen = state.openAgentId === id;
         var status = String(firstDefined(item.status, "ready"));
         return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(firstDefined(item.current_activity, "Ready to support the next leadership review.")) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div>' + renderLeadershipStatus(item) + '<div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(firstDefined(item.authority, "Responsibilities will appear when available.")) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div>' + (item.route ? '<a class="btn secondary twin-open" href="' + escapeHtml(item.route) + '">Open team workspace</a>' : '') + '</div>' : '') + '</article>';
-      }).join('') : '<div class="network-empty">No AI leaders match this search.</div>') + '</div>';
+      }).join('') : '<div class="network-empty">No AI assistants match this search.</div>') + '</div>';
       var search = networkCard.querySelector('#twin-network-search');
       if (search) search.oninput = function () {
         state.discoveryQuery = search.value || '';
@@ -4840,7 +5046,7 @@
       var noEventCopy = openHandoffs
         ? 'Items are progressing; no decision is requested from you yet.'
         : 'No recent leadership-team activity needs review.';
-      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Leadership team activity</span><span class="ach-hint">Items moving between your AI leaders</span></div></div><p class="twin-explainer">This view highlights work in progress and shows only the items that need an executive decision.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>') + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
+      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Twin collaboration</span><span class="ach-hint">Items moving between executive-role interfaces</span></div></div><p class="twin-explainer">This view shows coordination between executive twins. Work performed by specialist functions is recorded separately in the Functions audit trail.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>') + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
     }
 
     if (automationCard) {
@@ -4890,7 +5096,7 @@
     }
     [launcher, topbarLauncher].forEach(function (trigger) {
       if (!trigger) return;
-      trigger.hidden = state.drawerOpen || state.activeView === "assistants";
+      trigger.hidden = state.drawerOpen;
       trigger.onclick = function () {
         _openHermesDrawer(trigger);
       };
@@ -5119,8 +5325,8 @@
     var viewLabels = {
       home: state.activePersona === "board" ? "Portal" : "Briefing",
       calendar: "Calendar",
-      assistants: "Hermes",
       agents: "AI team",
+      functions: "Functions",
       knowledge: "Evidence",
       reports: "Reports"
     };
@@ -5142,8 +5348,7 @@
     renderCalendarAgenda();
     renderLowerRailFidelity();
     renderAgentsDiscovery();
-    renderAssistantNetwork();
-    renderA2APanel();
+    renderFunctionsWorkspace();
     renderKnowledgeGraph();
     renderAssistantStudio();
     renderReportSurface();
@@ -5244,6 +5449,7 @@
       networkStatusFilter: "all",
       networkFilterMenuOpen: false,
       openNetworkAssistantId: "",
+      openFunctionFindingId: "",
       selectedAgentModuleKey: "",
       knowledgeQuestionIndex: 0,
       kgDensityMode: "compact",
