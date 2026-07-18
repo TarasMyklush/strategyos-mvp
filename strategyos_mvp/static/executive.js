@@ -3871,7 +3871,6 @@
     var diagnostics = getExecutiveDiagnostics();
     var blueprint = getPersonaBlueprint(state.activePersona);
     var hero = diagnostics.hero || {};
-    var publication = getPublication();
     var boardPortal = getBoardPortal();
     var agents = (state.latestPacket && state.latestPacket.agents) || {};
     var fullName = sessionDisplayName();
@@ -3884,36 +3883,48 @@
       score = Number(preferredHero.score);
     }
     var clampedScore = Math.max(0, Math.min(100, score));
-    var circumference = 2 * Math.PI * 60;
-    var dash = circumference * (clampedScore / 100);
     var prompts = getHeroPrompts();
+    var calendarContract = (state.latestPacket && state.latestPacket.calendar_agenda) || {};
+    var upcomingCommitments = Number(calendarContract.upcoming_item_count);
+    if (!Number.isFinite(upcomingCommitments) || upcomingCommitments < 0) {
+      upcomingCommitments = safeArray(((diagnostics.sections || {}).week_ahead || {}).items).length;
+    }
+    var attentionItems = safeArray((getDrilldown().owed_upward || {}).items).length;
     var miniStats = [
-      { label: "Board state", value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
-      { label: "Reports", value: String(firstDefined(publication.report_count, 0)) + (state.activePersona === "ceo" ? " reports ready" : " surfaced") },
-      { label: "AI team", value: String(firstDefined((agents.summary || {}).active_count, 0)) + " AI agents active" },
-      { label: state.activePersona === "ceo" ? "Needs review" : "Next move", value: state.activePersona === "ceo" ? String(firstDefined(publication.challenged_cases, safeArray((getDrilldown().owed_upward || {}).items).length, 0)) + " items need review" : humanizeToken(firstDefined(getPlanHealth().next_action, (boardPortal.state_detail || {}).title, "review")) }
+      { label: "Board", value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
+      { label: "Calendar", value: String(upcomingCommitments) + " upcoming" },
+      { label: "AI team", value: String(firstDefined((agents.summary || {}).active_count, 0)) + " assistants" },
+      { label: "Your attention", value: attentionItems ? String(attentionItems) + " items" : "None" }
     ];
 
     $("hero-eyebrow").textContent = state.activePersona === "board"
-      ? "Board portal · current board posture"
+      ? "Board portal · board readiness"
       : "Good morning, " + firstName;
     $("hero-head").textContent = firstDefined(preferredHero.headline, preferredHero.summary, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
-    var truthSourceBadge = diagnostics.source === "database" ? "DB" : diagnostics.source === "governed_artifacts" ? "RUN" : "--";
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
-    // The former `reviewGate ? "OPEN"` / `reviewGate ? "reviewer decision"`
-    // treatment falsely rendered a workflow status as a progress score.
-    var heroScoreText = hasScore ? String(clampedScore || 0) : firstDefined(hero.executive_posture, reviewGate ? "Review" : truthSourceBadge);
-    $("hero-score").textContent = heroScoreText;
-    // Board-gate labels must remain a single, centred word inside the same
-    // 128px reference ring across every governed state (DB, RUN, OPEN, REVIEW).
-    $("hero-score").classList.toggle("hero-score__value--compact", heroScoreText.length > 4);
-    $("hero-cap").textContent = firstDefined(hero.score_note, reviewGate ? "needs sign-off" : preferredHero.scoreNote, preferredHero.score_note, getPlanHealth().badge, "current posture");
-    var scoreMedallion = $("hero-score").closest ? $("hero-score").closest(".hero-score") : null;
-    if (scoreMedallion) {
-      scoreMedallion.classList.toggle("is-status", !hasScore);
-      scoreMedallion.classList.toggle("is-score", hasScore);
-      scoreMedallion.setAttribute("aria-label", reviewGate ? "Human review decision required" : (hasScore ? "Plan health score " + heroScoreText : "Governed data status " + heroScoreText));
+    var statusSignal = reviewGate
+      ? "Your decision"
+      : hasScore
+        ? (clampedScore >= 95 ? "On plan" : clampedScore >= 85 ? "Watch" : "Action needed")
+        : "Current";
+    var heroStatusText = reviewGate
+      ? "Review required"
+      : hasScore
+        ? String(clampedScore || 0) + "% of plan"
+        : "Business view ready";
+    var heroStatusCaption = reviewGate
+      ? "An item is waiting for executive sign-off."
+      : hasScore
+        ? "Measured against the latest approved plan."
+        : "Built from the latest available operating data.";
+    $("hero-score").textContent = heroStatusText;
+    $("hero-cap").textContent = heroStatusCaption;
+    var statusSignalEl = $("hero-status-signal");
+    if (statusSignalEl) {
+      statusSignalEl.textContent = statusSignal;
+      statusSignalEl.classList.toggle("is-attention", reviewGate || (hasScore && clampedScore < 85));
+      statusSignalEl.classList.toggle("is-watch", hasScore && clampedScore >= 85 && clampedScore < 95);
     }
     var byline = $("hero-byline");
     if (byline) {
@@ -3932,21 +3943,6 @@
         quote.hidden = true;
         quote.textContent = "";
       }
-    }
-
-    var arc = $("hero-arc");
-    if (arc) {
-      arc.style.strokeDasharray = dash + "px " + (circumference - dash) + "px";
-      arc.setAttribute("stroke-dasharray", dash + " " + (circumference - dash));
-    }
-    var dot = $("hero-dot");
-    if (dot) {
-      var angleRad = (clampedScore / 100) * 2 * Math.PI;
-      var dotCx = 64 + 60 * Math.sin(angleRad);
-      var dotCy = 64 - 60 * Math.cos(angleRad);
-      dot.setAttribute("cx", String(Math.round(dotCx * 10) / 10));
-      dot.setAttribute("cy", String(Math.round(dotCy * 10) / 10));
-      dot.style.visibility = hasScore && clampedScore > 0 ? "visible" : "hidden";
     }
 
     var promptRow = $("hero-prompts");
@@ -4338,7 +4334,7 @@
       executiveContextMarkup,
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       (compositionMarkup ? '<details class="kpi-supporting-analysis"><summary>Supporting analysis</summary>' + compositionMarkup + '</details>' : ''),
-      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Decision support</span><strong>Pressure-test the executive position with ' + escapeHtml(assistantName) + '</strong><p>The selected KPI, current posture and evidence boundary are already attached.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">Do I need to intervene?</button><button type="button" data-kpi-question="drivers">Which leader owns the outcome?</button><button type="button" data-kpi-question="comparison">What changes the outlook?</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask a decision question about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
+      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Decision support</span><strong>Pressure-test the executive position with ' + escapeHtml(assistantName) + '</strong><p>The selected result, business context and supporting sources are already attached.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">Do I need to intervene?</button><button type="button" data-kpi-question="drivers">Which leader owns the outcome?</button><button type="button" data-kpi-question="comparison">What changes the outlook?</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask a decision question about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
       '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");

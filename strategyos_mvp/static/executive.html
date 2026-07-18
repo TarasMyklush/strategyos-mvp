@@ -84,20 +84,15 @@
           <div class="hero-prompts" id="hero-prompts"></div>
         </div>
 
-        <div class="hero-score-wrap">
-          <div class="hero-score" aria-label="Plan health score">
-            <svg class="score-ring" viewBox="0 0 128 128" aria-hidden="true">
-              <circle cx="64" cy="64" r="60" class="score-ring__track"></circle>
-              <circle cx="64" cy="64" r="60" class="score-ring__value" id="hero-arc"></circle>
-              <circle cx="64" cy="4" r="4" class="score-ring__dot" id="hero-dot" style="visibility:hidden"></circle>
-            </svg>
-            <div class="hero-score__label">
-              <span class="hero-score__value" id="hero-score">--</span>
-              <span class="hero-score__caption" id="hero-cap">loading</span>
-            </div>
+        <aside class="hero-status" aria-label="Executive status">
+          <div class="hero-status__heading">
+            <span class="hero-status__kicker">Executive status</span>
+            <span class="hero-status__signal" id="hero-status-signal">Updating</span>
           </div>
+          <strong class="hero-status__value" id="hero-score">Preparing your view</strong>
+          <p class="hero-status__caption" id="hero-cap">Loading the latest operating data.</p>
           <div class="hero-mini-stats" id="hero-mini-stats"></div>
-        </div>
+        </aside>
       </section>
 
       <section class="section" id="kpi-index-section" aria-labelledby="driver-heading">

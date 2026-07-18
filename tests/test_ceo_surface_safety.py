@@ -107,11 +107,9 @@ def test_ceo_jargon_replacements():
     assert "Board reports" in js, (
         "Report surface must be rebadged as 'Board reports'"
     )
-    assert "reports ready" in js, (
-        "Hero mini-stats must use CEO-friendly labels"
-    )
-    assert "agents active" in js, (
-        "Hero mini-stats must use 'agents active' not 'running'"
+    assert '{ label: "Calendar", value: String(upcomingCommitments) + " upcoming" }' in js
+    assert '" assistants"' in js, (
+        "Hero mini-stats must describe the AI team as assistants, not technical agents"
     )
 
     # Old text must NOT appear (or must be in non-CEO context)
@@ -693,31 +691,20 @@ def test_ceo_digital_twin_cards_and_search_are_interactive():
 # NEW TESTS — CEO Demo Defect Batch 2026-07-03
 # ══════════════════════════════════════════════════════════════════════
 
-def test_plan_health_gauge_has_indicator_dot():
-    """#1: Plan health gauge must render hero-dot element and position it."""
+def test_ceo_hero_uses_business_status_panel_not_technical_gauge():
+    """The first viewport must explain the decision state, not expose storage internals."""
     html = _ceo_executive_html()
     js = _static_executive_js()
 
-    # SVG must contain hero-dot circle element
-    assert 'id="hero-dot"' in html, (
-        "Plan health gauge SVG must contain indicator dot element #hero-dot"
-    )
-
-    # JS must compute dot position from score
-    assert "hero-dot" in js, (
-        "renderHero must reference hero-dot element"
-    )
-    assert "Math.sin(angleRad)" in js or "Math.sin" in js, (
-        "JS must compute angular position for indicator dot"
-    )
-    assert "dot.style.visibility" in js, (
-        "Dot visibility must be set to visible after positioning"
-    )
-    assert 'viewBox="0 0 128 128"' in html
-    assert 'cx="64" cy="64" r="60"' in html
-    assert "2 * Math.PI * 60" in js
-    assert "64 + 60 * Math.sin(angleRad)" in js
-    assert "64 - 60 * Math.cos(angleRad)" in js
+    assert 'class="hero-status"' in html
+    assert 'aria-label="Executive status"' in html
+    assert 'id="hero-status-signal"' in html
+    assert 'id="hero-mini-stats"' in html
+    assert "Business view ready" in js
+    assert "Built from the latest available operating data." in js
+    assert 'truthSourceBadge' not in js
+    assert 'id="hero-dot"' not in html
+    assert 'class="score-ring"' not in html
 
 
 def test_kpi_spacing_css_exists():
@@ -1043,19 +1030,17 @@ def test_dark_theme_native_controls_inherit_executive_text_colour():
     assert 'html[data-theme="dark"] .pill-inline.danger' in css
 
 
-def test_review_gate_copy_fits_ring_and_decision_kpi_routes_deterministically():
+def test_review_gate_copy_is_executive_safe_and_decision_kpi_routes_deterministically():
     js = _static_executive_js()
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
 
-    assert 'reviewGate ? "OPEN"' in js
-    assert 'reviewGate ? "reviewer decision"' in js
+    assert '? "Your decision"' in js
+    assert '? "Review required"' in js
+    assert '"An item is waiting for executive sign-off."' in js
     assert 'data-kpi-key=' in js
     assert 'if (contextualKpiKey) entrypoint = "ceo_kpi_inline"' in js
-    # The hero word is sized from the ring (cqw), not the viewport: a vw clamp
-    # grew the text on wide screens while the 128px circle stayed put, which
-    # pushed "Review" onto the stroke. See
-    # test_hero_ring_text_is_bounded_by_the_circle_not_its_square.
-    assert "font-size: clamp(15px, 20cqw, 28px)" in css
+    assert ".hero-status__signal.is-attention" in css
+    assert ".score-ring" not in css
 
 
 def test_agents_running_panel_has_no_orphan_sovereign_bullet_for_ceo():
@@ -2140,38 +2125,17 @@ def test_ceo_digital_health_answer_leads_with_facts():
 # rather than left to contradict the shipped geometry.
 
 
-def test_hero_ring_text_is_bounded_by_the_circle_not_its_square():
-    """The hero status word must stay clear of the ring stroke.
-
-    The ring is a circle, but the label was allowed the ring's near-full square
-    width (max-width:116px on a 128px ring) and the status word was pinned at a
-    hardcoded 31px whenever it exceeded four characters. "Review" then measured
-    116px against a ~98px chord at its height and sat on the stroke. The label
-    is now bounded by the square inscribed in the inner circle (half-width
-    r/sqrt(2) ~= 70.7% of the inner diameter) and the word scales with the ring
-    via container query units instead of a per-length magic number.
-    """
+def test_hero_status_panel_is_compact_and_responsive():
+    """The CEO status summary must remain a bounded card at every viewport."""
     css = _static_executive_css()
 
-    assert "max-width: 116px" not in css, (
-        "the hero label must not be sized to the ring's square; that width "
-        "reaches the corners where the circle has already curved away"
-    )
-    assert "font-size: 31px" not in css, (
-        "the hero status word must not carry a hardcoded size for words over "
-        "four characters; it must scale with the ring"
-    )
-    assert "container-type: inline-size" in css, (
-        ".hero-score must be a query container so its text can size from the "
-        "ring rather than the viewport"
-    )
-    assert "0.707" in css, (
-        "the label must be bounded by the inscribed square of the inner circle"
-    )
-    assert "20cqw" in css, (
-        "the hero status word must scale in container query units so any status "
-        "word stays inside the curve at every ring size"
-    )
+    assert ".hero-status {" in css
+    assert "minmax(280px, 0.75fr)" in css
+    assert ".hero-status__heading" in css
+    assert ".hero-status__signal.is-attention" in css
+    assert ".hero-mini-stats .mini-stat" in css
+    assert ".hero-score" not in css
+    assert ".score-ring" not in css
 
 
 def test_kpi_panel_free_text_ask_carries_the_active_figure_as_context():

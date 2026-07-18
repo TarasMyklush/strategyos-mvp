@@ -126,9 +126,11 @@ def test_executive_ui_distinguishes_twins_from_automations_and_status_ring():
     assert "queued messages" not in js
     assert "No inter-twin handoff has been recorded yet" not in js
     assert "agents.digital_twins" in js
-    assert 'reviewGate ? "Review"' in js
-    assert 'dot.style.visibility = hasScore && clampedScore > 0 ? "visible" : "hidden"' in js
-    assert ".hero-score.is-status .score-ring__dot" in css
+    assert 'reviewGate\n      ? "Review required"' in js
+    assert 'var statusSignal = reviewGate' in js
+    assert '"Business view ready"' in js
+    assert ".hero-status__signal.is-attention" in css
+    assert ".score-ring" not in css
     assert "--display: var(--serif)" in css
 
 
