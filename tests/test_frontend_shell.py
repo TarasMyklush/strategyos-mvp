@@ -2881,6 +2881,8 @@ const bootstrapPayload = {{
       {{ twin_id: 'cfo', role: 'cfo', display_name: 'Group CFO', assistant_name: 'Atlas', status: 'attention', current_activity: 'Validating the cash recovery recommendation', active_investigation_count: 2, pending_request_count: 1, cycle_count: 2, authority: 'Own finance analysis and surface material exceptions.', escalation_path: ['Group CEO', 'Group CFO'] }},
       {{ twin_id: 'gm', role: 'gm', display_name: 'Group Manager', assistant_name: 'Iris', status: 'monitoring', current_activity: 'Monitoring operating commitments', active_investigation_count: 1, pending_request_count: 0, cycle_count: 4, authority: 'Track operating commitments across the group.', escalation_path: ['Group Manager'] }},
       {{ twin_id: 'strategy', role: 'strategy', display_name: 'Strategy Lead', assistant_name: 'Nora', status: 'ready', current_activity: 'Ready to prepare the next strategy review', active_investigation_count: 0, pending_request_count: 0, cycle_count: 1, authority: 'Maintain the strategy review and decision record.', escalation_path: ['Group CEO'] }},
+      {{ twin_id: 'analyst', role: 'analyst', display_name: 'Analyst Assistant', assistant_name: '', status: 'active', current_activity: 'Building finance findings' }},
+      {{ twin_id: 'reviewer', role: 'reviewer', display_name: 'Reviewer Assistant', assistant_name: '', status: 'attention', current_activity: 'Reviewing finance findings' }},
     ],
   }},
 }};
@@ -2975,6 +2977,8 @@ console.log(JSON.stringify({{
     assert "1 need your review" in result["html"]
     assert "data-network-status-toggle" in result["html"]
     assert "Runtime Governance" not in result["html"]
+    assert "Analyst Assistant" not in result["html"]
+    assert "Reviewer Assistant" not in result["html"]
     for fabricated in ("92", "76", "62", "45"):
         assert ">" + fabricated + "<" not in result["html"], (
             f"fabricated readiness score {fabricated} leaked back into the card"

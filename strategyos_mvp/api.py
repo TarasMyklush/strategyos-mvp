@@ -5369,9 +5369,33 @@ def _resolve_digital_twin_status(
 
     principal = {"role": role, "authenticated": True}
     network = _agents_surface_payload(summary, principal)
-    twins = list(network.get("digital_twins") or [])
+    twins = [
+        item
+        for item in list(network.get("digital_twins") or [])
+        if not re.search(
+            r"(?:^|_)(?:analyst|auditor|reviewer)(?:$|_)",
+            str(item.get("role") or item.get("twin_id") or "").strip().casefold().replace("-", "_"),
+        )
+    ]
     if not twins:
         return None
+
+    summary_payload = {
+        **dict(network.get("summary") or {}),
+        "configured_count": len(twins),
+        "active_count": sum(
+            1 for item in twins if str(item.get("status") or "").casefold() in {"active", "monitoring"}
+        ),
+        "attention_count": sum(
+            1 for item in twins if str(item.get("status") or "").casefold() == "attention"
+        ),
+        "pending_request_count": sum(int(item.get("pending_request_count") or 0) for item in twins),
+    }
+    network = {
+        **network,
+        "digital_twins": twins,
+        "summary": summary_payload,
+    }
 
     def twin_matches(item: dict[str, Any]) -> bool:
         role_alias = str(item.get("role") or "").replace("_", " ").lower()
@@ -5387,7 +5411,6 @@ def _resolve_digital_twin_status(
         return any(alias and alias in normalized for alias in aliases)
 
     selected = [item for item in twins if twin_matches(item)]
-    summary_payload = dict(network.get("summary") or {})
     citations = [
         {
             "source_path": "runtime://digital-twin-network",

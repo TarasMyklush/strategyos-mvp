@@ -191,7 +191,13 @@ def test_hermes_ai_team_answer_uses_same_persistent_runtime(tmp_path, monkeypatc
     assert result is not None
     assert result["matched"] is True
     assert result["answered_by"] == "digital_twin_runtime"
-    assert "6 configured Digital Twins" in result["answer"]
+    assert "4 configured Digital Twins" in result["answer"]
+    assert [item["role"] for item in result["digital_twin_network"]["digital_twins"]] == [
+        "ceo",
+        "cfo",
+        "group_manager",
+        "strategy",
+    ]
     assert "No Twin is currently flagged for executive attention" in result["answer"]
     assert "unknown_node" not in result["answer"]
     assert result["digital_twin_network"]["contract_version"] == "digital_twin_network.v1"

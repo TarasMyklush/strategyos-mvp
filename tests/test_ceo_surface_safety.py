@@ -2275,6 +2275,8 @@ def test_hermes_network_is_a_named_ai_leadership_team_not_product_modules():
     assert "Hermes' AI leadership team" in js
     assert "function getLeadershipTeam()" in js
     assert "agents.digital_twins" in js
+    assert "isExecutiveLeadershipTwin" in js
+    assert "analyst|auditor|reviewer" in js
     assert "data-network-status-toggle" in js
     assert 'entrypoint: "ai_team_brief"' in js
     assert "working now" in js

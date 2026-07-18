@@ -1112,9 +1112,16 @@
   // with responsibilities, current work and escalation paths. Product
   // capabilities and runtime guardrails remain in the operator surface; they
   // are not an executive's "team" and must never be rendered as one here.
+  function isExecutiveLeadershipTwin(item) {
+    var roleKey = String(firstDefined(item && item.role, item && item.twin_id, ""))
+      .toLowerCase()
+      .replace(/[-\s]+/g, "_");
+    return !/(^|_)(analyst|auditor|reviewer)($|_)/.test(roleKey);
+  }
+
   function getLeadershipTeam() {
     var agents = (state.latestPacket && state.latestPacket.agents) || bootstrap.agents || {};
-    return safeArray(agents.digital_twins);
+    return safeArray(agents.digital_twins).filter(isExecutiveLeadershipTwin);
   }
 
   function leadershipStatusLabel(status) {
@@ -5005,11 +5012,11 @@
     var collaborationCard = $("discovery-panel");
     var automationCard = $("subtools-panel");
     var agents = (state.latestPacket && state.latestPacket.agents) || {};
-    var summary = agents.summary || {};
     var collaboration = agents.collaboration || {};
     var runtime = agents.runtime || {};
     var query = String(state.discoveryQuery || "").trim().toLowerCase();
-    var twins = safeArray(agents.digital_twins).filter(function (item) {
+    var leadershipTwins = getLeadershipTeam();
+    var twins = leadershipTwins.filter(function (item) {
       if (!query) return true;
       return [item.display_name, item.assistant_name, item.role, item.current_activity]
         .concat(safeArray(item.kpis_owned), safeArray(item.goals))
@@ -5034,7 +5041,9 @@
     }
 
     if (activityCard) {
-      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Executive twins</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist work such as analysis or audit is tracked separately under Functions.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(firstDefined(summary.configured_count, 0))) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(firstDefined(summary.active_count, 0))) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(firstDefined(summary.attention_count, 0))) + '</strong><span>need review</span></div></div></div>';
+      var activeLeadershipCount = leadershipTwins.filter(function (item) { return /^(active|monitoring)$/i.test(String(item && item.status || "")); }).length;
+      var attentionLeadershipCount = leadershipTwins.filter(function (item) { return /^attention$/i.test(String(item && item.status || "")); }).length;
+      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Executive twins</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist work such as analysis or audit is tracked separately under Functions.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
     }
 
     if (networkCard) {
