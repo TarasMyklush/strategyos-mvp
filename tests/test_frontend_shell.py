@@ -2786,6 +2786,18 @@ def test_assistant_requests_include_shared_entrypoint_metadata():
         assert token in executive_js
 
 
+def test_ceo_calendar_lists_only_governed_upcoming_commitments():
+    executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    calendar_block = executive_js.split("function renderCalendarAgenda()", 1)[1].split(
+        "function renderLowerRailFidelity", 1
+    )[0]
+
+    assert "agendaContract.projection_as_of" in calendar_block
+    assert "agendaContract.upcoming_item_count" in calendar_block
+    assert "itemDate >= projectionAsOf" in calendar_block
+    assert "items.slice(0, governedUpcomingCount)" in calendar_block
+
+
 def test_hermes_network_uses_named_assistants_and_status_before_chat():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
     network_start = executive_js.index("function getAssistantNetwork()")

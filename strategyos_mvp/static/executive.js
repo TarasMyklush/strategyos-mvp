@@ -4848,9 +4848,19 @@
     var diagnostics = getExecutiveDiagnostics();
     var sections = diagnostics.sections || {};
     var calendar = sections.week_ahead || {};
+    var agendaContract = (state.latestPacket && state.latestPacket.calendar_agenda) || {};
+    var projectionAsOf = String(firstDefined(agendaContract.projection_as_of, "")).slice(0, 10);
+    var governedUpcomingCount = Number(agendaContract.upcoming_item_count);
     var items = safeArray(calendar.items).filter(function (item) {
-      return item && firstDefined(item.title, item.label, "");
-    }).slice(0, 12);
+      if (!item || !firstDefined(item.title, item.label, "")) return false;
+      var itemDate = String(firstDefined(item.date, "")).slice(0, 10);
+      return !projectionAsOf || !itemDate || itemDate >= projectionAsOf;
+    });
+    if (Number.isFinite(governedUpcomingCount) && governedUpcomingCount >= 0) {
+      items = items.slice(0, governedUpcomingCount);
+    } else {
+      items = items.slice(0, 12);
+    }
     var status = String(firstDefined(calendar.status, "unavailable")).toLowerCase();
     if (status !== "ready" || !items.length) {
       panel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Executive calendar</p><h3 class="detail-title">Calendar not connected</h3><p class="section-note">' + escapeHtml(firstDefined(calendar.reason, "No calendar is available for this review.")) + '</p></div></div>';
