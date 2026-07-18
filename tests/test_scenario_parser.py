@@ -1,4 +1,8 @@
-from strategyos_mvp.scenario_parser import parse_scenario
+from strategyos_mvp.scenario_parser import (
+    _parse_numeric_tokens,
+    _target_revenue_attainment_from_prompt,
+    parse_scenario,
+)
 from tests.fixtures.executive_demo_packet import executive_demo_packet
 
 
@@ -475,6 +479,21 @@ def test_revenue_card_context_turns_make_it_100_percent_into_target_calculation(
 
     assert result.scenario_id == "revenue_plan_attainment"
     assert "gap to 100.0% is SAR 2.4M" in result.answer
+
+
+def test_revenue_status_question_does_not_treat_decision_to_make_as_a_target():
+    prompt = (
+        "As CEO, what does revenue's 99.4% of plan mean for me? "
+        "Name the largest driver and the decision I need to make."
+    )
+
+    target = _target_revenue_attainment_from_prompt(
+        prompt,
+        _parse_numeric_tokens(prompt),
+        {"assistant_context": {"kpi_key": "revenue"}},
+    )
+
+    assert target is None
 
 
 def test_governed_public_ceo_surface_models_target_margin_from_same_dashboard_baseline():

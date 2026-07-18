@@ -823,10 +823,14 @@ def _target_revenue_attainment_from_prompt(
     if not revenue_context and not any(token in norm for token in ("revenue", "sales")):
         return None
 
+    # ``make``, ``get`` and ``bring`` are target cues only when they govern
+    # Revenue (or a stand-in such as "it").  Treating the bare verbs as a
+    # target request makes ordinary CEO phrasing such as "the decision I need
+    # to make" look like an instruction to reach the displayed attainment.
     target_cues = list(
         re.finditer(
-            r"\b(?:target|reach|achieve|make(?:\s+(?:it|revenue|sales))?|"
-            r"get(?:\s+(?:it|revenue|sales))?|bring(?:\s+(?:it|revenue|sales))?|"
+            r"\b(?:target|reach|achieve|make\s+(?:it|revenue|sales)|"
+            r"get\s+(?:it|revenue|sales)|bring\s+(?:it|revenue|sales)|"
             r"close\s+the\s+gap)\b",
             str(prompt or ""),
             re.IGNORECASE,
