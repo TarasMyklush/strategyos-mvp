@@ -457,9 +457,9 @@ def test_deploy_workflow_renders_llm_chat_config_without_committed_secret() -> N
     assert "STRATEGYOS_MODEL_PROVIDER_ENABLED" in workflow
     assert "STRATEGYOS_LLM_CHAT_ENABLED" in workflow
     assert "STRATEGYOS_LLM_MODEL" in workflow
-    assert "deepseek-v4-pro" in workflow
-    assert "https://api.deepseek.com" in workflow
-    assert "STRATEGYOS_LLM_MODEL: ${STRATEGYOS_LLM_MODEL:-deepseek-v4-pro}" in compose
+    assert "gpt-5.6-sol" in workflow
+    assert "https://api.openai.com/v1" in workflow
+    assert "STRATEGYOS_LLM_MODEL: ${STRATEGYOS_LLM_MODEL:-gpt-5.6-sol}" in compose
     assert "STRATEGYOS_LLM_API_KEY: ${{ secrets.STRATEGYOS_LLM_API_KEY }}" in workflow
     assert "STRATEGYOS_LLM_API_KEY: ${STRATEGYOS_LLM_API_KEY:-}" in compose
 
