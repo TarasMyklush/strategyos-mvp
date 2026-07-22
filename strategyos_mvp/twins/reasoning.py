@@ -184,16 +184,16 @@ def _call_litellm_reasoning(
     transport_trace: list[dict[str, Any]] | None = None,
 ) -> str:
     url = _chat_completions_url(str(config.llm_base_url))
-    payload = llm_qa._chat_completions_payload(
-        config=config,
-        messages=[
+    payload = {
+        "model": config.llm_model,
+        "messages": [
             {"role": "system", "content": _system_prompt(stage)},
             {"role": "user", "content": json.dumps(input_context, ensure_ascii=False)},
         ],
-        temperature=0.1,
-        max_tokens=900,
-        response_format={"type": "json_object"},
-    )
+        "temperature": 0.1,
+        "max_tokens": 900,
+        "response_format": {"type": "json_object"},
+    }
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),

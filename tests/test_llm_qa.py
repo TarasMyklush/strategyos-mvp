@@ -41,40 +41,6 @@ def _config(**overrides):
     return SimpleNamespace(**values)
 
 
-def test_openai_gpt56_uses_reasoning_compatible_chat_parameters():
-    payload = llm_qa._chat_completions_payload(
-        config=_config(
-            llm_provider="openai",
-            llm_base_url="https://api.openai.com/v1",
-            llm_model="gpt-5.6-sol",
-        ),
-        messages=[{"role": "user", "content": "Give the CEO decision."}],
-        temperature=0.1,
-        max_tokens=900,
-        response_format={"type": "json_object"},
-    )
-
-    assert payload["model"] == "gpt-5.6-sol"
-    assert payload["reasoning_effort"] == "low"
-    assert payload["max_completion_tokens"] == 1800
-    assert payload["response_format"] == {"type": "json_object"}
-    assert "temperature" not in payload
-    assert "max_tokens" not in payload
-
-
-def test_openai_gpt56_health_probe_uses_non_reasoning_bounded_request():
-    payload = llm_qa._chat_completions_payload(
-        config=_config(llm_provider="openai", llm_model="gpt-5.6-sol"),
-        messages=[{"role": "user", "content": "healthcheck"}],
-        temperature=0.0,
-        max_tokens=8,
-        response_format=None,
-    )
-
-    assert payload["reasoning_effort"] == "none"
-    assert payload["max_completion_tokens"] == 64
-
-
 def _bundle() -> DataBundle:
     ap = pd.DataFrame(
         [

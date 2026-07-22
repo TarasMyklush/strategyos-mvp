@@ -363,13 +363,13 @@ def load_config() -> StrategyOSConfig:
             iter(sensitive_identifier_hmac_keys.keys()),
             default_sensitive_key_id,
         )
-    llm_provider = (env("STRATEGYOS_LLM_PROVIDER", "openai") or "openai").strip()
+    llm_provider = (env("STRATEGYOS_LLM_PROVIDER", "deepseek") or "deepseek").strip()
     llm_base_url = (
-        env("STRATEGYOS_LLM_BASE_URL", "https://api.openai.com/v1")
-        or "https://api.openai.com/v1"
+        env("STRATEGYOS_LLM_BASE_URL", "https://api.deepseek.com")
+        or "https://api.deepseek.com"
     ).strip()
     llm_model = (
-        env("STRATEGYOS_LLM_MODEL", "gpt-5.6-sol") or "gpt-5.6-sol"
+        env("STRATEGYOS_LLM_MODEL", "deepseek-v4-pro") or "deepseek-v4-pro"
     ).strip()
     llm_api_key = env("STRATEGYOS_LLM_API_KEY")
     normalized_provider = llm_provider.lower()

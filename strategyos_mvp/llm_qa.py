@@ -717,13 +717,23 @@ def _call_openai_compatible_chat(
     transport_trace: list[dict[str, Any]] | None = None,
 ) -> str:
     url = _chat_completions_url(str(config.llm_base_url))
-    payload = _chat_completions_payload(
-        config=config,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        response_format=response_format,
-    )
+    payload = {
+        "model": config.llm_model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    # DeepSeek V4 enables thinking by default. Its reasoning tokens count
+    # against max_tokens and can consume the entire executive-response budget,
+    # leaving message.content empty even though reasoning_content is present.
+    # Hermes needs a concise final answer, not provider chain-of-thought, so use
+    # the provider's supported non-thinking mode for this bounded QA surface.
+    provider = str(getattr(config, "llm_provider", "") or "").strip().lower()
+    model = str(getattr(config, "llm_model", "") or "").strip().lower()
+    if provider == "deepseek" and model.startswith("deepseek-v4"):
+        payload["thinking"] = {"type": "disabled"}
+    if response_format is not None:
+        payload["response_format"] = response_format
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -759,49 +769,6 @@ def _call_openai_compatible_chat(
         )
         raise _EmptyProviderResponseError("LLM provider returned an empty answer.")
     return content
-
-
-def _chat_completions_payload(
-    *,
-    config: Any,
-    messages: list[dict[str, str]],
-    temperature: float,
-    max_tokens: int,
-    response_format: dict[str, str] | None,
-) -> dict[str, Any]:
-    """Build a provider-correct Chat Completions request.
-
-    GPT-5 reasoning models use ``max_completion_tokens`` and an explicit
-    reasoning effort.  Keeping the older OpenAI-compatible shape for other
-    providers avoids breaking DeepSeek or a private LiteLLM gateway while the
-    production deployment moves to OpenAI.
-    """
-    provider = str(getattr(config, "llm_provider", "") or "").strip().lower()
-    model = str(getattr(config, "llm_model", "") or "").strip().lower()
-    is_openai_gpt5 = provider == "openai" and model.startswith("gpt-5")
-    payload: dict[str, Any] = {
-        "model": config.llm_model,
-        "messages": messages,
-    }
-    if is_openai_gpt5:
-        health_probe = max_tokens <= 8
-        payload["reasoning_effort"] = "none" if health_probe else "low"
-        payload["max_completion_tokens"] = (
-            max(64, max_tokens) if health_probe else max(1_200, max_tokens * 2)
-        )
-    else:
-        payload["temperature"] = temperature
-        payload["max_tokens"] = max_tokens
-    # DeepSeek V4 enables thinking by default. Its reasoning tokens count
-    # against max_tokens and can consume the entire executive-response budget,
-    # leaving message.content empty even though reasoning_content is present.
-    # Hermes needs a concise final answer, not provider chain-of-thought, so use
-    # the provider's supported non-thinking mode for this bounded QA surface.
-    if provider == "deepseek" and model.startswith("deepseek-v4"):
-        payload["thinking"] = {"type": "disabled"}
-    if response_format is not None:
-        payload["response_format"] = response_format
-    return payload
 
 
 def _post_with_retry(

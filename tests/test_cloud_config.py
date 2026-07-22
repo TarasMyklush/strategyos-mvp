@@ -137,7 +137,7 @@ def test_load_config_parses_proxy_oidc_boundary(monkeypatch):
     assert config.oidc_redirect_url == "https://strategyos.example.com/oauth2/callback"
 
 
-def test_load_config_uses_openai_defaults_and_key_fallback(monkeypatch):
+def test_load_config_uses_deepseek_defaults_and_key_fallback(monkeypatch):
     for key in [
         "STRATEGYOS_LLM_PROVIDER",
         "STRATEGYOS_LLM_BASE_URL",
@@ -146,14 +146,14 @@ def test_load_config_uses_openai_defaults_and_key_fallback(monkeypatch):
         "OPENAI_API_KEY",
     ]:
         monkeypatch.delenv(key, raising=False)
-    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-key")
 
     config = load_config()
 
-    assert config.llm_provider == "openai"
-    assert config.llm_base_url == "https://api.openai.com/v1"
-    assert config.llm_model == "gpt-5.6-sol"
-    assert config.llm_api_key == "openai-key"
+    assert config.llm_provider == "deepseek"
+    assert config.llm_base_url == "https://api.deepseek.com"
+    assert config.llm_model == "deepseek-v4-pro"
+    assert config.llm_api_key == "deepseek-key"
 
 
 def test_load_config_parses_schema_tolerant_thresholds_and_fx_defaults(monkeypatch):
