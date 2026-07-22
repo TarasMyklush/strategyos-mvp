@@ -328,6 +328,12 @@ def test_ceo_kpi_intent_contract_handles_free_text_and_declared_ui_intent():
         "Which executive owns the outcome, what are the two largest drivers, and what commitment should I request?",
         "drivers",
     ) == "briefing"
+    assert api_module._assistant_question_requests_modelling(
+        "For Operating cost, do I need to intervene now? Give me the decision, owner and deadline only if the executive threshold is crossed."
+    ) is False
+    assert api_module._assistant_question_requests_modelling(
+        "What happens to operating cost if rent falls by 10%?"
+    ) is True
 
 
 def test_every_headline_kpi_preset_has_a_distinct_answer_contract(monkeypatch):
@@ -489,6 +495,70 @@ def test_qa_and_assistant_chat_share_the_governed_outlook_contract(monkeypatch):
         assert assistant_payload["answer"] == qa_payload["answer"]
         assert "down SAR 3.0M" in assistant_payload["answer"]
         assert "No like-for-like plan variance is stated" not in assistant_payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_ceo_intervention_preset_cannot_be_hijacked_by_scenario_routing(monkeypatch):
+    original, client = _client_with_auth()
+    card = {
+        "key": "operating_cost",
+        "label": "Operating cost",
+        "metric": "SAR 88.0M",
+        "availability": "available",
+        "missing_inputs": ["Approved operating-cost plan"],
+        "grounding": {"status": "grounded"},
+        "source_files": ["governed/operating-cost.csv"],
+        "trend": {"actual": [14_000_000.0, 11_000_000.0], "labels": ["2026-05", "2026-06"], "unit": "sar"},
+        "movers": {"lifting": [], "dragging": []},
+        "executive_brief": {
+            "readout": "The current operating-cost actual is verified.",
+            "decision_context": "Keep the review delegated to the Group CFO.",
+            "drivers": [{"label": "People", "value": "SAR 30.0M", "share_pct": 34.1}],
+            "comparison": {"available": False, "note": "No aligned plan is supplied."},
+            "audit": {"source_files": ["governed/operating-cost.csv"]},
+        },
+    }
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {"run_id": "run-1"},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(api_module, "_ceo_kpi_cards", lambda *_args, **_kwargs: [card])
+        question = (
+            "For Operating cost, do I need to intervene now? Give me the decision, owner and deadline "
+            "only if the executive threshold is crossed."
+        )
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": question,
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "entrypoint": "ceo_kpi_inline",
+                    "kpi_key": "operating_cost",
+                    "kpi_question_intent": "decision",
+                },
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_kpi"
+        assert payload["kpi_question_intent"] == "decision"
+        assert "Accountable owner:" in payload["answer"]
+        assert "cannot model this change" not in payload["answer"]
+        assert payload["llm_fallback_attempted"] is False
     finally:
         _restore_env(original)
 

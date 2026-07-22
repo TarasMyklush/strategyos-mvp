@@ -13325,7 +13325,20 @@ def _assistant_question_requests_modelling(question: str) -> bool:
         return False
     if re.search(r"\b(model|simulate|scenario|project)\b", norm):
         return True
-    if re.search(r"\b(if|assume|assuming|what happens|what would happen)\b", norm):
+    # A conditional word alone is not a modelling request.  Decision prompts
+    # legitimately say things such as "intervene only if the executive
+    # threshold is crossed"; treating that ``if`` as a scenario bypasses the
+    # governed KPI decision contract.  Conditional phrasing becomes modelling
+    # only when it also asks for a financial change or supplies a numeric
+    # assumption.
+    if re.search(r"\b(if|assume|assuming|what happens|what would happen)\b", norm) and (
+        re.search(r"\d+(?:\.\d+)?\s*%|\b(?:sar|usd|eur|gbp)\s*[\d,.]+|[\d,.]+\s*(?:m|mn|million|k|thousand)\b", norm)
+        or re.search(
+            r"\b(cut|reduce|increase|decrease|rise|fall|grow|drop|reach|target|achieve|"
+            r"make|get|bring|close\s+the\s+gap)\b",
+            norm,
+        )
+    ):
         return True
     if re.search(r"\b(reach|target|achieve|increase|decrease|rise|fall|grow|reduce)\b", norm) and re.search(
         r"\d+(?:\.\d+)?\s*%",
