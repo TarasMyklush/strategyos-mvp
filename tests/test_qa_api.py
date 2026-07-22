@@ -313,6 +313,7 @@ def test_assistant_chat_resolves_locale_formatted_headline_value_before_llm(monk
 def test_ceo_kpi_intent_contract_handles_free_text_and_declared_ui_intent():
     assert api_module._ceo_kpi_question_intent("What needs my attention?") == "decision"
     assert api_module._ceo_kpi_question_intent("Where does this result come from?") == "drivers"
+    assert api_module._ceo_kpi_question_intent("Which revenue stream is largest?") == "drivers"
     assert api_module._ceo_kpi_question_intent("What is the variance to budget?") == "comparison"
     assert api_module._ceo_kpi_question_intent(
         "What would materially change the current Operating cost outlook before the next executive review?",
@@ -630,6 +631,57 @@ def test_free_text_ceo_kpi_routing_covers_rendered_finance_cards():
     assert api_module._free_text_ceo_kpi_key("Explain operating cost") == "operating_cost"
     assert api_module._free_text_ceo_kpi_key("Explain the EBITDA bridge") == "ebitda_margin"
     assert api_module._free_text_ceo_kpi_key("Model a 60% EBITDA margin") is None
+
+
+def test_global_revenue_stream_question_returns_composition_not_headline_only(monkeypatch):
+    original, client = _client_with_auth()
+    card = {
+        "key": "revenue",
+        "label": "Revenue",
+        "metric": "SAR 385.1M",
+        "availability": "available",
+        "missing_inputs": [],
+        "grounding": {"status": "grounded"},
+        "source_files": ["governed/revenue.csv"],
+        "trend": {"actual": [56_000_000.0, 63_000_000.0], "labels": ["2026-05", "2026-06"], "unit": "sar"},
+        "movers": {"lifting": [], "dragging": []},
+        "executive_brief": {
+            "readout": "Revenue recognised across four governed streams.",
+            "drivers": [
+                {"label": "Revenue – Catering", "value": "SAR 123.0M", "share_pct": 31.9},
+                {"label": "Revenue – Government", "value": "SAR 109.9M", "share_pct": 28.5},
+            ],
+            "audit": {"source_files": ["governed/revenue.csv"]},
+        },
+    }
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {"run_id": "run-1"},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(api_module, "_ceo_kpi_cards", lambda *_args, **_kwargs: [card])
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": "Which revenue stream is largest?", "persona": "ceo", "mode": "auto"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["answered_by"] == "governed_kpi"
+        assert payload["kpi_question_intent"] == "drivers"
+        assert "Revenue – Catering — SAR 123.0M · 31.9%" in payload["answer"]
+        assert "largest reported contributor is Revenue – Catering at 31.9%" in payload["answer"]
+    finally:
+        _restore_env(original)
 
 
 def test_release_gate_answer_uses_publication_contract():

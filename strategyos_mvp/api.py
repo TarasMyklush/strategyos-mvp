@@ -12239,7 +12239,12 @@ def _ceo_kpi_question_intent(question: str, requested_intent: str | None = None)
         )
     )
     drivers_requested = bool(
-        re.search(r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|movement|moved|make up|come from|comes from|coming from)\b", norm)
+        re.search(
+            r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|"
+            r"movement|moved|make up|come from|comes from|coming from|largest|biggest|top|"
+            r"stream|streams|business line|business lines)\b",
+            norm,
+        )
     )
     decision_requested = bool(
         re.search(
