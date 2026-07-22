@@ -1085,7 +1085,13 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "kpi_key:" in js
     assert "Evidence and calculation" in js
     assert "data-kpi-question" in js
+    assert 'data-kpi-question="decision"' in js
+    assert 'data-kpi-question="briefing"' in js
+    assert 'data-kpi-question="outlook"' in js
+    assert 'data-kpi-question="comparison"' not in js
     assert 'decision: "For " + label + ", do I need to intervene now?' in js
+    assert 'briefing: "Which executive owns the current " + label + " outcome' in js
+    assert 'outlook: "What would materially change the current " + label + " outlook' in js
     assert "kpi_question_intent: questionType" in js
     assert "function assistantAnswerCacheKey(question, assistantContext)" in js
     assert 'String(firstDefined(context.kpi_question_intent, "free_text"))' in js

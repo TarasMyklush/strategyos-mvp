@@ -12226,27 +12226,43 @@ def _ceo_kpi_question_intent(question: str, requested_intent: str | None = None)
     """
     norm = " ".join(str(question or "").casefold().split())
     comparison_requested = bool(
-        re.search(r"\b(plan|budget|comparator|comparison|compare|variance|versus|vs\.?|target|baseline)\b", norm)
+        re.search(r"\b(plan|budget|comparator|comparison|compare|variance|versus|target|baseline)\b", norm)
+        or re.search(r"\bvs\.?\s+(?:plan|budget|target|baseline|actual|prior|previous|last)\b", norm)
+    )
+    outlook_requested = bool(
+        re.search(
+            r"\b(outlook|forecast|forward view|ahead|next review|next executive review|"
+            r"what (?:would|could|will) (?:materially )?change|what changes|"
+            r"change the (?:current )?outlook|alter the (?:current )?outlook|"
+            r"risk to the (?:current )?outlook|decision trigger|warning sign)\b",
+            norm,
+        )
     )
     drivers_requested = bool(
         re.search(r"\b(driver|drivers|driving|drives|composition|concentration|contributor|contributors|movement|moved|make up|come from|comes from|coming from)\b", norm)
     )
     decision_requested = bool(
-        re.search(r"\b(attention|action|decision|decide|approve|approval|intervene|escalat|need from me|should i|next step)\b", norm)
+        re.search(
+            r"\b(attention|action|decision|decide|approve|approval|intervene|escalat|"
+            r"need from me|should i|next step|owner|owns|accountable|commitment|deadline)\b",
+            norm,
+        )
     )
     # A CEO will often ask for the plan position, its material driver and the
     # decision in one sentence. Do not let the first matching keyword silently
     # discard the other requested parts.
-    if sum((comparison_requested, drivers_requested, decision_requested)) > 1:
+    if sum((comparison_requested, outlook_requested, drivers_requested, decision_requested)) > 1:
         return "briefing"
     if comparison_requested:
         return "comparison"
+    if outlook_requested:
+        return "outlook"
     if drivers_requested:
         return "drivers"
     if decision_requested:
         return "decision"
     declared = str(requested_intent or "").strip().lower()
-    return declared if declared in {"decision", "drivers", "comparison", "overview", "briefing"} else "overview"
+    return declared if declared in {"decision", "drivers", "comparison", "outlook", "overview", "briefing"} else "overview"
 
 
 def _ceo_kpi_cards(context: Mapping[str, Any], *, public_safe: bool) -> list[dict[str, Any]]:
@@ -12315,6 +12331,32 @@ def _ceo_kpi_inline_result(
     resolved_intent = _ceo_kpi_question_intent(question, question_intent)
     metric = str(card.get("metric") or "available")
 
+    def _accountable_owner() -> str:
+        return {
+            "revenue": "Group CFO and the accountable business-line CEO",
+            "ebitda_margin": "Group CFO",
+            "operating_cost": "Group CFO and the accountable operating executives",
+            "cash_vs_floor": "Group CFO and Group Treasury",
+        }.get(kpi_key, "Group CFO")
+
+    def _ranked_components() -> list[tuple[float, str, str]]:
+        ranked: list[tuple[float, str, str]] = []
+        for item in drivers:
+            try:
+                share = float(item.get("share_pct"))
+            except (TypeError, ValueError):
+                continue
+            if share <= 0:
+                continue
+            ranked.append(
+                (
+                    share,
+                    str(item.get("label") or "Component"),
+                    str(item.get("value") or "").strip(),
+                )
+            )
+        return sorted(ranked, reverse=True)
+
     def _composition_sentence() -> str:
         if not drivers:
             return "No component-level breakdown is available for this figure."
@@ -12342,26 +12384,61 @@ def _ceo_kpi_inline_result(
         return sentence
 
     def _largest_component_sentence() -> str:
-        ranked: list[tuple[float, str, str]] = []
-        for item in drivers:
-            try:
-                share = float(item.get("share_pct"))
-            except (TypeError, ValueError):
-                continue
-            if share <= 0:
-                continue
-            ranked.append(
-                (
-                    share,
-                    str(item.get("label") or "Component"),
-                    str(item.get("value") or "").strip(),
-                )
-            )
+        ranked = _ranked_components()
         if not ranked:
             return "No component-level driver is available for this figure."
         share, component_label, component_value = max(ranked)
         value_suffix = f" — {component_value}" if component_value else ""
         return f"Largest reported contributor: {component_label}{value_suffix} ({share:.1f}%)."
+
+    def _largest_exposures_sentence(limit: int = 2) -> str:
+        ranked = _ranked_components()[:limit]
+        if not ranked:
+            return "No component-level exposure is available for this figure."
+        details = "; ".join(
+            f"{component_label}{f' — {component_value}' if component_value else ''} ({share:.1f}%)"
+            for share, component_label, component_value in ranked
+        )
+        combined = sum(item[0] for item in ranked)
+        return f"Largest reported exposures: {details}. Together they represent {combined:.1f}% of the reported figure."
+
+    def _trend_sentence() -> str:
+        actual: list[float] = []
+        for value in list(trend.get("actual") or []):
+            try:
+                actual.append(float(value))
+            except (TypeError, ValueError):
+                return "No comparable multi-period trend is available for this figure."
+        labels = [str(value) for value in list(trend.get("labels") or [])]
+        unit = str(trend.get("unit") or "").lower()
+
+        def display(value: float) -> str:
+            if unit == "percent":
+                return f"{value:.1f}%"
+            if unit == "sar":
+                return _format_sar_brief(value)
+            return f"{value:,.1f}"
+
+        if not actual:
+            return "No comparable multi-period trend is available for this figure."
+        latest_label = labels[-1] if len(labels) == len(actual) else "the latest governed period"
+        if len(actual) == 1:
+            return f"Latest governed point: {display(actual[-1])} in {latest_label}."
+        previous_label = labels[-2] if len(labels) == len(actual) else "the previous governed period"
+        delta = actual[-1] - actual[-2]
+        if unit == "percent":
+            magnitude = f"{abs(delta):.1f} percentage points"
+        elif unit == "sar":
+            magnitude = _format_sar_brief(abs(delta))
+        else:
+            magnitude = f"{abs(delta):,.1f}"
+        if delta > 0:
+            direction = f"up {magnitude}"
+        elif delta < 0:
+            direction = f"down {magnitude}"
+        else:
+            direction = "unchanged"
+        return f"Latest governed movement: {display(actual[-1])} in {latest_label}, {direction} from {previous_label}."
 
     def _movement_sentence(*, decision_only: bool = False) -> str:
         if not (lifting or dragging):
@@ -12397,26 +12474,22 @@ def _ceo_kpi_inline_result(
             decision_context = str(brief.get("decision_context") or "").strip()
             readout = str(brief.get("readout") or card.get("detail") or "").strip()
             answer = f"Current position: {readout or f'{label} is {metric} for the selected period.'} "
+            answer += f"Accountable owner: {_accountable_owner()}. "
             if comparison.get("available") is True:
                 answer += f"Plan position: {comparison.get('value') or 'A like-for-like approved comparator is available'}. "
             elif comparison.get("note"):
                 answer += f"Plan position: {comparison.get('note')} "
             answer += _largest_component_sentence() + " "
+            answer += _movement_sentence() + " "
             answer += f"CEO decision: {decision_context or 'Keep the position delegated unless a governed exception crosses the CEO threshold.'}"
             if missing:
                 answer += f" The immediate governance gap is {'; '.join(missing)}."
         elif resolved_intent == "decision":
             decision_context = str(brief.get("decision_context") or "").strip()
             readout = str(brief.get("readout") or card.get("detail") or "").strip()
-            accountable_owner = {
-                "revenue": "Group CFO and the accountable business-line CEO",
-                "ebitda_margin": "Group CFO",
-                "operating_cost": "Group CFO and the accountable operating executives",
-                "cash_vs_floor": "Group CFO and Group Treasury",
-            }.get(kpi_key, "Group CFO")
             answer = (
                 f"Current position: {readout or f'{label} is {metric} for the selected period.'} "
-                f"Accountable owner: {accountable_owner}. "
+                f"Accountable owner: {_accountable_owner()}. "
                 f"Next decision: {decision_context or 'Keep the position delegated unless a governed exception crosses the CEO threshold.'} "
             )
             if dragging:
@@ -12426,9 +12499,32 @@ def _ceo_kpi_inline_result(
             elif not dragging:
                 answer += "No KPI-specific exception requiring executive intervention is recorded in the current governed data."
         elif resolved_intent == "drivers":
-            answer = f"{label} is {metric}. {brief.get('readout') or card.get('detail') or ''} "
+            decision_context = str(brief.get("decision_context") or "").strip()
+            answer = f"Accountable owner: {_accountable_owner()}. {label} is {metric}. {brief.get('readout') or card.get('detail') or ''} "
             answer += _composition_sentence() + " "
-            answer += _movement_sentence()
+            answer += _movement_sentence() + " "
+            answer += f"Commitment to request: {decision_context or 'Confirm the accountable owner, the next measurable milestone and the escalation threshold.'}"
+        elif resolved_intent == "outlook":
+            decision_context = str(brief.get("decision_context") or "").strip()
+            readout = str(brief.get("readout") or card.get("detail") or "").strip()
+            answer = f"Current position: {readout or f'{label} is {metric} for the selected period.'} "
+            answer += _trend_sentence() + " "
+            answer += _largest_exposures_sentence() + " "
+            if lifting or dragging:
+                answer += _movement_sentence() + " "
+            else:
+                answer += "No category-level movement is recorded, so the current data does not identify which component is changing now. "
+            answer += (
+                "What would change the executive outlook: a reversal or acceleration in the governed trend; "
+                "a material movement in the largest reported exposures; "
+            )
+            if comparison.get("available") is True:
+                answer += "or the aligned plan variance crossing the CEO intervention threshold. "
+            else:
+                answer += "or an aligned comparator showing an exception that crosses the CEO intervention threshold. "
+            answer += f"Accountable owner: {_accountable_owner()}. Current decision: {decision_context or 'Keep the position delegated until one of those governed triggers is observed.'}"
+            if missing:
+                answer += f" Evidence still needed for the comparison trigger: {'; '.join(missing)}."
         elif resolved_intent == "comparison":
             answer = f"The current {label.lower()} actual is {metric}. "
             if comparison.get("available") is True:
@@ -12472,6 +12568,7 @@ def _ceo_kpi_inline_result(
         "suggestions": [
             f"What needs executive attention for {label}?",
             f"What is driving {label}?",
+            f"What would change the outlook for {label}?",
         ],
         "answered_by": "governed_kpi",
         "grounding_status": grounding,
@@ -13586,6 +13683,37 @@ async def _assistant_chat_response(
         payload["llm_fallback_attempted"] = False
         return payload
 
+    # Cost-action questions must reach the governed levers before the inline
+    # KPI contract.  A KPI panel supplies ``kpi_key=operating_cost`` for useful
+    # context, but that context must not turn "how can we reduce it?" into a
+    # definition of the headline total.  This ordering applies equally to a
+    # preset, KPI free text and the global drawer.
+    cost_lever_result = _governed_cost_lever_result(
+        context,
+        question=question,
+        public_safe=public_safe,
+    )
+    if cost_lever_result is not None:
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=cost_lever_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=cost_lever_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
+
     explicit_kpi_key = _free_text_ceo_kpi_key(
         question,
         context,
@@ -13657,35 +13785,6 @@ async def _assistant_chat_response(
         finding.__dict__ if hasattr(finding, "__dict__") else finding
         for finding in context["findings"]
     ]
-
-    # "How do I decrease operating cost?" names the KPI, so the reference
-    # resolver would claim it and restate the total -- an answer to a different
-    # question. Levers run first: they answer what the executive actually asked.
-    cost_lever_result = _governed_cost_lever_result(
-        context,
-        question=question,
-        public_safe=public_safe,
-    )
-    if cost_lever_result is not None:
-        orchestrated = orchestrator.process(
-            question,
-            persona=persona,
-            qa_result=cost_lever_result,
-            driver_context=driver_context,
-        )
-        payload = _assistant_response_payload(
-            response_mode="deterministic",
-            question=question,
-            context=context,
-            requested_mode=mode,
-            persona=persona,
-            orchestrated=orchestrated,
-            base_result=cost_lever_result,
-            llm_status=llm_status,
-            assistant_context=assistant_context,
-        )
-        payload["llm_fallback_attempted"] = False
-        return payload
 
     governed_reference_result = _governed_reference_result(
         context,
@@ -14382,6 +14481,67 @@ def data_qa(
     graph_result = None
     retrieval_result = None
     deterministic_result = None
+
+    # Keep the operational Q&A page on the same governed semantic contract as
+    # the executive assistant.  Previously /qa and /assistant/chat could give
+    # different answers to the same authenticated executive question.
+    if mode in {"auto", "deterministic"}:
+        cost_lever_result = _governed_cost_lever_result(
+            context,
+            question=question,
+            public_safe=False,
+        )
+        if cost_lever_result is not None:
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                qa_result=cost_lever_result,
+                driver_context=driver_context,
+            )
+            return _compose_response(
+                response_mode="deterministic",
+                base_payload=cost_lever_result,
+                orchestrated_payload=orchestrated,
+                extra_trace={
+                    "route": "governed_cost_levers",
+                    "knowledge_id": request.knowledge_id,
+                },
+                extra_payload={"llm_fallback_attempted": False},
+            )
+
+        explicit_kpi_key = _free_text_ceo_kpi_key(
+            question,
+            context,
+            public_safe=False,
+        )
+        if persona == "ceo" and explicit_kpi_key and not _assistant_question_requests_modelling(question):
+            requested_intent = None
+            if isinstance(request.assistant_context, Mapping):
+                requested_intent = str(request.assistant_context.get("kpi_question_intent") or "") or None
+            kpi_result = _ceo_kpi_inline_result(
+                context,
+                kpi_key=explicit_kpi_key,
+                public_safe=False,
+                question=question,
+                question_intent=requested_intent,
+            )
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                qa_result={**kpi_result, "assistant_mode": "governed_kpi"},
+                driver_context={"key": explicit_kpi_key},
+            )
+            return _compose_response(
+                response_mode="deterministic",
+                base_payload=kpi_result,
+                orchestrated_payload=orchestrated,
+                extra_trace={
+                    "route": "governed_kpi",
+                    "intent": kpi_result.get("kpi_question_intent"),
+                    "knowledge_id": request.knowledge_id,
+                },
+                extra_payload={"llm_fallback_attempted": False},
+            )
 
     if mode == "llm":
         if context["bundle"] is None:

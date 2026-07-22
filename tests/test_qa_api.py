@@ -169,6 +169,14 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
         public_safe=False,
         question="How does revenue compare with the approved plan?",
     )
+    outlook = api_module._ceo_kpi_inline_result(
+        {"summary": {}},
+        kpi_key="revenue",
+        public_safe=False,
+        question="What would materially change the current Revenue outlook before the next executive review?",
+        # Explicit wording must outrank stale or malicious client metadata.
+        question_intent="comparison",
+    )
     briefing = api_module._ceo_kpi_inline_result(
         {"summary": {}},
         kpi_key="revenue",
@@ -207,19 +215,26 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
     assert "H1 budget aligned to this reporting scope" in comparison["answer"]
     assert "Current composition" not in comparison["answer"]
 
+    assert outlook["kpi_question_intent"] == "outlook"
+    assert "Latest governed movement:" in outlook["answer"]
+    assert "Largest reported exposures:" in outlook["answer"]
+    assert "What would change the executive outlook:" in outlook["answer"]
+    assert "Evidence still needed for the comparison trigger:" in outlook["answer"]
+    assert not outlook["answer"].startswith("The current revenue actual")
+
     assert briefing["kpi_question_intent"] == "briefing"
     assert "Current position:" in briefing["answer"]
     assert "Largest reported contributor: Revenue – Catering — SAR 123.0M (31.9%)." in briefing["answer"]
     assert "CEO decision:" in briefing["answer"]
 
-    assert len({decision["answer"], drivers["answer"], comparison["answer"]}) == 3
+    assert len({decision["answer"], drivers["answer"], comparison["answer"], outlook["answer"]}) == 4
     assert numeric_key == "revenue"
     assert numeric_answer["answered_by"] == "governed_kpi"
     assert numeric_answer["kpi_question_intent"] == "drivers"
     assert "Revenue is SAR 385.1M" in numeric_answer["answer"]
     assert "Revenue – Catering — SAR 123.0M · 31.9%" in numeric_answer["answer"]
     assert drivers["citations"][0]["source_path"] == "02_ERP_Extracts/GL_Extract_H1_2026.csv"
-    assert all(result["grounding_status"] == "grounded" for result in (decision, drivers, comparison))
+    assert all(result["grounding_status"] == "grounded" for result in (decision, drivers, comparison, outlook))
 
 
 def test_assistant_chat_resolves_locale_formatted_headline_value_before_llm(monkeypatch):
@@ -300,11 +315,243 @@ def test_ceo_kpi_intent_contract_handles_free_text_and_declared_ui_intent():
     assert api_module._ceo_kpi_question_intent("Where does this result come from?") == "drivers"
     assert api_module._ceo_kpi_question_intent("What is the variance to budget?") == "comparison"
     assert api_module._ceo_kpi_question_intent(
+        "What would materially change the current Operating cost outlook before the next executive review?",
+        "comparison",
+    ) == "outlook"
+    assert api_module._ceo_kpi_question_intent(
         "What does revenue's 99.4% of plan mean, what is its largest driver, and what decision do I need to make?"
     ) == "briefing"
     assert api_module._ceo_kpi_question_intent("Explain this figure", "drivers") == "drivers"
     # Explicit wording wins over inconsistent client metadata.
     assert api_module._ceo_kpi_question_intent("How does this compare to plan?", "decision") == "comparison"
+    assert api_module._ceo_kpi_question_intent(
+        "Which executive owns the outcome, what are the two largest drivers, and what commitment should I request?",
+        "drivers",
+    ) == "briefing"
+
+
+def test_every_headline_kpi_preset_has_a_distinct_answer_contract(monkeypatch):
+    cards = []
+    for index, (key, label, metric) in enumerate(
+        (
+            ("revenue", "Revenue", "SAR 410.0M"),
+            ("ebitda_margin", "EBITDA margin", "31.0%"),
+            ("operating_cost", "Operating cost", "SAR 88.0M"),
+            ("cash_vs_floor", "Cash vs floor", "SAR 55.0M"),
+        ),
+        start=1,
+    ):
+        cards.append(
+            {
+                "key": key,
+                "label": label,
+                "metric": metric,
+                "availability": "available",
+                "missing_inputs": [f"Approved comparator for {label}"],
+                "grounding": {"status": "grounded"},
+                "source_files": [f"governed/{key}.csv"],
+                "trend": {
+                    "actual": [float(index * 10), float(index * 10 + 2)],
+                    "labels": ["2026-05", "2026-06"],
+                    "unit": "percent" if key == "ebitda_margin" else "sar",
+                    "has_plan_series": False,
+                },
+                "movers": {"lifting": [], "dragging": []},
+                "executive_brief": {
+                    "readout": f"Governed {label} position is available.",
+                    "decision_context": f"Keep {label} delegated until a governed trigger is observed.",
+                    "drivers": [
+                        {"label": f"{label} exposure A", "value": "SAR 20.0M", "share_pct": 40.0},
+                        {"label": f"{label} exposure B", "value": "SAR 15.0M", "share_pct": 30.0},
+                    ],
+                    "comparison": {
+                        "available": False,
+                        "note": "The aligned comparator is not supplied.",
+                    },
+                    "audit": {"source_files": [f"governed/{key}.csv"]},
+                },
+            }
+        )
+    monkeypatch.setattr(api_module, "_ceo_kpi_cards", lambda *_args, **_kwargs: cards)
+
+    for key, label, _metric in (
+        ("revenue", "Revenue", "SAR 410.0M"),
+        ("ebitda_margin", "EBITDA margin", "31.0%"),
+        ("operating_cost", "Operating cost", "SAR 88.0M"),
+        ("cash_vs_floor", "Cash vs floor", "SAR 55.0M"),
+    ):
+        results = {
+            "decision": api_module._ceo_kpi_inline_result(
+                {"summary": {}},
+                kpi_key=key,
+                public_safe=False,
+                question=f"For {label}, do I need to intervene now?",
+                question_intent="decision",
+            ),
+            "briefing": api_module._ceo_kpi_inline_result(
+                {"summary": {}},
+                kpi_key=key,
+                public_safe=False,
+                question=f"Which executive owns the current {label} outcome, what are the two largest business drivers, and what commitment should I request?",
+                question_intent="briefing",
+            ),
+            "outlook": api_module._ceo_kpi_inline_result(
+                {"summary": {}},
+                kpi_key=key,
+                public_safe=False,
+                question=f"What would materially change the current {label} outlook before the next executive review?",
+                question_intent="outlook",
+            ),
+        }
+        assert {name: result["kpi_question_intent"] for name, result in results.items()} == {
+            "decision": "decision",
+            "briefing": "briefing",
+            "outlook": "outlook",
+        }
+        assert len({result["answer"] for result in results.values()}) == 3
+        assert "Accountable owner:" in results["decision"]["answer"]
+        assert "Largest reported contributor:" in results["briefing"]["answer"]
+        assert "Latest governed movement:" in results["outlook"]["answer"]
+        assert "What would change the executive outlook:" in results["outlook"]["answer"]
+
+
+def test_qa_and_assistant_chat_share_the_governed_outlook_contract(monkeypatch):
+    original, client = _client_with_auth()
+    card = {
+        "key": "operating_cost",
+        "label": "Operating cost",
+        "metric": "SAR 88.0M",
+        "availability": "available",
+        "missing_inputs": ["Approved operating-cost plan"],
+        "grounding": {"status": "grounded"},
+        "source_files": ["governed/operating-cost.csv"],
+        "trend": {
+            "actual": [14_000_000.0, 11_000_000.0],
+            "labels": ["2026-05", "2026-06"],
+            "unit": "sar",
+            "has_plan_series": False,
+        },
+        "movers": {"lifting": [], "dragging": []},
+        "executive_brief": {
+            "readout": "The current operating-cost actual is verified.",
+            "decision_context": "Keep the review delegated to the Group CFO.",
+            "drivers": [
+                {"label": "People", "value": "SAR 30.0M", "share_pct": 34.1},
+                {"label": "Facilities", "value": "SAR 20.0M", "share_pct": 22.7},
+            ],
+            "comparison": {"available": False, "note": "No aligned plan is supplied."},
+            "audit": {"source_files": ["governed/operating-cost.csv"]},
+        },
+    }
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {"run_id": "run-1"},
+                "run_id": "run-1",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(api_module, "_ceo_kpi_cards", lambda *_args, **_kwargs: [card])
+        question = "What would materially change the current Operating cost outlook before the next executive review?"
+        assistant_response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": question,
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "entrypoint": "ceo_kpi_inline",
+                    "kpi_key": "operating_cost",
+                    "kpi_question_intent": "outlook",
+                },
+            },
+        )
+        qa_response = client.post(
+            "/qa",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": question, "persona": "ceo", "mode": "auto"},
+        )
+        assert assistant_response.status_code == 200
+        assert qa_response.status_code == 200
+        assistant_payload = assistant_response.json()
+        qa_payload = qa_response.json()
+        assert assistant_payload["answered_by"] == "governed_kpi"
+        assert qa_payload["answered_by"] == "governed_kpi"
+        assert assistant_payload["kpi_question_intent"] == "outlook"
+        assert qa_payload["kpi_question_intent"] == "outlook"
+        assert assistant_payload["answer"] == qa_payload["answer"]
+        assert "down SAR 3.0M" in assistant_payload["answer"]
+        assert "No like-for-like plan variance is stated" not in assistant_payload["answer"]
+    finally:
+        _restore_env(original)
+
+
+def test_cost_action_reaches_governed_levers_from_both_chat_surfaces(monkeypatch):
+    original, client = _client_with_auth()
+    context = {
+        "bundle": object(),
+        "findings": [],
+        "kg_nodes": [],
+        "kg_edges": [],
+        "summary": {"run_id": "run-1"},
+        "run_id": "run-1",
+        "run_mode": "full",
+    }
+    lever_result = {
+        "matched": True,
+        "answer": "Governed cost levers, ordered by current evidence.",
+        "basis": "Governed cost evidence",
+        "citations": [],
+        "suggestions": [],
+        "answered_by": "governed_levers",
+        "assistant_mode": "governed_levers",
+        "grounding_status": "suggested",
+        "_orchestrator_force_answer": True,
+    }
+    try:
+        monkeypatch.setattr(api_module, "_resolve_qa_context", lambda _run_id: context)
+        monkeypatch.setattr(
+            api_module,
+            "_governed_cost_lever_result",
+            lambda _context, *, question, public_safe: lever_result
+            if "reduce operating cost" in question.casefold()
+            else None,
+        )
+        question = "How can we reduce operating cost?"
+        assistant_response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": question,
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "entrypoint": "ceo_kpi_inline",
+                    "kpi_key": "operating_cost",
+                    "kpi_question_intent": "free_text",
+                },
+            },
+        )
+        qa_response = client.post(
+            "/qa",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": question, "persona": "ceo", "mode": "auto"},
+        )
+        assert assistant_response.status_code == 200
+        assert qa_response.status_code == 200
+        for payload in (assistant_response.json(), qa_response.json()):
+            assert payload["answered_by"] == "governed_levers"
+            assert payload["answer"] == lever_result["answer"]
+            assert payload["llm_fallback_attempted"] is False
+    finally:
+        _restore_env(original)
 
 
 def test_free_text_ceo_kpi_routing_covers_rendered_finance_cards():
