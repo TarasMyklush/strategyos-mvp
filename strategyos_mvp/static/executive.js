@@ -4942,9 +4942,10 @@
     var developments = liveGovernedMode
       ? safeArray(developmentsSection.items).slice(0, 3)
       : (safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3));
-    var weekAhead = liveGovernedMode
-      ? safeArray(weekSection.items).slice(0, 3)
-      : (safeArray(blueprint.week).length ? safeArray(blueprint.week).slice(0, 3) : safeArray(lowerRail.week_ahead).slice(0, 3));
+    var allWeekAhead = (liveGovernedMode
+      ? safeArray(weekSection.items)
+      : (safeArray(blueprint.week).length ? safeArray(blueprint.week) : safeArray(lowerRail.week_ahead)))
+      .filter(function (item) { return item && item.business_relevant !== false; });
     if (!decisions.length && fallbackFindings.length) {
       decisions = [{
         key: 'delegated_controls',
@@ -4955,55 +4956,101 @@
         prompt: 'Do any finance-control items cross the CEO materiality threshold? Answer at portfolio level, not invoice level.'
       }];
     }
-    if (!signals.length && developments.length) {
-      signals = developments.map(function (item, index) {
+    var developmentsAndConcerns = signals.concat(developments.map(function (item, index) {
         return {
           key: 'development-' + index,
           title: firstDefined(item.title, 'Business signal'),
           summary: firstDefined(item.impact, item.detail, 'No executive implication is available.'),
           implication: 'Confirm whether this changes the current outlook or any leadership commitment.',
-          tone: 'neutral',
+          tone: firstDefined(item.tone, item.kind === 'win' ? 'positive' : 'watch'),
           prompt: 'Does “' + firstDefined(item.title, 'this business signal') + '” change the current outlook or require executive intervention?'
         };
-      }).slice(0, 3);
+      }));
+    if (!developmentsAndConcerns.length && fallbackFindings.length) {
+      developmentsAndConcerns = fallbackFindings.map(function (item, index) {
+        return {
+          key: firstDefined(item.finding_id, item.id, 'finding-' + index),
+          title: firstDefined(item.title, 'Material business signal'),
+          summary: firstDefined(item.summary, item.detail, 'No executive implication is available.'),
+          implication: firstDefined(item.implication, 'Confirm whether this changes the current outlook or any leadership commitment.'),
+          tone: firstDefined(item.tone, 'neutral'),
+          prompt: 'Explain the executive implication of “' + firstDefined(item.title, 'this signal') + '” and whether it needs CEO attention.'
+        };
+      });
     }
+    var seenOutlookItems = {};
+    developmentsAndConcerns = developmentsAndConcerns.filter(function (item) {
+      var key = String(firstDefined(item.key, item.title, '')).trim().toLowerCase();
+      if (!key || seenOutlookItems[key]) return false;
+      seenOutlookItems[key] = true;
+      return true;
+    }).slice(0, 3);
 
-    var decisionMarkup = decisions.length ? decisions.map(function (item) {
+    var decisionMarkup = decisions.length ? decisions.map(function (item, index) {
       var priority = ['critical', 'watch', 'positive', 'neutral'].indexOf(String(item.priority)) >= 0 ? String(item.priority) : 'neutral';
-      return '<article class="executive-decision tone-' + escapeHtml(priority) + '"><div class="executive-decision__head"><span>' + (item.action_required === false ? 'Delegated' : 'Decision required') + '</span><strong>' + escapeHtml(firstDefined(item.timing, 'Current review')) + '</strong></div><h4>' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</h4><p>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'Confirm the owner and next move.')) + '</strong></div><div class="executive-decision__foot"><span>Owner · ' + escapeHtml(firstDefined(item.owner, 'Executive team')) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Open decision brief</button></div></article>';
+      var key = String(firstDefined(item.key, 'decision-' + index));
+      var isOpen = Boolean((state.openDecisionKeys || {})[key]);
+      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-decision__head"><span>' + (item.action_required === false ? 'Delegated' : 'Decision required') + '</span><strong>' + escapeHtml(firstDefined(item.timing, 'Current review')) + '</strong></span><span class="executive-decision__title"><strong>' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</strong><span>' + escapeHtml(firstDefined(item.summary, '')) + '</span></span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="executive-decision__body"><div class="executive-decision__ask"><span>Decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'Confirm the owner and next move.')) + '</strong></div><div class="executive-decision__foot"><span>Owner · ' + escapeHtml(firstDefined(item.owner, 'Executive team')) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Open decision brief</button></div></div>' : '') + '</article>';
     }).join('') : '<div class="executive-empty-state"><strong>No CEO decision is waiting</strong><p>Operational work remains delegated and no material escalation is attached to this review.</p></div>';
 
-    var signalMarkup = signals.length ? signals.map(function (item) {
+    var signalMarkup = developmentsAndConcerns.length ? developmentsAndConcerns.map(function (item, index) {
       var tone = ['critical', 'watch', 'positive', 'neutral'].indexOf(String(item.tone)) >= 0 ? String(item.tone) : 'neutral';
-      return '<article class="executive-signal tone-' + escapeHtml(tone) + '"><div class="executive-signal__head"><span class="executive-signal__dot"></span><strong>' + escapeHtml(firstDefined(item.title, 'Business signal')) + '</strong></div><p>' + escapeHtml(firstDefined(item.summary, '')) + '</p><small>' + escapeHtml(firstDefined(item.implication, 'Keep this under review.')) + '</small><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Explain the executive implication.')) + '">Pressure-test with Hermes</button></article>';
+      var key = String(firstDefined(item.key, 'outlook-' + index));
+      var isOpen = Boolean((state.openOutlookKeys || {})[key]);
+      return '<article class="executive-signal tone-' + escapeHtml(tone) + (isOpen ? ' is-open' : '') + '"><button class="executive-signal__toggle" type="button" data-outlook-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__head"><span class="executive-signal__dot"></span><strong>' + escapeHtml(firstDefined(item.title, 'Business signal')) + '</strong></span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="executive-signal__body"><p>' + escapeHtml(firstDefined(item.summary, '')) + '</p><small>' + escapeHtml(firstDefined(item.implication, 'Keep this under review.')) + '</small><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Explain the executive implication.')) + '">Pressure-test with Hermes</button></div>' : '') + '</article>';
     }).join('') : '<div class="executive-empty-state"><strong>No material performance exception</strong><p>The current headline measures remain within the executive tolerance.</p></div>';
 
     if (findingsPanel) {
       findingsPanel.hidden = false;
-      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Your call</p><h3 class="detail-title">Decisions for you</h3><p class="section-note">Aggregated at enterprise level; execution detail stays with the accountable leader.</p></div></div><div class="executive-decision-list">' + decisionMarkup + '</div>' + (delegated ? '<div class="delegated-portfolio"><span>' + escapeHtml(firstDefined(delegated.title, 'Delegated portfolio')) + '</span><p>' + escapeHtml(firstDefined(delegated.summary, '')) + '</p><strong>' + escapeHtml(firstDefined(delegated.owner, 'Group CFO')) + '</strong></div>' : '');
+      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Enterprise outlook</p><h3 class="detail-title">Developments &amp; concerns</h3><p class="section-note">Only changes that can alter the outlook or a leadership commitment.</p></div></div><div class="executive-signal-list">' + signalMarkup + '</div>';
     }
 
     if (developmentsPanel) {
       developmentsPanel.hidden = false;
-      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Enterprise outlook</p><h3 class="detail-title">Signals to watch</h3><p class="section-note">Only changes that can alter the outlook or a leadership commitment.</p></div></div><div class="executive-signal-list">' + signalMarkup + '</div>';
+      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Your call</p><h3 class="detail-title">Decisions for you</h3><p class="section-note">Aggregated at enterprise level; execution detail stays with the accountable leader.</p></div></div><div class="executive-decision-list">' + decisionMarkup + '</div>' + (delegated ? '<div class="delegated-portfolio"><span>' + escapeHtml(firstDefined(delegated.title, 'Delegated portfolio')) + '</span><p>' + escapeHtml(firstDefined(delegated.summary, '')) + '</p><strong>' + escapeHtml(firstDefined(delegated.owner, 'Group CFO')) + '</strong></div>' : '');
     }
+
+    safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
+      safeArray(panel && panel.querySelectorAll('[data-executive-prompt]')).forEach(function (button) {
+        button.onclick = function () { askAssistant(button.getAttribute('data-executive-prompt') || '', button); };
+      });
+      safeArray(panel && panel.querySelectorAll('[data-decision-toggle]')).forEach(function (button) {
+        button.onclick = function () {
+          var key = button.getAttribute('data-decision-toggle') || '';
+          state.openDecisionKeys = state.openDecisionKeys || {};
+          state.openDecisionKeys[key] = !state.openDecisionKeys[key];
+          renderLowerRailFidelity();
+        };
+      });
+      safeArray(panel && panel.querySelectorAll('[data-outlook-toggle]')).forEach(function (button) {
+        button.onclick = function () {
+          var key = button.getAttribute('data-outlook-toggle') || '';
+          state.openOutlookKeys = state.openOutlookKeys || {};
+          state.openOutlookKeys[key] = !state.openOutlookKeys[key];
+          renderLowerRailFidelity();
+        };
+      });
+    });
 
     if (weekPanel) {
       weekPanel.hidden = false;
-      var openIndex = Math.min(state.openWeekIndex || 0, Math.max(weekAhead.length - 1, 0));
-      var activeEvent = weekAhead[openIndex] || null;
-      weekPanel.innerHTML = weekAhead.length ? '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">What to walk in having decided</h3><p class="section-note">Meetings are shown only when the current run carries a governed calendar.</p></div></div><div class="week-rail-v2">' + weekAhead.map(function (item, index) {
+      var openIndex = Math.min(state.openWeekIndex || 0, Math.max(allWeekAhead.length - 1, 0));
+      var activeEvent = allWeekAhead[openIndex] || null;
+      var visibleWeekAhead = state.showAllWeekEvents ? allWeekAhead : allWeekAhead.slice(0, 3);
+      weekPanel.innerHTML = allWeekAhead.length ? '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">Week ahead</h3><p class="section-note">Business-relevant commitments only. Select one to keep its preparation context in view.</p></div></div><div class="week-rail-v2">' + visibleWeekAhead.map(function (item) {
+        var index = allWeekAhead.indexOf(item);
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">Decision brief</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>Prepare me</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>Draft input request</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask Hermes to prepare something for this commitment</label><input id="week-input" class="driver-input" type="text" placeholder="Ask a decision question about this commitment..." /><button type="submit">Ask</button></form></div>' : '') : '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">No executive calendar connected</h3></div></div><p class="section-note">No governed calendar is available for this reporting period. No meetings or deadlines have been inferred.</p>';
-      safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
-        safeArray(panel && panel.querySelectorAll('[data-executive-prompt]')).forEach(function (button) {
-          button.onclick = function () { askAssistant(button.getAttribute('data-executive-prompt') || '', button); };
-        });
-      });
+      }).join('') + (allWeekAhead.length > 3 ? '<button class="week-show-more" type="button" data-week-show-all="true">' + (state.showAllWeekEvents ? 'Show less' : 'See ' + (allWeekAhead.length - 3) + ' more') + '</button>' : '') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">Decision brief</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>Prepare me</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>Draft input request</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask Hermes to prepare something for this commitment</label><input id="week-input" class="driver-input" type="text" placeholder="Ask a decision question about this commitment..." /><button type="submit">Ask</button></form></div>' : '') : '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">No executive calendar connected</h3></div></div><p class="section-note">No governed calendar is available for this reporting period, or no item has been classified as business-relevant. No meetings or deadlines have been inferred.</p>';
       safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {
         button.onclick = function () {
           var idx = Number(button.getAttribute('data-week-index') || 0) || 0;
           state.openWeekIndex = state.openWeekIndex === idx ? -1 : idx;
+          renderLowerRailFidelity();
+        };
+      });
+      safeArray(weekPanel.querySelectorAll('[data-week-show-all]')).forEach(function (button) {
+        button.onclick = function () {
+          state.showAllWeekEvents = !state.showAllWeekEvents;
           renderLowerRailFidelity();
         };
       });
@@ -5533,6 +5580,9 @@
       openDriverNoteKey: "",
       selectedFindingId: "",
       openWeekIndex: 0,
+      showAllWeekEvents: false,
+      openDecisionKeys: {},
+      openOutlookKeys: {},
       openCalendarIndex: 0,
       agentSummaryOpen: false,
       openAgentId: firstDefined(requested.agent, ""),

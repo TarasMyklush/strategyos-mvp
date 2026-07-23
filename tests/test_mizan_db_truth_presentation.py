@@ -395,7 +395,9 @@ def test_executive_js_live_database_mode_does_not_fallback_to_synthetic_rails():
     assert "liveGovernedMode\n      ? safeArray(developmentsSection.items)" in js
     assert "liveGovernedMode\n      ? safeArray(weekSection.items)" in js
     assert "developmentsPanel.hidden = false" in js
-    assert "Signals to watch" in js
+    assert "Developments &amp; concerns" in js
+    assert "data-decision-toggle" in js
+    assert "data-week-show-all" in js
     assert "No case-level decision is escalated to the CEO" in js
     assert "No governed calendar is available for this reporting period" in js
     assert "findingsSection.case_index" in js

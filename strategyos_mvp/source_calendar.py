@@ -12,6 +12,77 @@ from openpyxl import load_workbook
 from .source_governance import RESTRICTED_CONTEXT_DIR
 
 
+_PERSONAL_TERMS = frozenset(
+    {
+        "anniversary",
+        "birthday",
+        "dentist",
+        "doctor",
+        "family",
+        "florist",
+        "holiday",
+        "medical",
+        "personal",
+        "private",
+        "school",
+        "vacation",
+        "wedding",
+    }
+)
+_BUSINESS_TERMS = frozenset(
+    {
+        "board",
+        "budget",
+        "business",
+        "client",
+        "committee",
+        "compliance",
+        "contract",
+        "decision",
+        "executive",
+        "finance",
+        "governance",
+        "investor",
+        "leadership",
+        "meeting",
+        "operating",
+        "review",
+        "strategy",
+        "vendor",
+    }
+)
+
+
+def _business_relevance(
+    *,
+    explicit_value: Any,
+    title: str,
+    event_type: str,
+    related_bu: str,
+) -> tuple[bool, str]:
+    """Return a deterministic, privacy-first calendar relevance decision.
+
+    We never use a language model at source ingestion time. An explicit source
+    classification wins. Otherwise a personal marker is excluded; only a
+    positively identifiable business marker is included. Ambiguous events stay
+    out of the CEO agenda until their source is classified, which avoids
+    surfacing personal calendar data by inference.
+    """
+
+    normalized_explicit = str(explicit_value or "").strip().casefold()
+    if normalized_explicit in {"1", "true", "yes", "y", "business", "include", "included"}:
+        return True, "source_classified_business"
+    if normalized_explicit in {"0", "false", "no", "n", "personal", "private", "exclude", "excluded"}:
+        return False, "source_classified_non_business"
+
+    text = " ".join((title, event_type, related_bu)).casefold()
+    if any(term in text for term in _PERSONAL_TERMS):
+        return False, "deterministic_personal_marker"
+    if any(term in text for term in _BUSINESS_TERMS):
+        return True, "deterministic_business_marker"
+    return False, "requires_source_classification"
+
+
 def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
     root = Path(dataset_root)
     candidates = sorted(path for path in root.rglob("*.xlsx") if "calendar" in path.name.lower() or "agenda" in path.name.lower())
@@ -28,6 +99,7 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
         index = next((headers[name] for name in names if name in headers), None)
         return values[index] if index is not None and index < len(values) else None
     items: list[dict[str, Any]] = []
+    excluded_count = 0
     for raw in rows:
         values = tuple(raw)
         event_date = _date(value(values, "event_date", "date", "meeting_date"))
@@ -39,6 +111,23 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
             value(values, "prep_needed", "preparation", "prep", "notes_agenda", "notes", "agenda_notes")
             or "No preparation request was supplied."
         ).strip()
+        related_bu = str(value(values, "related_bu", "business_unit") or "").strip()
+        is_business_relevant, relevance_reason = _business_relevance(
+            explicit_value=value(
+                values,
+                "business_relevant",
+                "is_business",
+                "relevance",
+                "calendar_relevance",
+                "visibility",
+            ),
+            title=title,
+            event_type=event_type,
+            related_bu=related_bu,
+        )
+        if not is_business_relevant:
+            excluded_count += 1
+            continue
         items.append({
             "event_id": f"calendar-{event_date.isoformat()}-{len(items) + 1}",
             "date": event_date.isoformat(),
@@ -50,7 +139,9 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
             "prep": prep,
             "attendees": str(value(values, "attendees", "participants") or "").strip() or None,
             "location": str(value(values, "location", "venue") or "").strip() or None,
-            "related_bu": str(value(values, "related_bu", "business_unit") or "").strip() or None,
+            "related_bu": related_bu or None,
+            "business_relevant": True,
+            "relevance_reason": relevance_reason,
             "evidence_scope": "calendar_agenda_only" if restricted else "governed_calendar",
         })
     items.sort(key=lambda item: str(item.get("date") or ""))
@@ -69,10 +160,17 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
         "status": "ready" if items else "unavailable",
         "items": projected_items,
         "total_item_count": len(items),
+        "excluded_non_business_count": excluded_count,
         "upcoming_item_count": len(upcoming_items),
         "projection_as_of": projection_day.isoformat(),
         "projection_policy": projection_policy,
-        "reason": "Calendar workbook contains no complete Event_Date, Title and Type rows." if not items else None,
+        "reason": (
+            "No calendar item has been classified as business-relevant for the CEO projection."
+            if not items and excluded_count
+            else "Calendar workbook contains no complete Event_Date, Title and Type rows."
+            if not items
+            else None
+        ),
         "source_file": relative_source,
         "sheet": sheet.title,
         "restricted": restricted,

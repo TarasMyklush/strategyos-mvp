@@ -1665,6 +1665,77 @@ def test_authenticated_calendar_question_uses_governed_agenda_without_llm(monkey
         _restore_env(original)
 
 
+def test_calendar_assistant_excludes_explicitly_non_business_entries(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {
+                    "run_id": "run-calendar-privacy",
+                    "calendar_agenda": {
+                        "status": "ready",
+                        "source_file": "98_Restricted_Context/CEO_Calendar.xlsx",
+                        "sheet": "Calendar",
+                        "total_item_count": 2,
+                        "items": [
+                            {
+                                "event_id": "calendar-private-1",
+                                "date": "2099-07-20",
+                                "title": "Dentist appointment",
+                                "type": "Personal",
+                                "business_relevant": False,
+                            },
+                            {
+                                "event_id": "calendar-business-1",
+                                "date": "2099-07-21",
+                                "title": "Executive Committee",
+                                "type": "Decision meeting",
+                                "prep": "Review the cash-leakage decision brief.",
+                                "business_relevant": True,
+                                "evidence_scope": "calendar_agenda_only",
+                            },
+                        ],
+                    },
+                },
+                "run_id": run_id or "run-calendar-privacy",
+                "run_mode": "full",
+            },
+        )
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("a governed calendar question must not reach the LLM")
+            ),
+        )
+
+        response = client.post(
+            "/assistant/chat",
+            json={
+                "question": "What is next on my calendar?",
+                "persona": "ceo",
+                "mode": "auto",
+                "run_id": "run-calendar-privacy",
+            },
+            headers={"X-API-Key": "operator-key"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert "Executive Committee" in payload["answer"]
+        assert "Dentist appointment" not in payload["answer"]
+        assert payload["calendar_item_count"] == 1
+        assert payload["calendar_projection_item_count"] == 1
+    finally:
+        _restore_env(original)
+
+
 def test_calendar_quick_action_returns_executable_input_request_without_llm(monkeypatch):
     original, client = _client_with_auth()
     try:

@@ -11650,6 +11650,20 @@ def _requested_calendar_item_count(question: str, *, default: int = 1) -> int:
     return max(1, min(value, 10))
 
 
+def _business_calendar_items(agenda: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Return the CEO-safe projection of a governed calendar agenda.
+
+    Calendar ingestion classifies items before they are persisted. This second
+    guard keeps legacy or externally supplied agenda payloads from exposing an
+    entry explicitly marked as personal or otherwise non-business.
+    """
+    return [
+        item
+        for item in list(agenda.get("items") or [])
+        if isinstance(item, Mapping) and item.get("business_relevant") is not False
+    ]
+
+
 def _calendar_quick_action_result(
     item: Mapping[str, Any],
     agenda: Mapping[str, Any],
@@ -11701,6 +11715,7 @@ def _calendar_quick_action_result(
 
     source_file = str(agenda.get("source_file") or "governed calendar workbook")
     sheet = str(agenda.get("sheet") or "Calendar")
+    business_items = _business_calendar_items(agenda)
     return {
         "matched": True,
         "answer": answer,
@@ -11719,8 +11734,8 @@ def _calendar_quick_action_result(
         "answer_origin": "governed",
         "intent": intent,
         "calendar_status": "ready",
-        "calendar_item_count": int(agenda.get("total_item_count") or len(list(agenda.get("items") or []))),
-        "calendar_projection_item_count": len(list(agenda.get("items") or [])),
+        "calendar_item_count": len(business_items),
+        "calendar_projection_item_count": len(business_items),
         "_orchestrator_force_answer": True,
     }
 
@@ -11744,9 +11759,15 @@ def _governed_calendar_result(
     agenda = summary.get("calendar_agenda") if isinstance(summary, Mapping) else None
     if not isinstance(agenda, Mapping):
         agenda = {}
-    items = [item for item in list(agenda.get("items") or []) if isinstance(item, Mapping)]
+    items = _business_calendar_items(agenda)
     if str(agenda.get("status") or "").casefold() != "ready" or not items:
-        reason = str(agenda.get("reason") or "No governed calendar workbook was supplied for this run.")
+        reason = str(agenda.get("reason") or "").strip()
+        if not reason:
+            reason = (
+                "No item has been classified as business-relevant for the CEO projection."
+                if str(agenda.get("status") or "").casefold() == "ready"
+                else "No governed calendar workbook was supplied for this run."
+            )
         return {
             "matched": True,
             "answer": f"The governed calendar is not available for this run. {reason}",
@@ -11830,7 +11851,7 @@ def _governed_calendar_result(
             )
     else:
         selected = [(_calendar_item_date(item), item) for item in items[:3]]
-        total_item_count = int(agenda.get("total_item_count") or len(items))
+        total_item_count = len(items)
         status_sentence = (
             f"The governed calendar is connected with {total_item_count} processed agenda item(s); "
             f"{len(items)} are in the current CEO projection."
@@ -11890,7 +11911,7 @@ def _governed_calendar_result(
         "answer_origin": "governed",
         "intent": "calendar_agenda",
         "calendar_status": "ready",
-        "calendar_item_count": int(agenda.get("total_item_count") or len(items)),
+        "calendar_item_count": len(items),
         "calendar_projection_item_count": len(items),
         "_orchestrator_force_answer": True,
     }

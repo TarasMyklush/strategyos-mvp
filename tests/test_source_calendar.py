@@ -62,3 +62,64 @@ def test_calendar_projection_processes_all_rows_and_prioritises_upcoming(tmp_pat
     assert first["attendees"] == "CEO; CFO"
     assert first["location"] == "Boardroom"
     assert first["prep"] == "Review decision brief 3."
+
+
+def test_calendar_projection_excludes_personal_and_ambiguous_entries(tmp_path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Calendar"
+    sheet.append(["Date", "Title", "Category", "Related BU", "Notes / Agenda"])
+    tomorrow = date.today() + timedelta(days=1)
+    sheet.append(
+        [
+            tomorrow.isoformat(),
+            "Executive Committee",
+            "Decision meeting",
+            "Group",
+            "Review the board decision brief.",
+        ]
+    )
+    sheet.append(
+        [
+            tomorrow.isoformat(),
+            "Anniversary dinner reservation",
+            "Personal",
+            "",
+            "Book the florist.",
+        ]
+    )
+    sheet.append(
+        [
+            tomorrow.isoformat(),
+            "Coffee catch-up",
+            "Social",
+            "",
+            "",
+        ]
+    )
+    workbook.save(tmp_path / "CEO_Calendar.xlsx")
+
+    agenda = derive_calendar_agenda(tmp_path)
+
+    assert agenda["status"] == "ready"
+    assert agenda["total_item_count"] == 1
+    assert agenda["excluded_non_business_count"] == 2
+    assert [item["title"] for item in agenda["items"]] == ["Executive Committee"]
+    assert agenda["items"][0]["business_relevant"] is True
+    assert agenda["items"][0]["relevance_reason"] == "deterministic_business_marker"
+
+
+def test_calendar_projection_reports_when_all_complete_rows_are_excluded(tmp_path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Calendar"
+    sheet.append(["Date", "Title", "Category"])
+    sheet.append([(date.today() + timedelta(days=1)).isoformat(), "Dentist appointment", "Personal"])
+    workbook.save(tmp_path / "CEO_Calendar.xlsx")
+
+    agenda = derive_calendar_agenda(tmp_path)
+
+    assert agenda["status"] == "unavailable"
+    assert agenda["items"] == []
+    assert agenda["excluded_non_business_count"] == 1
+    assert agenda["reason"] == "No calendar item has been classified as business-relevant for the CEO projection."
