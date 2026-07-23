@@ -5223,13 +5223,23 @@
     var catalogue = getDiscoverableAgents().slice(0, 6);
 
     if (leadersPanel) {
-      var leaderCards = leaders.length ? leaders.map(function (leader) {
+      var leaderIndex = Math.max(0, Math.min(Number(leadersPanel.getAttribute('data-leader-index') || 0), Math.max(0, leaders.length - 1)));
+      var visibleLeaders = leaders.length ? [leaders[leaderIndex]] : [];
+      var leaderCards = visibleLeaders.length ? visibleLeaders.map(function (leader) {
         var title = firstDefined(leader.display_name, leadershipRoleLabel(leader), 'Leadership assistant');
         var activity = leadershipActivityCopy(leader);
         return '<article class="fidelity-leader-card"><div class="fidelity-leader-card__visual"><span>' + escapeHtml(String(title).slice(0, 1)) + '</span><small>' + escapeHtml(leadershipStatusLabel(leader.status)) + '</small></div><div class="fidelity-leader-card__copy"><strong>' + escapeHtml(title) + '</strong><span>' + escapeHtml(leadershipRoleLabel(leader)) + '</span><p>' + escapeHtml(activity) + '</p><button type="button" data-leader-discuss="' + escapeHtml('Prepare a CEO discussion brief with ' + title + ': ' + activity) + '">Discuss in chat</button></div></article>';
       }).join('') : '<div class="fidelity-empty"><strong>No leadership update is available</strong><p>No recorded leadership update is attached to the current CEO source set.</p></div>';
-      leadersPanel.innerHTML = '<div class="fidelity-section-toolbar"><span>Leadership updates attached to this review</span><button type="button" data-home-assistants-open="true">Browse all AI Assistants</button></div><div class="fidelity-leader-grid">' + leaderCards + '</div>';
+      var leaderNav = leaders.length > 1 ? '<span class="fidelity-leader-nav"><button type="button" data-leader-step="-1" aria-label="Previous leadership update">←</button><button type="button" data-leader-step="1" aria-label="Next leadership update">→</button></span>' : '';
+      leadersPanel.innerHTML = '<div class="fidelity-section-toolbar"><span>' + escapeHtml(leaders.length ? ((leaderIndex + 1) + ' of ' + leaders.length + ' leadership updates') : 'Leadership updates attached to this review') + '</span><span>' + leaderNav + '<button type="button" data-home-assistants-open="true">Browse all AI Assistants</button></span></div><div class="fidelity-leader-grid">' + leaderCards + '</div>';
       safeArray(leadersPanel.querySelectorAll('[data-leader-discuss]')).forEach(function (button) { button.onclick = function () { askAssistant(button.getAttribute('data-leader-discuss') || '', button, { entrypoint: 'leaders_corner' }); }; });
+      safeArray(leadersPanel.querySelectorAll('[data-leader-step]')).forEach(function (button) {
+        button.onclick = function () {
+          var nextIndex = (leaderIndex + Number(button.getAttribute('data-leader-step') || 0) + leaders.length) % leaders.length;
+          leadersPanel.setAttribute('data-leader-index', String(nextIndex));
+          renderHomeTargetExtensions();
+        };
+      });
       var browse = leadersPanel.querySelector('[data-home-assistants-open]');
       if (browse) browse.onclick = function () { switchView('agents'); };
     }

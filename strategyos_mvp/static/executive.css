@@ -7332,6 +7332,17 @@ body {
   gap: 12px;
 }
 
+.fidelity-operating-left .executive-signal-list,
+.fidelity-operating-left .executive-decision-list,
+#week-ahead-section .week-rail-v2 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fidelity-operating-left .executive-signal,
+.fidelity-operating-left .executive-decision {
+  min-height: 0;
+}
+
 .executive-signal,
 .executive-decision {
   min-height: 126px;
@@ -7404,8 +7415,21 @@ body {
 
 .fidelity-leader-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+}
+
+.fidelity-leader-nav {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.fidelity-leader-nav button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
 }
 
 .fidelity-leader-card {
