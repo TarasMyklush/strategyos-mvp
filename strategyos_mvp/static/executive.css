@@ -7796,6 +7796,17 @@ body {
     padding: 18px 16px 82px;
   }
 
+  .view-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .view-nav .view-tile {
+    width: 100%;
+    justify-content: center;
+  }
+
   .view-panel--home > .hero {
     grid-template-columns: 1fr;
     gap: 18px;
