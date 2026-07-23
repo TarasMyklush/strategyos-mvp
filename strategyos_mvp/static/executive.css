@@ -2106,6 +2106,18 @@ html[data-theme="dark"] .kg-node:focus-visible .kg-node-dot {
   margin: 0;
 }
 
+.kpi-show-work {
+  justify-self: end;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 0;
+}
+
 .kpi-brief-summary {
   max-width: 90ch;
 }
@@ -7132,4 +7144,142 @@ body {
   font-size: 9px;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+/* Target-parity CEO continuation: the source-backed content keeps the same
+   restrained card rhythm as the standalone diagnostic rather than becoming a
+   second, unrelated product surface. */
+.topbar-theme-toggle,
+.target-link-button,
+.target-leader-card button,
+.target-market-card button,
+.target-composer button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+
+.topbar-theme-toggle {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 16px;
+}
+
+.target-thinking,
+.target-agent-status,
+.target-market-head {
+  display: grid;
+  gap: 12px;
+}
+
+.target-composer {
+  display: flex;
+  gap: 10px;
+}
+
+.target-composer input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  padding: 14px 16px;
+}
+
+.target-composer button,
+.target-leader-card button,
+.target-market-card button {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.target-prompt-row,
+.target-agent-grid,
+.target-market-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.target-prompt-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.target-prompt-row button {
+  min-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 9px 14px;
+  text-align: left;
+}
+
+.target-leader-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.target-leader-card,
+.target-market-card,
+.target-agent-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 16px;
+}
+
+.target-leader-card__head { display: flex; align-items: center; gap: 10px; }
+.target-leader-card__head div { display: grid; min-width: 0; gap: 2px; }
+.target-leader-card__head small,
+.target-leader-card p,
+.target-market-card small,
+.target-market-head span,
+.target-agent-card small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.target-leader-card p { min-height: 52px; margin: 0; }
+.target-leader-avatar,
+.target-agent-card > span { display: inline-grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.target-link-button { justify-self: start; border-radius: 999px; padding: 8px 12px; font-size: 12px; font-weight: 700; }
+.target-agent-status { grid-template-columns: 1fr auto; align-items: end; }
+.target-agent-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.target-agent-card { text-align: left; cursor: pointer; }
+.target-agent-card:hover,
+.target-leader-card button:hover,
+.target-market-card button:hover,
+.target-link-button:hover,
+.target-prompt-row button:hover { border-color: var(--accent); }
+.target-agent-card strong,
+.target-market-card strong { overflow-wrap: anywhere; }
+.target-market-head { grid-template-columns: 1fr auto; align-items: end; margin-top: 20px; }
+.target-market-head p { margin: 0; }
+.target-market-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.target-market-card > span { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.target-market-card button { justify-self: start; margin-top: auto; }
+.target-empty { padding: 20px; border: 1px dashed var(--border); border-radius: 14px; color: var(--muted); }
+.target-empty p { margin: 5px 0 0; }
+
+@media (max-width: 900px) {
+  .target-leader-grid,
+  .target-agent-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .topbar-theme-toggle { width: 30px; height: 30px; }
+  .target-composer,
+  .target-agent-status,
+  .target-market-head { grid-template-columns: 1fr; }
+  .target-prompt-row,
+  .target-leader-grid,
+  .target-agent-grid,
+  .target-market-grid { grid-template-columns: 1fr; }
+  .target-composer { flex-direction: column; }
 }

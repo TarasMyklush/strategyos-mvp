@@ -27,11 +27,11 @@
       </div>
       <span class="tb-div" aria-hidden="true"></span>
       <nav class="view-nav" id="view-nav" aria-label="Executive views" role="tablist">
-        <button class="view-tile is-active" type="button" role="tab" data-view-target="home" aria-controls="view-home" aria-selected="true">Briefing</button>
+        <button class="view-tile is-active" type="button" role="tab" data-view-target="home" aria-controls="view-home" aria-selected="true">Diagnostics</button>
         <button class="view-tile" type="button" role="tab" data-view-target="calendar" aria-controls="view-calendar" aria-selected="false">Calendar</button>
-        <button class="view-tile" type="button" role="tab" data-view-target="agents" aria-controls="view-agents" aria-selected="false">AI team</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="agents" aria-controls="view-agents" aria-selected="false">Assistants</button>
         <button class="view-tile" type="button" role="tab" data-view-target="functions" aria-controls="view-functions" aria-selected="false">Functions</button>
-        <button class="view-tile" type="button" role="tab" data-view-target="knowledge" aria-controls="view-knowledge" aria-selected="false">Evidence</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="knowledge" aria-controls="view-knowledge" aria-selected="false">Knowledge</button>
       </nav>
     </div>
 
@@ -47,6 +47,7 @@
         <span class="topbar-assistant-launch__mark" aria-hidden="true">◆</span>
         <span class="topbar-assistant-launch__label">Ask Hermes</span>
       </button>
+      <button class="topbar-theme-toggle" id="topbar-theme-toggle" type="button" aria-label="Toggle colour theme" title="Toggle colour theme">◐</button>
       <div class="tb-user" id="topbar-user">
         <span class="avatar avatar-nav" id="topbar-avatar">—</span>
         <div class="tb-user-meta" hidden>
@@ -131,6 +132,30 @@
           <h2 class="section-title" id="gravity-heading">Prepare the next move</h2>
         </div>
         <article class="card detail-card" id="gravity-panel"></article>
+      </section>
+
+      <section class="section target-thinking-section" id="target-thinking-section" aria-labelledby="thinking-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="thinking-heading">Think and model on your data</h2>
+          <p class="section-note">Use governed figures and sources already in the current CEO workspace.</p>
+        </div>
+        <article class="card detail-card" id="thinking-panel"></article>
+      </section>
+
+      <section class="section target-leaders-section" id="target-leaders-section" aria-labelledby="leaders-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="leaders-heading">Leaders’ Corner</h2>
+          <p class="section-note">The leadership updates and direct discussion controls available in this workspace.</p>
+        </div>
+        <article class="card detail-card" id="leaders-corner-panel"></article>
+      </section>
+
+      <section class="section target-agents-section" id="target-agents-section" aria-labelledby="target-agents-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="target-agents-heading">Agents</h2>
+          <p class="section-note">Current assistant activity, role interfaces and governed deployment requests.</p>
+        </div>
+        <article class="card detail-card" id="target-agents-panel"></article>
       </section>
 
     </section>

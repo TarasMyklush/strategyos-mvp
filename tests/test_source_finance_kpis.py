@@ -180,3 +180,40 @@ def test_existing_dataset_without_a_plan_still_reports_none():
     payload = derive_source_finance_kpis(DATASET)
     assert payload["components"]["revenue_plan"] is None
     assert payload["trend"]["revenue"]["has_plan_series"] is False
+
+
+def test_group_budget_becomes_the_ceo_projection_without_double_counting_total(tmp_path):
+    """The calculated GROUP row is the headline, never an additional BU."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "BU_Budget_2026"
+    ws.append([
+        "Business Unit", "H1 Budget", "H1 Actual/Est (SAR M)", "H1 Var",
+        "EBITDA Budget %", "EBITDA H1 Est %", "Note",
+    ])
+    ws.append(["North", 100, 105, 5, 10, 12, "Demand ahead"])
+    ws.append(["South", 200, 195, -5, 20, 18, "Mix pressure"])
+    # This is already the consolidated figure: a regression must not sum it
+    # with North and South, which would report 800M instead of 300M.
+    ws.append(["GROUP", 300, 300, 0, 16.7, 16, "Consolidated"])
+    cash = wb.create_sheet("Group_Cash_Floor")
+    cash.append(["Quarter", "Group cash budget (SAR B)", "Actual/Forecast (SAR B)", "Floor (SAR B)"])
+    cash.append(["2026-Q2 (est)", 1.2, 1.4, 1.0])
+    wb.save(tmp_path / "BU_Group_Budget_2026.xlsx")
+
+    payload = derive_source_finance_kpis(tmp_path)
+
+    assert payload["components"] == {
+        "revenue_actual": "300000000.00",
+        "revenue_plan": "300000000.00",
+        "ebitda_actual": "48000000.00",
+        "ebitda_plan": "50100000.00",
+        "operating_cost_actual": "252000000.00",
+        "operating_cost_plan": "249900000.00",
+        "cash_balance": "1400000000.00",
+        "board_floor": "1000000000.00",
+    }
+    assert [item["name"] for item in payload["dynamics"]["revenue"]["lifting"]] == ["North"]
+    assert [item["name"] for item in payload["dynamics"]["revenue"]["dragging"]] == ["South"]

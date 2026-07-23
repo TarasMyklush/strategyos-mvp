@@ -27,6 +27,12 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     cash. Plans and the board floor are never manufactured from actuals.
     """
     root = Path(dataset_root)
+    # A group finance pack has a higher-quality, explicitly aligned CEO view
+    # than a division GL extract.  Prefer it when all of its required source
+    # workbooks are present; otherwise retain the existing narrow GL path.
+    group_projection = _group_finance_projection(root)
+    if group_projection is not None:
+        return group_projection
     gl_path = _first_matching(root, "gl_extract", ".csv")
     coa_path = _first_matching(root, "chart_of_accounts", ".xlsx")
     cash_path = _first_matching(root, "cash_forecast", ".xlsx")
@@ -187,6 +193,181 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
         "evidence": evidence,
         "source_files": sorted({item for group in evidence.values() for item in group["files"]}),
     }
+
+
+def _group_finance_projection(root: Path) -> dict[str, Any] | None:
+    """Derive CEO KPI cards from the supplied group P&L, budget and analytics.
+
+    The source pack contains a governed H1 group budget by business unit and a
+    separately documented monthly revenue series for the Tamween division.
+    These must not be silently mixed: headline group actuals and plan values
+    come only from ``BU_Group_Budget_2026``; the trend is explicitly labelled
+    as division steering data.  Each mover is the workbook's stated H1
+    variance and keeps the source note as an expandable source note.
+    """
+    budget_path = _first_matching(root, "bu_group_budget_2026", ".xlsx")
+    analytics_path = _first_matching(root, "revenue_analytics_2023-2026", ".xlsx")
+    if budget_path is None:
+        return None
+    try:
+        budget_book = load_workbook(budget_path, data_only=True, read_only=True)
+        budget_sheet = budget_book["BU_Budget_2026"]
+        rows = list(budget_sheet.values)
+    except Exception:
+        return None
+    if len(rows) < 2:
+        return None
+
+    headers = _header_positions(rows[0])
+    required = ("businessunit", "h1budget", "h1actualestsarm", "h1var", "ebitdabudget", "ebitdah1est")
+    if any(key not in headers for key in required):
+        return None
+    units: list[dict[str, Any]] = []
+    group_total: dict[str, Decimal] | None = None
+    for values in rows[1:]:
+        unit = str(_cell(values, headers, "businessunit") or "").strip()
+        actual = _decimal(_cell(values, headers, "h1actualestsarm"))
+        plan = _decimal(_cell(values, headers, "h1budget"))
+        variance = _decimal(_cell(values, headers, "h1var"))
+        plan_margin = _decimal(_cell(values, headers, "ebitdabudget"))
+        actual_margin = _decimal(_cell(values, headers, "ebitdah1est"))
+        if _normal(unit) == "group" and None not in {actual, plan, plan_margin, actual_margin}:
+            group_total = {"actual": actual, "plan": plan, "actual_margin": actual_margin, "plan_margin": plan_margin}
+            continue
+        # The GROUP total above is used for CEO headlines, but is never a
+        # business-unit mover.  Rows without a stated EBITDA margin (such as
+        # eliminations) are also not suitable for a margin reconstruction.
+        if not unit or None in {actual, plan, variance, plan_margin, actual_margin}:
+            continue
+        units.append({
+            "name": unit,
+            "actual": actual,
+            "plan": plan,
+            "variance": variance,
+            "plan_margin": plan_margin,
+            "actual_margin": actual_margin,
+            "note": str(_cell(values, headers, "note") or "").strip(),
+        })
+    if not units:
+        return None
+
+    # Workbook financial amounts are SAR millions.  Convert only at the
+    # calculation boundary so the API remains consistently in SAR.
+    million = Decimal("1000000")
+    revenue_actual = (group_total["actual"] if group_total else sum((row["actual"] for row in units), Decimal())) * million
+    revenue_plan = (group_total["plan"] if group_total else sum((row["plan"] for row in units), Decimal())) * million
+    ebitda_actual = ((revenue_actual / million) * group_total["actual_margin"] / 100 if group_total else sum((row["actual"] * row["actual_margin"] / 100 for row in units), Decimal())) * million
+    ebitda_plan = ((revenue_plan / million) * group_total["plan_margin"] / 100 if group_total else sum((row["plan"] * row["plan_margin"] / 100 for row in units), Decimal())) * million
+    operating_cost_actual = revenue_actual - ebitda_actual
+    operating_cost_plan = revenue_plan - ebitda_plan
+    cash = _group_cash_floor(budget_book, budget_path, root)
+    trend = _group_revenue_trend(analytics_path, root)
+    movers = _group_movers(units)
+    budget_file = _relative(budget_path, root)
+    budget_sha = _sha256(budget_path)
+    period = "H1 2026"
+    evidence_base = {
+        "files": [budget_file],
+        "actual_complete": True,
+        "details": {"file": budget_file, "sha256": budget_sha, "sheet": "BU_Budget_2026", "unit_count": len(units)},
+    }
+    evidence = {
+        "revenue": {**evidence_base, "summary": f"H1 actual and plan aggregated across {len(units)} business units from the approved group budget."},
+        "ebitda_margin": {**evidence_base, "summary": "H1 EBITDA is reconstructed from each business unit's H1 revenue and stated EBITDA margin; no group allocation has been added."},
+        "operating_cost": {**evidence_base, "summary": "Total cost to EBITDA is revenue less the stated business-unit EBITDA, not a proxy for a separately supplied opex ledger."},
+        "cash_vs_floor": cash["evidence"],
+    }
+    return {
+        "authoritative": True,
+        "derived_from": "deterministic_source_finance_kpi_engine",
+        "reporting_period_key": period,
+        "reporting_currency": "SAR",
+        "computation_boundary": "Group headlines use BU_Group_Budget_2026 H1 values. The revenue trend is separately labelled Tamween division steering data. No unprovided group cost allocation is inferred.",
+        "components": {
+            "revenue_actual": _number(revenue_actual), "revenue_plan": _number(revenue_plan),
+            "ebitda_actual": _number(ebitda_actual), "ebitda_plan": _number(ebitda_plan),
+            "operating_cost_actual": _number(operating_cost_actual), "operating_cost_plan": _number(operating_cost_plan),
+            "cash_balance": cash["value"], "board_floor": cash["floor"],
+        },
+        "trend": trend,
+        "dynamics": movers,
+        "actual_complete": {"revenue": True, "ebitda_margin": True, "operating_cost": True, "cash_vs_floor": cash["complete"]},
+        "evidence": evidence,
+        "source_files": sorted({*([budget_file]), *trend.get("source_files", []), *cash["evidence"].get("files", [])}),
+    }
+
+
+def _header_positions(values: Iterable[Any]) -> dict[str, int]:
+    return {_normal(value): index for index, value in enumerate(values) if value is not None}
+
+
+def _cell(values: Iterable[Any], headers: Mapping[str, int], key: str) -> Any:
+    items = tuple(values)
+    index = headers.get(key)
+    return items[index] if index is not None and index < len(items) else None
+
+
+def _group_movers(units: list[dict[str, Any]]) -> dict[str, list[dict[str, str]]]:
+    lifting: list[dict[str, str]] = []
+    dragging: list[dict[str, str]] = []
+    for unit in sorted(units, key=lambda item: item["variance"], reverse=True):
+        variance = unit["variance"]
+        if variance == 0:
+            continue
+        row = {"name": str(unit["name"]), "delta": _sar_delta(variance * Decimal("1000000"))}
+        if unit["note"]:
+            row["gm"] = "BU note"
+            row["note"] = unit["note"]
+        (lifting if variance > 0 else dragging).append(row)
+    return {"revenue": {"lifting": lifting[:4], "dragging": dragging[:4]}}
+
+
+def _group_revenue_trend(path: Path | None, root: Path) -> dict[str, Any]:
+    empty = {"labels": [], "actual": [], "plan": [], "has_plan_series": False, "unit": "sar"}
+    result = {"revenue": empty, "ebitda_margin": empty, "operating_cost": empty, "source_files": []}
+    if path is None:
+        return result
+    try:
+        sheet = load_workbook(path, data_only=True, read_only=True)["Monthly_by_Segment"]
+        rows = list(sheet.values)
+    except Exception:
+        return result
+    headers = _header_positions(rows[0] if rows else ())
+    if "month" not in headers or "netrevenuesar" not in headers:
+        return result
+    labels: list[str] = []
+    actual: list[str] = []
+    for values in rows[1:]:
+        month = str(_cell(values, headers, "month") or "")
+        value = _decimal(_cell(values, headers, "netrevenuesar"))
+        if month.startswith("2026-") and value is not None:
+            labels.append(month)
+            actual.append(_number(value) or "0")
+    if labels:
+        result["revenue"] = {"labels": labels, "actual": actual, "plan": [], "has_plan_series": False, "unit": "sar", "scope_note": "Tamween division monthly steering data; group headline is shown above."}
+        result["source_files"] = [_relative(path, root)]
+    return result
+
+
+def _group_cash_floor(book: Any, budget_path: Path, root: Path) -> dict[str, Any]:
+    fallback = {"value": None, "floor": None, "complete": False, "evidence": {"files": [_relative(budget_path, root)], "summary": "No group cash-floor row is available."}}
+    try:
+        sheet = book["Group_Cash_Floor"]
+        rows = list(sheet.values)
+        headers = _header_positions(rows[0] if rows else ())
+    except Exception:
+        return fallback
+    candidates = []
+    for values in rows[1:]:
+        quarter = str(_cell(values, headers, "quarter") or "")
+        value = _decimal(_cell(values, headers, "actualforecastsarb"))
+        floor = _decimal(_cell(values, headers, "floorsarb"))
+        if "2026-q" in quarter.lower() and value is not None and floor is not None:
+            candidates.append((quarter, value, floor))
+    if not candidates:
+        return fallback
+    quarter, value, floor = candidates[-1]
+    return {"value": _number(value * Decimal("1000000000")), "floor": _number(floor * Decimal("1000000000")), "complete": True, "evidence": {"files": [_relative(budget_path, root)], "summary": f"{quarter} group cash actual/forecast and approved floor from Group_Cash_Floor.", "details": {"file": _relative(budget_path, root), "sha256": _sha256(budget_path), "sheet": "Group_Cash_Floor", "quarter": quarter}}}
 
 
 def _finance_dynamics(

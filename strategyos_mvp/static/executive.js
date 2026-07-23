@@ -3099,6 +3099,7 @@
     var viewNav = $("view-nav");
     var launcher = $("chat-launcher-cta");
     var topbarAssistantLauncher = $("topbar-assistant-launch");
+    var themeToggle = $("topbar-theme-toggle");
     var launcherPrompt = document.querySelector("#chat-launcher .chat-launcher__prompt");
     var userName = $("topbar-user-name");
     var userRole = $("topbar-user-role");
@@ -3136,6 +3137,15 @@
     if (topbarAssistantLauncher) {
       topbarAssistantLauncher.innerHTML = '<span class="topbar-assistant-launch__mark" aria-hidden="true">' + escapeHtml(assistantGlyph) + '</span><span class="topbar-assistant-launch__label">Ask ' + escapeHtml(assistantName) + '</span>';
       topbarAssistantLauncher.setAttribute("aria-label", "Ask " + assistantName);
+    }
+    if (themeToggle) {
+      themeToggle.textContent = state.theme === "dark" ? "☀" : "◐";
+      themeToggle.setAttribute("aria-label", "Switch to " + (state.theme === "dark" ? "light" : "dark") + " theme");
+      themeToggle.onclick = function () {
+        state.theme = state.theme === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", state.theme);
+        renderTopbar();
+      };
     }
     if (launcherPrompt) launcherPrompt.hidden = state.activePersona !== "board";
     if (userName) userName.textContent = "";
@@ -4232,7 +4242,8 @@
     var movementLabel = latestMovement === 0 ? 'No change' : (latestMovement > 0 ? '+' : '−') + formatExecutiveTrendValue(Math.abs(latestMovement), driver);
     var latestPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[latestIndex]) : 'Latest period';
     var priorPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[priorIndex]) : 'prior period';
-    return '<section class="kpi-trend"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span><small>' + escapeHtml(hasPlan ? 'Actual versus aligned plan' : 'Actual series only — plan is not inferred') + '</small></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Aligned plan</span>' : '') + '</div></div><svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus aligned plan across ' : ' actual trend across ') + accessibleLabels) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong>' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong>' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
+    var scopeNote = firstDefined(trend && trend.scope_note, hasPlan ? 'Actual versus aligned plan' : 'Actual series only — plan is not inferred');
+    return '<section class="kpi-trend"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span><small>' + escapeHtml(scopeNote) + '</small></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Aligned plan</span>' : '') + '</div></div><svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus aligned plan across ' : ' actual trend across ') + accessibleLabels) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong>' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong>' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
   }
 
   function kpiMovementMarkup(driver) {
@@ -4246,11 +4257,11 @@
     }));
     var rows = movementRows.map(function (entry) {
       var item = entry.item || {};
-      var gm = item.gm && typeof item.gm === 'object' ? item.gm : null;
+      var gm = item.gm && typeof item.gm === 'object' ? item.gm : (item.note ? { who: firstDefined(item.gm, 'BU note'), note: item.note } : null);
       var noteKey = firstDefined(driver && driver.driver_key, driver && driver.key, 'kpi') + ':' + entry.key + ':' + firstDefined(item.name, 'mover');
       var noteOpen = state.openKpiMoverNoteKey === noteKey;
       var gmMarkup = gm
-        ? '<button type="button" class="kpi-movement__gm' + (noteOpen ? ' is-open' : '') + '" data-kpi-mover-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>GM note</span></button>'
+        ? '<button type="button" class="kpi-movement__gm' + (noteOpen ? ' is-open' : '') + '" data-kpi-mover-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>' + escapeHtml(firstDefined(item.gm, 'GM note')) + '</span></button>'
         : '';
       var noteMarkup = gm && noteOpen
         ? '<blockquote class="kpi-movement__note"><strong>' + escapeHtml(firstDefined(gm.who, 'GM')) + '</strong>' + escapeHtml(firstDefined(gm.note, 'No commentary was supplied.')) + '</blockquote>'
@@ -4349,7 +4360,7 @@
     var executiveContextMarkup = kpiExecutiveContextMarkup(brief, comparison, strategicReference);
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
-      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><span class="kpi-brief-variance tone-' + escapeHtml(firstDefined(executiveSignal.tone, 'neutral')) + '">' + escapeHtml(firstDefined(executiveSignal.variance_label, comparison.value, 'Current position')) + '</span></div></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
+      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><span class="kpi-brief-variance tone-' + escapeHtml(firstDefined(executiveSignal.tone, 'neutral')) + '">' + escapeHtml(firstDefined(executiveSignal.variance_label, comparison.value, 'Current position')) + '</span></div></div><button type="button" class="kpi-show-work" data-kpi-show-work="true">Show the work</button>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
       executiveContextMarkup,
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       (compositionMarkup ? '<details class="kpi-supporting-analysis"><summary>Supporting analysis</summary>' + compositionMarkup + '</details>' : ''),
@@ -4357,6 +4368,13 @@
       '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
+    var showWork = drillCard.querySelector('[data-kpi-show-work]');
+    if (showWork) showWork.onclick = function () {
+      var auditPanel = drillCard.querySelector('.kpi-brief-audit');
+      if (!auditPanel) return;
+      auditPanel.open = true;
+      auditPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
     safeArray(drillCard.querySelectorAll("[data-kpi-question]")).forEach(function (button) {
       button.addEventListener("click", function () {
         var questionType = button.getAttribute("data-kpi-question");
@@ -5016,12 +5034,12 @@
 
     if (findingsPanel) {
       findingsPanel.hidden = false;
-      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Enterprise outlook</p><h3 class="detail-title">Developments &amp; concerns</h3><p class="section-note">Only changes that can alter the outlook or a leadership commitment.</p></div></div><div class="executive-signal-list">' + signalMarkup + '</div>';
+      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Enterprise outlook</p><h3 class="detail-title">Findings &amp; concerns</h3><p class="section-note">Only changes that can alter the outlook or a leadership commitment.</p></div></div><div class="executive-signal-list">' + signalMarkup + '</div>';
     }
 
     if (developmentsPanel) {
       developmentsPanel.hidden = false;
-      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Your call</p><h3 class="detail-title">Decisions for you</h3><p class="section-note">Aggregated at enterprise level; execution detail stays with the accountable leader.</p></div></div><div class="executive-decision-list">' + decisionMarkup + '</div>' + (delegated ? '<div class="delegated-portfolio"><span>' + escapeHtml(firstDefined(delegated.title, 'Delegated portfolio')) + '</span><p>' + escapeHtml(firstDefined(delegated.summary, '')) + '</p><strong>' + escapeHtml(firstDefined(delegated.owner, 'Group CFO')) + '</strong></div>' : '');
+      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Your call</p><h3 class="detail-title">Developments since you were here</h3><p class="section-note">Decisions for you are aggregated at enterprise level; execution detail stays with the accountable leader.</p></div></div><div class="executive-decision-list">' + decisionMarkup + '</div>' + (delegated ? '<div class="delegated-portfolio"><span>' + escapeHtml(firstDefined(delegated.title, 'Delegated portfolio')) + '</span><p>' + escapeHtml(firstDefined(delegated.summary, '')) + '</p><strong>' + escapeHtml(firstDefined(delegated.owner, 'Group CFO')) + '</strong></div>' : '');
     }
 
     safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
@@ -5054,7 +5072,7 @@
       weekPanel.innerHTML = allWeekAhead.length ? '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">Week ahead</h3><p class="section-note">Business-relevant commitments only. Select one to keep its preparation context in view.</p></div></div><div class="week-rail-v2">' + visibleWeekAhead.map(function (item) {
         var index = allWeekAhead.indexOf(item);
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + (allWeekAhead.length > 3 ? '<button class="week-show-more" type="button" data-week-show-all="true">' + (state.showAllWeekEvents ? 'Show less' : 'See ' + (allWeekAhead.length - 3) + ' more') + '</button>' : '') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">Decision brief</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>Prepare me</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>Draft input request</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask Hermes to prepare something for this commitment</label><input id="week-input" class="driver-input" type="text" placeholder="Ask a decision question about this commitment..." /><button type="submit">Ask</button></form></div>' : '') : '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">No executive calendar connected</h3></div></div><p class="section-note">No governed calendar is available for this reporting period, or no item has been classified as business-relevant. No meetings or deadlines have been inferred.</p>';
+      }).join('') + (allWeekAhead.length > 3 ? '<button class="week-show-more" type="button" data-week-show-all="true">' + (state.showAllWeekEvents ? 'Show less' : 'See ' + (allWeekAhead.length - 3) + ' more') + '</button>' : '') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">Decision brief</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>Open in thinking mode</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="Ask StrategyOS to prepare something for this event" /><button type="submit">Ask</button></form></div>' : '') : '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">No executive calendar connected</h3></div></div><p class="section-note">No governed calendar is available for this reporting period, or no item has been classified as business-relevant. No meetings or deadlines have been inferred.</p>';
       safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {
         button.onclick = function () {
           var idx = Number(button.getAttribute('data-week-index') || 0) || 0;
@@ -5181,6 +5199,59 @@
     if (automationCard) {
       automationCard.hidden = true;
       automationCard.innerHTML = '';
+    }
+  }
+
+  // Keep the target's CEO continuation in the primary Diagnostics flow.  The
+  // cards deliberately bind to the live packet rather than to target-demo
+  // copy: when a source does not carry a video or marketplace record we state
+  // that fact and retain a useful Hermes action instead of fabricating one.
+  function renderTargetParitySections() {
+    var thinking = $("thinking-panel");
+    var leadersPanel = $("leaders-corner-panel");
+    var agentsPanel = $("target-agents-panel");
+    var leaders = getLeadershipTeam().slice(0, 4);
+    var catalogue = getDiscoverableAgents().slice(0, 6);
+
+    if (thinking) {
+      thinking.innerHTML = '<div class="target-thinking"><div><p class="detail-eyebrow">Thinking mode</p><h3 class="detail-title">Model a decision on current evidence</h3><p class="section-note">The result keeps the current KPI, reporting period and evidence boundary attached.</p></div><form id="thinking-composer" class="target-composer"><label class="sr-only" for="thinking-input">Ask a what-if question</label><input id="thinking-input" type="text" autocomplete="off" placeholder="e.g. what if our largest revenue variance reverses next quarter?" /><button type="submit">Send</button></form><div class="target-prompt-row"><button type="button" data-thinking-prompt="What is the downside case if the largest positive revenue driver normalises next quarter?">Stress-test largest upside</button><button type="button" data-thinking-prompt="What is the cash impact if the largest cost pressure repeats next quarter?">Model cash impact</button><button type="button" data-thinking-prompt="Which governed assumption changes the current plan outlook most?">Challenge plan outlook</button></div></div>';
+      var thinkingForm = thinking.querySelector('#thinking-composer');
+      var thinkingInput = thinking.querySelector('#thinking-input');
+      if (thinkingForm && thinkingInput) thinkingForm.onsubmit = function (event) {
+        event.preventDefault(); var prompt = String(thinkingInput.value || '').trim(); if (!prompt) return;
+        askAssistant(prompt, thinkingForm, { entrypoint: 'thinking_mode', source_scope: 'current_ceo_source_set' }); thinkingInput.value = '';
+      };
+      safeArray(thinking.querySelectorAll('[data-thinking-prompt]')).forEach(function (button) {
+        button.onclick = function () { askAssistant(button.getAttribute('data-thinking-prompt') || '', button, { entrypoint: 'thinking_mode', source_scope: 'current_ceo_source_set' }); };
+      });
+    }
+
+    if (leadersPanel) {
+      var leaderCards = leaders.length ? leaders.map(function (leader, index) {
+        var title = firstDefined(leader.display_name, leadershipRoleLabel(leader), 'Leadership assistant');
+        var activity = leadershipActivityCopy(leader);
+        return '<article class="target-leader-card"><div class="target-leader-card__head"><span class="target-leader-avatar">' + escapeHtml(String(title).slice(0, 1)) + '</span><div><strong>' + escapeHtml(title) + '</strong><small>' + escapeHtml(leadershipRoleLabel(leader)) + '</small></div></div><p>' + escapeHtml(activity) + '</p><button type="button" data-leader-discuss="' + escapeHtml('Prepare a CEO discussion brief with ' + title + ': ' + activity) + '">Discuss in chat</button></article>';
+      }).join('') : '<div class="target-empty"><strong>No leadership update is available</strong><p>No recorded leadership update has been supplied in the current CEO source set.</p></div>';
+      leadersPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Leadership updates</p><h3 class="detail-title">Discuss the work with your leadership interfaces</h3></div><button class="target-link-button" type="button" data-target-agents-open="true">Browse all assistants</button></div><div class="target-leader-grid">' + leaderCards + '</div>';
+      safeArray(leadersPanel.querySelectorAll('[data-leader-discuss]')).forEach(function (button) { button.onclick = function () { askAssistant(button.getAttribute('data-leader-discuss') || '', button, { entrypoint: 'leaders_corner' }); }; });
+      var browse = leadersPanel.querySelector('[data-target-agents-open]');
+      if (browse) browse.onclick = function () { switchView('agents'); };
+    }
+
+    if (agentsPanel) {
+      var activityCount = leaders.filter(function (leader) { return /^(active|monitoring)$/i.test(String(leader.status || '')); }).length;
+      var interfaceCards = leaders.map(function (leader) {
+        var label = firstDefined(leader.display_name, leadershipRoleLabel(leader), 'Assistant');
+        return '<button class="target-agent-card" type="button" data-target-agent-prompt="' + escapeHtml('What is ' + label + ' currently working on, and does it require CEO attention?') + '"><span>' + escapeHtml(String(label).slice(0, 1)) + '</span><strong>' + escapeHtml(label) + '</strong><small>' + escapeHtml(leadershipStatusLabel(leader.status)) + '</small></button>';
+      }).join('') || '<div class="target-empty">No leadership assistants are available in this packet.</div>';
+      var marketplace = catalogue.length ? catalogue.map(function (agent, index) {
+        var name = discoverableAgentLabel(agent);
+        return '<article class="target-market-card"><span>Marketplace</span><strong>' + escapeHtml(name) + '</strong><small>' + escapeHtml(firstDefined(agent.description, agent.summary, 'Governed deployment request')) + '</small><button type="button" data-target-deploy="' + escapeHtml(name) + '">+ Deploy</button></article>';
+      }).join('') : '<div class="target-empty">No deployable assistants are published for this tenant.</div>';
+      agentsPanel.innerHTML = '<div class="target-agent-status"><div><p class="detail-eyebrow">Current agent activity</p><h3 class="detail-title">' + escapeHtml(String(activityCount)) + ' leadership interface' + (activityCount === 1 ? '' : 's') + ' working now</h3></div><button class="target-link-button" type="button" data-target-agents-open="true">Browse all agents</button></div><div class="target-agent-grid">' + interfaceCards + '</div><div class="target-market-head"><p class="detail-eyebrow">Agent marketplace</p><span>Deployment requests follow your tenant governance.</span></div><div class="target-market-grid">' + marketplace + '</div>';
+      safeArray(agentsPanel.querySelectorAll('[data-target-agent-prompt]')).forEach(function (button) { button.onclick = function () { askAssistant(button.getAttribute('data-target-agent-prompt') || '', button, { entrypoint: 'agents' }); }; });
+      safeArray(agentsPanel.querySelectorAll('[data-target-deploy]')).forEach(function (button) { button.onclick = function () { var name = button.getAttribute('data-target-deploy') || 'this assistant'; askAssistant('Prepare a governed deployment request for ' + name + '. State the owner, tenant, scopes and approvals required; do not deploy it without the authorised operator action.', button, { entrypoint: 'agent_marketplace_request' }); }; });
+      safeArray(agentsPanel.querySelectorAll('[data-target-agents-open]')).forEach(function (button) { button.onclick = function () { switchView('agents'); }; });
     }
   }
 
@@ -5477,6 +5548,7 @@
     renderCalendarAgenda();
     renderLowerRailFidelity();
     renderAgentsDiscovery();
+    renderTargetParitySections();
     renderFunctionsWorkspace();
     renderKnowledgeGraph();
     renderAssistantStudio();
