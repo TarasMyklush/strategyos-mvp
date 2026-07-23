@@ -1102,7 +1102,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "Actual series only — plan is not inferred" in js
     assert "trend.has_plan_series === true" in js
     assert "kpiMovementMarkup(driver)" in js
-    assert "What changed" in js
+    assert "What moved it" in js
+    assert 'data-kpi-mover-note' in js
     assert "kpiExecutiveContextMarkup(brief, comparison, strategicReference)" in js
     assert "Comparison boundary" in js
     assert "referenceOnlyRatio" not in js
@@ -1110,6 +1111,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "Supporting analysis" in js
     assert "kpi-mix-chart" not in js
     assert ".kpi-executive-grid" in css
+    assert ".kpi-executive-grid:has(.kpi-movement--empty)" not in css
+    assert ".kpi-movement__rows" in css
     assert ".kpi-trend svg {\n  display: block;\n  width: 100%;\n  height: 164px;" in css
     assert ".kpi-mix-chart" not in css
     assert "data-kpi-inline-composer" not in js

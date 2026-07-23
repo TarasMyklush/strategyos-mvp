@@ -4239,18 +4239,25 @@
     var movers = (driver && driver.movers) || {};
     var higher = safeArray(movers.lifting).slice(0, 2);
     var lower = safeArray(movers.dragging).slice(0, 2);
-    var rows = [];
-    if (higher.length) {
-      rows.push('<div class="kpi-movement__group"><span>Higher in the latest period</span>' + higher.map(function (item) {
-        return '<div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--up">↗</span><strong>' + escapeHtml(firstDefined(item && item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item && item.delta, '')) + '</small></div>';
-      }).join('') + '</div>');
-    }
-    if (lower.length) {
-      rows.push('<div class="kpi-movement__group"><span>Lower in the latest period</span>' + lower.map(function (item) {
-        return '<div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--down">↘</span><strong>' + escapeHtml(firstDefined(item && item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item && item.delta, '')) + '</small></div>';
-      }).join('') + '</div>');
-    }
-    return '<section class="kpi-movement' + (rows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><span class="kpi-brief-label">What changed</span><small>Contribution by account in the two most recent periods</small></div>' + (rows.length ? rows.join('') : '<p>No category-level movement is available for the selected reporting periods.</p>') + '</section>';
+    var movementRows = higher.map(function (item, index) {
+      return { item: item, direction: 'up', glyph: '↗', key: 'lifting-' + index };
+    }).concat(lower.map(function (item, index) {
+      return { item: item, direction: 'down', glyph: '↘', key: 'dragging-' + index };
+    }));
+    var rows = movementRows.map(function (entry) {
+      var item = entry.item || {};
+      var gm = item.gm && typeof item.gm === 'object' ? item.gm : null;
+      var noteKey = firstDefined(driver && driver.driver_key, driver && driver.key, 'kpi') + ':' + entry.key + ':' + firstDefined(item.name, 'mover');
+      var noteOpen = state.openKpiMoverNoteKey === noteKey;
+      var gmMarkup = gm
+        ? '<button type="button" class="kpi-movement__gm' + (noteOpen ? ' is-open' : '') + '" data-kpi-mover-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>GM note</span></button>'
+        : '';
+      var noteMarkup = gm && noteOpen
+        ? '<blockquote class="kpi-movement__note"><strong>' + escapeHtml(firstDefined(gm.who, 'GM')) + '</strong>' + escapeHtml(firstDefined(gm.note, 'No commentary was supplied.')) + '</blockquote>'
+        : '';
+      return '<div class="kpi-movement__item"><div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--' + entry.direction + '">' + entry.glyph + '</span><strong>' + escapeHtml(firstDefined(item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item.delta, '')) + '</small>' + gmMarkup + '</div>' + noteMarkup + '</div>';
+    }).join('');
+    return '<section class="kpi-movement' + (movementRows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><div><span class="kpi-brief-label">What moved it</span><small>Business-unit movement behind the selected KPI</small></div></div><div class="kpi-movement__rows">' + (rows || '<p>No category-level movement is available for the selected reporting periods.</p>') + '</div></section>';
   }
 
   function kpiCompositionMarkup(key, brief, drivers) {
@@ -4367,6 +4374,13 @@
           kpi_availability: availability,
           active_view: "home"
         });
+      });
+    });
+    safeArray(drillCard.querySelectorAll("[data-kpi-mover-note]")).forEach(function (button) {
+      button.addEventListener("click", function () {
+        var noteKey = button.getAttribute("data-kpi-mover-note") || "";
+        state.openKpiMoverNoteKey = state.openKpiMoverNoteKey === noteKey ? "" : noteKey;
+        renderInlineKpiDrill(driver, drillCard);
       });
     });
 
