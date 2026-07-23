@@ -1,6 +1,12 @@
 name: StrategyOS Branch Deploy
 
 on:
+  # This is an isolated branch-preview environment. A tested push to the one
+  # preview branch is an auditable deployment request when workflow_dispatch
+  # is unavailable to a contributor token; no primary environment is in scope.
+  push:
+    branches:
+      - fix/hermes-cross-surface-intent-contract
   workflow_dispatch:
     inputs:
       run_smoke:
