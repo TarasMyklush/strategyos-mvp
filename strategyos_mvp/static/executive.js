@@ -3297,8 +3297,8 @@
     var drivers = getVisibleDrivers();
     var hasPercentDrivers = drivers.some(function (driver) { return driverHasPercent(driver); });
     if (state.activePersona === "ceo") {
-      if (driverHeading) driverHeading.textContent = "Enterprise performance";
-      if (driverHint) driverHint.textContent = "The four measures that determine whether executive intervention is required.";
+      if (driverHeading) driverHeading.textContent = "The group index";
+      if (driverHint) driverHint.textContent = "Percent of plan is the headline — the figure is the footnote. Tap a driver for the story.";
     } else {
       if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
       if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current measures";

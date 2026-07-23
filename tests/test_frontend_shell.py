@@ -1135,7 +1135,7 @@ def test_ceo_information_architecture_separates_board_and_operational_surfaces()
     assert 'state.activePersona === "board" && !boardReleased' in js
     assert "No live diagnostics, working evidence, or pre-board figures" in js
     assert "fidelity-thinking-composer" in js
-    assert "Enterprise performance" in js
+    assert "The group index" in js
     assert "Developments since you were here" in html
 
 
