@@ -28,9 +28,8 @@
       <span class="tb-div" aria-hidden="true"></span>
       <nav class="view-nav" id="view-nav" aria-label="Executive views" role="tablist">
         <button class="view-tile is-active" type="button" role="tab" data-view-target="home" aria-controls="view-home" aria-selected="true">Diagnostics</button>
-        <button class="view-tile" type="button" role="tab" data-view-target="calendar" aria-controls="view-calendar" aria-selected="false">Calendar</button>
-        <button class="view-tile" type="button" role="tab" data-view-target="agents" aria-controls="view-agents" aria-selected="false">Assistants</button>
-        <button class="view-tile" type="button" role="tab" data-view-target="functions" aria-controls="view-functions" aria-selected="false">Functions</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="agents" aria-controls="view-agents" aria-selected="false">AI Assistants</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="functions" aria-controls="view-functions" aria-selected="false">Agents</button>
         <button class="view-tile" type="button" role="tab" data-view-target="knowledge" aria-controls="view-knowledge" aria-selected="false" title="Evidence">Knowledge</button>
       </nav>
     </div>
@@ -111,63 +110,54 @@
         <article class="card detail-card" id="driver-drill"></article>
       </section>
 
-      <section class="section" id="priority-section" aria-labelledby="lower-rail-heading">
+      <section class="section target-flow-section" id="priority-section" aria-labelledby="lower-rail-heading">
         <div class="section-head">
-          <h2 class="section-title" id="lower-rail-heading">Decisions and commitments</h2>
-          <p class="section-note">Only material decisions, enterprise signals and the commitments that need preparation.</p>
+          <h2 class="section-title" id="lower-rail-heading">Findings &amp; concerns</h2>
+          <p class="section-note">Material signals that can alter the outlook or a leadership commitment.</p>
         </div>
-        <div class="lower-rail-grid lower-rail-grid--executive">
-          <div class="lower-rail-main">
-            <article class="card detail-card" id="findings-panel"></article>
-            <article class="card detail-card" id="developments-panel"></article>
-          </div>
-          <aside class="lower-rail-aside">
-            <article class="card detail-card" id="week-panel"></article>
-          </aside>
-        </div>
+        <article class="card detail-card target-flow-card" id="findings-panel"></article>
       </section>
 
-      <section class="section" id="decision-questions-section" aria-labelledby="gravity-heading">
+      <section class="section target-flow-section" id="developments-section" aria-labelledby="developments-heading">
         <div class="section-head">
-          <h2 class="section-title" id="gravity-heading">Prepare the next move</h2>
+          <h2 class="section-title" id="developments-heading">Developments since you were here</h2>
+          <p class="section-note">Recent changes and decisions that need executive context.</p>
         </div>
-        <article class="card detail-card" id="gravity-panel"></article>
+        <article class="card detail-card target-flow-card" id="developments-panel"></article>
       </section>
 
-      <section class="section target-thinking-section" id="target-thinking-section" aria-labelledby="thinking-heading">
+      <section class="section target-flow-section" id="week-ahead-section" aria-labelledby="week-ahead-heading">
         <div class="section-head">
-          <h2 class="section-title" id="thinking-heading">Think and model on your data</h2>
-          <p class="section-note">Use governed figures and sources already in the current CEO workspace.</p>
+          <h2 class="section-title" id="week-ahead-heading">Week ahead</h2>
+          <p class="section-note">Calendar commitments, preparation context and missing-input requests in one place.</p>
         </div>
-        <article class="card detail-card" id="thinking-panel"></article>
+        <article class="card detail-card target-flow-card" id="week-panel"></article>
       </section>
 
-      <section class="section target-leaders-section" id="target-leaders-section" aria-labelledby="leaders-heading">
+      <section class="section target-flow-section" id="decision-questions-section" aria-labelledby="gravity-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="gravity-heading">Think and model on your data</h2>
+          <p class="section-note">Pressure-test a decision using the governed data already attached to this briefing.</p>
+        </div>
+        <article class="card detail-card target-flow-card" id="gravity-panel"></article>
+      </section>
+
+      <section class="section target-flow-section" id="leaders-corner-section" aria-labelledby="leaders-heading">
         <div class="section-head">
           <h2 class="section-title" id="leaders-heading">Leaders’ Corner</h2>
-          <p class="section-note">The leadership updates and direct discussion controls available in this workspace.</p>
+          <p class="section-note">Current leadership updates with a direct path into discussion.</p>
         </div>
-        <article class="card detail-card" id="leaders-corner-panel"></article>
+        <article class="card detail-card target-flow-card" id="leaders-corner-panel"></article>
       </section>
 
-      <section class="section target-agents-section" id="target-agents-section" aria-labelledby="target-agents-heading">
+      <section class="section target-flow-section" id="home-agents-section" aria-labelledby="home-agents-heading">
         <div class="section-head">
-          <h2 class="section-title" id="target-agents-heading">Agents</h2>
-          <p class="section-note">Current assistant activity, role interfaces and governed deployment requests.</p>
+          <h2 class="section-title" id="home-agents-heading">Agents</h2>
+          <p class="section-note">Current activity and available specialist agents, without leaving the CEO briefing.</p>
         </div>
-        <article class="card detail-card" id="target-agents-panel"></article>
+        <article class="card detail-card target-flow-card" id="home-agents-panel"></article>
       </section>
 
-    </section>
-
-    <section class="view-panel" data-view-panel="calendar" id="view-calendar" role="tabpanel" aria-hidden="true" hidden>
-      <section class="section" aria-labelledby="calendar-view-heading">
-        <div class="section-head">
-          <h2 class="section-title" id="calendar-view-heading">Executive calendar</h2>
-          <p class="section-note">The commitments ahead, what to prepare, and the decisions they may require.</p>
-        </div>
-        <article class="card detail-card executive-calendar" id="calendar-agenda-panel"></article>
-      </section>
     </section>
 
     <section class="view-panel" data-view-panel="agents" id="view-agents" role="tabpanel" aria-hidden="true" hidden>
@@ -190,8 +180,8 @@
     <section class="view-panel" data-view-panel="functions" id="view-functions" role="tabpanel" aria-hidden="true" hidden>
       <section class="section" aria-labelledby="functions-view-heading">
         <div class="section-head">
-          <h2 class="section-title" id="functions-view-heading">AI functions</h2>
-          <p class="section-note">Specialist workers that perform a defined task. They do not represent an executive; they analyse, audit or prepare work and leave a trace of what they did.</p>
+          <h2 class="section-title" id="functions-view-heading">Agents</h2>
+          <p class="section-note">Specialist agents that analyse, audit or prepare defined work and leave a trace of what they did.</p>
         </div>
         <article class="card detail-card" id="functions-overview"></article>
         <div class="functions-layout">

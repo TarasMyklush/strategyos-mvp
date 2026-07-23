@@ -316,8 +316,8 @@ def test_ceo_agenda_has_no_raw_status_tokens():
         _, _, after_bootstrap = bootstrap_tail.partition("</script>")
         visible_html = before_bootstrap + after_bootstrap
 
-    assert "decision-question-grid" in js
-    gravity_idx = js.index("decision-question-grid")
+    assert "fidelity-thinking-prompts" in js
+    gravity_idx = js.index("fidelity-thinking-prompts")
     gravity_context = js[gravity_idx:gravity_idx + 800]
 
     # ---------------------------------------------------------------
@@ -368,11 +368,10 @@ def test_ceo_agenda_has_no_raw_status_tokens():
     # ---------------------------------------------------------------
     # PART E: Verify the decision questions are the only interactive content
     # ---------------------------------------------------------------
-    assert "decision-question-card" in gravity_context, (
-        "CEO agenda must contain decision-question cards"
-    )
-    assert "Ask Hermes with this context" in gravity_context, (
-        "CEO decision questions must clearly open Hermes with context"
+    assert 'data-chat-prompt="' in gravity_context
+    assert "thinking-composer" in gravity_context
+    assert "askAssistant" in gravity_context, (
+        "CEO decision questions must open Hermes with the current context"
     )
 
 
@@ -2498,7 +2497,7 @@ def test_ceo_home_aggregates_findings_instead_of_approving_cases():
     lower = js[js.index("function renderLowerRailFidelity"):js.index("function renderAgentsDiscovery")]
     assert "data-finding-approve=" not in lower
     assert "Approve recovery" not in lower
-    assert "Decisions for you" in lower
+    assert "Recent decisions and commitments" in lower
     assert "No case-level decision is escalated to the CEO" in lower
     assert "Owner · " in lower
     # The lower-level endpoint remains available outside the CEO home.

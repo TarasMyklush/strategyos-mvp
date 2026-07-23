@@ -67,12 +67,13 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     assert "/static/plan_data.js" not in plan_html
     assert "Group CEO Briefing" in executive_html
     assert "window payload as execution truth" in _plan_data()
-    assert "Briefing" in executive_html
-    assert "Calendar" in executive_html
+    assert "Diagnostics" in executive_html
+    assert "AI Assistants" in executive_html
+    assert "Agents" in executive_html
     assert "Hermes" in executive_html
-    assert "Evidence" in executive_html
+    assert "Knowledge" in executive_html
     assert "Enterprise performance" in executive_html
-    assert "Prepare the next move" in executive_html
+    assert "Think and model on your data" in executive_html
 
 
 def test_phase14_plan_data_marks_phase14_complete_after_phase15_closes() -> None:

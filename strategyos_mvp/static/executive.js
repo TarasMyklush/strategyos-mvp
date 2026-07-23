@@ -3271,10 +3271,10 @@
     }
     safeArray(document.querySelectorAll("[data-view-target]")).forEach(function (link) {
       var target = link.getAttribute("data-view-target") || "home";
-      if (target === "home") link.textContent = state.activePersona === "board" ? "Portal" : "Briefing";
-      if (target === "calendar") link.textContent = "Calendar";
-      if (target === "functions") link.textContent = "Functions";
-      if (target === "knowledge") link.textContent = "Evidence";
+      if (target === "home") link.textContent = state.activePersona === "board" ? "Portal" : "Diagnostics";
+      if (target === "agents") link.textContent = "AI Assistants";
+      if (target === "functions") link.textContent = "Agents";
+      if (target === "knowledge") link.textContent = "Knowledge";
       link.classList.toggle("is-active", target === state.activeView);
       link.setAttribute("aria-selected", target === state.activeView ? "true" : "false");
     });
@@ -3303,16 +3303,16 @@
       if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
       if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current measures";
     }
-    if (lowerHeading) lowerHeading.textContent = state.activePersona === "ceo" ? "Decisions and commitments" : "What matters now";
+    if (lowerHeading) lowerHeading.textContent = state.activePersona === "ceo" ? "Findings & concerns" : "What matters now";
     var boardOnly = state.activePersona === "board";
-    ["hero", "kpi-index-section", "kpi-detail-section", "priority-section", "decision-questions-section"].forEach(function (id) {
+    ["hero", "kpi-index-section", "kpi-detail-section", "priority-section", "developments-section", "week-ahead-section", "decision-questions-section", "leaders-corner-section", "home-agents-section"].forEach(function (id) {
       var element = $(id);
       if (element) element.hidden = boardOnly;
     });
     var boardWorkspace = $("board-workspace");
     if (boardWorkspace) boardWorkspace.hidden = !boardOnly;
     var gravityHeading = $("gravity-heading");
-    if (gravityHeading) gravityHeading.textContent = state.activePersona === "ceo" ? "Prepare the next move" : "Decision questions";
+    if (gravityHeading) gravityHeading.textContent = state.activePersona === "ceo" ? "Think and model on your data" : "Decision questions";
     var footer = $("composed-footer");
     if (footer) footer.hidden = false;
   }
@@ -4531,16 +4531,30 @@
         "What changed since the last executive review, and which item now crosses the CEO materiality threshold?"
       ];
       gravityPanel.innerHTML = [
-        '<div class="detail-head"><div><p class="detail-eyebrow">Executive preparation</p><h3 class="detail-title">Pressure-test the next move</h3><p class="section-note">Each question opens Hermes with the current performance position, commitments and materiality boundary attached.</p></div></div>',
-        '<div class="decision-question-grid">' + governedPrompts.map(function (prompt, index) {
-          var labels = [currentLabel + ' decision', 'Next commitments', 'Material changes'];
+        '<form class="fidelity-thinking-composer" id="thinking-composer"><label class="sr-only" for="thinking-input">Model a scenario on your data</label><textarea id="thinking-input" rows="2" placeholder="e.g. what if the largest revenue driver changes by 5%?"></textarea><button type="submit">Send</button></form>',
+        '<div class="fidelity-thinking-prompts">' + governedPrompts.map(function (prompt, index) {
           var kpiAttribute = index === 0 ? ' data-kpi-key="' + escapeHtml(String(firstDefined(driver.driver_key, driver.key, ""))) + '"' : '';
-          return '<button class="decision-question-card" type="button" data-chat-prompt="' + escapeHtml(prompt) + '"' + kpiAttribute + '><span>' + escapeHtml(labels[index]) + '</span><strong>' + escapeHtml(prompt) + '</strong><small>Ask Hermes with this context →</small></button>';
+          return '<button type="button" data-chat-prompt="' + escapeHtml(prompt) + '"' + kpiAttribute + '>' + escapeHtml(prompt) + '</button>';
         }).join('') + '</div>'
       ].join('');
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
         button.onclick = function () { askAssistant(button.getAttribute("data-chat-prompt") || "", button); };
       });
+      var thinkingComposer = gravityPanel.querySelector("#thinking-composer");
+      var thinkingInput = gravityPanel.querySelector("#thinking-input");
+      if (thinkingComposer && thinkingInput) {
+        thinkingComposer.onsubmit = function (event) {
+          event.preventDefault();
+          var prompt = String(thinkingInput.value || "").trim();
+          if (!prompt) return;
+          askAssistant(prompt, thinkingComposer, {
+            entrypoint: "thinking_mode",
+            source_scope: "current_ceo_source_set",
+            kpi_key: firstDefined(driver.driver_key, driver.key, "")
+          });
+          thinkingInput.value = "";
+        };
+      }
       return;
     }
   }
@@ -5034,12 +5048,12 @@
 
     if (findingsPanel) {
       findingsPanel.hidden = false;
-      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Enterprise outlook</p><h3 class="detail-title">Findings &amp; concerns</h3><p class="section-note">Developments &amp; concerns are limited to changes that can alter the outlook or a leadership commitment.</p></div></div><div class="executive-signal-list">' + signalMarkup + '</div>';
+      findingsPanel.innerHTML = '<div class="fidelity-panel-note">Tap a finding to see the executive implication and pressure-test it with Hermes.</div><div class="executive-signal-list">' + signalMarkup + '</div>';
     }
 
     if (developmentsPanel) {
       developmentsPanel.hidden = false;
-      developmentsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Your call</p><h3 class="detail-title">Developments since you were here</h3><p class="section-note">Decisions for you are aggregated at enterprise level; execution detail stays with the accountable leader.</p></div></div><div class="executive-decision-list">' + decisionMarkup + '</div>' + (delegated ? '<div class="delegated-portfolio"><span>' + escapeHtml(firstDefined(delegated.title, 'Delegated portfolio')) + '</span><p>' + escapeHtml(firstDefined(delegated.summary, '')) + '</p><strong>' + escapeHtml(firstDefined(delegated.owner, 'Group CFO')) + '</strong></div>' : '');
+      developmentsPanel.innerHTML = '<div class="fidelity-panel-note">Recent decisions and commitments are aggregated at enterprise level; execution detail stays with the accountable leader.</div><div class="executive-decision-list">' + decisionMarkup + '</div>' + (delegated ? '<div class="delegated-portfolio"><span>' + escapeHtml(firstDefined(delegated.title, 'Delegated portfolio')) + '</span><p>' + escapeHtml(firstDefined(delegated.summary, '')) + '</p><strong>' + escapeHtml(firstDefined(delegated.owner, 'Group CFO')) + '</strong></div>' : '');
     }
 
     safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
@@ -5069,10 +5083,10 @@
       var openIndex = Math.min(state.openWeekIndex || 0, Math.max(allWeekAhead.length - 1, 0));
       var activeEvent = allWeekAhead[openIndex] || null;
       var visibleWeekAhead = state.showAllWeekEvents ? allWeekAhead : allWeekAhead.slice(0, 3);
-      weekPanel.innerHTML = allWeekAhead.length ? '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">Week ahead</h3><p class="section-note">Business-relevant commitments only. Select one to keep its preparation context in view.</p></div></div><div class="week-rail-v2">' + visibleWeekAhead.map(function (item) {
+      weekPanel.innerHTML = allWeekAhead.length ? '<div class="fidelity-panel-note">Select a commitment to keep its preparation context in view.</div><div class="week-rail-v2">' + visibleWeekAhead.map(function (item) {
         var index = allWeekAhead.indexOf(item);
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '"><span class="event-day">' + escapeHtml(firstDefined(item.day, '')) + '</span><span class="event-title">' + escapeHtml(firstDefined(item.title, item.label, 'Event')) + '</span><span class="event-when">' + escapeHtml(firstDefined(item.when, item.detail, 'soon')) + '</span></button>';
-      }).join('') + (allWeekAhead.length > 3 ? '<button class="week-show-more" type="button" data-week-show-all="true">' + (state.showAllWeekEvents ? 'Show less' : 'See ' + (allWeekAhead.length - 3) + ' more') + '</button>' : '') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">Decision brief</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>Open in thinking mode</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="Ask StrategyOS to prepare something for this event" /><button type="submit">Ask</button></form></div>' : '') : '<div class="detail-head"><div><p class="detail-eyebrow">Next commitments</p><h3 class="detail-title">No executive calendar connected</h3></div></div><p class="section-note">No governed calendar is available for this reporting period, or no item has been classified as business-relevant. No meetings or deadlines have been inferred.</p>';
+      }).join('') + (allWeekAhead.length > 3 ? '<button class="week-show-more" type="button" data-week-show-all="true">' + (state.showAllWeekEvents ? 'Show less' : 'See ' + (allWeekAhead.length - 3) + ' more') + '</button>' : '') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">Decision brief</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>Open in thinking mode</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>Request missing data</strong></button></div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="Ask StrategyOS to prepare something for this event" /><button type="submit">Ask</button></form></div>' : '') : '<div class="fidelity-empty"><strong>No executive calendar connected</strong><p>No governed calendar is available for this reporting period. No meetings or deadlines have been inferred.</p></div>';
       safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {
         button.onclick = function () {
           var idx = Number(button.getAttribute('data-week-index') || 0) || 0;
@@ -5202,56 +5216,32 @@
     }
   }
 
-  // Keep the target's CEO continuation in the primary Diagnostics flow.  The
-  // cards deliberately bind to the live packet rather than to target-demo
-  // copy: when a source does not carry a video or marketplace record we state
-  // that fact and retain a useful Hermes action instead of fabricating one.
-  function renderTargetParitySections() {
-    var thinking = $("thinking-panel");
+  function renderHomeTargetExtensions() {
     var leadersPanel = $("leaders-corner-panel");
-    var agentsPanel = $("target-agents-panel");
+    var agentsPanel = $("home-agents-panel");
     var leaders = getLeadershipTeam().slice(0, 4);
     var catalogue = getDiscoverableAgents().slice(0, 6);
 
-    if (thinking) {
-      thinking.innerHTML = '<div class="target-thinking"><div><p class="detail-eyebrow">Thinking mode</p><h3 class="detail-title">Model a decision on current evidence</h3><p class="section-note">The result keeps the current KPI, reporting period and evidence boundary attached.</p></div><form id="thinking-composer" class="target-composer"><label class="sr-only" for="thinking-input">Ask a what-if question</label><input id="thinking-input" type="text" autocomplete="off" placeholder="e.g. what if our largest revenue variance reverses next quarter?" /><button type="submit">Send</button></form><div class="target-prompt-row"><button type="button" data-thinking-prompt="What is the downside case if the largest positive revenue driver normalises next quarter?">Stress-test largest upside</button><button type="button" data-thinking-prompt="What is the cash impact if the largest cost pressure repeats next quarter?">Model cash impact</button><button type="button" data-thinking-prompt="Which governed assumption changes the current plan outlook most?">Challenge plan outlook</button></div></div>';
-      var thinkingForm = thinking.querySelector('#thinking-composer');
-      var thinkingInput = thinking.querySelector('#thinking-input');
-      if (thinkingForm && thinkingInput) thinkingForm.onsubmit = function (event) {
-        event.preventDefault(); var prompt = String(thinkingInput.value || '').trim(); if (!prompt) return;
-        askAssistant(prompt, thinkingForm, { entrypoint: 'thinking_mode', source_scope: 'current_ceo_source_set' }); thinkingInput.value = '';
-      };
-      safeArray(thinking.querySelectorAll('[data-thinking-prompt]')).forEach(function (button) {
-        button.onclick = function () { askAssistant(button.getAttribute('data-thinking-prompt') || '', button, { entrypoint: 'thinking_mode', source_scope: 'current_ceo_source_set' }); };
-      });
-    }
-
     if (leadersPanel) {
-      var leaderCards = leaders.length ? leaders.map(function (leader, index) {
+      var leaderCards = leaders.length ? leaders.map(function (leader) {
         var title = firstDefined(leader.display_name, leadershipRoleLabel(leader), 'Leadership assistant');
         var activity = leadershipActivityCopy(leader);
-        return '<article class="target-leader-card"><div class="target-leader-card__head"><span class="target-leader-avatar">' + escapeHtml(String(title).slice(0, 1)) + '</span><div><strong>' + escapeHtml(title) + '</strong><small>' + escapeHtml(leadershipRoleLabel(leader)) + '</small></div></div><p>' + escapeHtml(activity) + '</p><button type="button" data-leader-discuss="' + escapeHtml('Prepare a CEO discussion brief with ' + title + ': ' + activity) + '">Discuss in chat</button></article>';
-      }).join('') : '<div class="target-empty"><strong>No leadership update is available</strong><p>No recorded leadership update has been supplied in the current CEO source set.</p></div>';
-      leadersPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Leadership updates</p><h3 class="detail-title">Discuss the work with your leadership interfaces</h3></div><button class="target-link-button" type="button" data-target-agents-open="true">Browse all assistants</button></div><div class="target-leader-grid">' + leaderCards + '</div>';
+        return '<article class="fidelity-leader-card"><div class="fidelity-leader-card__visual"><span>' + escapeHtml(String(title).slice(0, 1)) + '</span><small>' + escapeHtml(leadershipStatusLabel(leader.status)) + '</small></div><div class="fidelity-leader-card__copy"><strong>' + escapeHtml(title) + '</strong><span>' + escapeHtml(leadershipRoleLabel(leader)) + '</span><p>' + escapeHtml(activity) + '</p><button type="button" data-leader-discuss="' + escapeHtml('Prepare a CEO discussion brief with ' + title + ': ' + activity) + '">Discuss in chat</button></div></article>';
+      }).join('') : '<div class="fidelity-empty"><strong>No leadership update is available</strong><p>No recorded leadership update is attached to the current CEO source set.</p></div>';
+      leadersPanel.innerHTML = '<div class="fidelity-section-toolbar"><span>Leadership updates attached to this review</span><button type="button" data-home-assistants-open="true">Browse all AI Assistants</button></div><div class="fidelity-leader-grid">' + leaderCards + '</div>';
       safeArray(leadersPanel.querySelectorAll('[data-leader-discuss]')).forEach(function (button) { button.onclick = function () { askAssistant(button.getAttribute('data-leader-discuss') || '', button, { entrypoint: 'leaders_corner' }); }; });
-      var browse = leadersPanel.querySelector('[data-target-agents-open]');
+      var browse = leadersPanel.querySelector('[data-home-assistants-open]');
       if (browse) browse.onclick = function () { switchView('agents'); };
     }
 
     if (agentsPanel) {
       var activityCount = leaders.filter(function (leader) { return /^(active|monitoring)$/i.test(String(leader.status || '')); }).length;
-      var interfaceCards = leaders.map(function (leader) {
-        var label = firstDefined(leader.display_name, leadershipRoleLabel(leader), 'Assistant');
-        return '<button class="target-agent-card" type="button" data-target-agent-prompt="' + escapeHtml('What is ' + label + ' currently working on, and does it require CEO attention?') + '"><span>' + escapeHtml(String(label).slice(0, 1)) + '</span><strong>' + escapeHtml(label) + '</strong><small>' + escapeHtml(leadershipStatusLabel(leader.status)) + '</small></button>';
-      }).join('') || '<div class="target-empty">No leadership assistants are available in this packet.</div>';
-      var marketplace = catalogue.length ? catalogue.map(function (agent, index) {
+      var marketplace = catalogue.length ? catalogue.map(function (agent) {
         var name = discoverableAgentLabel(agent);
-        return '<article class="target-market-card"><span>Marketplace</span><strong>' + escapeHtml(name) + '</strong><small>' + escapeHtml(firstDefined(agent.description, agent.summary, 'Governed deployment request')) + '</small><button type="button" data-target-deploy="' + escapeHtml(name) + '">+ Deploy</button></article>';
-      }).join('') : '<div class="target-empty">No deployable assistants are published for this tenant.</div>';
-      agentsPanel.innerHTML = '<div class="target-agent-status"><div><p class="detail-eyebrow">Current agent activity</p><h3 class="detail-title">' + escapeHtml(String(activityCount)) + ' leadership interface' + (activityCount === 1 ? '' : 's') + ' working now</h3></div><button class="target-link-button" type="button" data-target-agents-open="true">Browse all agents</button></div><div class="target-agent-grid">' + interfaceCards + '</div><div class="target-market-head"><p class="detail-eyebrow">Agent marketplace</p><span>Deployment requests follow your tenant governance.</span></div><div class="target-market-grid">' + marketplace + '</div>';
-      safeArray(agentsPanel.querySelectorAll('[data-target-agent-prompt]')).forEach(function (button) { button.onclick = function () { askAssistant(button.getAttribute('data-target-agent-prompt') || '', button, { entrypoint: 'agents' }); }; });
-      safeArray(agentsPanel.querySelectorAll('[data-target-deploy]')).forEach(function (button) { button.onclick = function () { var name = button.getAttribute('data-target-deploy') || 'this assistant'; askAssistant('Prepare a governed deployment request for ' + name + '. State the owner, tenant, scopes and approvals required; do not deploy it without the authorised operator action.', button, { entrypoint: 'agent_marketplace_request' }); }; });
-      safeArray(agentsPanel.querySelectorAll('[data-target-agents-open]')).forEach(function (button) { button.onclick = function () { switchView('agents'); }; });
+        return '<article class="fidelity-agent-card"><span class="fidelity-agent-card__mark">◆</span><strong>' + escapeHtml(name) + '</strong><small>' + escapeHtml(firstDefined(agent.description, agent.summary, 'Specialist agent available to this tenant.')) + '</small><button type="button" data-home-agent-open="true">Open in Agents</button></article>';
+      }).join('') : '<div class="fidelity-empty">No specialist agents are published for this tenant.</div>';
+      agentsPanel.innerHTML = '<div class="fidelity-agent-activity"><div><span>Current agent activity</span><strong>' + escapeHtml(String(activityCount)) + ' active leadership workflow' + (activityCount === 1 ? '' : 's') + '</strong></div><button type="button" data-home-agent-open="true">Browse all agents</button></div><div class="fidelity-agent-grid">' + marketplace + '</div>';
+      safeArray(agentsPanel.querySelectorAll('[data-home-agent-open]')).forEach(function (button) { button.onclick = function () { switchView('functions'); }; });
     }
   }
 
@@ -5523,11 +5513,10 @@
   function updateDocumentTitle() {
     var personaLabel = state.activePersona === "board" ? "Board Room" : getPersonaLabel(state.activePersona);
     var viewLabels = {
-      home: state.activePersona === "board" ? "Portal" : "Briefing",
-      calendar: "Calendar",
-      agents: "AI team",
-      functions: "Functions",
-      knowledge: "Evidence",
+      home: state.activePersona === "board" ? "Portal" : "Diagnostics",
+      agents: "AI Assistants",
+      functions: "Agents",
+      knowledge: "Knowledge",
       reports: "Reports"
     };
     document.title = "StrategyOS — " + personaLabel + " " + firstDefined(viewLabels[state.activeView], "Workspace");
@@ -5548,7 +5537,7 @@
     renderCalendarAgenda();
     renderLowerRailFidelity();
     renderAgentsDiscovery();
-    renderTargetParitySections();
+    renderHomeTargetExtensions();
     renderFunctionsWorkspace();
     renderKnowledgeGraph();
     renderAssistantStudio();

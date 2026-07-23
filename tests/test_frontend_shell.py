@@ -171,8 +171,9 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
     # 22.06 top bar / nav parity
     assert 'id="view-nav"' in html
-    assert "Briefing" in html and "Calendar" in html and "Hermes" in html and "Evidence" in html
-    assert 'id="view-calendar"' in html and 'id="calendar-agenda-panel"' in html
+    assert "Diagnostics" in html and "AI Assistants" in html and "Agents" in html and "Knowledge" in html and "Hermes" in html
+    assert 'data-view-target="calendar"' not in html
+    assert 'id="view-calendar"' not in html
     assert "Mizan Group" not in html
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
@@ -192,7 +193,7 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="findings-panel"' in html
     assert 'id="developments-panel"' in html
     assert 'id="week-panel"' in html
-    assert "Prepare the next move" in html
+    assert "Think and model on your data" in html
     assert 'id="board-portal"' in html
     assert 'id="agents-activity"' in html
     assert 'id="functions-overview"' in html
@@ -223,8 +224,9 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
     assert 'id="view-nav"' in html
-    assert "Briefing" in html and "Calendar" in html and "Hermes" in html and "Evidence" in html
-    assert 'id="view-calendar"' in html and 'id="calendar-agenda-panel"' in html
+    assert "Diagnostics" in html and "AI Assistants" in html and "Agents" in html and "Knowledge" in html and "Hermes" in html
+    assert 'data-view-target="calendar"' not in html
+    assert 'id="view-calendar"' not in html
     assert "Mizan Group" not in html
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
@@ -285,7 +287,7 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
     assert 'id="view-nav"' in html
-    assert "Briefing" in html and "Calendar" in html and "Hermes" in html and "Evidence" in html
+    assert "Diagnostics" in html and "AI Assistants" in html and "Agents" in html and "Knowledge" in html and "Hermes" in html
     assert "Mizan Group" not in html
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
@@ -1132,9 +1134,9 @@ def test_ceo_information_architecture_separates_board_and_operational_surfaces()
     assert 'data-view-panel="agents"' in html
     assert 'state.activePersona === "board" && !boardReleased' in js
     assert "No live diagnostics, working evidence, or pre-board figures" in js
-    assert "Pressure-test the next move" in js
+    assert "fidelity-thinking-composer" in js
     assert "Enterprise performance" in js
-    assert "Decisions for you" in js
+    assert "Developments since you were here" in html
 
 
 def test_kpi_questions_use_the_shared_assistant_drawer():
