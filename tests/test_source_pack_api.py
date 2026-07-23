@@ -840,3 +840,29 @@ def test_low_confidence_mapping_blocks_run_until_confirmed(tmp_path: Path):
         assert "ap_ledger" not in confirmed.json()["task_readiness"]["unconfirmed_roles"]
     finally:
         _restore_env(original)
+
+
+def test_low_confidence_supplement_does_not_block_exact_role_source():
+    manifest = [
+        {
+            "source_disposition": "current_evidence",
+            "classification": {
+                "status": "classified",
+                "role": "ap_ledger",
+                "column_mapping_proposal": {"requires_confirmation": False},
+            },
+        },
+        {
+            "source_disposition": "current_evidence",
+            "classification": {
+                "status": "candidate",
+                "role": "ap_ledger",
+                "column_mapping_proposal": {
+                    "role": "ap_ledger",
+                    "requires_confirmation": True,
+                },
+            },
+        },
+    ]
+
+    assert source_pack_module._unconfirmed_roles(manifest) == []

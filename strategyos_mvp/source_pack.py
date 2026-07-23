@@ -1266,6 +1266,19 @@ def _unconfirmed_roles(manifest: list[dict[str, Any]]) -> list[str]:
     match) and no operator override has been saved for it. Exact/high-confidence
     matches and operator-confirmed mappings are never flagged.
     """
+    # A supplemental file must not block a role that is already backed by an
+    # exact, classified current-evidence source. This is common in real packs:
+    # e.g. AP invoices are canonical while an AP payments export is only a
+    # lower-confidence secondary match for the same role. Requiring the
+    # operator to force the payments file into the invoice schema would both
+    # add friction and risk overwriting the better normalized source.
+    trusted_roles = {
+        str((item.get("classification") or {}).get("role"))
+        for item in manifest
+        if str(item.get("source_disposition") or CURRENT_EVIDENCE) == CURRENT_EVIDENCE
+        and str((item.get("classification") or {}).get("status") or "") == "classified"
+        and (item.get("classification") or {}).get("role") in TABULAR_ROLE_SIGNATURES
+    }
     flagged: set[str] = set()
     for item in manifest:
         if str(item.get("source_disposition") or CURRENT_EVIDENCE) != CURRENT_EVIDENCE:
@@ -1275,7 +1288,7 @@ def _unconfirmed_roles(manifest: list[dict[str, Any]]) -> list[str]:
         role = proposal.get("role") or classification.get("role")
         if not role or role not in TABULAR_ROLE_SIGNATURES:
             continue
-        if proposal.get("requires_confirmation"):
+        if proposal.get("requires_confirmation") and str(role) not in trusted_roles:
             flagged.add(str(role))
     return sorted(flagged)
 
