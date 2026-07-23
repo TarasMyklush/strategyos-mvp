@@ -72,7 +72,7 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     assert "Agents" in executive_html
     assert "Hermes" in executive_html
     assert "Knowledge" in executive_html
-    assert "Enterprise performance" in executive_html
+    assert "The group index" in executive_html
     assert "Think and model on your data" in executive_html
 
 

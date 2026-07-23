@@ -7603,6 +7603,177 @@ body {
   margin: 5px 0 0;
 }
 
+/* Final target-composition pass: keep the product's governed controls while
+   matching the standalone CEO diagnostic's proportions and visual hierarchy. */
+.fidelity-shell {
+  width: min(100%, 1220px);
+  padding: 34px 30px 96px;
+}
+
+.view-panel--home > .hero {
+  grid-template-columns: 150px minmax(0, 1fr);
+  min-height: 205px;
+  gap: 34px;
+  align-items: center;
+  padding: 30px 38px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--warning);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.view-panel--home > .hero .hero-copy {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.view-panel--home > .hero .hero-status {
+  display: grid;
+  grid-column: 1;
+  grid-row: 1;
+  width: 126px;
+  height: 126px;
+  place-items: center;
+  justify-self: center;
+  padding: 0;
+  border: 7px solid color-mix(in srgb, var(--warning) 80%, var(--border));
+  border-radius: 50%;
+  background: var(--surface);
+  text-align: center;
+}
+
+.view-panel--home > .hero .hero-status__heading,
+.view-panel--home > .hero .hero-status__caption,
+.view-panel--home > .hero .hero-mini-stats,
+.view-panel--home > .hero .hero-prompts {
+  display: none;
+}
+
+.view-panel--home > .hero .hero-status__value {
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 0;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.view-panel--home > .hero .hero-status__value > span:not(.hero-status__fallback) {
+  font-size: 40px;
+}
+
+.view-panel--home > .hero .hero-status__value small {
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .04em;
+}
+
+.view-panel--home > .hero .hero-status__fallback {
+  max-width: 92px;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+#kpi-index-section .section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+#kpi-index-section .section-title {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+#kpi-detail-section > .section-head {
+  display: none;
+}
+
+#driver-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#driver-row .driver-tile {
+  min-height: 198px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+#driver-row .driver-tile.is-selected {
+  border: 2px solid var(--accent);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+#driver-drill .kpi-inline-drill {
+  gap: 24px;
+  padding: 28px 30px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+#driver-drill .ceo-kpi-readout,
+#driver-drill .ceo-kpi-facts,
+#driver-drill .ceo-comparison-note,
+#driver-drill .kpi-supporting-analysis,
+#driver-drill .kpi-brief-audit {
+  display: none;
+}
+
+#driver-drill .kpi-brief-audit[open] {
+  display: block;
+}
+
+#driver-drill .kpi-inline-chat {
+  padding: 18px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+#driver-drill .kpi-inline-chat__intro {
+  display: none;
+}
+
+.fidelity-operating-left > .section,
+#week-ahead-section,
+.fidelity-thinking-grid > .section,
+#home-agents-section {
+  padding: 24px 26px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+#home-agents-section {
+  margin-top: 24px;
+}
+
+.fidelity-leader-card__visual {
+  min-height: 250px;
+}
+
 @media (max-width: 980px) {
   #driver-drill .kpi-executive-grid,
   .fidelity-operating-grid,
@@ -7623,6 +7794,25 @@ body {
 @media (max-width: 720px) {
   .fidelity-shell {
     padding: 18px 16px 82px;
+  }
+
+  .view-panel--home > .hero {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 24px;
+  }
+
+  .view-panel--home > .hero .hero-copy,
+  .view-panel--home > .hero .hero-status {
+    grid-column: 1;
+  }
+
+  .view-panel--home > .hero .hero-status {
+    grid-row: 1;
+  }
+
+  .view-panel--home > .hero .hero-copy {
+    grid-row: 2;
   }
 
   #driver-row,

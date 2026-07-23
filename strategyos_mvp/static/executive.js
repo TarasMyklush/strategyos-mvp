@@ -3940,7 +3940,9 @@
       : hasScore
         ? "Measured against the latest approved plan."
         : "Built from the latest available operating data.";
-    $("hero-score").textContent = heroStatusText;
+    $("hero-score").innerHTML = hasScore && !reviewGate
+      ? '<span>' + escapeHtml(String(clampedScore || 0)) + '</span><small>plan health</small>'
+      : '<span class="hero-status__fallback">' + escapeHtml(heroStatusText) + '</span>';
     $("hero-cap").textContent = heroStatusCaption;
     var statusSignalEl = $("hero-status-signal");
     if (statusSignalEl) {

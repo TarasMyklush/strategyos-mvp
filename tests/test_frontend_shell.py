@@ -188,7 +188,7 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     # Driver grid
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
     # Home composition parity
-    assert "Enterprise performance" in html
+    assert "The group index" in html
     assert 'id="driver-drill"' in html
     assert 'id="findings-panel"' in html
     assert 'id="developments-panel"' in html
@@ -235,7 +235,7 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="hero-score"' in html or 'class="hero-score__value"' in html
     assert 'id="hero-head"' in html or 'class="hero-title"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
-    assert "Enterprise performance" in html
+    assert "The group index" in html
     assert 'id="decision-questions-section"' in html
     assert 'id="driver-drill"' in html
     assert 'id="findings-panel"' in html
@@ -294,7 +294,7 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert ">KA<" not in html
     assert 'id="hero"' in html or 'class="hero"' in html
     assert 'id="driver-row"' in html or 'class="driver-grid"' in html
-    assert "Enterprise performance" in html
+    assert "The group index" in html
     assert 'id="decision-questions-section"' in html
     assert 'id="driver-drill"' in html
     assert 'id="findings-panel"' in html
