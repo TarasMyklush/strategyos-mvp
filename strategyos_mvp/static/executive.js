@@ -5034,7 +5034,7 @@
 
     if (findingsPanel) {
       findingsPanel.hidden = false;
-      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Enterprise outlook</p><h3 class="detail-title">Findings &amp; concerns</h3><p class="section-note">Only changes that can alter the outlook or a leadership commitment.</p></div></div><div class="executive-signal-list">' + signalMarkup + '</div>';
+      findingsPanel.innerHTML = '<div class="detail-head"><div><p class="detail-eyebrow">Enterprise outlook</p><h3 class="detail-title">Findings &amp; concerns</h3><p class="section-note">Developments &amp; concerns are limited to changes that can alter the outlook or a leadership commitment.</p></div></div><div class="executive-signal-list">' + signalMarkup + '</div>';
     }
 
     if (developmentsPanel) {
