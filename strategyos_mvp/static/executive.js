@@ -5236,11 +5236,17 @@
 
     if (agentsPanel) {
       var activityCount = leaders.filter(function (leader) { return /^(active|monitoring)$/i.test(String(leader.status || '')); }).length;
+      var runningAgents = getRunningAgents().slice(0, 6);
+      var runningMarkup = runningAgents.length ? runningAgents.map(function (agent) {
+        var name = firstDefined(agent.name, agent.label, agent.module_id, "Agent");
+        var status = firstDefined(agent.status, agent.state, "running");
+        return '<button type="button" class="fidelity-running-agent" data-home-agent-open="true"><span class="fidelity-running-agent__dot"></span><strong>' + escapeHtml(name) + '</strong><small>' + escapeHtml(humanizeToken(status)) + '</small><span>›</span></button>';
+      }).join("") : '<div class="fidelity-empty">No specialist agent is currently running.</div>';
       var marketplace = catalogue.length ? catalogue.map(function (agent) {
         var name = discoverableAgentLabel(agent);
-        return '<article class="fidelity-agent-card"><span class="fidelity-agent-card__mark">◆</span><strong>' + escapeHtml(name) + '</strong><small>' + escapeHtml(firstDefined(agent.description, agent.summary, 'Specialist agent available to this tenant.')) + '</small><button type="button" data-home-agent-open="true">Open in Agents</button></article>';
+        return '<article class="fidelity-agent-card"><span class="fidelity-agent-card__mark">◆</span><strong>' + escapeHtml(name) + '</strong><small>' + escapeHtml(firstDefined(agent.description, agent.summary, 'Specialist agent available to this tenant.')) + '</small><button type="button" data-home-agent-open="true">+ deploy</button></article>';
       }).join('') : '<div class="fidelity-empty">No specialist agents are published for this tenant.</div>';
-      agentsPanel.innerHTML = '<div class="fidelity-agent-activity"><div><span>Current agent activity</span><strong>' + escapeHtml(String(activityCount)) + ' active leadership workflow' + (activityCount === 1 ? '' : 's') + '</strong></div><button type="button" data-home-agent-open="true">Browse all agents</button></div><div class="fidelity-agent-grid">' + marketplace + '</div>';
+      agentsPanel.innerHTML = '<div class="fidelity-agent-activity"><div><span>Current agent activity</span><strong>' + escapeHtml(String(activityCount + runningAgents.length)) + ' active or available workflow' + (activityCount + runningAgents.length === 1 ? '' : 's') + '</strong></div><button type="button" data-home-agent-open="true">View detail</button></div><div class="fidelity-agents-layout"><section><div class="fidelity-agents-column-head"><strong>Running now</strong><span>Live specialist work and monitoring</span></div><div class="fidelity-running-list">' + runningMarkup + '</div></section><section><div class="fidelity-agents-column-head"><strong>Discover agents</strong><span>Deploy through the governed Agents workspace</span></div><div class="fidelity-agent-grid">' + marketplace + '</div><button type="button" class="fidelity-browse-agents" data-home-agent-open="true">Browse all agents →</button></section></div>';
       safeArray(agentsPanel.querySelectorAll('[data-home-agent-open]')).forEach(function (button) { button.onclick = function () { switchView('functions'); }; });
     }
   }

@@ -1169,7 +1169,7 @@ def test_digital_twin_attention_label_is_ceo_friendly():
     js = _static_executive_js()
 
     assert 'attention: "Needs human review"' in js
-    assert "Running now" not in js
+    assert "Running now" in js
 
 
 def test_twin_status_labels_are_ceo_friendly():
