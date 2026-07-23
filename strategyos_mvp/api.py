@@ -4742,6 +4742,7 @@ def _executive_diagnostics_payload(
                 "source_files": item.get("source_files"),
                 "trend": item.get("trend"),
                 "trend_status": item.get("trend_status"),
+                "movers": item.get("movers"),
                 "executive_brief": item.get("executive_brief"),
             }
         )
