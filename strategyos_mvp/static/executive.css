@@ -7184,7 +7184,7 @@ body {
 .fidelity-thinking-grid {
   margin: 0;
   padding: 32px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-bottom: 0;
 }
 
 .fidelity-operating-grid,
@@ -7209,7 +7209,7 @@ body {
 
 .view-panel--home > .hero {
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-bottom: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
