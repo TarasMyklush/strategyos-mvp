@@ -105,7 +105,7 @@ def test_executive_ui_distinguishes_assistants_from_functions_and_status_panel()
     css = (root / "executive.css").read_text(encoding="utf-8")
     html = (root / "executive.html").read_text(encoding="utf-8")
 
-    assert '<h2 class="section-title" id="agents-heading">AI assistants</h2>' in html
+    assert '<h2 class="section-title" id="agents-heading">AI Assistants</h2>' in html
     assert "AI assistants by executive role" in js
     assert "Specialist work such as analysis or audit is tracked separately under Functions." in js
     assert 'data-view-target="functions"' in html
