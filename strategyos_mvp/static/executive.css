@@ -5870,7 +5870,7 @@ html[data-theme="dark"] .trend-axis {
 
 .functions-layout {
   display: grid;
-  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-top: 14px;
   align-items: start;
@@ -5919,6 +5919,14 @@ html[data-theme="dark"] .trend-axis {
 .function-team-link:hover,
 .function-brief-btn:hover {
   background: var(--accent-soft);
+}
+
+.function-overview-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .function-review-summary {
@@ -6096,6 +6104,32 @@ html[data-theme="dark"] .trend-axis {
 
 .function-card__latest small { display: block; margin-top: 5px; }
 
+.function-card__trail {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.function-card__trail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 13px;
+}
+
+.function-card__trail-head strong {
+  font-size: 12px;
+}
+
+.function-card__trail-head span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.function-card__trail .function-finding-list {
+  margin-top: 10px;
+}
+
 .planned-functions {
   margin-top: 18px;
   padding-top: 14px;
@@ -6148,6 +6182,54 @@ html[data-theme="dark"] .trend-axis {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+summary.function-finding__head {
+  list-style: none;
+}
+
+summary.function-finding__head::-webkit-details-marker {
+  display: none;
+}
+
+.function-finding[open] > .function-finding__head .function-card__caret {
+  transform: rotate(90deg);
+}
+
+.specialist-agent-directory {
+  display: grid;
+  grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr);
+  gap: 18px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.specialist-agent-running {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.specialist-agent-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-strong);
+}
+
+.specialist-agent-row > div {
+  display: grid;
+  gap: 2px;
+}
+
+.specialist-agent-row small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .function-finding__head:hover { background: var(--accent-soft); }
@@ -8655,5 +8737,199 @@ body {
 
   .fidelity-leader-card__visual {
     min-height: 210px;
+  }
+}
+
+/* Leaders' Corner follows the target vlog pattern: one reel, four navigable
+   entries, and no assistant-directory content inside the briefing. */
+.leaders-vlog {
+  display: grid;
+  gap: 10px;
+}
+
+.leaders-vlog__badge {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.leaders-vlog__title {
+  font-family: var(--display);
+  font-size: clamp(22px, 2.2vw, 29px);
+  letter-spacing: -.02em;
+}
+
+.vlog-slide {
+  display: grid;
+  grid-template-columns: minmax(180px, .86fr) minmax(0, 1.14fr);
+  gap: 18px;
+  align-items: stretch;
+  margin-top: 3px;
+}
+
+.vlog-thumb {
+  position: relative;
+  display: grid;
+  min-height: 210px;
+  overflow: hidden;
+  place-items: center;
+  border: 0;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 72% 24%, hsla(var(--vlog-hue), 68%, 73%, .5), transparent 36%),
+    linear-gradient(145deg, hsl(var(--vlog-hue), 34%, 23%), hsl(var(--vlog-hue), 24%, 12%));
+  color: #fff;
+  cursor: pointer;
+}
+
+.vlog-thumb::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+
+.vlog-play {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  padding-left: 3px;
+  border: 1px solid rgba(255, 255, 255, .58);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .24);
+  font-size: 18px;
+}
+
+.vlog-duration,
+.vlog-placeholder {
+  position: absolute;
+  bottom: 12px;
+  font-size: 10px;
+}
+
+.vlog-duration {
+  right: 12px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .54);
+  font-weight: 700;
+}
+
+.vlog-placeholder {
+  left: 12px;
+  color: rgba(255, 255, 255, .76);
+}
+
+.vlog-meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 2px;
+}
+
+.vlog-meta > strong {
+  font-family: var(--display);
+  font-size: clamp(23px, 2.25vw, 31px);
+  font-weight: 500;
+  line-height: 1.12;
+}
+
+.vlog-meta > span {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.vlog-meta > span em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 450;
+}
+
+.vlog-meta button {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vlog-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.vlog-nav > button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-strong);
+  color: var(--ink);
+  font: inherit;
+  font-size: 19px;
+  cursor: pointer;
+}
+
+.vlog-nav > button:disabled {
+  cursor: default;
+  opacity: .35;
+}
+
+.vlog-dots {
+  display: flex;
+  gap: 7px;
+}
+
+.vlog-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: width 150ms ease, background 150ms ease;
+}
+
+.vlog-dot.is-active {
+  width: 22px;
+  background: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .vlog-slide,
+  .specialist-agent-directory {
+    grid-template-columns: 1fr;
+  }
+
+  .vlog-thumb {
+    min-height: 190px;
+  }
+
+  .function-separation {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .function-overview-actions {
+    justify-content: flex-start;
   }
 }

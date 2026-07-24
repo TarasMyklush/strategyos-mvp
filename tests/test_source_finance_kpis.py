@@ -217,3 +217,35 @@ def test_group_budget_becomes_the_ceo_projection_without_double_counting_total(t
     }
     assert [item["name"] for item in payload["dynamics"]["revenue"]["lifting"]] == ["North"]
     assert [item["name"] for item in payload["dynamics"]["revenue"]["dragging"]] == ["South"]
+
+
+def test_group_cash_floor_history_is_a_governed_chart_not_a_synthetic_series():
+    from openpyxl import Workbook
+
+    from strategyos_mvp.source_finance_kpis import _group_cash_floor_trend
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Group_Cash_Floor"
+    sheet.append([
+        "Quarter",
+        "Group cash budget (SAR B)",
+        "Actual/Forecast (SAR B)",
+        "Floor (SAR B)",
+        "Headroom",
+        "Note",
+    ])
+    sheet.append(["2025-Q4 (actual)", 1.30, 1.32, 1.20, 0.12, "Approved floor"])
+    sheet.append(["2026-Q1 (actual)", 1.34, 1.37, 1.20, 0.17, "Approved floor"])
+    sheet.append(["2026-Q2 (est)", 1.38, 1.41, 1.20, 0.21, "Approved floor"])
+
+    trend = _group_cash_floor_trend(workbook)
+
+    assert trend == {
+        "labels": ["2025-Q4", "2026-Q1", "2026-Q2"],
+        "actual": ["1320000000.00", "1370000000.00", "1410000000.00"],
+        "plan": ["1200000000.00", "1200000000.00", "1200000000.00"],
+        "has_plan_series": True,
+        "unit": "sar",
+        "scope_note": "Quarterly group cash actual/forecast versus the approved group floor.",
+    }

@@ -2165,14 +2165,14 @@ def test_twins_and_specialist_functions_are_separate_ceo_surfaces():
     assert 'data-view-target="functions"' in html
     assert 'id="view-functions"' in html
     assert 'id="functions-roster"' in html
-    assert 'id="functions-audit"' in html
+    assert 'id="functions-audit"' not in html
     assert 'data-view-target="assistants"' not in html
     assert 'id="assistant-network-card"' not in html
     assert 'id="a2a-fab"' not in html
     assert 'id="a2a-panel"' not in html
     assert 'id="assistant-drawer"' in html
-    assert "Assistants represent roles. Functions perform work." in js
-    assert "Specialist work such as analysis or audit is tracked separately under Functions." in js
+    assert "AI Assistants represent leaders. Agents complete specialist work." in js
+    assert "Specialist analysis and audit work is tracked under Agents." in js
 
 
 def test_finance_function_workspace_uses_recorded_audit_events_and_exposes_stuck_state():
@@ -2190,9 +2190,10 @@ def test_finance_function_workspace_uses_recorded_audit_events_and_exposes_stuck
     assert 'name: "Finance Auditor"' in review_block
     assert 'stateKey = /\\b(locked|resolved|approved|complete|completed|closed|accepted)\\b/' in review_block
     assert '"stuck"' in review_block
-    assert "Analyst–Auditor audit trail" in render_block
-    assert "Current recorded state" in render_block
-    assert "data-function-finding-toggle" in render_block
+    assert "Recorded review trail" in render_block
+    assert "Expand a finding to see this agent’s work" in render_block
+    assert "function-card__trail" in render_block
+    assert "data-function-finding-toggle" not in render_block
     assert 'entrypoint: "function_review"' in render_block
     assert "Presentation composer" in render_block and "Meeting booker" in render_block
     assert "Planned · not enabled" in render_block

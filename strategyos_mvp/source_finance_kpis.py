@@ -262,6 +262,47 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     operating_cost_plan = revenue_plan - ebitda_plan
     cash = _group_cash_floor(budget_book, budget_path, root)
     trend = _group_revenue_trend(analytics_path, root)
+    # The group pack supplies one consolidated H1 headline, while the same
+    # governed source set also carries monthly Tamween division actuals and a
+    # quarterly group cash series. Use those explicitly labelled series for
+    # trajectory charts; never manufacture a history from the headline.
+    gl_path = _first_matching(root, "gl_extract_h1_2026", ".csv")
+    coa_path = _first_matching(root, "chart_of_accounts", ".xlsx")
+    if gl_path is not None and coa_path is not None:
+        accounts = _load_accounts(coa_path)
+        gl = _load_gl(gl_path)
+        balances: dict[str, Decimal] = defaultdict(Decimal)
+        for row in gl:
+            account = str(row.get("account") or "").strip()
+            debit = _decimal(row.get("debit"))
+            credit = _decimal(row.get("credit"))
+            if account and debit is not None and credit is not None:
+                balances[account] += debit - credit
+        revenue_accounts = _accounts_matching(balances, accounts, _is_revenue)
+        cogs_accounts = _accounts_matching(balances, accounts, _is_cogs)
+        operating_accounts = _accounts_matching(balances, accounts, _is_operating_cost)
+        if revenue_accounts and cogs_accounts and operating_accounts:
+            division_dynamics = _finance_dynamics(
+                gl,
+                revenue_accounts,
+                cogs_accounts,
+                operating_accounts,
+                accounts,
+            )["trend"]
+            trend["ebitda_margin"] = {
+                **division_dynamics["ebitda_margin"],
+                "scope_note": "Tamween division monthly ledger actuals; group H1 headline is shown above.",
+            }
+            trend["operating_cost"] = {
+                **division_dynamics["total_cost_to_ebitda"],
+                "scope_note": "Tamween division monthly COGS plus cash operating cost; group H1 headline is shown above.",
+            }
+            trend["source_files"] = sorted({
+                *trend.get("source_files", []),
+                _relative(gl_path, root),
+                _relative(coa_path, root),
+            })
+    trend["cash_vs_floor"] = _group_cash_floor_trend(budget_book)
     movers = _group_movers(units)
     budget_file = _relative(budget_path, root)
     budget_sha = _sha256(budget_path)
@@ -370,6 +411,43 @@ def _group_cash_floor(book: Any, budget_path: Path, root: Path) -> dict[str, Any
     return {"value": _number(value * Decimal("1000000000")), "floor": _number(floor * Decimal("1000000000")), "complete": True, "evidence": {"files": [_relative(budget_path, root)], "summary": f"{quarter} group cash actual/forecast and approved floor from Group_Cash_Floor.", "details": {"file": _relative(budget_path, root), "sha256": _sha256(budget_path), "sheet": "Group_Cash_Floor", "quarter": quarter}}}
 
 
+def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
+    empty = {
+        "labels": [],
+        "actual": [],
+        "plan": [],
+        "has_plan_series": False,
+        "unit": "sar",
+    }
+    try:
+        rows = list(book["Group_Cash_Floor"].values)
+        headers = _header_positions(rows[0] if rows else ())
+    except Exception:
+        return empty
+    labels: list[str] = []
+    actual: list[str] = []
+    floors: list[str] = []
+    for values in rows[1:]:
+        quarter = str(_cell(values, headers, "quarter") or "").strip()
+        value = _decimal(_cell(values, headers, "actualforecastsarb"))
+        floor = _decimal(_cell(values, headers, "floorsarb"))
+        if not quarter or value is None or floor is None:
+            continue
+        labels.append(quarter.split(" (", 1)[0])
+        actual.append(_number(value * Decimal("1000000000")) or "0")
+        floors.append(_number(floor * Decimal("1000000000")) or "0")
+    if len(actual) < 2:
+        return empty
+    return {
+        "labels": labels,
+        "actual": actual,
+        "plan": floors,
+        "has_plan_series": True,
+        "unit": "sar",
+        "scope_note": "Quarterly group cash actual/forecast versus the approved group floor.",
+    }
+
+
 def _finance_dynamics(
     gl: Iterable[Mapping[str, Any]],
     revenue_accounts: Iterable[str],
@@ -422,6 +500,9 @@ def _finance_dynamics(
     labels = sorted(periods)
     revenue_actual = [periods[label]["revenue"] for label in labels]
     operating_cost_actual = [periods[label]["operating_cost"] for label in labels]
+    total_cost_to_ebitda_actual = [
+        periods[label]["cogs"] + periods[label]["operating_cost"] for label in labels
+    ]
     ebitda_margin_labels: list[str] = []
     ebitda_margin_actual: list[Decimal] = []
     for label in labels:
@@ -495,6 +576,7 @@ def _finance_dynamics(
             ),
             "ebitda_margin": actual_trend(ebitda_margin_labels, ebitda_margin_actual, unit="percent"),
             "operating_cost": actual_trend(labels, operating_cost_actual, unit="sar"),
+            "total_cost_to_ebitda": actual_trend(labels, total_cost_to_ebitda_actual, unit="sar"),
         },
         "movers": {"revenue": movers},
     }

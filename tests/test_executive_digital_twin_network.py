@@ -107,7 +107,7 @@ def test_executive_ui_distinguishes_assistants_from_functions_and_status_panel()
 
     assert '<h2 class="section-title" id="agents-heading">AI Assistants</h2>' in html
     assert "AI assistants by executive role" in js
-    assert "Specialist work such as analysis or audit is tracked separately under Functions." in js
+    assert "Specialist analysis and audit work is tracked under Agents." in js
     assert 'data-view-target="functions"' in html
     assert 'id="subtools-panel" hidden' in html
     assert "automationCard.hidden = true" in js
@@ -116,7 +116,7 @@ def test_executive_ui_distinguishes_assistants_from_functions_and_status_panel()
     assert ".agents-col-head .ach-title" in css
     assert ".agents-col-head .ach-hint" in css
     assert "text-align: left" in css
-    assert "This view shows coordination between AI assistants" in js
+    assert "This view shows coordination between AI Assistants" in js
     assert "Assistant collaboration" in js
     assert "Who each assistant represents" in js
     assert "executive twins" not in js.lower()

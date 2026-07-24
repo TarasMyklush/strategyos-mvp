@@ -1559,6 +1559,19 @@
       .trim();
   }
 
+  function specialistAgentCopy(value) {
+    return String(firstDefined(value, ""))
+      .replace(/\bassistant steps?\b/gi, function (match) {
+        return /steps$/i.test(match) ? "agent steps" : "agent step";
+      })
+      .replace(/\bspecialist functions?\b/gi, function (match) {
+        return /s$/i.test(match) ? "specialist agents" : "specialist agent";
+      })
+      .replace(/\bfunctions?\b/gi, function (match) {
+        return /s$/i.test(match) ? "agents" : "agent";
+      });
+  }
+
   function functionActionLabel(action) {
     var key = String(action || "").toLowerCase().replace(/[_\s-]+/g, "_");
     var labels = {
@@ -1595,7 +1608,7 @@
     return rightKey.action_rank - leftKey.action_rank;
   }
 
-  // Functions are specialist workers, not executive-role assistants. Their state is
+  // Specialist agents are workers, not executive-role assistants. Their state is
   // read from persisted Analyst/Auditor events so the CEO sees what actually
   // happened, where the review stopped and whether every case was closed.
   function getFinanceFunctionReview() {
@@ -1693,7 +1706,7 @@
           output: actionCount(auditorEntries, /challenge/i) + " challenges · " + lockedCount + " findings locked"
         }
       ],
-      reason: firstDefined(log.reason, "No Finance Analyst or Finance Auditor work has been recorded for this run.")
+      reason: specialistAgentCopy(firstDefined(log.reason, "No Finance Analyst or Finance Auditor work has been recorded for this run."))
     };
   }
 
@@ -1725,42 +1738,17 @@
   function renderFunctionsWorkspace() {
     var overview = $("functions-overview");
     var roster = $("functions-roster");
-    var audit = $("functions-audit");
-    if (!overview && !roster && !audit) return;
+    if (!overview && !roster) return;
     var review = getFinanceFunctionReview();
     var statusLabel = functionStateLabel(review.status);
     var statusTone = functionStateTone(review.status);
     var openCount = review.stuck_count + review.working_count;
 
     if (overview) {
-      overview.innerHTML = '<div class="function-separation"><div class="function-separation__copy"><span class="eyebrow">Two different kinds of AI</span><h3>Assistants represent roles. Functions perform work.</h3><p><strong>AI team</strong> contains AI assistants aligned to real leadership roles such as the Group CFO. <strong>Functions</strong> are specialist workers such as the Finance Analyst and Finance Auditor. Every function must show its work and current state.</p></div><button type="button" class="function-team-link" data-function-view-team>View AI team</button></div><div class="function-review-summary"><div class="function-review-state tone-' + escapeHtml(statusTone) + '"><span>Current finance review</span><strong>' + escapeHtml(statusLabel) + '</strong><small>' + escapeHtml(review.status === "complete" ? "Every recorded finding is locked." : review.status === "stuck" ? review.stuck_count + " finding" + (review.stuck_count === 1 ? " is" : "s are") + " waiting for resolution." : review.status === "working" ? openCount + " finding" + (openCount === 1 ? " remains" : "s remain") + " open." : review.reason) + '</small></div><div><strong>' + escapeHtml(String(review.findings.length)) + '</strong><span>findings reviewed</span></div><div><strong>' + escapeHtml(String(review.locked_count)) + '</strong><span>locked</span></div><div class="' + (openCount ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(openCount)) + '</strong><span>open or stuck</span></div><div><strong>' + escapeHtml(String(review.round_count)) + '</strong><span>review rounds</span></div></div>';
+      overview.innerHTML = '<div class="function-separation"><div class="function-separation__copy"><span class="eyebrow">Two different kinds of AI</span><h3>AI Assistants represent leaders. Agents complete specialist work.</h3><p><strong>AI Assistants</strong> are aligned to accountable executive roles such as the Group CFO. <strong>Agents</strong> analyse, audit or prepare defined work. Each agent exposes its own evidence-backed activity and review trail below.</p></div><div class="function-overview-actions"><button type="button" class="function-team-link" data-function-view-team>View AI Assistants</button><button type="button" class="function-brief-btn" data-function-ask>Ask Hermes for CEO brief</button></div></div><div class="function-review-summary"><div class="function-review-state tone-' + escapeHtml(statusTone) + '"><span>Current finance review</span><strong>' + escapeHtml(statusLabel) + '</strong><small>' + escapeHtml(review.status === "complete" ? "Every recorded finding is locked." : review.status === "stuck" ? review.stuck_count + " finding" + (review.stuck_count === 1 ? " is" : "s are") + " waiting for resolution." : review.status === "working" ? openCount + " finding" + (openCount === 1 ? " remains" : "s remain") + " open." : review.reason) + '</small></div><div><strong>' + escapeHtml(String(review.findings.length)) + '</strong><span>findings reviewed</span></div><div><strong>' + escapeHtml(String(review.locked_count)) + '</strong><span>locked</span></div><div class="' + (openCount ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(openCount)) + '</strong><span>open or stuck</span></div><div><strong>' + escapeHtml(String(review.round_count)) + '</strong><span>review rounds</span></div></div>';
       var teamLink = overview.querySelector('[data-function-view-team]');
       if (teamLink) teamLink.onclick = function () { switchView("agents"); };
-    }
-
-    if (roster) {
-      var activeCards = review.functions.map(function (item) {
-        var latest = item.entries[0] || {};
-        return '<details class="function-card"><summary class="function-card__summary"><div class="function-card__head"><span class="function-card__icon" aria-hidden="true">' + escapeHtml(item.name === "Finance Auditor" ? "A" : "F") + '</span><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.purpose) + '</span></div><em class="function-state tone-' + escapeHtml(functionStateTone(item.state)) + '">' + escapeHtml(functionStateLabel(item.state)) + '</em><span class="function-card__caret" aria-hidden="true">›</span></div><div class="function-card__facts"><span><strong>' + escapeHtml(String(item.entries.length)) + '</strong> recorded step' + (item.entries.length === 1 ? '' : 's') + '</span><span>' + escapeHtml(item.output) + '</span></div></summary><div class="function-card__latest"><span>Latest recorded work</span><p>' + escapeHtml(functionAuditCopy(latest.detail || (item.entries.length ? functionActionLabel(latest.action) : "No work recorded for this run."))) + '</p>' + (latest.round_no !== null && latest.round_no !== undefined ? '<small>Round ' + escapeHtml(String(latest.round_no)) + '</small>' : '') + '</div></details>';
-      }).join('');
-      roster.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Active functions</span><span class="ach-hint">Specialists working on the current run</span></div></div><div class="function-card-list">' + activeCards + '</div><div class="planned-functions"><span class="eyebrow">Coming next</span><div><span>Presentation composer <em>Planned · not enabled</em></span><span>Meeting booker <em>Planned · not enabled</em></span></div></div>';
-    }
-
-    if (audit) {
-      var findingRows = review.findings.length ? review.findings.map(function (finding) {
-        var isOpen = state.openFunctionFindingId === finding.id;
-        var latest = finding.latest || {};
-        return '<article class="function-finding state-' + escapeHtml(finding.state) + '"><button type="button" class="function-finding__head" data-function-finding-toggle="' + escapeHtml(finding.id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span><strong>' + escapeHtml(finding.id) + '</strong><small>' + escapeHtml(String(finding.entries.length)) + ' recorded step' + (finding.entries.length === 1 ? '' : 's') + ' · ' + escapeHtml(String(finding.round_count)) + ' round' + (finding.round_count === 1 ? '' : 's') + '</small></span><em class="function-state tone-' + escapeHtml(functionStateTone(finding.state)) + '">' + escapeHtml(functionStateLabel(finding.state)) + '</em><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="function-finding__body"><p class="function-finding__latest"><span>Current recorded state</span><strong>' + escapeHtml(functionAuditCopy(latest.detail || functionActionLabel(firstDefined(latest.action, latest.status, "Recorded")))) + '</strong></p><ol class="function-step-list">' + finding.entries.slice().reverse().map(renderFunctionStep).join('') + '</ol></div>' : '') + '</article>';
-      }).join('') : '<div class="function-empty"><strong>No specialist audit recorded</strong><p>' + escapeHtml(review.reason) + '</p></div>';
-      audit.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Analyst–Auditor audit trail</span><span class="ach-hint">What was done, challenged and closed</span></div><button type="button" class="function-brief-btn" data-function-ask>Ask Hermes for CEO brief</button></div><p class="function-audit-intro">Open a finding to see the real sequence between the Finance Analyst and Finance Auditor. A finding marked “Stuck” has not reached a recorded lock or resolution.</p><div class="function-finding-list">' + findingRows + '</div>' + (review.truncated ? '<p class="trail-foot">Showing the available audit excerpt; ' + escapeHtml(String(review.total_count)) + ' total steps were recorded.</p>' : '');
-      safeArray(audit.querySelectorAll('[data-function-finding-toggle]')).forEach(function (button) {
-        button.onclick = function () {
-          var id = button.getAttribute('data-function-finding-toggle') || '';
-          state.openFunctionFindingId = state.openFunctionFindingId === id ? '' : id;
-          renderFunctionsWorkspace();
-        };
-      });
-      var askButton = audit.querySelector('[data-function-ask]');
+      var askButton = overview.querySelector('[data-function-ask]');
       if (askButton) askButton.onclick = function () {
         askAssistant('Give me a CEO brief on the Finance Analyst–Finance Auditor review: what was completed, what remains open or stuck, the material implication, and whether I need to intervene.', askButton, {
           entrypoint: "function_review",
@@ -1770,6 +1758,38 @@
           stuck_count: review.stuck_count
         });
       };
+    }
+
+    if (roster) {
+      var activeCards = review.functions.map(function (item) {
+        var latest = item.entries[0] || {};
+        var roleFindings = review.findings.map(function (finding) {
+          var entries = finding.entries.filter(function (entry) { return entry.function_name === item.name; });
+          if (!entries.length) return "";
+          return '<details class="function-finding state-' + escapeHtml(finding.state) + '"><summary class="function-finding__head"><span><strong>' + escapeHtml(finding.id) + '</strong><small>' + escapeHtml(String(entries.length)) + ' ' + escapeHtml(item.name) + ' step' + (entries.length === 1 ? '' : 's') + '</small></span><em class="function-state tone-' + escapeHtml(functionStateTone(finding.state)) + '">' + escapeHtml(functionStateLabel(finding.state)) + '</em><span class="function-card__caret" aria-hidden="true">›</span></summary><div class="function-finding__body"><ol class="function-step-list">' + entries.slice().reverse().map(renderFunctionStep).join('') + '</ol></div></details>';
+        }).filter(Boolean).join("");
+        return '<details class="function-card"><summary class="function-card__summary"><div class="function-card__head"><span class="function-card__icon" aria-hidden="true">' + escapeHtml(item.name === "Finance Auditor" ? "A" : "F") + '</span><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.purpose) + '</span></div><em class="function-state tone-' + escapeHtml(functionStateTone(item.state)) + '">' + escapeHtml(functionStateLabel(item.state)) + '</em><span class="function-card__caret" aria-hidden="true">›</span></div><div class="function-card__facts"><span><strong>' + escapeHtml(String(item.entries.length)) + '</strong> recorded step' + (item.entries.length === 1 ? '' : 's') + '</span><span>' + escapeHtml(item.output) + '</span></div></summary><div class="function-card__latest"><span>Latest recorded work</span><p>' + escapeHtml(functionAuditCopy(latest.detail || (item.entries.length ? functionActionLabel(latest.action) : "No work recorded for this run."))) + '</p>' + (latest.round_no !== null && latest.round_no !== undefined ? '<small>Round ' + escapeHtml(String(latest.round_no)) + '</small>' : '') + '</div><div class="function-card__trail"><div class="function-card__trail-head"><strong>Recorded review trail</strong><span>Expand a finding to see this agent’s work</span></div><div class="function-finding-list">' + (roleFindings || '<div class="function-empty"><p>No review steps are recorded for this agent.</p></div>') + '</div></div></details>';
+      }).join('');
+      var runningAgents = getRunningAgents().filter(function (agent) {
+        var name = String(firstDefined(agent.name, agent.label, agent.module_id, "")).toLowerCase();
+        return name.indexOf("finance analyst") < 0 && name.indexOf("finance auditor") < 0;
+      }).slice(0, 6);
+      var catalogue = getDiscoverableAgents().slice(0, 6);
+      var runningMarkup = runningAgents.length ? runningAgents.map(function (agent) {
+        return '<article class="specialist-agent-row"><span class="fidelity-running-agent__dot"></span><div><strong>' + escapeHtml(firstDefined(agent.name, agent.label, agent.module_id, "Agent")) + '</strong><small>' + escapeHtml(humanizeToken(firstDefined(agent.status, agent.state, "available"))) + '</small></div></article>';
+      }).join("") : '<div class="function-empty"><p>No other specialist agent is running.</p></div>';
+      var marketplace = catalogue.length ? catalogue.map(function (agent, index) {
+        var id = discoverableAgentId(agent, index);
+        return '<article class="fidelity-agent-card"><span class="fidelity-agent-card__mark">◆</span><strong>' + escapeHtml(discoverableAgentLabel(agent)) + '</strong><small>' + escapeHtml(firstDefined(agent.description, agent.summary, 'Specialist agent available to this tenant.')) + '</small><button type="button" data-specialist-agent-id="' + escapeHtml(id) + '">View agent</button></article>';
+      }).join("") : '<div class="function-empty"><p>No additional specialist agents are published for this tenant.</p></div>';
+      roster.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Active agents</span><span class="ach-hint">Specialists working on the current review; expand each agent for its own audit trail</span></div></div><div class="function-card-list">' + activeCards + '</div><div class="specialist-agent-directory"><section><div class="fidelity-agents-column-head"><strong>Running now</strong><span>Other live specialist work and monitoring</span></div><div class="specialist-agent-running">' + runningMarkup + '</div></section><section><div class="fidelity-agents-column-head"><strong>Available agents</strong><span>Specialists approved for this workspace</span></div><div class="fidelity-agent-grid">' + marketplace + '</div></section></div><div class="planned-functions"><span class="eyebrow">Planned agents</span><div><span>Presentation composer <em>Planned · not enabled</em></span><span>Meeting booker <em>Planned · not enabled</em></span></div></div>' + (review.truncated ? '<p class="trail-foot">Showing the available review excerpt; ' + escapeHtml(String(review.total_count)) + ' total steps were recorded.</p>' : '');
+      safeArray(roster.querySelectorAll('[data-specialist-agent-id]')).forEach(function (button) {
+        button.onclick = function () {
+          var id = button.getAttribute('data-specialist-agent-id') || '';
+          var item = catalogue.find(function (agent, index) { return discoverableAgentId(agent, index) === id; });
+          if (item) handleDiscoverableAgentAction(item, button);
+        };
+      });
     }
   }
 
@@ -3307,14 +3327,14 @@
     var hasPercentDrivers = drivers.some(function (driver) { return driverHasPercent(driver); });
     if (state.activePersona === "ceo") {
       if (driverHeading) driverHeading.textContent = "The group index";
-      if (driverHint) driverHint.textContent = "Percent of plan is the headline — the figure is the footnote. Tap a driver for the story.";
+      if (driverHint) driverHint.textContent = "Percent of plan is the headline — the small triangle marks 100% of plan. Tap a KPI for its trend and drivers.";
     } else {
       if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
       if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current measures";
     }
     if (lowerHeading) lowerHeading.textContent = state.activePersona === "ceo" ? "Findings & concerns" : "What matters now";
     var boardOnly = state.activePersona === "board";
-    ["hero", "kpi-index-section", "kpi-detail-section", "priority-section", "developments-section", "week-ahead-section", "decision-questions-section", "leaders-corner-section", "home-agents-section"].forEach(function (id) {
+    ["hero", "kpi-index-section", "kpi-detail-section", "priority-section", "developments-section", "week-ahead-section", "decision-questions-section", "leaders-corner-section"].forEach(function (id) {
       var element = $(id);
       if (element) element.hidden = boardOnly;
     });
@@ -5218,7 +5238,7 @@
     if (activityCard) {
       var activeLeadershipCount = leadershipTwins.filter(function (item) { return /^(active|monitoring)$/i.test(String(item && item.status || "")); }).length;
       var attentionLeadershipCount = leadershipTwins.filter(function (item) { return /^attention$/i.test(String(item && item.status || "")); }).length;
-      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Executive assistants</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist work such as analysis or audit is tracked separately under Functions.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
+      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Executive assistants</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist analysis and audit work is tracked under Agents.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
     }
 
     if (networkCard) {
@@ -5259,7 +5279,7 @@
       var noEventCopy = openHandoffs
         ? 'Items are progressing; no decision is requested from you yet.'
         : 'No recent leadership-team activity needs review.';
-      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Items moving between executive-role assistants</span></div></div><p class="twin-explainer">This view shows coordination between AI assistants. Work performed by specialist functions is recorded separately in the Functions audit trail.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>') + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
+      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Items moving between executive-role assistants</span></div></div><p class="twin-explainer">This view shows coordination between AI Assistants. Work completed by specialist agents—and each agent’s review trail—is available under Agents.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>') + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
     }
 
     if (automationCard) {
@@ -5270,46 +5290,35 @@
 
   function renderHomeTargetExtensions() {
     var leadersPanel = $("leaders-corner-panel");
-    var agentsPanel = $("home-agents-panel");
-    var leaders = getLeadershipTeam().slice(0, 4);
-    var catalogue = getDiscoverableAgents().slice(0, 6);
+    var videos = [
+      { topic: 'Reading margin pressure before the board', who: 'Dr. Amal Faris', role: 'former Group CFO, regional pharma', dur: '4:12', hue: 222 },
+      { topic: 'When to hedge — and when to wait', who: 'Tariq Bensalem', role: 'treasury advisor', dur: '6:38', hue: 158 },
+      { topic: 'Recognising GMs without distorting incentives', who: 'Huda Karim', role: 'leadership coach', dur: '3:55', hue: 28 },
+      { topic: 'Pre-stocking for a JV without choking cash', who: 'Sami Wardi', role: 'operations partner', dur: '5:20', hue: 268 }
+    ];
 
     if (leadersPanel) {
-      var leaderIndex = Math.max(0, Math.min(Number(leadersPanel.getAttribute('data-leader-index') || 0), Math.max(0, leaders.length - 1)));
-      var visibleLeaders = leaders.length ? [leaders[leaderIndex]] : [];
-      var leaderCards = visibleLeaders.length ? visibleLeaders.map(function (leader) {
-        var title = firstDefined(leader.display_name, leadershipRoleLabel(leader), 'Leadership assistant');
-        var activity = leadershipActivityCopy(leader);
-        return '<article class="fidelity-leader-card"><div class="fidelity-leader-card__visual"><span>' + escapeHtml(String(title).slice(0, 1)) + '</span><small>' + escapeHtml(leadershipStatusLabel(leader.status)) + '</small></div><div class="fidelity-leader-card__copy"><strong>' + escapeHtml(title) + '</strong><span>' + escapeHtml(leadershipRoleLabel(leader)) + '</span><p>' + escapeHtml(activity) + '</p><button type="button" data-leader-discuss="' + escapeHtml('Prepare a CEO discussion brief with ' + title + ': ' + activity) + '">Discuss in chat</button></div></article>';
-      }).join('') : '<div class="fidelity-empty"><strong>No leadership update is available</strong><p>No recorded leadership update is attached to the current CEO source set.</p></div>';
-      var leaderNav = leaders.length > 1 ? '<span class="fidelity-leader-nav"><button type="button" data-leader-step="-1" aria-label="Previous leadership update">←</button><button type="button" data-leader-step="1" aria-label="Next leadership update">→</button></span>' : '';
-      leadersPanel.innerHTML = '<div class="fidelity-section-toolbar"><span>' + escapeHtml(leaders.length ? ((leaderIndex + 1) + ' of ' + leaders.length + ' leadership updates') : 'Leadership updates attached to this review') + '</span><span>' + leaderNav + '<button type="button" data-home-assistants-open="true">Browse all AI Assistants</button></span></div><div class="fidelity-leader-grid">' + leaderCards + '</div>';
+      var leaderIndex = Math.max(0, Math.min(Number(leadersPanel.getAttribute('data-leader-index') || 0), videos.length - 1));
+      var video = videos[leaderIndex];
+      var videoPrompt = 'From the Leaders’ Corner reel “' + video.topic + '” — how does this apply to ' + tenantDisplayName() + ' right now?';
+      var dots = videos.map(function (_item, index) {
+        return '<button type="button" class="vlog-dot' + (index === leaderIndex ? ' is-active' : '') + '" data-leader-index="' + index + '" aria-label="Show video ' + (index + 1) + '" aria-current="' + (index === leaderIndex ? 'true' : 'false') + '"></button>';
+      }).join('');
+      leadersPanel.innerHTML = '<div class="leaders-vlog"><div class="leaders-vlog__badge">✦ Leaders’ Corner · vlog</div><div class="leaders-vlog__title">Short counsel, senior practitioners</div><article class="vlog-slide"><button type="button" class="vlog-thumb" style="--vlog-hue:' + escapeHtml(String(video.hue)) + '" data-leader-discuss="' + escapeHtml(videoPrompt) + '" aria-label="Discuss ' + escapeHtml(video.topic) + ' in chat"><span class="vlog-play" aria-hidden="true">▶</span><span class="vlog-duration">' + escapeHtml(video.dur) + '</span><span class="vlog-placeholder">video reel · drop footage</span></button><div class="vlog-meta"><strong>' + escapeHtml(video.topic) + '</strong><span>' + escapeHtml(video.who) + ' <em>· ' + escapeHtml(video.role) + '</em></span><button type="button" data-leader-discuss="' + escapeHtml(videoPrompt) + '">Discuss in chat →</button></div></article><div class="vlog-nav"><button type="button" data-leader-step="-1" aria-label="Previous video" ' + (leaderIndex === 0 ? 'disabled' : '') + '>‹</button><span class="vlog-dots">' + dots + '</span><button type="button" data-leader-step="1" aria-label="Next video" ' + (leaderIndex === videos.length - 1 ? 'disabled' : '') + '>›</button></div></div>';
       safeArray(leadersPanel.querySelectorAll('[data-leader-discuss]')).forEach(function (button) { button.onclick = function () { askAssistant(button.getAttribute('data-leader-discuss') || '', button, { entrypoint: 'leaders_corner' }); }; });
       safeArray(leadersPanel.querySelectorAll('[data-leader-step]')).forEach(function (button) {
         button.onclick = function () {
-          var nextIndex = (leaderIndex + Number(button.getAttribute('data-leader-step') || 0) + leaders.length) % leaders.length;
+          var nextIndex = Math.max(0, Math.min(videos.length - 1, leaderIndex + Number(button.getAttribute('data-leader-step') || 0)));
           leadersPanel.setAttribute('data-leader-index', String(nextIndex));
           renderHomeTargetExtensions();
         };
       });
-      var browse = leadersPanel.querySelector('[data-home-assistants-open]');
-      if (browse) browse.onclick = function () { switchView('agents'); };
-    }
-
-    if (agentsPanel) {
-      var activityCount = leaders.filter(function (leader) { return /^(active|monitoring)$/i.test(String(leader.status || '')); }).length;
-      var runningAgents = getRunningAgents().slice(0, 6);
-      var runningMarkup = runningAgents.length ? runningAgents.map(function (agent) {
-        var name = firstDefined(agent.name, agent.label, agent.module_id, "Agent");
-        var status = firstDefined(agent.status, agent.state, "running");
-        return '<button type="button" class="fidelity-running-agent" data-home-agent-open="true"><span class="fidelity-running-agent__dot"></span><strong>' + escapeHtml(name) + '</strong><small>' + escapeHtml(humanizeToken(status)) + '</small><span>›</span></button>';
-      }).join("") : '<div class="fidelity-empty">No specialist agent is currently running.</div>';
-      var marketplace = catalogue.length ? catalogue.map(function (agent) {
-        var name = discoverableAgentLabel(agent);
-        return '<article class="fidelity-agent-card"><span class="fidelity-agent-card__mark">◆</span><strong>' + escapeHtml(name) + '</strong><small>' + escapeHtml(firstDefined(agent.description, agent.summary, 'Specialist agent available to this tenant.')) + '</small><button type="button" data-home-agent-open="true">+ deploy</button></article>';
-      }).join('') : '<div class="fidelity-empty">No specialist agents are published for this tenant.</div>';
-      agentsPanel.innerHTML = '<div class="fidelity-agent-activity"><div><span>Current agent activity</span><strong>' + escapeHtml(String(activityCount + runningAgents.length)) + ' active or available workflow' + (activityCount + runningAgents.length === 1 ? '' : 's') + '</strong></div><button type="button" data-home-agent-open="true">View detail</button></div><div class="fidelity-agents-layout"><section><div class="fidelity-agents-column-head"><strong>Running now</strong><span>Live specialist work and monitoring</span></div><div class="fidelity-running-list">' + runningMarkup + '</div></section><section><div class="fidelity-agents-column-head"><strong>Discover agents</strong><span>Deploy through the governed Agents workspace</span></div><div class="fidelity-agent-grid">' + marketplace + '</div><button type="button" class="fidelity-browse-agents" data-home-agent-open="true">Browse all agents →</button></section></div>';
-      safeArray(agentsPanel.querySelectorAll('[data-home-agent-open]')).forEach(function (button) { button.onclick = function () { switchView('functions'); }; });
+      safeArray(leadersPanel.querySelectorAll('[data-leader-index]')).forEach(function (button) {
+        button.onclick = function () {
+          leadersPanel.setAttribute('data-leader-index', button.getAttribute('data-leader-index') || '0');
+          renderHomeTargetExtensions();
+        };
+      });
     }
   }
 

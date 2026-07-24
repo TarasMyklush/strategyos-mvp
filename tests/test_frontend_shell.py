@@ -194,11 +194,19 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="developments-panel"' in html
     assert 'id="week-panel"' in html
     assert "Think and model on your data" in html
+    assert 'id="home-agents-section"' not in html
+    assert "Reading margin pressure before the board" in _static_executive_js()
+    assert "When to hedge — and when to wait" in _static_executive_js()
+    assert "Recognising GMs without distorting incentives" in _static_executive_js()
+    assert "Pre-stocking for a JV without choking cash" in _static_executive_js()
     assert 'id="board-portal"' in html
     assert 'id="agents-activity"' in html
     assert 'id="functions-overview"' in html
     assert 'id="functions-roster"' in html
-    assert 'id="functions-audit"' in html
+    assert 'id="functions-audit"' not in html
+    assert "expand each agent for its own audit trail" in _static_executive_js()
+    assert "Assistants represent roles. Functions perform work." not in _static_executive_js()
+    assert "Active functions" not in _static_executive_js()
     assert 'id="assistant-studio"' in html
     assert 'id="assistant-form"' in html
     assert 'id="assistant-drawer"' in html
@@ -246,7 +254,8 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     assert 'id="persona-menu"' in html or 'id="persona-btn"' in html
     assert 'id="functions-overview"' in html
     assert 'id="functions-roster"' in html
-    assert 'id="functions-audit"' in html
+    assert 'id="functions-audit"' not in html
+    assert "expand each agent for its own audit trail" in js
     assert 'id="knowledge-graph-card"' in html
     assert 'id="assistant-studio"' in html
     assert 'id="assistant-drawer"' in html
@@ -304,7 +313,8 @@ def test_app_entry_uses_design_faithful_executive_surface():
     assert 'id="agents-activity"' in html
     assert 'id="functions-overview"' in html
     assert 'id="functions-roster"' in html
-    assert 'id="functions-audit"' in html
+    assert 'id="functions-audit"' not in html
+    assert "expand each agent for its own audit trail" in js
     assert 'id="knowledge-graph-card"' in html
     assert 'id="assistant-studio"' in html
     assert 'id="assistant-drawer"' in html

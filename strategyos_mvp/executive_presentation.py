@@ -493,13 +493,18 @@ def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, Any]:
     plan = values("plan")
     labels = [str(value) for value in list(item.get("labels") or [])]
     has_plan = bool(item.get("has_plan_series")) and bool(plan) and len(actual) == len(plan)
-    return {
+    result = {
         "actual": actual,
         "plan": plan if has_plan else [],
         "labels": labels if len(labels) == len(actual) else [],
         "has_plan_series": has_plan,
         "unit": str(item.get("unit") or ""),
     }
+    if item.get("scope_note"):
+        result["scope_note"] = str(item["scope_note"])
+    if item.get("plan_note"):
+        result["plan_note"] = str(item["plan_note"])
+    return result
 
 
 def _unavailable_ceo_kpi(spec: Mapping[str, Any], *, reason: str) -> dict[str, Any]:
