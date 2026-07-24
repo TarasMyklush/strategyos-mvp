@@ -8252,6 +8252,7 @@ body {
 #week-ahead-section #week-panel .event-chip {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
+  height: 47px;
   min-height: 0;
   align-items: center;
   gap: 12px;
@@ -8290,9 +8291,12 @@ body {
 
 #week-ahead-section #week-panel .event-title {
   min-width: 0;
+  overflow: hidden;
   font-size: 13.5px;
   font-weight: 600;
   line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #week-ahead-section #week-panel .event-when {
@@ -8334,7 +8338,9 @@ body {
 }
 
 #week-ahead-section .prep-actions .timeline-chip {
+  width: auto;
   min-height: 0;
+  flex: 1 1 0;
   padding: 7px 11px;
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -8632,7 +8638,7 @@ body {
   }
 
   #week-ahead-section #week-panel .event-when {
-    grid-column: 2;
+    display: none;
   }
 
   #gravity-panel {

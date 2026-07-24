@@ -1159,7 +1159,9 @@ def test_ceo_home_uses_the_standalone_target_alignment_contract():
     assert ".target-feed-row" in css
     assert "padding: 14px 2px;" in css
     assert "#week-ahead-section #week-panel .event-chip" in css
+    assert "height: 47px;" in css
     assert "padding: 11px 14px;" in css
+    assert "text-overflow: ellipsis;" in css
     assert ".fidelity-thinking-composer button" in css
     assert "width: 36px;" in css
 
