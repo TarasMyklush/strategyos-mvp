@@ -4224,6 +4224,19 @@
     return months[Math.max(0, Math.min(11, Number(match[2]) - 1))] + " " + match[1];
   }
 
+  function kpiSemanticTone(driver) {
+    var brief = driver && driver.executive_brief && typeof driver.executive_brief === "object"
+      ? driver.executive_brief
+      : {};
+    var signal = brief.executive_signal && typeof brief.executive_signal === "object"
+      ? brief.executive_signal
+      : {};
+    var tone = String(firstDefined(signal.tone, driver && driver.tone, "neutral")).toLowerCase();
+    if (tone === "positive" || tone === "up" || tone === "success" || tone === "ok") return "up";
+    if (tone === "critical" || tone === "watch" || tone === "down" || tone === "danger") return "down";
+    return "flat";
+  }
+
   function kpiTrendChartMarkup(driver) {
     var label = firstDefined(driver && driver.label, "KPI");
     var trend = driver && driver.trend;
@@ -4274,7 +4287,8 @@
     var latestPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[latestIndex]) : 'Latest period';
     var priorPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[priorIndex]) : 'prior period';
     var scopeNote = firstDefined(trend && trend.scope_note, hasPlan ? 'Actual versus aligned plan' : 'Actual series only — plan is not inferred');
-    return '<section class="kpi-trend"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span><small>' + escapeHtml(scopeNote) + '</small></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Plan</span>' : '') + '</div></div><svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus plan across ' : ' actual trend across ') + accessibleLabels) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong>' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong>' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
+    var semanticTone = kpiSemanticTone(driver);
+    return '<section class="kpi-trend tone-' + semanticTone + '"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span><small>' + escapeHtml(scopeNote) + '</small></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Plan</span>' : '') + '</div></div><svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus plan across ' : ' actual trend across ') + accessibleLabels) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong class="tone-' + semanticTone + '">' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong class="tone-' + semanticTone + '">' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
   }
 
   function kpiMovementRows(driver) {
@@ -4324,7 +4338,7 @@
       var noteMarkup = gm && noteOpen
         ? '<blockquote class="kpi-movement__note"><strong>' + escapeHtml(firstDefined(gm.who, 'GM')) + '</strong>' + escapeHtml(firstDefined(gm.note, 'No commentary was supplied.')) + '</blockquote>'
         : '';
-      return '<div class="kpi-movement__item"><div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--' + entry.direction + '">' + entry.glyph + '</span><strong>' + escapeHtml(firstDefined(item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item.delta, '')) + '</small>' + gmMarkup + '</div>' + noteMarkup + '</div>';
+      return '<div class="kpi-movement__item tone-' + entry.direction + '"><div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--' + entry.direction + '">' + entry.glyph + '</span><strong>' + escapeHtml(firstDefined(item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item.delta, '')) + '</small>' + gmMarkup + '</div>' + noteMarkup + '</div>';
     }).join('');
     return '<section class="kpi-movement' + (movementRows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><div><span class="kpi-brief-label">What moved it</span><small>' + escapeHtml(firstDefined(movers.scope_note, 'Governed movement behind the selected KPI')) + '</small></div></div><div class="kpi-movement__rows">' + (rows || '<p>No category-level movement is available for the selected reporting periods.</p>') + '</div></section>';
   }
@@ -4418,7 +4432,7 @@
     var executiveContextMarkup = kpiExecutiveContextMarkup(brief, comparison, strategicReference);
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
-      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong><span class="kpi-brief-variance tone-' + escapeHtml(firstDefined(executiveSignal.tone, 'neutral')) + '">' + escapeHtml(firstDefined(executiveSignal.variance_label, comparison.value, 'Current position')) + '</span></div></div><button type="button" class="kpi-show-work" data-kpi-show-work="true">Show the work</button>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
+      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3><span class="kpi-brief-variance tone-' + escapeHtml(firstDefined(executiveSignal.tone, 'neutral')) + '">' + escapeHtml(firstDefined(executiveSignal.variance_label, comparison.value, 'Current position')) + '</span><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong></div></div><button type="button" class="kpi-show-work" data-kpi-show-work="true">Show the work</button>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
       executiveContextMarkup,
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       (compositionMarkup ? '<details class="kpi-supporting-analysis"><summary>Supporting analysis</summary>' + compositionMarkup + '</details>' : ''),

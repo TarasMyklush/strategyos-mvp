@@ -1645,8 +1645,8 @@ def test_driver_ring_has_rich_positive_and_negative_colors():
     """Above-plan and below-plan ring arcs use restrained rich semantic colors."""
     css = _static_executive_css()
 
-    assert "--up: #176b4f;" in css
-    assert "--down: #a33f35;" in css
+    assert "--up: #4e7c5b;" in css
+    assert "--down: #b0523c;" in css
     assert ".driver-ring__value--up { stroke: var(--up); }" in css
     assert ".driver-ring__value--down { stroke: var(--down); }" in css
 

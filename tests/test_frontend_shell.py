@@ -1111,6 +1111,9 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "Share of the current reported figure" in js
     assert 'class="kpi-composition__bar"' in js
     assert "function kpiTrendChartMarkup(driver)" in js
+    assert "function kpiSemanticTone(driver)" in js
+    assert 'class="kpi-trend tone-' in js
+    assert 'class="kpi-movement__item tone-' in js
     assert "Actual series only — plan is not inferred" in js
     assert "trend.has_plan_series === true" in js
     assert '<span class="kpi-trend__plan-key">Plan</span>' in js
@@ -1130,6 +1133,14 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "#driver-drill .kpi-movement__row strong,\n  #driver-drill .kpi-movement__row small" in css
     assert "overflow-wrap: anywhere;" in css
     assert ".kpi-trend svg {\n  display: block;\n  width: 100%;\n  height: 164px;" in css
+    assert "--surface-2: #faf9f5;" in css
+    assert "--line: #e7e3da;" in css
+    assert "--plan-line: #b7b2a6;" in css
+    assert "--up: #4e7c5b;" in css
+    assert "--down: #b0523c;" in css
+    assert "#driver-drill .kpi-brief-header .detail-title {\n  font-family: var(--display);\n  font-size: 21px;" in css
+    assert "#driver-drill .kpi-movement__item.tone-up {\n  color: var(--up);" in css
+    assert "#driver-drill .kpi-movement__item.tone-down {\n  color: var(--down);" in css
     assert ".kpi-mix-chart" not in css
     assert "data-kpi-inline-composer" not in js
     assert "executiveKpiBrief(driver)" in js
