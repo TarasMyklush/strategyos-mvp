@@ -1610,82 +1610,62 @@ def test_driver_ring_frac_floor_preserved():
     )
 
 
-def test_driver_ring_over_plan_badge_present():
-    """renderDriverGrid must emit a driver-over-plan badge when pct > 100."""
+def test_driver_ring_plan_variance_badge_supports_positive_and_negative_values():
+    """The KPI ring must show a semantically toned variance on either side of plan."""
     js = _static_executive_js()
 
-    # The over-plan badge span must exist in the JS source
-    assert "driver-over-plan" in js, (
-        "renderDriverGrid must emit a driver-over-plan badge for pct > 100"
-    )
-
-    # Must compute the delta relative to 100
-    assert "> 100" in js, (
-        "renderDriverGrid must check for pct > 100 to show the over-plan badge"
-    )
+    assert "function driverPlanVarianceBadgeMarkup(driver)" in js
+    assert 'var delta = Math.round(pct - 100);' in js
+    assert 'delta > 0 ? "positive" : "negative"' in js
+    assert 'delta > 0 ? "+" : "-"' in js
+    assert "driver-plan-variance--" in js
 
 
-def test_driver_ring_over_plan_badge_absent_at_or_below_100():
-    """renderDriverGrid must NOT emit a badge when pct <= 100.
-    The conditional must gate on > 100, not >= 100."""
+def test_driver_ring_plan_variance_badge_hides_zero_or_missing_comparisons():
+    """Exactly-on-plan and absent percentages must not create a misleading badge."""
     js = _static_executive_js()
 
-    # The condition must be strictly > 100 (not >= 100)
-    assert "> 100" in js, (
-        "renderDriverGrid must use > 100 (not >= 100) so exactly-100 shows no badge"
-    )
+    assert 'if (rawPct === null || rawPct === undefined || rawPct === "") return "";' in js
+    assert 'if (!Number.isFinite(pct)) return "";' in js
+    assert 'if (delta === 0) return "";' in js
 
 
-def test_driver_ring_over_plan_badge_outside_ring_copy():
-    """The over-plan badge must be a sibling of .driver-ring-copy (inside
+def test_driver_ring_plan_variance_badge_outside_ring_copy():
+    """The variance badge must be a sibling of .driver-ring-copy (inside
     .driver-ring-stage but outside .driver-ring-copy) so it can be
     absolutely positioned as an outside pill without fighting the
     centered percentage display."""
     js = _static_executive_js()
 
-    # The badge must be rendered AFTER the ring-copy closing </div>
-    # but BEFORE the ring-stage closing </div>.
-    # JS concatenation pattern:
-    #   '</div></div>' + (Number(...) > 100 ? '<span class="driver-over-plan">...' : '') + '</div>'
     assert "driver-ring-copy" in js, "ring-copy must exist"
-    assert "driver-over-plan" in js, "over-plan badge must exist"
+    assert "driverPlanVarianceBadgeMarkup(driver)" in js, "variance badge must exist"
 
-    # Extract the renderDriverGrid function body to verify structure
     func_start = js.index("function renderDriverGrid")
     func_end = js.index("function renderMetrics", func_start)
     grid_func_body = js[func_start:func_end]
 
-    # The ring-copy template must appear BEFORE the driver-over-plan reference.
     ring_copy_close_pos = grid_func_body.index("driver-ring-copy")
-    badge_pos = grid_func_body.index("driver-over-plan")
+    badge_pos = grid_func_body.index("driverPlanVarianceBadgeMarkup(driver)")
     assert badge_pos > ring_copy_close_pos, (
-        "driver-over-plan badge must appear AFTER .driver-ring-copy closing "
-        "</div></div> in the renderDriverGrid template — badge must be a "
+        "the plan-variance badge must appear AFTER .driver-ring-copy closing "
+        "</div> in the renderDriverGrid template — the badge must be a "
         "sibling of ring-copy inside ring-stage, not a child of ring-copy"
     )
 
 
-def test_driver_ring_over_plan_badge_has_outside_pill_css():
-    """The .driver-over-plan CSS must use position:absolute so the badge
-    sits as an outside pill at the top-right of the ring, not inline inside
-    the centered ring-copy grid."""
+def test_driver_ring_plan_variance_badge_has_semantic_rich_colors():
+    """The variance badge stays an outside pill with distinct rich semantic colors."""
     css = _static_executive_css()
 
-    # Find the .driver-over-plan rule
-    assert ".driver-over-plan" in css, "driver-over-plan CSS rule must exist"
-
-    # The rule must use position: absolute (outside pill)
-    rule_start = css.index(".driver-over-plan")
-    # Find the closing brace of this rule
+    assert ".driver-plan-variance" in css
+    rule_start = css.index(".driver-plan-variance")
     rule_end = css.index("}", rule_start)
     rule_body = css[rule_start:rule_end]
 
-    assert "position: absolute" in rule_body, (
-        "driver-over-plan CSS must use position:absolute for outside-pill placement"
-    )
-    assert "border-radius: 999px" in rule_body, (
-        "driver-over-plan CSS must use pill shape (border-radius: 999px)"
-    )
+    assert "position: absolute" in rule_body
+    assert "border-radius: 999px" in rule_body
+    assert ".driver-plan-variance--positive {\n  background: #176b4f;" in css
+    assert ".driver-plan-variance--negative {\n  background: #a33f35;" in css
 
 
 def test_assistant_controls_do_not_cover_financial_evidence_at_desktop():

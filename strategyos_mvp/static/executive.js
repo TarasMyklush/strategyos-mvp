@@ -4013,6 +4013,18 @@
     });
   }
 
+  function driverPlanVarianceBadgeMarkup(driver) {
+    var rawPct = driver && driver.pct;
+    if (rawPct === null || rawPct === undefined || rawPct === "") return "";
+    var pct = Number(rawPct);
+    if (!Number.isFinite(pct)) return "";
+    var delta = Math.round(pct - 100);
+    if (delta === 0) return "";
+    var tone = delta > 0 ? "positive" : "negative";
+    var sign = delta > 0 ? "+" : "-";
+    return '<span class="driver-plan-variance driver-plan-variance--' + tone + '">' + sign + Math.abs(delta) + '% vs plan</span>';
+  }
+
   function renderDriverGrid() {
     var grid = $("driver-row");
     if (!grid) return;
@@ -4034,7 +4046,7 @@
           groundingBadgeMarkup(driver.provenance, driver.grounding)
         ].join("")
         : [
-          '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + (Number(firstDefined(driver.pct, 0)) > 100 ? '<span class="driver-over-plan">+' + Math.round(Number(firstDefined(driver.pct, 0)) - 100) + '% vs plan</span>' : '') + '</div>',
+          '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + driverPlanVarianceBadgeMarkup(driver) + '</div>',
           '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot"><span class="driver-foot__metric">' + escapeHtml(firstDefined(driver.metric, '—')) + '</span><span class="driver-sub">' + escapeHtml(firstDefined(driver.ring_label, driverSubLabel(driver))) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
         ].join("");
       // Native focus can scroll a partially visible tile before `click`
