@@ -1146,6 +1146,34 @@ def test_ceo_calendar_selection_does_not_shift_the_developments_column():
     assert ".fidelity-operating-left {\n  display: grid;\n  align-content: start;" in css
 
 
+def test_ceo_home_uses_the_standalone_target_alignment_contract():
+    static_dir = Path(api_module.STATIC_DIR)
+    html = (static_dir / "executive.html").read_text(encoding="utf-8")
+    css = (static_dir / "executive.css").read_text(encoding="utf-8")
+    js = (static_dir / "executive.js").read_text(encoding="utf-8")
+
+    assert "Target HTML alignment contract." in css
+    assert "max-width: 1240px;" in css
+    assert ".view-panel--home .target-flow-section .section-title" in css
+    assert "font-size: 14px;" in css
+    assert ".target-feed-row" in css
+    assert "padding: 14px 2px;" in css
+    assert "#week-ahead-section #week-panel .event-chip" in css
+    assert "padding: 11px 14px;" in css
+    assert ".fidelity-thinking-composer button" in css
+    assert "width: 36px;" in css
+
+    assert "the system’s read — positive or negative, with its classification" in html
+    assert "your calendar, AI-triaged — a launchpad, not a list" in html
+    assert "the gravity layer — think, don’t act" in html
+    assert "target-gravity-section" in html
+
+    assert "fidelity-thinking-badge" in js
+    assert 'id="thinking-input" type="text"' in js
+    assert "allWeekAhead.slice(0, 4)" in js
+    assert "allWeekAhead.length > 4" in js
+
+
 def test_kpi_questions_use_the_shared_assistant_drawer():
     js = _static_executive_js()
     drill_start = js.index("function renderInlineKpiDrill(driver, drillCard)")
