@@ -217,6 +217,10 @@ def test_group_budget_becomes_the_ceo_projection_without_double_counting_total(t
     }
     assert [item["name"] for item in payload["dynamics"]["revenue"]["lifting"]] == ["North"]
     assert [item["name"] for item in payload["dynamics"]["revenue"]["dragging"]] == ["South"]
+    assert [item["name"] for item in payload["dynamics"]["ebitda_margin"]["lifting"]] == ["North"]
+    assert [item["name"] for item in payload["dynamics"]["ebitda_margin"]["dragging"]] == ["South"]
+    assert payload["dynamics"]["operating_cost"]["lifting"]
+    assert payload["dynamics"]["operating_cost"]["dragging"]
 
 
 def test_group_cash_floor_history_is_a_governed_chart_not_a_synthetic_series():
@@ -244,8 +248,64 @@ def test_group_cash_floor_history_is_a_governed_chart_not_a_synthetic_series():
     assert trend == {
         "labels": ["2025-Q4", "2026-Q1", "2026-Q2"],
         "actual": ["1320000000.00", "1370000000.00", "1410000000.00"],
-        "plan": ["1200000000.00", "1200000000.00", "1200000000.00"],
+        "plan": ["1300000000.00", "1340000000.00", "1380000000.00"],
         "has_plan_series": True,
         "unit": "sar",
-        "scope_note": "Quarterly group cash actual/forecast versus the approved group floor.",
+        "scope_note": "Quarterly group cash actual/forecast versus budget; the approved floor remains the headline comparator.",
+        "plan_note": "Approved quarterly group cash budget from Group_Cash_Floor.",
     }
+
+
+def test_division_monthly_budget_aligns_plan_to_actual_account_scope(tmp_path):
+    from openpyxl import Workbook
+
+    from strategyos_mvp.source_finance_kpis import _division_monthly_plan
+
+    workbook = Workbook()
+    revenue = workbook.active
+    revenue.title = "Revenue_Budget_Monthly"
+    revenue.append(["Line", "2026-01", "2026-02"])
+    revenue.append(["Revenue — Modern Pharmacy (4000)", 100, 120])
+    revenue.append(["Unrelated revenue (4099)", 900, 900])
+    cost = workbook.create_sheet("Cost_Budget_Monthly")
+    cost.append(["Line", "2026-01", "2026-02"])
+    cost.append(["COGS (5000)", 30, 40])
+    cost.append(["Operating cost (6000)", 20, 20])
+    cost.append(["Depreciation outside EBITDA scope (6500)", 80, 80])
+    path = tmp_path / "Division_Budget_2026.xlsx"
+    workbook.save(path)
+
+    plan = _division_monthly_plan(
+        path,
+        labels=["2026-01", "2026-02"],
+        revenue_accounts=["4000"],
+        cogs_accounts=["5000"],
+        operating_cost_accounts=["6000"],
+    )
+
+    assert plan == {
+        "revenue": ["100.00", "120.00"],
+        "ebitda_margin": ["50.00", "50.00"],
+        "operating_cost": ["50.00", "60.00"],
+    }
+
+
+def test_group_cash_movers_are_populated_from_governed_floor_headroom():
+    from openpyxl import Workbook
+
+    from strategyos_mvp.source_finance_kpis import _group_cash_floor_movers
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Group_Cash_Floor"
+    sheet.append(["Quarter", "Actual/Forecast (SAR B)", "Floor (SAR B)", "Note"])
+    sheet.append(["2026-Q1 (actual)", 1.37, 1.20, "Approved floor"])
+    sheet.append(["2026-Q2 (est)", 1.41, 1.20, "Approved floor"])
+
+    movers = _group_cash_floor_movers(workbook)
+
+    assert movers["dragging"] == []
+    assert [(item["name"], item["delta"]) for item in movers["lifting"]] == [
+        ("2026-Q2 group cash", "SAR 210.0M above floor"),
+        ("2026-Q1 group cash", "SAR 170.0M above floor"),
+    ]

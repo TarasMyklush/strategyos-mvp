@@ -4274,7 +4274,7 @@
     var latestPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[latestIndex]) : 'Latest period';
     var priorPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[priorIndex]) : 'prior period';
     var scopeNote = firstDefined(trend && trend.scope_note, hasPlan ? 'Actual versus aligned plan' : 'Actual series only — plan is not inferred');
-    return '<section class="kpi-trend"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span><small>' + escapeHtml(scopeNote) + '</small></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Aligned plan</span>' : '') + '</div></div><svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus aligned plan across ' : ' actual trend across ') + accessibleLabels) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong>' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong>' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
+    return '<section class="kpi-trend"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span><small>' + escapeHtml(scopeNote) + '</small></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Plan</span>' : '') + '</div></div><svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus plan across ' : ' actual trend across ') + accessibleLabels) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong>' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong>' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
   }
 
   function kpiMovementRows(driver) {
@@ -4311,6 +4311,7 @@
   }
 
   function kpiMovementMarkup(driver) {
+    var movers = (driver && driver.movers) || {};
     var movementRows = kpiMovementRows(driver);
     var rows = movementRows.map(function (entry) {
       var item = entry.item || {};
@@ -4325,7 +4326,7 @@
         : '';
       return '<div class="kpi-movement__item"><div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--' + entry.direction + '">' + entry.glyph + '</span><strong>' + escapeHtml(firstDefined(item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item.delta, '')) + '</small>' + gmMarkup + '</div>' + noteMarkup + '</div>';
     }).join('');
-    return '<section class="kpi-movement' + (movementRows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><div><span class="kpi-brief-label">What moved it</span><small>Business-unit movement behind the selected KPI</small></div></div><div class="kpi-movement__rows">' + (rows || '<p>No category-level movement is available for the selected reporting periods.</p>') + '</div></section>';
+    return '<section class="kpi-movement' + (movementRows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><div><span class="kpi-brief-label">What moved it</span><small>' + escapeHtml(firstDefined(movers.scope_note, 'Governed movement behind the selected KPI')) + '</small></div></div><div class="kpi-movement__rows">' + (rows || '<p>No category-level movement is available for the selected reporting periods.</p>') + '</div></section>';
   }
 
   function kpiCompositionMarkup(key, brief, drivers) {

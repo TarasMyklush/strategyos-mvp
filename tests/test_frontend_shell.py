@@ -1113,8 +1113,10 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert "function kpiTrendChartMarkup(driver)" in js
     assert "Actual series only — plan is not inferred" in js
     assert "trend.has_plan_series === true" in js
+    assert '<span class="kpi-trend__plan-key">Plan</span>' in js
     assert "kpiMovementMarkup(driver)" in js
     assert "What moved it" in js
+    assert "movers.scope_note" in js
     assert 'data-kpi-mover-note' in js
     assert "kpiExecutiveContextMarkup(brief, comparison, strategicReference)" in js
     assert "Comparison boundary" in js

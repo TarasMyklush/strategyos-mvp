@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import re
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -268,6 +269,7 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     # trajectory charts; never manufacture a history from the headline.
     gl_path = _first_matching(root, "gl_extract_h1_2026", ".csv")
     coa_path = _first_matching(root, "chart_of_accounts", ".xlsx")
+    division_budget_path = _first_matching(root, "division_budget_2026", ".xlsx")
     if gl_path is not None and coa_path is not None:
         accounts = _load_accounts(coa_path)
         gl = _load_gl(gl_path)
@@ -297,13 +299,32 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
                 **division_dynamics["total_cost_to_ebitda"],
                 "scope_note": "Tamween division monthly COGS plus cash operating cost; group H1 headline is shown above.",
             }
+            if division_budget_path is not None:
+                division_plan = _division_monthly_plan(
+                    division_budget_path,
+                    labels=list(trend["revenue"].get("labels") or []),
+                    revenue_accounts=revenue_accounts,
+                    cogs_accounts=cogs_accounts,
+                    operating_cost_accounts=operating_accounts,
+                )
+                for key in ("revenue", "ebitda_margin", "operating_cost"):
+                    plan = list(division_plan.get(key) or [])
+                    actual = list((trend.get(key) or {}).get("actual") or [])
+                    if plan and len(plan) == len(actual):
+                        trend[key]["plan"] = plan
+                        trend[key]["has_plan_series"] = True
+                        trend[key]["plan_note"] = (
+                            "Approved Tamween monthly budget aligned to the same division and account scope as the actual series."
+                        )
             trend["source_files"] = sorted({
                 *trend.get("source_files", []),
                 _relative(gl_path, root),
                 _relative(coa_path, root),
+                *([_relative(division_budget_path, root)] if division_budget_path is not None else []),
             })
     trend["cash_vs_floor"] = _group_cash_floor_trend(budget_book)
     movers = _group_movers(units)
+    movers["cash_vs_floor"] = _group_cash_floor_movers(budget_book)
     budget_file = _relative(budget_path, root)
     budget_sha = _sha256(budget_path)
     period = "H1 2026"
@@ -348,19 +369,68 @@ def _cell(values: Iterable[Any], headers: Mapping[str, int], key: str) -> Any:
     return items[index] if index is not None and index < len(items) else None
 
 
-def _group_movers(units: list[dict[str, Any]]) -> dict[str, list[dict[str, str]]]:
-    lifting: list[dict[str, str]] = []
-    dragging: list[dict[str, str]] = []
+def _group_movers(units: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    revenue_lifting: list[dict[str, str]] = []
+    revenue_dragging: list[dict[str, str]] = []
+    margin_lifting: list[tuple[Decimal, dict[str, str]]] = []
+    margin_dragging: list[tuple[Decimal, dict[str, str]]] = []
+    cost_lifting: list[tuple[Decimal, dict[str, str]]] = []
+    cost_dragging: list[tuple[Decimal, dict[str, str]]] = []
     for unit in sorted(units, key=lambda item: item["variance"], reverse=True):
         variance = unit["variance"]
-        if variance == 0:
-            continue
-        row = {"name": str(unit["name"]), "delta": _sar_delta(variance * Decimal("1000000"))}
-        if unit["note"]:
-            row["gm"] = "BU note"
-            row["note"] = unit["note"]
-        (lifting if variance > 0 else dragging).append(row)
-    return {"revenue": {"lifting": lifting[:4], "dragging": dragging[:4]}}
+        note = str(unit.get("note") or "")
+        if variance != 0:
+            row = {"name": str(unit["name"]), "delta": _sar_delta(variance * Decimal("1000000"))}
+            if note:
+                row["gm"] = "BU note"
+                row["note"] = note
+            (revenue_lifting if variance > 0 else revenue_dragging).append(row)
+
+        margin_delta = unit["actual_margin"] - unit["plan_margin"]
+        if margin_delta != 0:
+            margin_row = {
+                "name": str(unit["name"]),
+                "delta": f"{'+' if margin_delta > 0 else '−'}{abs(margin_delta).quantize(Decimal('0.1'))}pp vs plan",
+            }
+            if note:
+                margin_row["gm"] = "BU note"
+                margin_row["note"] = note
+            (margin_lifting if margin_delta > 0 else margin_dragging).append((abs(margin_delta), margin_row))
+
+        actual_cost = unit["actual"] * (Decimal("1") - unit["actual_margin"] / Decimal("100"))
+        plan_cost = unit["plan"] * (Decimal("1") - unit["plan_margin"] / Decimal("100"))
+        cost_delta = actual_cost - plan_cost
+        if cost_delta != 0:
+            cost_row = {
+                "name": str(unit["name"]),
+                "delta": (
+                    f"{_sar_delta(abs(cost_delta) * Decimal('1000000')).removeprefix('+')} above plan"
+                    if cost_delta > 0
+                    else f"{_sar_delta(abs(cost_delta) * Decimal('1000000')).removeprefix('+')} below plan"
+                ),
+            }
+            if note:
+                cost_row["gm"] = "BU note"
+                cost_row["note"] = note
+            # Lower operating cost is favourable; higher cost is a drag.
+            (cost_dragging if cost_delta > 0 else cost_lifting).append((abs(cost_delta), cost_row))
+    return {
+        "revenue": {
+            "lifting": revenue_lifting[:4],
+            "dragging": revenue_dragging[:4],
+            "scope_note": "Business-unit revenue variance against the approved H1 plan.",
+        },
+        "ebitda_margin": {
+            "lifting": [row for _magnitude, row in sorted(margin_lifting, key=lambda item: item[0], reverse=True)[:4]],
+            "dragging": [row for _magnitude, row in sorted(margin_dragging, key=lambda item: item[0], reverse=True)[:4]],
+            "scope_note": "Business-unit EBITDA-margin movement against the approved H1 plan.",
+        },
+        "operating_cost": {
+            "lifting": [row for _magnitude, row in sorted(cost_lifting, key=lambda item: item[0], reverse=True)[:4]],
+            "dragging": [row for _magnitude, row in sorted(cost_dragging, key=lambda item: item[0], reverse=True)[:4]],
+            "scope_note": "Business-unit total cost-to-EBITDA movement against the approved H1 plan.",
+        },
+    }
 
 
 def _group_revenue_trend(path: Path | None, root: Path) -> dict[str, Any]:
@@ -388,6 +458,69 @@ def _group_revenue_trend(path: Path | None, root: Path) -> dict[str, Any]:
         result["revenue"] = {"labels": labels, "actual": actual, "plan": [], "has_plan_series": False, "unit": "sar", "scope_note": "Tamween division monthly steering data; group headline is shown above."}
         result["source_files"] = [_relative(path, root)]
     return result
+
+
+def _division_monthly_plan(
+    path: Path,
+    *,
+    labels: list[str],
+    revenue_accounts: Iterable[str],
+    cogs_accounts: Iterable[str],
+    operating_cost_accounts: Iterable[str],
+) -> dict[str, list[str]]:
+    """Read the approved monthly division budget on the actual-series scope.
+
+    Budget rows carry their GL account code in parentheses.  Only accounts
+    already classified into the actual revenue/COGS/operating-cost scopes are
+    included, so depreciation or unrelated lines cannot leak into the plan.
+    """
+    empty = {"revenue": [], "ebitda_margin": [], "operating_cost": []}
+    if not labels:
+        return empty
+    try:
+        book = load_workbook(path, data_only=True, read_only=True)
+    except Exception:
+        return empty
+
+    def series(sheet_name: str, allowed_accounts: set[str]) -> list[Decimal] | None:
+        try:
+            rows = list(book[sheet_name].values)
+        except Exception:
+            return None
+        headers = _header_positions(rows[0] if rows else ())
+        totals = {label: Decimal() for label in labels}
+        matched = False
+        for values in rows[1:]:
+            line = str(values[0] or "")
+            account_match = re.search(r"\((\d{4,})\)", line)
+            if not account_match or account_match.group(1) not in allowed_accounts:
+                continue
+            matched = True
+            for label in labels:
+                value = _decimal(_cell(values, headers, _normal(label)))
+                if value is None:
+                    return None
+                totals[label] += value
+        if not matched:
+            return None
+        return [totals[label] for label in labels]
+
+    revenue = series("Revenue_Budget_Monthly", set(revenue_accounts))
+    cost = series(
+        "Cost_Budget_Monthly",
+        set(cogs_accounts) | set(operating_cost_accounts),
+    )
+    if revenue is None or cost is None or any(value == 0 for value in revenue):
+        return empty
+    margin = [
+        ((revenue_value - cost_value) / revenue_value) * Decimal("100")
+        for revenue_value, cost_value in zip(revenue, cost, strict=True)
+    ]
+    return {
+        "revenue": [_number(value) or "0" for value in revenue],
+        "ebitda_margin": [_number(value) or "0" for value in margin],
+        "operating_cost": [_number(value) or "0" for value in cost],
+    }
 
 
 def _group_cash_floor(book: Any, budget_path: Path, root: Path) -> dict[str, Any]:
@@ -426,26 +559,62 @@ def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
         return empty
     labels: list[str] = []
     actual: list[str] = []
-    floors: list[str] = []
+    budgets: list[str] = []
     for values in rows[1:]:
         quarter = str(_cell(values, headers, "quarter") or "").strip()
         value = _decimal(_cell(values, headers, "actualforecastsarb"))
+        budget = _decimal(_cell(values, headers, "groupcashbudgetsarb"))
         floor = _decimal(_cell(values, headers, "floorsarb"))
-        if not quarter or value is None or floor is None:
+        if not quarter or value is None or budget is None or floor is None:
             continue
         labels.append(quarter.split(" (", 1)[0])
         actual.append(_number(value * Decimal("1000000000")) or "0")
-        floors.append(_number(floor * Decimal("1000000000")) or "0")
+        budgets.append(_number(budget * Decimal("1000000000")) or "0")
     if len(actual) < 2:
         return empty
     return {
         "labels": labels,
         "actual": actual,
-        "plan": floors,
+        "plan": budgets,
         "has_plan_series": True,
         "unit": "sar",
-        "scope_note": "Quarterly group cash actual/forecast versus the approved group floor.",
+        "scope_note": "Quarterly group cash actual/forecast versus budget; the approved floor remains the headline comparator.",
+        "plan_note": "Approved quarterly group cash budget from Group_Cash_Floor.",
     }
+
+
+def _group_cash_floor_movers(book: Any) -> dict[str, Any]:
+    """Expose the governed quarterly headroom movements behind cash vs floor."""
+    result: dict[str, Any] = {
+        "lifting": [],
+        "dragging": [],
+        "scope_note": "Quarterly group cash headroom against the approved floor.",
+    }
+    try:
+        rows = list(book["Group_Cash_Floor"].values)
+        headers = _header_positions(rows[0] if rows else ())
+    except Exception:
+        return result
+    entries: list[tuple[str, Decimal, str]] = []
+    for values in rows[1:]:
+        quarter = str(_cell(values, headers, "quarter") or "").strip()
+        actual = _decimal(_cell(values, headers, "actualforecastsarb"))
+        floor = _decimal(_cell(values, headers, "floorsarb"))
+        note = str(_cell(values, headers, "note") or "").strip()
+        if not quarter or actual is None or floor is None:
+            continue
+        entries.append((quarter.split(" (", 1)[0], actual - floor, note))
+    for quarter, headroom, note in reversed(entries[-4:]):
+        amount = _sar_delta(abs(headroom) * Decimal("1000000000")).removeprefix("+")
+        row = {
+            "name": f"{quarter} group cash",
+            "delta": f"{amount} {'above' if headroom >= 0 else 'below'} floor",
+        }
+        if note:
+            row["gm"] = "Source note"
+            row["note"] = note
+        result["lifting" if headroom >= 0 else "dragging"].append(row)
+    return result
 
 
 def _finance_dynamics(
