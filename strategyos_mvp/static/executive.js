@@ -4410,6 +4410,7 @@
     var brief = executiveKpiBrief(driver);
     var comparison = brief.comparison || {};
     var executiveSignal = brief.executive_signal || {};
+    var semanticTone = kpiSemanticTone(driver);
     var strategicReference = brief.strategic_reference || null;
     var calculation = brief.calculation || {};
     var coverage = brief.coverage || {};
@@ -4434,7 +4435,7 @@
     var executiveContextMarkup = kpiExecutiveContextMarkup(brief, comparison, strategicReference);
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
-      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3><span class="kpi-brief-variance tone-' + escapeHtml(firstDefined(executiveSignal.tone, 'neutral')) + '">' + escapeHtml(firstDefined(executiveSignal.variance_label, comparison.value, 'Current position')) + '</span><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong></div></div><button type="button" class="kpi-show-work" data-kpi-show-work="true">Show the work</button>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
+      '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3><span class="kpi-brief-variance tone-' + semanticTone + '">' + escapeHtml(firstDefined(executiveSignal.variance_label, comparison.value, 'Current position')) + '</span><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong></div></div><button type="button" class="kpi-show-work" data-kpi-show-work="true">Show the work</button>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
       executiveContextMarkup,
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       (compositionMarkup ? '<details class="kpi-supporting-analysis"><summary>Supporting analysis</summary>' + compositionMarkup + '</details>' : ''),

@@ -9071,13 +9071,28 @@ body {
   color: var(--up);
 }
 
+#driver-drill .kpi-brief-variance.tone-up {
+  background: transparent;
+  color: var(--up);
+}
+
 #driver-drill .kpi-brief-variance.tone-critical,
 #driver-drill .kpi-brief-variance.tone-watch {
   background: transparent;
   color: var(--down);
 }
 
+#driver-drill .kpi-brief-variance.tone-down {
+  background: transparent;
+  color: var(--down);
+}
+
 #driver-drill .kpi-brief-variance.tone-neutral {
+  background: transparent;
+  color: var(--flat);
+}
+
+#driver-drill .kpi-brief-variance.tone-flat {
   background: transparent;
   color: var(--flat);
 }

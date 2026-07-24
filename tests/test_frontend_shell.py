@@ -1112,6 +1112,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert 'class="kpi-composition__bar"' in js
     assert "function kpiTrendChartMarkup(driver)" in js
     assert "function kpiSemanticTone(driver)" in js
+    assert "var semanticTone = kpiSemanticTone(driver);" in js
+    assert 'kpi-brief-variance tone-\' + semanticTone' in js
     assert 'class="kpi-trend tone-' in js
     assert 'class="kpi-movement__item tone-' in js
     assert "Actual series only — plan is not inferred" in js
