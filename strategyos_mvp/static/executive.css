@@ -7227,8 +7227,13 @@ body {
   gap: 26px;
 }
 
+.fidelity-operating-grid {
+  align-items: start;
+}
+
 .fidelity-operating-left {
   display: grid;
+  align-content: start;
   gap: 22px;
 }
 

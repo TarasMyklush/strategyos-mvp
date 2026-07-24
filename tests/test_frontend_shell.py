@@ -1139,6 +1139,13 @@ def test_ceo_information_architecture_separates_board_and_operational_surfaces()
     assert "Developments since you were here" in html
 
 
+def test_ceo_calendar_selection_does_not_shift_the_developments_column():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert ".fidelity-operating-grid {\n  align-items: start;\n}" in css
+    assert ".fidelity-operating-left {\n  display: grid;\n  align-content: start;" in css
+
+
 def test_kpi_questions_use_the_shared_assistant_drawer():
     js = _static_executive_js()
     drill_start = js.index("function renderInlineKpiDrill(driver, drillCard)")
