@@ -1618,8 +1618,10 @@ def test_driver_ring_uses_plan_variance_for_its_semantic_color():
     ring_end = js.index("function driverHasPercent", ring_start)
     ring_body = js[ring_start:ring_end]
 
-    assert "var rawPlanPct = driver && driver.pct;" in ring_body
-    assert 'planPct > 100 ? "up" : "down"' in ring_body
+    assert "var tone = kpiSemanticTone(driver);" in ring_body
+    assert "var rawPlanPct = driver && driver.pct;" in js
+    assert 'planPct > 100 ? "up" : "down"' in js
+    assert 'planPct < 100 ? "up" : "down"' in js
     assert 'driver-ring__value--\' + tone' in ring_body
 
 
@@ -1627,8 +1629,8 @@ def test_driver_ring_is_neutral_without_a_plan_delta():
     """Exactly-on-plan and absent comparisons must retain the neutral ring."""
     js = _static_executive_js()
 
-    assert '!Number.isFinite(planPct) || planPct === 100' in js
-    assert '? "flat"' in js
+    assert "Number.isFinite(planPct) && planPct !== 100" in js
+    assert 'return "flat";' in js
 
 
 def test_driver_grid_has_no_plan_variance_badge():

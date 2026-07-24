@@ -2025,13 +2025,7 @@
     var base1Y = (52 + baseRadius * sin + halfWidth * tangentSin).toFixed(2);
     var base2X = (52 + baseRadius * cos - halfWidth * tangentCos).toFixed(2);
     var base2Y = (52 + baseRadius * sin - halfWidth * tangentSin).toFixed(2);
-    var rawPlanPct = driver && driver.pct;
-    var planPct = rawPlanPct === null || rawPlanPct === undefined || rawPlanPct === ""
-      ? NaN
-      : Number(rawPlanPct);
-    var tone = !Number.isFinite(planPct) || planPct === 100
-      ? "flat"
-      : (planPct > 100 ? "up" : "down");
+    var tone = kpiSemanticTone(driver);
     return '<svg class="driver-ring" viewBox="0 0 104 104" aria-hidden="true"><circle class="driver-ring__track" cx="52" cy="52" r="41.5"></circle><circle class="driver-ring__value driver-ring__value--' + tone + '" cx="52" cy="52" r="41.5" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 52 52)"></circle><polygon class="driver-ring__tick" points="' + apexX + ',' + apexY + ' ' + base1X + ',' + base1Y + ' ' + base2X + ',' + base2Y + '"></polygon></svg>';
   }
 
@@ -4234,6 +4228,14 @@
     var tone = String(firstDefined(signal.tone, driver && driver.tone, "neutral")).toLowerCase();
     if (tone === "positive" || tone === "up" || tone === "success" || tone === "ok") return "up";
     if (tone === "critical" || tone === "watch" || tone === "down" || tone === "danger") return "down";
+    var rawPlanPct = driver && driver.pct;
+    var planPct = rawPlanPct === null || rawPlanPct === undefined || rawPlanPct === ""
+      ? NaN
+      : Number(rawPlanPct);
+    if (Number.isFinite(planPct) && planPct !== 100) {
+      var inverse = String(firstDefined(driver && driver.driver_key, driver && driver.key, "")) === "operating_cost";
+      return inverse ? (planPct < 100 ? "up" : "down") : (planPct > 100 ? "up" : "down");
+    }
     return "flat";
   }
 
