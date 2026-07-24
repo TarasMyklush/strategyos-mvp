@@ -1610,62 +1610,45 @@ def test_driver_ring_frac_floor_preserved():
     )
 
 
-def test_driver_ring_plan_variance_badge_supports_positive_and_negative_values():
-    """The KPI ring must show a semantically toned variance on either side of plan."""
+def test_driver_ring_uses_plan_variance_for_its_semantic_color():
+    """The KPI ring itself, rather than an overlapping badge, carries the signal."""
     js = _static_executive_js()
 
-    assert "function driverPlanVarianceBadgeMarkup(driver)" in js
-    assert 'var delta = Math.round(pct - 100);' in js
-    assert 'delta > 0 ? "positive" : "negative"' in js
-    assert 'delta > 0 ? "+" : "-"' in js
-    assert "driver-plan-variance--" in js
+    ring_start = js.index("function driverRingMarkup")
+    ring_end = js.index("function driverHasPercent", ring_start)
+    ring_body = js[ring_start:ring_end]
+
+    assert "var rawPlanPct = driver && driver.pct;" in ring_body
+    assert 'planPct > 100 ? "up" : "down"' in ring_body
+    assert 'driver-ring__value--\' + tone' in ring_body
 
 
-def test_driver_ring_plan_variance_badge_hides_zero_or_missing_comparisons():
-    """Exactly-on-plan and absent percentages must not create a misleading badge."""
+def test_driver_ring_is_neutral_without_a_plan_delta():
+    """Exactly-on-plan and absent comparisons must retain the neutral ring."""
     js = _static_executive_js()
 
-    assert 'if (rawPct === null || rawPct === undefined || rawPct === "") return "";' in js
-    assert 'if (!Number.isFinite(pct)) return "";' in js
-    assert 'if (delta === 0) return "";' in js
+    assert '!Number.isFinite(planPct) || planPct === 100' in js
+    assert '? "flat"' in js
 
 
-def test_driver_ring_plan_variance_badge_outside_ring_copy():
-    """The variance badge must be a sibling of .driver-ring-copy (inside
-    .driver-ring-stage but outside .driver-ring-copy) so it can be
-    absolutely positioned as an outside pill without fighting the
-    centered percentage display."""
+def test_driver_grid_has_no_plan_variance_badge():
+    """The removed percentage pill must not overlap the gauge or metadata."""
     js = _static_executive_js()
-
-    assert "driver-ring-copy" in js, "ring-copy must exist"
-    assert "driverPlanVarianceBadgeMarkup(driver)" in js, "variance badge must exist"
-
-    func_start = js.index("function renderDriverGrid")
-    func_end = js.index("function renderMetrics", func_start)
-    grid_func_body = js[func_start:func_end]
-
-    ring_copy_close_pos = grid_func_body.index("driver-ring-copy")
-    badge_pos = grid_func_body.index("driverPlanVarianceBadgeMarkup(driver)")
-    assert badge_pos > ring_copy_close_pos, (
-        "the plan-variance badge must appear AFTER .driver-ring-copy closing "
-        "</div> in the renderDriverGrid template — the badge must be a "
-        "sibling of ring-copy inside ring-stage, not a child of ring-copy"
-    )
-
-
-def test_driver_ring_plan_variance_badge_has_semantic_rich_colors():
-    """The variance badge stays an outside pill with distinct rich semantic colors."""
     css = _static_executive_css()
 
-    assert ".driver-plan-variance" in css
-    rule_start = css.index(".driver-plan-variance")
-    rule_end = css.index("}", rule_start)
-    rule_body = css[rule_start:rule_end]
+    assert "driverPlanVarianceBadgeMarkup" not in js
+    assert "driver-plan-variance" not in js
+    assert ".driver-plan-variance" not in css
 
-    assert "position: absolute" in rule_body
-    assert "border-radius: 999px" in rule_body
-    assert ".driver-plan-variance--positive {\n  background: #176b4f;" in css
-    assert ".driver-plan-variance--negative {\n  background: #a33f35;" in css
+
+def test_driver_ring_has_rich_positive_and_negative_colors():
+    """Above-plan and below-plan ring arcs use restrained rich semantic colors."""
+    css = _static_executive_css()
+
+    assert "--up: #176b4f;" in css
+    assert "--down: #a33f35;" in css
+    assert ".driver-ring__value--up { stroke: var(--up); }" in css
+    assert ".driver-ring__value--down { stroke: var(--down); }" in css
 
 
 def test_assistant_controls_do_not_cover_financial_evidence_at_desktop():
@@ -2145,6 +2128,24 @@ def test_kpi_panel_free_text_ask_carries_the_active_figure_as_context():
     assert 'entrypoint: "ceo_kpi_inline"' in handler
 
     assert ".kpi-inline-ask" in css, "the free-text ask must be styled with the panel"
+
+
+def test_kpi_mover_note_is_a_shared_server_resolved_assistant_subject():
+    """Inline, drawer and follow-up asks must retain the selected governed mover."""
+    js = _static_executive_js()
+
+    assert "function kpiAssistantSubject(driver)" in js
+    assert 'kind: "kpi_mover"' in js
+    assert 'parent_kind: "kpi"' in js
+    assert "note:" not in js[js.index("function kpiAssistantSubject(driver)"):js.index("function kpiMovementMarkup", js.index("function kpiAssistantSubject(driver)"))]
+    assert 'subject: entrypoint === "board_portal" ? undefined : kpiAssistantSubject(activeDriver)' in js
+    assert js.count("subject: kpiAssistantSubject(driver)") >= 2
+
+    cache_start = js.index("function assistantAnswerCacheKey")
+    cache_end = js.index("function loadAssistantAnswerCache", cache_start)
+    cache_body = js[cache_start:cache_end]
+    assert "subject.kind" in cache_body
+    assert "subject.key" in cache_body
 
 
 def test_ai_team_card_renders_leadership_status_not_raw_execution_log():

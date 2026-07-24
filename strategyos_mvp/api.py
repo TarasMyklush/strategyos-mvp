@@ -12665,6 +12665,20 @@ def _history_kpi_key(history: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def _history_assistant_subject(history: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the newest structured on-screen subject carried by chat history."""
+    for item in reversed(history):
+        payload = item.get("payload")
+        payload_context = payload.get("assistant_context") if isinstance(payload, Mapping) else None
+        for source in (item.get("assistant_context"), payload_context):
+            if not isinstance(source, Mapping):
+                continue
+            subject = source.get("subject")
+            if isinstance(subject, Mapping) and str(subject.get("kind") or "").strip():
+                return dict(subject)
+    return None
+
+
 def _governed_entity_index(context: Mapping[str, Any]) -> list[dict[str, Any]]:
     """One lookup over every entity the current governed run puts on screen.
 
@@ -12759,6 +12773,38 @@ def _governed_entity_index(context: Mapping[str, Any]) -> list[dict[str, Any]]:
                     "driver": dict(driver),
                 }
             )
+        movers = card.get("movers") if isinstance(card.get("movers"), Mapping) else {}
+        for direction, key_prefix in (("lifting", "lifting"), ("dragging", "dragging")):
+            for index, raw_mover in enumerate(list(movers.get(direction) or [])):
+                if not isinstance(raw_mover, Mapping):
+                    continue
+                mover = dict(raw_mover)
+                mover_label = str(mover.get("name") or "").strip()
+                note = str(mover.get("note") or "").strip()
+                if not mover_label and not note:
+                    continue
+                entity_id = f"{card_key}:{key_prefix}-{index}:{mover_label or 'mover'}"
+                phrases = [
+                    phrase
+                    for phrase in (mover_label.casefold(), note.casefold())
+                    if len(phrase) >= 8
+                ]
+                entities.append(
+                    {
+                        "kind": "kpi_mover",
+                        "id": entity_id,
+                        "label": mover_label or "KPI movement",
+                        "tokens": {token for token in {entity_id.casefold(), mover_label.casefold()} if token},
+                        "phrase": mover_label.casefold(),
+                        "phrases": phrases,
+                        "amount": _parse_display_amount(mover.get("delta")),
+                        "card": dict(card),
+                        "brief": dict(brief),
+                        "mover": mover,
+                        "direction": direction,
+                        "index": index,
+                    }
+                )
     return entities
 
 
@@ -12928,7 +12974,21 @@ def _question_is_reference_followup(question: str) -> bool:
     norm = " ".join(str(question or "").casefold().split()).strip(" ?.!")
     if not norm:
         return False
-    if norm in {"why", "why?", "how", "and why", "explain", "elaborate", "more", "tell me more", "go on"}:
+    if norm in {
+        "why",
+        "why?",
+        "how",
+        "and why",
+        "explain",
+        "elaborate",
+        "more",
+        "tell me more",
+        "go on",
+        "what does it mean",
+        "what does this mean",
+        "what does that mean",
+        "what does it imply",
+    }:
         return True
     return bool(_PRONOUN_ONLY_RE.match(norm))
 
@@ -12971,8 +13031,9 @@ def _resolve_governed_entities(
         return matches
 
     for entity in entities:
-        phrase = entity.get("phrase") or ""
-        if len(phrase) >= 8 and phrase in norm:
+        phrases = entity.get("phrases")
+        candidates = list(phrases) if isinstance(phrases, (list, tuple, set)) else [entity.get("phrase") or ""]
+        if any(len(str(phrase)) >= 8 and str(phrase) in norm for phrase in candidates):
             matches.append(entity)
     if matches:
         return matches
@@ -13195,6 +13256,221 @@ def _governed_cost_lever_result(
     }
 
 
+def _kpi_mover_constraint_type(note: str) -> tuple[str, str]:
+    """Classify only the operational mechanism explicitly named in a BU note."""
+    normalized = " ".join(str(note or "").casefold().split())
+    if re.search(r"\b(consultant|staff|staffing|vacanc|headcount|recruit|workforce|capacity)\b", normalized):
+        return (
+            "a staffing or delivery-capacity constraint",
+            "affected capacity or appointment slots, delivered volume, KPI exposure, accountable owner and recovery date",
+        )
+    if re.search(r"\b(stock|inventory|supplier|supply|shipment|shortage|availability)\b", normalized):
+        return (
+            "a supply or availability constraint",
+            "affected volume, inventory or service exposure, accountable owner and recovery date",
+        )
+    if re.search(r"\b(price|pricing|discount|tariff|rate|mix)\b", normalized):
+        return (
+            "a commercial or pricing mechanism",
+            "affected volume, realized price or mix, KPI exposure, accountable owner and decision date",
+        )
+    if re.search(r"\b(occupancy|utili[sz]ation|throughput|slot|bed)\b", normalized):
+        return (
+            "a utilization or throughput constraint",
+            "available versus used capacity, lost or deferred volume, KPI exposure, accountable owner and recovery date",
+        )
+    if re.search(r"\b(demand|order|orders|pipeline|conversion|customer)\b", normalized):
+        return (
+            "a demand or conversion mechanism",
+            "demand volume, conversion, realized KPI exposure, accountable owner and next checkpoint",
+        )
+    return (
+        "business-unit commentary attached to this KPI movement",
+        "the affected operating volume, KPI exposure, accountable owner and next checkpoint",
+    )
+
+
+def _kpi_mover_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
+    """Explain a governed KPI mover without treating commentary as proven causation."""
+    card = entity.get("card") if isinstance(entity.get("card"), Mapping) else {}
+    mover = entity.get("mover") if isinstance(entity.get("mover"), Mapping) else {}
+    kpi_label = str(card.get("label") or "the selected KPI")
+    kpi_key = str(card.get("key") or card.get("driver_key") or "")
+    mover_label = str(entity.get("label") or mover.get("name") or "This movement")
+    delta = str(mover.get("delta") or "").strip()
+    note = str(mover.get("note") or "").strip()
+    author = str(mover.get("gm") or "Business-unit note").strip()
+    direction = str(entity.get("direction") or "")
+    direction_label = "positive" if direction == "lifting" else "negative" if direction == "dragging" else "recorded"
+    mechanism, required_quantification = _kpi_mover_constraint_type(note)
+
+    parts = [
+        f"Meaning: {mover_label} is reported as {mechanism} within {kpi_label}.",
+    ]
+    if delta:
+        parts.append(f"KPI context: it appears in the {direction_label} movement list at {delta}.")
+    if note:
+        parts.append(f"{author}: {note}.")
+    parts.append(
+        "Evidence boundary: the note is governed commentary, but it does not by itself prove that this issue caused the full KPI movement or quantify the financial effect."
+    )
+    parts.append(
+        f"Next decision input: request {required_quantification}. Do not change guidance from this note alone."
+    )
+
+    source_files = [
+        str(item)
+        for item in list(card.get("source_files") or [])
+        if str(item)
+    ]
+    citations = [
+        {
+            "source_path": "run_artifacts://executive_presentation",
+            "locator": f"kpi={kpi_key};mover={entity.get('id')}",
+            "excerpt": " · ".join(part for part in (mover_label, delta, note) if part),
+        }
+    ]
+    citations.extend(
+        {
+            "source_path": source_file,
+            "locator": f"CEO {kpi_label} evidence",
+            "excerpt": f"Governed source attached to the current {kpi_label} measure.",
+        }
+        for source_file in source_files[:5]
+    )
+    return {
+        "matched": True,
+        "answer": " ".join(parts),
+        "basis": "Server-resolved KPI mover and attached business-unit commentary from the current governed run.",
+        "citations": citations,
+        "suggestions": [
+            f"What evidence quantifies the effect on {kpi_label}?",
+            "Who owns the recovery action and by when?",
+            "Does this cross the CEO intervention threshold?",
+        ],
+        "answered_by": "governed_subject",
+        "assistant_mode": "governed_subject",
+        "grounding_status": "grounded",
+        "claim_class": "governed_commentary_with_unquantified_causation",
+        "reference": {
+            "kind": "kpi_mover",
+            "id": str(entity.get("id") or ""),
+            "kpi_key": kpi_key,
+            "label": mover_label,
+            "direction": direction,
+            "delta": delta,
+        },
+        "_orchestrator_force_answer": True,
+    }
+
+
+def _governed_subject_result(
+    context: Mapping[str, Any],
+    *,
+    question: str,
+    assistant_context: Mapping[str, Any],
+    history: list[dict[str, Any]],
+    public_safe: bool,
+) -> dict[str, Any] | None:
+    """Resolve the selected on-screen subject independently of its UI entrypoint.
+
+    Browser context identifies an entity; it never supplies authoritative entity
+    content. The server re-resolves the key from the current governed run so the
+    same contract works for inline asks, the global drawer and later follow-ups.
+    """
+    if (
+        public_safe
+        or _assistant_question_requests_modelling(question)
+        or _question_is_general_knowledge(question)
+        or _question_asks_what_to_do_about_cost(question)
+    ):
+        return None
+    subject = assistant_context.get("subject")
+    if not isinstance(subject, Mapping):
+        subject = _history_assistant_subject(history)
+    if not isinstance(subject, Mapping):
+        return None
+    subject_kind = str(subject.get("kind") or "").strip()
+    if subject_kind != "kpi_mover":
+        return None
+
+    entities = _governed_entity_index_safe(context)
+    subject_key = str(subject.get("key") or subject.get("id") or "").strip()
+    subject_label = str(subject.get("label") or "").strip().casefold()
+    parent_key = str(subject.get("parent_key") or "").strip()
+    entity = next(
+        (
+            item
+            for item in entities
+            if item.get("kind") == "kpi_mover"
+            and subject_key
+            and str(item.get("id") or "") == subject_key
+        ),
+        None,
+    )
+    if entity is None and subject_label:
+        entity = next(
+            (
+                item
+                for item in entities
+                if item.get("kind") == "kpi_mover"
+                and str(item.get("label") or "").casefold() == subject_label
+                and (
+                    not parent_key
+                    or str((item.get("card") or {}).get("key") or (item.get("card") or {}).get("driver_key") or "")
+                    == parent_key
+                )
+            ),
+            None,
+        )
+    if entity is None:
+        return None
+
+    entrypoint = str(assistant_context.get("entrypoint") or "").strip()
+    entity_text = " ".join(
+        str(value or "").casefold()
+        for value in (
+            entity.get("label"),
+            (entity.get("mover") or {}).get("note") if isinstance(entity.get("mover"), Mapping) else "",
+        )
+    )
+    question_text = " ".join(str(question or "").casefold().split())
+    explicit_other_kpi = _free_text_ceo_kpi_key(question, context, public_safe=public_safe)
+    entity_kpi_key = str((entity.get("card") or {}).get("key") or (entity.get("card") or {}).get("driver_key") or "")
+    if explicit_other_kpi and explicit_other_kpi != entity_kpi_key:
+        return None
+    subject_terms = {
+        token
+        for token in re.findall(r"[a-z0-9]+", entity_text)
+        if len(token) >= 4
+        and token
+        not in {
+            "this",
+            "that",
+            "with",
+            "from",
+            "current",
+            "business",
+            "unit",
+            "note",
+            "reported",
+            "service",
+            "services",
+        }
+    }
+    subject_is_relevant = (
+        entrypoint == "ceo_kpi_inline"
+        or _question_is_reference_followup(question)
+        or any(
+            re.search(r"\b" + re.escape(token) + r"\b", question_text)
+            for token in subject_terms
+        )
+    )
+    if not subject_is_relevant:
+        return None
+    return _kpi_mover_reference_answer(entity)
+
+
 def _governed_reference_result(
     context: Mapping[str, Any],
     *,
@@ -13226,15 +13502,6 @@ def _governed_reference_result(
         scenario_norm,
     ):
         return None
-    # Naming an entity is necessary to answer from it, not sufficient. This
-    # resolver states what a figure IS; it cannot explain causation or trend.
-    # "Why did revenue drop 12%?" mentions Revenue, and answering it from the
-    # Revenue card produced a confident non sequitur about a drop that never
-    # happened. Questions of that shape belong to the engines that model
-    # movement, or to an honest "I cannot attribute that".
-    if _question_asks_for_causation(question):
-        return None
-
     try:
         entities = _governed_entity_index(context)
     except HTTPException:
@@ -13244,6 +13511,17 @@ def _governed_reference_result(
 
     matches = _resolve_governed_entities(entities, question=question, history=history)
     if not matches:
+        return None
+
+    mover_match = next((item for item in matches if item.get("kind") == "kpi_mover"), None)
+    if mover_match is not None:
+        return _kpi_mover_reference_answer(mover_match)
+
+    # Naming an entity is necessary to answer from it, not sufficient. The
+    # generic reference resolver states what a figure IS; only the dedicated
+    # mover-note contract above may discuss a recorded movement while keeping
+    # commentary separate from quantified causation.
+    if _question_asks_for_causation(question):
         return None
 
     finding_match = next((item for item in matches if item.get("kind") == "finding"), None)
@@ -13583,6 +13861,38 @@ async def _assistant_chat_response(
     if conversation_history:
         context["assistant_history"] = conversation_history
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    # A selected governed entity is the strongest UI context. Resolve it before
+    # broad intent engines so a pronoun follow-up such as "what does it mean?"
+    # cannot be consumed by a generic tabular answer. The resolver itself lets
+    # explicit modelling, cost-action and general-knowledge questions widen out.
+    governed_subject_result = _governed_subject_result(
+        context,
+        question=question,
+        assistant_context=assistant_context,
+        history=conversation_history,
+        public_safe=public_safe,
+    )
+    if governed_subject_result is not None:
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=governed_subject_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=governed_subject_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     calendar_result = (
         None

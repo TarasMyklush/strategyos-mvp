@@ -2005,8 +2005,13 @@
     var base1Y = (52 + baseRadius * sin + halfWidth * tangentSin).toFixed(2);
     var base2X = (52 + baseRadius * cos - halfWidth * tangentCos).toFixed(2);
     var base2Y = (52 + baseRadius * sin - halfWidth * tangentSin).toFixed(2);
-    var tone = String(firstDefined(driver && driver.tone, "flat")).toLowerCase();
-    if (["up", "flat", "down"].indexOf(tone) === -1) tone = "flat";
+    var rawPlanPct = driver && driver.pct;
+    var planPct = rawPlanPct === null || rawPlanPct === undefined || rawPlanPct === ""
+      ? NaN
+      : Number(rawPlanPct);
+    var tone = !Number.isFinite(planPct) || planPct === 100
+      ? "flat"
+      : (planPct > 100 ? "up" : "down");
     return '<svg class="driver-ring" viewBox="0 0 104 104" aria-hidden="true"><circle class="driver-ring__track" cx="52" cy="52" r="41.5"></circle><circle class="driver-ring__value driver-ring__value--' + tone + '" cx="52" cy="52" r="41.5" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 52 52)"></circle><polygon class="driver-ring__tick" points="' + apexX + ',' + apexY + ' ' + base1X + ',' + base1Y + ' ' + base2X + ',' + base2Y + '"></polygon></svg>';
   }
 
@@ -2441,11 +2446,14 @@
 
   function assistantAnswerCacheKey(question, assistantContext) {
     var context = assistantContext && typeof assistantContext === "object" ? assistantContext : {};
+    var subject = context.subject && typeof context.subject === "object" ? context.subject : {};
     return [
       String(state.activePersona || "ceo"),
       String(firstDefined(context.entrypoint, "drawer_input")),
       String(firstDefined(context.kpi_key, context.driver_key, "none")),
       String(firstDefined(context.kpi_question_intent, "free_text")),
+      String(firstDefined(subject.kind, "no_subject")),
+      String(firstDefined(subject.key, subject.id, "no_subject_key")),
       String(question || "").trim().toLowerCase().replace(/\s+/g, " ")
     ].join("::");
   }
@@ -2596,6 +2604,7 @@
       driver_key: entrypoint === "board_portal" ? "board_packet" : firstDefined(contextualKpiKey, activeDriver && (activeDriver.driver_key || activeDriver.key), state.activeDriverKey, "board_packet"),
       kpi_key: contextualKpiKey || undefined,
       kpi_label: contextualKpiKey ? firstDefined(contextualKpiLabel, activeDriver && String(activeDriver.driver_key || activeDriver.key || "") === contextualKpiKey ? activeDriver.label : "") : undefined,
+      subject: entrypoint === "board_portal" ? undefined : kpiAssistantSubject(activeDriver),
       thread_key: currentThreadKey(),
       active_view: state.activeView || "home"
     };
@@ -4013,18 +4022,6 @@
     });
   }
 
-  function driverPlanVarianceBadgeMarkup(driver) {
-    var rawPct = driver && driver.pct;
-    if (rawPct === null || rawPct === undefined || rawPct === "") return "";
-    var pct = Number(rawPct);
-    if (!Number.isFinite(pct)) return "";
-    var delta = Math.round(pct - 100);
-    if (delta === 0) return "";
-    var tone = delta > 0 ? "positive" : "negative";
-    var sign = delta > 0 ? "+" : "-";
-    return '<span class="driver-plan-variance driver-plan-variance--' + tone + '">' + sign + Math.abs(delta) + '% vs plan</span>';
-  }
-
   function renderDriverGrid() {
     var grid = $("driver-row");
     if (!grid) return;
@@ -4046,7 +4043,7 @@
           groundingBadgeMarkup(driver.provenance, driver.grounding)
         ].join("")
         : [
-          '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div>' + driverPlanVarianceBadgeMarkup(driver) + '</div>',
+          '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div></div>',
           '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot"><span class="driver-foot__metric">' + escapeHtml(firstDefined(driver.metric, '—')) + '</span><span class="driver-sub">' + escapeHtml(firstDefined(driver.ring_label, driverSubLabel(driver))) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
         ].join("");
       // Native focus can scroll a partially visible tile before `click`
@@ -4260,15 +4257,41 @@
     return '<section class="kpi-trend"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span><small>' + escapeHtml(scopeNote) + '</small></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Aligned plan</span>' : '') + '</div></div><svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus aligned plan across ' : ' actual trend across ') + accessibleLabels) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong>' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong>' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
   }
 
-  function kpiMovementMarkup(driver) {
+  function kpiMovementRows(driver) {
     var movers = (driver && driver.movers) || {};
     var higher = safeArray(movers.lifting).slice(0, 2);
     var lower = safeArray(movers.dragging).slice(0, 2);
-    var movementRows = higher.map(function (item, index) {
+    return higher.map(function (item, index) {
       return { item: item, direction: 'up', glyph: '↗', key: 'lifting-' + index };
     }).concat(lower.map(function (item, index) {
       return { item: item, direction: 'down', glyph: '↘', key: 'dragging-' + index };
     }));
+  }
+
+  function kpiAssistantSubject(driver) {
+    if (!driver) return null;
+    var kpiKey = String(firstDefined(driver.driver_key, driver.key, ""));
+    var activeNoteKey = String(state.openKpiMoverNoteKey || "");
+    var activeMover = kpiMovementRows(driver).find(function (entry) {
+      var item = entry.item || {};
+      var noteKey = kpiKey + ':' + entry.key + ':' + firstDefined(item.name, 'mover');
+      return activeNoteKey === noteKey && Boolean(item.note || (item.gm && typeof item.gm === 'object'));
+    });
+    if (activeMover) {
+      var moverItem = activeMover.item || {};
+      return {
+        kind: "kpi_mover",
+        key: kpiKey + ':' + activeMover.key + ':' + firstDefined(moverItem.name, 'mover'),
+        parent_kind: "kpi",
+        parent_key: kpiKey,
+        label: firstDefined(moverItem.name, "KPI movement")
+      };
+    }
+    return kpiKey ? { kind: "kpi", key: kpiKey, label: firstDefined(driver.label, "KPI") } : null;
+  }
+
+  function kpiMovementMarkup(driver) {
+    var movementRows = kpiMovementRows(driver);
     var rows = movementRows.map(function (entry) {
       var item = entry.item || {};
       var gm = item.gm && typeof item.gm === 'object' ? item.gm : (item.note ? { who: firstDefined(item.gm, 'BU note'), note: item.note } : null);
@@ -4402,6 +4425,7 @@
           source: "executive_surface",
           kpi_key: key,
           kpi_label: label,
+          subject: kpiAssistantSubject(driver),
           kpi_question_intent: questionType,
           kpi_availability: availability,
           active_view: "home"
@@ -4433,6 +4457,7 @@
           source: "executive_surface",
           kpi_key: key,
           kpi_label: label,
+          subject: kpiAssistantSubject(driver),
           kpi_question_intent: "free_text",
           kpi_availability: availability,
           active_view: "home"

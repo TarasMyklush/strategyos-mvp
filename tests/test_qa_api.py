@@ -3904,6 +3904,125 @@ def test_inline_ceo_kpi_chat_uses_server_resolved_contract_and_never_llm(monkeyp
         _restore_env(original)
 
 
+def test_kpi_mover_note_context_is_resolved_governedly_across_hermes_entrypoints(monkeypatch):
+    original, client = _client_with_auth()
+    api_module._QA_CONTEXT_CACHE.clear()
+    context = {
+        "bundle": object(),
+        "findings": [],
+        "kg_nodes": [],
+        "kg_edges": [],
+        "summary": {
+            "run_id": "mover-note-run",
+            "finance_kpi": {
+                "derived_from": "deterministic_source_finance_kpi_engine",
+                "authoritative": True,
+                "reporting_period_key": "H1 2026",
+                "reporting_currency": "SAR",
+                "components": {
+                    "revenue_actual": "4006000000",
+                    "revenue_plan": "3900000000",
+                    "ebitda_actual": "780000000",
+                    "ebitda_plan": "760000000",
+                    "operating_cost_actual": "3224800000",
+                    "operating_cost_plan": "3130000000",
+                    "cash_balance": "1410000000",
+                    "board_floor": "1200000000",
+                },
+                "dynamics": {
+                    "revenue": {
+                        "lifting": [
+                            {
+                                "name": "Healthcare Services",
+                                "delta": "+SAR 5.0M",
+                                "gm": "BU note",
+                                "note": "Cardiology consultant gap constrains day-care",
+                            }
+                        ],
+                        "dragging": [],
+                    }
+                },
+                "evidence": {"revenue": {"files": ["finance.csv"]}},
+            },
+        },
+        "run_id": "mover-note-run",
+        "run_mode": "full",
+    }
+    subject = {
+        "kind": "kpi_mover",
+        "key": "revenue:lifting-0:Healthcare Services",
+        "parent_kind": "kpi",
+        "parent_key": "revenue",
+        "label": "Healthcare Services",
+        # Browser-supplied prose is untrusted and must never become the answer.
+        "note": "FAKE CLIENT NOTE",
+    }
+    try:
+        monkeypatch.setattr(api_module, "_resolve_qa_context", lambda _run_id: context)
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "answer_question",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("a governed mover-note question must not reach the LLM")
+            ),
+        )
+
+        for entrypoint in ("ceo_kpi_inline", "drawer_input", "leaders_corner"):
+            response = client.post(
+                "/assistant/chat",
+                headers={"X-API-Key": "operator-key"},
+                json={
+                    "question": "BU note Cardiology consultant gap constrains day-care — what does it mean?",
+                    "persona": "ceo",
+                    "mode": "auto",
+                    "assistant_context": {
+                        "source": "executive_surface",
+                        "entrypoint": entrypoint,
+                        "kpi_key": "revenue",
+                        "subject": subject,
+                    },
+                },
+            )
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["answered_by"] == "governed_subject"
+            assert payload["assistant_mode"] == "governed_subject"
+            assert payload["llm_fallback_attempted"] is False
+            assert "staffing or delivery-capacity constraint" in payload["answer"]
+            assert "+SAR 5.0M" in payload["answer"]
+            assert "does not by itself prove" in payload["answer"]
+            assert "FAKE CLIENT NOTE" not in payload["answer"]
+            assert payload["reference"]["kind"] == "kpi_mover"
+
+        follow_up = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={
+                "question": "What does it mean?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "source": "executive_surface",
+                    "entrypoint": "drawer_input",
+                    "kpi_key": "revenue",
+                },
+                "history": [
+                    {
+                        "role": "assistant",
+                        "text": "We were discussing Healthcare Services.",
+                        "payload": {"assistant_context": {"subject": subject}},
+                    }
+                ],
+            },
+        )
+        assert follow_up.status_code == 200
+        follow_up_payload = follow_up.json()
+        assert follow_up_payload["answered_by"] == "governed_subject"
+        assert "Cardiology consultant gap constrains day-care" in follow_up_payload["answer"]
+    finally:
+        _restore_env(original)
+
+
 def test_assistant_chat_models_target_margin_from_governed_finance_kpis_despite_stale_cash_context(monkeypatch):
     original, client = _client_with_auth()
     api_module._QA_CONTEXT_CACHE.clear()
