@@ -1127,6 +1127,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert ".kpi-executive-grid" in css
     assert ".kpi-executive-grid:has(.kpi-movement--empty)" not in css
     assert ".kpi-movement__rows" in css
+    assert "#driver-drill .kpi-movement__row strong,\n  #driver-drill .kpi-movement__row small" in css
+    assert "overflow-wrap: anywhere;" in css
     assert ".kpi-trend svg {\n  display: block;\n  width: 100%;\n  height: 164px;" in css
     assert ".kpi-mix-chart" not in css
     assert "data-kpi-inline-composer" not in js

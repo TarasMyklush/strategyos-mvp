@@ -8920,6 +8920,43 @@ body {
     grid-template-columns: 1fr;
   }
 
+  #driver-drill .kpi-movement__row {
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 7px 10px;
+    min-height: 0;
+    padding: 14px 16px;
+  }
+
+  #driver-drill .kpi-movement__direction {
+    grid-column: 1;
+    grid-row: 1;
+    padding-top: 2px;
+  }
+
+  #driver-drill .kpi-movement__row strong,
+  #driver-drill .kpi-movement__row small,
+  #driver-drill .kpi-movement__gm {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  #driver-drill .kpi-movement__row strong {
+    grid-row: 1;
+    overflow-wrap: anywhere;
+  }
+
+  #driver-drill .kpi-movement__row small {
+    grid-row: 2;
+    font-size: 16px;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  #driver-drill .kpi-movement__gm {
+    grid-row: 3;
+    justify-self: start;
+  }
+
   .vlog-thumb {
     min-height: 190px;
   }
