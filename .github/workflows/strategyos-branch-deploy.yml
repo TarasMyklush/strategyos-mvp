@@ -1,6 +1,9 @@
 name: StrategyOS Branch Deploy
 
 on:
+  push:
+    branches:
+      - fix/hermes-cross-surface-intent-contract
   workflow_dispatch:
     inputs:
       run_smoke:
