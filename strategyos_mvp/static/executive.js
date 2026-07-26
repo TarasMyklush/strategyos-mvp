@@ -2108,9 +2108,11 @@
 
   function driverRingCaption(driver) {
     var key = String(firstDefined(driver && driver.driver_key, driver && driver.key, ""));
+    // Keep the centre label short enough to remain inside the 104px gauge.
+    // The full "current margin" wording belongs in the supporting copy.
+    if (key === "ebitda_margin") return "margin";
     var supplied = String(firstDefined(driver && driver.ring_label, "")).trim();
     if (supplied) return supplied;
-    if (key === "ebitda_margin") return "current margin";
     if (key === "operating_cost") return "of plan";
     if (key === "cash_vs_floor") return "of floor";
     return "of plan";
@@ -4168,7 +4170,7 @@
         ].join("")
         : [
           '<div class="driver-ring-stage">' + driverRingMarkup(driver) + '<div class="driver-ring-copy">' + driverCenterMarkup(driver) + '</div></div>',
-          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot"><span class="driver-foot__metric">' + escapeHtml(firstDefined(driver.metric, '—')) + '</span><span class="driver-sub">' + escapeHtml(firstDefined(driver.ring_label, driverSubLabel(driver))) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
+          '<div class="driver-meta"><strong class="driver-label">' + escapeHtml(firstDefined(driver.label, "Driver")) + '</strong><div class="driver-foot"><span class="driver-foot__metric">' + escapeHtml(firstDefined(driver.metric, '—')) + '</span><span class="driver-sub">' + escapeHtml(driverSubLabel(driver)) + '</span></div>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>'
         ].join("");
       // Native focus can scroll a partially visible tile before `click`
       // fires. Preserve the executive's position at pointer/keyboard intent,

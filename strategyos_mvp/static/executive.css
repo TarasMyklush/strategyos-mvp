@@ -5405,7 +5405,7 @@ html[data-theme="dark"] .trend-axis {
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 2px;
+  gap: 5px;
 }
 
 .driver-pct {
@@ -5445,6 +5445,8 @@ html[data-theme="dark"] .trend-axis {
 
 .driver-ofplan {
   font-size: 9.5px;
+  line-height: 1;
+  white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
