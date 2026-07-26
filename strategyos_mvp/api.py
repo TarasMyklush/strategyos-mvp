@@ -4759,6 +4759,8 @@ def _executive_diagnostics_payload(
             "persona_label": persona_label,
             "score": presentation_hero.get("score"),
             "status": presentation_hero.get("status") or plan_health.get("status"),
+            "tone": presentation_hero.get("tone") or "neutral",
+            "focus_driver_key": presentation_hero.get("focus_driver_key"),
             "label": presentation_hero.get("label") or plan_health.get("label"),
             "summary": presentation_hero.get("summary") or lifecycle_hero.get("headline"),
             "body": presentation_hero.get("body") or lifecycle_hero.get("body"),

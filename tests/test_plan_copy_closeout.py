@@ -21,7 +21,7 @@ def test_plan_page_fetches_governed_api_payload_instead_of_static_truth() -> Non
 
     assert '<h1>Execution tracker</h1>' in html
     assert 'href="/guide"' in html
-    assert '>Guide</a>' in html
+    assert '>How it works</a>' in html
     assert "Loading governed execution tracker truth" in html
     assert "fetch('/api/plan/latest')" in html
     assert "/static/plan_data.js" not in html

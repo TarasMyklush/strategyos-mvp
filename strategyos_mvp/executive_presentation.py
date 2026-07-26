@@ -736,6 +736,8 @@ def _hero(
             driver_signals.append((driver, signal))
     intervention = next((item for item in driver_signals if item[1].get("action_required") is True), None)
     comparable_signals = [item for item in driver_signals if item[1].get("posture") != "Comparison pending"]
+    hero_tone = "neutral"
+    focus_driver_key: str | None = None
     if read_model.get("data_status") != "ready":
         label = "Board readiness is unavailable"
         body = read_model.get("status_reason") or "Current reporting information is not available."
@@ -754,6 +756,8 @@ def _hero(
         if challenged:
             body += f" Board release is also blocked by {challenged} evidence {'issue' if challenged == 1 else 'issues'}."
         status = "intervention_required"
+        hero_tone = str(signal.get("tone") or "critical")
+        focus_driver_key = str(driver.get("driver_key") or driver.get("key") or "") or None
     elif comparable_signals:
         label = "Enterprise performance is broadly on plan"
         body = "No headline measure currently crosses the CEO intervention threshold."
@@ -764,22 +768,33 @@ def _hero(
         elif approval_status == "approved" and reports:
             body += f" The board pack is approved and {reports} {'report is' if reports == 1 else 'reports are'} ready."
         status = "on_plan"
+        favourable = next((item for item in comparable_signals if item[1].get("tone") == "positive"), None)
+        adverse = next((item for item in comparable_signals if item[1].get("tone") in {"critical", "watch"}), None)
+        focus = adverse or favourable
+        if focus:
+            focus_driver, focus_signal = focus
+            hero_tone = str(focus_signal.get("tone") or "neutral")
+            focus_driver_key = str(focus_driver.get("driver_key") or focus_driver.get("key") or "") or None
     elif challenged:
         label = "Board release needs executive attention"
         body = f"{challenged} evidence {'issue is' if challenged == 1 else 'issues are'} still blocking a clean release."
         status = "needs_reviewer_closure"
+        hero_tone = "watch"
     elif approval_status == "approved" and reports:
         label = "Board pack is approved for release"
         body = f"Approval is recorded and {reports} {'report' if reports == 1 else 'reports'} are ready."
         status = "release_ready"
+        hero_tone = "positive"
     elif approval_status in {"pending", "awaiting_review", ""}:
         label = "Board pack is waiting for final sign-off"
         body = "The reviewer decision is still open; distribution remains blocked until it is recorded."
         status = "review_gate"
+        hero_tone = "watch"
     else:
         label = "Board pack needs follow-up"
         body = f"Current approval posture is {_humanize(approval_status).lower()}."
         status = "attention"
+        hero_tone = "watch"
     readiness_operands = {
         "approval_status": approval_status,
         "challenged_count": challenged,
@@ -794,6 +809,8 @@ def _hero(
         "summary": label,
         "body": body,
         "score": None,
+        "tone": hero_tone,
+        "focus_driver_key": focus_driver_key,
         "executive_posture": (
             "Action"
             if status in {"intervention_required", "needs_reviewer_closure"}

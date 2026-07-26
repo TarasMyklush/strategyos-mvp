@@ -2335,6 +2335,62 @@ def test_hero_leads_with_the_business_not_our_workflow():
     assert hero["executive_posture"] == "On plan"
 
 
+def test_hero_carries_the_focused_kpi_semantic_tone():
+    from strategyos_mvp.executive_presentation import _hero
+
+    negative = _hero(_ready_hero_read_model(0.0, 0), drivers=[{
+        "availability": "verified",
+        "driver_key": "operating_cost",
+        "label": "Operating cost",
+        "executive_brief": {"executive_signal": {
+            "posture": "Off plan",
+            "tone": "watch",
+            "action_required": True,
+            "readout": "Operating cost is 2.7% above plan.",
+            "decision": "Confirm the recovery owner.",
+        }},
+    }])
+    positive = _hero(_ready_hero_read_model(0.0, 0), drivers=[{
+        "availability": "verified",
+        "driver_key": "revenue",
+        "label": "Revenue",
+        "executive_brief": {"executive_signal": {
+            "posture": "Ahead of plan",
+            "tone": "positive",
+            "action_required": False,
+            "readout": "Revenue is 3.0% above plan.",
+            "decision": "Validate whether the upside is repeatable.",
+        }},
+    }])
+
+    assert negative["status"] == "intervention_required"
+    assert negative["tone"] == "watch"
+    assert negative["focus_driver_key"] == "operating_cost"
+    assert positive["status"] == "on_plan"
+    assert positive["tone"] == "positive"
+    assert positive["focus_driver_key"] == "revenue"
+
+
+def test_hero_frame_ring_and_message_share_the_kpi_semantic_contract():
+    js = _static_executive_js()
+    css = _static_executive_css()
+
+    assert "function heroSemanticTone(hero)" in js
+    assert "if (focusDriver) return kpiSemanticTone(focusDriver);" in js
+    assert 'heroEl.classList.add("tone-" + semanticTone)' in js
+    assert 'heroStatusEl.classList.add("tone-" + semanticTone)' in js
+    assert ".view-panel--home > .hero.tone-up" in css
+    assert ".view-panel--home > .hero.tone-down" in css
+    assert ".view-panel--home > .hero .hero-status.tone-up" in css
+    assert ".view-panel--home > .hero .hero-status.tone-down" in css
+    assert "border-left-color: var(--up)" in css
+    assert "border-left-color: var(--down)" in css
+    status_value = css.split(".view-panel--home > .hero .hero-status__value {", 1)[1].split("}", 1)[0]
+    assert "margin: 0" in status_value
+    assert "place-items: center" in status_value
+    assert "place-self: center" in status_value
+
+
 def test_hero_does_not_manufacture_a_headline_when_nothing_was_found():
     from strategyos_mvp.executive_presentation import _hero
 

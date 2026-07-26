@@ -3,205 +3,399 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>StrategyOS Guide — How it works</title>
+  <title>How StrategyOS works</title>
   <style>
+    @font-face {
+      font-family: "Newsreader";
+      src: url("/static/newsreader-latin.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 400 700;
+      font-display: swap;
+    }
     :root {
-      --bg: #f6f3ec;
-      --panel: #fffaf0;
-      --ink: #172033;
-      --muted: #5f6b7a;
-      --line: rgba(23, 32, 51, 0.14);
-      --navy: #16233f;
-      --green: #1f8f68;
-      --amber: #a96f18;
-      --soft-green: rgba(31, 143, 104, 0.10);
-      --soft-blue: rgba(22, 35, 63, 0.08);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --canvas: #f7f5ef;
+      --surface: #fff;
+      --ink: #20201e;
+      --muted: #77736b;
+      --line: #e5e0d5;
+      --navy: #25335c;
+      --green: #4e7c5b;
+      --green-soft: #edf4ee;
+      --red: #b0523c;
+      --red-soft: #f8eeeb;
+      --amber: #a77a32;
+      --amber-soft: #f8f1e5;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --serif: "Newsreader", Georgia, serif;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at top left, rgba(31, 143, 104, 0.14), transparent 28rem),
-        linear-gradient(180deg, #fbf8f1 0%, var(--bg) 100%);
+      background: var(--canvas);
       color: var(--ink);
-      line-height: 1.6;
+      font-family: var(--sans);
+      line-height: 1.55;
     }
     a { color: inherit; }
-    .shell { max-width: 1120px; margin: 0 auto; padding: 28px 20px 56px; }
-    .topline {
+    .topbar {
+      position: sticky;
+      z-index: 10;
+      top: 0;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--canvas) 94%, transparent);
+      backdrop-filter: blur(14px);
+    }
+    .topbar__inner,
+    main,
+    footer {
+      width: min(100%, 1220px);
+      margin: 0 auto;
+    }
+    .topbar__inner {
+      display: flex;
+      min-height: 64px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 30px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-weight: 750;
+      text-decoration: none;
+    }
+    .brand__mark {
+      width: 25px;
+      height: 25px;
+      border: 7px solid var(--navy);
+      border-radius: 50%;
+    }
+    .topbar nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .topbar nav a {
+      border-radius: 999px;
+      padding: 7px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .topbar nav a:hover,
+    .topbar nav a:focus-visible {
+      background: #fff;
+      color: var(--navy);
+      outline: none;
+    }
+    main { padding: 52px 30px 80px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(250px, .42fr);
+      gap: 52px;
+      align-items: end;
+      padding: 30px 0 46px;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      display: block;
+      margin-bottom: 13px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    h1, h2 {
+      margin: 0;
+      font-family: var(--serif);
+      font-weight: 500;
+      letter-spacing: -.035em;
+    }
+    h1 {
+      max-width: 820px;
+      font-size: clamp(46px, 6.5vw, 78px);
+      line-height: .98;
+    }
+    h2 {
+      font-size: clamp(30px, 3.4vw, 43px);
+      line-height: 1.05;
+    }
+    .hero__lede {
+      max-width: 700px;
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    .hero__aside {
+      padding-left: 22px;
+      border-left: 3px solid var(--navy);
+    }
+    .hero__aside strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 17px;
+    }
+    .hero__aside p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .section {
+      display: grid;
+      grid-template-columns: minmax(210px, .42fr) minmax(0, 1fr);
+      gap: 48px;
+      padding: 48px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .section__intro p {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .step-list,
+    .surface-list,
+    .principle-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .step,
+    .surface,
+    .principle {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 15px;
+      align-items: start;
+      padding: 17px 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    .step__number {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--navy);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .step strong,
+    .surface strong,
+    .principle strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 15px;
+    }
+    .step p,
+    .surface p,
+    .principle p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13.5px;
+    }
+    .surface__mark,
+    .principle__mark {
+      width: 9px;
+      height: 9px;
+      margin-top: 7px;
+      border-radius: 50%;
+      background: var(--navy);
+    }
+    .colour-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .colour-card {
+      min-height: 154px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    .colour-card__signal {
+      display: block;
+      width: 34px;
+      height: 8px;
+      margin-bottom: 18px;
+      border-radius: 999px;
+    }
+    .colour-card strong { display: block; margin-bottom: 6px; }
+    .colour-card p { margin: 0; color: var(--muted); font-size: 13px; }
+    .colour-card--good { background: var(--green-soft); }
+    .colour-card--good .colour-card__signal { background: var(--green); }
+    .colour-card--bad { background: var(--red-soft); }
+    .colour-card--bad .colour-card__signal { background: var(--red); }
+    .colour-card--watch { background: var(--amber-soft); }
+    .colour-card--watch .colour-card__signal { background: var(--amber); }
+    .cta {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      padding: 14px 0 32px;
-    }
-    .brand { display: inline-flex; align-items: center; gap: 11px; font-weight: 850; letter-spacing: -0.02em; }
-    .brand-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--navy); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.14); }
-    .nav { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 14px; }
-    .nav a { text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; background: rgba(255,255,255,0.54); }
-    .hero {
-      display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
       gap: 24px;
-      align-items: stretch;
-      margin-bottom: 24px;
+      padding: 48px 0 0;
     }
-    .card {
-      border: 1px solid var(--line);
-      border-radius: 24px;
-      background: rgba(255, 250, 240, 0.86);
-      box-shadow: 0 24px 60px rgba(22, 35, 63, 0.08);
-      padding: 28px;
+    .cta p { margin: 8px 0 0; color: var(--muted); }
+    .button {
+      display: inline-flex;
+      min-height: 44px;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--navy);
+      border-radius: 999px;
+      padding: 0 18px;
+      background: var(--navy);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
     }
-    .hero h1 { font-size: clamp(40px, 7vw, 76px); line-height: 0.94; letter-spacing: -0.07em; margin: 0 0 18px; }
-    .eyebrow { margin: 0 0 12px; color: var(--green); font-weight: 850; text-transform: uppercase; letter-spacing: 0.12em; font-size: 12px; }
-    .lede { font-size: clamp(18px, 2vw, 23px); color: #29354a; margin: 0; max-width: 760px; }
-    .quick-card { background: var(--navy); color: #fff; display: flex; flex-direction: column; justify-content: space-between; }
-    .quick-card h2 { margin: 0 0 12px; font-size: 24px; }
-    .quick-card p { margin: 0; color: rgba(255,255,255,0.76); }
-    .quick-stat { border-top: 1px solid rgba(255,255,255,0.16); padding-top: 18px; margin-top: 24px; display: grid; gap: 8px; }
-    .quick-stat strong { font-size: 34px; letter-spacing: -0.04em; }
-    .section { margin-top: 20px; }
-    .section h2 { margin: 0 0 14px; font-size: clamp(27px, 4vw, 42px); letter-spacing: -0.045em; line-height: 1.05; }
-    .section p { color: var(--muted); margin: 0 0 14px; }
-    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-    .steps, .plain-list { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
-    .steps li, .plain-list li {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 12px;
-      align-items: start;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 16px;
-      background: rgba(255,255,255,0.58);
+    footer {
+      padding: 26px 30px 40px;
+      color: var(--muted);
+      font-size: 12px;
     }
-    .badge {
-      min-width: 32px;
-      height: 32px;
-      display: inline-grid;
-      place-items: center;
-      border-radius: 11px;
-      background: var(--soft-green);
-      color: var(--green);
-      font-weight: 900;
-    }
-    .role-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
-    .role { border: 1px solid var(--line); border-radius: 18px; padding: 16px; background: rgba(255,255,255,0.58); }
-    .role strong { display: block; margin-bottom: 6px; color: var(--navy); }
-    .note { border-left: 4px solid var(--green); background: var(--soft-green); padding: 16px 18px; border-radius: 16px; color: #274136; }
-    .boundary { border-left-color: var(--amber); background: rgba(169, 111, 24, 0.10); color: #514026; }
-    .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
-    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 999px; padding: 0 18px; text-decoration: none; font-weight: 800; border: 1px solid var(--navy); }
-    .button.primary { background: var(--navy); color: #fff; }
-    .button.secondary { background: transparent; color: var(--navy); }
-    footer { color: var(--muted); font-size: 14px; padding-top: 28px; }
-    @media (max-width: 820px) {
-      .hero, .grid-2, .role-grid { grid-template-columns: 1fr; }
-      .topline { align-items: flex-start; flex-direction: column; }
-      .card { padding: 22px; }
+    @media (max-width: 760px) {
+      .topbar__inner { padding: 0 16px; }
+      .topbar nav a:not(:last-child) { display: none; }
+      main { padding: 24px 16px 64px; }
+      .hero,
+      .section {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+      .hero { padding-top: 18px; }
+      .hero__aside { padding-left: 16px; }
+      .section { padding: 36px 0; }
+      .colour-grid { grid-template-columns: 1fr; }
+      .colour-card { min-height: 0; }
+      .cta { align-items: flex-start; flex-direction: column; }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <header class="topline">
-      <a class="brand" href="/" aria-label="StrategyOS homepage"><span class="brand-mark" aria-hidden="true"></span><span>StrategyOS</span></a>
-      <nav class="nav" aria-label="Guide navigation">
-        <a href="/">Home</a>
-        <a href="/executive">Executive overview</a>
-        <a href="/app">Workspace preview</a>
-        <a href="/plan">Plan tracker</a>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a class="brand" href="/executive" aria-label="Return to StrategyOS briefing">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <span>StrategyOS</span>
+      </a>
+      <nav aria-label="Guide navigation">
+        <a href="#briefing">The briefing</a>
+        <a href="#signals">Signals</a>
+        <a href="/executive">Back to briefing</a>
       </nav>
-    </header>
+    </div>
+  </header>
 
+  <main>
     <section class="hero" aria-labelledby="guide-title">
-      <article class="card">
-        <p class="eyebrow">Non-technical guide</p>
+      <div>
+        <span class="eyebrow">Product guide</span>
         <h1 id="guide-title">How StrategyOS works</h1>
-        <p class="lede">StrategyOS helps leaders and teams review strategy and financial performance with evidence, not guesswork. This page explains the system in plain English and shows how to test the current role-based preview.</p>
-        <div class="cta-row">
-          <a class="button primary" href="#try-it-yourself">Try it yourself</a>
-          <a class="button secondary" href="/login">Open test login</a>
-        </div>
-      </article>
-      <aside class="card quick-card" aria-label="Quick summary">
-        <div>
-          <h2>What to expect</h2>
-          <p>A 5–10 minute walkthrough using temporary test users for executive, operator, reviewer, business-unit, analyst, auditor, tenant, and system roles.</p>
-        </div>
-        <div class="quick-stat">
-          <span>Use the temporary test login page</span>
-          <strong>5–10 min</strong>
-        </div>
+        <p class="hero__lede">StrategyOS turns approved plans and verified company data into a decision-ready CEO briefing. It shows the headline, the reason it moved, the evidence behind it, and the action that belongs at executive level.</p>
+      </div>
+      <aside class="hero__aside">
+        <strong>One governed decision surface</strong>
+        <p>No invented values, no hidden case work, and no “running” agent unless execution has actually been recorded.</p>
       </aside>
     </section>
 
-    <section class="section card" aria-labelledby="what-strategyos-does">
-      <h2 id="what-strategyos-does">What StrategyOS does</h2>
-      <p>StrategyOS brings strategy, performance, cases, and supporting evidence into one review surface so leaders can see what matters and where the proof sits.</p>
-      <p>It is designed for teams that currently rely on scattered spreadsheets, disconnected reports, and decision notes that are hard to trace back to source material.</p>
-      <div class="role-grid" aria-label="Typical users">
-        <div class="role"><strong>Executive</strong><span>Sees the top-level picture: KPIs, cases, and a board-pack snapshot.</span></div>
-        <div class="role"><strong>Business-unit leader</strong><span>Reviews results and risks for their area.</span></div>
-        <div class="role"><strong>Reviewer</strong><span>Inspects the evidence behind numbers and findings.</span></div>
-        <div class="role"><strong>Operator</strong><span>Prepares data and runs the analysis workflow.</span></div>
+    <section class="section" id="briefing" aria-labelledby="briefing-title">
+      <div class="section__intro">
+        <span class="eyebrow">The operating loop</span>
+        <h2 id="briefing-title">From source to decision</h2>
+        <p>The interface stays compact; supporting detail is revealed only when it helps the decision.</p>
       </div>
-    </section>
-
-    <section class="section grid-2" aria-labelledby="how-it-works">
-      <article class="card">
-        <h2 id="how-it-works">How it works</h2>
-        <ol class="steps">
-          <li><span class="badge">1</span><span><strong>Prepare.</strong> Source material such as spreadsheets, financial extracts, plans, and review notes is loaded into a controlled workspace.</span></li>
-          <li><span class="badge">2</span><span><strong>Analyse.</strong> The system produces findings, flags gaps, and connects each case to supporting evidence.</span></li>
-          <li><span class="badge">3</span><span><strong>Review.</strong> A human reviewer inspects, approves, or challenges the output before it reaches leadership.</span></li>
-        </ol>
-      </article>
-      <article class="card">
-        <h2>Human review stays central</h2>
-        <p>The system prepares the view and connects evidence. A person still makes the final call, especially before a finding is shared with leadership or used in a board pack.</p>
-        <p class="note boundary">The full governed workflow requires an authenticated session. The temporary <a href="/login">/login</a> page lets invited testers enter as different roles without exposing private production credentials.</p>
-      </article>
-    </section>
-
-    <section class="section card" aria-labelledby="what-you-can-see">
-      <h2 id="what-you-can-see">What you can see right now</h2>
-      <ul class="plain-list">
-        <li><span class="badge">/</span><span><strong>Homepage.</strong> An executive overview with KPI cards, case previews, an evidence packet preview, and a board-pack area.</span></li>
-        <li><span class="badge">/executive</span><span><strong>Executive overview.</strong> The same leadership view, framed for review of current performance signals.</span></li>
-        <li><span class="badge">/login</span><span><strong>Customer sign-in.</strong> Choose your authorized account and enter its password to continue.</span></li>
-        <li><span class="badge">/app</span><span><strong>Workspace preview.</strong> The governed diagnostics workspace layout after a temporary login.</span></li>
-      </ul>
-      <p class="note boundary">The public surface is a preview. Live case data, full evidence, reports, and approval actions require an authorised session; the temporary test users are only for preview and role-flow testing.</p>
-    </section>
-
-    <section class="section card" id="try-it-yourself" aria-labelledby="try-heading">
-      <h2 id="try-heading">Try it yourself</h2>
-      <p>Estimated time: 5–10 minutes. Use one of the temporary test users on <a href="/login">/login</a>; the password list is shared separately with authorised testers.</p>
-      <ol class="steps">
-        <li><span class="badge">1</span><span>Open <a href="https://strategyos.live/login">https://strategyos.live/login</a>.</span></li>
-        <li><span class="badge">2</span><span>Select a temporary role user, enter its password, and press <strong>Log in</strong>.</span></li>
-        <li><span class="badge">3</span><span>Executive users land on <a href="/executive">/executive</a>; all other test roles land on <a href="/app">/app</a>.</span></li>
-        <li><span class="badge">4</span><span>Check the role-specific workspace: KPI cards, case list, evidence packet area, board-pack area, and allowed actions.</span></li>
-        <li><span class="badge">5</span><span>Repeat with another role to compare what an operator, reviewer, auditor, executive, tenant admin, or system user can see and do.</span></li>
-        <li><span class="badge">6</span><span>Use only the temporary test users for preview testing; real customer credentials and production data are out of scope for this page.</span></li>
+      <ol class="step-list">
+        <li class="step">
+          <span class="step__number">1</span>
+          <div><strong>Read the position</strong><p>The opening statement identifies the most material KPI or governance issue for the current reporting period.</p></div>
+        </li>
+        <li class="step">
+          <span class="step__number">2</span>
+          <div><strong>Inspect what moved it</strong><p>Select a KPI to compare actuals with plan, review its trend, see the contributing business lines, and open the calculation trail.</p></div>
+        </li>
+        <li class="step">
+          <span class="step__number">3</span>
+          <div><strong>Decide at the right altitude</strong><p>StrategyOS separates CEO intervention from work that should remain with the accountable executive, reviewer, or specialist agent.</p></div>
+        </li>
       </ol>
     </section>
 
-    <section class="section card" aria-labelledby="next-heading">
-      <h2 id="next-heading">What's next</h2>
-      <p>StrategyOS is under active development. The current focus is strengthening the governed workflow, role-specific views, and the authenticated experience while keeping the temporary preview clear and truthful.</p>
-      <div class="cta-row">
-        <a class="button primary" href="/login">Open the test login</a>
-        <a class="button secondary" href="/plan">View the plan tracker</a>
+    <section class="section" aria-labelledby="surfaces-title">
+      <div class="section__intro">
+        <span class="eyebrow">The product</span>
+        <h2 id="surfaces-title">What each area is for</h2>
+      </div>
+      <ul class="surface-list">
+        <li class="surface"><span class="surface__mark"></span><div><strong>Diagnostics</strong><p>The CEO briefing: headline KPIs, movements, concerns, developments, calendar context, modelling, and leadership material.</p></div></li>
+        <li class="surface"><span class="surface__mark"></span><div><strong>AI Assistants</strong><p>Role-aligned interfaces for accountable leaders. They show responsibilities, current priorities, decision needs, and escalation paths.</p></div></li>
+        <li class="surface"><span class="surface__mark"></span><div><strong>Agents</strong><p>Specialist work such as analysis and audit. An agent appears only when the application has a recorded task or audit trail to show.</p></div></li>
+        <li class="surface"><span class="surface__mark"></span><div><strong>KPI evidence</strong><p>The source and relationship view behind headline figures, including missing-input and evidence boundaries.</p></div></li>
+        <li class="surface"><span class="surface__mark"></span><div><strong>Hermes</strong><p>The decision dialogue. Hermes answers from the current governed packet, explains the implication, and distinguishes evidence from uncertainty.</p></div></li>
+      </ul>
+    </section>
+
+    <section class="section" id="signals" aria-labelledby="signals-title">
+      <div class="section__intro">
+        <span class="eyebrow">Shared visual language</span>
+        <h2 id="signals-title">How to read the colours</h2>
+        <p>Direction is KPI-aware. “More” is not automatically good.</p>
+      </div>
+      <div class="colour-grid">
+        <article class="colour-card colour-card--good">
+          <span class="colour-card__signal"></span>
+          <strong>Favourable</strong>
+          <p>Green means the KPI moved in the beneficial direction: revenue, margin or cash above plan—or operating cost below plan.</p>
+        </article>
+        <article class="colour-card colour-card--bad">
+          <span class="colour-card__signal"></span>
+          <strong>Unfavourable</strong>
+          <p>Red means the KPI moved against the plan: revenue, margin or cash below plan—or operating cost above plan.</p>
+        </article>
+        <article class="colour-card colour-card--watch">
+          <span class="colour-card__signal"></span>
+          <strong>Watch or governance</strong>
+          <p>Amber is reserved for review gates, incomplete evidence, or a watch state. Neutral styling means no safe comparison is available.</p>
+        </article>
       </div>
     </section>
 
-    <footer>
-      <p>StrategyOS guide · Plain-English overview for non-technical reviewers.</p>
-    </footer>
-  </div>
+    <section class="section" aria-labelledby="boundaries-title">
+      <div class="section__intro">
+        <span class="eyebrow">Trust boundary</span>
+        <h2 id="boundaries-title">What StrategyOS will not pretend</h2>
+      </div>
+      <ul class="principle-list">
+        <li class="principle"><span class="principle__mark"></span><div><strong>No estimate presented as an actual</strong><p>If an input or aligned comparator is missing, the conclusion is withheld and the missing information is named.</p></div></li>
+        <li class="principle"><span class="principle__mark"></span><div><strong>No execution without a record</strong><p>Idle, disabled, planned, or catalogue-only agents are not presented as running work.</p></div></li>
+        <li class="principle"><span class="principle__mark"></span><div><strong>No case-level noise at CEO altitude</strong><p>Operational work remains delegated unless its aggregate exposure or decision threshold requires executive intervention.</p></div></li>
+      </ul>
+    </section>
+
+    <section class="cta" aria-labelledby="return-title">
+      <div>
+        <span class="eyebrow">Continue</span>
+        <h2 id="return-title">Return to the live briefing</h2>
+        <p>Use the KPI cards and “Show the work” controls to move from headline to evidence.</p>
+      </div>
+      <a class="button" href="/executive">Open StrategyOS</a>
+    </section>
+  </main>
+
+  <footer>StrategyOS · How it works · Current governed product guide</footer>
 </body>
 </html>

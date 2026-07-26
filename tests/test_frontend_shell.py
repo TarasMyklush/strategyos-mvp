@@ -122,18 +122,23 @@ def test_guide_route_renders_plain_english_public_guide():
     html_lower = html.lower()
 
     assert "How StrategyOS works" in html
-    assert "What StrategyOS does" in html
-    assert "How it works" in html
-    assert "What you can see right now" in html
-    assert "Try it yourself" in html
-    assert "What's next" in html
-    assert "Use the temporary test login page" in html
-    assert 'href="/login"' in html
-    assert "https://strategyos.live/login" in html
-    assert "Executive users land on" in html
-    assert "all other test roles land on" in html
-    assert "No sign-up needed for the public preview" not in html
-    assert "5–10 minutes" in html
+    assert "From source to decision" in html
+    assert "What each area is for" in html
+    assert "How to read the colours" in html
+    assert "What StrategyOS will not pretend" in html
+    assert "Diagnostics" in html
+    assert "AI Assistants" in html
+    assert "KPI evidence" in html
+    assert "Hermes" in html
+    assert "Green means the KPI moved in the beneficial direction" in html
+    assert "operating cost below plan" in html
+    assert "operating cost above plan" in html
+    assert 'href="/executive"' in html
+    assert 'href="/login"' not in html
+    assert 'href="/app"' not in html
+    assert 'href="/plan"' not in html
+    assert "strategyos.live/login" not in html
+    assert "temporary test" not in html_lower
     assert "criticalBlockers" not in html
     assert "activeActionItems" not in html
 

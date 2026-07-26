@@ -3972,6 +3972,19 @@
     };
   }
 
+  function heroSemanticTone(hero) {
+    var focusKey = String(firstDefined(hero && hero.focus_driver_key, ""));
+    var focusDriver = getVisibleDrivers().find(function (driver) {
+      return String(firstDefined(driver && driver.driver_key, driver && driver.key, "")) === focusKey;
+    });
+    if (focusDriver) return kpiSemanticTone(focusDriver);
+    var tone = String(firstDefined(hero && hero.tone, "")).toLowerCase();
+    if (/^(positive|up|success|ok)$/.test(tone)) return "up";
+    if (/^(critical|down|danger)$/.test(tone)) return "down";
+    if (tone === "watch" || String(firstDefined(hero && hero.status, "")).match(/review|attention/)) return "watch";
+    return "flat";
+  }
+
   function renderHero() {
     var diagnostics = getExecutiveDiagnostics();
     var blueprint = getPersonaBlueprint(state.activePersona);
@@ -4023,6 +4036,15 @@
       : hasScore
         ? "Measured against the latest approved plan."
         : "Built from the latest available operating data.";
+    var semanticTone = heroSemanticTone(hero);
+    var heroEl = $("hero");
+    var heroStatusEl = heroEl && heroEl.querySelector(".hero-status");
+    ["up", "down", "watch", "flat"].forEach(function (tone) {
+      if (heroEl) heroEl.classList.remove("tone-" + tone);
+      if (heroStatusEl) heroStatusEl.classList.remove("tone-" + tone);
+    });
+    if (heroEl) heroEl.classList.add("tone-" + semanticTone);
+    if (heroStatusEl) heroStatusEl.classList.add("tone-" + semanticTone);
     $("hero-score").innerHTML = hasScore && !reviewGate
       ? '<span>' + escapeHtml(String(clampedScore || 0)) + '</span><small>plan health</small>'
       : '<span class="hero-status__fallback">' + escapeHtml(heroStatusText) + '</span>';
