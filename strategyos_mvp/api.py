@@ -12658,6 +12658,8 @@ def _ceo_kpi_inline_result(
                     answer += "No period-aligned revenue plan series is connected. "
                 if missing:
                     answer += f"Needed for a valid comparison: {'; '.join(missing)}."
+            if has_plan_series:
+                answer += " " + _trend_sentence()
             if strategic_reference:
                 answer += (
                     f" The {str(strategic_reference.get('label') or 'approved strategic reference').lower()} is "
@@ -13398,6 +13400,8 @@ def _kpi_mover_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
     author = str(mover.get("gm") or "Business-unit note").strip()
     direction = str(entity.get("direction") or "")
     direction_label = "positive" if direction == "lifting" else "negative" if direction == "dragging" else "recorded"
+    if kpi_key == "operating_cost":
+        direction_label = "favourable" if direction == "lifting" else "unfavourable" if direction == "dragging" else "recorded"
     mechanism, required_quantification = _kpi_mover_constraint_type(note)
 
     parts = [
@@ -13405,6 +13409,8 @@ def _kpi_mover_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
     ]
     if delta:
         parts.append(f"KPI context: it appears in the {direction_label} movement list at {delta}.")
+        if kpi_key == "operating_cost" and direction == "lifting":
+            parts.append("This is not a cost overrun in the governed movement contract; it is a below-plan cost contribution.")
     if note:
         parts.append(f"{author}: {note}.")
     parts.append(
@@ -13759,6 +13765,15 @@ def _assistant_question_requests_modelling(question: str) -> bool:
     if not any(term in norm for term in finance_terms):
         return False
     if re.search(r"\b(model|simulate|scenario|project)\b", norm):
+        return True
+    # A relationship what-if is still a scenario when the executive has not
+    # supplied the magnitude yet. Route it to the scenario contract so Hermes
+    # asks for that missing input instead of restating the KPI headline.
+    if re.search(
+        r"\bwhat happens to\b.+\bif\b.+\b(change|changes|changed|increase|increases|"
+        r"decrease|decreases|rise|rises|fall|falls|drop|drops|grow|grows)\b",
+        norm,
+    ):
         return True
     # A conditional word alone is not a modelling request.  Decision prompts
     # legitimately say things such as "intervene only if the executive
@@ -14188,6 +14203,37 @@ async def _assistant_chat_response(
             persona=persona,
             orchestrated=orchestrated,
             base_result=cost_lever_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
+
+    # Resolve a named business unit or mover before the whole-KPI contract.
+    # The same BU can appear under Revenue, margin and cost; the resolver uses
+    # the metric words in the question to select the correct governed row.
+    governed_reference_result = _governed_reference_result(
+        context,
+        question=question,
+        assistant_context=assistant_context,
+        history=conversation_history,
+        public_safe=public_safe,
+    )
+    if governed_reference_result is not None:
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=governed_reference_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=governed_reference_result,
             llm_status=llm_status,
             assistant_context=assistant_context,
         )
@@ -14984,6 +15030,31 @@ def data_qa(
                 orchestrated_payload=orchestrated,
                 extra_trace={
                     "route": "governed_cost_levers",
+                    "knowledge_id": request.knowledge_id,
+                },
+                extra_payload={"llm_fallback_attempted": False},
+            )
+
+        governed_reference_result = _governed_reference_result(
+            context,
+            question=question,
+            assistant_context=request.assistant_context or {},
+            history=conversation_history,
+            public_safe=False,
+        )
+        if governed_reference_result is not None:
+            orchestrated = orchestrator.process(
+                question,
+                persona=persona,
+                qa_result=governed_reference_result,
+                driver_context=driver_context,
+            )
+            return _compose_response(
+                response_mode="deterministic",
+                base_payload=governed_reference_result,
+                orchestrated_payload=orchestrated,
+                extra_trace={
+                    "route": "governed_reference",
                     "knowledge_id": request.knowledge_id,
                 },
                 extra_payload={"llm_fallback_attempted": False},

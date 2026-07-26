@@ -5188,6 +5188,70 @@ def test_a_cost_line_scenario_states_the_run_does_not_endorse_the_cut():
     assert "nothing in this run says the line can be reduced" in result.answer.casefold()
 
 
+def test_unquantified_finance_relationship_routes_to_missing_scenario_input():
+    assert api_module._assistant_question_requests_modelling(
+        "What happens to EBITDA margin if revenue changes?"
+    ) is True
+
+
+def test_kpi_comparison_explains_headline_and_monthly_scope_difference(monkeypatch):
+    monkeypatch.setattr(
+        api_module,
+        "_ceo_kpi_cards",
+        lambda *_args, **_kwargs: [
+            {
+                "key": "operating_cost",
+                "label": "Operating cost",
+                "metric": "SAR 3224.8M",
+                "availability": "verified",
+                "missing_inputs": [],
+                "trend": {
+                    "actual": [22_140_441.75, 17_302_614.65],
+                    "plan": [26_316_644.0, 26_316_648.0],
+                    "labels": ["2026-05", "2026-06"],
+                    "unit": "sar",
+                    "has_plan_series": True,
+                    "scope_note": "Division monthly COGS plus cash operating cost; group H1 headline is shown above.",
+                },
+                "executive_brief": {
+                    "readout": "Operating cost is 2.7% above plan for the current period.",
+                    "comparison": {"available": True, "value": "102.7% of plan"},
+                    "drivers": [],
+                    "audit": {},
+                },
+            }
+        ],
+    )
+    result = api_module._ceo_kpi_inline_result(
+        {"summary": {}},
+        kpi_key="operating_cost",
+        public_safe=False,
+        question="The chart is below plan in June while the headline is 2.7% above plan. Explain the difference.",
+    )
+    assert result["kpi_question_intent"] == "comparison"
+    assert "latest point is below its aligned plan" in result["answer"].casefold()
+    assert "not the same measure as the headline" in result["answer"].casefold()
+
+
+def test_favourable_cost_mover_corrects_an_overrun_premise():
+    result = api_module._kpi_mover_reference_answer(
+        {
+            "id": "operating_cost:lifting-0:Healthcare Services",
+            "label": "Healthcare Services",
+            "direction": "lifting",
+            "card": {"key": "operating_cost", "label": "Operating cost"},
+            "mover": {
+                "name": "Healthcare Services",
+                "delta": "SAR 3.4M below plan",
+                "note": "Occupancy remains constrained.",
+                "gm": "BU note",
+            },
+        }
+    )
+    assert "not a cost overrun" in result["answer"].casefold()
+    assert "below-plan cost contribution" in result["answer"].casefold()
+
+
 def test_a_rollup_row_is_not_a_line_an_executive_can_cut():
     """"Other 120 accounts" is a display device, not an actionable line."""
     from strategyos_mvp.scenario_parser import parse_scenario
