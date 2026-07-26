@@ -1179,10 +1179,6 @@
     if (/(runtime\s+governance|policy\s+gate|object\s+storage\s+sync|model_provider|batch_apis|hosted_ocr|external\s+mode)/i.test(activity)) {
       return "Monitoring the operating environment; no executive action is currently required.";
     }
-    var priority = getExecutiveAttention().primary;
-    if (priority && /no open investigation|no issue is currently escalated|ready for the next leadership review/i.test(activity)) {
-      return firstDefined(priority.summary, priority.title, activity);
-    }
     return activity
       .replace(/governed\s+KPIs?/gi, "key performance measures")
       .replace(/no open investigation is recorded/gi, "no issue is currently escalated");
@@ -1207,11 +1203,8 @@
     var workflowAttentionCount = team.filter(function (item) {
       return String(firstDefined(item.status, "ready")).toLowerCase() === "attention";
     }).length;
-    var executivePriorityCount = getExecutiveAttention().count;
-    var attentionCount = Math.max(workflowAttentionCount, executivePriorityCount);
-    var attentionHint = executivePriorityCount
-      ? executivePriorityCount + " executive " + (executivePriorityCount === 1 ? "priority needs" : "priorities need") + " your review"
-      : workflowAttentionCount + " assistant" + (workflowAttentionCount === 1 ? " needs" : "s need") + " your review";
+    var attentionCount = workflowAttentionCount;
+    var attentionHint = workflowAttentionCount + " assistant" + (workflowAttentionCount === 1 ? " needs" : "s need") + " your review";
     return {
       label: "Hermes' AI leadership team",
       hint: team.length
@@ -1241,17 +1234,6 @@
       var openPriorities = Number(firstDefined(item && item.active_investigation_count, 0)) || 0;
       var decisionsNeeded = Number(firstDefined(item && item.pending_request_count, 0)) || 0;
       var role = leadershipRoleLabel(item);
-      var executiveAttention = getExecutiveAttention();
-      var priorityKey = String(firstDefined(executiveAttention.primary && executiveAttention.primary.key, ""));
-      var itemRole = String(firstDefined(item && item.role, "")).toLowerCase();
-      var ownsExecutivePriority = executiveAttention.count > 0 && (
-        itemRole === "ceo"
-        || (itemRole === "cfo" && /cost|cash|margin|revenue|finance/.test(priorityKey))
-      );
-      if (ownsExecutivePriority) {
-        openPriorities = Math.max(openPriorities, executiveAttention.count);
-        if (itemRole === "cfo") status = "attention";
-      }
       return {
         assistantId: firstDefined(item && item.twin_id, item && item.role, "assistant-" + index),
         statusRank: assistantStatusRank(status),
@@ -1877,10 +1859,7 @@
   function renderLeadershipStatus(item) {
     var status = leadershipStatusLabel(firstDefined(item && item.status, "ready"));
     var currentActivity = leadershipActivityCopy(item);
-    var openPriorities = Math.max(
-      Number(firstDefined(item && item.active_investigation_count, 0)) || 0,
-      getExecutiveAttention().count
-    );
+    var openPriorities = Number(firstDefined(item && item.active_investigation_count, 0)) || 0;
     var decisionsNeeded = Number(firstDefined(item && item.pending_request_count, 0)) || 0;
     var outcome = leadershipPriorityCopy(openPriorities);
     var decision = leadershipDecisionCopy(decisionsNeeded);
@@ -2128,8 +2107,10 @@
 
   function driverRingCaption(driver) {
     var key = String(firstDefined(driver && driver.driver_key, driver && driver.key, ""));
-    if (key === "ebitda_margin") return "margin";
-    if (key === "operating_cost") return "of plan";
+    var supplied = String(firstDefined(driver && driver.ring_label, "")).trim();
+    if (supplied) return supplied;
+    if (key === "ebitda_margin") return "current margin";
+    if (key === "operating_cost") return "of revenue";
     if (key === "cash_vs_floor") return "of floor";
     return "of plan";
   }
@@ -5215,10 +5196,24 @@
     var developments = liveGovernedMode
       ? safeArray(developmentsSection.items).slice(0, 3)
       : (safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3));
+    var calendarAgenda = (state.latestPacket && state.latestPacket.calendar_agenda) || {};
+    var projectionAsOf = String(firstDefined(calendarAgenda.projection_as_of, "")).slice(0, 10);
+    var projectionThrough = String(firstDefined(calendarAgenda.projection_through, "")).slice(0, 10);
+    var governedUpcomingCount = Number(calendarAgenda.upcoming_item_count);
     var allWeekAhead = (liveGovernedMode
       ? safeArray(weekSection.items)
       : (safeArray(blueprint.week).length ? safeArray(blueprint.week) : safeArray(lowerRail.week_ahead)))
-      .filter(function (item) { return item && item.business_relevant !== false; });
+      .filter(function (item) {
+        if (!item || item.business_relevant === false) return false;
+        if (!projectionAsOf && !projectionThrough) return true;
+        var itemDate = String(firstDefined(item.date, "")).slice(0, 10);
+        if (!itemDate) return false;
+        return (!projectionAsOf || itemDate >= projectionAsOf)
+          && (!projectionThrough || itemDate <= projectionThrough);
+      });
+    if (Number.isFinite(governedUpcomingCount) && governedUpcomingCount >= 0) {
+      allWeekAhead = allWeekAhead.slice(0, governedUpcomingCount);
+    }
     if (!decisions.length && fallbackFindings.length) {
       decisions = [{
         key: 'delegated_controls',
@@ -5435,10 +5430,7 @@
       var events = safeArray(collaboration.recent_events);
       var openHandoffs = Number(firstDefined(collaboration.open_handoff_count, collaboration.pending_request_count, 0)) || 0;
       var resolvedHandoffs = Number(firstDefined(collaboration.resolved_handoff_count, 0)) || 0;
-      var attentionHandoffs = Math.max(
-        Number(firstDefined(collaboration.executive_attention_count, 0)) || 0,
-        getExecutiveAttention().count
-      );
+      var attentionHandoffs = Number(firstDefined(collaboration.executive_attention_count, 0)) || 0;
       var completedCycles = Number(firstDefined(runtime.completed_cycle_count, runtime.cycle_count, 0)) || 0;
       var collaborationMeaning = attentionHandoffs
         ? attentionHandoffs + ' item' + (attentionHandoffs === 1 ? ' requires' : 's require') + ' your attention.'
@@ -5842,7 +5834,10 @@
       state.session = session;
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
-      state.activePersona = firstDefined((state.latestPacket.executive_modes || {}).active_persona_id, state.activePersona, "ceo");
+      // The persona selected in the current browser is authoritative. The
+      // packet value initializes old clients, but must never snap a user back
+      // to a stale server-side persona after a deliberate switch.
+      state.activePersona = firstDefined(state.activePersona, (state.latestPacket.executive_modes || {}).active_persona_id, "ceo");
       if (state.activePersona === "board") state.activeView = "home";
       // During an active board-state transition, the packet's presentation_state
       // must not override the user's in-flight selection. _boardStateTransition
@@ -5854,7 +5849,22 @@
       }
       // Preserve the KPI the executive selected locally. The packet default is
       // only used on first load or after an explicit persona reset.
-      state.activeDriverKey = firstDefined(state.activeDriverKey, (state.latestPacket.executive_modes || {}).active_driver_key, "board_packet");
+      var packetDiagnostics = (state.latestPacket && state.latestPacket.executive_diagnostics) || {};
+      var packetDrivers = safeArray(packetDiagnostics.driver_grid);
+      var packetDriverKeys = packetDrivers.map(function (driver) {
+        return String(firstDefined(driver && driver.driver_key, driver && driver.key, ""));
+      }).filter(Boolean);
+      var requestedDriverKey = String(firstDefined(
+        state.activeDriverKey,
+        (state.latestPacket.executive_modes || {}).active_driver_key,
+        ""
+      ));
+      var heroDriverKey = String(firstDefined((packetDiagnostics.hero || {}).focus_driver_key, ""));
+      state.activeDriverKey = packetDriverKeys.indexOf(requestedDriverKey) >= 0
+        ? requestedDriverKey
+        : packetDriverKeys.indexOf(heroDriverKey) >= 0
+        ? heroDriverKey
+        : firstDefined(packetDriverKeys[0], "");
       state.activeCompany = firstDefined((state.latestPacket.executive_modes || {}).company_id, state.activeCompany);
       state.activePortfolio = firstDefined((state.latestPacket.executive_modes || {}).portfolio_id, state.activePortfolio);
       ensureThreads();

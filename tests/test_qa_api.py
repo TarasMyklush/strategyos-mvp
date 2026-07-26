@@ -2771,6 +2771,13 @@ def test_ceo_knowledge_graph_uses_the_same_four_kpi_contracts_as_dashboard():
         == str((node.get("properties") or {}).get("kpi_key") or "").replace("_", " ").casefold()
         for node in nodes
     )
+    assert not any(
+        node.get("category") == "business_driver"
+        and str((node.get("properties") or {}).get("kpi_key") or "") == "cash_vs_floor"
+        and str(node.get("label") or "").casefold()
+        in {"cash vs floor", "cash vs floor actual", "reported cash position"}
+        for node in nodes
+    )
     assert all(edge["source"] != edge["target"] for edge in edges)
 
 
@@ -5021,6 +5028,57 @@ def test_causal_question_does_not_claim_a_kpi_by_word_match():
     # Plain lookups must still route to the KPI contract.
     assert api_module._free_text_ceo_kpi_key("What is our revenue?") == "revenue"
     assert api_module._free_text_ceo_kpi_key("Show me EBITDA margin") == "ebitda_margin"
+
+
+def test_semantically_invalid_kpi_questions_never_inherit_governed_figures(monkeypatch):
+    questions = (
+        "What is the operating cost of the moon divided by the color blue?",
+        "How many angels can dance on the head of the EBITDA margin?",
+    )
+    for question in questions:
+        assert api_module._question_has_semantic_kpi_mismatch(question) is True
+        assert api_module._free_text_ceo_kpi_key(question, {}) is None
+
+    for question in (
+        "What is our operating cost?",
+        "What is the EBITDA margin variance to plan?",
+        "Who owns the operating-cost recovery?",
+    ):
+        assert api_module._question_has_semantic_kpi_mismatch(question) is False
+
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(
+            api_module,
+            "_resolve_qa_context",
+            lambda _run_id: {
+                "bundle": object(),
+                "findings": [],
+                "kg_nodes": [],
+                "kg_edges": [],
+                "summary": {"run_id": "semantic-run"},
+                "run_id": "semantic-run",
+                "run_mode": "full",
+            },
+        )
+        for endpoint in ("/assistant/chat", "/qa"):
+            response = client.post(
+                endpoint,
+                headers={"X-API-Key": "operator-key"},
+                json={
+                    "question": questions[0],
+                    "persona": "ceo",
+                    "mode": "auto",
+                },
+            )
+            assert response.status_code == 200, response.text
+            payload = response.json()
+            assert payload["answered_by"] == "semantic_relevance_guard"
+            assert payload["citations"] == []
+            assert "non-business concept" in payload["answer"]
+            assert payload.get("llm_fallback_attempted") is False
+    finally:
+        _restore_env(original)
 
 
 def test_kpi_card_buttons_still_route_when_the_card_supplies_the_key():

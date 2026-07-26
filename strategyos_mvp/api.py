@@ -902,6 +902,16 @@ def _ceo_kpi_knowledge_graph(
             step_value = str(step.get("value") or "Not supplied")
             if step_value.strip().casefold() in {"not supplied", "not available", "n/a", "—", "-"}:
                 continue
+            # A row that merely repeats the headline actual is provenance for
+            # the KPI, not an independent business driver. Treating "Reported
+            # cash position" as a driver of "Cash vs floor" (or "Recognised
+            # revenue" as a driver of Revenue) creates a circular explanation
+            # even though the labels are not textually identical.
+            if step_value.strip().casefold() == metric.strip().casefold() and (
+                len(list(calculation.get("steps") or [])) == 1
+                or re.search(r"\b(?:reported|recognised|recognized|actual|current)\b", normalized_step_label)
+            ):
+                continue
             component_id = f"component:{key}:{index}"
             add_node(
                 {
@@ -13826,6 +13836,93 @@ def _decimal_references(text: str) -> set[Decimal]:
     return values
 
 
+_NON_BUSINESS_KPI_CONCEPT_RE = re.compile(
+    r"\b(?:"
+    r"moon|sun|planet|mars|venus|jupiter|galaxy|universe|"
+    r"angel|angels|fairy|fairies|unicorn|ghost|spirit|"
+    r"colour|color|blue|purple|taste|smell|emotion|dream|"
+    r"astrology|zodiac|horoscope|magic|magical"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _question_has_semantic_kpi_mismatch(question: str) -> bool:
+    """Reject category errors that merely contain a governed KPI name.
+
+    A KPI keyword proves which company measure was mentioned; it does not
+    prove that the requested operation is meaningful for that measure. This
+    guard is intentionally narrow and deterministic: ordinary requests for a
+    value, variance, trend, driver, owner or implication continue to the KPI
+    contract, while obviously non-business compositions cannot inherit a real
+    board number and a "traced to source" badge.
+    """
+
+    norm = " ".join(str(question or "").casefold().split())
+    if not norm:
+        return False
+    names_a_kpi = any(
+        token in norm
+        for token in (
+            "cash versus floor",
+            "cash-versus-floor",
+            "cash vs floor",
+            "cash position",
+            "ebitda",
+            "operating margin",
+            "margin bridge",
+            "operating cost",
+            "operating expense",
+            "opex",
+            "revenue",
+        )
+    )
+    if not names_a_kpi:
+        return False
+    if re.search(r"\bhow many\b", norm) and (
+        re.search(r"\b(?:dance|fit|sit|stand|live|fly)\b", norm)
+        or _NON_BUSINESS_KPI_CONCEPT_RE.search(norm)
+    ):
+        return True
+    arithmetic = re.search(r"\b(?:divided|multiplied)\s+by\s+(.+?)(?:[?.!]|$)", norm)
+    if arithmetic and not re.search(
+        r"(?:\d|percent|percentage|basis point|bps|plan|budget|forecast|"
+        r"revenue|cost|expense|margin|ebitda|cash|floor|actual|prior|previous)",
+        arithmetic.group(1),
+    ):
+        return True
+    return bool(
+        _NON_BUSINESS_KPI_CONCEPT_RE.search(norm)
+        and re.search(
+            r"\b(?:revenue|operating cost|operating expense|opex|ebitda(?: margin)?|cash(?: vs floor| position)?)\s+of\s+(?:the\s+)?",
+            norm,
+        )
+    )
+
+
+def _semantic_kpi_mismatch_result() -> dict[str, Any]:
+    return {
+        "matched": True,
+        "answer": (
+            "That question combines a governed company KPI with a non-business concept, "
+            "so the current evidence cannot answer it. Ask for the KPI’s actual value, "
+            "plan variance, trend, business drivers, owner or decision implication."
+        ),
+        "basis": "The request is not a meaningful business operation on the governed KPI.",
+        "citations": [],
+        "suggestions": [
+            "What is the current value and variance to plan?",
+            "What moved this KPI?",
+            "Does this KPI require executive intervention?",
+        ],
+        "answered_by": "semantic_relevance_guard",
+        "assistant_mode": "clarification",
+        "grounding_status": "not_applicable",
+        "claim_class": "semantic_scope_refusal",
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _free_text_ceo_kpi_key(
     question: str,
     context: Mapping[str, Any] | None = None,
@@ -13833,6 +13930,8 @@ def _free_text_ceo_kpi_key(
     public_safe: bool = False,
 ) -> str | None:
     """Route names or uniquely displayed values to the governed KPI contract."""
+    if _question_has_semantic_kpi_mismatch(question):
+        return None
     if _assistant_question_requests_modelling(question):
         return None
     # The KPI contract states what a figure IS and how it is composed; it does
@@ -14013,6 +14112,28 @@ async def _assistant_chat_response(
     if conversation_history:
         context["assistant_history"] = conversation_history
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    if _question_has_semantic_kpi_mismatch(question):
+        relevance_result = _semantic_kpi_mismatch_result()
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=relevance_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=relevance_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
 
     # A selected governed entity is the strongest UI context. Resolve it before
     # broad intent engines so a pronoun follow-up such as "what does it mean?"
@@ -15010,6 +15131,25 @@ def data_qa(
         finding.__dict__ if hasattr(finding, "__dict__") else finding
         for finding in context["findings"]
     ]
+
+    if _question_has_semantic_kpi_mismatch(question):
+        relevance_result = _semantic_kpi_mismatch_result()
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=relevance_result,
+            driver_context=driver_context,
+        )
+        return _compose_response(
+            response_mode="deterministic",
+            base_payload=relevance_result,
+            orchestrated_payload=orchestrated,
+            extra_trace={
+                "route": "semantic_relevance_guard",
+                "knowledge_id": request.knowledge_id,
+            },
+            extra_payload={"llm_fallback_attempted": False},
+        )
 
     graph_result = None
     retrieval_result = None

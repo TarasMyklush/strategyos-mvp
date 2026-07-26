@@ -218,7 +218,12 @@ def test_ceo_kpi_contract_uses_only_authoritative_deterministic_finance_inputs()
     assert cards[1]["comparison"] == "+200 bps vs plan"
     assert cards[2]["pct"] == 105.0
     assert cards[3]["comparison"] == "SAR 100K above floor"
-    assert all(card["availability"] == "verified" for card in cards)
+    assert cards[0]["availability"] == "verified"
+    assert cards[1]["availability"] == "partial"
+    assert cards[1]["missing_inputs"] == ["Cost of goods sold bridge input"]
+    assert cards[1]["executive_brief"]["comparison"]["available"] is True
+    assert cards[2]["availability"] == "verified"
+    assert cards[3]["availability"] == "verified"
     assert all(
         card["trend"] == {"actual": [], "plan": [], "labels": [], "has_plan_series": False, "unit": ""}
         for card in cards

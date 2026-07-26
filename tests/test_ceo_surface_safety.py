@@ -2240,6 +2240,51 @@ def test_leadership_status_does_not_read_raw_execution_events():
     assert "Portfolio under review" in js
 
 
+def test_assistant_counts_do_not_inherit_unrelated_ceo_priority_counts():
+    js = _static_executive_js()
+    activity_block = js.split("function leadershipActivityCopy(item)")[1].split(
+        "function leadershipPriorityCopy", 1
+    )[0]
+    meta_block = js.split("function getAssistantNetworkMeta()")[1].split(
+        "function assistantStatusRank", 1
+    )[0]
+    network_block = js.split("function getAssistantNetwork()")[1].split(
+        "function getAssistantExchanges", 1
+    )[0]
+    status_block = js.split("function renderLeadershipStatus(item)")[1].split(
+        "function getRunningAgents", 1
+    )[0]
+    collaboration_block = js.split("if (collaborationCard)")[1].split(
+        "if (automationCard)", 1
+    )[0]
+
+    for block in (activity_block, meta_block, network_block, status_block, collaboration_block):
+        assert "getExecutiveAttention()" not in block
+    assert "active_investigation_count" in network_block
+    assert "active_investigation_count" in status_block
+
+
+def test_ring_caption_and_calendar_use_the_governed_display_contract():
+    js = _static_executive_js()
+    caption_block = js.split("function driverRingCaption(driver)")[1].split(
+        "function driverMeasureLabel", 1
+    )[0]
+    week_block = js.split("function renderLowerRailFidelity()")[1].split(
+        "function renderAgentsDiscovery", 1
+    )[0]
+    refresh_block = js.split("async function refresh(withAnimation)")[1].split(
+        "function bindAssistantForm", 1
+    )[0]
+
+    assert "driver.ring_label" in caption_block
+    assert 'if (key === "operating_cost") return "of revenue"' in caption_block
+    assert "projection_as_of" in week_block
+    assert "projection_through" in week_block
+    assert "upcoming_item_count" in week_block
+    assert "packetDriverKeys.indexOf(heroDriverKey)" in refresh_block
+    assert "firstDefined(state.activePersona" in refresh_block
+
+
 def test_execution_log_styles_are_served():
     css = _static_executive_css()
     for selector in (".agent-trail", ".trail-item", ".trail-quote", ".trail-note", ".trail-foot"):

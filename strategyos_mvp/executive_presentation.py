@@ -218,6 +218,7 @@ def _executive_kpi_signal(
     actual: float,
     components: Mapping[str, Any],
     missing_inputs: list[str],
+    comparison_available: bool,
     actual_complete: bool,
 ) -> dict[str, Any]:
     """Translate a finance calculation into a CEO posture and next move.
@@ -227,7 +228,7 @@ def _executive_kpi_signal(
     direction it is moving in, and whether the CEO needs to act.
     """
     key = str(spec["key"])
-    if missing_inputs or not actual_complete:
+    if not comparison_available or not actual_complete:
         return {
             "posture": "Comparison pending",
             "variance_label": "No like-for-like comparator",
@@ -331,6 +332,7 @@ def _executive_kpi_brief(
     components: Mapping[str, Any],
     evidence: Mapping[str, Any],
     missing_inputs: list[str],
+    comparison_available: bool,
     actual_complete: bool,
     comparison: str,
     strategic_reference: Mapping[str, Any] | None,
@@ -347,12 +349,12 @@ def _executive_kpi_brief(
     source_files = list(evidence.get("files") or [])
     source_titles = list(dict.fromkeys(_source_title(item) for item in source_files))
     comparison_name = "Current-period comparison"
-    comparison_value = comparison if not missing_inputs else "Not yet aligned"
+    comparison_value = comparison if comparison_available else "Not yet aligned"
     comparison_note = (
         "A governed strategic reference is available, but it is not aligned to the current period and scope."
-        if missing_inputs and strategic_reference
+        if not comparison_available and strategic_reference
         else "A like-for-like approved comparator for the current period and scope has not been supplied."
-        if missing_inputs
+        if not comparison_available
         else "Compared with the approved comparator supplied for this period."
     )
     contributors = evidence_details.get("contributors") if isinstance(evidence_details.get("contributors"), Mapping) else {}
@@ -436,7 +438,7 @@ def _executive_kpi_brief(
             "label": comparison_name,
             "value": comparison_value,
             "note": comparison_note,
-            "available": not bool(missing_inputs),
+            "available": comparison_available,
         },
         "strategic_reference": dict(strategic_reference) if strategic_reference else None,
         "calculation": {
@@ -601,6 +603,9 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             ring_label = "current margin"
             comparison = _basis_points_display(variance_bps)
             missing_inputs = [] if plan_margin is not None else ["H1 EBITDA budget aligned to this scope", "H1 revenue budget aligned to this scope"]
+            comparison_available = plan_margin is not None
+            if spec["key"] == "ebitda_margin" and _number_or_none(components.get("cogs_actual")) is None:
+                missing_inputs.append("Cost of goods sold bridge input")
         else:
             pct = (actual / comparator) * 100 if comparator not in {None, 0} else None
             metric = _format_sar(actual)
@@ -618,6 +623,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 else:
                     comparison = f"{pct:.1f}% of plan"
                 missing_inputs = []
+            comparison_available = comparator is not None
 
             if spec["key"] == "operating_cost":
                 revenue_actual = _number_or_none(components.get("revenue_actual"))
@@ -630,13 +636,18 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
         actual_missing = [] if actual_is_complete else ["Complete latest cash-position balances"]
         missing_inputs = list(dict.fromkeys([*missing_inputs, *actual_missing]))
         availability = "verified" if not missing_inputs else "partial"
-        status = "Verified" if availability == "verified" else "Current actual available · comparison pending"
+        if availability == "verified":
+            status = "Verified"
+        elif comparison_available:
+            status = "Current actual and comparison available · evidence bridge incomplete"
+        else:
+            status = "Current actual available · comparison pending"
         sub = comparison
-        detail = (
-            f"Calculated for {period}. {comparison}."
-            if availability == "verified"
-            else f"Calculated for {period}. A comparison is withheld until period and scope are aligned."
-        )
+        detail = f"Calculated for {period}. {comparison}."
+        if not comparison_available:
+            detail = f"Calculated for {period}. A comparison is withheld until period and scope are aligned."
+        elif missing_inputs:
+            detail += " The current headline and plan variance are calculated, but the evidence bridge is incomplete."
         evidence_summary = str(kpi_evidence.get("summary") or "")
         if evidence_summary:
             detail += " " + evidence_summary
@@ -653,6 +664,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             actual=actual,
             components=components,
             missing_inputs=missing_inputs,
+            comparison_available=comparison_available,
             actual_complete=actual_is_complete,
         )
         cards.append(
@@ -699,6 +711,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                     components=components,
                     evidence=kpi_evidence,
                     missing_inputs=missing_inputs,
+                    comparison_available=comparison_available,
                     actual_complete=actual_is_complete,
                     comparison=comparison,
                     strategic_reference=strategic_reference,
