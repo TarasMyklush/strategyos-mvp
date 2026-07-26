@@ -1375,6 +1375,7 @@ def test_target_ceo_layout_keeps_ring_right_and_modelling_columns_content_sized(
     assert "grid-template-columns: minmax(0, 1fr) 150px" in hero
     assert "grid-column: 1" in final_pass[copy_start:copy_end]
     assert "grid-column: 2" in final_pass[status_start:status_end]
+    assert "align-self: center" in final_pass[status_start:status_end]
     assert "align-items: start" in css[css.index(".fidelity-thinking-grid {", css.index("/* One shared gravity heading")):][:220]
     assert "#gravity-panel {\n  display: flex;\n  min-height: 0;" in css
     assert ".fidelity-thinking-starter {\n  margin-top: 16px;" in css
