@@ -570,6 +570,36 @@ def test_ebitda_target_margin_can_complete_one_component_from_governed_identity(
     assert result.scenario_type == "deterministic"
 
 
+def test_ebitda_baseline_does_not_present_inferred_cogs_as_supplied():
+    result = parse_scenario(
+        "What is the EBITDA margin variance to plan?",
+        {
+            "bundle": object(),
+            "findings": [],
+            "kg_nodes": [],
+            "public_context_packet": {},
+            "summary": {
+                "finance_kpi": {
+                    "reporting_period_key": "H1 2026",
+                    "components": {
+                        "revenue_actual": "4006000000",
+                        "revenue_plan": "3900000000",
+                        "ebitda_actual": "781200000",
+                        "ebitda_plan": "764400000",
+                        "operating_cost_actual": "3224800000",
+                        "cogs_actual": None,
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.scenario_id == "governed_ebitda_baseline"
+    assert "cost-of-goods-sold bridge input is not supplied" in result.answer
+    assert "SAR 0 cost of goods sold" not in result.answer
+    assert "aligned plan margin" in result.answer
+
+
 def test_authenticated_digital_health_without_actual_data_does_not_use_synthetic_baseline():
     result = parse_scenario(
         "Simulate Digital Health flat by end of year",

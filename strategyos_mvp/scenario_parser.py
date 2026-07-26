@@ -598,14 +598,20 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
         if revenue is None or revenue <= 0:
             continue
 
+        inferred_components: list[str] = []
         # EBITDA can safely complete one missing cost component because this is the
-        # governing identity used by the dashboard calculation contract.
+        # governing identity used by the dashboard calculation contract. Keep
+        # the provenance explicit: a residual used for arithmetic is not a
+        # supplied finance fact and must never be narrated as one.
         if ebitda is None and cogs is not None and operating_cost is not None:
             ebitda = revenue - cogs - operating_cost
+            inferred_components.append("ebitda")
         elif cogs is None and ebitda is not None and operating_cost is not None:
             cogs = revenue - operating_cost - ebitda
+            inferred_components.append("cogs")
         elif operating_cost is None and ebitda is not None and cogs is not None:
             operating_cost = revenue - cogs - ebitda
+            inferred_components.append("operating_cost")
 
         if any(value is None for value in (cogs, operating_cost, ebitda)):
             continue
@@ -640,6 +646,7 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
             "ebitda": ebitda,
             "revenue_plan": revenue_plan,
             "ebitda_plan": ebitda_plan,
+            "inferred_components": inferred_components,
             "citations": citations,
         }
     return None
@@ -1135,17 +1142,29 @@ def _finance_baseline_result(baseline: Mapping[str, Any]) -> ScenarioResult:
     margin = ebitda / revenue
     revenue_plan = baseline.get("revenue_plan")
     ebitda_plan = baseline.get("ebitda_plan")
+    inferred_components = {
+        str(item)
+        for item in list(baseline.get("inferred_components") or [])
+    }
     citations = list(baseline["citations"])
     comparison = (
         f" The aligned plan margin is {_percent(float(Decimal(ebitda_plan) / Decimal(revenue_plan)), 1)}."
         if revenue_plan is not None and ebitda_plan is not None and Decimal(revenue_plan) > 0
         else " No approved EBITDA and revenue plan for the same scope and period is available, so I have not shown a plan variance."
     )
+    bridge_text = (
+        "The cost-of-goods-sold bridge input is not supplied, so no COGS amount is stated. "
+        f"The reported operating cost is {_sar_executive_decimal(operating_cost)}."
+        if "cogs" in inferred_components
+        else (
+            f"The reported bridge includes {_sar_executive_decimal(cogs)} cost of goods sold and "
+            f"{_sar_executive_decimal(operating_cost)} operating cost."
+        )
+    )
     answer = (
         f"For {baseline['period']}, EBITDA margin is {_percent(float(margin), 1)}. "
-        f"That is {_sar_executive_decimal(ebitda)} of EBITDA on {_sar_executive_decimal(revenue)} revenue, "
-        f"after {_sar_executive_decimal(cogs)} cost of goods sold and "
-        f"{_sar_executive_decimal(operating_cost)} operating cost."
+        f"That is {_sar_executive_decimal(ebitda)} of EBITDA on {_sar_executive_decimal(revenue)} revenue. "
+        f"{bridge_text}"
         f"{comparison}"
     )
     return ScenarioResult(
