@@ -5160,6 +5160,17 @@ def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
         "a whole-KPI question belongs to the KPI contract, which states the "
         "figure on its own terms"
     )
+    whole_margin_kpi = api_module._governed_reference_result(
+        context,
+        question="What is the EBITDA margin variance to plan?",
+        assistant_context={},
+        history=[],
+        public_safe=False,
+    )
+    assert whole_margin_kpi is None, (
+        "the EBITDA amount bridge row must not intercept a question that "
+        "explicitly names the whole EBITDA margin KPI"
+    )
 
     component = api_module._governed_reference_result(
         context, question="Elaborate on SAR 109.9M", assistant_context={}, history=[], public_safe=False

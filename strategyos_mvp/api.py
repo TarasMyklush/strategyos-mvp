@@ -13698,6 +13698,30 @@ def _governed_reference_result(
         for item in matches
         if item.get("kind") == "kpi"
     }
+    requested_kpi_match = next(
+        (
+            item
+            for item in matches
+            if item.get("kind") == "kpi"
+            and str(item.get("key") or (item.get("card") or {}).get("key") or (item.get("card") or {}).get("driver_key") or "")
+            == requested_kpi
+        ),
+        None,
+    )
+    if requested_kpi_match is not None:
+        requested_label = str(requested_kpi_match.get("label") or "").casefold().strip()
+        distinct_component_is_named = any(
+            item.get("kind") == "kpi_component"
+            and str(item.get("label") or "").casefold().strip()
+            and str(item.get("label") or "").casefold().strip() not in requested_label
+            and re.search(
+                r"\b" + re.escape(str(item.get("label") or "").casefold().strip()) + r"\b",
+                normalized_question,
+            )
+            for item in matches
+        )
+        if requested_label and requested_label in normalized_question and not distinct_component_is_named:
+            return None
     component = next(
         (
             item
