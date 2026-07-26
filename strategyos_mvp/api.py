@@ -12887,6 +12887,13 @@ def _governed_entity_index(context: Mapping[str, Any]) -> list[dict[str, Any]]:
                     for phrase in (mover_label.casefold(), note.casefold())
                     if len(phrase) >= 8
                 ]
+                # Executives naturally omit a corporate/group prefix when
+                # naming a business unit ("Healthcare Services" rather than
+                # the fully registered display name). Preserve the full label
+                # and add only the specific two-or-more-word suffix.
+                mover_words = mover_label.casefold().split()
+                if len(mover_words) >= 3:
+                    phrases.append(" ".join(mover_words[1:]))
                 entities.append(
                     {
                         "kind": "kpi_mover",
@@ -13125,13 +13132,13 @@ def _resolve_governed_entities(
             if re.search(r"(?<![\w-])" + re.escape(token) + r"(?![\w-])", norm):
                 matches.append(entity)
                 break
-    if matches:
-        return matches
-
     for entity in entities:
         phrases = entity.get("phrases")
         candidates = list(phrases) if isinstance(phrases, (list, tuple, set)) else [entity.get("phrase") or ""]
-        if any(len(str(phrase)) >= 8 and str(phrase) in norm for phrase in candidates):
+        if (
+            entity not in matches
+            and any(len(str(phrase)) >= 8 and str(phrase) in norm for phrase in candidates)
+        ):
             matches.append(entity)
     if matches:
         return matches

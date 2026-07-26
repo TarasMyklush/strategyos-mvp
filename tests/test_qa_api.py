@@ -5252,6 +5252,44 @@ def test_favourable_cost_mover_corrects_an_overrun_premise():
     assert "below-plan cost contribution" in result["answer"].casefold()
 
 
+def test_business_unit_reference_matches_without_corporate_prefix(monkeypatch):
+    monkeypatch.setattr(
+        api_module,
+        "build_executive_presentation",
+        lambda _read_model: {
+            "driver_grid": [
+                {
+                    "key": "operating_cost",
+                    "label": "Operating cost",
+                    "source_files": ["finance.xlsx"],
+                    "movers": {
+                        "lifting": [
+                            {
+                                "name": "Mizan Healthcare Services",
+                                "delta": "SAR 3.4M below plan",
+                                "note": "Occupancy remains constrained.",
+                                "gm": "BU note",
+                            }
+                        ],
+                        "dragging": [],
+                    },
+                    "executive_brief": {},
+                }
+            ]
+        },
+    )
+    result = api_module._governed_reference_result(
+        {"summary": {}, "findings": []},
+        question="What does the Healthcare Services operating cost overrun mean?",
+        assistant_context={},
+        history=[],
+        public_safe=False,
+    )
+    assert result is not None
+    assert result["answered_by"] == "governed_subject"
+    assert "not a cost overrun" in result["answer"].casefold()
+
+
 def test_a_rollup_row_is_not_a_line_an_executive_can_cut():
     """"Other 120 accounts" is a display device, not an actionable line."""
     from strategyos_mvp.scenario_parser import parse_scenario
