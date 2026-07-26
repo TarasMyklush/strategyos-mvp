@@ -1566,16 +1566,16 @@ def test_driver_ring_preserves_reference_headroom_above_100():
     )
 
 
-def test_driver_ring_has_reference_tick():
-    """The visual contract requires a visible 100% plan marker."""
+def test_driver_ring_has_no_overlapping_reference_tick():
+    """The compact gauge uses its arc and caption without a triangle marker."""
     js = _static_executive_js()
 
     func_start = js.index("function driverRingMarkup")
     func_end = js.index("function qaAnswerText", func_start)
     ring_func_body = js[func_start:func_end]
 
-    assert "tickAngle" in ring_func_body
-    assert "driver-ring__tick" in ring_func_body
+    assert "tickAngle" not in ring_func_body
+    assert "driver-ring__tick" not in ring_func_body
 
 
 def test_driver_ring_dash_proportional_to_pct():

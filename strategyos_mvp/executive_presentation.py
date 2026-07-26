@@ -1061,6 +1061,33 @@ def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
     hero = _hero(read_model, drivers=drivers)
     findings, reconciliation = _findings(read_model)
     executive_priorities = _executive_priorities(read_model, drivers=drivers, reconciliation=reconciliation)
+    attention_items = [
+        {
+            "key": str(item.get("key") or "executive_priority"),
+            "title": str(item.get("title") or "Executive priority"),
+            "summary": str(item.get("summary") or ""),
+            "decision": str(item.get("decision") or item.get("implication") or ""),
+            "owner": str(item.get("owner") or ""),
+            "tone": str(item.get("priority") or item.get("tone") or "watch"),
+            "prompt": str(item.get("prompt") or ""),
+        }
+        for item in (
+            list(executive_priorities.get("decisions") or [])
+            + list(executive_priorities.get("signals") or [])
+        )
+        if bool(item.get("action_required"))
+    ]
+    executive_attention = {
+        "status": "action_required" if attention_items else "clear",
+        "count": len(attention_items),
+        "items": attention_items,
+        "primary": attention_items[0] if attention_items else None,
+        "summary": (
+            f"{len(attention_items)} executive {'priority requires' if len(attention_items) == 1 else 'priorities require'} attention."
+            if attention_items
+            else "No governed executive priority currently requires attention."
+        ),
+    }
     developments = list((read_model.get("developments") or {}).get("items") or [])
     week = list((read_model.get("week_ahead") or {}).get("items") or [])
     sections = {
@@ -1104,6 +1131,7 @@ def build_executive_presentation(read_model: dict[str, Any]) -> dict[str, Any]:
             "week": week,
         },
         "sections": sections,
+        "executive_attention": executive_attention,
         "findings_reconciliation": reconciliation,
     }
     payload["provenance_summary"] = provenance_summary(read_model)

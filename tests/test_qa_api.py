@@ -2737,7 +2737,12 @@ def test_ceo_knowledge_graph_uses_the_same_four_kpi_contracts_as_dashboard():
                         "available": key != "cash_vs_floor",
                     },
                     "coverage": {"value": "Partial" if key == "cash_vs_floor" else "Complete"},
-                    "calculation": {"steps": [{"label": f"{label} actual", "value": metric}]},
+                    "calculation": {
+                        "steps": [
+                            {"label": f"{label} actual", "value": metric},
+                            {"label": label, "value": metric},
+                        ]
+                    },
                     "audit": {
                         "source_titles": ["Governed source extract"],
                         "source_files": [f"source/{key}.xlsx"],
@@ -2760,6 +2765,13 @@ def test_ceo_knowledge_graph_uses_the_same_four_kpi_contracts_as_dashboard():
     assert any(node["category"] == "evidence_gap" for node in nodes)
     assert any(node["category"] == "source" for node in nodes)
     assert all("vendor" not in str(node.get("category") or "").lower() for node in nodes)
+    assert not any(
+        node["category"] == "business_driver"
+        and str(node.get("label") or "").casefold()
+        == str((node.get("properties") or {}).get("kpi_key") or "").replace("_", " ").casefold()
+        for node in nodes
+    )
+    assert all(edge["source"] != edge["target"] for edge in edges)
 
 
 def test_public_safe_legacy_demo_prompts_use_only_governed_answers(monkeypatch):

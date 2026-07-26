@@ -72,6 +72,9 @@ def test_mizan_style_presentation_uses_database_claims_only():
     assert presentation["hero"]["label"] == "CEO finance baseline is not yet connected"
     assert presentation["sections"]["developments"]["items"] == []
     assert presentation["sections"]["week_ahead"]["items"] == []
+    assert presentation["executive_attention"]["status"] == "action_required"
+    assert presentation["executive_attention"]["count"] >= 1
+    assert presentation["executive_attention"]["primary"]["title"]
     assert presentation["provenance_summary"]["all_claims_validated"] is True
     assert "Mizan Group" not in all_text
     assert "SAR 8.6M" not in all_text

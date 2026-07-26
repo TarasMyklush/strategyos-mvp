@@ -1098,6 +1098,17 @@
     return (state.latestPacket && state.latestPacket.executive_diagnostics) || {};
   }
 
+  function getExecutiveAttention() {
+    var attention = getExecutiveDiagnostics().executive_attention || {};
+    var items = safeArray(attention.items);
+    return {
+      count: Number.isFinite(Number(attention.count)) ? Number(attention.count) : items.length,
+      items: items,
+      primary: attention.primary || items[0] || null,
+      summary: firstDefined(attention.summary, "")
+    };
+  }
+
   function getBoardPortal() {
     return (state.latestPacket && state.latestPacket.board_portal) || {};
   }
@@ -1168,6 +1179,10 @@
     if (/(runtime\s+governance|policy\s+gate|object\s+storage\s+sync|model_provider|batch_apis|hosted_ocr|external\s+mode)/i.test(activity)) {
       return "Monitoring the operating environment; no executive action is currently required.";
     }
+    var priority = getExecutiveAttention().primary;
+    if (priority && /no open investigation|no issue is currently escalated|ready for the next leadership review/i.test(activity)) {
+      return firstDefined(priority.summary, priority.title, activity);
+    }
     return activity
       .replace(/governed\s+KPIs?/gi, "key performance measures")
       .replace(/no open investigation is recorded/gi, "no issue is currently escalated");
@@ -1189,13 +1204,18 @@
     var activeCount = team.filter(function (item) {
       return ["active", "monitoring"].indexOf(String(firstDefined(item.status, "ready")).toLowerCase()) >= 0;
     }).length;
-    var attentionCount = team.filter(function (item) {
+    var workflowAttentionCount = team.filter(function (item) {
       return String(firstDefined(item.status, "ready")).toLowerCase() === "attention";
     }).length;
+    var executivePriorityCount = getExecutiveAttention().count;
+    var attentionCount = Math.max(workflowAttentionCount, executivePriorityCount);
+    var attentionHint = executivePriorityCount
+      ? executivePriorityCount + " executive " + (executivePriorityCount === 1 ? "priority needs" : "priorities need") + " your review"
+      : workflowAttentionCount + " assistant" + (workflowAttentionCount === 1 ? " needs" : "s need") + " your review";
     return {
       label: "Hermes' AI leadership team",
       hint: team.length
-        ? activeCount + " assistant" + (activeCount === 1 ? " is" : "s are") + " active" + (attentionCount ? " · " + attentionCount + " assistant" + (attentionCount === 1 ? " needs" : "s need") + " your review" : " · nothing needs your decision")
+        ? activeCount + " assistant" + (activeCount === 1 ? " is" : "s are") + " active" + (attentionCount ? " · " + attentionHint : " · no governed priority needs your decision")
         : "No AI leadership team is configured for this workspace yet.",
       active_count: activeCount,
       attention_count: attentionCount,
@@ -1221,6 +1241,17 @@
       var openPriorities = Number(firstDefined(item && item.active_investigation_count, 0)) || 0;
       var decisionsNeeded = Number(firstDefined(item && item.pending_request_count, 0)) || 0;
       var role = leadershipRoleLabel(item);
+      var executiveAttention = getExecutiveAttention();
+      var priorityKey = String(firstDefined(executiveAttention.primary && executiveAttention.primary.key, ""));
+      var itemRole = String(firstDefined(item && item.role, "")).toLowerCase();
+      var ownsExecutivePriority = executiveAttention.count > 0 && (
+        itemRole === "ceo"
+        || (itemRole === "cfo" && /cost|cash|margin|revenue|finance/.test(priorityKey))
+      );
+      if (ownsExecutivePriority) {
+        openPriorities = Math.max(openPriorities, executiveAttention.count);
+        if (itemRole === "cfo") status = "attention";
+      }
       return {
         assistantId: firstDefined(item && item.twin_id, item && item.role, "assistant-" + index),
         statusRank: assistantStatusRank(status),
@@ -1846,7 +1877,10 @@
   function renderLeadershipStatus(item) {
     var status = leadershipStatusLabel(firstDefined(item && item.status, "ready"));
     var currentActivity = leadershipActivityCopy(item);
-    var openPriorities = Number(firstDefined(item && item.active_investigation_count, 0)) || 0;
+    var openPriorities = Math.max(
+      Number(firstDefined(item && item.active_investigation_count, 0)) || 0,
+      getExecutiveAttention().count
+    );
     var decisionsNeeded = Number(firstDefined(item && item.pending_request_count, 0)) || 0;
     var outcome = leadershipPriorityCopy(openPriorities);
     var decision = leadershipDecisionCopy(decisionsNeeded);
@@ -2060,23 +2094,8 @@
     // of the circle, leaving visible headroom for over-plan performance.
     var frac = Math.max(0.02, Math.min(pct, ringMax) / ringMax);
     var dash = circumference * frac;
-    var tickAngle = (100 / ringMax) * 360 - 90;
-    var tickRad = tickAngle * Math.PI / 180;
-    var cos = Math.cos(tickRad);
-    var sin = Math.sin(tickRad);
-    var tangentCos = -sin;
-    var tangentSin = cos;
-    var apexRadius = radius + stroke / 2 + 1.5;
-    var baseRadius = radius + stroke / 2 + 7;
-    var halfWidth = 3.1;
-    var apexX = (52 + apexRadius * cos).toFixed(2);
-    var apexY = (52 + apexRadius * sin).toFixed(2);
-    var base1X = (52 + baseRadius * cos + halfWidth * tangentCos).toFixed(2);
-    var base1Y = (52 + baseRadius * sin + halfWidth * tangentSin).toFixed(2);
-    var base2X = (52 + baseRadius * cos - halfWidth * tangentCos).toFixed(2);
-    var base2Y = (52 + baseRadius * sin - halfWidth * tangentSin).toFixed(2);
     var tone = kpiSemanticTone(driver);
-    return '<svg class="driver-ring" viewBox="0 0 104 104" aria-hidden="true"><circle class="driver-ring__track" cx="52" cy="52" r="41.5"></circle><circle class="driver-ring__value driver-ring__value--' + tone + '" cx="52" cy="52" r="41.5" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 52 52)"></circle><polygon class="driver-ring__tick" points="' + apexX + ',' + apexY + ' ' + base1X + ',' + base1Y + ' ' + base2X + ',' + base2Y + '"></polygon></svg>';
+    return '<svg class="driver-ring" viewBox="0 0 104 104" aria-hidden="true"><circle class="driver-ring__track" cx="52" cy="52" r="41.5"></circle><circle class="driver-ring__value driver-ring__value--' + tone + '" cx="52" cy="52" r="41.5" stroke-dasharray="' + dash + ' ' + circumference + '" transform="rotate(-90 52 52)"></circle></svg>';
   }
 
   function driverHasPercent(driver) {
@@ -2110,7 +2129,7 @@
   function driverRingCaption(driver) {
     var key = String(firstDefined(driver && driver.driver_key, driver && driver.key, ""));
     if (key === "ebitda_margin") return "margin";
-    if (key === "operating_cost") return "of revenue";
+    if (key === "operating_cost") return "of plan";
     if (key === "cash_vs_floor") return "of floor";
     return "of plan";
   }
@@ -3381,7 +3400,7 @@
     var hasPercentDrivers = drivers.some(function (driver) { return driverHasPercent(driver); });
     if (state.activePersona === "ceo") {
       if (driverHeading) driverHeading.textContent = "The group index";
-      if (driverHint) driverHint.textContent = "Percent of plan is the headline — the small triangle marks 100% of plan. Tap a KPI for its trend and drivers.";
+      if (driverHint) driverHint.textContent = "Percent of plan is the headline. Tap a KPI for its trend and drivers.";
     } else {
       if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
       if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current measures";
@@ -3410,7 +3429,10 @@
     if (card) {
       var activeCount = network.filter(function (item) { return ["active", "monitoring"].indexOf(String(item.tone || "").toLowerCase()) >= 0; }).length;
       var readyCount = network.filter(function (item) { return String(item.tone || "").toLowerCase() === "ready"; }).length;
-      var attentionCount = network.filter(function (item) { return String(item.tone || "").toLowerCase() === "attention"; }).length;
+      var attentionCount = Math.max(
+        network.filter(function (item) { return String(item.tone || "").toLowerCase() === "attention"; }).length,
+        getExecutiveAttention().count
+      );
       var activeFilter = state.networkStatusFilter || "all";
       var filterLabels = { all: "All assistants", active: "Working", ready: "Ready", attention: "Needs your review" };
       function networkStatusKey(item) {
@@ -3989,6 +4011,26 @@
     var diagnostics = getExecutiveDiagnostics();
     var blueprint = getPersonaBlueprint(state.activePersona);
     var hero = diagnostics.hero || {};
+    var selectedDriver = getActiveDriver();
+    var selectedBrief = selectedDriver && selectedDriver.executive_brief && typeof selectedDriver.executive_brief === "object"
+      ? selectedDriver.executive_brief
+      : {};
+    var selectedSignal = selectedBrief.executive_signal && typeof selectedBrief.executive_signal === "object"
+      ? selectedBrief.executive_signal
+      : {};
+    var heroFocusKey = String(firstDefined(hero.focus_driver_key, ""));
+    var selectedKey = String(firstDefined(selectedDriver && selectedDriver.driver_key, selectedDriver && selectedDriver.key, ""));
+    if (selectedDriver && selectedKey && selectedKey !== heroFocusKey) {
+      var selectedShowsPlanHealth = selectedKey !== "ebitda_margin";
+      hero = Object.assign({}, hero, {
+        focus_driver_key: selectedKey,
+        headline: firstDefined(selectedSignal.headline, selectedSignal.posture, selectedDriver.label),
+        summary: firstDefined(selectedSignal.headline, selectedSignal.posture, selectedDriver.label),
+        body: firstDefined(selectedSignal.readout, selectedBrief.readout, selectedDriver.detail),
+        tone: firstDefined(selectedSignal.tone, selectedDriver.tone, "neutral"),
+        score: selectedShowsPlanHealth ? firstDefined(selectedDriver.pct, hero.score) : ""
+      });
+    }
     var boardPortal = getBoardPortal();
     var agents = (state.latestPacket && state.latestPacket.agents) || {};
     var fullName = sessionDisplayName();
@@ -4007,7 +4049,10 @@
     if (!Number.isFinite(upcomingCommitments) || upcomingCommitments < 0) {
       upcomingCommitments = safeArray(((diagnostics.sections || {}).week_ahead || {}).items).length;
     }
-    var attentionItems = safeArray((getDrilldown().owed_upward || {}).items).length;
+    var attentionItems = Math.max(
+      safeArray((getDrilldown().owed_upward || {}).items).length,
+      getExecutiveAttention().count
+    );
     var miniStats = [
       { label: "Board", value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
       { label: "Calendar", value: String(upcomingCommitments) + " upcoming" },
@@ -4102,7 +4147,9 @@
     var source = firstDefined(explicit.source, provenance && provenance.source, "");
     var explicitStatus = String(firstDefined(explicit.status, "")).toLowerCase();
     var grounded = explicitStatus === "grounded" || (!explicitStatus && provenance && provenance.complete === true && source);
+    var breakdownPartial = Boolean(explicit.breakdown_partial || (provenance && provenance.breakdown_partial));
     var label = grounded ? "Evidence verified" : "Evidence gap";
+    if (grounded && breakdownPartial) label = "Headline verified · breakdown partial";
     var title = grounded
       ? "Traced to " + String(source || "its source document")
       : "This figure cannot yet be traced back to a source document.";
@@ -4178,6 +4225,7 @@
         window.requestAnimationFrame(function () {
           renderDriverDrillFidelity();
           renderSummary();
+          renderHero();
           // KPI detail is deliberately inline below the strip. Selecting a
           // tile must never move the executive's reading position. Browsers
           // can apply scroll anchoring after the next frame when the selected
@@ -4379,10 +4427,11 @@
     var movers = (driver && driver.movers) || {};
     var higher = safeArray(movers.lifting).slice(0, 2);
     var lower = safeArray(movers.dragging).slice(0, 2);
+    var inverse = String(firstDefined(driver && driver.driver_key, driver && driver.key, "")) === "operating_cost";
     return higher.map(function (item, index) {
-      return { item: item, direction: 'up', glyph: '↗', key: 'lifting-' + index };
+      return { item: item, direction: 'up', glyph: inverse ? '↘' : '↗', key: 'lifting-' + index };
     }).concat(lower.map(function (item, index) {
-      return { item: item, direction: 'down', glyph: '↘', key: 'dragging-' + index };
+      return { item: item, direction: 'down', glyph: inverse ? '↗' : '↘', key: 'dragging-' + index };
     }));
   }
 
@@ -5386,11 +5435,14 @@
       var events = safeArray(collaboration.recent_events);
       var openHandoffs = Number(firstDefined(collaboration.open_handoff_count, collaboration.pending_request_count, 0)) || 0;
       var resolvedHandoffs = Number(firstDefined(collaboration.resolved_handoff_count, 0)) || 0;
-      var attentionHandoffs = Number(firstDefined(collaboration.executive_attention_count, 0)) || 0;
+      var attentionHandoffs = Math.max(
+        Number(firstDefined(collaboration.executive_attention_count, 0)) || 0,
+        getExecutiveAttention().count
+      );
       var completedCycles = Number(firstDefined(runtime.completed_cycle_count, runtime.cycle_count, 0)) || 0;
       var collaborationMeaning = attentionHandoffs
         ? attentionHandoffs + ' item' + (attentionHandoffs === 1 ? ' requires' : 's require') + ' your attention.'
-        : (openHandoffs ? openHandoffs + ' item' + (openHandoffs === 1 ? ' is' : 's are') + ' progressing with the leadership team.' : 'Nothing requires your attention.');
+        : (openHandoffs ? openHandoffs + ' item' + (openHandoffs === 1 ? ' is' : 's are') + ' progressing with the leadership team.' : 'No assistant handoff requires your attention.');
       var noEventCopy = openHandoffs
         ? 'Items are progressing; no decision is requested from you yet.'
         : 'No recent leadership-team activity needs review.';

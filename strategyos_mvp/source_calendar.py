@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 import re
 from typing import Any
@@ -146,29 +146,31 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
         })
     items.sort(key=lambda item: str(item.get("date") or ""))
     projection_day = date.today()
-    upcoming_items = [item for item in items if str(item.get("date") or "") >= projection_day.isoformat()]
-    if upcoming_items:
-        projected_items = upcoming_items[:12]
-        if len(projected_items) < 12:
-            recent_past = [item for item in items if str(item.get("date") or "") < projection_day.isoformat()]
-            projected_items.extend(reversed(recent_past[-(12 - len(projected_items)) :]))
-        projection_policy = "upcoming_first"
-    else:
-        projected_items = items[-12:]
-        projection_policy = "latest_available"
+    projection_end = projection_day + timedelta(days=7)
+    future_items = [item for item in items if str(item.get("date") or "") >= projection_day.isoformat()]
+    projected_items = [
+        item
+        for item in future_items
+        if str(item.get("date") or "") <= projection_end.isoformat()
+    ]
+    projection_policy = "next_7_days"
     return {
         "status": "ready" if items else "unavailable",
         "items": projected_items,
         "total_item_count": len(items),
         "excluded_non_business_count": excluded_count,
-        "upcoming_item_count": len(upcoming_items),
+        "upcoming_item_count": len(projected_items),
+        "future_item_count": len(future_items),
         "projection_as_of": projection_day.isoformat(),
+        "projection_through": projection_end.isoformat(),
         "projection_policy": projection_policy,
         "reason": (
             "No calendar item has been classified as business-relevant for the CEO projection."
             if not items and excluded_count
             else "Calendar workbook contains no complete Event_Date, Title and Type rows."
             if not items
+            else "No business-relevant commitment falls within the next seven days."
+            if not projected_items
             else None
         ),
         "source_file": relative_source,

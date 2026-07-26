@@ -51,10 +51,12 @@ def test_calendar_projection_processes_all_rows_and_prioritises_upcoming(tmp_pat
 
     assert agenda["status"] == "ready"
     assert agenda["total_item_count"] == 16
-    assert agenda["upcoming_item_count"] == 14
+    assert agenda["upcoming_item_count"] == 7
+    assert agenda["future_item_count"] == 14
     assert agenda["projection_as_of"] == current_day.isoformat()
-    assert agenda["projection_policy"] == "upcoming_first"
-    assert len(agenda["items"]) == 12
+    assert agenda["projection_through"] == (current_day + timedelta(days=7)).isoformat()
+    assert agenda["projection_policy"] == "next_7_days"
+    assert len(agenda["items"]) == 7
     first = agenda["items"][0]
     assert first["date"] == (current_day + timedelta(days=1)).isoformat()
     assert first["when"] == "09:00"

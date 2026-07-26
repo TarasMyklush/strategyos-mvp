@@ -828,7 +828,7 @@ def _ceo_kpi_knowledge_graph(
 
     def add_edge(source: str, target: str, label: str) -> None:
         key = (source, target, label)
-        if not source or not target or key in edge_ids:
+        if not source or not target or source == target or key in edge_ids:
             return
         edge_ids.add(key)
         edges.append({"source": source, "target": target, "label": label})
@@ -887,12 +887,21 @@ def _ceo_kpi_knowledge_graph(
 
         calculation = brief.get("calculation") if isinstance(brief.get("calculation"), dict) else {}
         component_labels: set[str] = set()
+        normalized_kpi_label = re.sub(r"[^a-z0-9]+", " ", label.casefold()).strip()
         for index, step in enumerate(list(calculation.get("steps") or [])[:8], start=1):
             if not isinstance(step, dict):
                 continue
             step_label = str(step.get("label") or f"Calculation component {index}")
+            normalized_step_label = re.sub(r"[^a-z0-9]+", " ", step_label.casefold()).strip()
+            # A calculation cannot be its own business driver. Some imported
+            # bridges repeat the KPI label as a presentation row; rendering it
+            # creates a circular, semantically empty graph node.
+            if normalized_step_label == normalized_kpi_label:
+                continue
             component_labels.add(step_label.strip().lower())
             step_value = str(step.get("value") or "Not supplied")
+            if step_value.strip().casefold() in {"not supplied", "not available", "n/a", "—", "-"}:
+                continue
             component_id = f"component:{key}:{index}"
             add_node(
                 {
@@ -913,9 +922,12 @@ def _ceo_kpi_knowledge_graph(
             if not isinstance(driver, dict):
                 continue
             driver_label = str(driver.get("label") or f"Business driver {index}")
-            if driver_label.strip().lower() in component_labels:
+            normalized_driver_label = re.sub(r"[^a-z0-9]+", " ", driver_label.casefold()).strip()
+            if normalized_driver_label == normalized_kpi_label or driver_label.strip().lower() in component_labels:
                 continue
             driver_value = str(driver.get("value") or "Not supplied")
+            if driver_value.strip().casefold() in {"not supplied", "not available", "n/a", "—", "-"}:
+                continue
             driver_id = f"driver:{key}:{index}"
             add_node(
                 {
@@ -4717,6 +4729,17 @@ def _executive_diagnostics_payload(
     driver_tiles = []
     persona_drivers = list(executive_presentation_payload.get("driver_grid") or persona_blueprint.get("drivers") or [])
     for item in persona_drivers[:4] or list(executive_modes.get("driver_focus") or [])[:4]:
+        executive_brief = item.get("executive_brief") if isinstance(item.get("executive_brief"), Mapping) else {}
+        decomposition_rows = list(executive_brief.get("drivers") or [])
+        breakdown_partial = any(
+            str((row or {}).get("value") or "").strip().casefold()
+            in {"not supplied", "not available", "n/a", "—", "-"}
+            for row in decomposition_rows
+            if isinstance(row, Mapping)
+        )
+        grounding = dict(item.get("grounding") or {})
+        if breakdown_partial:
+            grounding["breakdown_partial"] = True
         driver_tiles.append(
             {
                 "kpi_contract": bool(item.get("kpi_contract")),
@@ -4732,7 +4755,7 @@ def _executive_diagnostics_payload(
                 "ring_label": item.get("ring_label"),
                 "sub": item.get("sub"),
                 "provenance": item.get("provenance"),
-                "grounding": item.get("grounding"),
+                "grounding": grounding,
                 "availability": item.get("availability"),
                 "formula": item.get("formula"),
                 "inputs": item.get("inputs"),
@@ -4743,7 +4766,7 @@ def _executive_diagnostics_payload(
                 "trend": item.get("trend"),
                 "trend_status": item.get("trend_status"),
                 "movers": item.get("movers"),
-                "executive_brief": item.get("executive_brief"),
+                "executive_brief": executive_brief,
             }
         )
     presentation_hero = dict(executive_presentation_payload.get("hero") or {})
@@ -4810,6 +4833,7 @@ def _executive_diagnostics_payload(
             ),
         ],
         "sections": executive_presentation_payload.get("sections") or {},
+        "executive_attention": executive_presentation_payload.get("executive_attention") or {},
         "provenance_summary": executive_presentation_payload.get("provenance_summary") or {},
     }
 
@@ -11043,6 +11067,24 @@ def _governed_amount_facts(context: Mapping[str, Any]) -> list[dict[str, Any]]:
                     "kind": entity.get("kind"),
                 }
             )
+        card = entity.get("card") if isinstance(entity.get("card"), Mapping) else {}
+        if entity.get("kind") != "kpi" or not card:
+            continue
+        trend = card.get("trend") if isinstance(card.get("trend"), Mapping) else {}
+        labels = list(trend.get("labels") or [])
+        for series_name in ("actual", "plan"):
+            for index, raw_value in enumerate(list(trend.get(series_name) or [])):
+                value = _as_float_or_none(raw_value)
+                if value is None:
+                    continue
+                period = labels[index] if index < len(labels) else f"period {index + 1}"
+                facts.append(
+                    {
+                        "label": f"{card.get('label') or 'KPI'} {series_name} {period}",
+                        "value": value,
+                        "kind": "kpi_trend",
+                    }
+                )
     total = 0.0
     for entity in _governed_entity_index_safe(context):
         if entity.get("kind") == "finding" and entity.get("amount"):
@@ -12439,7 +12481,15 @@ def _ceo_kpi_inline_result(
             except (TypeError, ValueError):
                 return "No comparable multi-period trend is available for this figure."
         labels = [str(value) for value in list(trend.get("labels") or [])]
+        plan_values: list[float] = []
+        for value in list(trend.get("plan") or []):
+            try:
+                plan_values.append(float(value))
+            except (TypeError, ValueError):
+                plan_values = []
+                break
         unit = str(trend.get("unit") or "").lower()
+        scope_note = str(trend.get("scope_note") or "").strip()
 
         def display(value: float) -> str:
             if unit == "percent":
@@ -12467,7 +12517,19 @@ def _ceo_kpi_inline_result(
             direction = f"down {magnitude}"
         else:
             direction = "unchanged"
-        return f"Latest governed movement: {display(actual[-1])} in {latest_label}, {direction} from {previous_label}."
+        sentence = f"Latest governed movement: {display(actual[-1])} in {latest_label}, {direction} from {previous_label}."
+        if has_plan_series and len(plan_values) == len(actual):
+            variance = actual[-1] - plan_values[-1]
+            plan_position = "above" if variance > 0 else "below" if variance < 0 else "at"
+            sentence += f" The latest point is {plan_position} its aligned plan of {display(plan_values[-1])}."
+        if scope_note:
+            sentence += f" Scope: {scope_note}"
+        if kpi_key == "operating_cost" and scope_note:
+            sentence += (
+                f" This monthly operating series is contextual and is not the same measure as the headline {metric}, "
+                "which is the Group H1 total-cost-to-EBITDA comparison; the two must not be read as contradictory."
+            )
+        return sentence
 
     def _movement_sentence(*, decision_only: bool = False) -> str:
         if not (lifting or dragging):
@@ -13547,7 +13609,41 @@ def _governed_reference_result(
     if not matches:
         return None
 
-    mover_match = next((item for item in matches if item.get("kind") == "kpi_mover"), None)
+    normalized_question = " ".join(str(question or "").casefold().split())
+    requested_kpi = _free_text_ceo_kpi_key(question, context, public_safe=public_safe)
+    if requested_kpi is None and re.search(r"\b(cost|costs|expense|expenses|spend|overrun)\b", normalized_question):
+        requested_kpi = "operating_cost"
+    mover_matches = [item for item in matches if item.get("kind") == "kpi_mover"]
+    if requested_kpi:
+        scoped_matches = [
+            item
+            for item in mover_matches
+            if str(
+                ((item.get("card") or {}).get("key") if isinstance(item.get("card"), Mapping) else "")
+                or ((item.get("card") or {}).get("driver_key") if isinstance(item.get("card"), Mapping) else "")
+            )
+            == requested_kpi
+        ]
+        if scoped_matches:
+            mover_matches = scoped_matches
+    mover_kpis = {
+        str((item.get("card") or {}).get("key") or (item.get("card") or {}).get("driver_key") or "")
+        for item in mover_matches
+        if isinstance(item.get("card"), Mapping)
+    }
+    if len(mover_kpis) > 1 and not requested_kpi:
+        return {
+            "matched": True,
+            "answer": "I found this business unit under more than one governed KPI. Which measure do you mean—Revenue or Operating cost?",
+            "basis": "The entity is valid, but the requested KPI is ambiguous.",
+            "citations": [],
+            "suggestions": ["Show its Revenue movement", "Show its Operating cost movement"],
+            "answered_by": "governed_reference",
+            "assistant_mode": "clarification",
+            "grounding_status": "needs_input",
+            "_orchestrator_force_answer": True,
+        }
+    mover_match = mover_matches[0] if mover_matches else None
     if mover_match is not None:
         return _kpi_mover_reference_answer(mover_match)
 
