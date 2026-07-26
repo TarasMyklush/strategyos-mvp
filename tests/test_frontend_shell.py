@@ -1360,6 +1360,51 @@ def test_leaders_corner_player_is_responsive_and_thumbnail_library_is_compact():
     assert ".vlog-item.is-active {" in css
 
 
+def test_target_ceo_layout_keeps_ring_right_and_modelling_columns_content_sized():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    final_pass = css[css.index("/* Final target-composition pass"):]
+    hero_start = final_pass.index(".view-panel--home > .hero {")
+    hero_end = final_pass.index("}", hero_start)
+    hero = final_pass[hero_start:hero_end]
+    copy_start = final_pass.index(".view-panel--home > .hero .hero-copy {")
+    copy_end = final_pass.index("}", copy_start)
+    status_start = final_pass.index(".view-panel--home > .hero .hero-status {")
+    status_end = final_pass.index("}", status_start)
+
+    assert "grid-template-columns: minmax(0, 1fr) 150px" in hero
+    assert "grid-column: 1" in final_pass[copy_start:copy_end]
+    assert "grid-column: 2" in final_pass[status_start:status_end]
+    assert "align-items: start" in css[css.index(".fidelity-thinking-grid {", css.index("/* One shared gravity heading")):][:220]
+    assert "#gravity-panel {\n  display: flex;\n  min-height: 0;" in css
+    assert ".fidelity-thinking-starter {\n  margin-top: 16px;" in css
+    assert "min-height: 535px" not in css
+    assert "min-height: 460px" not in css
+
+
+def test_target_kpi_movers_are_framed_and_decision_presets_use_regular_weight():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert "#driver-drill .kpi-movement__rows {\n  gap: 8px;" in css
+    assert "#driver-drill .kpi-movement__item {\n  border: 1px solid var(--line);" in css
+    assert "border-radius: var(--r-sm)" in css
+    assert "#driver-drill .kpi-movement__row {\n  min-height: 54px;\n  padding: 12px 14px;" in css
+    assert "#driver-drill .kpi-question-actions button {\n  font-weight: 400;" in css
+
+
+def test_leaders_corner_selected_metadata_has_stable_line_budget():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    title_start = css.index(".vlog-meta > strong {")
+    title_end = css.index("}", title_start)
+    summary_start = css.index(".vlog-meta > p {")
+    summary_end = css.index("}", summary_start)
+    assert "min-height: 2.24em" in css[title_start:title_end]
+    assert "-webkit-line-clamp: 2" in css[title_start:title_end]
+    assert "min-height: 3em" in css[summary_start:summary_end]
+    assert "-webkit-line-clamp: 2" in css[summary_start:summary_end]
+
+
 def test_assistant_drawer_mobile_bottom_sheet():
     """Mobile (<760px) must use bottom-sheet drawer, not full-screen overlay."""
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
