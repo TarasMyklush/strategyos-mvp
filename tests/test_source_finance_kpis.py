@@ -92,7 +92,7 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
     assert [(card["ring_pct"], card["ring_label"]) for card in cards] == [
         (None, ""),
         (56.0, "current margin"),
-        (24.4, "of revenue"),
+        (None, ""),
         (None, ""),
     ]
     assert cards[1]["trend"]["unit"] == "percent"

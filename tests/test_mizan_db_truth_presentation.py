@@ -217,6 +217,8 @@ def test_ceo_kpi_contract_uses_only_authoritative_deterministic_finance_inputs()
     assert cards[1]["metric"] == "20.0%"
     assert cards[1]["comparison"] == "+200 bps vs plan"
     assert cards[2]["pct"] == 105.0
+    assert cards[2]["ring_pct"] == 105.0
+    assert cards[2]["ring_label"] == "of plan"
     assert cards[3]["comparison"] == "SAR 100K above floor"
     assert cards[0]["availability"] == "verified"
     assert cards[1]["availability"] == "partial"

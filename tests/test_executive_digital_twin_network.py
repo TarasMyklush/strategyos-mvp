@@ -205,7 +205,7 @@ def test_hermes_ai_team_answer_uses_same_persistent_runtime(tmp_path, monkeypatc
         "group_manager",
         "strategy",
     ]
-    assert "No AI assistant is currently flagged for executive attention" in result["answer"]
+    assert "No AI assistant investigation is currently flagged for executive review" in result["answer"]
     assert "unknown_node" not in result["answer"]
     assert result["digital_twin_network"]["contract_version"] == "digital_twin_network.v1"
 
@@ -232,4 +232,4 @@ def test_hermes_specific_twin_answer_is_role_specific(tmp_path, monkeypatch):
     assert result is not None
     assert "Atlas (CFO Assistant)" in result["answer"]
     assert "Reconcile H1 EBITDA bridge" in result["answer"]
-    assert "not currently flagged for executive intervention" in result["answer"]
+    assert "no investigation flagged for executive review" in result["answer"]

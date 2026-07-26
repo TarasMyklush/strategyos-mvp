@@ -44,6 +44,16 @@ def _safe_float(value: Any) -> float:
         return 0.0
 
 
+def _format_sar_scale(value: Any) -> str:
+    number = _safe_float(value)
+    absolute = abs(number)
+    if absolute >= 1_000_000:
+        return f"SAR {number / 1_000_000:.1f}M"
+    if absolute >= 1_000:
+        return f"SAR {number / 1_000:.1f}K"
+    return f"SAR {number:,.0f}"
+
+
 def _tokenize(text: str) -> set[str]:
     tokens = []
     current = []
@@ -426,7 +436,8 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
             "summary": (
                 f"Latest StrategyOS run {run_context.get('run_id') or 'latest'} is "
                 f"{str(run_context.get('approval_status') or 'pending').replace('_', ' ')}. "
-                f"It currently carries SAR {recoverable:,.0f} recoverable value across {finding_count} cases, "
+                f"It currently carries {_format_sar_scale(recoverable)} recoverable value "
+                f"(exact amount: SAR {recoverable:,.0f}) across {finding_count} cases, "
                 f"{resolved}/{citations} citation resolution, and {report_count} surfaced board/report artifacts."
                 f" Plan health: {plan_health.get('label') or plan_health.get('status') or 'bounded'}."
                 f"{lead_text}"

@@ -1109,6 +1109,24 @@
     };
   }
 
+  function executiveAttentionMarkup() {
+    var attention = getExecutiveAttention();
+    var primary = attention.primary || {};
+    if (!attention.count || !attention.primary) return "";
+    var issueList = safeArray(attention.items).map(function (item) {
+      return '<li><strong>' + escapeHtml(firstDefined(item.title, "Executive priority")) + '</strong><span>'
+        + escapeHtml(firstDefined(item.summary, "")) + '</span></li>';
+    }).join("");
+    return '<aside class="executive-attention-contract" role="status"><div><span class="eyebrow">CEO business attention · '
+      + escapeHtml(String(attention.count)) + '</span><strong>'
+      + escapeHtml(firstDefined(primary.title, "Executive priority requires attention")) + '</strong><p>'
+      + escapeHtml(firstDefined(primary.summary, attention.summary, "")) + '</p>'
+      + (issueList ? '<ul class="executive-attention-contract__items">' + issueList + '</ul>' : '')
+      + '</div><div><span>Primary decision</span><strong>'
+      + escapeHtml(firstDefined(primary.decision, "Review the governed executive priority.")) + '</strong><small>'
+      + escapeHtml(firstDefined(primary.owner, "Accountable executive owner")) + '</small></div><p class="executive-attention-contract__scope">Business attention is separate from assistant investigations and agent execution queues.</p></aside>';
+  }
+
   function getBoardPortal() {
     return (state.latestPacket && state.latestPacket.board_portal) || {};
   }
@@ -1181,17 +1199,17 @@
     }
     return activity
       .replace(/governed\s+KPIs?/gi, "key performance measures")
-      .replace(/no open investigation is recorded/gi, "no issue is currently escalated");
+      .replace(/no open investigation is recorded/gi, "no assistant investigation is currently escalated");
   }
 
   function leadershipPriorityCopy(count) {
-    if (!count) return "No open priorities";
+    if (!count) return "0 assistant investigations";
     if (count > 5) return "Portfolio under review";
     return count === 1 ? "1 priority in progress" : count + " priorities in progress";
   }
 
   function leadershipDecisionCopy(count) {
-    if (!count) return "No decision needed";
+    if (!count) return "No assistant decision needed";
     return count + " decision" + (count === 1 ? " needs" : "s need") + " your review";
   }
 
@@ -1204,11 +1222,14 @@
       return String(firstDefined(item.status, "ready")).toLowerCase() === "attention";
     }).length;
     var attentionCount = workflowAttentionCount;
+    var businessAttentionCount = getExecutiveAttention().count;
     var attentionHint = workflowAttentionCount + " assistant" + (workflowAttentionCount === 1 ? " needs" : "s need") + " your review";
     return {
       label: "Hermes' AI leadership team",
       hint: team.length
-        ? activeCount + " assistant" + (activeCount === 1 ? " is" : "s are") + " active" + (attentionCount ? " · " + attentionHint : " · no governed priority needs your decision")
+        ? activeCount + " assistant" + (activeCount === 1 ? " is" : "s are") + " active"
+          + (attentionCount ? " · " + attentionHint : " · 0 assistant investigations need review")
+          + (businessAttentionCount ? " · " + businessAttentionCount + " CEO business issue remains active" : "")
         : "No AI leadership team is configured for this workspace yet.",
       active_count: activeCount,
       attention_count: attentionCount,
@@ -1817,6 +1838,7 @@
 
     if (overview) {
       overview.innerHTML = '<div class="function-separation"><div class="function-separation__copy"><span class="eyebrow">Two different kinds of AI</span><h3>AI Assistants represent leaders. Agents complete specialist work.</h3><p><strong>AI Assistants</strong> are aligned to accountable executive roles such as the Group CFO. <strong>Agents</strong> analyse, audit or prepare defined work. Each agent exposes its own evidence-backed activity and review trail below.</p></div><div class="function-overview-actions"><button type="button" class="function-team-link" data-function-view-team>View AI Assistants</button><button type="button" class="function-brief-btn" data-function-ask>Ask Hermes for CEO brief</button></div></div><div class="function-review-summary"><div class="function-review-state tone-' + escapeHtml(statusTone) + '"><span>Current finance review</span><strong>' + escapeHtml(statusLabel) + '</strong><small>' + escapeHtml(review.status === "complete" ? "Every recorded finding is locked." : review.status === "stuck" ? review.stuck_count + " finding" + (review.stuck_count === 1 ? " is" : "s are") + " waiting for resolution." : review.status === "working" ? openCount + " finding" + (openCount === 1 ? " remains" : "s remain") + " open." : review.reason) + '</small></div><div><strong>' + escapeHtml(String(review.findings.length)) + '</strong><span>findings reviewed</span></div><div><strong>' + escapeHtml(String(review.locked_count)) + '</strong><span>locked</span></div><div class="' + (openCount ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(openCount)) + '</strong><span>open or stuck</span></div><div><strong>' + escapeHtml(String(review.round_count)) + '</strong><span>review rounds</span></div></div>';
+      overview.innerHTML = executiveAttentionMarkup() + overview.innerHTML;
       var teamLink = overview.querySelector('[data-function-view-team]');
       if (teamLink) teamLink.onclick = function () { switchView("agents"); };
       var askButton = overview.querySelector('[data-function-ask]');
@@ -2110,7 +2132,7 @@
     var supplied = String(firstDefined(driver && driver.ring_label, "")).trim();
     if (supplied) return supplied;
     if (key === "ebitda_margin") return "current margin";
-    if (key === "operating_cost") return "of revenue";
+    if (key === "operating_cost") return "of plan";
     if (key === "cash_vs_floor") return "of floor";
     return "of plan";
   }
@@ -3410,10 +3432,9 @@
     if (card) {
       var activeCount = network.filter(function (item) { return ["active", "monitoring"].indexOf(String(item.tone || "").toLowerCase()) >= 0; }).length;
       var readyCount = network.filter(function (item) { return String(item.tone || "").toLowerCase() === "ready"; }).length;
-      var attentionCount = Math.max(
-        network.filter(function (item) { return String(item.tone || "").toLowerCase() === "attention"; }).length,
-        getExecutiveAttention().count
-      );
+      var attentionCount = network.filter(function (item) {
+        return String(item.tone || "").toLowerCase() === "attention";
+      }).length;
       var activeFilter = state.networkStatusFilter || "all";
       var filterLabels = { all: "All assistants", active: "Working", ready: "Ready", attention: "Needs your review" };
       function networkStatusKey(item) {
@@ -3424,8 +3445,9 @@
         ? network
         : network.filter(function (item) { return networkStatusKey(item) === activeFilter; });
       card.innerHTML = [
+        executiveAttentionMarkup(),
         '<div class="detail-head"><div><p class="detail-eyebrow">Hermes’ team</p><h3 class="detail-title">' + escapeHtml(firstDefined(meta.label, 'AI leadership team')) + '</h3><p class="section-note">' + escapeHtml(firstDefined(meta.hint, 'AI assistants Hermes coordinates for your current review.')) + '</p></div><div class="network-filter-wrap"><button type="button" class="pill-inline ok network-module-toggle" id="network-module-toggle" aria-haspopup="menu" aria-expanded="' + (state.networkFilterMenuOpen ? 'true' : 'false') + '">' + escapeHtml(filterLabels[activeFilter] || 'All assistants') + ' · ' + escapeHtml(String(filteredNetwork.length)) + '</button>' + (state.networkFilterMenuOpen ? '<div class="network-filter-menu" role="menu" aria-label="Filter AI assistants"><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'all' ? 'true' : 'false') + '" data-network-menu-filter="all">All assistants</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'active' ? 'true' : 'false') + '" data-network-menu-filter="active">Working</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'ready' ? 'true' : 'false') + '" data-network-menu-filter="ready">Ready</button><button type="button" role="menuitemradio" aria-checked="' + (activeFilter === 'attention' ? 'true' : 'false') + '" data-network-menu-filter="attention">Needs your review</button></div>' : '') + '</div></div>',
-        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? activeCount : '—')) + '</strong><span>working now</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="active">' + escapeHtml(String(activeCount)) + ' working</span><span class="pill-inline" data-network-filter="ready">' + escapeHtml(String(readyCount)) + ' ready</span><span class="pill-inline ' + (attentionCount ? 'warn' : 'ok') + '" data-network-filter="attention">' + escapeHtml(String(attentionCount)) + ' need your review</span></div></div>',
+        '<div class="network-summary"><div class="network-score"><strong>' + escapeHtml(String(network.length ? activeCount : '—')) + '</strong><span>working now</span></div><div class="network-meta"><span class="pill-inline ok" data-network-filter="active">' + escapeHtml(String(activeCount)) + ' working</span><span class="pill-inline" data-network-filter="ready">' + escapeHtml(String(readyCount)) + ' ready</span><span class="pill-inline ' + (attentionCount ? 'warn' : 'ok') + '" data-network-filter="attention">' + escapeHtml(String(attentionCount)) + ' assistant investigation' + (attentionCount === 1 ? ' needs' : 's need') + ' review</span></div></div>',
         '<div class="network-list" id="network-module-list" data-active-filter="' + escapeHtml(activeFilter) + '"><div class="network-list-head"><span class="sr-only">Status</span><span class="sr-only">Assistant</span><div class="network-list-head__stats"><span class="network-list-head__stat">State</span><span class="network-list-head__stat">Business output</span><span class="network-list-head__stat">Decision / scope</span></div></div>' + filteredNetwork.map(function (item, index) {
           var isOpen = state.openNetworkAssistantId === item.assistantId;
           return '<article class="network-row network-row--assistant" data-network-status="' + escapeHtml(networkStatusKey(item)) + '"><button type="button" class="network-row__toggle" data-network-status-toggle="' + escapeHtml(item.assistantId) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '" title="Show ' + escapeHtml(firstDefined(item.assistant, 'this assistant')) + ' status"><span class="network-score-badge tone-' + toneClass(item.tone) + '" role="img" aria-label="' + escapeHtml(firstDefined(item.stateLabel, 'Current')) + '"><strong>●</strong></span><span class="network-row__main"><span class="network-row__head"><strong>' + escapeHtml(firstDefined(item.assistant, 'Assistant')) + '</strong><span>· ' + escapeHtml(firstDefined(item.who, 'AI leader')) + '</span></span><span class="list-copy">' + escapeHtml(firstDefined(item.unit, 'Ready for the next leadership review.')) + '</span></span><span class="network-stats"><span aria-label="State"><span class="network-stat-value">' + escapeHtml(firstDefined(item.stateLabel, 'Current')) + '</span></span><span aria-label="Business output"><span class="network-stat-value">' + escapeHtml(firstDefined(item.businessOutput, 'No output reported')) + '</span></span><span aria-label="Decision or scope"><span class="network-stat-value">' + escapeHtml(firstDefined(item.decisionScope, 'No decision requested')) + '</span></span></span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="network-assistant-detail"><div><span>Responsibility</span><strong>' + escapeHtml(item.authority) + '</strong></div><div><span>Escalation</span><strong>' + escapeHtml(item.escalationPath || 'No escalation is currently required') + '</strong></div><button type="button" class="timeline-chip" data-network-ask="' + escapeHtml(item.assistantId) + '"><strong>Ask Hermes for a brief</strong></button></div>' : '') + '</article>';
@@ -5398,6 +5420,7 @@
       var activeLeadershipCount = leadershipTwins.filter(function (item) { return /^(active|monitoring)$/i.test(String(item && item.status || "")); }).length;
       var attentionLeadershipCount = leadershipTwins.filter(function (item) { return /^attention$/i.test(String(item && item.status || "")); }).length;
       activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Executive assistants</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist analysis and audit work is tracked under Agents.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
+      activityCard.innerHTML = executiveAttentionMarkup() + activityCard.innerHTML;
     }
 
     if (networkCard) {

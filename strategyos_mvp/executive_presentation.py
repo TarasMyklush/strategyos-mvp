@@ -625,11 +625,11 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 missing_inputs = []
             comparison_available = comparator is not None
 
-            if spec["key"] == "operating_cost":
-                revenue_actual = _number_or_none(components.get("revenue_actual"))
-                if revenue_actual:
-                    ring_pct = actual / revenue_actual * 100
-                    ring_label = "of revenue"
+            if spec["key"] == "operating_cost" and pct is not None:
+                # The primary gauge is plan attainment. Cost as a share of
+                # revenue belongs in decomposition, not in the plan gauge.
+                ring_pct = pct
+                ring_label = "of plan"
 
         kpi_evidence = evidence.get(spec["key"]) if isinstance(evidence.get(spec["key"]), Mapping) else {}
         actual_is_complete = bool(actual_complete.get(spec["key"], True))

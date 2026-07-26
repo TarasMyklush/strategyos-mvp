@@ -3157,7 +3157,7 @@ console.log(JSON.stringify({{
     assert "working now" in result["html"]
     assert "2 working" in result["html"]
     assert "1 ready" in result["html"]
-    assert "1 need your review" in result["html"]
+    assert "1 assistant investigation needs review" in result["html"]
     assert "data-network-status-toggle" in result["html"]
     assert "Runtime Governance" not in result["html"]
     assert "Analyst Assistant" not in result["html"]

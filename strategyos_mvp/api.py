@@ -5428,6 +5428,23 @@ def _resolve_digital_twin_status(
         ),
         "pending_request_count": sum(int(item.get("pending_request_count") or 0) for item in twins),
     }
+    business_attention = _executive_attention_contract(summary, public_safe=False)
+    business_attention_count = int(
+        business_attention.get("count") or len(list(business_attention.get("items") or []))
+    )
+    business_primary = dict(business_attention.get("primary") or {})
+    business_titles = "; ".join(
+        str(item.get("title") or "Executive priority")
+        for item in list(business_attention.get("items") or [])
+        if isinstance(item, Mapping)
+    )
+    business_sentence = (
+        f"Separately, {business_attention_count} CEO business "
+        f"{'issue remains' if business_attention_count == 1 else 'issues remain'} active: "
+        f"{business_titles or business_primary.get('title') or 'Executive priority requires attention'}."
+        if business_attention_count
+        else "Separately, no CEO business issue currently requires attention."
+    )
     network = {
         **network,
         "digital_twins": twins,
@@ -5468,14 +5485,15 @@ def _resolve_digital_twin_status(
         executive_action = (
             "It is flagged for executive attention; open its governed workspace and review the recorded escalation."
             if attention
-            else "It is not currently flagged for executive intervention. Pending handoffs remain governed assistant-to-assistant dependencies unless an escalation changes the status to Attention."
+            else "This assistant has no investigation flagged for executive review. Pending handoffs remain governed assistant-to-assistant dependencies unless its status changes to Attention."
         )
         answer = (
             f"{name} ({role_label}) is {status_label.lower()}. "
             f"Current activity: {item.get('current_activity') or 'No current governed activity is recorded.'} "
             f"It owns {', '.join(_module_status_label(value) for value in list(item.get('kpis_owned') or [])) or 'no configured KPI domains'}, "
             f"with {int(item.get('active_investigation_count') or 0)} open investigation(s) and "
-            f"{int(item.get('pending_request_count') or 0)} pending handoff(s). {executive_action}"
+            f"{int(item.get('pending_request_count') or 0)} pending handoff(s). {executive_action} "
+            f"{business_sentence}"
         )
         citations.append(
             {
@@ -5499,13 +5517,14 @@ def _resolve_digital_twin_status(
                 f"{name}: {_module_status_label(item.get('status') or 'ready')} — {item.get('current_activity') or 'No current governed activity is recorded.'}"
             )
         attention_sentence = (
-            f"{attention} AI assistant(s) are explicitly flagged for executive attention."
+            f"{attention} AI assistant investigation(s) are explicitly flagged for executive review."
             if attention
-            else "No AI assistant is currently flagged for executive attention."
+            else "No AI assistant investigation is currently flagged for executive review."
         )
         answer = (
             f"Your AI team has {len(twins)} configured AI assistants; {active} are active or monitoring. "
             f"{attention_sentence} The network has {pending} pending governed handoff(s); these are not executive approvals unless an assistant is marked Attention. "
+            f"{business_sentence} "
             "Current activity — " + " ".join(activity_lines)
         )
         suggestions = [
@@ -6030,40 +6049,58 @@ def _resolve_finance_function_review(
     if not finance_entries:
         overall_state = "Not started"
         completion_sentence = "No Finance Analyst or Finance Auditor work is recorded for this run."
-        intervention = "CEO intervention: none can be determined until specialist work is recorded."
+        intervention = "Agent-review intervention: none can be determined until specialist work is recorded."
     elif stuck_ids:
         overall_state = "Stuck"
         completion_sentence = (
             f"{len(complete_ids)} of {len(finding_states)} findings are complete; "
             f"{len(stuck_ids)} are stuck ({', '.join(stuck_ids[:5])}{'…' if len(stuck_ids) > 5 else ''})."
         )
-        intervention = "CEO intervention: review the stuck findings and assign ownership for the unresolved evidence or decision."
+        intervention = "Agent-review intervention: review the stuck findings and assign ownership for the unresolved evidence or decision."
     elif working_ids:
         overall_state = "In progress"
         completion_sentence = (
             f"{len(complete_ids)} of {len(finding_states)} findings are complete; "
             f"{len(working_ids)} remain in progress ({', '.join(working_ids[:5])}{'…' if len(working_ids) > 5 else ''})."
         )
-        intervention = "CEO intervention: none is currently flagged; monitor the open review until it reaches a recorded lock or exception."
+        intervention = "Agent-review intervention: none is currently flagged; monitor the open review until it reaches a recorded lock or exception."
     else:
         overall_state = "Complete"
         completion_sentence = f"All {len(finding_states)} reviewed findings are complete and locked; 0 are open or stuck."
-        intervention = "CEO intervention: none is currently required by the recorded review state."
+        intervention = "Agent-review intervention: none is currently required by the recorded review state."
 
     try:
         recoverable = float(summary.get("total_recoverable_sar") or 0)
     except (TypeError, ValueError):
         recoverable = 0.0
     material_sentence = (
-        f"The governed findings identify SAR {recoverable:,.0f} of recoverable value."
+        f"The governed findings identify {_format_sar_brief(recoverable)} of recoverable value "
+        f"(exact amount: SAR {recoverable:,.0f})."
         if recoverable
         else "No recoverable-value total is recorded for this run."
+    )
+    business_attention = _executive_attention_contract(summary, public_safe=False)
+    business_primary = dict(business_attention.get("primary") or {})
+    business_attention_count = int(
+        business_attention.get("count") or len(list(business_attention.get("items") or []))
+    )
+    business_titles = "; ".join(
+        str(item.get("title") or "Executive priority")
+        for item in list(business_attention.get("items") or [])
+        if isinstance(item, Mapping)
+    )
+    business_sentence = (
+        f"Separately, the CEO business-attention contract has {business_attention_count} active "
+        f"{'issue' if business_attention_count == 1 else 'issues'}: "
+        f"{business_titles or business_primary.get('title') or 'Executive priority requires attention'}."
+        if business_attention_count
+        else "Separately, no CEO business issue currently requires attention."
     )
     answer = (
         f"Finance review status: {overall_state}. {completion_sentence} "
         f"The Finance Analyst recorded {analyst_responses} audit response(s); the Finance Auditor recorded "
         f"{auditor_challenges} challenge(s) and {len(complete_ids)} final lock(s) across {len(rounds)} review round(s). "
-        f"{material_sentence} {intervention}"
+        f"{material_sentence} {intervention} {business_sentence}"
     )
     return {
         "matched": True,
@@ -13924,6 +13961,22 @@ def _question_has_semantic_kpi_mismatch(question: str) -> bool:
     )
 
 
+def _question_has_semantic_self_reference(question: str) -> bool:
+    """Reject self-referential word games before retrieval can mimic an answer."""
+    norm = " ".join(str(question or "").casefold().split())
+    hermes_mentions = len(re.findall(r"\bhermes\b", norm))
+    if hermes_mentions < 2:
+        return False
+    return bool(
+        re.search(r"\b(?:ask(?:ed|s|ing)?|answer(?:ed|s|ing)?|about|itself|himself)\b", norm)
+        and not re.search(
+            r"\b(?:kpi|revenue|cost|cash|margin|plan|budget|forecast|business|decision|"
+            r"priority|intervention|driver|owner|deadline|risk|evidence)\b",
+            norm,
+        )
+    )
+
+
 def _semantic_kpi_mismatch_result() -> dict[str, Any]:
     return {
         "matched": True,
@@ -13943,6 +13996,113 @@ def _semantic_kpi_mismatch_result() -> dict[str, Any]:
         "assistant_mode": "clarification",
         "grounding_status": "not_applicable",
         "claim_class": "semantic_scope_refusal",
+        "_orchestrator_force_answer": True,
+    }
+
+
+def _semantic_self_reference_result() -> dict[str, Any]:
+    return {
+        "matched": True,
+        "answer": (
+            "That is a self-referential word game rather than a business question, "
+            "so there is no governed evidence to answer it. Ask about a KPI, business "
+            "priority, decision, owner, deadline, risk or source instead."
+        ),
+        "basis": "The request has no business proposition that can be checked against governed evidence.",
+        "citations": [],
+        "suggestions": [
+            "Which CEO business issue requires attention?",
+            "What moved Operating cost?",
+            "What decision is required now?",
+        ],
+        "answered_by": "semantic_relevance_guard",
+        "assistant_mode": "clarification",
+        "grounding_status": "not_applicable",
+        "claim_class": "semantic_scope_refusal",
+        "_orchestrator_force_answer": True,
+    }
+
+
+def _executive_attention_contract(
+    summary: Mapping[str, Any] | None,
+    *,
+    public_safe: bool,
+) -> dict[str, Any]:
+    read_model = _executive_read_model_from_available_truth(
+        dict(summary or {}),
+        [],
+        {},
+        {"report_count": 0},
+        {},
+        public_safe=public_safe,
+    )
+    return dict(build_executive_presentation(read_model).get("executive_attention") or {})
+
+
+def _question_requests_executive_attention_reconciliation(question: str) -> bool:
+    norm = " ".join(str(question or "").casefold().split())
+    if re.search(r"\b(?:finance analyst|finance auditor|review trail)\b", norm):
+        return False
+    if "ceo brief" in norm or "executive brief" in norm:
+        return True
+    contradiction = bool(
+        re.search(r"\b(?:banner|diagnostics?|you said|which is correct|contradict|reconcile)\b", norm)
+        and re.search(r"\b(?:attention|priority|intervention|nothing|none|operating cost)\b", norm)
+    )
+    return contradiction
+
+
+def _governed_executive_attention_result(
+    summary: Mapping[str, Any] | None,
+    *,
+    public_safe: bool,
+) -> dict[str, Any]:
+    attention = _executive_attention_contract(summary, public_safe=public_safe)
+    items = [dict(item) for item in list(attention.get("items") or []) if isinstance(item, Mapping)]
+    primary = dict(attention.get("primary") or (items[0] if items else {}))
+    count = int(attention.get("count") or len(items))
+    if count and primary:
+        title = str(primary.get("title") or "Executive priority requires attention")
+        summary_text = str(primary.get("summary") or "")
+        decision = str(primary.get("decision") or "Review the governed executive priority.")
+        owner = str(primary.get("owner") or "Accountable executive owner")
+        active_titles = "; ".join(
+            str(item.get("title") or "Executive priority")
+            for item in items
+        )
+        answer = (
+            f"The Diagnostics banner is correct. There are {count} active CEO business "
+            f"{'priority' if count == 1 else 'priorities'}: {active_titles}. "
+            f"The primary governed priority is {title}. {summary_text} "
+            f"Decision required: {decision} Owner: {owner} "
+            "A zero on AI Assistants or Agents means zero assistant investigations or "
+            "specialist-agent queue items; it does not clear this CEO business priority."
+        )
+    else:
+        answer = (
+            "No governed CEO business priority currently requires attention. "
+            "Assistant investigations and specialist-agent queues are separate workflow states."
+        )
+    return {
+        "matched": True,
+        "answer": answer,
+        "basis": "The same governed executive-attention contract used by the Diagnostics banner.",
+        "citations": [
+            {
+                "source_path": "runtime://executive-presentation",
+                "locator": "executive_attention",
+                "excerpt": str(attention.get("summary") or answer),
+            }
+        ],
+        "suggestions": [
+            "What moved the active KPI?",
+            "Who owns the recovery and by when?",
+            "What evidence supports this priority?",
+        ],
+        "answered_by": "governed_executive_attention",
+        "assistant_mode": "executive_brief",
+        "grounding_status": "grounded",
+        "executive_attention": attention,
         "_orchestrator_force_answer": True,
     }
 
@@ -14137,8 +14297,12 @@ async def _assistant_chat_response(
         context["assistant_history"] = conversation_history
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
-    if _question_has_semantic_kpi_mismatch(question):
-        relevance_result = _semantic_kpi_mismatch_result()
+    if _question_has_semantic_kpi_mismatch(question) or _question_has_semantic_self_reference(question):
+        relevance_result = (
+            _semantic_self_reference_result()
+            if _question_has_semantic_self_reference(question)
+            else _semantic_kpi_mismatch_result()
+        )
         orchestrated = get_orchestrator().process(
             question,
             persona=persona,
@@ -14153,6 +14317,31 @@ async def _assistant_chat_response(
             persona=persona,
             orchestrated=orchestrated,
             base_result=relevance_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
+
+    if _question_requests_executive_attention_reconciliation(question):
+        attention_result = _governed_executive_attention_result(
+            context.get("summary"),
+            public_safe=public_safe,
+        )
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=attention_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=attention_result,
             llm_status=llm_status,
             assistant_context=assistant_context,
         )
@@ -15156,8 +15345,12 @@ def data_qa(
         for finding in context["findings"]
     ]
 
-    if _question_has_semantic_kpi_mismatch(question):
-        relevance_result = _semantic_kpi_mismatch_result()
+    if _question_has_semantic_kpi_mismatch(question) or _question_has_semantic_self_reference(question):
+        relevance_result = (
+            _semantic_self_reference_result()
+            if _question_has_semantic_self_reference(question)
+            else _semantic_kpi_mismatch_result()
+        )
         orchestrated = orchestrator.process(
             question,
             persona=persona,
@@ -15170,6 +15363,28 @@ def data_qa(
             orchestrated_payload=orchestrated,
             extra_trace={
                 "route": "semantic_relevance_guard",
+                "knowledge_id": request.knowledge_id,
+            },
+            extra_payload={"llm_fallback_attempted": False},
+        )
+
+    if _question_requests_executive_attention_reconciliation(question):
+        attention_result = _governed_executive_attention_result(
+            context.get("summary"),
+            public_safe=False,
+        )
+        orchestrated = orchestrator.process(
+            question,
+            persona=persona,
+            qa_result=attention_result,
+            driver_context=driver_context,
+        )
+        return _compose_response(
+            response_mode="deterministic",
+            base_payload=attention_result,
+            orchestrated_payload=orchestrated,
+            extra_trace={
+                "route": "governed_executive_attention",
                 "knowledge_id": request.knowledge_id,
             },
             extra_payload={"llm_fallback_attempted": False},

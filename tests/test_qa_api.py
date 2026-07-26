@@ -1029,7 +1029,7 @@ def test_finance_function_review_reports_latest_block_as_stuck():
     assert result is not None
     assert result["function_review"]["status"] == "stuck"
     assert result["function_review"]["stuck_count"] == 1
-    assert "CEO intervention: review the stuck findings" in result["answer"]
+    assert "Agent-review intervention: review the stuck findings" in result["answer"]
 
 
 def test_finance_function_review_loads_run_log_when_chat_summary_is_undecorated(monkeypatch):
@@ -5079,6 +5079,37 @@ def test_semantically_invalid_kpi_questions_never_inherit_governed_figures(monke
             assert payload.get("llm_fallback_attempted") is False
     finally:
         _restore_env(original)
+
+
+def test_self_referential_hermes_word_game_is_refused_without_evidence():
+    question = "If Hermes asked Hermes about Hermes, what would Hermes tell Hermes?"
+    assert api_module._question_has_semantic_self_reference(question) is True
+    result = api_module._semantic_self_reference_result()
+    assert result["answered_by"] == "semantic_relevance_guard"
+    assert result["citations"] == []
+    assert "self-referential" in result["answer"]
+
+
+def test_ceo_brief_reconciles_business_attention_with_empty_assistant_queues(monkeypatch):
+    monkeypatch.setattr(
+        api_module,
+        "_executive_attention_contract",
+        lambda *_args, **_kwargs: {
+            "count": 1,
+            "summary": "1 executive priority requires attention.",
+            "primary": {
+                "title": "Operating cost needs executive intervention",
+                "summary": "Operating cost is 2.7% above plan.",
+                "decision": "Confirm the recovery owner and date.",
+                "owner": "Group CFO",
+            },
+        },
+    )
+    result = api_module._governed_executive_attention_result({}, public_safe=False)
+    assert "Diagnostics banner is correct" in result["answer"]
+    assert "Operating cost needs executive intervention" in result["answer"]
+    assert "zero assistant investigations" in result["answer"]
+    assert result["answered_by"] == "governed_executive_attention"
 
 
 def test_kpi_card_buttons_still_route_when_the_card_supplies_the_key():

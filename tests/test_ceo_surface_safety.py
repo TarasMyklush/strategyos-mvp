@@ -2258,8 +2258,19 @@ def test_assistant_counts_do_not_inherit_unrelated_ceo_priority_counts():
         "if (automationCard)", 1
     )[0]
 
-    for block in (activity_block, meta_block, network_block, status_block, collaboration_block):
-        assert "getExecutiveAttention()" not in block
+    discovery_block = js.split("function renderAgentsDiscovery()")[1].split(
+        "function renderHomeTargetExtensions", 1
+    )[0]
+    assistant_panel_block = js.split("function renderAssistantNetwork()")[1].split(
+        "function renderLeadershipAvatar", 1
+    )[0]
+    functions_block = js.split("function renderFunctionsWorkspace()")[1].split(
+        "function renderLeadershipStatus", 1
+    )[0]
+    assert "executiveAttentionMarkup()" in discovery_block
+    assert "getExecutiveAttention().count" in meta_block
+    assert "executiveAttentionMarkup()" in assistant_panel_block
+    assert "executiveAttentionMarkup()" in functions_block
     assert "active_investigation_count" in network_block
     assert "active_investigation_count" in status_block
 
@@ -2277,7 +2288,7 @@ def test_ring_caption_and_calendar_use_the_governed_display_contract():
     )[0]
 
     assert "driver.ring_label" in caption_block
-    assert 'if (key === "operating_cost") return "of revenue"' in caption_block
+    assert 'if (key === "operating_cost") return "of revenue"' not in caption_block
     assert "projection_as_of" in week_block
     assert "projection_through" in week_block
     assert "upcoming_item_count" in week_block
