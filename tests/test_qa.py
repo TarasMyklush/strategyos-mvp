@@ -97,6 +97,25 @@ def test_partial_run_missing_role_returns_clear_message(qa_context):
     assert "needs the AP and AR ledgers" in result["answer"]
 
 
+def test_liquidity_commitment_question_returns_decision_contract_not_signal_dump(qa_context):
+    bundle, findings = qa_context
+
+    result = qa.answer_question(
+        "Is liquidity headroom sufficient for the next commitments, and what needs protecting?",
+        bundle=bundle,
+        findings=findings,
+    )
+
+    assert result["matched"] is True
+    assert result["available"] is True
+    assert result["citations"]
+    assert result["answer"].startswith("**Decision**")
+    assert "**Protect**" in result["answer"]
+    assert "**Owner**" in result["answer"]
+    assert "not proven by working-capital drift alone" in result["answer"]
+    assert not result["answer"].startswith("Top working-capital drift signals:")
+
+
 def test_colloquial_phrasing_routes_to_the_right_intent(qa_context):
     bundle, findings = qa_context
 

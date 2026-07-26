@@ -12514,17 +12514,49 @@ def _ceo_kpi_inline_result(
         elif resolved_intent == "decision":
             decision_context = str(brief.get("decision_context") or "").strip()
             readout = str(brief.get("readout") or card.get("detail") or "").strip()
-            answer = (
-                f"Current position: {readout or f'{label} is {metric} for the selected period.'} "
-                f"Accountable owner: {_accountable_owner()}. "
-                f"Next decision: {decision_context or 'Keep the position delegated unless a governed exception crosses the CEO threshold.'} "
-            )
-            if dragging:
-                answer += _movement_sentence(decision_only=True) + " "
-            if missing:
-                answer += f"The immediate governance gap is {'; '.join(missing)}. Supply or approve that comparator before treating the figure as a plan variance."
-            elif not dragging:
-                answer += "No KPI-specific exception requiring executive intervention is recorded in the current governed data."
+            if kpi_key == "cash_vs_floor":
+                executive_signal = brief.get("executive_signal") if isinstance(brief.get("executive_signal"), Mapping) else {}
+                action_required = bool(executive_signal.get("action_required"))
+                if comparison.get("available") is True:
+                    relative_answer = (
+                        "No—the current governed cash position is below the approved floor."
+                        if action_required
+                        else "Relative to the approved board floor, yes—the current governed cash position is above it."
+                    )
+                else:
+                    relative_answer = "Not yet—the current cash position cannot be tested against an approved board floor."
+                answer = (
+                    f"**Decision** — {relative_answer} "
+                    "Sufficiency for the next commitments is not yet proven because this KPI does not net the dated committed outflows.\n\n"
+                    f"**Why** — {readout or f'{label} is {metric} for the selected period.'}"
+                )
+                if comparison.get("available") is True and comparison.get("value"):
+                    answer += f" {comparison.get('value')}."
+                answer += (
+                    "\n\n**Protect** — Protect the liquidity buffer above the approved floor from unapproved uses"
+                    if not action_required
+                    else "\n\n**Protect** — Protect essential operating liquidity and pause discretionary cash commitments"
+                )
+                if drivers:
+                    answer += f"; {_largest_exposures_sentence().lower()}"
+                answer += (
+                    f"\n\n**Owner** — {_accountable_owner()}. "
+                    "Before the next cash commitment, reconcile the governed cash balance, board floor and dated committed outflows."
+                )
+                if missing:
+                    answer += f" Evidence still needed: {'; '.join(missing)}."
+            else:
+                answer = (
+                    f"Current position: {readout or f'{label} is {metric} for the selected period.'} "
+                    f"Accountable owner: {_accountable_owner()}. "
+                    f"Next decision: {decision_context or 'Keep the position delegated unless a governed exception crosses the CEO threshold.'} "
+                )
+                if dragging:
+                    answer += _movement_sentence(decision_only=True) + " "
+                if missing:
+                    answer += f"The immediate governance gap is {'; '.join(missing)}. Supply or approve that comparator before treating the figure as a plan variance."
+                elif not dragging:
+                    answer += "No KPI-specific exception requiring executive intervention is recorded in the current governed data."
         elif resolved_intent == "drivers":
             decision_context = str(brief.get("decision_context") or "").strip()
             answer = f"Accountable owner: {_accountable_owner()}. {label} is {metric}. {brief.get('readout') or card.get('detail') or ''} "

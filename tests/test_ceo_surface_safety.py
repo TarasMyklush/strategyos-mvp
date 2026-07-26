@@ -318,7 +318,10 @@ def test_ceo_agenda_has_no_raw_status_tokens():
 
     assert "fidelity-thinking-prompts" in js
     gravity_idx = js.index("fidelity-thinking-prompts")
-    gravity_context = js[gravity_idx:gravity_idx + 800]
+    # Include the prompt handlers and composer bindings. The governed KPI
+    # context carried by each prompt makes this block intentionally longer
+    # than the old context-free implementation.
+    gravity_context = js[gravity_idx:gravity_idx + 1600]
 
     # ---------------------------------------------------------------
     # PART B: The pill-row was intentionally removed — verify absence

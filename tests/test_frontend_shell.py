@@ -1376,6 +1376,7 @@ def test_target_ceo_layout_keeps_ring_right_and_modelling_columns_content_sized(
     assert "grid-column: 1" in final_pass[copy_start:copy_end]
     assert "grid-column: 2" in final_pass[status_start:status_end]
     assert "align-self: center" in final_pass[status_start:status_end]
+    assert ".view-panel--home > .section,\n.view-panel--home > .hero," not in final_pass
     assert "align-items: start" in css[css.index(".fidelity-thinking-grid {", css.index("/* One shared gravity heading")):][:220]
     assert "#gravity-panel {\n  display: flex;\n  min-height: 0;" in css
     assert ".fidelity-thinking-starter {\n  margin-top: 16px;" in css
@@ -1391,6 +1392,18 @@ def test_target_kpi_movers_are_framed_and_decision_presets_use_regular_weight():
     assert "border-radius: var(--r-sm)" in css
     assert "#driver-drill .kpi-movement__row {\n  min-height: 54px;\n  padding: 12px 14px;" in css
     assert "#driver-drill .kpi-question-actions button {\n  font-weight: 400;" in css
+
+
+def test_thinking_kpi_prompt_carries_explicit_ceo_decision_context():
+    js = (Path(api_module.STATIC_DIR) / "executive.js").read_text(encoding="utf-8")
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert 'entrypoint: "ceo_kpi_inline"' in js
+    assert 'kpi_key: kpiKey' in js
+    assert 'kpi_question_intent: "decision"' in js
+    assert 'entrypoint: "thinking_mode"' in js
+    assert 'class="assistant-message__evidence"' in js
+    assert ".assistant-message__evidence summary {" in css
 
 
 def test_leaders_corner_selected_metadata_has_stable_line_budget():

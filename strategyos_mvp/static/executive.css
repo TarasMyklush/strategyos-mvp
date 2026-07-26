@@ -4521,8 +4521,34 @@ html[data-theme="dark"] .pill-inline.danger { color: #efaaaa; }
 }
 
 .assistant-message__meta {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
   font-size: 12px;
+  line-height: 1.45;
   color: var(--muted);
+}
+
+.assistant-message__evidence {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.assistant-message__evidence summary {
+  width: max-content;
+  max-width: 100%;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 500;
+  list-style-position: inside;
+}
+
+.assistant-message__evidence > div {
+  margin-top: 6px;
 }
 
 .assistant-message__actions {
@@ -8120,7 +8146,6 @@ body {
 }
 
 .view-panel--home > .section,
-.view-panel--home > .hero,
 .fidelity-operating-grid,
 .target-gravity-section {
   margin: 0;

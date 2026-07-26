@@ -2171,6 +2171,16 @@
     return parts.join(" · ");
   }
 
+  function assistantEvidenceSummary(meta) {
+    var text = String(meta || "");
+    var sourceMatch = text.match(/(?:^|·)\s*Evidence:\s*([^·]+)/i);
+    var confidenceMatch = text.match(/Evidence confidence:\s*([^·]+)/i);
+    var parts = ["Evidence"];
+    if (sourceMatch && sourceMatch[1]) parts.push(sourceMatch[1].trim());
+    if (confidenceMatch && confidenceMatch[1]) parts.push(confidenceMatch[1].trim());
+    return parts.join(" · ");
+  }
+
   function cleanMetaText(value) {
     var text = String(value || "").trim();
     if (!text) return "";
@@ -4619,7 +4629,22 @@
         }).join('') + '</div>'
       ].join('');
       safeArray(gravityPanel.querySelectorAll("[data-chat-prompt]")).forEach(function (button) {
-        button.onclick = function () { askAssistant(button.getAttribute("data-chat-prompt") || "", button); };
+        button.onclick = function () {
+          var prompt = button.getAttribute("data-chat-prompt") || "";
+          var kpiKey = String(button.getAttribute("data-kpi-key") || "").trim();
+          askAssistant(prompt, button, kpiKey ? {
+            entrypoint: "ceo_kpi_inline",
+            source: "executive_surface",
+            kpi_key: kpiKey,
+            kpi_label: currentLabel,
+            kpi_question_intent: "decision",
+            active_view: "home"
+          } : {
+            entrypoint: "thinking_mode",
+            source: "executive_surface",
+            active_view: "home"
+          });
+        };
       });
       var thinkingComposer = gravityPanel.querySelector("#thinking-composer");
       var thinkingInput = gravityPanel.querySelector("#thinking-input");
@@ -5536,7 +5561,7 @@
         if (role === 'assistant' && message.status === 'failed') {
           failureMeta = '<div class="assistant-message__meta">' + escapeHtml(summarizeAssistantFailure(message)) + '</div>';
         } else if (role === 'assistant' && message.meta) {
-          failureMeta = '<div class="assistant-message__meta">' + escapeHtml(firstDefined(message.meta, '')) + '</div>';
+          failureMeta = '<details class="assistant-message__evidence"><summary>' + escapeHtml(assistantEvidenceSummary(message.meta)) + '</summary><div>' + escapeHtml(firstDefined(message.meta, '')) + '</div></details>';
         }
         var retryButton = '';
         if (role === 'assistant' && message.status === 'failed' && message.retryPrompt) {

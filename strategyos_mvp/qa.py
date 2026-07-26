@@ -539,9 +539,54 @@ def _handle_working_capital(question: str, bundle: _DataBundle, findings: list[_
             "metric": s.get("metric"),
             "drift_days": s.get("drift_days"),
             "cash_impact_sar": round(float(s.get("cash_impact_sar", 0.0)), 2),
+            "cash_effect": s.get("cash_effect"),
         }
         for s in signals[:3]
     ]
+    decision_question = _has_any(
+        question,
+        "headroom",
+        "sufficient",
+        "commitment",
+        "commitments",
+        "protect",
+        "intervene",
+    )
+    if decision_question:
+        absorbed = sum(
+            float(row["cash_impact_sar"])
+            for row in rows
+            if row.get("cash_effect") == "absorbed"
+        )
+        released = sum(
+            float(row["cash_impact_sar"])
+            for row in rows
+            if row.get("cash_effect") == "released"
+        )
+        pressure_metrics = [
+            str(row.get("metric") or "working capital")
+            for row in rows
+            if row.get("cash_effect") == "absorbed"
+        ]
+        pressure_label = " and ".join(dict.fromkeys(pressure_metrics)) or "the current working-capital signals"
+        return {
+            "matched": True,
+            "answer": (
+                "**Decision** — Liquidity headroom for the next commitments is not proven by working-capital drift alone. "
+                f"The current signals show {_sar(absorbed)} absorbed and {_sar(released)} released; "
+                "that is pressure/release timing, not a reconciliation of cash, the approved board floor and dated commitments.\n\n"
+                f"**Protect** — Protect cash tied up in {pressure_label} and do not treat the apparent release as available headroom until it is reconciled.\n\n"
+                "**Owner** — Group CFO and Group Treasury should reconcile the governed cash balance, approved floor and committed outflows before the next cash commitment is approved."
+            ),
+            "value": rows,
+            "unit": "SAR",
+            "basis": "compute_working_capital_drifts (DSO/DPO drift vs trailing baseline); this evidence does not include a cash-floor-to-commitments reconciliation.",
+            "citations": [
+                _ledger_citation(bundle, "ap_ledger", "AP ledger payment timing"),
+                _ledger_citation(bundle, "ar_ledger", "AR ledger collection timing"),
+            ],
+            "available": True,
+        }
     listing = "; ".join(f"{r['metric']} drift {r['drift_days']}d, cash impact {_sar(r['cash_impact_sar'])}" for r in rows)
     return {
         "matched": True,

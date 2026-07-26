@@ -644,7 +644,12 @@ def _format_for_persona(answer: str, persona_key: str) -> str:
         cleaned = re.sub(r"\bBasis:[^.]+\.", "", cleaned)
         cleaned = re.sub(r"\bRun:[^.]+\.", "", cleaned)
         cleaned = re.sub(r"\bAI fallback is not available:[^.]+\.", "", cleaned)
-        cleaned = " ".join(cleaned.split())
+        # Preserve deliberate executive paragraphs and Markdown structure.
+        # Collapsing every whitespace character made a decision, rationale,
+        # owner and evidence boundary render as one dense sentence in Hermes.
+        cleaned = re.sub(r"[ \t]+", " ", cleaned)
+        cleaned = re.sub(r" *\n *", "\n", cleaned)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
         return cleaned.strip() or answer.strip()
 
     # Non-CEO personas get the full answer

@@ -31,6 +31,28 @@ def test_compose_persona_answer_prefers_grounded_qa_over_persona_templates():
     assert "which aspect would you like to examine" not in result.answer.lower()
 
 
+def test_ceo_answer_preserves_decision_paragraphs_for_dialogue_readability():
+    answer = (
+        "**Decision** — Protect the cash buffer.\n\n"
+        "**Owner** — Group CFO and Group Treasury."
+    )
+
+    result = compose_persona_answer(
+        qa_result={
+            "matched": True,
+            "answer": answer,
+            "basis": "Governed cash records.",
+            "citations": [],
+            "suggestions": [],
+            "assistant_mode": "qa_engine",
+        },
+        persona="ceo",
+        question="What needs protecting?",
+    )
+
+    assert result.answer == answer
+
+
 def test_assistant_orchestrator_audit_log_is_bounded():
     orchestrator = AssistantOrchestrator(audit_log_maxlen=3)
 

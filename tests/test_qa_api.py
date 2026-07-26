@@ -416,10 +416,18 @@ def test_every_headline_kpi_preset_has_a_distinct_answer_contract(monkeypatch):
             "outlook": "outlook",
         }
         assert len({result["answer"] for result in results.values()}) == 3
-        assert "Accountable owner:" in results["decision"]["answer"]
+        if key == "cash_vs_floor":
+            assert "**Owner**" in results["decision"]["answer"]
+        else:
+            assert "Accountable owner:" in results["decision"]["answer"]
         assert "Largest reported contributor:" in results["briefing"]["answer"]
         assert "Latest governed movement:" in results["outlook"]["answer"]
         assert "What would change the executive outlook:" in results["outlook"]["answer"]
+        if key == "cash_vs_floor":
+            assert results["decision"]["answer"].startswith("**Decision**")
+            assert "**Protect**" in results["decision"]["answer"]
+            assert "**Owner**" in results["decision"]["answer"]
+            assert "dated committed outflows" in results["decision"]["answer"]
 
 
 def test_qa_and_assistant_chat_share_the_governed_outlook_contract(monkeypatch):
