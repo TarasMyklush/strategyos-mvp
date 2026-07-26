@@ -5309,28 +5309,51 @@
   function renderHomeTargetExtensions() {
     var leadersPanel = $("leaders-corner-panel");
     var videos = [
-      { topic: 'Reading margin pressure before the board', who: 'Dr. Amal Faris', role: 'former Group CFO, regional pharma', dur: '4:12', hue: 222 },
-      { topic: 'When to hedge — and when to wait', who: 'Tariq Bensalem', role: 'treasury advisor', dur: '6:38', hue: 158 },
-      { topic: 'Recognising GMs without distorting incentives', who: 'Huda Karim', role: 'leadership coach', dur: '3:55', hue: 28 },
-      { topic: 'Pre-stocking for a JV without choking cash', who: 'Sami Wardi', role: 'operations partner', dur: '5:20', hue: 268 }
+      {
+        id: 'uTRKdCY4HdE',
+        topic: 'Enterprise AI Strategy and CEO Leadership',
+        who: 'McKinsey & Company',
+        role: 'CEO leadership · enterprise AI strategy',
+        dur: '~45 min',
+        summary: 'How CEOs can move from AI experiments to enterprise adoption while aligning governance, organisation and strategy.'
+      },
+      {
+        id: 'sFSzPE2AOE0',
+        topic: 'Aligning AI with Enterprise Strategy',
+        who: 'Leon Gordon, CEO at Onyx Data',
+        role: 'AI and data strategy alignment',
+        dur: '~40 min',
+        summary: 'A practical discussion of connecting AI capability, data maturity and strategic goals.'
+      },
+      {
+        id: 'pQtdQ6AHn_Q',
+        topic: 'Agentic AI Governance and Enterprise-Scale Execution',
+        who: 'SiliconANGLE theCUBE',
+        role: 'governance · data quality · execution',
+        dur: '~50 min',
+        summary: 'Governance, data-quality and human-review patterns for scaling agentic systems responsibly.'
+      },
+      {
+        id: 't885M1WB1pg',
+        topic: 'Bridge Strategy and Execution with Decision-Ready Views',
+        who: 'Tempo',
+        role: 'strategy execution · decision-ready views',
+        dur: '~35 min',
+        summary: 'How decision-ready views connect strategic plans to operational execution and feedback loops.'
+      }
     ];
 
     if (leadersPanel) {
       var leaderIndex = Math.max(0, Math.min(Number(leadersPanel.getAttribute('data-leader-index') || 0), videos.length - 1));
       var video = videos[leaderIndex];
       var videoPrompt = 'From the Leaders’ Corner reel “' + video.topic + '” — how does this apply to ' + tenantDisplayName() + ' right now?';
-      var dots = videos.map(function (_item, index) {
-        return '<button type="button" class="vlog-dot' + (index === leaderIndex ? ' is-active' : '') + '" data-leader-index="' + index + '" aria-label="Show video ' + (index + 1) + '" aria-current="' + (index === leaderIndex ? 'true' : 'false') + '"></button>';
+      var videoSrc = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(video.id) + '?rel=0&modestbranding=1';
+      var videoUrl = 'https://www.youtube.com/watch?v=' + encodeURIComponent(video.id);
+      var thumbnails = videos.map(function (item, index) {
+        return '<button type="button" class="vlog-item' + (index === leaderIndex ? ' is-active' : '') + '" data-leader-index="' + index + '" aria-label="Play ' + escapeHtml(item.topic) + '" aria-current="' + (index === leaderIndex ? 'true' : 'false') + '"><span class="vlog-item__image" style="background-image:url(&quot;https://i.ytimg.com/vi/' + escapeHtml(item.id) + '/hqdefault.jpg&quot;)"><span aria-hidden="true">▶</span><small>' + escapeHtml(item.dur) + '</small></span><strong>' + escapeHtml(item.topic) + '</strong><em>' + escapeHtml(item.who) + '</em></button>';
       }).join('');
-      leadersPanel.innerHTML = '<div class="leaders-vlog"><div class="leaders-vlog__badge">✦ Leaders’ Corner · vlog</div><div class="leaders-vlog__title">Short counsel, senior practitioners</div><article class="vlog-slide"><button type="button" class="vlog-thumb" style="--vlog-hue:' + escapeHtml(String(video.hue)) + '" data-leader-discuss="' + escapeHtml(videoPrompt) + '" aria-label="Discuss ' + escapeHtml(video.topic) + ' in chat"><span class="vlog-play" aria-hidden="true">▶</span><span class="vlog-duration">' + escapeHtml(video.dur) + '</span><span class="vlog-placeholder">video reel · drop footage</span></button><div class="vlog-meta"><strong>' + escapeHtml(video.topic) + '</strong><span>' + escapeHtml(video.who) + ' <em>· ' + escapeHtml(video.role) + '</em></span><button type="button" data-leader-discuss="' + escapeHtml(videoPrompt) + '">Discuss in chat →</button></div></article><div class="vlog-nav"><button type="button" data-leader-step="-1" aria-label="Previous video" ' + (leaderIndex === 0 ? 'disabled' : '') + '>‹</button><span class="vlog-dots">' + dots + '</span><button type="button" data-leader-step="1" aria-label="Next video" ' + (leaderIndex === videos.length - 1 ? 'disabled' : '') + '>›</button></div></div>';
+      leadersPanel.innerHTML = '<div class="leaders-vlog"><div class="leaders-vlog__badge">✦ Leaders’ Corner · video</div><div class="leaders-vlog__title">Short counsel, senior practitioners</div><div class="vlog-player"><iframe src="' + escapeHtml(videoSrc) + '" title="' + escapeHtml(video.topic) + '" loading="eager" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><div class="vlog-meta"><strong>' + escapeHtml(video.topic) + '</strong><span>' + escapeHtml(video.who) + ' <em>· ' + escapeHtml(video.role) + '</em></span><p>' + escapeHtml(video.summary) + '</p><div class="vlog-actions"><button type="button" data-leader-discuss="' + escapeHtml(videoPrompt) + '">Ask Hermes about this topic</button><a href="' + escapeHtml(videoUrl) + '" target="_blank" rel="noopener noreferrer">Open on YouTube ↗</a></div></div><div class="vlog-library" aria-label="Leaders’ Corner videos">' + thumbnails + '</div></div>';
       safeArray(leadersPanel.querySelectorAll('[data-leader-discuss]')).forEach(function (button) { button.onclick = function () { askAssistant(button.getAttribute('data-leader-discuss') || '', button, { entrypoint: 'leaders_corner' }); }; });
-      safeArray(leadersPanel.querySelectorAll('[data-leader-step]')).forEach(function (button) {
-        button.onclick = function () {
-          var nextIndex = Math.max(0, Math.min(videos.length - 1, leaderIndex + Number(button.getAttribute('data-leader-step') || 0)));
-          leadersPanel.setAttribute('data-leader-index', String(nextIndex));
-          renderHomeTargetExtensions();
-        };
-      });
       safeArray(leadersPanel.querySelectorAll('[data-leader-index]')).forEach(function (button) {
         button.onclick = function () {
           leadersPanel.setAttribute('data-leader-index', button.getAttribute('data-leader-index') || '0');

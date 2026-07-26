@@ -37,12 +37,12 @@ def test_illustrative_fixture_is_test_only() -> None:
     assert "is_illustrative" in fixture.read_text(encoding="utf-8")
 
 
-def test_executive_runtime_has_no_curated_external_editorial_surface() -> None:
+def test_executive_runtime_external_editorial_surface_is_privacy_bounded() -> None:
     root = Path(__file__).resolve().parents[1]
     js = (root / "strategyos_mvp/static/executive.js").read_text(encoding="utf-8").lower()
     css = (root / "strategyos_mvp/static/executive.css").read_text(encoding="utf-8").lower()
-    assert "leaders' corner" not in js
-    assert "youtube" not in js
+    assert "youtube-nocookie.com/embed/" in js
+    assert "youtube.com/embed/" not in js
     assert "youtube" not in css
     for relative in (
         "deploy/caddy/Caddyfile",
@@ -50,5 +50,5 @@ def test_executive_runtime_has_no_curated_external_editorial_surface() -> None:
         "deploy/caddy/Caddyfile.proxy-oidc",
     ):
         caddy = (root / relative).read_text(encoding="utf-8").lower()
-        assert "youtube" not in caddy
-        assert "frame-src 'none'" in caddy
+        assert "frame-src https://www.youtube-nocookie.com" in caddy
+        assert "frame-src https://www.youtube.com" not in caddy

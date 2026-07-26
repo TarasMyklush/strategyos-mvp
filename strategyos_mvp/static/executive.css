@@ -8793,11 +8793,10 @@ body {
   }
 }
 
-/* Leaders' Corner follows the target vlog pattern: one reel, four navigable
-   entries, and no assistant-directory content inside the briefing. */
+/* Leaders' Corner: one real privacy-enhanced player and four selectable videos. */
 .leaders-vlog {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .leaders-vlog__badge {
@@ -8814,84 +8813,34 @@ body {
   letter-spacing: -.02em;
 }
 
-.vlog-slide {
-  display: grid;
-  grid-template-columns: minmax(180px, .86fr) minmax(0, 1.14fr);
-  gap: 18px;
-  align-items: stretch;
-  margin-top: 3px;
-}
-
-.vlog-thumb {
+.vlog-player {
   position: relative;
-  display: grid;
-  min-height: 210px;
+  width: 100%;
   overflow: hidden;
-  place-items: center;
-  border: 0;
   border-radius: 14px;
-  background:
-    radial-gradient(circle at 72% 24%, hsla(var(--vlog-hue), 68%, 73%, .5), transparent 36%),
-    linear-gradient(145deg, hsl(var(--vlog-hue), 34%, 23%), hsl(var(--vlog-hue), 24%, 12%));
-  color: #fff;
-  cursor: pointer;
+  aspect-ratio: 16 / 9;
+  background: #111;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.vlog-thumb::after {
+.vlog-player iframe {
   position: absolute;
   inset: 0;
-  border: 1px solid rgba(255, 255, 255, .16);
-  border-radius: inherit;
-  content: "";
-  pointer-events: none;
-}
-
-.vlog-play {
-  display: grid;
-  width: 54px;
-  height: 54px;
-  place-items: center;
-  padding-left: 3px;
-  border: 1px solid rgba(255, 255, 255, .58);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .14);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .24);
-  font-size: 18px;
-}
-
-.vlog-duration,
-.vlog-placeholder {
-  position: absolute;
-  bottom: 12px;
-  font-size: 10px;
-}
-
-.vlog-duration {
-  right: 12px;
-  padding: 4px 7px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, .54);
-  font-weight: 700;
-}
-
-.vlog-placeholder {
-  left: 12px;
-  color: rgba(255, 255, 255, .76);
+  width: 100%;
+  height: 100%;
+  border: 0;
 }
 
 .vlog-meta {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 8px;
-  padding: 18px 2px;
+  gap: 6px;
+  padding: 2px;
 }
 
 .vlog-meta > strong {
   font-family: var(--display);
-  font-size: clamp(23px, 2.25vw, 31px);
+  font-size: clamp(21px, 2vw, 27px);
   font-weight: 500;
   line-height: 1.12;
 }
@@ -8908,69 +8857,147 @@ body {
   font-weight: 450;
 }
 
-.vlog-meta button {
-  margin-top: 8px;
-  padding: 0;
-  border: 0;
-  background: transparent;
+.vlog-meta > p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vlog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.vlog-actions button,
+.vlog-actions a {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-strong);
   color: var(--accent);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.vlog-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
+.vlog-actions button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
 
-.vlog-nav > button {
+.vlog-library {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.vlog-item {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vlog-item:hover,
+.vlog-item:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.vlog-item.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.vlog-item__image {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 8px;
+  aspect-ratio: 16 / 9;
+  background-position: center;
+  background-size: cover;
+  color: #fff;
+}
+
+.vlog-item__image::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 42%, rgba(0, 0, 0, .48));
+  content: "";
+}
+
+.vlog-item__image > span {
+  position: relative;
+  z-index: 1;
   display: grid;
   width: 30px;
   height: 30px;
   place-items: center;
-  border: 1px solid var(--border);
+  padding-left: 2px;
+  border: 1px solid rgba(255, 255, 255, .72);
   border-radius: 50%;
-  background: var(--surface-strong);
-  color: var(--ink);
-  font: inherit;
-  font-size: 19px;
-  cursor: pointer;
+  background: rgba(0, 0, 0, .44);
+  font-size: 11px;
 }
 
-.vlog-nav > button:disabled {
-  cursor: default;
-  opacity: .35;
+.vlog-item__image small {
+  position: absolute;
+  z-index: 1;
+  right: 6px;
+  bottom: 5px;
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 700;
 }
 
-.vlog-dots {
-  display: flex;
-  gap: 7px;
+.vlog-item > strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 10.5px;
+  font-weight: 680;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.vlog-dot {
-  width: 7px;
-  height: 7px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--border-strong);
-  cursor: pointer;
-  transition: width 150ms ease, background 150ms ease;
+.vlog-item > em {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.vlog-dot.is-active {
-  width: 22px;
-  background: var(--accent);
+.vlog-actions button:hover,
+.vlog-actions a:hover {
+  opacity: .86;
 }
 
 @media (max-width: 720px) {
-  .vlog-slide,
+  .vlog-library,
   .specialist-agent-directory {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   #driver-drill .kpi-movement__row {

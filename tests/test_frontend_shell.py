@@ -195,10 +195,12 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert 'id="week-panel"' in html
     assert "Think and model on your data" in html
     assert 'id="home-agents-section"' not in html
-    assert "Reading margin pressure before the board" in _static_executive_js()
-    assert "When to hedge — and when to wait" in _static_executive_js()
-    assert "Recognising GMs without distorting incentives" in _static_executive_js()
-    assert "Pre-stocking for a JV without choking cash" in _static_executive_js()
+    executive_js = _static_executive_js()
+    assert "Enterprise AI Strategy and CEO Leadership" in executive_js
+    assert "video reel · drop footage" not in executive_js
+    assert "Aligning AI with Enterprise Strategy" in executive_js
+    assert "Agentic AI Governance and Enterprise-Scale Execution" in executive_js
+    assert "Bridge Strategy and Execution with Decision-Ready Views" in executive_js
     assert 'id="board-portal"' in html
     assert 'id="agents-activity"' in html
     assert 'id="functions-overview"' in html
@@ -413,7 +415,7 @@ def test_app_entry_uses_content_hashed_executive_assets():
     assert "__EXECUTIVE_ASSET_REV__" not in html
 
 
-def test_entry_routes_static_assets_have_no_external_origins():
+def test_entry_routes_static_assets_only_use_the_bounded_video_origins():
     html = _app_entry_response()
     js = _static_executive_js()
     client = TestClient(api_module.app)
@@ -423,7 +425,11 @@ def test_entry_routes_static_assets_have_no_external_origins():
     combined = html + executive_html + js + css
     assert "https://cdn" not in combined
     assert "http://" not in combined
-    assert "https://" not in combined.replace("https://strategyos.live", "")
+    bounded = combined.replace("https://strategyos.live", "")
+    bounded = bounded.replace("https://www.youtube-nocookie.com", "")
+    bounded = bounded.replace("https://www.youtube.com", "")
+    bounded = bounded.replace("https://i.ytimg.com", "")
+    assert "https://" not in bounded
     assert "fonts.googleapis" not in combined
 
 
@@ -1324,6 +1330,34 @@ def test_assistant_drawer_css_z_index_layering():
     assert "z-index: 1100" in css and "assistant-scrim" in css, (
         "assistant-scrim z-index must be 1100"
     )
+
+
+def test_leaders_corner_renders_four_real_selectable_videos_without_hijacking_playback():
+    js = _static_executive_js()
+    start = js.index("function renderHomeTargetExtensions()")
+    end = js.index("function renderAssistantStudio()", start)
+    leaders = js[start:end]
+
+    assert leaders.count("id: '") == 4
+    assert "youtube-nocookie.com/embed/" in leaders
+    assert "vlog-player" in leaders
+    assert "vlog-library" in leaders
+    assert 'data-leader-index="' in leaders
+    assert "renderHomeTargetExtensions();" in leaders
+    assert "video reel · drop footage" not in leaders
+    assert "data-leader-discuss" not in leaders.split('<div class="vlog-player"', 1)[1].split("</div>", 1)[0]
+    assert "Ask Hermes about this topic" in leaders
+
+
+def test_leaders_corner_player_is_responsive_and_thumbnail_library_is_compact():
+    css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+
+    assert ".vlog-player {" in css
+    assert "aspect-ratio: 16 / 9" in css
+    assert ".vlog-player iframe {" in css
+    assert ".vlog-library {" in css
+    assert "grid-template-columns: repeat(4, minmax(0, 1fr))" in css
+    assert ".vlog-item.is-active {" in css
 
 
 def test_assistant_drawer_mobile_bottom_sheet():
