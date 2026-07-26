@@ -1172,7 +1172,7 @@ def test_digital_twin_attention_label_is_ceo_friendly():
     js = _static_executive_js()
 
     assert 'attention: "Needs human review"' in js
-    assert "Running now" in js
+    assert "Current agent execution" in js
 
 
 def test_twin_status_labels_are_ceo_friendly():
@@ -2200,8 +2200,33 @@ def test_finance_function_workspace_uses_recorded_audit_events_and_exposes_stuck
     assert "function-card__trail" in render_block
     assert "data-function-finding-toggle" not in render_block
     assert 'entrypoint: "function_review"' in render_block
-    assert "Presentation composer" in render_block and "Meeting booker" in render_block
-    assert "Planned · not enabled" in render_block
+    assert "Current agent execution" in render_block
+    assert "getRecordedRuntimeAgents()" in render_block
+    assert "renderRuntimeAgentCard" in render_block
+    assert "Presentation composer" not in render_block
+    assert "Meeting booker" not in render_block
+    assert "Available agents" not in render_block
+    assert "View agent" not in render_block
+
+
+def test_agents_surface_uses_durable_tasks_and_hides_unproved_catalogue_entries():
+    js = _static_executive_js()
+    runtime_block = js.split("function getRecordedRuntimeAgents()")[1].split(
+        "function renderFunctionStep", 1
+    )[0]
+    refresh_block = js.split("async function refresh(withAnimation)")[1].split(
+        "function bindAssistantForm", 1
+    )[0]
+    discovery_block = js.split("function renderAgentsDiscovery()")[1].split(
+        "function renderKnowledgeGraph", 1
+    )[0]
+
+    assert 'fetchJson("/api/v1/agent-network")' in refresh_block
+    assert "state.agentNetwork = agentNetwork && agentNetwork.status === \"ok\"" in refresh_block
+    assert "agent.task_id" in runtime_block
+    assert "agent.objective" in runtime_block
+    assert 'status !== "idle"' in runtime_block
+    assert "Open team workspace" not in discovery_block
 
 
 def test_leadership_status_does_not_read_raw_execution_events():

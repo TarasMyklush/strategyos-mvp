@@ -6183,6 +6183,16 @@ html[data-theme="dark"] .trend-axis {
 
 .function-card__latest small { display: block; margin-top: 5px; }
 
+.agent-runtime-section {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.runtime-agent-card .function-card__facts {
+  padding-bottom: 12px;
+}
+
 .function-card__trail {
   padding: 0 14px 14px;
   border-top: 1px solid var(--border);

@@ -1728,6 +1728,64 @@
     return "neutral";
   }
 
+  function runtimeAgentTone(statusKey) {
+    var status = String(statusKey || "").toLowerCase();
+    if (/^(succeeded|complete|completed)$/.test(status)) return "ok";
+    if (/^(failed|cancelled|timed_out)$/.test(status)) return "danger";
+    if (/^(waiting_for_approval|waiting_for_input|proposed|queued|running)$/.test(status)) return "warn";
+    return "neutral";
+  }
+
+  function runtimeAgentUpdatedLabel(value) {
+    var parsed = new Date(String(value || ""));
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toLocaleString([], {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function getRecordedRuntimeAgents() {
+    var network = state.agentNetwork || {};
+    return safeArray(network.modules).filter(function (agent) {
+      var status = String(firstDefined(agent && agent.status, "")).toLowerCase();
+      return Boolean(
+        agent
+        && agent.task_id
+        && String(firstDefined(agent.objective, "")).trim()
+        && status
+        && status !== "idle"
+      );
+    });
+  }
+
+  function renderRuntimeAgentCard(agent) {
+    var name = firstDefined(agent.display_name, agent.label, agent.agent_key, "Agent");
+    var objective = scrubExecutiveTechnicalLanguage(firstDefined(agent.objective, ""));
+    var status = String(firstDefined(agent.status, ""));
+    var statusText = firstDefined(agent.status_label, functionStateLabel(status));
+    var updated = runtimeAgentUpdatedLabel(agent.last_update);
+    var approvalRequired = String(firstDefined(agent.approval_dependency, "none")) !== "none";
+    var facts = [
+      updated ? "Updated " + updated : "",
+      approvalRequired ? "Reviewer decision required" : "No executive decision requested"
+    ].filter(Boolean);
+    return '<details class="function-card runtime-agent-card"><summary class="function-card__summary"><div class="function-card__head"><span class="function-card__icon" aria-hidden="true">'
+      + escapeHtml(String(name).slice(0, 1).toUpperCase())
+      + '</span><div><strong>' + escapeHtml(name) + '</strong><span>' + escapeHtml(objective)
+      + '</span></div><em class="function-state tone-' + escapeHtml(runtimeAgentTone(status)) + '">'
+      + escapeHtml(statusText) + '</em><span class="function-card__caret" aria-hidden="true">›</span></div><div class="function-card__facts">'
+      + facts.map(function (fact) { return '<span>' + escapeHtml(fact) + '</span>'; }).join("")
+      + '</div></summary><div class="function-card__latest"><span>Current recorded task</span><p>'
+      + escapeHtml(objective) + '</p>'
+      + (approvalRequired
+        ? '<small>This task is paused at a governed reviewer gate.</small>'
+        : '<small>No approval or intervention is currently requested.</small>')
+      + '</div></details>';
+  }
+
   function renderFunctionStep(entry) {
     var round = entry.round_no === null || entry.round_no === undefined ? "" : "Round " + entry.round_no;
     var challenge = entry.challenge ? '<p class="function-step__quote"><strong>Challenge</strong>' + escapeHtml(functionAuditCopy(entry.challenge)) + '</p>' : '';
@@ -1761,7 +1819,9 @@
     }
 
     if (roster) {
-      var activeCards = review.functions.map(function (item) {
+      var activeCards = review.functions.filter(function (item) {
+        return item.entries.length > 0;
+      }).map(function (item) {
         var latest = item.entries[0] || {};
         var roleFindings = review.findings.map(function (finding) {
           var entries = finding.entries.filter(function (entry) { return entry.function_name === item.name; });
@@ -1770,26 +1830,16 @@
         }).filter(Boolean).join("");
         return '<details class="function-card"><summary class="function-card__summary"><div class="function-card__head"><span class="function-card__icon" aria-hidden="true">' + escapeHtml(item.name === "Finance Auditor" ? "A" : "F") + '</span><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.purpose) + '</span></div><em class="function-state tone-' + escapeHtml(functionStateTone(item.state)) + '">' + escapeHtml(functionStateLabel(item.state)) + '</em><span class="function-card__caret" aria-hidden="true">›</span></div><div class="function-card__facts"><span><strong>' + escapeHtml(String(item.entries.length)) + '</strong> recorded step' + (item.entries.length === 1 ? '' : 's') + '</span><span>' + escapeHtml(item.output) + '</span></div></summary><div class="function-card__latest"><span>Latest recorded work</span><p>' + escapeHtml(functionAuditCopy(latest.detail || (item.entries.length ? functionActionLabel(latest.action) : "No work recorded for this run."))) + '</p>' + (latest.round_no !== null && latest.round_no !== undefined ? '<small>Round ' + escapeHtml(String(latest.round_no)) + '</small>' : '') + '</div><div class="function-card__trail"><div class="function-card__trail-head"><strong>Recorded review trail</strong><span>Expand a finding to see this agent’s work</span></div><div class="function-finding-list">' + (roleFindings || '<div class="function-empty"><p>No review steps are recorded for this agent.</p></div>') + '</div></div></details>';
       }).join('');
-      var runningAgents = getRunningAgents().filter(function (agent) {
-        var name = String(firstDefined(agent.name, agent.label, agent.module_id, "")).toLowerCase();
-        return name.indexOf("finance analyst") < 0 && name.indexOf("finance auditor") < 0;
-      }).slice(0, 6);
-      var catalogue = getDiscoverableAgents().slice(0, 6);
-      var runningMarkup = runningAgents.length ? runningAgents.map(function (agent) {
-        return '<article class="specialist-agent-row"><span class="fidelity-running-agent__dot"></span><div><strong>' + escapeHtml(firstDefined(agent.name, agent.label, agent.module_id, "Agent")) + '</strong><small>' + escapeHtml(humanizeToken(firstDefined(agent.status, agent.state, "available"))) + '</small></div></article>';
-      }).join("") : '<div class="function-empty"><p>No other specialist agent is running.</p></div>';
-      var marketplace = catalogue.length ? catalogue.map(function (agent, index) {
-        var id = discoverableAgentId(agent, index);
-        return '<article class="fidelity-agent-card"><span class="fidelity-agent-card__mark">◆</span><strong>' + escapeHtml(discoverableAgentLabel(agent)) + '</strong><small>' + escapeHtml(firstDefined(agent.description, agent.summary, 'Specialist agent available to this tenant.')) + '</small><button type="button" data-specialist-agent-id="' + escapeHtml(id) + '">View agent</button></article>';
-      }).join("") : '<div class="function-empty"><p>No additional specialist agents are published for this tenant.</p></div>';
-      roster.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Active agents</span><span class="ach-hint">Specialists working on the current review; expand each agent for its own audit trail</span></div></div><div class="function-card-list">' + activeCards + '</div><div class="specialist-agent-directory"><section><div class="fidelity-agents-column-head"><strong>Running now</strong><span>Other live specialist work and monitoring</span></div><div class="specialist-agent-running">' + runningMarkup + '</div></section><section><div class="fidelity-agents-column-head"><strong>Available agents</strong><span>Specialists approved for this workspace</span></div><div class="fidelity-agent-grid">' + marketplace + '</div></section></div><div class="planned-functions"><span class="eyebrow">Planned agents</span><div><span>Presentation composer <em>Planned · not enabled</em></span><span>Meeting booker <em>Planned · not enabled</em></span></div></div>' + (review.truncated ? '<p class="trail-foot">Showing the available review excerpt; ' + escapeHtml(String(review.total_count)) + ' total steps were recorded.</p>' : '');
-      safeArray(roster.querySelectorAll('[data-specialist-agent-id]')).forEach(function (button) {
-        button.onclick = function () {
-          var id = button.getAttribute('data-specialist-agent-id') || '';
-          var item = catalogue.find(function (agent, index) { return discoverableAgentId(agent, index) === id; });
-          if (item) handleDiscoverableAgentAction(item, button);
-        };
-      });
+      var runtimeAgents = getRecordedRuntimeAgents().slice(0, 6);
+      var financeSection = activeCards
+        ? '<div class="agents-col-head"><div><span class="ach-title">Active agents</span><span class="ach-hint">Specialists with recorded work on the current review; expand each agent for its own audit trail</span></div></div><div class="function-card-list">' + activeCards + '</div>'
+        : '';
+      var runtimeSection = runtimeAgents.length
+        ? '<section class="agent-runtime-section"><div class="agents-col-head"><div><span class="ach-title">Current agent execution</span><span class="ach-hint">Durable tasks recorded for this workspace; expand an agent to inspect its current objective and decision state</span></div></div><div class="function-card-list">' + runtimeAgents.map(renderRuntimeAgentCard).join("") + '</div></section>'
+        : '';
+      roster.innerHTML = financeSection + runtimeSection + (!financeSection && !runtimeSection
+        ? '<div class="function-empty"><p>No agent execution is recorded for this workspace.</p></div>'
+        : '') + (review.truncated ? '<p class="trail-foot">Showing the available review excerpt; ' + escapeHtml(String(review.total_count)) + ' total steps were recorded.</p>' : '');
     }
   }
 
@@ -5289,7 +5339,7 @@
         var id = String(firstDefined(item.role, item.twin_id, "twin"));
         var isOpen = state.openAgentId === id;
         var status = String(firstDefined(item.status, "ready"));
-        return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.current_activity, "Ready to support the next leadership review."))) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div>' + renderLeadershipStatus(item) + '<div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.authority, "Responsibilities will appear when available."))) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div>' + (item.route ? '<a class="btn secondary twin-open" href="' + escapeHtml(item.route) + '">Open team workspace</a>' : '') + '</div>' : '') + '</article>';
+        return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.current_activity, "Ready to support the next leadership review."))) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div>' + renderLeadershipStatus(item) + '<div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.authority, "Responsibilities will appear when available."))) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div></div>' : '') + '</article>';
       }).join('') : '<div class="network-empty">No AI assistants match this search.</div>') + '</div>';
       var search = networkCard.querySelector('#twin-network-search');
       if (search) search.oninput = function () {
@@ -5706,9 +5756,15 @@
       }
       var params = currentViewParams();
       var session = await fetchJson("/ui/session") || {};
-      var latestPacket = await fetchJson(latestRunRouteForSession(session) + buildQuery(params));
+      var packetAndNetwork = await Promise.all([
+        fetchJson(latestRunRouteForSession(session) + buildQuery(params)),
+        session.authenticated ? fetchJson("/api/v1/agent-network") : Promise.resolve(null)
+      ]);
+      var latestPacket = packetAndNetwork[0];
+      var agentNetwork = packetAndNetwork[1];
 
       state.latestPacket = latestPacket || {};
+      state.agentNetwork = agentNetwork && agentNetwork.status === "ok" ? agentNetwork : null;
       state.session = session;
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
@@ -5760,6 +5816,7 @@
   var requested = (bootstrap.requested_view_state || {});
   var state = {
     latestPacket: null,
+    agentNetwork: null,
     session: null,
     personas: [],
     token: null,
