@@ -2267,10 +2267,10 @@ def test_assistant_counts_do_not_inherit_unrelated_ceo_priority_counts():
     functions_block = js.split("function renderFunctionsWorkspace()")[1].split(
         "function renderLeadershipStatus", 1
     )[0]
-    assert "executiveAttentionMarkup()" in discovery_block
-    assert "getExecutiveAttention().count" in meta_block
-    assert "executiveAttentionMarkup()" in assistant_panel_block
-    assert "executiveAttentionMarkup()" in functions_block
+    assert "executiveAttentionMarkup" not in js
+    assert "CEO business attention" not in discovery_block
+    assert "CEO business attention" not in assistant_panel_block
+    assert "CEO business attention" not in functions_block
     assert "active_investigation_count" in network_block
     assert "active_investigation_count" in status_block
 
