@@ -14352,6 +14352,7 @@ async def _assistant_chat_response(
         **dict(getattr(request, "assistant_context", None) or {}),
     }
     conversation_history = _assistant_history_from_request(request)
+    explicit_advisory_request = _question_requests_general_practice_advisory(question)
     if conversation_history:
         assistant_context["history"] = conversation_history
         assistant_context["history_attached"] = True
@@ -14920,7 +14921,7 @@ async def _assistant_chat_response(
             )
 
     scenario_result = None
-    if mode in {"auto", "deterministic"}:
+    if mode in {"auto", "deterministic"} and not explicit_advisory_request:
         parsed = parse_scenario(
             question,
             {
@@ -15154,7 +15155,11 @@ async def _assistant_chat_response(
             llm_status=llm_status,
             assistant_context=assistant_context,
         )
-    scope_boundary_result = _unavailable_external_decision_result(question, context)
+    scope_boundary_result = (
+        None
+        if explicit_advisory_request
+        else _unavailable_external_decision_result(question, context)
+    )
     if scope_boundary_result is not None:
         orchestrated = orchestrator.process(
             question,
@@ -15175,10 +15180,23 @@ async def _assistant_chat_response(
         )
         payload["llm_fallback_attempted"] = False
         return payload
-    deterministic_result = qa_engine.answer_question(
-        question,
-        bundle=context["bundle"],
-        findings=context["findings"],
+    deterministic_result = (
+        {
+            "matched": False,
+            "answer": (
+                "This question requests external practice or benchmark context, "
+                "not a governed calculation."
+            ),
+            "basis": "Explicit general-practice advisory request.",
+            "citations": [],
+            "suggestions": [],
+        }
+        if explicit_advisory_request
+        else qa_engine.answer_question(
+            question,
+            bundle=context["bundle"],
+            findings=context["findings"],
+        )
     )
     deterministic_result.setdefault("answered_by", "tabular")
     if mode == "deterministic" or deterministic_result.get("matched") is not False:

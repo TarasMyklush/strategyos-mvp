@@ -1,3 +1,4 @@
+import inspect
 import json
 import os
 from pathlib import Path
@@ -5538,6 +5539,9 @@ def test_general_practice_wording_is_advisory_not_recoverable_arithmetic():
     assert not api_module._question_requests_general_practice_advisory(
         "What is the total recoverable value?"
     )
+    source = inspect.getsource(api_module._assistant_chat_response)
+    assert "and not explicit_advisory_request" in source
+    assert "if explicit_advisory_request" in source
 
 
 def test_request_recovery_requires_sign_in():
