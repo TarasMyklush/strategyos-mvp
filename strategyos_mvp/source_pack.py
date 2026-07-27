@@ -1183,7 +1183,12 @@ def _normalize_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, sourc
         destination.parent.mkdir(parents=True, exist_ok=True)
         source_path = raw_root / str(item["relative_path"])
         column_mapping = (classification.get("column_mapping_proposal") or {}).get("column_mapping") or {}
-        if role in ROLE_TARGET_PATHS and column_mapping and source_path.suffix.lower() in TABULAR_EXTENSIONS and role != "cash_forecast":
+        if (
+            role in ROLE_TARGET_PATHS
+            and column_mapping
+            and source_path.suffix.lower() in TABULAR_EXTENSIONS
+            and role not in {"cash_forecast", "calendar"}
+        ):
             _canonicalize_structured_file(source_path, destination, role=str(role), column_mapping=column_mapping)
         else:
             shutil.copy2(source_path, destination)

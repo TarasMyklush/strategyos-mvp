@@ -66,6 +66,57 @@ def test_calendar_projection_processes_all_rows_and_prioritises_upcoming(tmp_pat
     assert first["prep"] == "Review decision brief 3."
 
 
+def test_calendar_projection_honours_governed_workbook_today_anchor(tmp_path):
+    workbook = Workbook()
+    calendar = workbook.active
+    calendar.title = "Calendar"
+    calendar.append(["Date", "Title", "Category", "Related BU", "Notes / Agenda"])
+    calendar.append(
+        [
+            "2026-06-02",
+            "Q2 Board of Directors meeting",
+            "Board",
+            "Group",
+            "Review the trading and remediation decisions.",
+        ]
+    )
+    calendar.append(
+        [
+            "2026-06-08",
+            "StrategyOS Monday Brief",
+            "Operating cadence",
+            "Group",
+            "Review group KPIs and exceptions.",
+        ]
+    )
+    calendar.append(
+        [
+            "2026-06-09",
+            "Outside projection window",
+            "Operating cadence",
+            "Group",
+            "Not part of the seven-day launchpad.",
+        ]
+    )
+    readme = workbook.create_sheet("ReadMe")
+    readme["A1"] = (
+        "Period: 30-Mar-2026 to 27-Jul-2026. "
+        "'Today' anchor: Monday 1 June 2026 (matches Strategic Context layer)."
+    )
+    workbook.save(tmp_path / "CEO_Calendar.xlsx")
+
+    agenda = derive_calendar_agenda(tmp_path)
+
+    assert agenda["projection_as_of"] == "2026-06-01"
+    assert agenda["projection_through"] == "2026-06-08"
+    assert agenda["projection_anchor_source"] == "workbook_today_anchor"
+    assert agenda["upcoming_item_count"] == 2
+    assert [item["title"] for item in agenda["items"]] == [
+        "Q2 Board of Directors meeting",
+        "StrategyOS Monday Brief",
+    ]
+
+
 def test_calendar_projection_excludes_personal_and_ambiguous_entries(tmp_path):
     workbook = Workbook()
     sheet = workbook.active

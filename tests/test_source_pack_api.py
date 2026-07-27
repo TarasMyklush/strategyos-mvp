@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from openpyxl import Workbook, load_workbook
 import pandas as pd
 
 import strategyos_mvp.api as api_module
@@ -558,6 +559,56 @@ def test_source_pack_candidate_mapping_can_be_confirmed_and_canonicalized(tmp_pa
         assert normalized.exists()
         frame = pd.read_excel(normalized)
         assert ["Invoice_ID", "Vendor_ID", "Amount_SAR", "Payment_Date", "PO_Reference"] == list(frame.columns[:5])
+    finally:
+        _restore_env(original)
+
+
+def test_source_pack_preserves_calendar_metadata_sheets(tmp_path: Path):
+    workspace_root = tmp_path / "workspace"
+    output_root = tmp_path / "outputs"
+    source_dir = workspace_root / "packs" / "calendar-pack"
+    source_dir.mkdir(parents=True)
+    output_root.mkdir()
+
+    workbook = Workbook()
+    calendar = workbook.active
+    calendar.title = "Calendar"
+    calendar.append(["Event_Date", "Title", "Type", "Prep_Needed"])
+    calendar.append(
+        [
+            "2026-06-02",
+            "Q2 Board of Directors meeting",
+            "Board",
+            "Review the trading and remediation decisions.",
+        ]
+    )
+    readme = workbook.create_sheet("ReadMe")
+    readme["A1"] = "'Today' anchor: Monday 1 June 2026."
+    workbook.save(source_dir / "CEO_Calendar.xlsx")
+
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_WORKSPACE_ROOT": str(workspace_root),
+            "STRATEGYOS_OUTPUT_ROOT": str(output_root),
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        response = client.post(
+            "/source-packs/from-path",
+            headers=_auth_header("operator-secret"),
+            json={"folder_path": str(source_dir)},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        normalized = Path(payload["manifest"][0]["normalized_path"])
+        normalized_workbook = load_workbook(normalized, data_only=True, read_only=True)
+        assert normalized_workbook.sheetnames == ["Calendar", "ReadMe"]
+        assert normalized_workbook["ReadMe"]["A1"].value == "'Today' anchor: Monday 1 June 2026."
     finally:
         _restore_env(original)
 

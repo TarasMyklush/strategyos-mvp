@@ -53,6 +53,37 @@ _BUSINESS_TERMS = frozenset(
 )
 
 
+def _workbook_projection_anchor(workbook: Any) -> date | None:
+    """Read an explicit governed 'today' anchor from workbook metadata.
+
+    Synthetic and point-in-time source packs may intentionally model a date
+    other than the application server's wall clock.  The workbook remains the
+    authority when it declares that anchor; ordinary live calendars without
+    one continue to use ``date.today()``.
+    """
+
+    anchor_pattern = re.compile(
+        r"\btoday['’]?\s+anchor\s*:\s*(?:[A-Za-z]+[,\s]+)?"
+        r"(?P<date>\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        re.IGNORECASE,
+    )
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows(values_only=True):
+            for raw in row:
+                if raw is None:
+                    continue
+                match = anchor_pattern.search(str(raw))
+                if not match:
+                    continue
+                value = match.group("date")
+                for pattern in ("%Y-%m-%d", "%d %B %Y", "%d %b %Y"):
+                    try:
+                        return datetime.strptime(value, pattern).date()
+                    except ValueError:
+                        continue
+    return None
+
+
 def _business_relevance(
     *,
     explicit_value: Any,
@@ -92,6 +123,7 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
     relative_source = path.relative_to(root).as_posix()
     restricted = RESTRICTED_CONTEXT_DIR in path.relative_to(root).parts
     workbook = load_workbook(path, data_only=True, read_only=True)
+    workbook_anchor = _workbook_projection_anchor(workbook)
     sheet = next((item for item in workbook.worksheets if item.title.strip().lower() in {"calendar", "agenda"}), workbook.active)
     rows = iter(sheet.values)
     headers = {_header_key(value): index for index, value in enumerate(next(rows, ())) if value is not None}
@@ -145,7 +177,7 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
             "evidence_scope": "calendar_agenda_only" if restricted else "governed_calendar",
         })
     items.sort(key=lambda item: str(item.get("date") or ""))
-    projection_day = date.today()
+    projection_day = workbook_anchor or date.today()
     projection_end = projection_day + timedelta(days=7)
     future_items = [item for item in items if str(item.get("date") or "") >= projection_day.isoformat()]
     projected_items = [
@@ -164,6 +196,7 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
         "projection_as_of": projection_day.isoformat(),
         "projection_through": projection_end.isoformat(),
         "projection_policy": projection_policy,
+        "projection_anchor_source": "workbook_today_anchor" if workbook_anchor else "system_date",
         "reason": (
             "No calendar item has been classified as business-relevant for the CEO projection."
             if not items and excluded_count
