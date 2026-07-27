@@ -1280,7 +1280,8 @@ def _unconfirmed_roles(manifest: list[dict[str, Any]]) -> list[str]:
     trusted_roles = {
         str((item.get("classification") or {}).get("role"))
         for item in manifest
-        if str(item.get("source_disposition") or CURRENT_EVIDENCE) == CURRENT_EVIDENCE
+        if str(item.get("source_disposition") or CURRENT_EVIDENCE)
+        in {CURRENT_EVIDENCE, RESTRICTED_CONTEXT}
         and str((item.get("classification") or {}).get("status") or "") == "classified"
         and (item.get("classification") or {}).get("role") in TABULAR_ROLE_SIGNATURES
     }

@@ -917,3 +917,29 @@ def test_low_confidence_supplement_does_not_block_exact_role_source():
     ]
 
     assert source_pack_module._unconfirmed_roles(manifest) == []
+
+
+def test_confirmed_restricted_calendar_satisfies_calendar_role():
+    manifest = [
+        {
+            "source_disposition": "restricted_context",
+            "classification": {
+                "status": "classified",
+                "role": "calendar",
+                "column_mapping_proposal": {"requires_confirmation": True},
+            },
+        },
+        {
+            "source_disposition": "current_evidence",
+            "classification": {
+                "status": "candidate",
+                "role": "calendar",
+                "column_mapping_proposal": {
+                    "role": "calendar",
+                    "requires_confirmation": True,
+                },
+            },
+        },
+    ]
+
+    assert source_pack_module._unconfirmed_roles(manifest) == []
