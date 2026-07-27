@@ -13842,6 +13842,15 @@ def _governed_reference_result(
         for item in mover_matches
         if isinstance(item.get("card"), Mapping)
     }
+    broad_bu_analysis = bool(
+        re.search(
+            r"\b(?:performing|performance|against budget|explains? the gap|"
+            r"margin trajectory|one decision|change .+ year|overall|across kpis?)\b",
+            normalized_question,
+        )
+    )
+    if len(mover_kpis) > 1 and not requested_kpi and broad_bu_analysis:
+        return None
     if len(mover_kpis) > 1 and not requested_kpi:
         return {
             "matched": True,
@@ -14305,6 +14314,8 @@ def _free_text_ceo_kpi_key(
     """Route names or uniquely displayed values to the governed KPI contract."""
     if _question_has_semantic_kpi_mismatch(question):
         return None
+    if _question_requests_kpi_analysis_beyond_headline(question):
+        return None
     if _assistant_question_requests_modelling(question):
         return None
     # The KPI contract states what a figure IS and how it is composed; it does
@@ -14352,6 +14363,60 @@ def _free_text_ceo_kpi_key(
         if len(matches) == 1:
             return next(iter(matches))
     return None
+
+
+def _question_requests_kpi_analysis_beyond_headline(question: str) -> bool:
+    """Distinguish a headline lookup from multi-dimensional CEO analysis."""
+
+    norm = " ".join(str(question or "").casefold().split())
+    analytical_terms = (
+        "segment",
+        "segments",
+        "sku",
+        "category",
+        "categories",
+        "seasonality",
+        "reconcile",
+        "reconciliation",
+        "incremental",
+        "contract",
+        "contracts",
+        "employee",
+        "headcount",
+        "customer",
+        "customers",
+        "competitor",
+        "competitors",
+        "bottleneck",
+        "single source of truth",
+        "track record",
+        "correlate",
+        "trajectory",
+        "peers",
+        "2028 target",
+        "next year",
+        "last year",
+        "last three years",
+        "over three years",
+        "full-year forecast",
+        "capital allocation",
+        "integration cost",
+        "products launched",
+        "credit memos",
+        "returns eroding",
+        "per riyal",
+        "per employee",
+    )
+    if any(term in norm for term in analytical_terms):
+        return True
+    if re.search(r"\b(?:break down|ranked by impact|which bu|which items|which levers|which decisions)\b", norm):
+        return True
+    if re.search(r"\b(?:month|quarter|year-to-date)\b", norm) and re.search(
+        r"\b(?:each|last year|compare)\b",
+        norm,
+    ):
+        return True
+    return False
 
 
 async def _assistant_chat_response(
@@ -15161,6 +15226,13 @@ async def _assistant_chat_response(
         return payload
 
     graph_result = route_graph_question(context["run_id"], question)
+    graph_answer = str(graph_result.get("answer") or "").strip().casefold()
+    if graph_result.get("matched") and graph_answer.startswith("no neo4j findings were linked"):
+        graph_result = {
+            **graph_result,
+            "matched": False,
+            "reason": "negative_graph_lookup_is_not_an_answer",
+        }
     retrieval_result = _route_keyword_retrieval(context["run_id"], question)
     if graph_result.get("matched") or retrieval_result.get("matched"):
         selected_result = graph_result if graph_result.get("matched") else retrieval_result

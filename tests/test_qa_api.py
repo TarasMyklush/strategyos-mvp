@@ -5564,6 +5564,31 @@ def test_auto_tabular_lookup_boundary_rejects_compound_keyword_traps():
     assert not any(api_module._auto_question_is_narrow_tabular_lookup(value) for value in rejected)
 
 
+def test_kpi_headline_router_defers_multi_dimensional_ceo_analysis():
+    complex_questions = (
+        "Break down this quarter's revenue by segment.",
+        "What contributed most to revenue growth over the last three years?",
+        "Which SKUs and categories drive revenue?",
+        "How does the division's revenue reconcile to BU and group revenue?",
+        "Which competitor revenues and margins beat us?",
+        "What is our single source of truth for revenue?",
+    )
+    direct_questions = (
+        "What is our revenue?",
+        "Is revenue above plan?",
+        "What is operating cost versus plan?",
+        "What is our cash position versus the floor?",
+    )
+    assert all(
+        api_module._question_requests_kpi_analysis_beyond_headline(value)
+        for value in complex_questions
+    )
+    assert not any(
+        api_module._question_requests_kpi_analysis_beyond_headline(value)
+        for value in direct_questions
+    )
+
+
 def test_request_recovery_requires_sign_in():
     """An unauthenticated caller cannot log a directive against the run."""
     client = TestClient(api_module.app)
