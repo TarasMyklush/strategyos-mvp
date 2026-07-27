@@ -13842,27 +13842,12 @@ def _governed_reference_result(
         for item in mover_matches
         if isinstance(item.get("card"), Mapping)
     }
-    broad_bu_analysis = bool(
-        re.search(
-            r"\b(?:performing|performance|against budget|explains? the gap|"
-            r"margin trajectory|one decision|change .+ year|overall|across kpis?)\b",
-            normalized_question,
-        )
-    )
-    if len(mover_kpis) > 1 and not requested_kpi and broad_bu_analysis:
-        return None
     if len(mover_kpis) > 1 and not requested_kpi:
-        return {
-            "matched": True,
-            "answer": "I found this business unit under more than one governed KPI. Which measure do you mean—Revenue or Operating cost?",
-            "basis": "The entity is valid, but the requested KPI is ambiguous.",
-            "citations": [],
-            "suggestions": ["Show its Revenue movement", "Show its Operating cost movement"],
-            "answered_by": "governed_reference",
-            "assistant_mode": "clarification",
-            "grounding_status": "needs_input",
-            "_orchestrator_force_answer": True,
-        }
+        # A unit spanning several measures is a synthesis request rather than a
+        # deterministic lookup. The evidence-reasoning path can see every
+        # resolved KPI row and should compose the BU view without asking the CEO
+        # to choose information the system already holds.
+        return None
     mover_match = mover_matches[0] if mover_matches else None
     if mover_match is not None:
         return _kpi_mover_reference_answer(mover_match)
@@ -14311,10 +14296,13 @@ def _free_text_ceo_kpi_key(
     *,
     public_safe: bool = False,
 ) -> str | None:
-    """Route names or uniquely displayed values to the governed KPI contract."""
+    """Route only direct headline lookups to the governed KPI contract.
+
+    KPI vocabulary comes from the current run's rendered cards. Analytical
+    free text falls through to evidence reasoning instead of accumulating
+    business-keyword exceptions at this routing boundary.
+    """
     if _question_has_semantic_kpi_mismatch(question):
-        return None
-    if _question_requests_kpi_analysis_beyond_headline(question):
         return None
     if _assistant_question_requests_modelling(question):
         return None
@@ -14334,19 +14322,36 @@ def _free_text_ceo_kpi_key(
     # still routes here.
     if _question_is_general_knowledge(question):
         return None
-    norm = " ".join(str(question or "").casefold().split())
-    if any(token in norm for token in ("cash versus floor", "cash-versus-floor", "cash vs floor", "cash floor", "cash position")):
-        return "cash_vs_floor"
-    if any(token in norm for token in ("ebitda", "operating margin", "margin bridge")):
-        return "ebitda_margin"
-    if any(token in norm for token in ("operating cost", "operating expense", "opex")):
-        return "operating_cost"
-    if "revenue" in norm:
-        return "revenue"
+    cards = _ceo_kpi_cards(context or {}, public_safe=public_safe)
+    normalized_question = re.sub(
+        r"[?.!]+$",
+        "",
+        " ".join(str(question or "").casefold().split()),
+    ).strip()
+    for card in cards:
+        key = str(card.get("key") or card.get("driver_key") or "").strip()
+        label = " ".join(str(card.get("label") or "").casefold().split())
+        if not key or not label:
+            continue
+        escaped_label = re.escape(label).replace(r"\ ", r"\s+")
+        direct_lookup = (
+            rf"(?:what\s+is|what's|show(?:\s+me)?|explain|how\s+is|where\s+is)"
+            rf"\s+(?:(?:our|the|current)\s+)?{escaped_label}"
+            rf"(?:\s+(?:versus|vs\.?)\s+(?:plan|budget|floor|target))?"
+        )
+        direct_comparison = (
+            rf"is\s+(?:(?:our|the|current)\s+)?{escaped_label}"
+            rf"\s+(?:above|below|at|on|versus|vs\.?)\s+(?:plan|budget|floor|target)"
+        )
+        if normalized_question == label or re.fullmatch(
+            rf"(?:{direct_lookup}|{direct_comparison})",
+            normalized_question,
+        ):
+            return key
     references = _decimal_references(question)
-    if references and context is not None:
+    if references:
         matches: set[str] = set()
-        for card in _ceo_kpi_cards(context, public_safe=public_safe):
+        for card in cards:
             key = str(card.get("key") or card.get("driver_key") or "").strip()
             if not key:
                 continue
@@ -14363,60 +14368,6 @@ def _free_text_ceo_kpi_key(
         if len(matches) == 1:
             return next(iter(matches))
     return None
-
-
-def _question_requests_kpi_analysis_beyond_headline(question: str) -> bool:
-    """Distinguish a headline lookup from multi-dimensional CEO analysis."""
-
-    norm = " ".join(str(question or "").casefold().split())
-    analytical_terms = (
-        "segment",
-        "segments",
-        "sku",
-        "category",
-        "categories",
-        "seasonality",
-        "reconcile",
-        "reconciliation",
-        "incremental",
-        "contract",
-        "contracts",
-        "employee",
-        "headcount",
-        "customer",
-        "customers",
-        "competitor",
-        "competitors",
-        "bottleneck",
-        "single source of truth",
-        "track record",
-        "correlate",
-        "trajectory",
-        "peers",
-        "2028 target",
-        "next year",
-        "last year",
-        "last three years",
-        "over three years",
-        "full-year forecast",
-        "capital allocation",
-        "integration cost",
-        "products launched",
-        "credit memos",
-        "returns eroding",
-        "per riyal",
-        "per employee",
-    )
-    if any(term in norm for term in analytical_terms):
-        return True
-    if re.search(r"\b(?:break down|ranked by impact|which bu|which items|which levers|which decisions)\b", norm):
-        return True
-    if re.search(r"\b(?:month|quarter|year-to-date)\b", norm) and re.search(
-        r"\b(?:each|last year|compare)\b",
-        norm,
-    ):
-        return True
-    return False
 
 
 async def _assistant_chat_response(

@@ -635,10 +635,11 @@ def test_cost_action_reaches_governed_levers_from_both_chat_surfaces(monkeypatch
 
 
 def test_free_text_ceo_kpi_routing_covers_rendered_finance_cards():
-    assert api_module._free_text_ceo_kpi_key("Which revenue stream is largest?") == "revenue"
-    assert api_module._free_text_ceo_kpi_key("What data gap blocks cash-versus-floor?") == "cash_vs_floor"
+    assert api_module._free_text_ceo_kpi_key("What is our revenue?") == "revenue"
+    assert api_module._free_text_ceo_kpi_key("What is our cash vs floor?") == "cash_vs_floor"
     assert api_module._free_text_ceo_kpi_key("Explain operating cost") == "operating_cost"
-    assert api_module._free_text_ceo_kpi_key("Explain the EBITDA bridge") == "ebitda_margin"
+    assert api_module._free_text_ceo_kpi_key("Explain the EBITDA margin") == "ebitda_margin"
+    assert api_module._free_text_ceo_kpi_key("Which revenue stream is largest?") is None
     assert api_module._free_text_ceo_kpi_key("Model a 60% EBITDA margin") is None
 
 
@@ -681,7 +682,16 @@ def test_global_revenue_stream_question_returns_composition_not_headline_only(mo
         response = client.post(
             "/assistant/chat",
             headers={"X-API-Key": "operator-key"},
-            json={"question": "Which revenue stream is largest?", "persona": "ceo", "mode": "auto"},
+            json={
+                "question": "Which revenue stream is largest?",
+                "persona": "ceo",
+                "mode": "auto",
+                "assistant_context": {
+                    "entrypoint": "ceo_kpi_inline",
+                    "kpi_key": "revenue",
+                    "kpi_question_intent": "drivers",
+                },
+            },
         )
         assert response.status_code == 200
         payload = response.json()
@@ -754,7 +764,7 @@ def test_authenticated_free_text_kpi_and_release_route_before_fallback(monkeypat
         revenue = client.post(
             "/assistant/chat",
             headers={"X-API-Key": "operator-key"},
-            json={"question": "Which revenue stream is largest?", "persona": "ceo", "mode": "auto"},
+            json={"question": "What is our Revenue?", "persona": "ceo", "mode": "auto"},
         )
         assert revenue.status_code == 200
         assert revenue.json()["answered_by"] == "governed_kpi"
@@ -5564,7 +5574,14 @@ def test_auto_tabular_lookup_boundary_rejects_compound_keyword_traps():
     assert not any(api_module._auto_question_is_narrow_tabular_lookup(value) for value in rejected)
 
 
-def test_kpi_headline_router_defers_multi_dimensional_ceo_analysis():
+def test_kpi_headline_router_uses_run_labels_and_defers_analysis(monkeypatch):
+    cards = [
+        {"key": "revenue", "label": "Revenue", "metric": "SAR 4.0B"},
+        {"key": "ebitda_margin", "label": "EBITDA margin", "metric": "19.5%"},
+        {"key": "operating_cost", "label": "Operating cost", "metric": "SAR 3.4B"},
+        {"key": "cash_vs_floor", "label": "Cash vs floor", "metric": "117.5%"},
+    ]
+    monkeypatch.setattr(api_module, "_ceo_kpi_cards", lambda *_args, **_kwargs: cards)
     complex_questions = (
         "Break down this quarter's revenue by segment.",
         "What contributed most to revenue growth over the last three years?",
@@ -5579,14 +5596,11 @@ def test_kpi_headline_router_defers_multi_dimensional_ceo_analysis():
         "What is operating cost versus plan?",
         "What is our cash position versus the floor?",
     )
-    assert all(
-        api_module._question_requests_kpi_analysis_beyond_headline(value)
-        for value in complex_questions
-    )
-    assert not any(
-        api_module._question_requests_kpi_analysis_beyond_headline(value)
+    assert not any(api_module._free_text_ceo_kpi_key(value, {}) for value in complex_questions)
+    assert [
+        api_module._free_text_ceo_kpi_key(value, {})
         for value in direct_questions
-    )
+    ] == ["revenue", "revenue", "operating_cost", None]
 
 
 def test_request_recovery_requires_sign_in():
