@@ -119,11 +119,36 @@ def derive_calendar_agenda(dataset_root: Path) -> dict[str, Any]:
     candidates = sorted(path for path in root.rglob("*.xlsx") if "calendar" in path.name.lower() or "agenda" in path.name.lower())
     if not candidates:
         return {"status": "unavailable", "items": [], "reason": "No governed calendar workbook was supplied for this run."}
-    path = candidates[0]
+    loaded_candidates: list[tuple[Path, Any, date | None]] = []
+    for candidate in candidates:
+        try:
+            candidate_workbook = load_workbook(candidate, data_only=True, read_only=True)
+        except Exception:
+            continue
+        loaded_candidates.append(
+            (
+                candidate,
+                candidate_workbook,
+                _workbook_projection_anchor(candidate_workbook),
+            )
+        )
+    if not loaded_candidates:
+        return {
+            "status": "unavailable",
+            "items": [],
+            "reason": "No governed calendar workbook could be read for this run.",
+        }
+    path, workbook, workbook_anchor = max(
+        loaded_candidates,
+        key=lambda item: (
+            item[2] is not None,
+            "calendar" in item[0].name.casefold(),
+            "agenda" in item[0].name.casefold(),
+            -candidates.index(item[0]),
+        ),
+    )
     relative_source = path.relative_to(root).as_posix()
     restricted = RESTRICTED_CONTEXT_DIR in path.relative_to(root).parts
-    workbook = load_workbook(path, data_only=True, read_only=True)
-    workbook_anchor = _workbook_projection_anchor(workbook)
     sheet = next((item for item in workbook.worksheets if item.title.strip().lower() in {"calendar", "agenda"}), workbook.active)
     rows = iter(sheet.values)
     headers = {_header_key(value): index for index, value in enumerate(next(rows, ())) if value is not None}

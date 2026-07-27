@@ -117,6 +117,35 @@ def test_calendar_projection_honours_governed_workbook_today_anchor(tmp_path):
     ]
 
 
+def test_calendar_projection_prefers_authoritative_anchored_calendar(tmp_path):
+    normalized_agenda_dir = tmp_path / "09_Calendar"
+    normalized_agenda_dir.mkdir()
+    events = Workbook()
+    events_sheet = events.active
+    events_sheet.title = "Calendar"
+    events_sheet.append(["Event_Date", "Title", "Type"])
+    events_sheet.append(["2025-11-21", "Historic business event", "Business event"])
+    events.save(normalized_agenda_dir / "CEO_Agenda_H2_2026.xlsx")
+
+    restricted_calendar_dir = tmp_path / "98_Restricted_Context" / "14_CEO_Office"
+    restricted_calendar_dir.mkdir(parents=True)
+    calendar = Workbook()
+    calendar_sheet = calendar.active
+    calendar_sheet.title = "Calendar"
+    calendar_sheet.append(["Event_Date", "Title", "Type"])
+    calendar_sheet.append(["2026-06-02", "Q2 Board of Directors meeting", "Board"])
+    readme = calendar.create_sheet("ReadMe")
+    readme["A1"] = "'Today' anchor: Monday 1 June 2026."
+    calendar.save(restricted_calendar_dir / "CEO_Calendar_Mizan_Apr-Jul_2026.xlsx")
+
+    agenda = derive_calendar_agenda(tmp_path)
+
+    assert agenda["source_file"].endswith("CEO_Calendar_Mizan_Apr-Jul_2026.xlsx")
+    assert agenda["projection_anchor_source"] == "workbook_today_anchor"
+    assert agenda["upcoming_item_count"] == 1
+    assert agenda["items"][0]["title"] == "Q2 Board of Directors meeting"
+
+
 def test_calendar_projection_excludes_personal_and_ambiguous_entries(tmp_path):
     workbook = Workbook()
     sheet = workbook.active
