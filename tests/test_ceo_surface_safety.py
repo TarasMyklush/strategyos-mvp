@@ -1465,10 +1465,14 @@ def test_cta_enum_executive_decision_brief():
     assert "data-executive-prompt" in js
     assert "Open decision brief" in js
 
-def test_cta_enum_business_signal_pressure_test():
-    """CTA 10: Material business signals can be pressure-tested."""
+def test_awareness_signals_remain_statements_not_action_ctas():
+    """Awareness belongs in the RAG feed; only decisions expose action CTAs."""
     js = _static_executive_js()
-    assert "Pressure-test with Hermes" in js
+    lower = js[js.index("function renderLowerRailFidelity"):js.index("function renderAgentsDiscovery")]
+    assert "target-awareness-row" in lower
+    assert "Pressure-test with Hermes" not in lower
+    assert "data-outlook-toggle" not in lower
+    assert "Open decision brief" in lower
 
 def test_cta_enum_week_decision_preparation():
     """CTA 11: Commitments provide executable preparation actions."""
@@ -2621,9 +2625,11 @@ def test_ceo_home_aggregates_findings_instead_of_approving_cases():
     lower = js[js.index("function renderLowerRailFidelity"):js.index("function renderAgentsDiscovery")]
     assert "data-finding-approve=" not in lower
     assert "Approve recovery" not in lower
-    assert "Recent decisions and commitments" in lower
-    assert "No case-level decision is escalated to the CEO" in lower
-    assert "Owner · " in lower
+    assert "Pending CEO decisions" in lower
+    assert "No case-level decision is escalated to the CEO" not in lower
+    assert "Accountable owner · " in lower
+    assert "safeArray(priorities.inbound_requests)" in lower
+    assert "item.action_required !== false" in lower
     # The lower-level endpoint remains available outside the CEO home.
     assert '"/executive/findings/request-recovery"' in js
 
@@ -2658,6 +2664,7 @@ def test_sub_threshold_findings_remain_delegated_to_the_group_cfo():
     priorities = build_executive_presentation(read_model)["sections"]["executive_priorities"]
 
     assert priorities["materiality_threshold_sar"] == 1_000_000.0
+    assert priorities["inbound_requests"] == []
     assert not any(item["key"] == "recovery_mandate" for item in priorities["decisions"])
     assert priorities["delegated_summary"] == {
         "title": "Operational controls remain delegated",
@@ -2698,6 +2705,9 @@ def test_material_findings_become_one_aggregated_ceo_mandate():
 
     assert mandate["title"] == "Set the mandate for SAR 1.3M of recovery"
     assert mandate["owner"] == "Group CFO"
+    assert mandate["source"] == "Finance control analysis"
+    assert all(item["action_required"] is True and item["source"] for item in priorities["decisions"])
+    assert priorities["inbound_requests"] == []
     assert "aggregated across 2 finance-control cases" in mandate["summary"]
     assert "INV-100" not in json.dumps(priorities)
     assert "INV-200" not in json.dumps(priorities)

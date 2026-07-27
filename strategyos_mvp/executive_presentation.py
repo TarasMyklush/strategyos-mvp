@@ -973,6 +973,7 @@ def _executive_priorities(
                 ),
                 "decision": "Confirm the accountable executive and the deadline for closure.",
                 "owner": "Group CFO and Reviewer",
+                "source": "Evidence review",
                 "timing": board_timing,
                 "priority": "critical",
                 "action_required": True,
@@ -990,6 +991,7 @@ def _executive_priorities(
                 ),
                 "decision": "Confirm who will sign off and when the pack can be released.",
                 "owner": "Reviewer",
+                "source": "Board-pack workflow",
                 "timing": board_timing,
                 "priority": "watch",
                 "action_required": True,
@@ -1010,6 +1012,7 @@ def _executive_priorities(
                 ),
                 "decision": "Confirm the recovery target, executive owner and exceptions that return to you.",
                 "owner": "Group CFO",
+                "source": "Finance control analysis",
                 "timing": "Next executive review",
                 "priority": "watch",
                 "action_required": True,
@@ -1044,7 +1047,7 @@ def _executive_priorities(
                 "title": "No material headline variance requires CEO intervention",
                 "summary": "The current four enterprise measures do not show an exception above the executive threshold.",
                 "implication": "Keep the operating review delegated and watch for a change in direction next period.",
-                "tone": "neutral",
+                "tone": "positive",
                 "action_required": False,
                 "prompt": "Confirm whether any headline performance measure requires CEO intervention now, and explain why.",
             }
@@ -1063,6 +1066,9 @@ def _executive_priorities(
 
     return {
         "decisions": decisions[:3],
+        # Reserved for governed approval requests routed by other people's agents.
+        # Keep this empty until that workflow supplies real requests; never mock them.
+        "inbound_requests": [],
         "signals": performance_signals[:3],
         "delegated_summary": delegated_summary,
         "materiality_threshold_sar": round(materiality_threshold, 2),

@@ -3389,7 +3389,9 @@
       if (driverHeading) driverHeading.textContent = firstDefined(blueprint.indexLabel, "The group index");
       if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current measures";
     }
-    if (lowerHeading) lowerHeading.textContent = state.activePersona === "ceo" ? "Findings & concerns" : "What matters now";
+    if (lowerHeading) lowerHeading.textContent = state.activePersona === "ceo" ? "Developments & concerns" : "What matters now";
+    var developmentsHeading = $("developments-heading");
+    if (developmentsHeading) developmentsHeading.textContent = "Decisions for you";
     var boardOnly = state.activePersona === "board";
     ["hero", "kpi-index-section", "kpi-detail-section", "priority-section", "developments-section", "week-ahead-section", "decision-questions-section", "leaders-corner-section"].forEach(function (id) {
       var element = $(id);
@@ -5191,8 +5193,10 @@
     var findingsSection = sections.findings || {};
     var developmentsSection = sections.developments || {};
     var weekSection = sections.week_ahead || {};
-    var decisions = safeArray(priorities.decisions).slice(0, 3);
-    var signals = safeArray(priorities.signals).slice(0, 3);
+    var decisions = safeArray(priorities.decisions)
+      .concat(safeArray(priorities.inbound_requests))
+      .filter(function (item) { return item && item.action_required !== false && firstDefined(item.title, ""); });
+    var signals = safeArray(priorities.signals);
     var delegated = priorities.delegated_summary || null;
     var fallbackFindings = safeArray(findingsSection.items).length ? safeArray(findingsSection.items) : safeArray(blueprint.findings);
     var developments = liveGovernedMode
@@ -5216,64 +5220,73 @@
     if (Number.isFinite(governedUpcomingCount) && governedUpcomingCount >= 0) {
       allWeekAhead = allWeekAhead.slice(0, governedUpcomingCount);
     }
-    if (!decisions.length && fallbackFindings.length) {
-      decisions = [{
-        key: 'delegated_controls',
-        title: 'No case-level decision is escalated to the CEO',
-        summary: 'Finance-control items remain with the Group CFO. Hermes can surface only the aggregate exposure if it crosses the executive threshold.',
-        decision: 'No CEO action is required unless the aggregate exposure or release risk becomes material.',
-        owner: 'Group CFO', timing: 'Delegated', priority: 'neutral', action_required: false,
-        prompt: 'Do any finance-control items cross the CEO materiality threshold? Answer at portfolio level, not invoice level.'
-      }];
+    function awarenessTone(value) {
+      var tone = String(firstDefined(value, "watch")).toLowerCase();
+      if (["critical", "red", "down", "negative", "danger", "unfavourable", "unfavorable"].indexOf(tone) >= 0) return "critical";
+      if (["positive", "green", "up", "success", "favourable", "favorable", "win"].indexOf(tone) >= 0) return "positive";
+      return "watch";
     }
     var developmentsAndConcerns = signals.concat(developments.map(function (item, index) {
         return {
           key: 'development-' + index,
           title: firstDefined(item.title, 'Business signal'),
-          summary: firstDefined(item.impact, item.detail, 'No executive implication is available.'),
-          implication: 'Confirm whether this changes the current outlook or any leadership commitment.',
-          tone: firstDefined(item.tone, item.kind === 'win' ? 'positive' : 'watch'),
-          prompt: 'Does “' + firstDefined(item.title, 'this business signal') + '” change the current outlook or require executive intervention?'
+          summary: firstDefined(item.impact, item.detail, ''),
+          classification: firstDefined(item.tag, item.category, 'Operational development'),
+          tone: awarenessTone(firstDefined(item.tone, item.kind))
         };
-      }));
-    if (!developmentsAndConcerns.length && fallbackFindings.length) {
-      developmentsAndConcerns = fallbackFindings.map(function (item, index) {
+      })).concat(fallbackFindings.map(function (item, index) {
         return {
           key: firstDefined(item.finding_id, item.id, 'finding-' + index),
           title: firstDefined(item.title, 'Material business signal'),
-          summary: firstDefined(item.summary, item.detail, 'No executive implication is available.'),
-          implication: firstDefined(item.implication, 'Confirm whether this changes the current outlook or any leadership commitment.'),
-          tone: firstDefined(item.tone, 'neutral'),
-          prompt: 'Explain the executive implication of “' + firstDefined(item.title, 'this signal') + '” and whether it needs CEO attention.'
+          summary: firstDefined(item.summary, item.detail, ''),
+          classification: firstDefined(item.tag, item.classification, item.category, 'Finance finding'),
+          tone: awarenessTone(firstDefined(item.tone, 'watch'))
         };
+      }));
+    if (delegated) {
+      developmentsAndConcerns.push({
+        key: "delegated-controls",
+        title: firstDefined(delegated.title, "Operational controls remain delegated"),
+        summary: firstDefined(delegated.summary, ""),
+        classification: firstDefined(delegated.owner, "Delegated"),
+        tone: "positive"
       });
     }
     var seenOutlookItems = {};
     developmentsAndConcerns = developmentsAndConcerns.filter(function (item) {
-      var key = String(firstDefined(item.key, item.title, '')).trim().toLowerCase();
+      var key = String(firstDefined(item.title, item.key, '')).trim().toLowerCase().replace(/[^a-z0-9]+/g, " ");
       if (!key || seenOutlookItems[key]) return false;
       seenOutlookItems[key] = true;
       return true;
-    }).slice(0, 3);
+    }).sort(function (left, right) {
+      var rank = { critical: 0, watch: 1, positive: 2 };
+      return rank[awarenessTone(left.tone)] - rank[awarenessTone(right.tone)];
+    }).slice(0, 6);
+    var seenDecisions = {};
+    decisions = decisions.filter(function (item) {
+      var key = String(firstDefined(item.key, item.title, "")).trim().toLowerCase();
+      if (!key || seenDecisions[key]) return false;
+      seenDecisions[key] = true;
+      return true;
+    }).slice(0, 5);
 
     var decisionMarkup = decisions.length ? decisions.map(function (item, index) {
       var priority = ['critical', 'watch', 'positive', 'neutral'].indexOf(String(item.priority)) >= 0 ? String(item.priority) : 'neutral';
       var key = String(firstDefined(item.key, 'decision-' + index));
       var isOpen = Boolean((state.openDecisionKeys || {})[key]);
-      var kind = item.action_required === false ? 'delegated' : (priority === 'positive' ? 'achievement' : 'watch-out');
-      var meta = [firstDefined(item.owner, 'Executive team'), firstDefined(item.timing, 'Current review')].filter(Boolean).join(' · ');
-      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-feed-kind target-feed-kind--' + escapeHtml(kind) + '">' + escapeHtml(kind) + '</span><span class="target-feed-meta">' + escapeHtml(meta) + '</span><span class="target-feed-caret">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Projected impact</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'Confirm the owner and next move.')) + '</strong></div><div class="executive-decision__foot"><span>Owner · ' + escapeHtml(firstDefined(item.owner, 'Executive team')) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Open decision brief →</button></div></div>' : '') + '</article>';
-    }).join('') : '<div class="executive-empty-state"><strong>No CEO decision is waiting</strong><p>Operational work remains delegated and no material escalation is attached to this review.</p></div>';
+      var source = firstDefined(item.raised_by, item.source_agent, item.source, 'Executive review');
+      var timing = firstDefined(item.timing, 'Current review');
+      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>What needs your decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'Confirm the owner and next move.')) + '</strong></div><div class="executive-decision__foot"><span>Accountable owner · ' + escapeHtml(firstDefined(item.owner, 'Executive team')) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Open decision brief →</button></div></div>' : '') + '</article>';
+    }).join('') : '<div class="executive-empty-state"><strong>No decision is waiting for you</strong><p>No approval, intervention or direction is currently routed to the CEO.</p></div>';
 
     var signalMarkup = developmentsAndConcerns.length ? developmentsAndConcerns.map(function (item, index) {
-      var tone = ['critical', 'watch', 'positive', 'neutral'].indexOf(String(item.tone)) >= 0 ? String(item.tone) : 'neutral';
-      var key = String(firstDefined(item.key, 'outlook-' + index));
-      var isOpen = Boolean((state.openOutlookKeys || {})[key]);
+      var tone = awarenessTone(item.tone);
       var title = firstDefined(item.title, 'Business signal');
       var metricName = String(title).split(':')[0].trim();
       var inferredClassification = metricName.length <= 28 ? 'Group KPI · ' + metricName : 'Group KPI';
       var classification = firstDefined(item.tag, item.classification, item.category, inferredClassification);
-      return '<article class="executive-signal tone-' + escapeHtml(tone) + (isOpen ? ' is-open' : '') + '"><button class="executive-signal__toggle target-feed-row" type="button" data-outlook-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot"></span><span class="target-feed-title">' + escapeHtml(title) + '</span><span class="target-feed-tag">' + escapeHtml(classification) + '</span><span class="target-feed-caret">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-signal__body"><p>' + escapeHtml(firstDefined(item.summary, '')) + '</p><small>' + escapeHtml(firstDefined(item.implication, 'Keep this under review.')) + '</small><button type="button" aria-label="Pressure-test with Hermes" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Explain the executive implication.')) + '">Open a thread on this →</button></div>' : '') + '</article>';
+      var statement = [title, firstDefined(item.summary, '')].filter(Boolean).join(' — ');
+      return '<article class="executive-signal target-awareness-row tone-' + escapeHtml(tone) + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(tone === 'critical' ? 'Red concern' : tone === 'positive' ? 'Green positive development' : 'Amber watch item') + '"></span><span class="target-feed-title">' + escapeHtml(statement) + '</span><span class="target-feed-tag">' + escapeHtml(classification) + '</span></article>';
     }).join('') : '<div class="executive-empty-state"><strong>No material performance exception</strong><p>The current headline measures remain within the executive tolerance.</p></div>';
 
     if (findingsPanel) {
@@ -5283,7 +5296,7 @@
 
     if (developmentsPanel) {
       developmentsPanel.hidden = false;
-      developmentsPanel.innerHTML = '<span class="sr-only">Recent decisions and commitments</span><div class="executive-decision-list">' + decisionMarkup + '</div>' + (delegated ? '<details class="delegated-portfolio"><summary>' + escapeHtml(firstDefined(delegated.title, 'Delegated portfolio')) + '</summary><p>' + escapeHtml(firstDefined(delegated.summary, '')) + '</p><strong>' + escapeHtml(firstDefined(delegated.owner, 'Group CFO')) + '</strong></details>' : '');
+      developmentsPanel.innerHTML = '<span class="sr-only">Pending CEO decisions</span><div class="executive-decision-list">' + decisionMarkup + '</div>';
     }
 
     safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
@@ -5295,14 +5308,6 @@
           var key = button.getAttribute('data-decision-toggle') || '';
           state.openDecisionKeys = state.openDecisionKeys || {};
           state.openDecisionKeys[key] = !state.openDecisionKeys[key];
-          renderLowerRailFidelity();
-        };
-      });
-      safeArray(panel && panel.querySelectorAll('[data-outlook-toggle]')).forEach(function (button) {
-        button.onclick = function () {
-          var key = button.getAttribute('data-outlook-toggle') || '';
-          state.openOutlookKeys = state.openOutlookKeys || {};
-          state.openOutlookKeys[key] = !state.openOutlookKeys[key];
           renderLowerRailFidelity();
         };
       });

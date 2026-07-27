@@ -7388,14 +7388,7 @@ body {
   align-items: start;
 }
 
-.fidelity-operating-left {
-  display: grid;
-  align-content: start;
-  gap: 22px;
-}
-
 .fidelity-operating-grid > .section,
-.fidelity-operating-left > .section,
 .fidelity-thinking-grid > .section {
   min-width: 0;
   margin: 0;
@@ -7527,14 +7520,12 @@ body {
   gap: 12px;
 }
 
-.fidelity-operating-left .executive-signal-list,
-.fidelity-operating-left .executive-decision-list,
 #week-ahead-section .week-rail-v2 {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.fidelity-operating-left .executive-signal,
-.fidelity-operating-left .executive-decision {
+.fidelity-operating-grid .executive-signal,
+.fidelity-operating-grid .executive-decision {
   min-height: 0;
 }
 
@@ -7991,7 +7982,7 @@ body {
   display: none;
 }
 
-.fidelity-operating-left > .section,
+.fidelity-operating-grid > .section,
 #week-ahead-section,
 .fidelity-thinking-grid > .section,
 #home-agents-section {
@@ -8205,15 +8196,11 @@ body {
 }
 
 .fidelity-operating-grid {
-  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px;
 }
 
-.fidelity-operating-left {
-  gap: 22px;
-}
-
-.fidelity-operating-left > .target-flow-section,
+.fidelity-operating-grid > .target-flow-section,
 #week-ahead-section {
   padding: 30px;
   border: 1px solid var(--line);
@@ -8321,6 +8308,16 @@ body {
   grid-template-columns: 8px minmax(0, 1fr) auto auto 16px;
 }
 
+.target-awareness-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 2px;
+}
+
 .target-feed-title {
   min-width: 0;
   color: var(--ink);
@@ -8368,6 +8365,13 @@ body {
 .target-feed-meta {
   color: var(--ink-3);
   font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.target-decision-source {
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -8809,7 +8813,7 @@ body {
     padding: 18px 16px 82px;
   }
 
-  .fidelity-operating-left > .target-flow-section,
+  .fidelity-operating-grid > .target-flow-section,
   #week-ahead-section {
     padding: 22px;
   }
@@ -8834,11 +8838,19 @@ body {
     grid-row: 1 / span 2;
   }
 
+  .target-awareness-row {
+    grid-template-columns: 8px minmax(0, 1fr);
+  }
+
+  .target-awareness-row .target-feed-tag {
+    grid-column: 2;
+  }
+
   .executive-decision__toggle.target-feed-row {
     grid-template-columns: 8px minmax(0, 1fr) 16px;
   }
 
-  .executive-decision__toggle.target-feed-row .target-feed-kind,
+  .executive-decision__toggle.target-feed-row .target-decision-source,
   .executive-decision__toggle.target-feed-row .target-feed-meta {
     grid-column: 2 / 3;
   }

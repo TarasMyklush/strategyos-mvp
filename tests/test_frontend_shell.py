@@ -1175,14 +1175,42 @@ def test_ceo_information_architecture_separates_board_and_operational_surfaces()
     assert "No live diagnostics, working evidence, or pre-board figures" in js
     assert "fidelity-thinking-composer" in js
     assert "The group index" in js
-    assert "Developments since you were here" in html
+    assert "Developments &amp; concerns" in html
+    assert "Decisions for you" in html
+    assert "Developments since you were here" not in html
 
 
 def test_ceo_calendar_selection_does_not_shift_the_developments_column():
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
+    html = (Path(api_module.STATIC_DIR) / "executive.html").read_text(encoding="utf-8")
 
     assert ".fidelity-operating-grid {\n  align-items: start;\n}" in css
-    assert ".fidelity-operating-left {\n  display: grid;\n  align-content: start;" in css
+    operating_grid = html[html.index('<div class="fidelity-operating-grid">'):html.index('id="week-ahead-section"')]
+    assert 'id="priority-section"' in operating_grid
+    assert 'id="developments-section"' in operating_grid
+    assert "fidelity-operating-left" not in operating_grid
+    assert html.index("</div>\n\n      <section class=\"section target-flow-section\" id=\"week-ahead-section\"") > html.index('id="developments-section"')
+
+
+def test_ceo_awareness_and_decisions_have_distinct_semantics():
+    static_dir = Path(api_module.STATIC_DIR)
+    html = (static_dir / "executive.html").read_text(encoding="utf-8")
+    css = (static_dir / "executive.css").read_text(encoding="utf-8")
+    js = (static_dir / "executive.js").read_text(encoding="utf-8")
+    lower = js[js.index("function renderLowerRailFidelity"):js.index("function renderAgentsDiscovery")]
+
+    assert "business movements and signals to keep in view — no action implied" in html
+    assert "approvals, interventions and direction that need your call" in html
+    assert "safeArray(priorities.inbound_requests)" in lower
+    assert "target-awareness-row" in lower
+    assert "data-outlook-toggle" not in lower
+    assert "Pending CEO decisions" in lower
+    assert "Why this is here" in lower
+    assert "What needs your decision" in lower
+    assert "No decision is waiting for you" in lower
+    assert "No case-level decision is escalated to the CEO" not in lower
+    assert ".target-awareness-row {" in css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
 
 
 def test_ceo_home_uses_the_standalone_target_alignment_contract():
@@ -1204,7 +1232,8 @@ def test_ceo_home_uses_the_standalone_target_alignment_contract():
     assert ".fidelity-thinking-composer button" in css
     assert "width: 36px;" in css
 
-    assert "the system’s read — positive or negative, with its classification" in html
+    assert "business movements and signals to keep in view — no action implied" in html
+    assert "approvals, interventions and direction that need your call" in html
     assert "your calendar, AI-triaged — a launchpad, not a list" in html
     assert "the gravity layer — think, don’t act" in html
     assert "target-gravity-section" in html
@@ -3432,10 +3461,10 @@ main().catch((error) => {{
     assert "strategyos.ui.token" not in result["localStorageAfter"]
 
 
-def test_exact_fx_cta_thread_is_preserved_as_retryable_flow():
+def test_decision_brief_thread_is_preserved_as_retryable_flow():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
     assert "data-executive-prompt" in executive_js
-    assert "cross the CEO materiality threshold" in executive_js
+    assert "Open decision brief" in executive_js
     assert "askAssistant(button.getAttribute('data-executive-prompt')" in executive_js
     assert 'markThreadTransportFailuresRetryable(current);' in executive_js
     assert 'data-assistant-retry-latest' in executive_js
