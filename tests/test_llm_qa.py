@@ -1533,3 +1533,40 @@ def test_prompt_speaks_business_terms_not_run_status():
     prompt = " ".join(llm_qa_module.SYSTEM_PROMPT.split())
     assert "not system terms" in prompt
     assert "awaiting sign-off" in prompt
+
+
+def test_finance_evidence_exposes_ranked_contributors_and_movement_absence():
+    evidence = llm_qa._finance_kpi_evidence(
+        {
+            "finance_kpi": {
+                "authoritative": True,
+                "components": {"revenue_actual": "100"},
+                "evidence": {
+                    "revenue": {
+                        "files": ["gl.csv"],
+                        "details": {
+                            "contributors": {
+                                "revenue": [
+                                    {"label": "Retail", "value_sar": "60", "share_pct": 60},
+                                    {"label": "Government", "value_sar": "40", "share_pct": 40},
+                                ]
+                            }
+                        },
+                    }
+                },
+            }
+        }
+    )
+
+    assert evidence["contributors"]["available"] is True
+    assert evidence["contributors"]["cap"] == 5
+    assert evidence["contributors"]["scopes"]["revenue"][0] == {
+        "label": "Retail",
+        "amount_sar": "60",
+        "variance_sar": None,
+        "share_pct": 60,
+        "direction": None,
+    }
+    assert evidence["movements"]["available"] is False
+    assert "period-over-period" in evidence["movements"]["unavailable_reason"]
+    assert "never say component-level drivers are\nunavailable" in llm_qa.SYSTEM_PROMPT.casefold()

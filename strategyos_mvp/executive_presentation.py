@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from .executive_read_model import provenance_summary
 
@@ -212,6 +212,74 @@ def _governed_strategic_reference(payload: Mapping[str, Any], key: str) -> dict[
     return {"label": label, "value": value, "note": note, "source": source}
 
 
+def _contributor_rows(
+    evidence_details: Mapping[str, Any] | None,
+    scope: str,
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Return the ranked contributors already proved by the finance engine."""
+    details = evidence_details if isinstance(evidence_details, Mapping) else {}
+    contributors = details.get("contributors") if isinstance(details.get("contributors"), Mapping) else {}
+    rows = list(contributors.get(scope) or []) if isinstance(contributors, Mapping) else []
+    result: list[dict[str, Any]] = []
+    for row in rows[:limit]:
+        if not isinstance(row, Mapping):
+            continue
+        value = _number_or_none(row.get("value_sar"))
+        result.append(
+            {
+                "label": str(row.get("label") or row.get("account") or "Account"),
+                "value": _format_sar(value),
+                "value_sar": value,
+                "variance_sar": _number_or_none(row.get("variance_sar")),
+                "share_pct": _number_or_none(row.get("share_pct")),
+                "direction": str(row.get("direction") or "").strip() or None,
+                "owner": dict(row.get("owner")) if isinstance(row.get("owner"), Mapping) else None,
+            }
+        )
+    if len(rows) > limit:
+        shown = sum((_number_or_none(row.get("value_sar")) or 0) for row in rows[:limit] if isinstance(row, Mapping))
+        total = sum((_number_or_none(row.get("value_sar")) or 0) for row in rows if isinstance(row, Mapping))
+        remainder = total - shown
+        result.append(
+            {
+                "label": f"Other {len(rows) - limit} accounts",
+                "value": _format_sar(remainder),
+                "value_sar": remainder,
+                "share_pct": (remainder / total * 100) if total else None,
+                "direction": None,
+                "owner": None,
+            }
+        )
+    return result
+
+
+def _decision_contract(
+    *,
+    assertion: str,
+    ask: str | None,
+    owner: Mapping[str, Any] | None,
+    action_required: bool,
+    unavailable_reason: str | None = None,
+    resolved_fields: Iterable[str] = (),
+    requested_fields: Iterable[str] = (),
+) -> dict[str, Any]:
+    """Build a residual human ask and reject requests for resolved fields."""
+    resolved = {str(item) for item in resolved_fields}
+    requested = {str(item) for item in requested_fields}
+    overlap = resolved.intersection(requested)
+    if overlap:
+        raise ValueError(f"CEO decision asks for derivable fields: {sorted(overlap)}")
+    return {
+        "assertion": assertion,
+        "ask": ask,
+        "owner": dict(owner) if isinstance(owner, Mapping) else None,
+        "action_required": bool(action_required),
+        "unavailable_reason": unavailable_reason,
+    }
+
+
 def _executive_kpi_signal(
     spec: Mapping[str, Any],
     *,
@@ -220,6 +288,8 @@ def _executive_kpi_signal(
     missing_inputs: list[str],
     comparison_available: bool,
     actual_complete: bool,
+    evidence_details: Mapping[str, Any] | None = None,
+    evidence_files: Iterable[str] = (),
 ) -> dict[str, Any]:
     """Translate a finance calculation into a CEO posture and next move.
 
@@ -235,7 +305,14 @@ def _executive_kpi_signal(
             "tone": "neutral",
             "action_required": False,
             "readout": "The current actual is available, but a CEO performance conclusion is not yet safe.",
-            "decision": "Keep this with the Group CFO until the period, scope and comparator are aligned.",
+            "decision": "The period, scope and comparator must be aligned before an intervention decision is safe.",
+            "decision_contract": _decision_contract(
+                assertion="A current actual is available, but no like-for-like performance conclusion is derivable.",
+                ask=None,
+                owner=None,
+                action_required=False,
+                unavailable_reason="Period, scope or comparator is not aligned.",
+            ),
         }
 
     if key == "ebitda_margin":
@@ -260,7 +337,24 @@ def _executive_kpi_signal(
             if within_tolerance
             else "Validate whether the upside is repeatable before changing guidance."
             if favourable
-            else "Confirm the margin recovery owner, the two largest levers and the date the gap will close."
+            else "The margin gap requires a dated remediation plan; nominate an accountable owner if none is governed."
+        )
+        decision_contract = _decision_contract(
+            assertion=readout,
+            ask=(
+                "Ask the accountable executive for a dated margin-remediation plan."
+                if not within_tolerance and not favourable
+                else None
+            ),
+            owner=None,
+            action_required=not within_tolerance and not favourable,
+            unavailable_reason=(
+                "The run has no governed owner mapping for this KPI."
+                if not within_tolerance and not favourable
+                else None
+            ),
+            resolved_fields=("margin_variance",),
+            requested_fields=("closure_date", "remediation_plan") if not within_tolerance and not favourable else (),
         )
         return {
             "posture": posture,
@@ -269,6 +363,12 @@ def _executive_kpi_signal(
             "action_required": not within_tolerance and not favourable,
             "readout": readout,
             "decision": decision,
+            "decision_contract": decision_contract,
+            "context": {
+                "what": readout,
+                "why_attached": "This signal is derived from the aligned actual-versus-plan margin comparison.",
+                "sources": [str(item) for item in evidence_files if str(item)][:5],
+            },
         }
 
     comparator = _number_or_none(components.get(spec.get("comparator")))
@@ -293,8 +393,22 @@ def _executive_kpi_signal(
             "decision": (
                 "No liquidity intervention is required; keep the headroom protected against committed uses."
                 if favourable
-                else "Confirm the liquidity action, accountable owner and deadline before the next commitment is made."
+                else "A liquidity action is required before the next commitment; nominate an accountable owner and set the deadline."
             ),
+            "decision_contract": _decision_contract(
+                assertion=f"Liquidity is {variance_label.lower()} for the current reporting scope.",
+                ask="Nominate an accountable owner and set a deadline for the liquidity action." if not favourable else None,
+                owner=None,
+                action_required=not favourable,
+                unavailable_reason="The run has no governed owner mapping." if not favourable else None,
+                resolved_fields=("liquidity_position",),
+                requested_fields=("accountable_owner", "deadline") if not favourable else (),
+            ),
+            "context": {
+                "what": f"Liquidity is {variance_label.lower()} for the current reporting scope.",
+                "why_attached": "This signal is attached because current cash is compared with the governed operating floor.",
+                "sources": [str(item) for item in evidence_files if str(item)][:5],
+            },
         }
 
     posture = "Broadly on plan" if within_tolerance else "Ahead of plan" if favourable else "Off plan"
@@ -306,12 +420,63 @@ def _executive_kpi_signal(
         if within_tolerance
         else f"{subject} is {variance_label} for the current period."
     )
+    scope = "operating_cost" if key == "operating_cost" else "revenue"
+    ranked = _contributor_rows(evidence_details, scope, limit=5)
+    variance_rows = [row for row in ranked if _number_or_none(row.get("variance_sar")) is not None]
+    if not favourable and variance_rows:
+        if bool(spec.get("inverse")):
+            adverse = [row for row in variance_rows if (_number_or_none(row.get("variance_sar")) or 0) > 0]
+        else:
+            adverse = [row for row in variance_rows if (_number_or_none(row.get("variance_sar")) or 0) < 0]
+        top = max(adverse, key=lambda row: abs(_number_or_none(row.get("variance_sar")) or 0)) if adverse else None
+    else:
+        top = ranked[0] if ranked else None
+    owner = top.get("owner") if isinstance(top, Mapping) and isinstance(top.get("owner"), Mapping) else None
+    contributor_assertion = ""
+    if top:
+        share = _number_or_none(top.get("share_pct"))
+        share_text = f", {share:.1f}% of the current figure" if share is not None else ""
+        variance_value = _number_or_none(top.get("variance_sar"))
+        if not favourable and variance_value is not None:
+            contributor_assertion = (
+                f" {top['label']} is the largest adverse contributor to the gap at "
+                f"{_format_sar(abs(variance_value))}; its current value is {top['value']}{share_text}."
+            )
+        else:
+            contributor_assertion = f" {top['label']} is the largest supplied component at {top['value']}{share_text}."
+    unavailable_reason = None
+    if not top:
+        unavailable_reason = f"No ranked {scope.replace('_', ' ')} contributors are present in the governed evidence."
+    elif not owner:
+        unavailable_reason = "The largest contributor is known, but the run has no governed owner mapping."
     decision = (
         "No immediate CEO intervention. Keep the run-rate under watch and escalate only if the gap widens next period."
         if within_tolerance
         else "Validate whether the favourable variance is repeatable before changing guidance."
         if favourable
-        else "Confirm the recovery owner, the largest contributing business line and the date the gap will close."
+        else (
+            contributor_assertion.strip()
+            + (" Nominate its accountable owner and request a dated remediation plan." if not owner else " Request a dated remediation plan from the accountable owner.")
+        )
+    )
+    decision_contract = _decision_contract(
+        assertion=readout + contributor_assertion,
+        ask=(
+            "Nominate the accountable owner and request a dated remediation plan."
+            if not favourable and not within_tolerance and not owner
+            else "Request a dated remediation plan from the accountable owner."
+            if not favourable and not within_tolerance
+            else None
+        ),
+        owner=owner,
+        action_required=not within_tolerance and not favourable,
+        unavailable_reason=unavailable_reason if not within_tolerance and not favourable else None,
+        resolved_fields=("variance", "largest_contributor") if top else ("variance",),
+        requested_fields=("accountable_owner", "closure_date", "remediation_plan")
+        if not favourable and not within_tolerance and not owner
+        else ("closure_date", "remediation_plan")
+        if not favourable and not within_tolerance
+        else (),
     )
     return {
         "posture": posture,
@@ -320,6 +485,12 @@ def _executive_kpi_signal(
         "action_required": not within_tolerance and not favourable,
         "readout": readout,
         "decision": decision,
+        "decision_contract": decision_contract,
+        "context": {
+            "what": readout + contributor_assertion,
+            "why_attached": "This signal is attached because the current actual is compared with the aligned plan and ranked governed components.",
+            "sources": [str(item) for item in evidence_files if str(item)][:5],
+        },
     }
 
 
@@ -357,28 +528,6 @@ def _executive_kpi_brief(
         if not comparison_available
         else "Compared with the approved comparator supplied for this period."
     )
-    contributors = evidence_details.get("contributors") if isinstance(evidence_details.get("contributors"), Mapping) else {}
-
-    def contributor_rows(scope: str, limit: int = 5) -> list[dict[str, Any]]:
-        rows = list(contributors.get(scope) or []) if isinstance(contributors, Mapping) else []
-        result: list[dict[str, Any]] = []
-        for row in rows[:limit]:
-            if not isinstance(row, Mapping):
-                continue
-            result.append(
-                {
-                    "label": str(row.get("label") or row.get("account") or "Account"),
-                    "value": _format_sar(row.get("value_sar")),
-                    "share_pct": _number_or_none(row.get("share_pct")),
-                }
-            )
-        if len(rows) > limit:
-            shown = sum((_number_or_none(row.get("value_sar")) or 0) for row in rows[:limit] if isinstance(row, Mapping))
-            total = sum((_number_or_none(row.get("value_sar")) or 0) for row in rows if isinstance(row, Mapping))
-            remainder = total - shown
-            result.append({"label": f"Other {len(rows) - limit} accounts", "value": _format_sar(remainder), "share_pct": (remainder / total * 100) if total else None})
-        return result
-
     calculation_steps: list[dict[str, str]] = []
     driver_rows: list[dict[str, Any]] = []
     narrative = str(executive_signal.get("readout") or "Current performance is available for review.")
@@ -386,7 +535,7 @@ def _executive_kpi_brief(
     decision_question = ""
     if key == "revenue":
         calculation_steps = [{"label": "Recognised revenue", "value": metric}]
-        driver_rows = contributor_rows("revenue")
+        driver_rows = _contributor_rows(evidence_details, "revenue")
         decision_question = "Does the current revenue position require intervention, and which business line should own it?"
     elif key == "ebitda_margin":
         revenue = _number_or_none(components.get("revenue_actual"))
@@ -409,7 +558,7 @@ def _executive_kpi_brief(
         decision_question = "Does the margin gap require intervention, and which two levers will close it?"
     elif key == "operating_cost":
         calculation_steps = [{"label": "Operating cost", "value": metric}]
-        driver_rows = contributor_rows("operating_cost")
+        driver_rows = _contributor_rows(evidence_details, "operating_cost")
         decision_question = "Does the cost position require intervention, and which owner has the largest controllable gap?"
     elif key == "cash_vs_floor":
         calculation_steps = [{"label": "Reported cash position", "value": metric}]
@@ -666,6 +815,8 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             missing_inputs=missing_inputs,
             comparison_available=comparison_available,
             actual_complete=actual_is_complete,
+            evidence_details=kpi_evidence.get("details") if isinstance(kpi_evidence.get("details"), Mapping) else {},
+            evidence_files=list(kpi_evidence.get("files") or []),
         )
         cards.append(
             {
@@ -1021,6 +1172,26 @@ def _executive_priorities(
         )
 
     performance_signals: list[dict[str, Any]] = []
+    governed_signal_register = (
+        read_model.get("governed_signals")
+        if isinstance(read_model.get("governed_signals"), Mapping)
+        else {}
+    )
+    for item in list(governed_signal_register.get("items") or []):
+        if not isinstance(item, Mapping):
+            continue
+        performance_signals.append(
+            {
+                "key": str(item.get("key") or "governed_signal"),
+                "title": str(item.get("title") or "Governed business signal"),
+                "summary": str(item.get("summary") or ""),
+                "classification": str(item.get("classification") or "Governed signal"),
+                "tone": str(item.get("tone") or "watch"),
+                "action_required": False,
+                "context": dict(item.get("context") or {}),
+                "source_file": governed_signal_register.get("source_file"),
+            }
+        )
     for driver in drivers:
         brief = driver.get("executive_brief") if isinstance(driver.get("executive_brief"), Mapping) else {}
         signal = brief.get("executive_signal") if isinstance(brief.get("executive_signal"), Mapping) else {}
@@ -1035,6 +1206,7 @@ def _executive_priorities(
                 "tone": str(signal.get("tone") or "neutral"),
                 "action_required": bool(signal.get("action_required")),
                 "prompt": str(brief.get("decision_question") or "Explain the executive implication and required owner."),
+                "context": dict(signal.get("signal_context") or {}),
             }
         )
     performance_signals.sort(
@@ -1069,7 +1241,7 @@ def _executive_priorities(
         # Reserved for governed approval requests routed by other people's agents.
         # Keep this empty until that workflow supplies real requests; never mock them.
         "inbound_requests": [],
-        "signals": performance_signals[:3],
+        "signals": performance_signals[:6],
         "delegated_summary": delegated_summary,
         "materiality_threshold_sar": round(materiality_threshold, 2),
     }

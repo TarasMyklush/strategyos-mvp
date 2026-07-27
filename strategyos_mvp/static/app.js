@@ -3536,6 +3536,12 @@
   function renderSourcePackPanel() {
     const operator = isOperator();
     const disabled = state.sourcePackSubmitting || !operator;
+    if (els.sourcePackUploadSubmit) {
+      els.sourcePackUploadSubmit.textContent = activeRunId() ? "Upload and reprocess dataset" : "Start analysis";
+    }
+    if (els.startRunSubmit) {
+      els.startRunSubmit.textContent = activeRunId() ? "Reprocess dataset" : "Start analysis";
+    }
     [
       els.sourcePackFiles,
       els.sourcePackFolderFiles,

@@ -397,6 +397,15 @@ def build_executive_read_model(
             if isinstance((summary or {}).get("finance_kpi"), Mapping)
             else {}
         ),
+        "governed_signals": (
+            dict((summary or {}).get("governed_signals") or {})
+            if isinstance((summary or {}).get("governed_signals"), Mapping)
+            else {
+                "items": [],
+                "status": "unavailable",
+                "reason": "No governed signal register was supplied for this run.",
+            }
+        ),
         "findings": _finding_claims(
             rows,
             run_id=run_id,

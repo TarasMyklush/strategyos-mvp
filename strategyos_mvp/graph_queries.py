@@ -682,7 +682,10 @@ def _humanize_finding_evidence_chain(
     )
     if contract_text:
         answer += f" Contract context also appears in {contract_text}."
-    answer += " Next step: confirm owner, recovery plan, and target closure date before escalation."
+    answer += (
+        " Next step: use the governed owner when supplied; otherwise nominate one, "
+        "then set the recovery plan and target closure date before escalation."
+    )
     return answer
 
 

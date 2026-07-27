@@ -6104,3 +6104,49 @@ def test_board_prompt_driver_context_omitted_for_board_portal():
     assert '"board_packet"' in ctx_body, (
         "assistantEntrypointContext must use board_packet driver_key for board_portal"
     )
+
+
+def test_signal_context_and_determinism_tiers_are_visible_and_fail_closed():
+    js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    css = Path("strategyos_mvp/static/executive.css").read_text(encoding="utf-8")
+    api = Path("strategyos_mvp/api.py").read_text(encoding="utf-8")
+
+    assert "signalContext.what && (signalContext.why_attached || contextSources.length)" in js
+    assert '<details class="ceo-signal-context"><summary>Signal context</summary>' in js
+    assert "text-decoration: underline;" in css
+    assert "governed_fact" in api and "derived_insight" in api and "advisory" in api
+    assert "assistant-tier--" in js
+    assert "From your data" in js
+    assert "Not in your data" in js
+    assert "General practice suggests" in js
+    assert 'data-kpi-question="advisory"' in js
+    assert 'allow_external_advisory: questionType === "advisory"' in js
+
+
+def test_operator_reprocess_reuses_governed_run_path_and_shows_status():
+    js = Path("strategyos_mvp/static/app.js").read_text(encoding="utf-8")
+    html = Path("strategyos_mvp/static/index.html").read_text(encoding="utf-8")
+    state_store = Path("strategyos_mvp/state_store.py").read_text(encoding="utf-8")
+
+    assert 'activeRunId() ? "Upload and reprocess dataset" : "Start analysis"' in js
+    assert 'activeRunId() ? "Reprocess dataset" : "Start analysis"' in js
+    assert "Current run ${displayRunId(result)} is now running." in js
+    assert "current run remains available until processing succeeds" in html
+    assert "pg_advisory_xact_lock" in state_store
+    assert "status in ('queued', 'running')" in state_store
+
+
+def test_ceo_review_files_are_home_only_grouped_and_operable():
+    html = Path("strategyos_mvp/static/executive.html").read_text(encoding="utf-8")
+    js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
+    css = Path("strategyos_mvp/static/executive.css").read_text(encoding="utf-8")
+
+    assert html.count('id="review-files-section"') == 1
+    assert html.index('id="review-files-section"') > html.index('id="priority-section"')
+    assert 'id="review-files-panel"' in html
+    assert "Available files for review" in html
+    assert "review-file-group" in js
+    assert "item.view_url" in js and "item.download_url" in js
+    assert "accept=\".xlsx,.docx,.pptx\"" in js
+    assert "Latest file with the same name is shown" in js
+    assert ".ceo-action-column" in css

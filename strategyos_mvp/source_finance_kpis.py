@@ -232,7 +232,7 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         variance = _decimal(_cell(values, headers, "h1var"))
         plan_margin = _decimal(_cell(values, headers, "ebitdabudget"))
         actual_margin = _decimal(_cell(values, headers, "ebitdah1est"))
-        if _normal(unit) == "group" and None not in {actual, plan, plan_margin, actual_margin}:
+        if _normal(unit).startswith("group") and None not in {actual, plan, plan_margin, actual_margin}:
             group_total = {"actual": actual, "plan": plan, "actual_margin": actual_margin, "plan_margin": plan_margin}
             continue
         # The GROUP total above is used for CEO headlines, but is never a
@@ -328,15 +328,51 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     budget_file = _relative(budget_path, root)
     budget_sha = _sha256(budget_path)
     period = "H1 2026"
+    revenue_contributors = _group_contributor_rows(
+        units,
+        actual_value=lambda row: row["actual"],
+        plan_value=lambda row: row["plan"],
+    )
+    operating_cost_contributors = _group_contributor_rows(
+        units,
+        actual_value=lambda row: row["actual"] * (Decimal("100") - row["actual_margin"]) / 100,
+        plan_value=lambda row: row["plan"] * (Decimal("100") - row["plan_margin"]) / 100,
+    )
+    cost_components = _group_cost_component_drivers(root)
     evidence_base = {
         "files": [budget_file],
         "actual_complete": True,
         "details": {"file": budget_file, "sha256": budget_sha, "sheet": "BU_Budget_2026", "unit_count": len(units)},
     }
     evidence = {
-        "revenue": {**evidence_base, "summary": f"H1 actual and plan aggregated across {len(units)} business units from the approved group budget."},
+        "revenue": {
+            **evidence_base,
+            "details": {**evidence_base["details"], "contributors": {"revenue": revenue_contributors}},
+            "summary": f"H1 actual and plan aggregated across {len(units)} business units from the approved group budget.",
+        },
         "ebitda_margin": {**evidence_base, "summary": "H1 EBITDA is reconstructed from each business unit's H1 revenue and stated EBITDA margin; no group allocation has been added."},
-        "operating_cost": {**evidence_base, "summary": "Total cost to EBITDA is revenue less the stated business-unit EBITDA, not a proxy for a separately supplied opex ledger."},
+        "operating_cost": {
+            **evidence_base,
+            "files": sorted(
+                {
+                    *evidence_base["files"],
+                    *([cost_components["source_file"]] if cost_components else []),
+                }
+            ),
+            "details": {
+                **evidence_base["details"],
+                "contributors": {"operating_cost": operating_cost_contributors},
+                "cost_components": (
+                    cost_components
+                    if cost_components
+                    else {
+                        "available": False,
+                        "unavailable_reason": "No governed BU cost-component variance table is present.",
+                    }
+                ),
+            },
+            "summary": "Total cost to EBITDA is revenue less the stated business-unit EBITDA, not a proxy for a separately supplied opex ledger.",
+        },
         "cash_vs_floor": cash["evidence"],
     }
     return {
@@ -357,6 +393,107 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         "evidence": evidence,
         "source_files": sorted({*([budget_file]), *trend.get("source_files", []), *cash["evidence"].get("files", [])}),
     }
+
+
+def _group_contributor_rows(
+    units: list[dict[str, Any]],
+    *,
+    actual_value: Any,
+    plan_value: Any,
+) -> list[dict[str, Any]]:
+    """Rank group components from the same BU rows as the group headline."""
+    actuals = [(row, Decimal(actual_value(row))) for row in units]
+    total = sum((value for _row, value in actuals), Decimal())
+    result: list[dict[str, Any]] = []
+    for row, actual in sorted(actuals, key=lambda item: abs(item[1]), reverse=True):
+        plan = Decimal(plan_value(row))
+        variance = actual - plan
+        result.append(
+            {
+                "label": str(row["name"]),
+                "value_sar": _number(actual * Decimal("1000000")),
+                "plan_sar": _number(plan * Decimal("1000000")),
+                "variance_sar": _number(variance * Decimal("1000000")),
+                "share_pct": float((actual / total * 100).quantize(Decimal("0.1"))) if total else None,
+                "direction": "above_plan" if variance > 0 else "below_plan" if variance < 0 else "on_plan",
+            }
+        )
+    return result
+
+
+def _group_cost_component_drivers(root: Path) -> dict[str, Any] | None:
+    """Read the delivered BU cost-component table by schema, never filename.
+
+    The KPI headline remains sourced from the approved group budget.  This
+    table only explains the component variances beneath that headline.
+    """
+    required = {
+        "bu",
+        "costcomponent",
+        "h1budgetsarm",
+        "h1actualsarm",
+        "varianceaboveplan",
+    }
+    for path in sorted(root.rglob("*.xlsx")):
+        try:
+            book = load_workbook(path, data_only=True, read_only=True)
+        except Exception:
+            continue
+        for sheet in book.worksheets:
+            iterator = sheet.iter_rows(values_only=True)
+            headers_row = next(iterator, None)
+            headers = _header_positions(headers_row or ())
+            if not required.issubset(headers):
+                continue
+            rows: list[dict[str, Any]] = []
+            for values in iterator:
+                bu = str(_cell(values, headers, "bu") or "").strip()
+                component = str(_cell(values, headers, "costcomponent") or "").strip()
+                budget = _decimal(_cell(values, headers, "h1budgetsarm"))
+                actual = _decimal(_cell(values, headers, "h1actualsarm"))
+                variance = _decimal(_cell(values, headers, "varianceaboveplan"))
+                # Aggregate rows repeat the BU total already exposed in
+                # contributors; the component block must contain the lines
+                # beneath that total, not duplicate it.
+                if (
+                    not bu
+                    or not component
+                    or _normal(component) == "totalcost"
+                    or None in {budget, actual, variance}
+                ):
+                    continue
+                rows.append(
+                    {
+                        "business_unit": bu,
+                        "component": component,
+                        "budget_sar": _number(budget * Decimal("1000000")),
+                        "actual_sar": _number(actual * Decimal("1000000")),
+                        "variance_sar": _number(variance * Decimal("1000000")),
+                        "direction": (
+                            "above_plan"
+                            if variance > 0
+                            else "below_plan"
+                            if variance < 0
+                            else "on_plan"
+                        ),
+                        "driver": str(_cell(values, headers, "driver") or "").strip() or None,
+                        "cross_ref": str(_cell(values, headers, "crossref") or "").strip() or None,
+                    }
+                )
+            if rows:
+                rows.sort(
+                    key=lambda row: abs(Decimal(str(row["variance_sar"]))),
+                    reverse=True,
+                )
+                return {
+                    "available": True,
+                    "cap": 12,
+                    "ranked_by": "absolute governed H1 variance",
+                    "rows": rows[:12],
+                    "source_file": _relative(path, root),
+                    "sheet": sheet.title,
+                }
+    return None
 
 
 def _header_positions(values: Iterable[Any]) -> dict[str, int]:

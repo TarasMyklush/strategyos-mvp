@@ -100,6 +100,26 @@ def create_run_job(
     with connection as conn:
         ensure_data_schema(conn)
         with conn.cursor() as cur:
+            # Serialize submissions for the exact same governed input contract.
+            # The request hash is derived from dataset/source-pack + run options,
+            # so this prevents duplicate reprocessing without blocking unrelated
+            # tenants or datasets.
+            cur.execute("select pg_advisory_xact_lock(hashtext(%s))", (request_hash,))
+            cur.execute(
+                """
+                select id, status
+                from strategyos_run_jobs
+                where request_hash = %s and status in ('queued', 'running')
+                order by created_at desc
+                limit 1
+                """,
+                (request_hash,),
+            )
+            active = fetchone_dict(cur)
+            if active is not None:
+                raise ValueError(
+                    f"Analysis is already {active.get('status') or 'running'} for this dataset."
+                )
             cur.execute(
                 """
                 insert into strategyos_run_jobs

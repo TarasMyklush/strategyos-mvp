@@ -197,7 +197,7 @@ def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatc
 
     assert decision["kpi_question_intent"] == "decision"
     assert "Current position:" in decision["answer"]
-    assert "Accountable owner: Group CFO and the accountable business-line CEO." in decision["answer"]
+    assert "Accountable owner: Not supplied in the governed run; nominate the accountable owner." in decision["answer"]
     assert "Next decision:" in decision["answer"]
     assert "Movement requiring attention: Revenue – Government (-SAR 5)" in decision["answer"]
     assert "immediate governance gap" in decision["answer"]

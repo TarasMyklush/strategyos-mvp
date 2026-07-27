@@ -4,7 +4,10 @@ from pathlib import Path
 
 from strategyos_mvp.executive_presentation import build_executive_presentation
 from strategyos_mvp.executive_read_model import build_executive_read_model
-from strategyos_mvp.source_finance_kpis import derive_source_finance_kpis
+from strategyos_mvp.source_finance_kpis import (
+    _group_cost_component_drivers,
+    derive_source_finance_kpis,
+)
 
 
 DATASET = Path(__file__).parent / "fixtures" / "01_Synthetic_Dataset"
@@ -113,9 +116,37 @@ def test_source_pack_actuals_render_without_inventing_missing_comparators():
         "The current actual is available, but a CEO performance conclusion is not yet safe."
     )
     assert cards[2]["executive_brief"]["executive_signal"]["posture"] == "Comparison pending"
-    assert "Group CFO" in cards[2]["executive_brief"]["decision_context"]
+    assert "Group CFO" not in cards[2]["executive_brief"]["decision_context"]
+    assert cards[2]["executive_brief"]["executive_signal"]["decision_contract"] == {
+        "assertion": "A current actual is available, but no like-for-like performance conclusion is derivable.",
+        "ask": None,
+        "owner": None,
+        "action_required": False,
+        "unavailable_reason": "Period, scope or comparator is not aligned.",
+    }
     assert cards[2]["executive_brief"]["drivers"][0]["label"] == "Salaries & Wages"
-    assert cards[2]["executive_brief"]["decision_context"].startswith("Keep this with the Group CFO")
+    assert cards[2]["executive_brief"]["decision_context"] == (
+        "The period, scope and comparator must be aligned before an intervention decision is safe."
+    )
+
+
+def test_off_plan_cost_asserts_known_contributor_and_only_asks_for_human_authority():
+    payload = derive_source_finance_kpis(DATASET)
+    payload["components"]["operating_cost_plan"] = "90000000.00"
+    read_model = build_executive_read_model(
+        {"run_id": "off-plan-cost", "finance_kpi": payload}, [], {}, {"report_count": 0}, {}
+    )
+    card = build_executive_presentation(read_model)["driver_grid"][2]
+    contract = card["executive_brief"]["executive_signal"]["decision_contract"]
+
+    assert "Salaries & Wages is the largest supplied component" in contract["assertion"]
+    assert "SAR 24.7M" in contract["assertion"]
+    assert contract["owner"] is None
+    assert contract["ask"] == "Nominate the accountable owner and request a dated remediation plan."
+    assert contract["unavailable_reason"] == (
+        "The largest contributor is known, but the run has no governed owner mapping."
+    )
+    assert "Confirm the recovery owner" not in card["executive_brief"]["decision_context"]
 
 
 def _write_reconciliation(path: Path, *, division_2026f: str = "775") -> None:
@@ -197,7 +228,7 @@ def test_group_budget_becomes_the_ceo_projection_without_double_counting_total(t
     ws.append(["South", 200, 195, -5, 20, 18, "Mix pressure"])
     # This is already the consolidated figure: a regression must not sum it
     # with North and South, which would report 800M instead of 300M.
-    ws.append(["GROUP", 300, 300, 0, 16.7, 16, "Consolidated"])
+    ws.append(["GROUP (consolidated, bottom-up)", 300, 300, 0, 16.7, 16, "Consolidated"])
     cash = wb.create_sheet("Group_Cash_Floor")
     cash.append(["Quarter", "Group cash budget (SAR B)", "Actual/Forecast (SAR B)", "Floor (SAR B)"])
     cash.append(["2026-Q2 (est)", 1.2, 1.4, 1.0])
@@ -221,6 +252,11 @@ def test_group_budget_becomes_the_ceo_projection_without_double_counting_total(t
     assert [item["name"] for item in payload["dynamics"]["ebitda_margin"]["dragging"]] == ["South"]
     assert payload["dynamics"]["operating_cost"]["lifting"]
     assert payload["dynamics"]["operating_cost"]["dragging"]
+    revenue_contributors = payload["evidence"]["revenue"]["details"]["contributors"]["revenue"]
+    cost_contributors = payload["evidence"]["operating_cost"]["details"]["contributors"]["operating_cost"]
+    assert revenue_contributors[0]["label"] == "South"
+    assert revenue_contributors[0]["value_sar"] == "195000000.00"
+    assert cost_contributors[0]["variance_sar"] == "-100000.00"
 
 
 def test_group_cash_floor_history_is_a_governed_chart_not_a_synthetic_series():
@@ -309,3 +345,45 @@ def test_group_cash_movers_are_populated_from_governed_floor_headroom():
         ("2026-Q2 group cash", "SAR 210.0M above floor"),
         ("2026-Q1 group cash", "SAR 170.0M above floor"),
     ]
+
+
+def test_group_cost_component_driver_table_is_discovered_by_schema(tmp_path):
+    from openpyxl import Workbook
+
+    path = tmp_path / "opaque_workbook_name.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Cost detail"
+    sheet.append(
+        [
+            "BU",
+            "Cost component",
+            "H1 Budget (SAR M)",
+            "H1 Actual (SAR M)",
+            "Variance (+ = above plan)",
+            "Volume-linked?",
+            "Driver",
+            "Cross-ref",
+        ]
+    )
+    sheet.append(
+        [
+            "Distribution",
+            "Logistics",
+            14.0,
+            16.9,
+            2.9,
+            "Yes",
+            "Contract escalation",
+            "SIG-7",
+        ]
+    )
+    workbook.save(path)
+
+    payload = _group_cost_component_drivers(tmp_path)
+
+    assert payload is not None
+    assert payload["available"] is True
+    assert payload["rows"][0]["business_unit"] == "Distribution"
+    assert payload["rows"][0]["variance_sar"] == "2900000.00"
+    assert payload["rows"][0]["driver"] == "Contract escalation"

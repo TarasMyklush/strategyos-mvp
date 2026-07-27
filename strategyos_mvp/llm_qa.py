@@ -77,6 +77,20 @@ it to answer questions about prior years, growth over time, and what drove
 change -- never say historic data is unavailable while that block is present.
 When it is absent, the run genuinely holds only the current period; say so
 plainly.
+When ``evidence.finance_kpis.contributors.available`` is true, answer questions
+about contributors directly from its ranked scope rows: name the leading line,
+its magnitude and supplied share. Never say component-level drivers are
+unavailable while that block is populated. The ``cap`` states how many ranked
+rows were exposed; do not imply the list is complete beyond that cap.
+When ``evidence.finance_kpis.cost_components.available`` is true, use its
+ranked BU/component rows for operating-cost breakdown and driver questions.
+Keep its supplied cap explicit and do not imply rows beyond it were reviewed.
+When ``evidence.finance_kpis.movements.available`` is false, distinguish current
+composition from period-over-period movement and state that the latter is not
+supplied rather than synthesising a trend.
+When ``evidence.governed_signals.available`` is true, use those signal rows for
+forward-looking risk and opportunity questions. Keep their impact,
+probability, horizon and source distinct from calculated KPI facts.
 For a question that is plainly general knowledge and names nothing in the
 business (a definition, arithmetic, a well-known fact), answer it directly and
 briefly from your own knowledge; do not force it through the evidence.
@@ -461,6 +475,7 @@ def _build_evidence_payload(
         },
         "finance_kpis": _finance_kpi_evidence(summary),
         "historic_context": _historic_context_evidence(summary),
+        "governed_signals": _governed_signals_evidence(summary),
         "findings": [_finding_summary(finding) for finding in findings[:12]],
     }
     if supplemental_evidence:
@@ -542,6 +557,22 @@ def _historic_context_evidence(summary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _governed_signals_evidence(summary: dict[str, Any]) -> dict[str, Any]:
+    payload = summary.get("governed_signals")
+    if not isinstance(payload, dict) or payload.get("status") != "ready":
+        return {
+            "available": False,
+            "unavailable_reason": "No governed signal register is present in the run model.",
+        }
+    return {
+        "available": True,
+        "cap": payload.get("cap"),
+        "total_item_count": payload.get("total_item_count"),
+        "source_file": payload.get("source_file"),
+        "items": list(payload.get("items") or []),
+    }
+
+
 def _finance_kpi_evidence(summary: dict[str, Any]) -> dict[str, Any]:
     """Expose the governed finance contract to Hermes without broad DB leakage."""
     payload = summary.get("finance_kpi") or summary.get("oracle_kpi") or {}
@@ -549,6 +580,44 @@ def _finance_kpi_evidence(summary: dict[str, Any]) -> dict[str, Any]:
         return {"available": False}
     components = payload.get("components") if isinstance(payload.get("components"), dict) else {}
     evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+    contributor_cap = 5
+    contributors_by_scope: dict[str, list[dict[str, Any]]] = {}
+    cost_components: dict[str, Any] = {
+        "available": False,
+        "unavailable_reason": "No governed BU cost-component variance table is present.",
+    }
+    for evidence_item in evidence.values():
+        if not isinstance(evidence_item, dict):
+            continue
+        details = evidence_item.get("details") if isinstance(evidence_item.get("details"), dict) else {}
+        contributor_map = details.get("contributors") if isinstance(details.get("contributors"), dict) else {}
+        component_block = details.get("cost_components")
+        if (
+            isinstance(component_block, dict)
+            and component_block.get("available")
+            and not cost_components.get("available")
+        ):
+            cost_components = dict(component_block)
+        for scope, raw_rows in contributor_map.items():
+            if scope in contributors_by_scope or not isinstance(raw_rows, list):
+                continue
+            rows: list[dict[str, Any]] = []
+            for row in raw_rows[:contributor_cap]:
+                if not isinstance(row, dict):
+                    continue
+                rows.append(
+                    {
+                        "label": row.get("label") or row.get("account"),
+                        "amount_sar": row.get("value_sar"),
+                        "variance_sar": row.get("variance_sar"),
+                        "share_pct": row.get("share_pct"),
+                        "direction": row.get("direction"),
+                    }
+                )
+            if rows:
+                contributors_by_scope[str(scope)] = rows
+    raw_movements = payload.get("movements") or payload.get("dynamics")
+    movements = dict(raw_movements) if isinstance(raw_movements, dict) and raw_movements else {}
     source_files: list[str] = []
     for item in evidence.values():
         if not isinstance(item, dict):
@@ -565,6 +634,18 @@ def _finance_kpi_evidence(summary: dict[str, Any]) -> dict[str, Any]:
             key: components.get(key)
             for key in ("revenue_actual", "revenue_plan", "cogs_actual", "operating_cost_actual", "ebitda_actual", "cash_balance")
             if key in components
+        },
+        "contributors": {
+            "available": bool(contributors_by_scope),
+            "cap": contributor_cap,
+            "ranked_by": "absolute governed amount",
+            "scopes": contributors_by_scope,
+        },
+        "cost_components": cost_components,
+        "movements": {
+            "available": bool(movements),
+            "items": movements,
+            "unavailable_reason": None if movements else "No governed period-over-period movement block is present in the run model.",
         },
         "source_files": source_files[:8],
     }

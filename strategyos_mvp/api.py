@@ -20,8 +20,8 @@ from urllib.parse import quote, urlparse
 from uuid import UUID, uuid4
 
 try:
-    from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
-    from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+    from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
+    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
 except Exception as exc:  # pragma: no cover - optional cloud dependency
@@ -73,6 +73,13 @@ from . import qa as qa_engine
 from . import llm_qa
 from .skills.finance_controls import run_all_finance_skills
 from .reviewer_runtime import resume_reviewed_run
+from .review_files import (
+    build_review_file_registry,
+    media_type_for,
+    resolve_source_review_file,
+    resolve_uploaded_review_file,
+    save_review_file_upload,
+)
 from .run_registry import (
     discover_run_history,
     load_latest_run_summary,
@@ -9832,6 +9839,103 @@ def latest_run(
     return _summary_with_reconciled_metrics(summary, view_state=view_state, principal=principal)
 
 
+def _latest_source_pack_id(summary: Mapping[str, Any] | None) -> str | None:
+    if not isinstance(summary, Mapping):
+        return None
+    source_pack = summary.get("source_pack")
+    if isinstance(source_pack, Mapping):
+        value = str(source_pack.get("source_pack_id") or "").strip()
+        if value:
+            return value
+    value = str(summary.get("source_pack_id") or "").strip()
+    return value or None
+
+
+def _principal_tenant_id(principal: Mapping[str, Any]) -> str:
+    return str(principal.get("tenant_id") or CONFIG.tenant_slug)
+
+
+@app.get("/executive/files")
+def executive_review_files(
+    principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
+) -> dict[str, Any]:
+    summary = _latest_summary()
+    return build_review_file_registry(
+        source_pack_id=_latest_source_pack_id(summary),
+        tenant_id=_principal_tenant_id(principal),
+        summary=summary,
+    )
+
+
+@app.post("/executive/files")
+def upload_executive_review_file(
+    file: UploadFile = File(...),
+    group: str | None = Form(None),
+    scope: str | None = Form(None),
+    linked_refs: str | None = Form(None),
+    principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
+) -> dict[str, Any]:
+    item = save_review_file_upload(
+        file,
+        tenant_id=_principal_tenant_id(principal),
+        uploaded_by=str(
+            principal.get("display_name")
+            or principal.get("email")
+            or principal.get("role")
+            or "Executive"
+        ),
+        group=group,
+        scope=scope,
+        linked_refs=linked_refs,
+    )
+    return {"status": "uploaded", "file": item}
+
+
+@app.get("/executive/files/{file_id}")
+def download_executive_review_file(
+    file_id: str,
+    disposition: str = "attachment",
+    origin: str = "source",
+    principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
+) -> FileResponse:
+    normalized_disposition = (
+        "inline" if str(disposition).lower() == "inline" else "attachment"
+    )
+    summary = _latest_summary()
+    if origin == "upload":
+        registry = build_review_file_registry(
+            source_pack_id=None,
+            tenant_id=_principal_tenant_id(principal),
+            summary=summary,
+        )
+        matching = [
+            item
+            for group in registry.get("groups") or []
+            for item in group.get("items") or []
+            if str(item.get("id") or "") == f"upload:{file_id}"
+        ]
+        if len(matching) != 1:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found.")
+        path = resolve_uploaded_review_file(_principal_tenant_id(principal), file_id)
+        filename = str(matching[0].get("filename") or path.name)
+    else:
+        source_pack_id = _latest_source_pack_id(summary)
+        if not source_pack_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found.")
+        path = resolve_source_review_file(source_pack_id, file_id)
+        filename = path.name
+    response = FileResponse(
+        path,
+        media_type=media_type_for(path),
+        filename=filename,
+    )
+    response.headers["Content-Disposition"] = (
+        f'{normalized_disposition}; filename="{quote(filename)}"'
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @app.get("/runs/latest/audit-summary")
 def latest_run_audit_summary(
     _: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
@@ -11446,6 +11550,40 @@ def _assistant_response_payload(
         payload.setdefault("answer_origin", "governed")
         payload.setdefault("human_review_required", False)
     payload["answer"] = _sanitize_assistant_visible_text(payload.get("answer"))
+    citations = list(payload.get("citations") or [])
+    is_model_answer = str(payload.get("answer_origin") or "").lower() == "llm"
+    traceable = bool((payload.get("risk_metadata") or {}).get("traceable"))
+    if not is_model_answer and (payload.get("assistant_mode") in {"deterministic", "governed_kpi", "governed_calendar"} or citations):
+        determinism_tier = "governed_fact"
+    elif citations or traceable:
+        determinism_tier = "derived_insight"
+    else:
+        determinism_tier = "advisory"
+    payload["determinism_tier"] = determinism_tier
+    if determinism_tier == "advisory":
+        missing_layer = str(
+            payload.get("missing_layer")
+            or trace.get("missing_layer")
+            or (scenario_result or {}).get("missing_layer")
+            or "external benchmark or market context"
+        )
+        payload["missing_layer"] = missing_layer
+        payload["response_sections"] = {
+            "from_your_data": None,
+            "not_in_your_data": f"The governed evidence stops at the {missing_layer} layer.",
+            "general_practice_suggests": payload["answer"],
+        }
+    else:
+        payload["response_sections"] = {
+            "from_your_data": payload["answer"],
+            "not_in_your_data": None,
+            "general_practice_suggests": None,
+        }
+    payload["external_consultation"] = {
+        "requested": bool((assistant_context or {}).get("allow_external_advisory")),
+        "used": determinism_tier == "advisory",
+        "audit_trail_id": trace.get("audit_trail_id"),
+    }
     # Last gate before the executive reads it: correct any premise the run
     # refutes, and never let a figure under review leave as a commitment.
     # Placed here so deterministic, scenario and model answers are all covered.
@@ -11773,7 +11911,7 @@ def _calendar_quick_action_result(
     related_bu = str(item.get("related_bu") or "").strip()
     attendees = str(item.get("attendees") or "").strip()
     recipient = attendees or (f"{related_bu} leadership" if related_bu else "the meeting sponsor and CEO Office")
-    owner_gap = f"The calendar does not name the accountable input owner; confirm ownership with {recipient}."
+    owner_gap = f"The calendar does not name the accountable input owner; assign ownership with {recipient}."
 
     if action == "input_request":
         answer = "\n".join(
@@ -12450,12 +12588,16 @@ def _ceo_kpi_inline_result(
     metric = str(card.get("metric") or "available")
 
     def _accountable_owner() -> str:
-        return {
-            "revenue": "Group CFO and the accountable business-line CEO",
-            "ebitda_margin": "Group CFO",
-            "operating_cost": "Group CFO and the accountable operating executives",
-            "cash_vs_floor": "Group CFO and Group Treasury",
-        }.get(kpi_key, "Group CFO")
+        signal = brief.get("executive_signal") if isinstance(brief.get("executive_signal"), Mapping) else {}
+        contract = signal.get("decision_contract") if isinstance(signal.get("decision_contract"), Mapping) else {}
+        owner = contract.get("owner") if isinstance(contract.get("owner"), Mapping) else {}
+        role = str(owner.get("role") or "").strip()
+        basis = str(owner.get("basis") or "").strip()
+        if role and basis:
+            return f"{role} (established by {basis})"
+        if role:
+            return role
+        return "Not supplied in the governed run; nominate the accountable owner"
 
     def _ranked_components() -> list[tuple[float, str, str]]:
         ranked: list[tuple[float, str, str]] = []
@@ -12673,7 +12815,7 @@ def _ceo_kpi_inline_result(
             answer = f"Accountable owner: {_accountable_owner()}. {label} is {metric}. {brief.get('readout') or card.get('detail') or ''} "
             answer += _composition_sentence() + " "
             answer += _movement_sentence() + " "
-            answer += f"Commitment to request: {decision_context or 'Confirm the accountable owner, the next measurable milestone and the escalation threshold.'}"
+            answer += f"Commitment to request: {decision_context or 'Nominate the accountable owner, then set the next measurable milestone and escalation threshold.'}"
         elif resolved_intent == "outlook":
             decision_context = str(brief.get("decision_context") or "").strip()
             readout = str(brief.get("readout") or card.get("detail") or "").strip()

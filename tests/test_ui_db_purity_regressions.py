@@ -127,7 +127,10 @@ def test_executive_js_has_no_hardcoded_identity_fixtures():
 
 def test_executive_shell_has_no_hardcoded_org_identity_or_legacy_namespace():
     client = TestClient(api_module.app)
-    html = client.get("/app").text
+    # Inspect the shell template, not the runtime bootstrap packet. A governed
+    # dataset may legitimately name its organisation or executives; the
+    # regression protects against hardcoding those names in UI source.
+    html = Path("strategyos_mvp/static/executive.html").read_text(encoding="utf-8")
     js = client.get("/static/executive.js").text
 
     for marker in ("Mizan", "Khalid", ">KA<", "window.MIZAN", "MIZAN_X"):

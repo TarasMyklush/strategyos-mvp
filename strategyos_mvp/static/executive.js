@@ -4491,6 +4491,9 @@
 
   function kpiExecutiveContextMarkup(brief, comparison, strategicReference) {
     var signal = brief.executive_signal && typeof brief.executive_signal === "object" ? brief.executive_signal : {};
+    var decisionContract = signal.decision_contract && typeof signal.decision_contract === "object" ? signal.decision_contract : {};
+    var signalContext = signal.context && typeof signal.context === "object" ? signal.context : {};
+    var contextSources = safeArray(signalContext.sources);
     var comparisonAvailable = comparison && comparison.available === true;
     var audit = brief.audit || {};
     var missing = safeArray(audit.missing_inputs);
@@ -4503,11 +4506,17 @@
     var variance = firstDefined(signal.variance_label, comparison.value, comparisonAvailable ? 'Compared with plan' : 'No like-for-like comparator');
     var tone = ['critical', 'watch', 'positive', 'neutral'].indexOf(String(signal.tone)) >= 0 ? String(signal.tone) : 'neutral';
     var actionRequired = signal.action_required === true;
+    var assertion = firstDefined(decisionContract.assertion, signal.readout, brief.readout, 'No executive readout is available.');
+    var ask = firstDefined(decisionContract.ask, signal.decision, brief.decision_context, 'No CEO action is currently identified.');
+    var signalContextMarkup = signalContext.what && (signalContext.why_attached || contextSources.length)
+      ? '<details class="ceo-signal-context"><summary>Signal context</summary><div><p>' + escapeHtml(signalContext.what) + '</p>' + (signalContext.why_attached ? '<small>' + escapeHtml(signalContext.why_attached) + '</small>' : '') + (contextSources.length ? '<span>Source · ' + escapeHtml(contextSources.join(' · ')) + '</span>' : '') + '</div></details>'
+      : '';
     return [
       '<section class="ceo-kpi-readout tone-' + escapeHtml(tone) + '">',
       '<div class="ceo-kpi-readout__head"><span class="kpi-brief-label">CEO readout</span><span class="ceo-posture-chip tone-' + escapeHtml(tone) + '">' + escapeHtml(posture) + '</span></div>',
-      '<p class="ceo-kpi-readout__summary">' + escapeHtml(firstDefined(signal.readout, brief.readout, 'No executive readout is available.')) + '</p>',
-      '<div class="ceo-kpi-next-move"><span>' + (actionRequired ? 'Decision required' : 'Executive posture') + '</span><strong>' + escapeHtml(firstDefined(signal.decision, brief.decision_context, 'No CEO action is currently identified.')) + '</strong></div>',
+      '<p class="ceo-kpi-readout__summary">' + escapeHtml(assertion) + '</p>',
+      signalContextMarkup,
+      '<div class="ceo-kpi-next-move"><span>' + (actionRequired ? 'What needs your authority' : 'Executive posture') + '</span><strong>' + escapeHtml(ask) + '</strong></div>',
       '</section>',
       '<div class="ceo-kpi-facts">',
       '<div><span>Position</span><strong>' + escapeHtml(variance) + '</strong></div>',
@@ -4555,7 +4564,7 @@
       executiveContextMarkup,
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       (compositionMarkup ? '<details class="kpi-supporting-analysis"><summary>Supporting analysis</summary>' + compositionMarkup + '</details>' : ''),
-      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Decision support</span><strong>Pressure-test the executive position with ' + escapeHtml(assistantName) + '</strong><p>The selected result, business context and supporting sources are already attached.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">Do I need to intervene?</button><button type="button" data-kpi-question="briefing">Who owns it—and why?</button><button type="button" data-kpi-question="outlook">What changes the outlook?</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask a decision question about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
+      '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Decision support</span><strong>Pressure-test the executive position with ' + escapeHtml(assistantName) + '</strong><p>The selected result, business context and supporting sources are already attached.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">Do I need to intervene?</button><button type="button" data-kpi-question="briefing">Who owns it—and why?</button><button type="button" data-kpi-question="outlook">What changes the outlook?</button><button type="button" data-kpi-question="advisory">Consult general practice</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask a decision question about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
       '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
@@ -4572,7 +4581,8 @@
         var prompts = {
           decision: "For " + label + ", do I need to intervene now? Give me the decision, owner and deadline only if the executive threshold is crossed.",
           briefing: "Which executive owns the current " + label + " outcome, what are the two largest business drivers, and what commitment should I request?",
-          outlook: "What would materially change the current " + label + " outlook before the next executive review?"
+          outlook: "What would materially change the current " + label + " outlook before the next executive review?",
+          advisory: "For " + label + ", separate what our data proves, what is missing, and what general executive practice suggests."
         };
         askAssistant(prompts[questionType] || prompts.decision, button, {
           entrypoint: "ceo_kpi_inline",
@@ -4581,6 +4591,7 @@
           kpi_label: label,
           subject: kpiAssistantSubject(driver),
           kpi_question_intent: questionType,
+          allow_external_advisory: questionType === "advisory",
           kpi_availability: availability,
           active_view: "home"
         });
@@ -5276,7 +5287,7 @@
       var isOpen = Boolean((state.openDecisionKeys || {})[key]);
       var source = firstDefined(item.raised_by, item.source_agent, item.source, 'Executive review');
       var timing = firstDefined(item.timing, 'Current review');
-      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>What needs your decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'Confirm the owner and next move.')) + '</strong></div><div class="executive-decision__foot"><span>Accountable owner · ' + escapeHtml(firstDefined(item.owner, 'Executive team')) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Open decision brief →</button></div></div>' : '') + '</article>';
+      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>What needs your decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'No executive authority request was supplied.')) + '</strong></div><div class="executive-decision__foot"><span>Accountable owner · ' + escapeHtml(firstDefined(item.owner, 'Not supplied in the governed run')) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Open decision brief →</button></div></div>' : '') + '</article>';
     }).join('') : '<div class="executive-empty-state"><strong>No decision is waiting for you</strong><p>No approval, intervention or direction is currently routed to the CEO.</p></div>';
 
     var signalMarkup = developmentsAndConcerns.length ? developmentsAndConcerns.map(function (item, index) {
@@ -5286,7 +5297,17 @@
       var inferredClassification = metricName.length <= 28 ? 'Group KPI · ' + metricName : 'Group KPI';
       var classification = firstDefined(item.tag, item.classification, item.category, inferredClassification);
       var statement = [title, firstDefined(item.summary, '')].filter(Boolean).join(' — ');
-      return '<article class="executive-signal target-awareness-row tone-' + escapeHtml(tone) + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(tone === 'critical' ? 'Red concern' : tone === 'positive' ? 'Green positive development' : 'Amber watch item') + '"></span><span class="target-feed-title">' + escapeHtml(statement) + '</span><span class="target-feed-tag">' + escapeHtml(classification) + '</span></article>';
+      var context = item.context && typeof item.context === 'object' ? item.context : {};
+      var sources = safeArray(context.sources).filter(Boolean);
+      var hasContext = Boolean(context.what && (context.why_attached || sources.length));
+      var row = '<span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(tone === 'critical' ? 'Red concern' : tone === 'positive' ? 'Green positive development' : 'Amber watch item') + '"></span><span class="target-feed-title">' + escapeHtml(statement) + '</span><span class="target-feed-tag">' + escapeHtml(classification) + '</span>';
+      if (!hasContext) return '<article class="executive-signal target-awareness-row tone-' + escapeHtml(tone) + '">' + row + '</article>';
+      var contextMeta = [
+        context.probability ? 'Probability · ' + context.probability : '',
+        context.horizon ? 'Horizon · ' + context.horizon : '',
+        sources.length ? 'Source · ' + sources.join(' · ') : ''
+      ].filter(Boolean);
+      return '<details class="executive-signal executive-signal--context tone-' + escapeHtml(tone) + '"><summary class="target-awareness-row">' + row + '<span class="target-feed-caret" aria-hidden="true">+</span></summary><div class="executive-signal-context"><p><strong>Why it is here</strong>' + escapeHtml(firstDefined(context.why_attached, context.what)) + '</p>' + (context.leading_indicator ? '<p><strong>Watch</strong>' + escapeHtml(context.leading_indicator) + '</p>' : '') + (context.recommended_action ? '<p><strong>Response already in the data</strong>' + escapeHtml(context.recommended_action) + '</p>' : '') + (contextMeta.length ? '<small>' + escapeHtml(contextMeta.join(' · ')) + '</small>' : '') + '</div></details>';
     }).join('') : '<div class="executive-empty-state"><strong>No material performance exception</strong><p>The current headline measures remain within the executive tolerance.</p></div>';
 
     if (findingsPanel) {
@@ -5312,6 +5333,7 @@
         };
       });
     });
+    renderReviewFiles();
 
     if (weekPanel) {
       weekPanel.hidden = false;
@@ -5451,6 +5473,51 @@
     if (automationCard) {
       automationCard.hidden = true;
       automationCard.innerHTML = '';
+    }
+  }
+
+  function renderReviewFiles() {
+    var panel = $("review-files-panel");
+    if (!panel) return;
+    var registry = state.reviewFiles || {};
+    var groups = safeArray(registry.groups);
+    var groupsMarkup = groups.length ? groups.map(function (group) {
+      var items = safeArray(group.items);
+      return '<section class="review-file-group"><h3>' + escapeHtml(firstDefined(group.label, 'Governed documents')) + '</h3><div class="review-file-list">' + items.map(function (item) {
+        var meta = [String(firstDefined(item.type, '')).toUpperCase(), item.scope, item.status, item.date].filter(Boolean).join(' · ');
+        return '<article class="review-file-row"><span class="review-file-icon" aria-hidden="true">' + escapeHtml(String(firstDefined(item.type, 'file')).slice(0, 1).toUpperCase()) + '</span><span class="review-file-copy"><strong>' + escapeHtml(firstDefined(item.filename, 'Office file')) + '</strong><small>' + escapeHtml(meta) + '</small></span><span class="review-file-actions"><a href="' + escapeHtml(item.view_url) + '" target="_blank" rel="noopener">View</a><a href="' + escapeHtml(item.download_url) + '">Download</a></span></article>';
+      }).join('') + '</div></section>';
+    }).join('') : '<div class="executive-empty-state"><strong>No relevant Office files</strong><p>' + escapeHtml(firstDefined(registry.empty_reason, 'No governed XLSX, DOCX or PPTX file is linked to the current briefing.')) + '</p></div>';
+    var capNote = registry.cap
+      ? 'Showing up to ' + escapeHtml(String(registry.cap)) + ' relevance-selected files. '
+      : '';
+    panel.innerHTML = '<div class="review-file-groups">' + groupsMarkup + '</div><p class="review-file-version-note">' + capNote + escapeHtml(firstDefined(registry.versioning, 'Latest file with the same name is shown. Version history is not yet available.')) + '</p><details class="review-file-upload"><summary>Upload an Office file</summary><form data-review-file-upload><label>File<input type="file" name="file" required accept=".xlsx,.docx,.pptx" /></label><label>Headline group<input type="text" name="group" maxlength="120" placeholder="e.g. Decision pack" /></label><label>Business scope<input type="text" name="scope" maxlength="120" placeholder="Optional" /></label><button type="submit">Upload for review</button><span data-review-file-status></span></form></details>';
+    var form = panel.querySelector('[data-review-file-upload]');
+    if (form) {
+      form.onsubmit = async function (event) {
+        event.preventDefault();
+        var statusEl = form.querySelector('[data-review-file-status]');
+        var submit = form.querySelector('button[type="submit"]');
+        var data = new FormData(form);
+        if (submit) submit.disabled = true;
+        if (statusEl) statusEl.textContent = 'Uploading…';
+        try {
+          var response = await fetch('/executive/files', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: data
+          });
+          var payload = await parseJsonResponse(response);
+          if (!response.ok) throw new Error(firstDefined(payload && payload.detail, 'Upload failed.'));
+          state.reviewFiles = await fetchJson('/executive/files') || state.reviewFiles;
+          renderReviewFiles();
+          showToast('Office file added to the CEO review list.');
+        } catch (error) {
+          if (statusEl) statusEl.textContent = firstDefined(error && error.message, 'Upload failed.');
+        } finally {
+          if (submit) submit.disabled = false;
+        }
+      };
     }
   }
 
@@ -5699,10 +5766,22 @@
             return '<button type="button" class="assistant-retry-button" data-assistant-case-id="' + escapeHtml(caseId) + '">Open case: ' + escapeHtml(label) + '</button>';
           }).join('') + '</div>';
         }
+        var payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
+        var tier = String(firstDefined(payload.determinism_tier, '')).trim();
+        var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
+        var tierLabel = { governed_fact: 'Governed fact', derived_insight: 'Derived insight', advisory: 'Advisory' }[tier] || '';
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));
-        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + '</span><p>' + bodyHtml + '</p>' + failureMeta + retryButton + caseLinks + '</div>';
+        var answerMarkup = '<p>' + bodyHtml + '</p>';
+        if (role === 'assistant' && tier === 'advisory') {
+          answerMarkup = '<div class="assistant-answer-sections">'
+            + (sections.from_your_data ? '<section class="assistant-answer-block assistant-answer-block--fact"><span>From your data</span><p>' + renderAssistantMarkdownToHtml(sections.from_your_data) + '</p></section>' : '')
+            + (sections.not_in_your_data ? '<section class="assistant-answer-block assistant-answer-block--gap"><span>Not in your data</span><p>' + escapeHtml(sections.not_in_your_data) + '</p></section>' : '')
+            + (sections.general_practice_suggests ? '<section class="assistant-answer-block assistant-answer-block--advisory"><span>General practice suggests</span><p>' + renderAssistantMarkdownToHtml(sections.general_practice_suggests) + '</p></section>' : '')
+            + '</div>';
+        }
+        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + (tierLabel ? '<em class="assistant-tier assistant-tier--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</em>' : '') + '</span>' + answerMarkup + failureMeta + retryButton + caseLinks + '</div>';
       }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No messages yet</span><p>Ask a question to begin.</p></div>';
       safeArray(messages.querySelectorAll('[data-assistant-retry-index]')).forEach(function (button) {
         button.onclick = function () {
@@ -5831,13 +5910,16 @@
       var session = await fetchJson("/ui/session") || {};
       var packetAndNetwork = await Promise.all([
         fetchJson(latestRunRouteForSession(session) + buildQuery(params)),
-        session.authenticated ? fetchJson("/api/v1/agent-network") : Promise.resolve(null)
+        session.authenticated ? fetchJson("/api/v1/agent-network") : Promise.resolve(null),
+        session.authenticated ? fetchJson("/executive/files") : Promise.resolve(null)
       ]);
       var latestPacket = packetAndNetwork[0];
       var agentNetwork = packetAndNetwork[1];
+      var reviewFiles = packetAndNetwork[2];
 
       state.latestPacket = latestPacket || {};
       state.agentNetwork = agentNetwork && agentNetwork.status === "ok" ? agentNetwork : null;
+      state.reviewFiles = reviewFiles && reviewFiles.status === "ok" ? reviewFiles : null;
       state.session = session;
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
@@ -5908,6 +5990,7 @@
   var state = {
     latestPacket: null,
     agentNetwork: null,
+    reviewFiles: null,
     session: null,
     personas: [],
     token: null,

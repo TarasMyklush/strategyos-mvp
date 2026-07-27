@@ -29,6 +29,7 @@ from .runtime_governance import RuntimeGovernance, build_run_summary, checkpoint
 from .source_finance_kpis import derive_source_finance_kpis
 from .source_calendar import derive_calendar_agenda
 from .source_historic_context import derive_historic_context
+from .source_signals import derive_governed_signals
 from .source_pack import resolve_source_pack_for_run
 from .vector_store import sync_findings_vector_store
 from .workflow import build_workflow
@@ -326,6 +327,7 @@ def _execute_strategyos_workflow(
     # from those files instead of requiring a separate Oracle API request.
     summary["finance_kpi"] = derive_source_finance_kpis(dataset_root)
     summary["calendar_agenda"] = derive_calendar_agenda(dataset_root)
+    summary["governed_signals"] = derive_governed_signals(dataset_root)
     # Multi-year context read from the dataset's strategic files, so the
     # assistant can answer trend questions the current-period run does not
     # calculate. Absent for datasets that carry no history.

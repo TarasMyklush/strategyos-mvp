@@ -332,7 +332,10 @@ def _handle_named_finding_board_question(
     if remediation:
         answer_parts.append(f"Recommended action: {remediation}")
     else:
-        answer_parts.append("Recommended action: review the cited evidence and confirm the next owner before board release.")
+        answer_parts.append(
+            "Recommended action: review the cited evidence; use its governed owner when supplied, "
+            "otherwise nominate one before board release."
+        )
     answer_parts.append(
         "For the board, treat the value as an identified recoverable amount until the recorded action is completed."
     )
