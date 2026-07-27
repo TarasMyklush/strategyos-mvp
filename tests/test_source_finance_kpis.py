@@ -190,6 +190,29 @@ def test_recommendation_due_date_uses_only_a_future_governed_milestone():
     }
 
 
+def test_legacy_group_variance_rows_retain_business_unit_accountability():
+    from strategyos_mvp.executive_presentation import _contributor_rows
+
+    rows = _contributor_rows(
+        {
+            "contributors": {
+                "operating_cost": [
+                    {
+                        "label": "Tamween Pharma Distribution",
+                        "value_sar": 1179240000,
+                        "variance_sar": 71208000,
+                        "share_pct": 34.4,
+                        "direction": "above_plan",
+                    }
+                ]
+            }
+        },
+        "operating_cost",
+    )
+
+    assert rows[0]["contributor_kind"] == "business_unit"
+
+
 def _write_reconciliation(path: Path, *, division_2026f: str = "775") -> None:
     """A minimal division-to-group reconciliation, matching the real file's shape."""
     from openpyxl import Workbook

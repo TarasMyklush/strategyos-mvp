@@ -230,10 +230,23 @@ def _contributor_rows(
         if not isinstance(row, Mapping):
             continue
         value = _number_or_none(row.get("value_sar"))
+        contributor_kind = str(row.get("contributor_kind") or "").strip() or None
+        if contributor_kind is None:
+            if (
+                row.get("business_unit") is not None
+                or row.get("bu") is not None
+                or ("account" not in row and row.get("variance_sar") is not None)
+            ):
+                # Runs persisted before contributor_kind was added still carry
+                # the deterministic BU variance shape. Preserve their meaning
+                # without guessing from the display label.
+                contributor_kind = "business_unit"
+            elif row.get("account") is not None:
+                contributor_kind = "account"
         result.append(
             {
                 "label": str(row.get("label") or row.get("account") or "Account"),
-                "contributor_kind": str(row.get("contributor_kind") or "").strip() or None,
+                "contributor_kind": contributor_kind,
                 "value": _format_sar(value),
                 "value_sar": value,
                 "variance_sar": _number_or_none(row.get("variance_sar")),
