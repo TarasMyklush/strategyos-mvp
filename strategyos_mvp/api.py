@@ -14214,6 +14214,33 @@ def _question_requests_general_practice_advisory(question: str) -> bool:
     )
 
 
+def _auto_question_is_narrow_tabular_lookup(question: str) -> bool:
+    """Allow deterministic QA only for exact, single-purpose lookup grammar.
+
+    CEO questions are commonly compound analyses. A broad keyword such as
+    ``invoice``, ``pay`` or ``save`` must never reduce those questions to an
+    unrelated total merely because the legacy tabular engine recognizes one
+    word. Complex questions fall through to the reviewed evidence-grounded
+    model path.
+    """
+
+    norm = " ".join(str(question or "").casefold().strip().rstrip("?.!").split())
+    patterns = (
+        r"(?:what is|show me) (?:the )?total recoverable(?: value| identified)?",
+        r"show (?:me )?recoverable by (?:pattern|type|category)",
+        r"how many findings(?: are there| by confidence| by status)?",
+        r"top \d{1,2} findings(?: by recoverable(?: value)?)?",
+        r"what is (?:the )?total amount of (?:(?:ap|ar) )?invoices",
+        r"how many (?:(?:ap|ar) )?invoices(?: are there)?",
+        r"what is (?:the )?total amount of (?:unpaid|overdue) invoices",
+        r"top \d{1,2} (?:vendors|suppliers|customers) by spend",
+        r"how many distinct (?:vendors|suppliers|customers)(?: are there)?",
+        r"how much did we pay [a-z0-9][a-z0-9 .&'/-]{2,80}",
+        r"what are (?:the )?working[- ]capital drift signals",
+    )
+    return any(re.fullmatch(pattern, norm) for pattern in patterns)
+
+
 def _governed_executive_attention_result(
     summary: Mapping[str, Any] | None,
     *,
@@ -15192,10 +15219,23 @@ async def _assistant_chat_response(
             "suggestions": [],
         }
         if explicit_advisory_request
-        else qa_engine.answer_question(
-            question,
-            bundle=context["bundle"],
-            findings=context["findings"],
+        else (
+            {
+                "matched": False,
+                "answer": (
+                    "This compound CEO question is not a narrow deterministic "
+                    "ledger lookup and requires evidence-grounded analysis."
+                ),
+                "basis": "Conservative deterministic-routing boundary.",
+                "citations": [],
+                "suggestions": [],
+            }
+            if mode == "auto" and not _auto_question_is_narrow_tabular_lookup(question)
+            else qa_engine.answer_question(
+                question,
+                bundle=context["bundle"],
+                findings=context["findings"],
+            )
         )
     )
     deterministic_result.setdefault("answered_by", "tabular")

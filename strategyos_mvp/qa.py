@@ -24,10 +24,12 @@ from .models import Finding as _Finding
 # already in the question keep matching as before; this just widens recall for the
 # way a business user actually phrases things ("how much are we losing").
 _SYNONYM_EXPANSIONS: tuple[tuple[str, str], ...] = (
-    (r"\b(losing|loss|losses|leak|leaking|leaks|bleed|bleeding|wasted?|wasting|"
-     r"slipping|going out the door|down the drain)\b", "leakage recoverable"),
-    (r"\b(claw ?back|recoup|recouped|get back|win back|claim back)\b", "recoverable recovery"),
-    (r"\b(save|saves|saving)\b", "savings recoverable"),
+    (
+        r"\bhow much (?:money )?(?:are we )?(?:losing|bleeding|wasting)\b|"
+        r"\bwhere is cash going out the door\b",
+        "leakage recoverable",
+    ),
+    (r"\b(what can we claw ?back|recoup|recouped|claim back)\b", "recoverable recovery"),
     (r"\b(supplier|suppliers|payee|payees)\b", "vendor"),
     (r"\b(issues?|problems?|red flags?|whats? wrong|anomal\w*|exceptions?)\b", "findings"),
     (r"\b(unpaid|outstanding|owe|owed|owing|past due|not paid)\b", "overdue invoice"),
@@ -427,7 +429,7 @@ def _handle_governed_case_links(
 
 
 def _handle_distinct_parties(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
-    if _has_any(question, "customer"):
+    if _has_any(question, "customer", "customers"):
         role, frame, col, label = "ar_ledger", bundle.ar, "Customer_ID", "customers"
     else:
         role, frame, col, label = "ap_ledger", bundle.ap, "Vendor_ID", "vendors"

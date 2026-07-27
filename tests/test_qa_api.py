@@ -5544,6 +5544,26 @@ def test_general_practice_wording_is_advisory_not_recoverable_arithmetic():
     assert "if explicit_advisory_request" in source
 
 
+def test_auto_tabular_lookup_boundary_rejects_compound_keyword_traps():
+    accepted = (
+        "What is the total recoverable?",
+        "Show recoverable by pattern",
+        "How many AP invoices are there?",
+        "Top 5 vendors by spend",
+        "How many distinct customers are there?",
+        "How much did we pay Saudi Trading Co?",
+    )
+    rejected = (
+        "What would a group-wide energy programme save, given the SEC tariff steps?",
+        "Which lost customers should we try to win back, and at what price?",
+        "How does our pharmacist pay compare to market?",
+        "Which invoices don't reconcile between lines and headers?",
+        "What is the fully-loaded profitability of our top 10 customers?",
+    )
+    assert all(api_module._auto_question_is_narrow_tabular_lookup(value) for value in accepted)
+    assert not any(api_module._auto_question_is_narrow_tabular_lookup(value) for value in rejected)
+
+
 def test_request_recovery_requires_sign_in():
     """An unauthenticated caller cannot log a directive against the run."""
     client = TestClient(api_module.app)
