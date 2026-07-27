@@ -20,7 +20,7 @@ from urllib.parse import quote, urlparse
 from uuid import UUID, uuid4
 
 try:
-    from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
+    from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
@@ -162,6 +162,15 @@ class ReviewerDecisionRequest(BaseModel):
 class FindingDirectiveRequest(BaseModel):
     finding_id: str
     note: str | None = None
+
+
+class ExecutiveDecisionRecordRequest(BaseModel):
+    run_id: str
+    decision_key: str
+    selected_owner_id: str | None = None
+    selected_owner_name: str | None = None
+    selected_owner_role: str | None = None
+    due_date: str | None = None
 
 
 class SourcePackPathRequest(BaseModel):
@@ -9435,6 +9444,211 @@ def request_finding_recovery(
         "status": "requested",
         "finding_id": finding_id,
         "message": "Recovery requested. Your reviewer will see this on the finding's audit trail.",
+    }
+
+
+def _current_executive_decision(
+    *,
+    run_id: str,
+    decision_key: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    summary = load_latest_run_summary()
+    current_run_id = str(
+        (summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or ""
+    ).strip()
+    if not current_run_id or current_run_id != str(run_id or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The decision is not attached to the current governed run. Refresh before recording it.",
+        )
+    snapshot = state_store.executive_snapshot_for_run(current_run_id)
+    finding_rows = (
+        list(snapshot.get("findings") or [])
+        if snapshot.get("status") == "ok"
+        else []
+    )
+    audit_summary = (
+        dict(snapshot.get("audit_summary") or {})
+        if snapshot.get("status") == "ok"
+        else {}
+    )
+    read_model = _executive_read_model_from_available_truth(
+        summary,
+        finding_rows,
+        audit_summary,
+        {"report_count": 0},
+        {},
+        public_safe=False,
+    )
+    presentation = build_executive_presentation(read_model)
+    priorities = (
+        ((presentation.get("sections") or {}).get("executive_priorities") or {})
+        if isinstance(presentation.get("sections"), Mapping)
+        else {}
+    )
+    decision = next(
+        (
+            dict(item)
+            for item in list(priorities.get("decisions") or [])
+            if isinstance(item, Mapping) and str(item.get("key") or "") == decision_key
+        ),
+        None,
+    )
+    if decision is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This decision is no longer present in the current governed run.",
+        )
+    recommendation = (
+        dict(decision.get("recommendation"))
+        if isinstance(decision.get("recommendation"), Mapping)
+        else {}
+    )
+    if not recommendation:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This decision has no governed recommendation to record.",
+        )
+    return decision, recommendation
+
+
+@app.get("/executive/decisions")
+def list_recorded_executive_decisions(
+    principal: dict[str, Any] = require_role("executive"),
+) -> dict[str, Any]:
+    """List Stage 1 CEO decisions; delivery and issue closure stay explicit."""
+
+    summary = load_latest_run_summary()
+    run_id = str(
+        (summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or ""
+    ).strip()
+    if not run_id:
+        return {"status": "ok", "run_id": None, "records": []}
+    result = state_store.executive_decisions_for_run(run_id)
+    if result.get("status") == "skipped":
+        return {"status": "unavailable", "run_id": run_id, "records": []}
+    if result.get("status") != "ok":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(result.get("reason") or "Could not load recorded executive decisions."),
+        )
+    return result
+
+
+@app.post("/executive/decisions/record")
+def record_executive_decision(
+    request: ExecutiveDecisionRecordRequest,
+    principal: dict[str, Any] = require_role("executive"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, Any]:
+    """Record the CEO's decision; never send, assign, close or self-authorise.
+
+    Confirmation is a route invariant enforced by authenticated executive
+    access.  There is deliberately no confirmation boolean or outbound-action
+    field in the request schema.
+    """
+
+    if not idempotency_key or not str(idempotency_key).strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Idempotency-Key header is required.",
+        )
+    decision_key = str(request.decision_key or "").strip()
+    _, recommendation = _current_executive_decision(
+        run_id=request.run_id,
+        decision_key=decision_key,
+    )
+    owner_resolution = (
+        recommendation.get("owner_resolution")
+        if isinstance(recommendation.get("owner_resolution"), Mapping)
+        else {}
+    )
+    governed_owner_id = str(owner_resolution.get("selected_owner_id") or "").strip() or None
+    governed_owner_name = str(owner_resolution.get("selected_owner_name") or "").strip() or None
+    governed_role = str(owner_resolution.get("selected_role") or "").strip()
+    requested_owner_id = str(request.selected_owner_id or "").strip() or None
+    requested_owner_name = str(request.selected_owner_name or "").strip() or None
+    requested_role = str(request.selected_owner_role or "").strip() or governed_role
+    if requested_owner_id != governed_owner_id or requested_owner_name != governed_owner_name:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The selected person does not match the current governed owner resolution.",
+        )
+    if not governed_role or requested_role != governed_role:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The selected role does not match the current governed recommendation.",
+        )
+
+    governed_due_date = (
+        recommendation.get("due_date")
+        if isinstance(recommendation.get("due_date"), Mapping)
+        else None
+    )
+    requested_due_date = str(request.due_date or "").strip() or None
+    if governed_due_date:
+        governed_value = str(governed_due_date.get("value") or "").strip()
+        if requested_due_date and requested_due_date != governed_value:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The requested date does not match the governed milestone. Refresh before changing it.",
+            )
+        due_date_contract = dict(governed_due_date)
+    else:
+        if not requested_due_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Choose a due date; no governed milestone is available.",
+            )
+        try:
+            date.fromisoformat(requested_due_date)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Due date must be an ISO date in YYYY-MM-DD format.",
+            ) from exc
+        due_date_contract = {
+            "value": requested_due_date,
+            "basis": "CEO-set date recorded at confirmation",
+            "basis_source_id": None,
+            "derivation_rule": "ceo_confirmed_input",
+        }
+
+    selected_owner = {
+        "id": governed_owner_id,
+        "name": governed_owner_name,
+        "role": governed_role,
+        "resolution_state": owner_resolution.get("resolution_state"),
+        "policy_version": owner_resolution.get("policy_version"),
+    }
+    effect_key = hashlib.sha256(
+        (
+            f"{principal.get('tenant_id')}|{request.run_id}|{decision_key}|"
+            f"{idempotency_key.strip()}"
+        ).encode("utf-8")
+    ).hexdigest()
+    result = state_store.record_executive_decision(
+        request.run_id,
+        decision_key=decision_key,
+        actor="Executive",
+        subject=str(principal.get("subject") or ""),
+        effect_key=effect_key,
+        recommendation_snapshot=recommendation,
+        selected_owner=selected_owner,
+        due_date=due_date_contract,
+    )
+    if result.get("status") != "recorded":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(result.get("reason") or "Could not record the executive decision."),
+        )
+    return {
+        "status": "decision_recorded",
+        "decision_key": decision_key,
+        "delivery_status": "not_delivered",
+        "underlying_issue_status": "open",
+        "idempotent_replay": bool(result.get("idempotent_replay")),
+        "message": "Decision recorded. No message was sent; the underlying issue remains open.",
     }
 
 

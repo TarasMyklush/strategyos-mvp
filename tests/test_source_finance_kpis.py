@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
 from pathlib import Path
 
-from strategyos_mvp.executive_presentation import build_executive_presentation
+from strategyos_mvp.executive_presentation import (
+    _grounded_due_date,
+    build_executive_presentation,
+)
 from strategyos_mvp.executive_read_model import build_executive_read_model
 from strategyos_mvp.source_finance_kpis import (
     _group_cost_component_drivers,
@@ -142,11 +146,48 @@ def test_off_plan_cost_asserts_known_contributor_and_only_asks_for_human_authori
     assert "Salaries & Wages is the largest supplied component" in contract["assertion"]
     assert "SAR 24.7M" in contract["assertion"]
     assert contract["owner"] is None
-    assert contract["ask"] == "Nominate the accountable owner and request a dated remediation plan."
+    assert contract["ask"].startswith("Recommended action: assign Group CFO")
+    recommendation = contract["recommendation"]
+    assert recommendation["owner_resolution"]["resolution_state"] == "role_only"
+    assert recommendation["owner_resolution"]["eligible_candidate_count"] == 0
+    assert recommendation["owner_resolution"]["selected_owner_name"] is None
+    assert recommendation["owner_resolution"]["selected_role"] == "Group CFO"
+    assert "confidence" not in recommendation
+    assert recommendation["due_date"] is None
     assert contract["unavailable_reason"] == (
         "The largest contributor is known, but the run has no governed owner mapping."
     )
     assert "Confirm the recovery owner" not in card["executive_brief"]["decision_context"]
+
+
+def test_recommendation_due_date_uses_only_a_future_governed_milestone():
+    past = (date.today() - timedelta(days=1)).isoformat()
+    future = (date.today() + timedelta(days=3)).isoformat()
+
+    result = _grounded_due_date(
+        [
+            {
+                "event_id": "past-review",
+                "date": past,
+                "title": "Tamween business review",
+                "related_bu": "Tamween Pharma Distribution",
+            },
+            {
+                "event_id": "future-review",
+                "date": future,
+                "title": "Tamween cost recovery review",
+                "related_bu": "Tamween Pharma Distribution",
+            },
+        ],
+        contributor_label="Tamween Pharma Distribution",
+    )
+
+    assert result == {
+        "value": future,
+        "basis": "Next governed review: Tamween cost recovery review",
+        "basis_source_id": "future-review",
+        "derivation_rule": "due_on_next_governed_review",
+    }
 
 
 def _write_reconciliation(path: Path, *, division_2026f: str = "775") -> None:

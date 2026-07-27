@@ -2086,6 +2086,153 @@ def record_executive_directive(
     return {"status": "recorded", "event": normalize_record(record) if record else None}
 
 
+def record_executive_decision(
+    run_id: str,
+    *,
+    decision_key: str,
+    actor: str,
+    subject: str,
+    effect_key: str,
+    recommendation_snapshot: dict[str, Any],
+    selected_owner: dict[str, Any],
+    due_date: dict[str, Any],
+) -> dict[str, Any]:
+    """Record a CEO decision without executing or delivering it.
+
+    Human confirmation is enforced by the authenticated API route.  This store
+    accepts no `requires_confirmation` or `send` flag: outbound delivery is not
+    expressible in this Stage 1 operation.  An advisory lock makes retries with
+    the same effect key idempotent even though the legacy audit table predates a
+    dedicated effect-key column.
+    """
+
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+    normalized_run_id = str(run_id or "").strip()
+    normalized_decision_key = str(decision_key or "").strip()
+    normalized_effect_key = str(effect_key or "").strip()
+    if not normalized_run_id or not normalized_decision_key or not normalized_effect_key:
+        return {
+            "status": "failed",
+            "reason": "Run id, decision key and effect key are required to record a decision.",
+        }
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute("select pg_advisory_xact_lock(hashtext(%s))", (normalized_effect_key,))
+            cur.execute(
+                """
+                select id, created_at, event_json
+                from strategyos_agent_events
+                where run_id = %s
+                  and action = 'record_executive_decision'
+                  and event_json ->> 'effect_key' = %s
+                order by created_at desc
+                limit 1
+                """,
+                (normalized_run_id, normalized_effect_key),
+            )
+            existing = fetchone_dict(cur)
+            if existing is not None:
+                conn.commit()
+                return {
+                    "status": "recorded",
+                    "idempotent_replay": True,
+                    "event": normalize_record(existing),
+                }
+
+            event_payload = {
+                "kind": "executive_decision_recorded",
+                "decision_key": normalized_decision_key,
+                "effect_key": normalized_effect_key,
+                "actor": actor,
+                "subject": str(subject or ""),
+                "decision_status": "recorded",
+                "delivery_status": "not_delivered",
+                "underlying_issue_status": "open",
+                "recommendation_snapshot": recommendation_snapshot,
+                "selected_owner": selected_owner,
+                "due_date": due_date,
+            }
+            owner_label = " · ".join(
+                item
+                for item in (
+                    str(selected_owner.get("name") or "").strip(),
+                    str(selected_owner.get("role") or "").strip(),
+                )
+                if item
+            ) or "accountable role"
+            detail = (
+                f"Executive recorded the {normalized_decision_key} decision for {owner_label}. "
+                "No message was sent; the underlying issue remains open."
+            )
+            cur.execute(
+                """
+                insert into strategyos_agent_events
+                    (run_id, round_no, actor, finding_id, action, detail, event_json)
+                values (%s, 0, %s, null, 'record_executive_decision', %s, %s::jsonb)
+                returning id, created_at, event_json
+                """,
+                (
+                    normalized_run_id,
+                    actor,
+                    detail,
+                    json_blob(event_payload),
+                ),
+            )
+            record = fetchone_dict(cur)
+        conn.commit()
+    return {
+        "status": "recorded",
+        "idempotent_replay": False,
+        "event": normalize_record(record) if record else None,
+    }
+
+
+def executive_decisions_for_run(run_id: str) -> dict[str, Any]:
+    """Return recorded Stage 1 decisions; never imply delivery or closure."""
+
+    connection, skipped = database_connection()
+    if skipped is not None:
+        return skipped
+    normalized_run_id = str(run_id or "").strip()
+    if not normalized_run_id:
+        return {"status": "failed", "reason": "A run id is required."}
+    assert connection is not None
+    with connection as conn:
+        ensure_data_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select id, created_at, event_json
+                from strategyos_agent_events
+                where run_id = %s and action = 'record_executive_decision'
+                order by created_at desc
+                """,
+                (normalized_run_id,),
+            )
+            rows = fetchall_dicts(cur)
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        normalized = normalize_record(row)
+        payload = normalized.get("event_json") if isinstance(normalized.get("event_json"), dict) else {}
+        decision_key = str(payload.get("decision_key") or "")
+        if not decision_key or decision_key in seen:
+            continue
+        seen.add(decision_key)
+        records.append(
+            {
+                **payload,
+                "event_id": normalized.get("id"),
+                "recorded_at": normalized.get("created_at"),
+            }
+        )
+    return {"status": "ok", "run_id": normalized_run_id, "records": records}
+
+
 def persist_artifacts(
     cur: Any, run_id: str, artifacts: dict[str, Path], summary: dict[str, Any]
 ) -> int:

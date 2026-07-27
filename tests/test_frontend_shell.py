@@ -1206,7 +1206,9 @@ def test_ceo_awareness_and_decisions_have_distinct_semantics():
     assert "data-outlook-toggle" not in lower
     assert "Pending CEO decisions" in lower
     assert "Why this is here" in lower
-    assert "What needs your decision" in lower
+    assert "Recommended decision" in lower
+    assert "Record decision" in lower
+    assert "does not send or close the issue" in lower
     assert "No decision is waiting for you" in lower
     assert "No case-level decision is escalated to the CEO" not in lower
     assert ".target-awareness-row {" in css
@@ -3464,7 +3466,7 @@ main().catch((error) => {{
 def test_decision_brief_thread_is_preserved_as_retryable_flow():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
     assert "data-executive-prompt" in executive_js
-    assert "Open decision brief" in executive_js
+    assert "Ask Hermes why" in executive_js
     assert "askAssistant(button.getAttribute('data-executive-prompt')" in executive_js
     assert 'markThreadTransportFailuresRetryable(current);' in executive_js
     assert 'data-assistant-retry-latest' in executive_js

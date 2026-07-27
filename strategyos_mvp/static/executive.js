@@ -857,6 +857,69 @@
     }
   }
 
+  async function recordExecutiveDecision(button) {
+    if (!button || button.disabled) return;
+    var decisionKey = button.getAttribute("data-record-decision") || "";
+    var card = button.closest(".executive-decision");
+    var dueInput = card && card.querySelector("[data-decision-due-date]");
+    var dueDate = String(firstDefined(
+      button.getAttribute("data-governed-due-date"),
+      dueInput && dueInput.value,
+      ""
+    )).trim();
+    if (dueInput && !dueDate) {
+      dueInput.focus();
+      dueInput.setAttribute("aria-invalid", "true");
+      return;
+    }
+    var idempotencyKey = button.getAttribute("data-idempotency-key");
+    if (!idempotencyKey) {
+      idempotencyKey = "executive-decision-" + decisionKey + "-" + Date.now();
+      button.setAttribute("data-idempotency-key", idempotencyKey);
+    }
+    var original = button.textContent;
+    button.disabled = true;
+    button.textContent = "Recording…";
+    try {
+      var headers = authHeaders({});
+      headers["Content-Type"] = "application/json";
+      headers["Idempotency-Key"] = idempotencyKey;
+      var response = await fetch("/executive/decisions/record", {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({
+          run_id: activeRunId(),
+          decision_key: decisionKey,
+          selected_owner_id: button.getAttribute("data-owner-id") || null,
+          selected_owner_name: button.getAttribute("data-owner-name") || null,
+          selected_owner_role: button.getAttribute("data-owner-role") || null,
+          due_date: dueDate || null
+        })
+      });
+      var payload = await parseJsonResponse(response);
+      if (!response.ok) {
+        throw new Error(firstDefined(payload && payload.detail, "Could not record the decision."));
+      }
+      state.decisionRecords = safeArray(state.decisionRecords).filter(function (item) {
+        return String(item.decision_key || "") !== decisionKey;
+      });
+      state.decisionRecords.unshift({
+        decision_key: decisionKey,
+        decision_status: "recorded",
+        delivery_status: "not_delivered",
+        underlying_issue_status: "open",
+        recorded_at: new Date().toISOString()
+      });
+      renderLowerRailFidelity();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = firstDefined(error && error.message, "Couldn't record — retry");
+      window.setTimeout(function () {
+        if (!button.disabled) button.textContent = original;
+      }, 4000);
+    }
+  }
+
   async function askAssistant(prompt, sourceChip) {
     var hiddenContext = arguments.length > 2 ? arguments[2] : null;
     var cleanPrompt = String(prompt || "").trim();
@@ -5287,7 +5350,37 @@
       var isOpen = Boolean((state.openDecisionKeys || {})[key]);
       var source = firstDefined(item.raised_by, item.source_agent, item.source, 'Executive review');
       var timing = firstDefined(item.timing, 'Current review');
-      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>What needs your decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'No executive authority request was supplied.')) + '</strong></div><div class="executive-decision__foot"><span>Accountable owner · ' + escapeHtml(firstDefined(item.owner, 'Not supplied in the governed run')) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Open decision brief →</button></div></div>' : '') + '</article>';
+      var recommendation = item.recommendation && typeof item.recommendation === 'object' ? item.recommendation : null;
+      var ownerResolution = recommendation && recommendation.owner_resolution && typeof recommendation.owner_resolution === 'object' ? recommendation.owner_resolution : {};
+      var dueDate = recommendation && recommendation.due_date && typeof recommendation.due_date === 'object' ? recommendation.due_date : null;
+      var record = safeArray(state.decisionRecords).find(function (entry) {
+        return String(entry && entry.decision_key || '') === key;
+      });
+      var resolutionLabels = {
+        unambiguous: 'Unambiguous governed match',
+        review_recommended: 'Several eligible owners · review recommended',
+        role_only: 'Role suggested · named owner unavailable'
+      };
+      var ownerLabel = [
+        firstDefined(ownerResolution.selected_owner_name, ''),
+        firstDefined(ownerResolution.selected_role, item.owner, '')
+      ].filter(Boolean).join(' · ');
+      var facts = safeArray(ownerResolution.match_facts).slice(0, 4);
+      var recommendationMarkup = recommendation ? [
+        '<section class="decision-recommendation" aria-label="Governed recommendation">',
+        '<div class="decision-recommendation__row"><span>Suggested accountable owner</span><strong>' + escapeHtml(ownerLabel || 'No governed owner available') + '</strong></div>',
+        '<div class="decision-recommendation__state">' + escapeHtml(firstDefined(resolutionLabels[ownerResolution.resolution_state], 'Governance review required')) + '<small>' + escapeHtml(firstDefined(ownerResolution.policy_version, 'Policy version unavailable')) + '</small></div>',
+        facts.length ? '<ul class="decision-recommendation__facts">' + facts.map(function (fact) { return '<li>' + escapeHtml(fact) + '</li>'; }).join('') + '</ul>' : '',
+        '<div class="decision-recommendation__row"><span>Required outcome</span><strong>' + escapeHtml(firstDefined(recommendation.success_measure, recommendation.requested_deliverable, 'Remediation outcome')) + '</strong></div>',
+        dueDate
+          ? '<div class="decision-recommendation__row"><span>Grounded due date</span><strong>' + escapeHtml(firstDefined(dueDate.value, 'Date unavailable')) + '</strong><small>' + escapeHtml(firstDefined(dueDate.basis, 'Governed milestone')) + '</small></div>'
+          : '<label class="decision-date-field"><span>Due date · CEO input required</span><input type="date" data-decision-due-date aria-label="Choose the due date for this decision" /></label>',
+        record
+          ? '<div class="decision-recorded-state"><strong>Decision recorded</strong><span>No message was sent · underlying issue remains open</span></div>'
+          : '<div class="decision-recommendation__actions"><button class="decision-record-button" type="button" data-record-decision="' + escapeHtml(key) + '" data-owner-id="' + escapeHtml(firstDefined(ownerResolution.selected_owner_id, '')) + '" data-owner-name="' + escapeHtml(firstDefined(ownerResolution.selected_owner_name, '')) + '" data-owner-role="' + escapeHtml(firstDefined(ownerResolution.selected_role, '')) + '" data-governed-due-date="' + escapeHtml(firstDefined(dueDate && dueDate.value, '')) + '">Record decision</button><span>Records your decision only · does not send or close the issue</span></div>',
+        '</section>'
+      ].join('') : '';
+      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Recommended decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'No executive authority request was supplied.')) + '</strong></div>' + recommendationMarkup + '<div class="executive-decision__foot"><span>Source · ' + escapeHtml(source) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Ask Hermes why →</button></div></div>' : '') + '</article>';
     }).join('') : '<div class="executive-empty-state"><strong>No decision is waiting for you</strong><p>No approval, intervention or direction is currently routed to the CEO.</p></div>';
 
     var signalMarkup = developmentsAndConcerns.length ? developmentsAndConcerns.map(function (item, index) {
@@ -5331,6 +5424,9 @@
           state.openDecisionKeys[key] = !state.openDecisionKeys[key];
           renderLowerRailFidelity();
         };
+      });
+      safeArray(panel && panel.querySelectorAll('[data-record-decision]')).forEach(function (button) {
+        button.onclick = function () { recordExecutiveDecision(button); };
       });
     });
     renderReviewFiles();
@@ -5911,15 +6007,20 @@
       var packetAndNetwork = await Promise.all([
         fetchJson(latestRunRouteForSession(session) + buildQuery(params)),
         session.authenticated ? fetchJson("/api/v1/agent-network") : Promise.resolve(null),
-        session.authenticated ? fetchJson("/executive/files") : Promise.resolve(null)
+        session.authenticated ? fetchJson("/executive/files") : Promise.resolve(null),
+        session.authenticated ? fetchJson("/executive/decisions") : Promise.resolve(null)
       ]);
       var latestPacket = packetAndNetwork[0];
       var agentNetwork = packetAndNetwork[1];
       var reviewFiles = packetAndNetwork[2];
+      var decisionRecords = packetAndNetwork[3];
 
       state.latestPacket = latestPacket || {};
       state.agentNetwork = agentNetwork && agentNetwork.status === "ok" ? agentNetwork : null;
       state.reviewFiles = reviewFiles && reviewFiles.status === "ok" ? reviewFiles : null;
+      state.decisionRecords = decisionRecords && decisionRecords.status === "ok"
+        ? safeArray(decisionRecords.records)
+        : safeArray(state.decisionRecords);
       state.session = session;
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
@@ -5991,6 +6092,7 @@
     latestPacket: null,
     agentNetwork: null,
     reviewFiles: null,
+    decisionRecords: [],
     session: null,
     personas: [],
     token: null,

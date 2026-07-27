@@ -5674,3 +5674,115 @@ def test_request_recovery_rejects_a_finding_not_in_the_run(monkeypatch):
         assert called["n"] == 0, "must not record a directive for an unknown finding"
     finally:
         _restore_env(original)
+
+
+def test_record_executive_decision_is_confirmation_gated_and_never_sends(monkeypatch):
+    original, client = _client_with_public_ceo_surface()
+    try:
+        monkeypatch.setattr(
+            auth_module,
+            "_introspect_identity_token",
+            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": "strategyos"},
+        )
+        recommendation = {
+            "recommendation_id": "rec-1",
+            "action_type": "assign_cost_remediation",
+            "owner_resolution": {
+                "selected_owner_id": None,
+                "selected_owner_name": None,
+                "selected_role": "Business Unit CEO, Distribution",
+                "resolution_state": "role_only",
+                "policy_version": "executive-accountability-policy-v1",
+            },
+            "due_date": None,
+            "requested_deliverable": "Dated cost-remediation plan",
+        }
+        monkeypatch.setattr(
+            api_module,
+            "_current_executive_decision",
+            lambda **_: ({"key": "kpi_operating_cost"}, recommendation),
+        )
+        recorded = {}
+
+        def _record(run_id, **kwargs):
+            recorded.update({"run_id": run_id, **kwargs})
+            return {"status": "recorded", "idempotent_replay": False}
+
+        monkeypatch.setattr(api_module.state_store, "record_executive_decision", _record)
+        response = client.post(
+            "/executive/decisions/record",
+            json={
+                "run_id": "run-x",
+                "decision_key": "kpi_operating_cost",
+                "selected_owner_role": "Business Unit CEO, Distribution",
+                "due_date": "2026-07-31",
+            },
+            headers={
+                "Authorization": "Bearer executive-token",
+                "Idempotency-Key": "decision-1",
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json() == {
+            "status": "decision_recorded",
+            "decision_key": "kpi_operating_cost",
+            "delivery_status": "not_delivered",
+            "underlying_issue_status": "open",
+            "idempotent_replay": False,
+            "message": "Decision recorded. No message was sent; the underlying issue remains open.",
+        }
+        assert recorded["selected_owner"]["role"] == "Business Unit CEO, Distribution"
+        assert recorded["due_date"]["basis"] == "CEO-set date recorded at confirmation"
+        assert "requires_ceo_confirmation" not in recorded["recommendation_snapshot"]
+        assert "send" not in recorded
+    finally:
+        _restore_env(original)
+
+
+def test_record_executive_decision_requires_idempotency_and_a_real_due_date(monkeypatch):
+    original, client = _client_with_public_ceo_surface()
+    try:
+        monkeypatch.setattr(
+            auth_module,
+            "_introspect_identity_token",
+            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": "strategyos"},
+        )
+        recommendation = {
+            "recommendation_id": "rec-1",
+            "owner_resolution": {
+                "selected_owner_id": None,
+                "selected_owner_name": None,
+                "selected_role": "Group CFO",
+                "resolution_state": "role_only",
+                "policy_version": "executive-accountability-policy-v1",
+            },
+            "due_date": None,
+        }
+        monkeypatch.setattr(
+            api_module,
+            "_current_executive_decision",
+            lambda **_: ({"key": "kpi_operating_cost"}, recommendation),
+        )
+        body = {
+            "run_id": "run-x",
+            "decision_key": "kpi_operating_cost",
+            "selected_owner_role": "Group CFO",
+        }
+        no_key = client.post(
+            "/executive/decisions/record",
+            json=body,
+            headers={"Authorization": "Bearer executive-token"},
+        )
+        assert no_key.status_code == 400
+        no_date = client.post(
+            "/executive/decisions/record",
+            json=body,
+            headers={
+                "Authorization": "Bearer executive-token",
+                "Idempotency-Key": "decision-2",
+            },
+        )
+        assert no_date.status_code == 400
+        assert "Choose a due date" in no_date.json()["detail"]
+    finally:
+        _restore_env(original)

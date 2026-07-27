@@ -1249,7 +1249,7 @@ def test_executive_priority_cta_calls_ask_assistant():
     assert "data-executive-prompt" in js, (
         "Executive priority CTA must have data-executive-prompt"
     )
-    assert "Open decision brief" in js, (
+    assert "Ask Hermes why" in js, (
         "Executive priority must describe the decision-support action"
     )
 
@@ -1463,7 +1463,7 @@ def test_cta_enum_executive_decision_brief():
     """CTA 9: Aggregated CEO priority opens a decision brief."""
     js = _static_executive_js()
     assert "data-executive-prompt" in js
-    assert "Open decision brief" in js
+    assert "Ask Hermes why" in js
 
 def test_awareness_signals_remain_statements_not_action_ctas():
     """Awareness belongs in the RAG feed; only decisions expose action CTAs."""
@@ -1472,7 +1472,7 @@ def test_awareness_signals_remain_statements_not_action_ctas():
     assert "target-awareness-row" in lower
     assert "Pressure-test with Hermes" not in lower
     assert "data-outlook-toggle" not in lower
-    assert "Open decision brief" in lower
+    assert "Ask Hermes why" in lower
 
 def test_cta_enum_week_decision_preparation():
     """CTA 11: Commitments provide executable preparation actions."""
@@ -2627,7 +2627,7 @@ def test_ceo_home_aggregates_findings_instead_of_approving_cases():
     assert "Approve recovery" not in lower
     assert "Pending CEO decisions" in lower
     assert "No case-level decision is escalated to the CEO" not in lower
-    assert "Accountable owner · " in lower
+    assert "Suggested accountable owner" in lower
     assert "safeArray(priorities.inbound_requests)" in lower
     assert "item.action_required !== false" in lower
     # The lower-level endpoint remains available outside the CEO home.

@@ -411,6 +411,7 @@ def _group_contributor_rows(
         result.append(
             {
                 "label": str(row["name"]),
+                "contributor_kind": "business_unit",
                 "value_sar": _number(actual * Decimal("1000000")),
                 "plan_sar": _number(plan * Decimal("1000000")),
                 "variance_sar": _number(variance * Decimal("1000000")),
@@ -1026,6 +1027,7 @@ def _contributors(
             {
                 "account": account,
                 "label": description or f"Account {account}",
+                "contributor_kind": "account",
                 "value_sar": _number(value),
                 "share_pct": float((value / total * 100).quantize(Decimal("0.1"))) if total else None,
             }

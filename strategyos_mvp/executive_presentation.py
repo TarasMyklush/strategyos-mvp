@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import re
+from datetime import date
 from typing import Any, Iterable, Mapping
 
 from .executive_read_model import provenance_summary
@@ -230,6 +233,7 @@ def _contributor_rows(
         result.append(
             {
                 "label": str(row.get("label") or row.get("account") or "Account"),
+                "contributor_kind": str(row.get("contributor_kind") or "").strip() or None,
                 "value": _format_sar(value),
                 "value_sar": value,
                 "variance_sar": _number_or_none(row.get("variance_sar")),
@@ -264,6 +268,7 @@ def _decision_contract(
     unavailable_reason: str | None = None,
     resolved_fields: Iterable[str] = (),
     requested_fields: Iterable[str] = (),
+    recommendation: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a residual human ask and reject requests for resolved fields."""
     resolved = {str(item) for item in resolved_fields}
@@ -271,13 +276,169 @@ def _decision_contract(
     overlap = resolved.intersection(requested)
     if overlap:
         raise ValueError(f"CEO decision asks for derivable fields: {sorted(overlap)}")
-    return {
+    contract = {
         "assertion": assertion,
         "ask": ask,
         "owner": dict(owner) if isinstance(owner, Mapping) else None,
         "action_required": bool(action_required),
         "unavailable_reason": unavailable_reason,
     }
+    if isinstance(recommendation, Mapping):
+        contract["recommendation"] = dict(recommendation)
+    return contract
+
+
+def _accountability_recommendation(
+    *,
+    action_type: str,
+    subject: str,
+    contributor: Mapping[str, Any] | None,
+    owner: Mapping[str, Any] | None,
+    calendar_items: Iterable[Mapping[str, Any]],
+    requested_deliverable: str,
+    success_measure: str,
+    source_signal_ids: Iterable[str],
+) -> dict[str, Any]:
+    """Build a deterministic recommendation; the model never self-scores it.
+
+    A governed owner mapping wins.  Without one, the policy may recommend the
+    accountable role, but never invent a person.  The UI derives its resolution
+    label from candidate count and match facts instead of displaying model
+    confidence.
+    """
+
+    contributor_label = str((contributor or {}).get("label") or "").strip()
+    governed_owner = dict(owner) if isinstance(owner, Mapping) else {}
+    owner_id = str(governed_owner.get("owner_id") or governed_owner.get("id") or "").strip() or None
+    owner_name = str(governed_owner.get("name") or "").strip() or None
+    governed_role = str(governed_owner.get("role") or "").strip() or None
+    eligible_count = int(governed_owner.get("eligible_candidate_count") or (1 if (owner_id or owner_name) else 0))
+    if governed_role:
+        selected_role = governed_role
+        match_facts = list(governed_owner.get("match_facts") or [])
+        if not match_facts:
+            match_facts = ["The current governed run supplies this accountable owner mapping."]
+        resolution_state = "unambiguous" if eligible_count == 1 else "review_recommended"
+        policy_version = str(governed_owner.get("policy_version") or "governed-owner-mapping-v1")
+    else:
+        contributor_kind = str((contributor or {}).get("contributor_kind") or "").strip()
+        if contributor_label and contributor_kind == "business_unit":
+            selected_role = f"Business Unit CEO, {contributor_label}"
+            match_facts = [
+                f"{contributor_label} is the largest governed adverse contributor.",
+                "BU-accountability policy routes a controllable BU variance to that business unit's executive.",
+                "No named person is asserted because the governed run does not contain an authoritative directory mapping.",
+            ]
+        elif subject in {"EBITDA margin", "Operating cost", "Revenue"}:
+            selected_role = "Group CFO"
+            match_facts = [
+                f"The exception is a group {subject.lower()} variance without a governed BU owner mapping.",
+                "Group-finance accountability policy routes the financial remediation bridge to the Group CFO.",
+                "No named person is asserted without an authoritative directory mapping.",
+            ]
+        elif subject == "Liquidity":
+            selected_role = "Group Treasurer"
+            match_facts = [
+                "The exception concerns liquidity against the governed cash floor.",
+                "Treasury-accountability policy routes liquidity remediation to the Group Treasurer.",
+                "No named person is asserted without an authoritative directory mapping.",
+            ]
+        else:
+            selected_role = "Accountable executive"
+            match_facts = [
+                "The governed evidence proves an exception but does not identify an authoritative owner mapping."
+            ]
+        resolution_state = "role_only"
+        policy_version = "executive-accountability-policy-v1"
+
+    due_date = _grounded_due_date(calendar_items, contributor_label=contributor_label)
+    source_ids = [str(item) for item in source_signal_ids if str(item)]
+    seed = "|".join([action_type, subject, contributor_label, *source_ids])
+    recommendation_id = "rec-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+    recommendation = {
+        "recommendation_id": recommendation_id,
+        "action_type": action_type,
+        "source_signal_ids": source_ids,
+        "owner_resolution": {
+            "selected_owner_id": owner_id,
+            "selected_owner_name": owner_name,
+            "selected_role": selected_role,
+            "eligible_candidate_count": eligible_count,
+            "match_facts": match_facts,
+            "policy_version": policy_version,
+            "resolution_state": resolution_state,
+        },
+        "due_date": due_date,
+        "requested_deliverable": requested_deliverable,
+        "success_measure": success_measure,
+        "evidence_refs": source_ids,
+    }
+    recommendation["recommended_action"] = _recommendation_sentence(recommendation)
+    return recommendation
+
+
+def _grounded_due_date(
+    calendar_items: Iterable[Mapping[str, Any]],
+    *,
+    contributor_label: str,
+) -> dict[str, Any] | None:
+    """Use a real governed milestone or return no date.
+
+    A date is never generated from a convenient interval.  Candidate calendar
+    events must carry an ISO date and be either BU-relevant or an executive
+    review/board milestone.
+    """
+
+    normalized_contributor = {
+        token
+        for token in re.findall(r"[a-z0-9]+", contributor_label.lower())
+        if token not in {"mizan", "pharma", "pharmacy", "services"}
+    }
+    candidates: list[tuple[int, str, Mapping[str, Any]]] = []
+    today_value = date.today().isoformat()
+    for item in calendar_items:
+        if not isinstance(item, Mapping):
+            continue
+        date_value = str(item.get("date") or "").strip()[:10]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_value):
+            continue
+        if date_value < today_value:
+            continue
+        title = str(item.get("title") or item.get("label") or "").strip()
+        related_bu = str(item.get("related_bu") or "").strip()
+        haystack = f"{title} {related_bu}".lower()
+        item_tokens = set(re.findall(r"[a-z0-9]+", haystack))
+        bu_match = bool(normalized_contributor.intersection(item_tokens))
+        executive_review = any(term in haystack for term in ("executive committee", "board", "business review", "strategyos monday brief"))
+        if not bu_match and not executive_review:
+            continue
+        candidates.append((0 if bu_match else 1, date_value, item))
+    if not candidates:
+        return None
+    _, date_value, item = sorted(candidates, key=lambda row: (row[0], row[1]))[0]
+    title = str(item.get("title") or item.get("label") or "governed executive review").strip()
+    source_id = str(item.get("event_id") or item.get("id") or f"calendar:{date_value}:{title}")
+    return {
+        "value": date_value,
+        "basis": f"Next governed review: {title}",
+        "basis_source_id": source_id,
+        "derivation_rule": "due_on_next_governed_review",
+    }
+
+
+def _recommendation_sentence(recommendation: Mapping[str, Any]) -> str:
+    owner = recommendation.get("owner_resolution") if isinstance(recommendation.get("owner_resolution"), Mapping) else {}
+    role = str(owner.get("selected_role") or "the accountable executive")
+    name = str(owner.get("selected_owner_name") or "").strip()
+    owner_label = f"{name} · {role}" if name else role
+    deliverable = str(recommendation.get("requested_deliverable") or "the required remediation plan")
+    due_date = recommendation.get("due_date") if isinstance(recommendation.get("due_date"), Mapping) else None
+    if due_date and due_date.get("value"):
+        return f"Recommended action: assign {owner_label} and request a {deliverable.lower()} by {due_date['value']}."
+    return (
+        f"Recommended action: assign {owner_label} and request a {deliverable.lower()}. "
+        "A due date needs your input because no governed milestone is available."
+    )
 
 
 def _executive_kpi_signal(
@@ -290,6 +451,7 @@ def _executive_kpi_signal(
     actual_complete: bool,
     evidence_details: Mapping[str, Any] | None = None,
     evidence_files: Iterable[str] = (),
+    calendar_items: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Translate a finance calculation into a CEO posture and next move.
 
@@ -332,17 +494,31 @@ def _executive_kpi_signal(
             if within_tolerance
             else f"EBITDA margin is {abs(round(gap_bps))} basis points {'above' if favourable else 'below'} plan."
         )
+        recommendation = (
+            _accountability_recommendation(
+                action_type="assign_margin_remediation",
+                subject="EBITDA margin",
+                contributor=None,
+                owner=None,
+                calendar_items=calendar_items,
+                requested_deliverable="Dated margin-remediation plan",
+                success_measure=f"Close or explain the {abs(round(gap_bps))} bps margin variance",
+                source_signal_ids=("ebitda_margin", *[str(item) for item in evidence_files if str(item)]),
+            )
+            if not within_tolerance and not favourable
+            else None
+        )
         decision = (
             "No immediate CEO intervention; ask the CFO to keep the margin bridge under watch."
             if within_tolerance
             else "Validate whether the upside is repeatable before changing guidance."
             if favourable
-            else "The margin gap requires a dated remediation plan; nominate an accountable owner if none is governed."
+            else str((recommendation or {}).get("recommended_action") or "A margin-remediation decision is required.")
         )
         decision_contract = _decision_contract(
             assertion=readout,
             ask=(
-                "Ask the accountable executive for a dated margin-remediation plan."
+                str((recommendation or {}).get("recommended_action") or "Record the margin-remediation decision.")
                 if not within_tolerance and not favourable
                 else None
             ),
@@ -355,6 +531,7 @@ def _executive_kpi_signal(
             ),
             resolved_fields=("margin_variance",),
             requested_fields=("closure_date", "remediation_plan") if not within_tolerance and not favourable else (),
+            recommendation=recommendation,
         )
         return {
             "posture": posture,
@@ -384,6 +561,20 @@ def _executive_kpi_signal(
         posture = "Above floor" if favourable else "Below floor"
         tone = "positive" if favourable else "critical"
         variance_label = f"{_format_sar(abs(gap_amount))} {'above' if favourable else 'below'} floor"
+        recommendation = (
+            _accountability_recommendation(
+                action_type="assign_liquidity_remediation",
+                subject="Liquidity",
+                contributor=None,
+                owner=None,
+                calendar_items=calendar_items,
+                requested_deliverable="Dated liquidity-remediation plan",
+                success_measure=f"Restore and protect liquidity above the governed floor by {_format_sar(abs(gap_amount))}",
+                source_signal_ids=("cash_vs_floor", *[str(item) for item in evidence_files if str(item)]),
+            )
+            if not favourable
+            else None
+        )
         return {
             "posture": posture,
             "variance_label": variance_label,
@@ -393,16 +584,17 @@ def _executive_kpi_signal(
             "decision": (
                 "No liquidity intervention is required; keep the headroom protected against committed uses."
                 if favourable
-                else "A liquidity action is required before the next commitment; nominate an accountable owner and set the deadline."
+                else str((recommendation or {}).get("recommended_action") or "A liquidity-remediation decision is required.")
             ),
             "decision_contract": _decision_contract(
                 assertion=f"Liquidity is {variance_label.lower()} for the current reporting scope.",
-                ask="Nominate an accountable owner and set a deadline for the liquidity action." if not favourable else None,
+                ask=str((recommendation or {}).get("recommended_action") or "Record the liquidity-remediation decision.") if not favourable else None,
                 owner=None,
                 action_required=not favourable,
                 unavailable_reason="The run has no governed owner mapping." if not favourable else None,
                 resolved_fields=("liquidity_position",),
                 requested_fields=("accountable_owner", "deadline") if not favourable else (),
+                recommendation=recommendation,
             ),
             "context": {
                 "what": f"Liquidity is {variance_label.lower()} for the current reporting scope.",
@@ -449,22 +641,39 @@ def _executive_kpi_signal(
         unavailable_reason = f"No ranked {scope.replace('_', ' ')} contributors are present in the governed evidence."
     elif not owner:
         unavailable_reason = "The largest contributor is known, but the run has no governed owner mapping."
+    recommendation = (
+        _accountability_recommendation(
+            action_type="assign_cost_remediation" if key == "operating_cost" else "assign_revenue_remediation",
+            subject=subject,
+            contributor=top,
+            owner=owner,
+            calendar_items=calendar_items,
+            requested_deliverable=(
+                "Dated cost-remediation plan"
+                if key == "operating_cost"
+                else "Dated revenue-recovery plan"
+            ),
+            success_measure=(
+                f"Address the {_format_sar(abs(_number_or_none(top.get('variance_sar')) or 0))} adverse variance"
+                if top and _number_or_none(top.get("variance_sar")) is not None
+                else f"Close or explain the {abs(gap_pct):.1f}% adverse variance"
+            ),
+            source_signal_ids=(key, *[str(item) for item in evidence_files if str(item)]),
+        )
+        if not favourable and not within_tolerance
+        else None
+    )
     decision = (
         "No immediate CEO intervention. Keep the run-rate under watch and escalate only if the gap widens next period."
         if within_tolerance
         else "Validate whether the favourable variance is repeatable before changing guidance."
         if favourable
-        else (
-            contributor_assertion.strip()
-            + (" Nominate its accountable owner and request a dated remediation plan." if not owner else " Request a dated remediation plan from the accountable owner.")
-        )
+        else str((recommendation or {}).get("recommended_action") or "An accountable remediation decision is required.")
     )
     decision_contract = _decision_contract(
         assertion=readout + contributor_assertion,
         ask=(
-            "Nominate the accountable owner and request a dated remediation plan."
-            if not favourable and not within_tolerance and not owner
-            else "Request a dated remediation plan from the accountable owner."
+            str((recommendation or {}).get("recommended_action") or "Record the accountable remediation decision.")
             if not favourable and not within_tolerance
             else None
         ),
@@ -477,6 +686,7 @@ def _executive_kpi_signal(
         else ("closure_date", "remediation_plan")
         if not favourable and not within_tolerance
         else (),
+        recommendation=recommendation,
     )
     return {
         "posture": posture,
@@ -695,6 +905,10 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
     evidence = finance_payload.get("evidence") if isinstance(finance_payload.get("evidence"), Mapping) else {}
     dynamics = finance_payload.get("dynamics") if isinstance(finance_payload.get("dynamics"), Mapping) else {}
     actual_complete = finance_payload.get("actual_complete") if isinstance(finance_payload.get("actual_complete"), Mapping) else {}
+    calendar = read_model.get("week_ahead") if isinstance(read_model.get("week_ahead"), Mapping) else {}
+    calendar_items = [
+        item for item in list(calendar.get("items") or []) if isinstance(item, Mapping)
+    ]
     period = str(finance_payload.get("reporting_period_key") or "the selected period")
     provenance = {
         "source": "current finance records",
@@ -817,6 +1031,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             actual_complete=actual_is_complete,
             evidence_details=kpi_evidence.get("details") if isinstance(kpi_evidence.get("details"), Mapping) else {},
             evidence_files=list(kpi_evidence.get("files") or []),
+            calendar_items=calendar_items,
         )
         cards.append(
             {
@@ -1197,6 +1412,61 @@ def _executive_priorities(
         signal = brief.get("executive_signal") if isinstance(brief.get("executive_signal"), Mapping) else {}
         if not signal or signal.get("tone") not in {"critical", "watch", "positive"}:
             continue
+        decision_contract = (
+            signal.get("decision_contract")
+            if isinstance(signal.get("decision_contract"), Mapping)
+            else {}
+        )
+        recommendation = (
+            decision_contract.get("recommendation")
+            if isinstance(decision_contract.get("recommendation"), Mapping)
+            else None
+        )
+        if bool(signal.get("action_required")) and recommendation:
+            owner_resolution = (
+                recommendation.get("owner_resolution")
+                if isinstance(recommendation.get("owner_resolution"), Mapping)
+                else {}
+            )
+            due_date = (
+                recommendation.get("due_date")
+                if isinstance(recommendation.get("due_date"), Mapping)
+                else None
+            )
+            owner_label = " · ".join(
+                item
+                for item in (
+                    str(owner_resolution.get("selected_owner_name") or "").strip(),
+                    str(owner_resolution.get("selected_role") or "").strip(),
+                )
+                if item
+            )
+            decisions.append(
+                {
+                    "key": f"kpi_{str(driver.get('driver_key') or driver.get('key') or 'performance')}",
+                    "title": f"{driver.get('label')}: {signal.get('posture')}",
+                    "summary": str(signal.get("readout") or ""),
+                    "decision": str(
+                        recommendation.get("recommended_action")
+                        or signal.get("decision")
+                        or "Record the accountable remediation decision."
+                    ),
+                    "owner": owner_label or "Governed owner unavailable",
+                    "source": "Current KPI review",
+                    "timing": (
+                        str(due_date.get("basis"))
+                        if due_date
+                        else "Due date needs your input"
+                    ),
+                    "priority": str(signal.get("tone") or "watch"),
+                    "action_required": True,
+                    "prompt": str(
+                        brief.get("decision_question")
+                        or "Explain the executive implication and required owner."
+                    ),
+                    "recommendation": dict(recommendation),
+                }
+            )
         performance_signals.append(
             {
                 "key": str(driver.get("driver_key") or driver.get("key") or "performance"),
@@ -1207,6 +1477,7 @@ def _executive_priorities(
                 "action_required": bool(signal.get("action_required")),
                 "prompt": str(brief.get("decision_question") or "Explain the executive implication and required owner."),
                 "context": dict(signal.get("signal_context") or {}),
+                "recommendation": dict(recommendation) if recommendation else None,
             }
         )
     performance_signals.sort(
@@ -1236,8 +1507,14 @@ def _executive_priorities(
             "owner": "Group CFO",
         }
 
+    decisions.sort(
+        key=lambda item: (
+            {"critical": 0, "watch": 1, "positive": 2}.get(str(item.get("priority")), 3),
+            str(item.get("title") or ""),
+        )
+    )
     return {
-        "decisions": decisions[:3],
+        "decisions": decisions[:5],
         # Reserved for governed approval requests routed by other people's agents.
         # Keep this empty until that workflow supplies real requests; never mock them.
         "inbound_requests": [],
