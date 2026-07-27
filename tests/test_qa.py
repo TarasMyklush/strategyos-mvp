@@ -72,6 +72,14 @@ def test_recoverable_findings_and_unmatched_questions(qa_context):
     }
     assert "All 8 governed findings are included" in by_pattern["answer"]
 
+    governance_advice = qa.answer_question(
+        "What does general practice suggest for governing this cost recovery?",
+        bundle=bundle,
+        findings=findings,
+    )
+    assert governance_advice["matched"] is False
+    assert "SAR 794,108" not in governance_advice["answer"]
+
     no_match = qa.answer_question("gibberish xyz", bundle=bundle, findings=findings)
     assert no_match["matched"] is False
     assert no_match["suggestions"]

@@ -11553,7 +11553,12 @@ def _assistant_response_payload(
     citations = list(payload.get("citations") or [])
     is_model_answer = str(payload.get("answer_origin") or "").lower() == "llm"
     traceable = bool((payload.get("risk_metadata") or {}).get("traceable"))
-    if not is_model_answer and (payload.get("assistant_mode") in {"deterministic", "governed_kpi", "governed_calendar"} or citations):
+    explicit_advisory_request = bool(
+        (assistant_context or {}).get("allow_external_advisory")
+    ) or _question_requests_general_practice_advisory(question)
+    if explicit_advisory_request:
+        determinism_tier = "advisory"
+    elif not is_model_answer and (payload.get("assistant_mode") in {"deterministic", "governed_kpi", "governed_calendar"} or citations):
         determinism_tier = "governed_fact"
     elif citations or traceable:
         determinism_tier = "derived_insight"
@@ -11569,7 +11574,11 @@ def _assistant_response_payload(
         )
         payload["missing_layer"] = missing_layer
         payload["response_sections"] = {
-            "from_your_data": None,
+            "from_your_data": (
+                "The current governed run supplied the company context used for this answer."
+                if citations
+                else None
+            ),
             "not_in_your_data": f"The governed evidence stops at the {missing_layer} layer.",
             "general_practice_suggests": payload["answer"],
         }
@@ -14194,6 +14203,17 @@ def _question_requests_executive_attention_reconciliation(question: str) -> bool
     return contradiction
 
 
+def _question_requests_general_practice_advisory(question: str) -> bool:
+    norm = " ".join(str(question or "").casefold().split())
+    return bool(
+        re.search(
+            r"\b(?:general practice|best practice|industry practice|external benchmark|"
+            r"market practice|what does practice suggest|consult practice)\b",
+            norm,
+        )
+    )
+
+
 def _governed_executive_attention_result(
     summary: Mapping[str, Any] | None,
     *,
@@ -14207,7 +14227,7 @@ def _governed_executive_attention_result(
         title = str(primary.get("title") or "Executive priority requires attention")
         summary_text = str(primary.get("summary") or "")
         decision = str(primary.get("decision") or "Review the governed executive priority.")
-        owner = str(primary.get("owner") or "Accountable executive owner")
+        owner = str(primary.get("owner") or "Not supplied — nomination required")
         active_titles = "; ".join(
             str(item.get("title") or "Executive priority")
             for item in items
@@ -14216,7 +14236,7 @@ def _governed_executive_attention_result(
             f"The Diagnostics banner is correct. There are {count} active CEO business "
             f"{'priority' if count == 1 else 'priorities'}: {active_titles}. "
             f"The primary governed priority is {title}. {summary_text} "
-            f"Decision required: {decision} Owner: {owner} "
+            f"Decision required: {decision} Owner: {owner}. "
             "A zero on AI Assistants or Agents means zero assistant investigations or "
             "specialist-agent queue items; it does not clear this CEO business priority."
         )

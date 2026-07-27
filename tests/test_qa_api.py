@@ -5531,6 +5531,15 @@ def test_a_compound_question_defers_so_both_parts_are_answered():
     assert api_module._free_text_ceo_kpi_key("What is our EBITDA margin?", {}) == "ebitda_margin"
 
 
+def test_general_practice_wording_is_advisory_not_recoverable_arithmetic():
+    assert api_module._question_requests_general_practice_advisory(
+        "What does general practice suggest for governing this cost recovery?"
+    )
+    assert not api_module._question_requests_general_practice_advisory(
+        "What is the total recoverable value?"
+    )
+
+
 def test_request_recovery_requires_sign_in():
     """An unauthenticated caller cannot log a directive against the run."""
     client = TestClient(api_module.app)

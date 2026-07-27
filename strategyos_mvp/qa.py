@@ -61,6 +61,34 @@ def _has_any(text: str, *terms: str) -> bool:
     return any(re.search(rf"\b{re.escape(t)}\b", text) for t in terms)
 
 
+def _asks_for_recoverable_value(text: str) -> bool:
+    """Keep cash-recovery arithmetic separate from governance advice.
+
+    The word ``recovery`` appears in both "how much can we recover?" and
+    "what governance practice should we use for recovery?". Only the first is
+    an exact ledger calculation owned by this deterministic engine.
+    """
+
+    advisory = _has_any(
+        text,
+        "general practice",
+        "best practice",
+        "govern",
+        "governing",
+        "governance",
+        "policy",
+        "controls",
+    )
+    recovery_subject = _has_any(
+        text,
+        "recoverable",
+        "recovery",
+        "leakage",
+        "savings",
+    )
+    return recovery_subject and not advisory
+
+
 def _sar(value: float) -> str:
     return f"SAR {value:,.2f}"
 
@@ -655,7 +683,7 @@ INTENTS: tuple[_Intent, ...] = (
            lambda q: _has_any(q, "overdue", "late") and _has(q, "invoice"),
            _handle_overdue),
     _Intent("recoverable",
-           lambda q: _has_any(q, "recoverable", "recovery", "leakage", "savings"),
+           _asks_for_recoverable_value,
            _handle_recoverable),
     _Intent("findings",
            lambda q: _has(q, "finding") or _has(q, "findings"),
