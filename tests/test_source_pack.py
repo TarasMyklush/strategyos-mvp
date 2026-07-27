@@ -215,6 +215,59 @@ def test_source_pack_upload_is_deterministic_and_supports_revalidation(tmp_path)
         _restore_env(original)
 
 
+def test_ceo_question_bank_schema_is_evaluator_only_and_never_run_evidence(tmp_path, monkeypatch):
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+    question_bank = raw_root / "arbitrary-business-looking-name.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "#": 1,
+                "Question": "What is revenue versus plan?",
+                "Answer type": "Driver analysis",
+                "Where StrategyOS finds the answer": "Revenue plan and actuals",
+            }
+        ]
+    ).to_excel(question_bank, index=False)
+
+    manifest = source_pack_module._build_manifest(
+        raw_root,
+        source_pack_id="evaluation-schema-test",
+    )
+    source_pack_module._classify_manifest(
+        manifest,
+        raw_root,
+        source_pack_id="evaluation-schema-test",
+    )
+
+    assert len(manifest) == 1
+    item = manifest[0]
+    assert item["source_disposition"] == "evaluator_only"
+    assert item["classification"]["status"] == "excluded"
+    assert item["evaluation_schema"] == "ceo_question_bank"
+
+    source_packs_root = tmp_path / "outputs" / "source_packs"
+    source_packs_root.mkdir(parents=True)
+    monkeypatch.setattr(
+        source_pack_module,
+        "_source_packs_root",
+        lambda: source_packs_root,
+    )
+    normalized = source_pack_module._normalize_manifest(
+        manifest,
+        raw_root,
+        source_pack_id="evaluation-schema-test",
+    )
+
+    assert normalized["normalized_files"] == {}
+    assert item["processing_status"] == "processed_evaluator_only"
+    assert "evaluator_only/" + item["relative_path"] in normalized["governed_files"]
+    assert not any(
+        path.name == question_bank.name
+        for path in Path(normalized["normalized_dataset_root"]).rglob("*")
+    )
+
+
 def test_source_pack_upload_rejects_parent_traversal(tmp_path):
     workspace_root = tmp_path / "workspace"
     output_root = workspace_root / "outputs"

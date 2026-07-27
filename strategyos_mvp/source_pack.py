@@ -298,6 +298,33 @@ def _read_tabular_preview(path: Path) -> tuple[list[str], set[str], str | None]:
         return [], set(), str(exc)
 
 
+EVALUATOR_QUESTION_BANK_COLUMNS = {
+    "question",
+    "answer type",
+    "where strategyos finds the answer",
+}
+
+
+def _is_evaluator_question_bank(path: Path) -> bool:
+    """Identify CEO evaluation corpora by schema, never by filename or folder.
+
+    Question banks are useful for regression testing, but allowing their prompts
+    or expected-answer guidance into the governed evidence set would let Hermes
+    appear to answer by reading the evaluation material itself.
+    """
+
+    if path.suffix.lower() not in TABULAR_EXTENSIONS:
+        return False
+    columns, _sheet_names, error = _read_tabular_preview(path)
+    if error:
+        return False
+    normalized_columns = {
+        re.sub(r"\s+", " ", str(column).strip().lower())
+        for column in columns
+    }
+    return EVALUATOR_QUESTION_BANK_COLUMNS.issubset(normalized_columns)
+
+
 def _normalized_token(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value).strip().lower())
 
@@ -812,6 +839,31 @@ def _classify_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, source
     _attach_text_extraction(manifest, raw_root)
     overrides = _load_mapping_overrides(source_pack_id)
     for item in manifest:
+        path = raw_root / str(item["relative_path"])
+        hint = str(item.get("file_type_hint") or "")
+        if (
+            item.get("supported")
+            and hint in {"spreadsheet", "csv", "tsv", "json"}
+            and _is_evaluator_question_bank(path)
+        ):
+            item["source_disposition"] = EVALUATOR_ONLY
+            item["classification"] = _classified_entry(
+                status_value="excluded",
+                role=None,
+                confidence=1.0,
+                basis=(
+                    "Structured columns match the CEO evaluation-question schema; "
+                    "the corpus is isolated from governed business evidence."
+                ),
+                issues=[
+                    "Evaluator questions are retained for regression testing and cannot enter Hermes evidence."
+                ],
+            )
+            item["evaluation_schema"] = "ceo_question_bank"
+            for issue in item["classification"].get("issues") or []:
+                if issue not in item["issues"]:
+                    item["issues"].append(issue)
+            continue
         disposition = str(item.get("source_disposition") or "")
         if disposition in {CONTROL_PLANE, EVALUATOR_ONLY}:
             label = "Control-plane instruction" if disposition == CONTROL_PLANE else "Evaluator-only material"
@@ -837,8 +889,6 @@ def _classify_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, source
                 issues=list(item.get("issues") or []),
             )
             continue
-        path = raw_root / str(item["relative_path"])
-        hint = str(item.get("file_type_hint") or "")
         if hint in {"spreadsheet", "csv", "tsv", "json"}:
             classification = _classify_structured_source(path)
         elif hint in {"pdf", "text", "markdown", "image"}:
