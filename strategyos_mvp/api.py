@@ -15207,6 +15207,11 @@ async def _assistant_chat_response(
         )
         payload["llm_fallback_attempted"] = False
         return payload
+    raw_tabular_result = qa_engine.answer_question(
+        question,
+        bundle=context["bundle"],
+        findings=context["findings"],
+    )
     deterministic_result = (
         {
             "matched": False,
@@ -15223,19 +15228,23 @@ async def _assistant_chat_response(
             {
                 "matched": False,
                 "answer": (
-                    "This compound CEO question is not a narrow deterministic "
-                    "ledger lookup and requires evidence-grounded analysis."
+                    str(raw_tabular_result.get("answer") or "")
+                    if raw_tabular_result.get("matched") is False
+                    else (
+                        "This compound CEO question is not a narrow deterministic "
+                        "ledger lookup and requires evidence-grounded analysis."
+                    )
                 ),
-                "basis": "Conservative deterministic-routing boundary.",
+                "basis": (
+                    str(raw_tabular_result.get("basis") or "")
+                    if raw_tabular_result.get("matched") is False
+                    else "Conservative deterministic-routing boundary."
+                ),
                 "citations": [],
-                "suggestions": [],
+                "suggestions": list(raw_tabular_result.get("suggestions") or []),
             }
             if mode == "auto" and not _auto_question_is_narrow_tabular_lookup(question)
-            else qa_engine.answer_question(
-                question,
-                bundle=context["bundle"],
-                findings=context["findings"],
-            )
+            else raw_tabular_result
         )
     )
     deterministic_result.setdefault("answered_by", "tabular")
