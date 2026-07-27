@@ -8114,7 +8114,8 @@ body {
   display: none;
 }
 
-.fidelity-operating-grid > .section,
+.ceo-awareness-column > .section,
+.ceo-action-column > .section,
 #week-ahead-section,
 .fidelity-thinking-grid > .section,
 #home-agents-section {
@@ -8332,7 +8333,7 @@ body {
   gap: 22px;
 }
 
-.fidelity-operating-grid > .target-flow-section,
+.ceo-awareness-column > .target-flow-section,
 .ceo-action-column > .target-flow-section,
 #week-ahead-section {
   padding: 30px;
@@ -8342,8 +8343,10 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.ceo-awareness-column,
 .ceo-action-column {
   display: grid;
+  align-content: start;
   min-width: 0;
   gap: 22px;
 }
@@ -9215,7 +9218,21 @@ body {
 }
 
 @media (max-width: 1080px) {
-  .fidelity-operating-grid,
+  .fidelity-operating-grid {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ceo-awareness-column,
+  .ceo-action-column {
+    display: contents;
+  }
+
+  #priority-section { order: 1; }
+  #developments-section { order: 2; }
+  #week-ahead-section { order: 3; }
+  #review-files-section { order: 4; }
+
   .fidelity-thinking-grid {
     grid-template-columns: 1fr;
   }
@@ -9230,7 +9247,7 @@ body {
     padding: 18px 16px 82px;
   }
 
-  .fidelity-operating-grid > .target-flow-section,
+  .ceo-awareness-column > .target-flow-section,
   .ceo-action-column > .target-flow-section,
   #week-ahead-section {
     padding: 22px;

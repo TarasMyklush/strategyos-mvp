@@ -1180,16 +1180,28 @@ def test_ceo_information_architecture_separates_board_and_operational_surfaces()
     assert "Developments since you were here" not in html
 
 
-def test_ceo_calendar_selection_does_not_shift_the_developments_column():
+def test_ceo_operating_rails_flow_independently_when_a_decision_expands():
     css = (Path(api_module.STATIC_DIR) / "executive.css").read_text(encoding="utf-8")
     html = (Path(api_module.STATIC_DIR) / "executive.html").read_text(encoding="utf-8")
 
     assert ".fidelity-operating-grid {\n  align-items: start;\n}" in css
-    operating_grid = html[html.index('<div class="fidelity-operating-grid">'):html.index('id="week-ahead-section"')]
-    assert 'id="priority-section"' in operating_grid
-    assert 'id="developments-section"' in operating_grid
-    assert "fidelity-operating-left" not in operating_grid
-    assert html.index("</div>\n\n      <section class=\"section target-flow-section\" id=\"week-ahead-section\"") > html.index('id="developments-section"')
+    operating_grid = html[
+        html.index('<div class="fidelity-operating-grid">'):
+        html.index('id="decision-questions-section"')
+    ]
+    awareness_column = operating_grid[
+        operating_grid.index('<div class="ceo-awareness-column">'):
+        operating_grid.index('<div class="ceo-action-column">')
+    ]
+    action_column = operating_grid[operating_grid.index('<div class="ceo-action-column">'):]
+    assert awareness_column.index('id="priority-section"') < awareness_column.index('id="week-ahead-section"')
+    assert action_column.index('id="developments-section"') < action_column.index('id="review-files-section"')
+    assert ".ceo-awareness-column,\n.ceo-action-column {\n  display: grid;\n  align-content: start;" in css
+    assert ".ceo-awareness-column,\n  .ceo-action-column {\n    display: contents;" in css
+    assert "#priority-section { order: 1; }" in css
+    assert "#developments-section { order: 2; }" in css
+    assert "#week-ahead-section { order: 3; }" in css
+    assert "#review-files-section { order: 4; }" in css
 
 
 def test_ceo_awareness_and_decisions_have_distinct_semantics():
