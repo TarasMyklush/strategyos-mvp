@@ -14343,8 +14343,16 @@ def _free_text_ceo_kpi_key(
             rf"is\s+(?:(?:our|the|current)\s+)?{escaped_label}"
             rf"\s+(?:above|below|at|on|versus|vs\.?)\s+(?:plan|budget|floor|target)"
         )
+        # These are the declared KPI action contract used by the inline CEO
+        # controls. Matching the same run-derived label makes an identical
+        # typed question resolve identically outside the card without opening
+        # a broad business-vocabulary router.
+        declared_outlook_action = (
+            rf"what\s+would\s+materially\s+change\s+the\s+current\s+"
+            rf"{escaped_label}\s+outlook\s+before\s+the\s+next\s+executive\s+review"
+        )
         if normalized_question == label or re.fullmatch(
-            rf"(?:{direct_lookup}|{direct_comparison})",
+            rf"(?:{direct_lookup}|{direct_comparison}|{declared_outlook_action})",
             normalized_question,
         ):
             return key
