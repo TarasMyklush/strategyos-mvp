@@ -962,6 +962,73 @@ def test_evidence_payload_exposes_strategy_glidepaths_and_execution_context():
     assert "question_bank" not in strategy
 
 
+def test_evidence_payload_exposes_governed_calendar_and_resolving_fallback():
+    payload = llm_qa._build_evidence_payload(
+        bundle=_bundle(),
+        findings=[],
+        summary={
+            "calendar_agenda": {
+                "status": "ready",
+                "projection_as_of": "2026-06-01",
+                "projection_through": "2026-06-08",
+                "source_file": "14_CEO_Office/CEO_Calendar.xlsx",
+                "sheet": "Calendar",
+                "items": [
+                    {
+                        "event_id": "calendar-2026-06-02-26",
+                        "day": "Tue 02 Jun",
+                        "when": "09:00",
+                        "title": "Q2 Board of Directors meeting",
+                        "prep": "Agenda: Q2 trading and remediation.",
+                    }
+                ],
+            }
+        },
+    )
+
+    assert payload["calendar"]["available"] is True
+    citations = llm_qa._default_authenticated_evidence_citations(
+        question="Which meetings this week need me?",
+        evidence=payload,
+    )
+    assert citations == [
+        {
+            "source_path": "14_CEO_Office/CEO_Calendar.xlsx",
+            "locator": "Calendar:calendar-2026-06-02-26",
+            "excerpt": "Tue 02 Jun 09:00 — Q2 Board of Directors meeting: Agenda: Q2 trading and remediation.",
+        }
+    ]
+
+
+def test_authenticated_citation_fallback_resolves_signals_not_arbitrary_sources():
+    citations = llm_qa._default_authenticated_evidence_citations(
+        question="Which leading risk indicators should I watch?",
+        evidence={
+            "governed_signals": {
+                "available": True,
+                "source_file": "17_Signals/Signals_Register_Jun2026.xlsx",
+                "items": [
+                    {
+                        "key": "SIG-2026-03",
+                        "title": "SEC tariff revision",
+                        "summary": "-SAR 7-9M/yr group utilities",
+                    }
+                ],
+            }
+        },
+    )
+
+    assert citations[0]["source_path"] == "17_Signals/Signals_Register_Jun2026.xlsx"
+    assert citations[0]["locator"] == "SIG-2026-03"
+    assert (
+        llm_qa._default_authenticated_evidence_citations(
+            question="Tell me a joke",
+            evidence={"strategy": {"available": True, "source_files": ["private.xlsx"]}},
+        )
+        == []
+    )
+
+
 def test_evidence_payload_wraps_untrusted_text_before_model_egress():
     payload = llm_qa._build_evidence_payload(
         bundle=_bundle(),

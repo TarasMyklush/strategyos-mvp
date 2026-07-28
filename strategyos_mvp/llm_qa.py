@@ -100,6 +100,10 @@ agent-to-agent questions; and use decisions, remediation and recovery for the
 CEO action queue. Cite the supplied evidence file and record locator. Never say
 that a glidepath, initiative, milestone, daily pulse or assistant thread is
 missing while the corresponding strategy block is populated.
+When ``evidence.calendar.available`` is true, it is the CEO's governed business
+calendar for the stated projection window. Use it for "this week", meeting,
+attendee and preparation questions; never say the calendar is absent while
+that block is populated.
 For a question that is plainly general knowledge and names nothing in the
 business (a definition, arithmetic, a well-known fact), answer it directly and
 briefly from your own knowledge; do not force it through the evidence.
@@ -358,6 +362,11 @@ def answer_question(
     citations = _normalize_citations(parsed.get("citations"))
     if public_mode:
         citations = _normalize_public_packet_citations(citations, packet=public_packet, question=question)
+    elif not citations and _normalize_bool(parsed.get("matched", True)):
+        citations = _default_authenticated_evidence_citations(
+            question=question,
+            evidence=evidence,
+        )
     status_payload = _status_with_transport(status, transport_trace)
     return {
         "matched": _normalize_bool(parsed.get("matched", True)),
@@ -484,6 +493,7 @@ def _build_evidence_payload(
         },
         "finance_kpis": _finance_kpi_evidence(summary),
         "strategy": _strategy_enrichment_evidence(summary),
+        "calendar": _calendar_evidence(summary),
         "historic_context": _historic_context_evidence(summary),
         "governed_signals": _governed_signals_evidence(summary),
         "findings": [_finding_summary(finding) for finding in findings[:12]],
@@ -673,6 +683,28 @@ def _strategy_enrichment_evidence(summary: dict[str, Any]) -> dict[str, Any]:
             if isinstance(item, dict)
         ],
         "source_files": list(payload.get("source_files") or [])[:24],
+    }
+
+
+def _calendar_evidence(summary: dict[str, Any]) -> dict[str, Any]:
+    payload = summary.get("calendar_agenda")
+    if not isinstance(payload, dict) or payload.get("status") != "ready":
+        return {
+            "available": False,
+            "unavailable_reason": "No governed CEO calendar is present in the run model.",
+        }
+    return {
+        "available": True,
+        "projection_as_of": payload.get("projection_as_of"),
+        "projection_through": payload.get("projection_through"),
+        "projection_policy": payload.get("projection_policy"),
+        "source_file": payload.get("source_file"),
+        "sheet": payload.get("sheet"),
+        "items": [
+            dict(item)
+            for item in list(payload.get("items") or [])[:16]
+            if isinstance(item, dict)
+        ],
     }
 
 
@@ -1462,6 +1494,114 @@ def _normalize_citations(value: Any) -> list[dict[str, Any]]:
         if isinstance(item, dict):
             citations.append(_citation_dict(item))
     return citations
+
+
+def _default_authenticated_evidence_citations(
+    *,
+    question: str,
+    evidence: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Attach resolving citations when the model omits them.
+
+    This is not a generic "trust the model" fallback. It only resolves source
+    paths already carried by the exact governed evidence section named by the
+    question, and returns nothing when no such section can be identified.
+    """
+    lower = str(question or "").casefold()
+    citations: list[dict[str, Any]] = []
+
+    def visible(value: Any) -> str:
+        text = str(value or "")
+        match = re.search(
+            r"BEGIN_UNTRUSTED_EVIDENCE\n(.*?)\nEND_UNTRUSTED_EVIDENCE",
+            text,
+            flags=re.DOTALL,
+        )
+        return (match.group(1) if match else text).strip()
+
+    def add(source_path: Any, locator: Any, excerpt: Any) -> None:
+        source = str(source_path or "").strip()
+        location = str(locator or "").strip()
+        if not source or not location:
+            return
+        key = (source, location)
+        if any(
+            (item.get("source_path"), item.get("locator")) == key
+            for item in citations
+        ):
+            return
+        citations.append(
+            {
+                "source_path": source,
+                "locator": location,
+                "excerpt": str(excerpt or "")[:600],
+            }
+        )
+
+    calendar = evidence.get("calendar")
+    if isinstance(calendar, dict) and calendar.get("available") and any(
+        token in lower
+        for token in ("calendar", "meeting", "meetings", "week", "schedule", "agenda")
+    ):
+        source = calendar.get("source_file")
+        for item in list(calendar.get("items") or [])[:4]:
+            if not isinstance(item, dict):
+                continue
+            add(
+                source,
+                f"{calendar.get('sheet') or 'Calendar'}:{item.get('event_id') or item.get('date')}",
+                f"{visible(item.get('day'))} {visible(item.get('when'))} — "
+                f"{visible(item.get('title'))}: {visible(item.get('prep'))}",
+            )
+
+    signals = evidence.get("governed_signals")
+    if isinstance(signals, dict) and signals.get("available") and any(
+        token in lower
+        for token in (
+            "risk",
+            "signal",
+            "indicator",
+            "market",
+            "threat",
+            "opportun",
+            "early-warning",
+        )
+    ):
+        source = signals.get("source_file")
+        for item in list(signals.get("items") or [])[:4]:
+            if not isinstance(item, dict):
+                continue
+            add(
+                source,
+                str(item.get("key") or item.get("title") or "signal"),
+                f"{visible(item.get('title'))} — {visible(item.get('summary'))}",
+            )
+
+    findings = evidence.get("findings")
+    if isinstance(findings, list) and any(
+        token in lower
+        for token in (
+            "duplicate",
+            "missing field",
+            "format error",
+            "data quality",
+            "reliable",
+            "reliability",
+        )
+    ):
+        for finding in findings[:6]:
+            if not isinstance(finding, dict):
+                continue
+            for citation in list(finding.get("citations") or [])[:2]:
+                if not isinstance(citation, dict):
+                    continue
+                add(
+                    citation.get("source_path"),
+                    citation.get("locator"),
+                    citation.get("excerpt") or finding.get("title"),
+                )
+
+    return citations[:8]
 
 
 def _normalize_bool(value: Any) -> bool:

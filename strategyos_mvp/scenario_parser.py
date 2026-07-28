@@ -1609,6 +1609,25 @@ def _parse_financial_what_if_guard(prompt: str, context: dict[str, Any]) -> Scen
     norm = _normalize(prompt)
     if not _has_scenario_intent(prompt):
         return None
+    # A hedge is also a real business object. Merely naming it in a factual
+    # causation question ("Why wasn't hedge HD-... applied?") must not turn the
+    # question into a hypothetical FX calculation and hide the run's documentary
+    # explanation behind a missing-input response. Keep the scenario guard for
+    # actual modelling language, but let factual hedge questions reach governed
+    # retrieval/LLM evidence.
+    factual_explanation = bool(
+        re.search(r"\b(?:why|what happened|what caused|reason|explain)\b", norm)
+    )
+    explicit_modelling = bool(
+        re.search(
+            r"\b(?:if|assume|assuming|scenario|simulate|model|project|"
+            r"increase|decrease|change by|impact of|what would happen|"
+            r"what happens|reach|target|achieve)\b",
+            norm,
+        )
+    )
+    if factual_explanation and not explicit_modelling:
+        return None
 
     prompt_numbers = _parse_numeric_tokens(prompt)
     if any(token in norm for token in ("hedge", "eur", "euro", "fx", "currency")):

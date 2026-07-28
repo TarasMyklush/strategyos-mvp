@@ -225,6 +225,21 @@ def test_fx_hedge_scenario_fails_closed_instead_of_returning_leakage_total():
     assert "SAR 794,108" not in result.answer
 
 
+def test_factual_hedge_causation_question_is_not_misrouted_as_a_scenario():
+    result = parse_scenario(
+        "Why wasn't hedge HD-2026-019 applied to the May Servier payment?",
+        {
+            "bundle": object(),
+            "findings": [],
+            "kg_nodes": [],
+            "public_context_packet": {},
+        },
+    )
+
+    assert result.scenario_id != "fx_hedge"
+    assert result.scenario_type != "missing_data"
+
+
 def test_ebitda_scenario_fails_closed_when_income_statement_inputs_are_absent():
     result = parse_scenario(
         "If revenue falls 5% and costs rise 3%, what happens to EBITDA?",
