@@ -1000,6 +1000,50 @@ def test_evidence_payload_exposes_governed_calendar_and_resolving_fallback():
     ]
 
 
+def test_governed_calendar_repairs_only_a_provable_absence_contradiction():
+    evidence = llm_qa._build_evidence_payload(
+        bundle=_bundle(),
+        findings=[],
+        summary={
+            "calendar_agenda": {
+                "status": "ready",
+                "projection_as_of": "2026-06-01",
+                "projection_through": "2026-06-08",
+                "source_file": "14_CEO_Office/CEO_Calendar.xlsx",
+                "sheet": "Calendar",
+                "items": [
+                    {
+                        "event_id": "board",
+                        "day": "Tue 02 Jun",
+                        "when": "09:00",
+                        "title": "Q2 Board meeting",
+                        "prep": "Read the board pack.",
+                        "attendees": "Board; CEO; CFO",
+                    }
+                ],
+            }
+        },
+    )
+    repaired = llm_qa._governed_calendar_contradiction_repair(
+        question="Which meetings this week actually need me?",
+        answer="I don't have your calendar or meeting list.",
+        evidence=evidence,
+    )
+
+    assert repaired is not None
+    assert "Tue 02 Jun at 09:00 — Q2 Board meeting" in repaired["answer"]
+    assert "UNTRUSTED DOCUMENT CONTENT" not in repaired["answer"]
+    assert repaired["citations"][0]["locator"] == "Calendar:board"
+    assert (
+        llm_qa._governed_calendar_contradiction_repair(
+            question="Which meetings this week actually need me?",
+            answer="The Board meeting needs you; read the board pack.",
+            evidence=evidence,
+        )
+        is None
+    )
+
+
 def test_authenticated_citation_fallback_resolves_signals_not_arbitrary_sources():
     citations = llm_qa._default_authenticated_evidence_citations(
         question="Which leading risk indicators should I watch?",
@@ -1027,6 +1071,21 @@ def test_authenticated_citation_fallback_resolves_signals_not_arbitrary_sources(
         )
         == []
     )
+
+
+def test_authenticated_citation_fallback_resolves_vendor_contract_findings():
+    evidence = llm_qa._build_evidence_payload(
+        bundle=_bundle(),
+        findings=[_finding()],
+        summary={},
+    )
+    citations = llm_qa._default_authenticated_evidence_citations(
+        question="Which vendors have no contract on file?",
+        evidence=evidence,
+    )
+
+    assert citations[0]["source_path"] == "ap.xlsx"
+    assert citations[0]["locator"] == "row 2"
 
 
 def test_evidence_payload_wraps_untrusted_text_before_model_egress():

@@ -359,6 +359,14 @@ def answer_question(
             "citations": [],
             "suggestions": [],
         }
+    calendar_repair = _governed_calendar_contradiction_repair(
+        question=question,
+        answer=_clean_visible_answer(parsed.get("answer")),
+        evidence=evidence,
+    )
+    if calendar_repair is not None:
+        parsed = {**parsed, **calendar_repair}
+
     citations = _normalize_citations(parsed.get("citations"))
     if public_mode:
         citations = _normalize_public_packet_citations(citations, packet=public_packet, question=question)
@@ -705,6 +713,84 @@ def _calendar_evidence(summary: dict[str, Any]) -> dict[str, Any]:
             for item in list(payload.get("items") or [])[:16]
             if isinstance(item, dict)
         ],
+    }
+
+
+def _governed_calendar_contradiction_repair(
+    *,
+    question: str,
+    answer: str,
+    evidence: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Repair only a provable calendar-absence contradiction.
+
+    The model may occasionally say that no calendar was supplied even while
+    the governed calendar block is populated. That is not a judgement call:
+    it is a false statement about the evidence boundary. Repair it
+    deterministically from the visible event rows and leave all other model
+    answers untouched.
+    """
+    calendar = evidence.get("calendar")
+    if not isinstance(calendar, dict) or not calendar.get("available"):
+        return None
+    lower_question = str(question or "").casefold()
+    if not any(
+        token in lower_question
+        for token in ("calendar", "meeting", "meetings", "week", "schedule", "agenda")
+    ):
+        return None
+    lower_answer = str(answer or "").casefold()
+    denies_calendar = bool(
+        re.search(
+            r"(?:do not|don't|does not|doesn't|cannot|can't|no)\b.{0,50}"
+            r"(?:calendar|meeting list|schedule)"
+            r"|(?:calendar|meeting list|schedule)\b.{0,50}"
+            r"(?:not available|not provided|not included|absent|missing)",
+            lower_answer,
+        )
+    )
+    if not denies_calendar:
+        return None
+
+    items = [
+        item
+        for item in list(calendar.get("items") or [])[:8]
+        if isinstance(item, dict)
+    ]
+    if not items:
+        return None
+    lines = []
+    for item in items:
+        attendees = _visible_guarded_evidence_text(item.get("attendees"))
+        executive_needed = "CEO" in attendees.upper() or not attendees
+        need = "CEO attendance" if executive_needed else "delegate unless your decision is needed"
+        lines.append(
+            f"{_visible_guarded_evidence_text(item.get('day'))} at "
+            f"{_visible_guarded_evidence_text(item.get('when'))} — "
+            f"{_visible_guarded_evidence_text(item.get('title'))} "
+            f"({need}). Prepare: "
+            f"{_visible_guarded_evidence_text(item.get('prep')) or 'No preparation note supplied.'}"
+        )
+    window = " to ".join(
+        str(value)
+        for value in (
+            calendar.get("projection_as_of"),
+            calendar.get("projection_through"),
+        )
+        if value
+    )
+    citations = _default_authenticated_evidence_citations(
+        question=question,
+        evidence=evidence,
+    )
+    return {
+        "matched": True,
+        "answer": (
+            f"Your governed business calendar for {window or 'the current week'} shows:\n"
+            + "\n".join(f"- {line}" for line in lines)
+        ),
+        "basis": "Governed CEO calendar for the current seven-day projection window.",
+        "citations": citations,
     }
 
 
@@ -1510,15 +1596,6 @@ def _default_authenticated_evidence_citations(
     lower = str(question or "").casefold()
     citations: list[dict[str, Any]] = []
 
-    def visible(value: Any) -> str:
-        text = str(value or "")
-        match = re.search(
-            r"BEGIN_UNTRUSTED_EVIDENCE\n(.*?)\nEND_UNTRUSTED_EVIDENCE",
-            text,
-            flags=re.DOTALL,
-        )
-        return (match.group(1) if match else text).strip()
-
     def add(source_path: Any, locator: Any, excerpt: Any) -> None:
         source = str(source_path or "").strip()
         location = str(locator or "").strip()
@@ -1541,7 +1618,16 @@ def _default_authenticated_evidence_citations(
     calendar = evidence.get("calendar")
     if isinstance(calendar, dict) and calendar.get("available") and any(
         token in lower
-        for token in ("calendar", "meeting", "meetings", "week", "schedule", "agenda")
+        for token in (
+            "calendar",
+            "meeting",
+            "meetings",
+            "week",
+            "schedule",
+            "agenda",
+            "session",
+            "read before",
+        )
     ):
         source = calendar.get("source_file")
         for item in list(calendar.get("items") or [])[:4]:
@@ -1550,8 +1636,10 @@ def _default_authenticated_evidence_citations(
             add(
                 source,
                 f"{calendar.get('sheet') or 'Calendar'}:{item.get('event_id') or item.get('date')}",
-                f"{visible(item.get('day'))} {visible(item.get('when'))} — "
-                f"{visible(item.get('title'))}: {visible(item.get('prep'))}",
+                f"{_visible_guarded_evidence_text(item.get('day'))} "
+                f"{_visible_guarded_evidence_text(item.get('when'))} — "
+                f"{_visible_guarded_evidence_text(item.get('title'))}: "
+                f"{_visible_guarded_evidence_text(item.get('prep'))}",
             )
 
     signals = evidence.get("governed_signals")
@@ -1574,7 +1662,8 @@ def _default_authenticated_evidence_citations(
             add(
                 source,
                 str(item.get("key") or item.get("title") or "signal"),
-                f"{visible(item.get('title'))} — {visible(item.get('summary'))}",
+                f"{_visible_guarded_evidence_text(item.get('title'))} — "
+                f"{_visible_guarded_evidence_text(item.get('summary'))}",
             )
 
     findings = evidence.get("findings")
@@ -1587,6 +1676,10 @@ def _default_authenticated_evidence_citations(
             "data quality",
             "reliable",
             "reliability",
+            "vendor",
+            "vendors",
+            "contract",
+            "contracts",
         )
     ):
         for finding in findings[:6]:
@@ -1602,6 +1695,16 @@ def _default_authenticated_evidence_citations(
                 )
 
     return citations[:8]
+
+
+def _visible_guarded_evidence_text(value: Any) -> str:
+    text = str(value or "")
+    match = re.search(
+        r"BEGIN_UNTRUSTED_EVIDENCE\n(.*?)\nEND_UNTRUSTED_EVIDENCE",
+        text,
+        flags=re.DOTALL,
+    )
+    return (match.group(1) if match else text).strip()
 
 
 def _normalize_bool(value: Any) -> bool:
