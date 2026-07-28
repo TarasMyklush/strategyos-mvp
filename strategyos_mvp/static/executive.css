@@ -9799,3 +9799,157 @@ body {
     margin: 0 12px 11px 35px;
   }
 }
+/* Legion v3 enrichment uses the existing paper, border and type tokens. */
+.plan-coverage-chip {
+  grid-column: 1 / -1;
+  width: fit-content;
+  border: 1px solid var(--line, #ded9cf);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--navy, #26345f);
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.hero-morning-note {
+  display: block;
+  max-width: 760px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line, #ded9cf);
+  border-radius: 14px;
+  background: var(--surface-2, #faf9f6);
+  color: var(--ink-2, #5d5a54);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+.hero-plan-coverage { display: grid; gap: 10px; margin-top: 12px; }
+.found-money-strip {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--line, #ded9cf);
+  border-radius: 16px;
+  background: var(--surface-2, #faf9f6);
+}
+.found-money-strip > span { color: var(--muted, #77736b); }
+.found-money-strip button {
+  display: grid;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.found-money-strip button span { color: var(--muted, #77736b); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.found-money-strip button strong { color: var(--up, #267052); font-size: 17px; }
+.decision-demo-reset {
+  margin: 14px 16px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--muted, #77736b);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.agent-activity-summary {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--navy, #26345f);
+  background: var(--surface-2, #faf9f6);
+  font-weight: 650;
+}
+.assistant-readiness__suggestion {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(182, 126, 37, .10);
+  color: var(--ink-2, #5d5a54);
+  font-size: 12px;
+}
+.persona-item.is-coming {
+  justify-content: space-between;
+  opacity: .64;
+  cursor: not-allowed;
+}
+.persona-item.is-coming small {
+  color: var(--muted, #77736b);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.plan-coverage-table {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line, #ded9cf);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+.plan-coverage-table > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(100px, auto);
+  gap: 14px;
+  align-items: center;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line, #ded9cf);
+}
+.plan-coverage-table > div:last-child { border-bottom: 0; }
+.plan-coverage-table span { font-size: 12px; }
+.plan-coverage-table strong { font-size: 12px; }
+.plan-coverage-table small { color: var(--muted, #77736b); text-align: right; }
+.decision-choice-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
+.decision-choice-row button {
+  border: 1px solid var(--navy, #26345f);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--navy, #26345f);
+  padding: 9px 16px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.decision-choice-row button.is-selected { background: var(--navy, #26345f); color: #fff; }
+.decision-choice-row span { color: var(--muted, #77736b); font-size: 12px; }
+.assistant-readiness { padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line, #ded9cf); }
+.assistant-readiness__head { display: flex; justify-content: space-between; gap: 20px; align-items: end; margin-bottom: 14px; }
+.assistant-readiness__head h3 { margin: 5px 0 0; }
+.assistant-readiness__head > span { color: var(--muted, #77736b); font-size: 12px; }
+.assistant-readiness__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.assistant-readiness__grid details { border: 1px solid var(--line, #ded9cf); border-radius: 14px; padding: 12px; }
+.assistant-readiness__grid summary { display: flex; justify-content: space-between; gap: 8px; cursor: pointer; }
+.assistant-readiness__grid p { font-size: 12px; line-height: 1.45; }
+.assistant-readiness__grid small { color: var(--muted, #77736b); }
+.a2a-seeded-threads { display: grid; gap: 12px; margin-top: 18px; }
+.a2a-seeded-threads details { border: 1px solid var(--line, #ded9cf); border-radius: 16px; padding: 0 16px; }
+.a2a-seeded-threads summary { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 16px 0; cursor: pointer; }
+.a2a-seeded-threads summary span { display: grid; gap: 4px; }
+.a2a-seeded-threads summary small, .a2a-seeded-threads summary em { color: var(--muted, #77736b); font-size: 12px; font-style: normal; }
+.a2a-seeded-threads ol { display: grid; gap: 12px; list-style: none; padding: 0 0 16px; margin: 0; }
+.a2a-seeded-threads li { border-top: 1px solid var(--line, #ded9cf); padding-top: 12px; }
+.a2a-seeded-threads li > span, .a2a-seeded-threads li > small { color: var(--muted, #77736b); font-size: 12px; }
+.a2a-seeded-threads li p { margin: 6px 0; line-height: 1.5; }
+.demo-day-scrubber { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.demo-day-scrubber button { border: 0; border-radius: 999px; background: transparent; padding: 5px 8px; color: inherit; cursor: pointer; }
+.demo-day-scrubber button.is-active { background: var(--navy, #26345f); color: white; }
+@media (max-width: 980px) {
+  .assistant-readiness__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .demo-day-scrubber { flex-basis: 100%; margin-left: 0; }
+}
+@media (max-width: 620px) {
+  .assistant-readiness__grid { grid-template-columns: 1fr; }
+  .plan-coverage-table > div { grid-template-columns: 1fr auto; }
+  .plan-coverage-table small { grid-column: 1 / -1; text-align: left; }
+  .found-money-strip { grid-template-columns: 1fr; }
+  .found-money-strip > span { display: none; }
+}

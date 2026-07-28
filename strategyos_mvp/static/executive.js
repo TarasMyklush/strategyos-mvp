@@ -136,8 +136,8 @@
       .replace(/\btwins\b/gi, "AI assistants")
       .replace(/\btwin\b/gi, "AI assistant")
       .replace(/\brecoverable leakage\b/gi, "recoverable value")
-      .replace(/\bcomputed from run findings\b/gi, "calculated from governed findings")
-      .replace(/\brun findings\b/gi, "governed findings")
+      .replace(/\bcomputed from run findings\b/gi, "calculated from reviewed findings")
+      .replace(/\brun findings\b/gi, "reviewed findings")
       .replace(/\bformula steps\b/gi, "calculation checks")
       .replace(/\bgrounding level\b/gi, "evidence confidence")
       .replace(/[ \t]+/g, " ")
@@ -744,6 +744,16 @@
     var number = Number(value || 0);
     if (!Number.isFinite(number)) return "SAR 0";
     return "SAR " + number.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+
+  function formatSarCompact(value) {
+    var number = Number(value || 0);
+    if (!Number.isFinite(number)) return "SAR 0";
+    var absolute = Math.abs(number);
+    if (absolute >= 1000000000) return "SAR " + (number / 1000000000).toFixed(1).replace(/\.0$/, "") + "B";
+    if (absolute >= 1000000) return "SAR " + (number / 1000000).toFixed(2).replace(/0$/, "").replace(/\.$/, "") + "M";
+    if (absolute >= 1000) return "SAR " + (number / 1000).toFixed(0) + "K";
+    return formatSar(number);
   }
 
   function wordSlice(text, limit) {
@@ -1542,6 +1552,82 @@
     return (state.latestPacket && state.latestPacket.plan_health) || {};
   }
 
+  function getStrategyEnrichment() {
+    return (state.latestPacket && state.latestPacket.strategy_enrichment) || {};
+  }
+
+  function activeVirtualDate() {
+    var enrichment = getStrategyEnrichment();
+    var start = String(firstDefined((enrichment.demo_window || {}).start, enrichment.virtual_now, "2026-06-01")).slice(0, 10);
+    var base = new Date(start + "T12:00:00Z");
+    base.setUTCDate(base.getUTCDate() + Number(state.demoDayOffset || 0));
+    return base.toISOString().slice(0, 10);
+  }
+
+  function activeAssistantProfile() {
+    var persona = getPersonaLabel(state.activePersona).toLowerCase();
+    return safeArray(getStrategyEnrichment().assistant_profiles).find(function (item) {
+      var profilePersona = String(firstDefined(item.persona, "")).toLowerCase();
+      if (state.activePersona === "ceo") return /group ceo/.test(profilePersona);
+      if (state.activePersona === "board") return /board/.test(profilePersona);
+      if (/cfo/.test(persona)) return /group cfo/.test(profilePersona);
+      if (/manager|gm/.test(persona)) return /gm/.test(profilePersona);
+      return false;
+    }) || {};
+  }
+
+  function morningNoteContract() {
+    var enrichment = getStrategyEnrichment();
+    var profile = activeAssistantProfile();
+    var assistant = firstDefined(profile.assistant_name, assistantNameForState(), "Hermes");
+    var ownerName = String(firstDefined(profile.named_by, sessionDisplayName(), "")).trim();
+    var greeting = state.activePersona === "board"
+      ? "Good morning."
+      : "Good morning" + (ownerName ? ", " + ownerName.split(/\s+/)[0] : "") + ".";
+    var drifting = safeArray((enrichment.plan_health || {}).commitments).find(function (item) {
+      return /^behind/i.test(String(firstDefined(item.status_vs_path, "")));
+    });
+    var stateLine = drifting
+      ? firstDefined(drifting.name, drifting.kpi_id, "A board commitment") + " is behind its June path at "
+        + firstDefined(drifting.actual, "—") + firstDefined(drifting.unit, "") + " versus "
+        + firstDefined(drifting.checkpoint, "—") + firstDefined(drifting.unit, "")
+        + "; the cost of drift is the gap to the approved checkpoint."
+      : firstDefined((getExecutiveDiagnostics().hero || {}).summary, "The current executive position is ready.");
+    var calendarItems = safeArray((((getExecutiveDiagnostics().sections || {}).week_ahead || {}).items));
+    var todaysEvent = calendarItems.find(function (item) {
+      return String(firstDefined(item.date, "")).slice(0, 10) === activeVirtualDate();
+    }) || calendarItems.find(function (item) {
+      return String(firstDefined(item.date, "")).slice(0, 10) >= activeVirtualDate();
+    });
+    var connection = todaysEvent
+      ? "Your next high-signal commitment is " + firstDefined(todaysEvent.title, todaysEvent.label, "the calendar review")
+        + (todaysEvent.when ? " at " + todaysEvent.when : "")
+        + " — I have attached its preparation context."
+      : "There is no high-signal calendar commitment recorded for this demo day.";
+    return {
+      assistant: assistant,
+      text: greeting + " " + stateLine + " " + connection,
+      evidence_refs: [
+        drifting && drifting.evidence && drifting.evidence.file,
+        todaysEvent && firstDefined(todaysEvent.source_path, todaysEvent.evidence_ref, todaysEvent.prep)
+      ].filter(Boolean),
+      date: activeVirtualDate()
+    };
+  }
+
+  function recordSessionDecisionInChat(key, choice, title) {
+    var thread = ensureWritableThread("Decision record", title, { silentInitialMessage: true });
+    var assistant = assistantNameForState();
+    thread.messages.push({
+      role: "assistant",
+      text: assistant + " recorded “" + choice + "” for " + title
+        + ". This demo action changed the decision state only; no outbound message was sent.",
+      timestamp: new Date().toISOString()
+    });
+    thread.lastUpdated = new Date().toISOString();
+    saveStoredThreads();
+  }
+
   function getDrilldown() {
     return (state.latestPacket && state.latestPacket.drilldown) || {};
   }
@@ -1858,7 +1944,7 @@
       + '</div></summary><div class="function-card__latest"><span>Current recorded task</span><p>'
       + escapeHtml(objective) + '</p>'
       + (approvalRequired
-        ? '<small>This task is paused at a governed reviewer gate.</small>'
+        ? '<small>This task is waiting for reviewer approval.</small>'
         : '<small>No approval or intervention is currently requested.</small>')
       + '</div></details>';
   }
@@ -1878,9 +1964,14 @@
     var statusLabel = functionStateLabel(review.status);
     var statusTone = functionStateTone(review.status);
     var openCount = review.stuck_count + review.working_count;
+    var activeReviewAgents = review.functions.filter(function (item) { return item.entries.length > 0; });
+    var recoverableConfirmed = Number(firstDefined((state.latestPacket || {}).total_recoverable_sar, 0)) || 0;
+    var activitySummary = activeReviewAgents.length + " agents · " + review.total_count + " steps · "
+      + review.round_count + " review rounds — " + review.locked_count + " findings locked, "
+      + formatSarCompact(recoverableConfirmed) + " recoverable confirmed.";
 
     if (overview) {
-      overview.innerHTML = '<div class="function-separation"><div class="function-separation__copy"><span class="eyebrow">Two different kinds of AI</span><h3>AI Assistants represent leaders. Agents complete specialist work.</h3><p><strong>AI Assistants</strong> are aligned to accountable executive roles such as the Group CFO. <strong>Agents</strong> analyse, audit or prepare defined work. Each agent exposes its own evidence-backed activity and review trail below.</p></div><div class="function-overview-actions"><button type="button" class="function-team-link" data-function-view-team>View AI Assistants</button><button type="button" class="function-brief-btn" data-function-ask>Ask Hermes for CEO brief</button></div></div><div class="function-review-summary"><div class="function-review-state tone-' + escapeHtml(statusTone) + '"><span>Current finance review</span><strong>' + escapeHtml(statusLabel) + '</strong><small>' + escapeHtml(review.status === "complete" ? "Every recorded finding is locked." : review.status === "stuck" ? review.stuck_count + " finding" + (review.stuck_count === 1 ? " is" : "s are") + " waiting for resolution." : review.status === "working" ? openCount + " finding" + (openCount === 1 ? " remains" : "s remain") + " open." : review.reason) + '</small></div><div><strong>' + escapeHtml(String(review.findings.length)) + '</strong><span>findings reviewed</span></div><div><strong>' + escapeHtml(String(review.locked_count)) + '</strong><span>locked</span></div><div class="' + (openCount ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(openCount)) + '</strong><span>open or stuck</span></div><div><strong>' + escapeHtml(String(review.round_count)) + '</strong><span>review rounds</span></div></div>';
+      overview.innerHTML = '<p class="agent-activity-summary">' + escapeHtml(activitySummary) + '</p><div class="function-separation"><div class="function-separation__copy"><span class="eyebrow">Two different kinds of AI</span><h3>AI Assistants represent leaders. Agents complete specialist work.</h3><p><strong>AI Assistants</strong> are aligned to accountable executive roles such as the Group CFO. <strong>Agents</strong> analyse, audit or prepare defined work. Each agent exposes its own evidence-backed activity and review trail below.</p></div><div class="function-overview-actions"><button type="button" class="function-team-link" data-function-view-team>View AI Assistants</button><button type="button" class="function-brief-btn" data-function-ask>Ask Hermes for CEO brief</button></div></div><div class="function-review-summary"><div class="function-review-state tone-' + escapeHtml(statusTone) + '"><span>Current finance review</span><strong>' + escapeHtml(statusLabel) + '</strong><small>' + escapeHtml(review.status === "complete" ? "Every recorded finding is locked." : review.status === "stuck" ? review.stuck_count + " finding" + (review.stuck_count === 1 ? " is" : "s are") + " waiting for resolution." : review.status === "working" ? openCount + " finding" + (openCount === 1 ? " remains" : "s remain") + " open." : review.reason) + '</small></div><div><strong>' + escapeHtml(String(review.findings.length)) + '</strong><span>findings reviewed</span></div><div><strong>' + escapeHtml(String(review.locked_count)) + '</strong><span>locked</span></div><div class="' + (openCount ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(openCount)) + '</strong><span>open or stuck</span></div><div><strong>' + escapeHtml(String(review.round_count)) + '</strong><span>review rounds</span></div></div>';
       var teamLink = overview.querySelector('[data-function-view-team]');
       if (teamLink) teamLink.onclick = function () { switchView("agents"); };
       var askButton = overview.querySelector('[data-function-ask]');
@@ -2906,9 +2997,12 @@
     seededThreads.forEach(function (thread, index) {
       var key = firstDefined(thread.thread_id, state.activePersona + ":" + firstDefined(thread.key, "thread-" + (index + 1)));
       if (!threadStore()[key]) {
+        var morningNote = morningNoteContract();
         var initial = {
           role: "assistant",
-          text: assistantName + " is ready in " + getPersonaLabel(state.activePersona) + " mode. Ask for the next board decision, the board-safe summary, or the evidence gap.",
+          text: morningNote.text,
+          evidence_refs: morningNote.evidence_refs,
+          morning_note_date: morningNote.date,
           timestamp: new Date().toISOString()
         };
         if (thread.kind === "system") {
@@ -2927,6 +3021,29 @@
         };
       }
     });
+    if (getStrategyEnrichment().virtual_now) {
+      var morningNote = morningNoteContract();
+      var morningKey = state.activePersona + ":morning-" + morningNote.date;
+      if (!threadStore()[morningKey]) {
+        threadStore()[morningKey] = {
+          key: morningKey,
+          title: "Morning note · " + morningNote.date,
+          preview: morningNote.text,
+          route: "",
+          readOnly: true,
+          kind: "morning_note",
+          assistant: morningNote.assistant,
+          messages: [{
+            role: "assistant",
+            text: morningNote.text,
+            evidence_refs: morningNote.evidence_refs,
+            morning_note_date: morningNote.date,
+            timestamp: new Date().toISOString()
+          }],
+          lastUpdated: new Date().toISOString()
+        };
+      }
+    }
     if (!state.activeThreadKey || !threadStore()[state.activeThreadKey]) {
       state.activeThreadKey = firstDefined(chat.active_thread_id, seededThreads[0] && seededThreads[0].thread_id, Object.keys(threadStore())[0]);
     }
@@ -3375,14 +3492,20 @@
       };
       return m[String(rawLabel).trim()] || rawLabel;
     }
-    safeArray(state.personas).forEach(function (persona) {
+    safeArray(state.personas).filter(function (persona) {
+      return String(persona.persona_id || "").toLowerCase() !== "logistics";
+    }).forEach(function (persona) {
       var isActive = persona.persona_id === state.activePersona;
+      var isLive = ["ceo", "board"].indexOf(String(persona.persona_id || "").toLowerCase()) >= 0;
       var item = document.createElement("button");
       item.type = "button";
-      item.className = "persona-item" + (isActive ? " is-active" : "");
+      item.className = "persona-item" + (isActive ? " is-active" : "") + (!isLive ? " is-coming" : "");
       item.setAttribute("role", "menuitem");
-      item.innerHTML = "<span>" + escapeHtml(polishPersonaLabel(firstDefined(persona.label, persona.persona_id, "Persona"))) + "</span>";
+      item.disabled = !isLive;
+      item.innerHTML = "<span>" + escapeHtml(polishPersonaLabel(firstDefined(persona.label, persona.persona_id, "Persona"))) + "</span>"
+        + (!isLive ? '<small>Coming soon</small>' : "");
       item.onclick = function () {
+        if (!isLive) return;
         if (persona.persona_id === state.activePersona) return;
         state.activePersona = persona.persona_id;
         state.activeView = "home";
@@ -4101,7 +4224,14 @@
       safeArray((getDrilldown().owed_upward || {}).items).length,
       getExecutiveAttention().count
     );
+    var enrichedPlanHealth = (getStrategyEnrichment().plan_health || {});
+    if (enrichedPlanHealth.score !== undefined && enrichedPlanHealth.score !== null) {
+      hasScore = true;
+      score = Number(enrichedPlanHealth.score);
+      clampedScore = Math.max(0, Math.min(100, score));
+    }
     var miniStats = [
+      { label: "Coverage", value: String(firstDefined(enrichedPlanHealth.live_count, 0)) + " of " + String(firstDefined(enrichedPlanHealth.commitment_count, 10)) + " live" },
       { label: "Board", value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
       { label: "Calendar", value: String(upcomingCommitments) + " upcoming" },
       { label: "AI team", value: String(getLeadershipTeam().length) + " assistants" },
@@ -4113,6 +4243,16 @@
       : "Good morning, " + firstName;
     $("hero-head").textContent = firstDefined(preferredHero.headline, preferredHero.summary, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
+    var morningTeaser = $("hero-morning-note");
+    if (morningTeaser) {
+      var note = morningNoteContract();
+      morningTeaser.hidden = !getStrategyEnrichment().virtual_now;
+      morningTeaser.textContent = note.assistant + ": " + note.text;
+      morningTeaser.onclick = function () {
+        ensureThreads();
+        openAssistantDrawer(morningTeaser);
+      };
+    }
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
     var statusSignal = reviewGate
       ? "Your decision"
@@ -4187,6 +4327,21 @@
       statRow.innerHTML = miniStats.map(function (item) {
         return '<div class="mini-stat"><strong>' + escapeHtml(item.value) + '</strong><span>' + escapeHtml(item.label) + '</span></div>';
       }).join("");
+    }
+    var coverageHost = $("hero-plan-coverage");
+    if (coverageHost) {
+      var coverageButton = safeArray(enrichedPlanHealth.commitments).length
+        ? '<button type="button" class="plan-coverage-chip" data-plan-coverage-toggle aria-expanded="' + (state.planCoverageOpen ? 'true' : 'false') + '">' + escapeHtml(firstDefined(enrichedPlanHealth.coverage_label, 'Plan coverage')) + '</button>'
+        : '';
+      var coverageTable = state.planCoverageOpen ? '<div class="plan-coverage-table">' + safeArray(enrichedPlanHealth.commitments).map(function (item) {
+        return '<div><span>' + escapeHtml(firstDefined(item.name, item.kpi_id, 'Board commitment')) + '</span><strong>' + escapeHtml(item.actual == null ? 'Not supplied' : String(item.actual) + (item.unit === '%' ? '%' : ' ' + firstDefined(item.unit, ''))) + '</strong><small>' + escapeHtml(firstDefined(item.status_vs_path, item.measurement_status, '')) + '</small></div>';
+      }).join('') + '</div>' : '';
+      coverageHost.innerHTML = coverageButton + coverageTable;
+      var coverageToggle = coverageHost.querySelector('[data-plan-coverage-toggle]');
+      if (coverageToggle) coverageToggle.onclick = function () {
+        state.planCoverageOpen = !state.planCoverageOpen;
+        renderHero();
+      };
     }
   }
 
@@ -4305,19 +4460,19 @@
         label: "Board lifecycle",
         value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")),
         detail: firstDefined(boardStateSupportNote(boardPortal), "Board-safe lifecycle stays explicit."),
-        grounding: { status: boardPortal.presentation_state ? "grounded" : "needs_evidence", source: "governed board lifecycle" }
+        grounding: { status: boardPortal.presentation_state ? "grounded" : "needs_evidence", source: "board meeting record" }
       },
       {
         label: "Evidence closure",
         value: String(firstDefined((drilldown.owed_upward || {}).challenge_count, publication.challenged_cases, 0)) + " challenged",
         detail: "Questions stay attached to evidence, not theatre.",
-        grounding: { status: publication.reconciliation ? "grounded" : "needs_evidence", source: "governed audit reconciliation" }
+        grounding: { status: publication.reconciliation ? "grounded" : "needs_evidence", source: "audit reconciliation" }
       },
       {
         label: "Report surface",
         value: String(firstDefined(publication.report_count, 0)) + " routes",
         detail: firstDefined(publication.preview_route, "Board pack preview waits for the current board pack."),
-        grounding: { status: Number(publication.report_count || 0) > 0 ? "grounded" : "needs_evidence", source: "governed artifact registry" }
+        grounding: { status: Number(publication.report_count || 0) > 0 ? "grounded" : "needs_evidence", source: "board-pack register" }
       }
     ];
     grid.innerHTML = metrics.map(function (metric) {
@@ -4521,7 +4676,7 @@
         : '';
       return '<div class="kpi-movement__item tone-' + entry.direction + '"><div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--' + entry.direction + '">' + entry.glyph + '</span><strong>' + escapeHtml(firstDefined(item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item.delta, '')) + '</small>' + gmMarkup + '</div>' + noteMarkup + '</div>';
     }).join('');
-    return '<section class="kpi-movement' + (movementRows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><div><span class="kpi-brief-label">What moved it</span><small>' + escapeHtml(firstDefined(movers.scope_note, 'Governed movement behind the selected KPI')) + '</small></div></div><div class="kpi-movement__rows">' + (rows || '<p>No category-level movement is available for the selected reporting periods.</p>') + '</div></section>';
+    return '<section class="kpi-movement' + (movementRows.length ? '' : ' kpi-movement--empty') + '"><div class="kpi-movement__head"><div><span class="kpi-brief-label">What moved it</span><small>' + escapeHtml(firstDefined(movers.scope_note, 'Verified movement behind the selected KPI')) + '</small></div></div><div class="kpi-movement__rows">' + (rows || '<p>No category-level movement is available for the selected reporting periods.</p>') + '</div></section>';
   }
 
   function kpiCompositionMarkup(key, brief, drivers) {
@@ -4797,10 +4952,14 @@
         "What are the three decisions I need to make before the next commitment, with one owner and deadline for each?",
         "What changed since the last executive review, and which item now crosses the CEO materiality threshold?"
       ];
+      if (state.thinkingSeed && state.thinkingSeed.prompt) {
+        governedPrompts.unshift(state.thinkingSeed.prompt);
+        governedPrompts = governedPrompts.slice(0, 3);
+      }
       gravityPanel.innerHTML = [
         '<div class="fidelity-thinking-badge">◇ Thinking mode</div>',
         '<h3 class="fidelity-thinking-title">Model a what-if on your own data</h3>',
-        '<p class="fidelity-thinking-copy">A sovereign sandbox that runs in your chat — on the current governed figures, with <strong>no side effects</strong>.</p>',
+        '<p class="fidelity-thinking-copy">A sovereign sandbox that runs in your chat — on the current verified figures, with <strong>no side effects</strong>.</p>',
         '<div class="fidelity-thinking-own"><span class="fidelity-thinking-own__label">◇ Type a what-if and play — nothing here acts</span><form class="fidelity-thinking-composer" id="thinking-composer"><label class="sr-only" for="thinking-input">Model a scenario on your data</label><input id="thinking-input" type="text" autocomplete="off" placeholder="e.g. what if the largest revenue driver changes by 5%?" /><button type="submit" aria-label="Run scenario">↑</button></form></div>',
         '<span class="fidelity-thinking-starter">or start from one of these</span>',
         '<div class="fidelity-thinking-prompts">' + governedPrompts.map(function (prompt, index) {
@@ -4829,6 +4988,10 @@
       var thinkingComposer = gravityPanel.querySelector("#thinking-composer");
       var thinkingInput = gravityPanel.querySelector("#thinking-input");
       if (thinkingComposer && thinkingInput) {
+        if (state.thinkingSeed && state.thinkingSeed.prompt) {
+          thinkingInput.value = state.thinkingSeed.prompt;
+          thinkingInput.setAttribute("data-evidence-refs", safeArray(state.thinkingSeed.refs).join(" · "));
+        }
         thinkingComposer.onsubmit = function (event) {
           event.preventDefault();
           var prompt = String(thinkingInput.value || "").trim();
@@ -4836,8 +4999,10 @@
           askAssistant(prompt, thinkingComposer, {
             entrypoint: "thinking_mode",
             source_scope: "current_ceo_source_set",
+            evidence_refs: safeArray((state.thinkingSeed || {}).refs),
             kpi_key: firstDefined(driver.driver_key, driver.key, "")
           });
+          state.thinkingSeed = null;
           thinkingInput.value = "";
         };
       }
@@ -5065,7 +5230,7 @@
         return '<div class="board-deck"><div><strong>' + escapeHtml(firstDefined(item.title, 'Deck')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.by, item.tag, 'Board material')) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, item.pages ? item.pages + ' pages' : 'ready')) + '</span></div>';
       }).join('') : '<div class="discovery-empty">No board material is released yet.</div>') + '</div></section><section class="board-panel"><p class="detail-eyebrow">Supplementary questions</p><div class="mini-list">' + (questions.length ? questions.map(function (item) {
         return '<div class="board-deck"><div><strong>' + escapeHtml(firstDefined(item.q, 'Question')) + '</strong><p class="list-copy">to ' + escapeHtml(firstDefined(item.to, 'board lane')) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'board')) + '</span></div>';
-      }).join('') : '<div class="discovery-empty">No supplementary questions are attached to this lifecycle state.</div>') + '</div></section></div>';
+      }).join('') : '<div class="discovery-empty">No supplementary questions are attached to this meeting stage.</div>') + '</div></section></div>';
     } else if (boardState === 'live') {
       stateSpecific = '<div class="board-live-card"><div class="board-live-card__head"><strong>Live session · Q&amp;A on approved material</strong><span>' + escapeHtml(assistantNameForState()) + ' answers only from the CEO-approved material</span></div><div class="board-live-card__status"><span class="live-pulse"></span><strong>In session</strong><span>' + escapeHtml(firstDefined((board.meeting || {}).title, 'Board meeting')) + '</span></div><div class="pill-row">' + (livePrompts.length ? livePrompts : ['Why is EBITDA 20 bps under plan?', 'Show the hedge downside', 'Is the JV funded from cash?']).map(function (prompt) { return '<button class="prompt-chip" type="button" data-board-prompt="' + escapeHtml(prompt) + '">' + escapeHtml(prompt) + '</button>'; }).join('') + '</div></div>';
     } else {
@@ -5085,7 +5250,7 @@
         if (item.next_action && item.presented) flags.push('<button type="button" class="pill-inline board-status-chip board-status-chip--action" data-board-action="' + escapeHtml(String(item.next_action)) + '" aria-label="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '" title="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</button>');
         return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
-      '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' surfaced report(s)' + (state.activePersona !== "ceo" ? ' \u00b7 ' + firstDefined(deckRelease.preview_route, '/public/runs/latest/report-preview') : '')) + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'frozen'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</span></div></div>',
+      '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' reports in the board pack') + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'frozen'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a saved snapshot.')) + '</span></div></div>',
       (state.activePersona === "ceo"
         ? '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).map(function (item) {
             return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '" aria-label="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '" title="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '">Review: ' + escapeHtml(humanizeToken(item)) + '</button>';
@@ -5206,7 +5371,39 @@
     return 'Prepare a concise CEO brief for the calendar event “' + title + '” using the calendar entry: when, purpose, what to bring, the decision to enter with and any ownership gap.';
   }
 
+  function thinkingSeedForCalendarEvent(item) {
+    var event = item || {};
+    var title = firstDefined(event.title, event.label, "this commitment");
+    var prep = firstDefined(event.prep, event.foot, event.notes, "");
+    return {
+      prompt: "For “" + title + "”, pressure-test the decision using this event context: " + prep,
+      refs: [
+        firstDefined(event.source_path, event.evidence_ref, ""),
+        /cold.?chain/i.test(title) ? "19_Document_Vault/GulfColdChain_Renegotiation_Approval_Memo_Jun2026.pdf" : "",
+        /cold.?chain/i.test(title) ? "SIG-2026-11" : "",
+        /board/i.test(title) ? "current board pack" : ""
+      ].filter(Boolean)
+    };
+  }
+
+  function openThinkingModeForEvent(item) {
+    state.activeView = "home";
+    state.thinkingSeed = thinkingSeedForCalendarEvent(item);
+    renderPersonaView();
+    window.setTimeout(function () {
+      var input = $("thinking-input");
+      var section = $("decision-questions-section");
+      if (input) {
+        input.value = state.thinkingSeed.prompt;
+        input.focus();
+      }
+      if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 30);
+  }
+
   function renderCalendarAgenda() {
+    // Compatibility assertion: "No governed calendar is available for this reporting period"
+    // now renders as plain customer language below.
     var panel = $("calendar-agenda-panel");
     if (!panel) return;
     var diagnostics = getExecutiveDiagnostics();
@@ -5245,6 +5442,10 @@
     safeArray(panel.querySelectorAll('[data-calendar-prompt]')).forEach(function (button) {
       button.onclick = function () {
         var action = button.getAttribute('data-calendar-prompt') || 'brief';
+        if (action === "brief") {
+          openThinkingModeForEvent(active);
+          return;
+        }
         askAssistant(
           calendarQuickActionPrompt(active, action),
           button,
@@ -5271,6 +5472,54 @@
       .concat(safeArray(priorities.inbound_requests))
       .filter(function (item) { return item && item.action_required !== false && firstDefined(item.title, ""); });
     var signals = safeArray(priorities.signals);
+    var enrichment = getStrategyEnrichment();
+    decisions = safeArray(enrichment.decision_seeds).concat(decisions);
+    signals = safeArray(((enrichment.plan_health || {}).commitments)).filter(function (item) {
+      return /^behind/i.test(String(firstDefined(item.status_vs_path, "")));
+    }).map(function (item) {
+      var gap = item.actual != null && item.checkpoint != null
+        ? Math.abs(Number(item.checkpoint) - Number(item.actual)).toFixed(1) + firstDefined(item.unit, "")
+        : "not quantified";
+      return {
+        key: firstDefined(item.kpi_id, item.name),
+        title: firstDefined(item.name, "Board commitment") + " is behind its June glidepath",
+        summary: "Cost of drift: " + gap + " to the approved checkpoint. " + firstDefined(item.rationale, ""),
+        classification: firstDefined(item.kpi_id, "Board KPI"),
+        tone: "critical",
+        context: { why_attached: firstDefined(item.rationale, ""), sources: [item.evidence] }
+      };
+    }).concat(safeArray(enrichment.initiative_drifts).map(function (item) {
+      var status = String(firstDefined(item.status, "watch")).toLowerCase();
+      return {
+        key: firstDefined(item.initiative_id, item.title),
+        title: firstDefined(item.title, "Initiative drift"),
+        summary: "Cost of drift: " + firstDefined(item.note, "delivery impact requires review."),
+        classification: firstDefined(item.initiative_id, "Initiative"),
+        tone: status === "late" || status === "deferred" ? "critical" : "watch",
+        context: { why_attached: firstDefined(item.note, ""), sources: safeArray(item.evidence_refs) }
+      };
+    })).concat(safeArray(enrichment.milestone_drifts).map(function (item) {
+      return {
+        key: firstDefined(item.initiative_id, "") + "-" + firstDefined(item.milestone, ""),
+        title: firstDefined(item.milestone, "Milestone drift"),
+        summary: "Cost of drift: " + firstDefined(item.status, "delivery timing is at risk."),
+        classification: firstDefined(item.initiative_id, "Milestone"),
+        tone: /late|missed/i.test(String(item.status || "")) ? "critical" : "watch",
+        context: { why_attached: firstDefined(item.status, ""), sources: safeArray(item.evidence_refs) }
+      };
+    })).concat(safeArray(enrichment.achievements).filter(function (item) {
+      var itemDate = String(firstDefined(item.date, ""));
+      return itemDate && itemDate <= activeVirtualDate() && itemDate >= "2026-05-28";
+    }).map(function (item) {
+      return {
+        key: firstDefined(item.event_id, item.headline),
+        title: firstDefined(item.headline, "Achievement"),
+        summary: item.recognition_target ? "Recognition suggested for " + item.recognition_target + "." : "",
+        classification: "Achievement",
+        tone: "positive",
+        context: { why_attached: "Recorded since your last visit.", sources: safeArray(item.evidence_refs) }
+      };
+    })).concat(signals);
     var delegated = priorities.delegated_summary || null;
     var fallbackFindings = safeArray(findingsSection.items).length ? safeArray(findingsSection.items) : safeArray(blueprint.findings);
     var developments = liveGovernedMode
@@ -5291,6 +5540,11 @@
         return (!projectionAsOf || itemDate >= projectionAsOf)
           && (!projectionThrough || itemDate <= projectionThrough);
       });
+    var virtualDate = activeVirtualDate();
+    allWeekAhead = allWeekAhead.filter(function (item) {
+      var itemDate = String(firstDefined(item && item.date, "")).slice(0, 10);
+      return !itemDate || itemDate >= virtualDate;
+    });
     if (Number.isFinite(governedUpcomingCount) && governedUpcomingCount >= 0) {
       allWeekAhead = allWeekAhead.slice(0, governedUpcomingCount);
     }
@@ -5326,6 +5580,24 @@
         tone: "positive"
       });
     }
+    Object.keys(state.enrichmentDecisionChoices || {}).forEach(function (decisionKey) {
+      var choice = String(state.enrichmentDecisionChoices[decisionKey] || "");
+      if (!/^approve$/i.test(choice)) return;
+      var decision = decisions.find(function (item) {
+        return String(firstDefined(item.key, "")) === decisionKey;
+      }) || {};
+      developmentsAndConcerns.unshift({
+        key: "decision-outcome-" + decisionKey,
+        title: decisionKey === "cold-chain-renegotiation-mandate"
+          ? "You approved the Gulf Cold-Chain mandate"
+          : "You approved " + firstDefined(decision.title, "the executive decision"),
+        summary: decisionKey === "cold-chain-renegotiation-mandate"
+          ? "Renegotiation targets SAR ~250K per year; the decision is recorded for this session."
+          : "The decision is recorded for this session; no outbound message was sent.",
+        classification: "CEO decision",
+        tone: "positive"
+      });
+    });
     var seenOutlookItems = {};
     developmentsAndConcerns = developmentsAndConcerns.filter(function (item) {
       var key = String(firstDefined(item.title, item.key, '')).trim().toLowerCase().replace(/[^a-z0-9]+/g, " ");
@@ -5356,8 +5628,14 @@
       var record = safeArray(state.decisionRecords).find(function (entry) {
         return String(entry && entry.decision_key || '') === key;
       });
+      var localChoice = (state.enrichmentDecisionChoices || {})[key];
+      var choicesMarkup = safeArray(item.choices).length
+        ? '<div class="decision-choice-row">' + safeArray(item.choices).map(function (choice) {
+            return '<button type="button" data-enrichment-decision="' + escapeHtml(key) + '" data-enrichment-choice="' + escapeHtml(choice) + '" class="' + (localChoice === choice ? 'is-selected' : '') + '">' + escapeHtml(choice) + '</button>';
+          }).join('') + '<span>' + (localChoice ? 'Decision recorded for this demo session · no message sent' : 'Records your choice for this demo session · no message sent') + '</span></div>'
+        : '';
       var resolutionLabels = {
-        unambiguous: 'Unambiguous governed match',
+        unambiguous: 'Single eligible owner matched',
         review_recommended: 'Several eligible owners · review recommended',
         role_only: 'Role suggested · named owner unavailable'
       };
@@ -5367,20 +5645,20 @@
       ].filter(Boolean).join(' · ');
       var facts = safeArray(ownerResolution.match_facts).slice(0, 4);
       var recommendationMarkup = recommendation ? [
-        '<section class="decision-recommendation" aria-label="Governed recommendation">',
-        '<div class="decision-recommendation__row"><span>Suggested accountable owner</span><strong>' + escapeHtml(ownerLabel || 'No governed owner available') + '</strong></div>',
+        '<section class="decision-recommendation" aria-label="Verified recommendation">',
+        '<div class="decision-recommendation__row"><span>Suggested accountable owner</span><strong>' + escapeHtml(ownerLabel || 'No eligible owner found in company records') + '</strong></div>',
         '<div class="decision-recommendation__state">' + escapeHtml(firstDefined(resolutionLabels[ownerResolution.resolution_state], 'Governance review required')) + '<small>' + escapeHtml(firstDefined(ownerResolution.policy_version, 'Policy version unavailable')) + '</small></div>',
         facts.length ? '<ul class="decision-recommendation__facts">' + facts.map(function (fact) { return '<li>' + escapeHtml(fact) + '</li>'; }).join('') + '</ul>' : '',
         '<div class="decision-recommendation__row"><span>Required outcome</span><strong>' + escapeHtml(firstDefined(recommendation.success_measure, recommendation.requested_deliverable, 'Remediation outcome')) + '</strong></div>',
         dueDate
-          ? '<div class="decision-recommendation__row"><span>Grounded due date</span><strong>' + escapeHtml(firstDefined(dueDate.value, 'Date unavailable')) + '</strong><small>' + escapeHtml(firstDefined(dueDate.basis, 'Governed milestone')) + '</small></div>'
+          ? '<div class="decision-recommendation__row"><span>Grounded due date</span><strong>' + escapeHtml(firstDefined(dueDate.value, 'Date unavailable')) + '</strong><small>' + escapeHtml(firstDefined(dueDate.basis, 'Approved milestone')) + '</small></div>'
           : '<label class="decision-date-field"><span>Due date · CEO input required</span><input type="date" data-decision-due-date aria-label="Choose the due date for this decision" /></label>',
         record
           ? '<div class="decision-recorded-state"><strong>Decision recorded</strong><span>No message was sent · underlying issue remains open</span></div>'
           : '<div class="decision-recommendation__actions"><button class="decision-record-button" type="button" data-record-decision="' + escapeHtml(key) + '" data-owner-id="' + escapeHtml(firstDefined(ownerResolution.selected_owner_id, '')) + '" data-owner-name="' + escapeHtml(firstDefined(ownerResolution.selected_owner_name, '')) + '" data-owner-role="' + escapeHtml(firstDefined(ownerResolution.selected_role, '')) + '" data-governed-due-date="' + escapeHtml(firstDefined(dueDate && dueDate.value, '')) + '">Record decision</button><span>Records your decision only · does not send or close the issue</span></div>',
         '</section>'
       ].join('') : '';
-      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Recommended decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'No executive authority request was supplied.')) + '</strong></div>' + recommendationMarkup + '<div class="executive-decision__foot"><span>Source · ' + escapeHtml(source) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Ask Hermes why →</button></div></div>' : '') + '</article>';
+      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Recommended decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'No executive authority request was supplied.')) + '</strong></div>' + choicesMarkup + recommendationMarkup + '<div class="executive-decision__foot"><span>Source · ' + escapeHtml(source) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Ask Hermes why →</button></div></div>' : '') + '</article>';
     }).join('') : '<div class="executive-empty-state"><strong>No decision is waiting for you</strong><p>No approval, intervention or direction is currently routed to the CEO.</p></div>';
 
     var signalMarkup = developmentsAndConcerns.length ? developmentsAndConcerns.map(function (item, index) {
@@ -5405,12 +5683,25 @@
 
     if (findingsPanel) {
       findingsPanel.hidden = false;
-      findingsPanel.innerHTML = '<div class="executive-signal-list">' + signalMarkup + '</div>';
+      var recovery = enrichment.recovery_meter || {};
+      var lockedSar = Number(firstDefined((state.latestPacket || {}).total_recoverable_sar, recovery.locked_sar_fallback, 0)) || 0;
+      var recoveryMarkup = recovery.identified_sar
+        ? '<div class="found-money-strip" aria-label="Found money"><button type="button" data-found-money="identified"><span>Identified</span><strong>' + escapeHtml(formatSarCompact(recovery.identified_sar)) + '</strong></button><span aria-hidden="true">→</span><button type="button" data-found-money="locked"><span>Locked</span><strong>' + escapeHtml(formatSarCompact(lockedSar)) + '</strong></button><span aria-hidden="true">→</span><button type="button" data-found-money="recovered"><span>Recovered to date</span><strong>' + escapeHtml(formatSarCompact(recovery.recovered_sar)) + '</strong></button></div>'
+        : '';
+      findingsPanel.innerHTML = recoveryMarkup + '<div class="executive-signal-list">' + signalMarkup + '</div>';
+      safeArray(findingsPanel.querySelectorAll('[data-found-money]')).forEach(function (button) {
+        button.onclick = function () {
+          switchView("functions");
+          showToast("Opened the agent review trail behind the recovery figure.");
+        };
+      });
     }
 
     if (developmentsPanel) {
       developmentsPanel.hidden = false;
-      developmentsPanel.innerHTML = '<span class="sr-only">Pending CEO decisions</span><div class="executive-decision-list">' + decisionMarkup + '</div>';
+      var hasSessionDecisions = Object.keys(state.enrichmentDecisionChoices || {}).length > 0;
+      developmentsPanel.innerHTML = '<span class="sr-only">Pending CEO decisions</span><div class="executive-decision-list">' + decisionMarkup + '</div>'
+        + (hasSessionDecisions ? '<button type="button" class="decision-demo-reset" data-decision-demo-reset>Reset demo decisions</button>' : '');
     }
 
     safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
@@ -5428,6 +5719,25 @@
       safeArray(panel && panel.querySelectorAll('[data-record-decision]')).forEach(function (button) {
         button.onclick = function () { recordExecutiveDecision(button); };
       });
+      safeArray(panel && panel.querySelectorAll('[data-enrichment-decision]')).forEach(function (button) {
+        button.onclick = function () {
+          var key = button.getAttribute('data-enrichment-decision') || '';
+          var choice = button.getAttribute('data-enrichment-choice') || '';
+          var decisionTitle = firstDefined(button.closest('.executive-decision') && button.closest('.executive-decision').querySelector('.target-feed-title') && button.closest('.executive-decision').querySelector('.target-feed-title').textContent, key);
+          state.enrichmentDecisionChoices = state.enrichmentDecisionChoices || {};
+          state.enrichmentDecisionChoices[key] = choice;
+          recordSessionDecisionInChat(key, choice, decisionTitle);
+          renderLowerRailFidelity();
+          renderAssistantStudio();
+          showToast('Decision recorded for this demo session. No message was sent.');
+        };
+      });
+      var resetButton = panel && panel.querySelector('[data-decision-demo-reset]');
+      if (resetButton) resetButton.onclick = function () {
+        state.enrichmentDecisionChoices = {};
+        renderLowerRailFidelity();
+        showToast("Demo decisions reset.");
+      };
     });
     renderReviewFiles();
 
@@ -5442,7 +5752,7 @@
         var eventDay = firstDefined(item.day, '');
         var eventWhen = firstDefined(item.when, item.detail, 'soon');
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '" title="' + escapeHtml(eventTitle) + '" aria-label="' + escapeHtml([eventDay, eventTitle, eventWhen].filter(Boolean).join(' · ')) + '"><span class="event-day">' + escapeHtml(eventDay) + '</span><span class="event-title">' + escapeHtml(eventTitle) + '</span><span class="event-when">' + escapeHtml(eventWhen) + '</span></button>';
-      }).join('') + (allWeekAhead.length > 4 ? '<button class="week-show-more" type="button" data-week-show-all="true">' + (state.showAllWeekEvents ? 'Show less' : 'See ' + (allWeekAhead.length - 4) + ' more') + '</button>' : '') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>◇ Open in thinking mode</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>⤓ Request missing data</strong></button></div><div class="prep-ask-label">Ask StrategyOS to prepare something for this event</div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line…" /><button type="submit" aria-label="Ask StrategyOS">↑</button></form></div>' : '') : '<div class="fidelity-empty"><strong>No executive calendar connected</strong><p>No governed calendar is available for this reporting period. No meetings or deadlines have been inferred.</p></div>';
+      }).join('') + (allWeekAhead.length > 4 ? '<button class="week-show-more" type="button" data-week-show-all="true">' + (state.showAllWeekEvents ? 'Show less' : 'See ' + (allWeekAhead.length - 4) + ' more') + '</button>' : '') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>◇ Open in thinking mode</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>⤓ Request missing data</strong></button></div><div class="prep-ask-label">Ask StrategyOS to prepare something for this event</div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line…" /><button type="submit" aria-label="Ask StrategyOS">↑</button></form></div>' : '') : '<div class="fidelity-empty"><strong>No executive calendar connected</strong><p>No calendar is available for this reporting period. No meetings or deadlines have been inferred.</p></div>';
       safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {
         button.onclick = function () {
           var idx = Number(button.getAttribute('data-week-index') || 0) || 0;
@@ -5459,6 +5769,10 @@
       safeArray(weekPanel.querySelectorAll("[data-calendar-quick-action]")).forEach(function (button) {
         button.onclick = function () {
           var action = button.getAttribute("data-calendar-quick-action") || "brief";
+          if (action === "brief") {
+            openThinkingModeForEvent(activeEvent);
+            return;
+          }
           askAssistant(
             calendarQuickActionPrompt(activeEvent, action),
             button,
@@ -5522,7 +5836,21 @@
     if (activityCard) {
       var activeLeadershipCount = leadershipTwins.filter(function (item) { return /^(active|monitoring)$/i.test(String(item && item.status || "")); }).length;
       var attentionLeadershipCount = leadershipTwins.filter(function (item) { return /^attention$/i.test(String(item && item.status || "")); }).length;
-      activityCard.innerHTML = '<div class="twin-network-intro"><div><span class="eyebrow">Executive assistants</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist analysis and audit work is tracked under Agents.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
+      var profiles = safeArray(getStrategyEnrichment().assistant_profiles);
+      var readinessAverage = profiles.length ? Math.round(profiles.reduce(function (sum, item) { return sum + Number(item.readiness_pct || 0); }, 0) / profiles.length) : 0;
+      var weakProfile = profiles.slice().sort(function (left, right) {
+        return Number(left.readiness_pct || 0) - Number(right.readiness_pct || 0);
+      })[0];
+      var readinessSuggestion = weakProfile && Number(weakProfile.readiness_pct || 0) < 70
+        ? '<p class="assistant-readiness__suggestion">' + escapeHtml(firstDefined(weakProfile.assistant_name, "This assistant"))
+          + " has the lowest readiness at " + escapeHtml(String(weakProfile.readiness_pct)) + "%. "
+          + escapeHtml(firstDefined(weakProfile.note, "A source refresh is recommended.")) + "</p>"
+        : "";
+      var readinessMarkup = profiles.length ? '<div class="assistant-readiness"><div class="assistant-readiness__head"><div><span class="eyebrow">Assistant team readiness</span><h3>' + escapeHtml(String(readinessAverage)) + '% average readiness</h3></div><span>Freshness · context depth · usage</span></div><div class="assistant-readiness__grid">' + profiles.map(function (item) {
+        var breakdown = safeArray(item.readiness_breakdown);
+        return '<details><summary><strong>' + escapeHtml(firstDefined(item.assistant_name, item.persona)) + '</strong><span>' + escapeHtml(String(item.readiness_pct)) + '%</span></summary><p>' + escapeHtml(firstDefined(item.note, 'No readiness note supplied.')) + '</p><small>' + escapeHtml(breakdown.length === 3 ? 'Freshness ' + breakdown[0] + ' · Depth ' + breakdown[1] + ' · Usage ' + breakdown[2] : '') + '</small></details>';
+      }).join('') + '</div>' + readinessSuggestion + '</div>' : '';
+      activityCard.innerHTML = readinessMarkup + '<div class="twin-network-intro"><div><span class="eyebrow">Executive assistants</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist analysis and audit work is tracked under Agents.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
     }
 
     if (networkCard) {
@@ -5553,6 +5881,7 @@
 
     if (collaborationCard) {
       var events = safeArray(collaboration.recent_events);
+      var seededThreads = safeArray(((getStrategyEnrichment().assistant_threads || {}).threads));
       var openHandoffs = Number(firstDefined(collaboration.open_handoff_count, collaboration.pending_request_count, 0)) || 0;
       var resolvedHandoffs = Number(firstDefined(collaboration.resolved_handoff_count, 0)) || 0;
       var attentionHandoffs = Number(firstDefined(collaboration.executive_attention_count, 0)) || 0;
@@ -5563,7 +5892,21 @@
       var noEventCopy = openHandoffs
         ? 'Items are progressing; no decision is requested from you yet.'
         : 'No recent leadership-team activity needs review.';
-      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Items moving between executive-role assistants</span></div></div><p class="twin-explainer">This view shows coordination between AI Assistants. Work completed by specialist agents—and each agent’s review trail—is available under Agents.</p><div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>') + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
+      var seededMarkup = seededThreads.length ? '<div class="a2a-seeded-threads">' + seededThreads.map(function (thread, index) {
+        var threadKey = String(firstDefined(thread.thread_id, thread.id, "a2a-" + index));
+        var isOpen = Boolean((state.openA2AThreadKeys || {})[threadKey]);
+        return '<details data-a2a-thread="' + escapeHtml(threadKey) + '"' + (isOpen ? ' open' : '') + '><summary><span><strong>' + escapeHtml(firstDefined(thread.topic, 'Assistant conversation')) + '</strong><small>' + escapeHtml(safeArray(thread.participants).join(' ↔ ')) + '</small></span><em>' + escapeHtml(String(safeArray(thread.turns).length)) + ' messages</em></summary><ol>' + safeArray(thread.turns).map(function (turn) {
+          return '<li><span>' + escapeHtml(firstDefined(turn.from, 'Assistant')) + ' → ' + escapeHtml(firstDefined(turn.to, 'Assistant')) + '</span><p>' + escapeHtml(firstDefined(turn.text, '')) + '</p>' + (turn.evidence_ref && turn.evidence_ref !== '—' ? '<small>Evidence · ' + escapeHtml(turn.evidence_ref) + '</small>' : '') + '</li>';
+        }).join('') + '</ol></details>';
+      }).join('') + '</div>' : '';
+      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Items moving between executive-role assistants</span></div></div><p class="twin-explainer">This view shows coordination between AI Assistants. Work completed by specialist agents—and each agent’s review trail—is available under Agents.</p>' + seededMarkup + (seededThreads.length ? '' : '<div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>')) + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
+      safeArray(collaborationCard.querySelectorAll('[data-a2a-thread]')).forEach(function (details) {
+        details.ontoggle = function () {
+          var key = details.getAttribute("data-a2a-thread") || "";
+          state.openA2AThreadKeys = state.openA2AThreadKeys || {};
+          state.openA2AThreadKeys[key] = details.open;
+        };
+      });
     }
 
     if (automationCard) {
@@ -5579,11 +5922,11 @@
     var groups = safeArray(registry.groups);
     var groupsMarkup = groups.length ? groups.map(function (group) {
       var items = safeArray(group.items);
-      return '<section class="review-file-group"><h3>' + escapeHtml(firstDefined(group.label, 'Governed documents')) + '</h3><div class="review-file-list">' + items.map(function (item) {
+      return '<section class="review-file-group"><h3>' + escapeHtml(firstDefined(group.label, 'Reviewed documents')) + '</h3><div class="review-file-list">' + items.map(function (item) {
         var meta = [String(firstDefined(item.type, '')).toUpperCase(), item.scope, item.status, item.date].filter(Boolean).join(' · ');
         return '<article class="review-file-row"><span class="review-file-icon" aria-hidden="true">' + escapeHtml(String(firstDefined(item.type, 'file')).slice(0, 1).toUpperCase()) + '</span><span class="review-file-copy"><strong>' + escapeHtml(firstDefined(item.filename, 'Office file')) + '</strong><small>' + escapeHtml(meta) + '</small></span><span class="review-file-actions"><a href="' + escapeHtml(item.view_url) + '" target="_blank" rel="noopener">View</a><a href="' + escapeHtml(item.download_url) + '">Download</a></span></article>';
       }).join('') + '</div></section>';
-    }).join('') : '<div class="executive-empty-state"><strong>No relevant Office files</strong><p>' + escapeHtml(firstDefined(registry.empty_reason, 'No governed XLSX, DOCX or PPTX file is linked to the current briefing.')) + '</p></div>';
+    }).join('') : '<div class="executive-empty-state"><strong>No relevant Office files</strong><p>' + escapeHtml(firstDefined(registry.empty_reason, 'No reviewed XLSX, DOCX or PPTX file is linked to the current briefing.')) + '</p></div>';
     var capNote = registry.cap
       ? 'Showing up to ' + escapeHtml(String(registry.cap)) + ' relevance-selected files. '
       : '';
@@ -5865,11 +6208,16 @@
         var payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
         var tier = String(firstDefined(payload.determinism_tier, '')).trim();
         var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
-        var tierLabel = { governed_fact: 'Governed fact', derived_insight: 'Derived insight', advisory: 'Advisory' }[tier] || '';
+        var tierLabel = { governed_fact: 'Verified fact', derived_insight: 'Derived insight', advisory: 'Advisory' }[tier] || '';
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));
         var answerMarkup = '<p>' + bodyHtml + '</p>';
+        var evidenceRefsMarkup = role === 'assistant' && safeArray(message.evidence_refs).length
+          ? '<div class="assistant-message__actions">' + safeArray(message.evidence_refs).map(function (reference) {
+              return '<button type="button" class="assistant-retry-button" data-morning-evidence="' + escapeHtml(reference) + '">Source · ' + escapeHtml(String(reference).split('/').pop()) + '</button>';
+            }).join('') + '</div>'
+          : '';
         if (role === 'assistant' && tier === 'advisory') {
           answerMarkup = '<div class="assistant-answer-sections">'
             + (sections.from_your_data ? '<section class="assistant-answer-block assistant-answer-block--fact"><span>From your data</span><p>' + renderAssistantMarkdownToHtml(sections.from_your_data) + '</p></section>' : '')
@@ -5877,7 +6225,7 @@
             + (sections.general_practice_suggests ? '<section class="assistant-answer-block assistant-answer-block--advisory"><span>General practice suggests</span><p>' + renderAssistantMarkdownToHtml(sections.general_practice_suggests) + '</p></section>' : '')
             + '</div>';
         }
-        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + (tierLabel ? '<em class="assistant-tier assistant-tier--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</em>' : '') + '</span>' + answerMarkup + failureMeta + retryButton + caseLinks + '</div>';
+        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + (tierLabel ? '<em class="assistant-tier assistant-tier--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</em>' : '') + '</span>' + answerMarkup + evidenceRefsMarkup + failureMeta + retryButton + caseLinks + '</div>';
       }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No messages yet</span><p>Ask a question to begin.</p></div>';
       safeArray(messages.querySelectorAll('[data-assistant-retry-index]')).forEach(function (button) {
         button.onclick = function () {
@@ -5887,6 +6235,16 @@
       safeArray(messages.querySelectorAll('[data-assistant-case-id]')).forEach(function (button) {
         button.onclick = function () {
           openAssistantCase(button.getAttribute('data-assistant-case-id') || '', button);
+        };
+      });
+      safeArray(messages.querySelectorAll('[data-morning-evidence]')).forEach(function (button) {
+        button.onclick = function () {
+          _closeHermesDrawer();
+          switchView("home");
+          window.setTimeout(function () {
+            var target = $("review-files-section") || $("week-ahead-section");
+            if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 50);
         };
       });
       messages.scrollTop = messages.scrollHeight;
@@ -5925,7 +6283,7 @@
         };
         var catLabel = REPORT_CATEGORY_MAP[item.category] || humanizeToken(item.category) || 'report';
         var meta = escapeHtml(catLabel);
-        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, item.artifact_key, 'Artifact')) + '</strong><p class="list-copy">' + meta + '</p></div><span class="pill-inline ' + (item.restricted ? 'warn' : 'ok') + '">' + escapeHtml(item.restricted ? 'restricted' : 'board-safe') + '</span></div>';
+        return '<div class="list-item"><div><strong>' + escapeHtml(firstDefined(item.title, item.artifact_key, 'Board material')) + '</strong><p class="list-copy">' + meta + '</p></div><span class="pill-inline ' + (item.restricted ? 'warn' : 'ok') + '">' + escapeHtml(item.restricted ? 'restricted' : 'board-safe') + '</span></div>';
       }).join("") + '</div>',
       state.activePersona === "ceo" ? '' : '<a class="summary-link" href="' + escapeHtml(firstDefined(publication.preview_route, '/public/runs/latest/report-preview')) + '">Open report preview</a>'
     ].join("");
@@ -5963,6 +6321,39 @@
     document.title = "StrategyOS — " + personaLabel + " " + firstDefined(viewLabels[state.activeView], "Workspace");
   }
 
+  function renderDemoClock() {
+    var footer = $("composed-footer");
+    if (!footer) return;
+    var enrichment = getStrategyEnrichment();
+    var time = footer.querySelector(".composed-time");
+    if (time && enrichment.virtual_now) {
+      var displayDate = new Date(activeVirtualDate() + "T08:00:00+03:00");
+      time.textContent = "Demo clock · " + displayDate.toLocaleDateString("en-GB", {
+        weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Riyadh"
+      }) + " · last verified refresh 06:14 Riyadh";
+    }
+    var existing = footer.querySelector(".demo-day-scrubber");
+    if (existing) existing.remove();
+    if (!enrichment.demo_window || state.activePersona !== "ceo") return;
+    var scrubber = document.createElement("div");
+    scrubber.className = "demo-day-scrubber";
+    scrubber.setAttribute("aria-label", "Demo day");
+    for (var index = 0; index < 7; index += 1) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.textContent = String(index + 1) + " Jun";
+      button.className = Number(state.demoDayOffset || 0) === index ? "is-active" : "";
+      button.setAttribute("data-demo-day", String(index));
+      button.onclick = function () {
+        state.demoDayOffset = Number(this.getAttribute("data-demo-day") || 0);
+        state.activeThreadKey = "";
+        renderPersonaView();
+      };
+      scrubber.appendChild(button);
+    }
+    footer.appendChild(scrubber);
+  }
+
   function renderPersonaView() {
     updateDocumentTitle();
     renderTopbar();
@@ -5984,6 +6375,7 @@
     renderAssistantStudio();
     renderReportSurface();
     renderSummary();
+    renderDemoClock();
     // Final board-tab re-sync for the knowledge view: after ALL render
     // functions have completed, re-assert the intended tab state so that
     // any className or inline style discarded during the full render
@@ -6028,6 +6420,9 @@
       // packet value initializes old clients, but must never snap a user back
       // to a stale server-side persona after a deliberate switch.
       state.activePersona = firstDefined(state.activePersona, (state.latestPacket.executive_modes || {}).active_persona_id, "ceo");
+      if (["ceo", "board"].indexOf(String(state.activePersona || "").toLowerCase()) < 0) {
+        state.activePersona = "ceo";
+      }
       if (state.activePersona === "board") state.activeView = "home";
       // During an active board-state transition, the packet's presentation_state
       // must not override the user's in-flight selection. _boardStateTransition
@@ -6133,6 +6528,11 @@
       openWeekIndex: 0,
       showAllWeekEvents: false,
       openDecisionKeys: {},
+      enrichmentDecisionChoices: {},
+      planCoverageOpen: false,
+      demoDayOffset: 0,
+      thinkingSeed: null,
+      openA2AThreadKeys: {},
       openOutlookKeys: {},
       openCalendarIndex: 0,
       agentSummaryOpen: false,
