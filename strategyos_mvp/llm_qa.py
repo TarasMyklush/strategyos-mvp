@@ -91,6 +91,15 @@ supplied rather than synthesising a trend.
 When ``evidence.governed_signals.available`` is true, use those signal rows for
 forward-looking risk and opportunity questions. Keep their impact,
 probability, horizon and source distinct from calculated KPI facts.
+When ``evidence.strategy.available`` is true, it is the governed CEO operating
+surface derived from the current source pack. Use ``plan_health.commitments``
+for board KPI glidepath/checkpoint questions; use initiative and milestone
+drifts for execution questions; use achievements and daily pulse for dated
+developments; use assistant profiles and threads for assistant-readiness and
+agent-to-agent questions; and use decisions, remediation and recovery for the
+CEO action queue. Cite the supplied evidence file and record locator. Never say
+that a glidepath, initiative, milestone, daily pulse or assistant thread is
+missing while the corresponding strategy block is populated.
 For a question that is plainly general knowledge and names nothing in the
 business (a definition, arithmetic, a well-known fact), answer it directly and
 briefly from your own knowledge; do not force it through the evidence.
@@ -474,6 +483,7 @@ def _build_evidence_payload(
             "data_contracts": bundle.data_contracts or {},
         },
         "finance_kpis": _finance_kpi_evidence(summary),
+        "strategy": _strategy_enrichment_evidence(summary),
         "historic_context": _historic_context_evidence(summary),
         "governed_signals": _governed_signals_evidence(summary),
         "findings": [_finding_summary(finding) for finding in findings[:12]],
@@ -570,6 +580,99 @@ def _governed_signals_evidence(summary: dict[str, Any]) -> dict[str, Any]:
         "total_item_count": payload.get("total_item_count"),
         "source_file": payload.get("source_file"),
         "items": list(payload.get("items") or []),
+    }
+
+
+def _strategy_enrichment_evidence(summary: dict[str, Any]) -> dict[str, Any]:
+    """Expose the governed CEO strategy substrate to Hermes.
+
+    The enrichment is already a deterministic, source-derived run artifact.
+    This adapter deliberately preserves its row-level evidence references while
+    bounding verbose collections so the model sees the same operating facts as
+    the executive UI without receiving the 500-question test bank itself.
+    """
+    payload = summary.get("strategy_enrichment")
+    if not isinstance(payload, dict) or payload.get("status") != "ready":
+        return {
+            "available": False,
+            "unavailable_reason": "No governed strategy enrichment is present in the run model.",
+        }
+
+    plan_health = payload.get("plan_health")
+    plan_health = dict(plan_health) if isinstance(plan_health, dict) else {}
+    commitments = [
+        dict(item)
+        for item in list(plan_health.get("commitments") or [])[:20]
+        if isinstance(item, dict)
+    ]
+    plan_health["commitments"] = commitments
+
+    threads_payload = payload.get("assistant_threads")
+    threads_payload = dict(threads_payload) if isinstance(threads_payload, dict) else {}
+    threads: list[dict[str, Any]] = []
+    for item in list(threads_payload.get("threads") or [])[:8]:
+        if not isinstance(item, dict):
+            continue
+        thread = dict(item)
+        thread["turns"] = [
+            dict(turn)
+            for turn in list(thread.get("turns") or [])[:12]
+            if isinstance(turn, dict)
+        ]
+        threads.append(thread)
+
+    return {
+        "available": True,
+        "virtual_now": payload.get("virtual_now"),
+        "demo_window": payload.get("demo_window") or {},
+        "plan_health": plan_health,
+        "operational_actuals": payload.get("operational_actuals") or {},
+        "initiatives": [
+            dict(item)
+            for item in list(payload.get("initiatives") or [])[:24]
+            if isinstance(item, dict)
+        ],
+        "initiative_drifts": [
+            dict(item)
+            for item in list(payload.get("initiative_drifts") or [])[:12]
+            if isinstance(item, dict)
+        ],
+        "milestone_drifts": [
+            dict(item)
+            for item in list(payload.get("milestone_drifts") or [])[:16]
+            if isinstance(item, dict)
+        ],
+        "achievements": [
+            dict(item)
+            for item in list(payload.get("achievements") or [])[:16]
+            if isinstance(item, dict)
+        ],
+        "daily_pulse": [
+            dict(item)
+            for item in list(payload.get("daily_pulse") or [])[-14:]
+            if isinstance(item, dict)
+        ],
+        "assistant_profiles": [
+            dict(item)
+            for item in list(payload.get("assistant_profiles") or [])[:12]
+            if isinstance(item, dict)
+        ],
+        "assistant_threads": {
+            "threads": threads,
+            "source_file": threads_payload.get("source_file"),
+        },
+        "decisions": [
+            dict(item)
+            for item in list(payload.get("decision_seeds") or [])[:12]
+            if isinstance(item, dict)
+        ],
+        "recovery": payload.get("recovery_meter") or {},
+        "remediation": [
+            dict(item)
+            for item in list(payload.get("remediation_decisions") or [])[:24]
+            if isinstance(item, dict)
+        ],
+        "source_files": list(payload.get("source_files") or [])[:24],
     }
 
 

@@ -900,6 +900,68 @@ def test_evidence_payload_exposes_governed_gl_and_finance_kpi_scope():
     assert payload["finance_kpis"]["source_files"] == ["GL.csv", "CoA.xlsx"]
 
 
+def test_evidence_payload_exposes_strategy_glidepaths_and_execution_context():
+    payload = llm_qa._build_evidence_payload(
+        bundle=_bundle(),
+        findings=[],
+        summary={
+            "strategy_enrichment": {
+                "status": "ready",
+                "virtual_now": "2026-06-01",
+                "plan_health": {
+                    "score": 100.9,
+                    "commitments": [
+                        {
+                            "kpi_id": "KPI-09",
+                            "name": "E-Rx share of eligible prescriptions",
+                            "actual": 36.2,
+                            "checkpoint": 38.0,
+                            "status_vs_path": "BEHIND",
+                            "evidence": {
+                                "file": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+                                "sheet": "Glidepaths",
+                                "kpi_id": "KPI-09",
+                            },
+                        }
+                    ],
+                },
+                "initiative_drifts": [
+                    {
+                        "initiative_id": "INIT-06",
+                        "status": "at-risk",
+                        "evidence_refs": ["Board_KPI_Glidepaths KPI-09"],
+                    }
+                ],
+                "assistant_threads": {
+                    "source_file": "23_Assistants/A2A_Seed_Threads.json",
+                    "threads": [
+                        {
+                            "thread_id": "A2A-1",
+                            "turns": [
+                                {
+                                    "from": "Hermes",
+                                    "to": "Iris",
+                                    "text": "Where does remediation stand?",
+                                    "evidence_ref": "Decision log",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                "question_bank": {"count": 500},
+                "source_files": ["20_Board_KPIs/Board_KPI_Glidepaths.xlsx"],
+            }
+        },
+    )
+
+    strategy = payload["strategy"]
+    assert strategy["available"] is True
+    assert strategy["plan_health"]["commitments"][0]["actual"] == 36.2
+    assert strategy["initiative_drifts"][0]["initiative_id"] == "INIT-06"
+    assert strategy["assistant_threads"]["threads"][0]["turns"][0]["to"] == "Iris"
+    assert "question_bank" not in strategy
+
+
 def test_evidence_payload_wraps_untrusted_text_before_model_egress():
     payload = llm_qa._build_evidence_payload(
         bundle=_bundle(),
