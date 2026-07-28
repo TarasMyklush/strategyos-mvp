@@ -63,6 +63,14 @@ def test_resume_preserves_the_approved_finance_calendar_and_source_context(
         "status": "ready",
         "items": [{"date": "2026-07-22", "title": "Executive Committee"}],
     }
+    approved_strategy = {
+        "status": "ready",
+        "plan_health": {
+            "score": 100.9,
+            "commitments": [{"kpi_id": "KPI-09", "actual": 36.2, "checkpoint": 38.0}],
+        },
+        "initiative_drifts": [{"initiative_id": "INIT-06", "status": "at-risk"}],
+    }
     approved_source_pack = {
         "source_pack_id": "pack-81",
         "normalized_dataset_root": str(dataset_root),
@@ -85,6 +93,7 @@ def test_resume_preserves_the_approved_finance_calendar_and_source_context(
             "summary_json": {
                 "finance_kpi": approved_finance,
                 "calendar_agenda": approved_calendar,
+                "strategy_enrichment": approved_strategy,
                 "historic_context": {"status": "ready", "periods": [2023, 2024, 2025]},
                 "source_pack": approved_source_pack,
                 "detector_report": {"status": "complete"},
@@ -121,6 +130,7 @@ def test_resume_preserves_the_approved_finance_calendar_and_source_context(
     assert summary["current_stage"] == "writer"
     assert summary["finance_kpi"] == approved_finance
     assert summary["calendar_agenda"] == approved_calendar
+    assert summary["strategy_enrichment"] == approved_strategy
     assert summary["historic_context"]["periods"] == [2023, 2024, 2025]
     assert summary["source_pack"] == approved_source_pack
     assert summary["detector_report"] == {"status": "complete"}
