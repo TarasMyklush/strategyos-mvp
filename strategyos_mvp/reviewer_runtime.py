@@ -29,6 +29,7 @@ _APPROVED_CONTEXT_KEYS = (
     "oracle_kpi",
     "calendar_agenda",
     "strategy_enrichment",
+    "governed_signals",
     "historic_context",
     "source_pack",
     "detector_report",

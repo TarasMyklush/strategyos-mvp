@@ -3,7 +3,7 @@ from pathlib import Path
 import strategyos_mvp.reviewer_runtime as reviewer_runtime
 
 
-def test_resume_preserves_the_approved_finance_calendar_and_source_context(
+def test_resume_preserves_the_approved_finance_calendar_signal_and_source_context(
     monkeypatch,
     tmp_path: Path,
 ):
@@ -71,6 +71,12 @@ def test_resume_preserves_the_approved_finance_calendar_and_source_context(
         },
         "initiative_drifts": [{"initiative_id": "INIT-06", "status": "at-risk"}],
     }
+    approved_signals = {
+        "status": "ready",
+        "total_item_count": 16,
+        "items": [{"key": "SIG-2026-03", "tone": "critical"}],
+        "source_file": "99_Historic_Context/17_Signals/Signals_Register_Jun2026.xlsx",
+    }
     approved_source_pack = {
         "source_pack_id": "pack-81",
         "normalized_dataset_root": str(dataset_root),
@@ -94,6 +100,7 @@ def test_resume_preserves_the_approved_finance_calendar_and_source_context(
                 "finance_kpi": approved_finance,
                 "calendar_agenda": approved_calendar,
                 "strategy_enrichment": approved_strategy,
+                "governed_signals": approved_signals,
                 "historic_context": {"status": "ready", "periods": [2023, 2024, 2025]},
                 "source_pack": approved_source_pack,
                 "detector_report": {"status": "complete"},
@@ -131,6 +138,7 @@ def test_resume_preserves_the_approved_finance_calendar_and_source_context(
     assert summary["finance_kpi"] == approved_finance
     assert summary["calendar_agenda"] == approved_calendar
     assert summary["strategy_enrichment"] == approved_strategy
+    assert summary["governed_signals"] == approved_signals
     assert summary["historic_context"]["periods"] == [2023, 2024, 2025]
     assert summary["source_pack"] == approved_source_pack
     assert summary["detector_report"] == {"status": "complete"}
