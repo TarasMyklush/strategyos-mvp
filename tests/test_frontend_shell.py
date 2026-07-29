@@ -410,6 +410,16 @@ def test_board_executive_html_is_minerva_correct_before_hydration() -> None:
     assert "Ask Hermes" not in response.text
 
 
+def test_cfo_executive_html_is_atlas_correct_before_hydration() -> None:
+    response = TestClient(api_module.app).get("/executive?persona=cfo")
+
+    assert response.status_code == 200
+    assert "<title>StrategyOS — Group CFO Briefing</title>" in response.text
+    assert 'id="persona-label">Group CFO</span>' in response.text
+    assert "Ask Atlas" in response.text
+    assert "Ask Hermes" not in response.text
+
+
 def test_legion_decisions_readiness_and_calendar_handoff_are_evidence_first() -> None:
     js = _static_executive_js()
     assert "item.cost_of_drift || {}" in js

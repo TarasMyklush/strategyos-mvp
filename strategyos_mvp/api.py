@@ -7915,9 +7915,20 @@ def _executive_html(
     html_text = html_text.replace("__EXECUTIVE_ASSET_REV__", asset_rev)
     html_text = html_text.replace("__STRATEGYOS_EXECUTIVE_BOOTSTRAP__", bootstrap_json)
     requested_persona = str((view_state or {}).get("persona") or "ceo").strip().lower()
-    assistant_name = str(
-        executive_persona_design(requested_persona).get("assistant") or "Hermes"
+    persona_design = executive_persona_design(requested_persona)
+    assistant_name = str(persona_design.get("assistant") or "Hermes").strip()
+    persona_label = str(persona_design.get("label") or "Group CEO").strip()
+    document_title = str(
+        persona_design.get("documentTitle") or "StrategyOS — Group CEO Briefing"
     ).strip()
+    html_text = html_text.replace(
+        "<title>StrategyOS — Group CEO Briefing</title>",
+        f"<title>{document_title}</title>",
+    )
+    html_text = html_text.replace(
+        'id="persona-label">Group CEO</span>',
+        f'id="persona-label">{persona_label}</span>',
+    )
     if assistant_name and assistant_name != "Hermes":
         # Render the correct identity before hydration. The client still keeps
         # this synchronized after persona changes, but board/CFO HTML must

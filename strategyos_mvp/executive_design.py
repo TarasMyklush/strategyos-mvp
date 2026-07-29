@@ -14,31 +14,43 @@ from typing import Any
 EXECUTIVE_DESIGN: dict[str, Any] = {
     "personas": {
         "ceo": {
+            "label": "Group CEO",
+            "documentTitle": "StrategyOS — Group CEO Briefing",
             "assistant": "Hermes",
             "assistantRole": "chief of staff",
             "indexLabel": "The group index",
         },
         "cfo": {
+            "label": "Group CFO",
+            "documentTitle": "StrategyOS — Group CFO Briefing",
             "assistant": "Atlas",
             "assistantRole": "finance chief of staff",
             "indexLabel": "The financial index",
         },
         "gm": {
+            "label": "BU GM",
+            "documentTitle": "StrategyOS — Business Unit Briefing",
             "assistant": "Iris",
             "assistantRole": "ground operator",
             "indexLabel": "The business-unit index",
         },
         "bucfo": {
+            "label": "BU CFO",
+            "documentTitle": "StrategyOS — Business Unit Finance Briefing",
             "assistant": "Argus",
             "assistantRole": "controller",
             "indexLabel": "The business-unit financial index",
         },
         "logistics": {
+            "label": "Logistics",
+            "documentTitle": "StrategyOS — Logistics Briefing",
             "assistant": "Vega",
             "assistantRole": "logistics chief of staff",
             "indexLabel": "The logistics index",
         },
         "board": {
+            "label": "Board room",
+            "documentTitle": "StrategyOS — Board Briefing",
             "assistant": "Minerva",
             "assistantRole": "board chief of staff",
             "indexLabel": "The board index",
