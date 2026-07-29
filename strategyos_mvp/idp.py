@@ -223,7 +223,6 @@ def health_live() -> dict[str, str]:
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page() -> HTMLResponse:
-    options = _role_options_html()
     html_body = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -257,8 +256,8 @@ def login_page() -> HTMLResponse:
     <h1>Sign in to StrategyOS</h1>
     <p>Use your authorized StrategyOS account to continue.</p>
     <form id="login-form">
-      <label>Role and username
-        <select id="username" autocomplete="username" required>{options}</select>
+      <label>Username
+        <input id="username" type="text" autocomplete="username" required />
       </label>
       <label>Password
         <input id="password" type="password" autocomplete="current-password" required autofocus />

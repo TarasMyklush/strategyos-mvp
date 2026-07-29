@@ -108,12 +108,12 @@ def test_login_page_is_human_friendly_and_security_tagged():
         assert response.headers["content-security-policy"].startswith("default-src 'self'")
         assert response.headers["x-robots-tag"] == "noindex, nofollow"
         assert "Customer sign-in" in response.text
-        assert "executive.tester" in response.text
+        assert 'id="username" type="text"' in response.text
+        assert "executive.tester" not in response.text
         assert "operator.tester" not in response.text
         assert "reviewer.tester" not in response.text
         assert "tenant-admin.tester" not in response.text
         assert "system.tester" not in response.text
-        assert "executive.tester" in response.text
         assert "operator.local" not in response.text
         assert "Sign out from your profile menu" in response.text
         assert "localStorage.removeItem" in response.text
