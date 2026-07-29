@@ -7914,6 +7914,15 @@ def _executive_html(
     html_text = template_path.read_text(encoding="utf-8")
     html_text = html_text.replace("__EXECUTIVE_ASSET_REV__", asset_rev)
     html_text = html_text.replace("__STRATEGYOS_EXECUTIVE_BOOTSTRAP__", bootstrap_json)
+    requested_persona = str((view_state or {}).get("persona") or "ceo").strip().lower()
+    assistant_name = str(
+        executive_persona_design(requested_persona).get("assistant") or "Hermes"
+    ).strip()
+    if assistant_name and assistant_name != "Hermes":
+        # Render the correct identity before hydration. The client still keeps
+        # this synchronized after persona changes, but board/CFO HTML must
+        # never flash or expose the CEO assistant as its default.
+        html_text = html_text.replace("Ask Hermes", f"Ask {assistant_name}")
     if view_state and view_state.get("persona") == "ceo":
         lines = html_text.split("\n")
         lines = [

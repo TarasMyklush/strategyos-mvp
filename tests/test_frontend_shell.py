@@ -402,6 +402,14 @@ def test_executive_bootstrap_does_not_expose_internal_run_routes() -> None:
         assert "/public/runs/" not in response.text
 
 
+def test_board_executive_html_is_minerva_correct_before_hydration() -> None:
+    response = TestClient(api_module.app).get("/executive?persona=board")
+
+    assert response.status_code == 200
+    assert "Ask Minerva" in response.text
+    assert "Ask Hermes" not in response.text
+
+
 def test_legion_decisions_readiness_and_calendar_handoff_are_evidence_first() -> None:
     js = _static_executive_js()
     assert "item.cost_of_drift || {}" in js
