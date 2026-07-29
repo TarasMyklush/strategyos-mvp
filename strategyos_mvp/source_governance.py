@@ -31,6 +31,14 @@ _STRATEGIC_HISTORY_PARTS = {
     "11_strategic_analytics",
     "12_group_financials",
 }
+_STRATEGY_ENRICHMENT_PARTS = {
+    "16_business_events",
+    "17_signals",
+    "20_board_kpis",
+    "21_initiatives",
+    "22_daily_pulse",
+    "23_assistants",
+}
 _RESTRICTED_PARTS = {"14_ceo_office"}
 _NON_EVIDENCE_DIRS = {RESTRICTED_CONTEXT_DIR, QUARANTINED_CONTEXT_DIR}
 _NON_DETECTOR_DIRS = {
@@ -65,6 +73,12 @@ def initial_source_disposition(relative_path: str, *, supported: bool = True) ->
     if any(part in _HISTORIC_PARTS for part in parts):
         return HISTORIC_CONTEXT
     if any(part in _STRATEGIC_HISTORY_PARTS for part in parts):
+        return HISTORIC_CONTEXT
+    # These directories contain governed enrichment registers rather than
+    # detector run-model inputs. Route them by source contract so incidental
+    # column overlap (for example, an event register resembling a calendar)
+    # cannot strand a valid source in mapping review.
+    if any(part in _STRATEGY_ENRICHMENT_PARTS for part in parts):
         return HISTORIC_CONTEXT
     return CURRENT_EVIDENCE
 

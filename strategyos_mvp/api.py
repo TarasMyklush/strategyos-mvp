@@ -12396,6 +12396,106 @@ def _governed_calendar_result(
     }
 
 
+def _assistant_question_is_forward_signal_review(question: str) -> bool:
+    norm = " ".join(str(question or "").casefold().split())
+    return bool(
+        re.search(
+            r"\b(?:signals?|leading indicators?|early[- ]warning|forward risks?|"
+            r"change (?:a |the )?(?:bu|business unit)(?:'s)? course)\b",
+            norm,
+        )
+    )
+
+
+def _governed_signals_result(
+    question: str,
+    summary: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not _assistant_question_is_forward_signal_review(question):
+        return None
+    signals = summary.get("governed_signals") if isinstance(summary, Mapping) else None
+    if not isinstance(signals, Mapping) or signals.get("status") != "ready":
+        return {
+            "matched": True,
+            "answer": (
+                "The current review does not contain a forward-signal register, so I "
+                "cannot rank the risks or opportunities that could change a business "
+                "unit's course."
+            ),
+            "basis": "No source-derived forward-signal register is present in the current run.",
+            "citations": [],
+            "suggestions": ["Connect the current signal register"],
+            "assistant_mode": "signal_review",
+            "answered_by": "signal_review",
+            "intent": "forward_signal_review",
+            "_orchestrator_force_answer": True,
+        }
+
+    items = [
+        item
+        for item in list(signals.get("items") or [])[:6]
+        if isinstance(item, Mapping)
+    ]
+    if not items:
+        return {
+            "matched": True,
+            "answer": "The connected signal register has no ranked signal rows.",
+            "basis": "The signal register is connected but contains no usable rows.",
+            "citations": [],
+            "suggestions": [],
+            "assistant_mode": "signal_review",
+            "answered_by": "signal_review",
+            "intent": "forward_signal_review",
+            "_orchestrator_force_answer": True,
+        }
+
+    source_file = str(signals.get("source_file") or "17_Signals/Signals_Register_Jun2026.xlsx")
+    lines: list[str] = []
+    citations: list[dict[str, Any]] = []
+    for item in items:
+        key = str(item.get("key") or "Signal")
+        title = str(item.get("title") or "Untitled signal").strip()
+        impact = str(item.get("summary") or "Impact not supplied").strip()
+        classification = str(item.get("classification") or "").strip()
+        context = item.get("context") if isinstance(item.get("context"), Mapping) else {}
+        probability = str(context.get("probability") or "Probability not supplied").strip()
+        horizon = str(context.get("horizon") or "Horizon not supplied").strip()
+        action = str(context.get("recommended_action") or "No action supplied").strip()
+        lines.append(
+            f"- {key} · {classification or 'Group'}: {title} "
+            f"Impact: {impact}. Probability: {probability}; horizon: {horizon}. "
+            f"Recommended response: {action}"
+        )
+        citations.append(
+            {
+                "source_path": source_file,
+                "locator": key,
+                "excerpt": f"{title}; impact: {impact}; recommended response: {action}"[:600],
+            }
+        )
+    return {
+        "matched": True,
+        "answer": (
+            "The current signal register flags these as the highest-priority developments "
+            "that could change a business unit's course:\n"
+            + "\n".join(lines)
+        ),
+        "basis": (
+            f"Top {len(items)} signal rows from the current signal register, preserving "
+            "the supplied impact, probability, horizon and recommended response."
+        ),
+        "citations": citations,
+        "suggestions": [
+            "Which of these signals has the nearest decision date?",
+            "Which business unit carries the largest exposure?",
+        ],
+        "assistant_mode": "signal_review",
+        "answered_by": "signal_review",
+        "intent": "forward_signal_review",
+        "_orchestrator_force_answer": True,
+    }
+
+
 def _supplemental_grounding_payload(
     *,
     graph_result: dict[str, Any] | None = None,
@@ -14882,6 +14982,32 @@ async def _assistant_chat_response(
             persona=persona,
             orchestrated=orchestrated,
             base_result=calendar_result,
+            llm_status=llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        return payload
+
+    signals_result = (
+        None
+        if public_safe
+        else _governed_signals_result(question, context.get("summary"))
+    )
+    if signals_result is not None:
+        orchestrated = get_orchestrator().process(
+            question,
+            persona=persona,
+            qa_result=signals_result,
+            driver_context=driver_context,
+        )
+        payload = _assistant_response_payload(
+            response_mode="deterministic",
+            question=question,
+            context=context,
+            requested_mode=mode,
+            persona=persona,
+            orchestrated=orchestrated,
+            base_result=signals_result,
             llm_status=llm_status,
             assistant_context=assistant_context,
         )

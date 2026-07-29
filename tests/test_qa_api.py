@@ -5593,6 +5593,37 @@ def test_calendar_agenda_recognizes_plural_weekly_ceo_judgment_question():
     )
 
 
+def test_forward_signal_review_is_deterministic_and_cited():
+    result = api_module._governed_signals_result(
+        "Which signals could materially change a BU's course this year?",
+        {
+            "governed_signals": {
+                "status": "ready",
+                "source_file": "17_Signals/Signals_Register_Jun2026.xlsx",
+                "items": [
+                    {
+                        "key": "SIG-2026-03",
+                        "title": "Commercial electricity tariffs rise from September.",
+                        "summary": "-SAR 7-9M per year",
+                        "classification": "Threat · All BUs",
+                        "context": {
+                            "probability": "Confirmed",
+                            "horizon": "Sep-2026",
+                            "recommended_action": "Accelerate the group energy programme.",
+                        },
+                    }
+                ],
+            }
+        },
+    )
+
+    assert result is not None
+    assert result["matched"] is True
+    assert "SIG-2026-03" in result["answer"]
+    assert "-SAR 7-9M per year" in result["answer"]
+    assert result["citations"][0]["source_path"].endswith("Signals_Register_Jun2026.xlsx")
+
+
 def test_kpi_headline_router_uses_run_labels_and_defers_analysis(monkeypatch):
     cards = [
         {"key": "revenue", "label": "Revenue", "metric": "SAR 4.0B"},

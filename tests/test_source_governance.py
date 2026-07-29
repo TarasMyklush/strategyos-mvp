@@ -45,6 +45,28 @@ def test_historic_paths_are_context_and_generic_ambiguity_is_quarantined():
     assert final_source_disposition(item) == QUARANTINED_CONTEXT
 
 
+def test_strategy_enrichment_registers_are_routed_by_contract():
+    paths = (
+        "16_Business_Events/Business_Events_Register_Q4-2025_H1-2026.xlsx",
+        "17_Signals/Signals_Register_Jun2026.xlsx",
+        "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "21_Initiatives/Initiative_Register.xlsx",
+        "22_Daily_Pulse/Daily_Flash_May-Jun_2026.xlsx",
+        "23_Assistants/Assistant_Profiles.xlsx",
+        "23_Assistants/A2A_Seed_Threads.json",
+    )
+    for path in paths:
+        assert initial_source_disposition(path) == HISTORIC_CONTEXT
+
+    event_register = {
+        "relative_path": paths[0],
+        "supported": True,
+        "source_disposition": HISTORIC_CONTEXT,
+        "classification": {"status": "candidate", "role": "calendar"},
+    }
+    assert final_source_disposition(event_register) == HISTORIC_CONTEXT
+
+
 def test_restricted_and_quarantined_context_never_enter_agent_or_detector_evidence():
     assert not is_agent_evidence_path("98_Restricted_Context/calendar.xlsx")
     assert not is_agent_evidence_path("97_Quarantined_Context/ambiguous.txt")
