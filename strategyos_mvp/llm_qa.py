@@ -1820,16 +1820,33 @@ def _default_authenticated_evidence_citations(
             "capital",
             "investment",
             "risk-adjusted",
+            "risk",
+            "signal",
+            "indicator",
+            "market",
+            "opportun",
+            "threat",
         )
     ):
-        for source in list(strategy.get("source_files") or [])[:4]:
-            if not any(token in str(source).casefold() for token in ("initiative", "board_kpi", "strategy")):
+        for source in list(strategy.get("source_files") or []):
+            if not any(
+                token in str(source).casefold()
+                for token in (
+                    "initiative",
+                    "board_kpi",
+                    "strategy",
+                    "signal",
+                    "business_event",
+                )
+            ):
                 continue
             add(
                 source,
                 "strategy source coverage",
                 "The connected strategy evidence is the boundary for this answer; absent transaction facts are not inferred.",
             )
+            if len(citations) >= 4:
+                break
 
     findings = evidence.get("findings")
     if isinstance(findings, list) and any(

@@ -3,6 +3,7 @@ from strategyos_mvp.scenario_parser import (
     _target_revenue_attainment_from_prompt,
     parse_scenario,
 )
+from strategyos_mvp import scenario_parser
 from tests.fixtures.executive_demo_packet import executive_demo_packet
 
 
@@ -613,6 +614,52 @@ def test_ebitda_baseline_does_not_present_inferred_cogs_as_supplied():
     assert "cost-of-goods-sold bridge input is not supplied" in result.answer
     assert "SAR 0 cost of goods sold" not in result.answer
     assert "aligned plan margin" in result.answer
+
+
+def test_multi_kpi_budget_question_uses_exact_governed_scorecard():
+    result = parse_scenario(
+        "Where are we versus budget on revenue, cost, EBITDA and cash — one view?",
+        {
+            "public_context_packet": {},
+            "summary": {
+                "finance_kpi": {
+                    "reporting_period_key": "H1 2026",
+                    "components": {
+                        "revenue_actual": "4006000000",
+                        "revenue_plan": "3904000000",
+                        "operating_cost_actual": "3389100000",
+                        "operating_cost_plan": "3286500000",
+                        "ebitda_actual": "616900000",
+                        "ebitda_plan": "617500000",
+                        "cash_balance": "1410000000",
+                        "board_floor": "1200000000",
+                        "cogs_actual": None,
+                    },
+                    "evidence": {
+                        "ebitda_margin": {
+                            "files": ["15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx"]
+                        }
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.scenario_id == "governed_finance_scorecard"
+    assert "SAR 3.3B plan" in result.answer
+    assert "SAR 102.6M above plan (unfavourable)" in result.answer
+    assert "SAR 210.0M above floor" in result.answer
+    assert "implied" not in result.answer.casefold()
+
+
+def test_bu_ebitda_synthesis_is_not_claimed_as_a_baseline_lookup():
+    for question in (
+        "What is group EBITDA vs budget this half, and which BUs explain the gap?",
+        "Which BU has the best EBITDA improvement potential and what is the primary lever?",
+    ):
+        assert scenario_parser._asks_for_governed_ebitda_baseline(
+            scenario_parser._normalize(question)
+        ) is False
 
 
 def test_authenticated_digital_health_without_actual_data_does_not_use_synthetic_baseline():

@@ -592,9 +592,12 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
         revenue = _decimal_or_none(components.get("revenue_actual"))
         cogs = _decimal_or_none(components.get("cogs_actual"))
         operating_cost = _decimal_or_none(components.get("operating_cost_actual"))
+        operating_cost_plan = _decimal_or_none(components.get("operating_cost_plan"))
         ebitda = _decimal_or_none(components.get("ebitda_actual"))
         revenue_plan = _decimal_or_none(components.get("revenue_plan"))
         ebitda_plan = _decimal_or_none(components.get("ebitda_plan"))
+        cash_balance = _decimal_or_none(components.get("cash_balance"))
+        board_floor = _decimal_or_none(components.get("board_floor"))
         if revenue is None or revenue <= 0:
             continue
 
@@ -643,9 +646,12 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
             "revenue": revenue,
             "cogs": cogs,
             "operating_cost": operating_cost,
+            "operating_cost_plan": operating_cost_plan,
             "ebitda": ebitda,
             "revenue_plan": revenue_plan,
             "ebitda_plan": ebitda_plan,
+            "cash_balance": cash_balance,
+            "board_floor": board_floor,
             "inferred_components": inferred_components,
             "citations": citations,
         }
@@ -1432,6 +1438,12 @@ def _asks_for_governed_ebitda_baseline(normalized_prompt: str) -> bool:
             "risk to",
             "impact of",
             "what happens",
+            "which bu",
+            "which business unit",
+            "explain the gap",
+            "improvement potential",
+            "primary lever",
+            "one view",
         )
     ):
         return False
@@ -1449,6 +1461,79 @@ def _asks_for_governed_ebitda_baseline(normalized_prompt: str) -> bool:
             "what is",
             "show",
         )
+    )
+
+
+def _asks_for_governed_finance_scorecard(normalized_prompt: str) -> bool:
+    """Match only an explicit current actual-versus-plan four-KPI summary."""
+    required = ("revenue", "cost", "ebitda", "cash")
+    return (
+        all(token in normalized_prompt for token in required)
+        and any(token in normalized_prompt for token in ("budget", "plan"))
+        and any(token in normalized_prompt for token in ("one view", "where are we", "summary"))
+    )
+
+
+def _finance_scorecard_result(baseline: Mapping[str, Any]) -> ScenarioResult:
+    def position(label: str, actual_key: str, plan_key: str, *, lower_is_better: bool = False) -> str:
+        actual = baseline.get(actual_key)
+        plan = baseline.get(plan_key)
+        if actual is None:
+            return f"{label}: actual not supplied."
+        if plan is None:
+            return f"{label}: {_sar_executive_decimal(Decimal(actual))}; aligned plan not supplied."
+        actual_value = Decimal(actual)
+        plan_value = Decimal(plan)
+        variance = actual_value - plan_value
+        favourable = variance <= 0 if lower_is_better else variance >= 0
+        direction = "favourable" if favourable else "unfavourable"
+        relation = "above" if variance > 0 else "below" if variance < 0 else "at"
+        return (
+            f"{label}: {_sar_executive_decimal(actual_value)} actual versus "
+            f"{_sar_executive_decimal(plan_value)} plan — "
+            f"{_sar_executive_decimal(abs(variance))} {relation} plan ({direction})."
+        )
+
+    lines = [
+        position("Revenue", "revenue", "revenue_plan"),
+        position("Operating cost", "operating_cost", "operating_cost_plan", lower_is_better=True),
+        position("EBITDA", "ebitda", "ebitda_plan"),
+    ]
+    cash = baseline.get("cash_balance")
+    floor = baseline.get("board_floor")
+    if cash is None:
+        lines.append("Cash: current balance not supplied.")
+    elif floor is None:
+        lines.append(
+            f"Cash: {_sar_executive_decimal(Decimal(cash))}; approved board floor not supplied."
+        )
+    else:
+        headroom = Decimal(cash) - Decimal(floor)
+        relation = "above" if headroom >= 0 else "below"
+        lines.append(
+            f"Cash: {_sar_executive_decimal(Decimal(cash))} versus "
+            f"{_sar_executive_decimal(Decimal(floor))} board floor — "
+            f"{_sar_executive_decimal(abs(headroom))} {relation} floor."
+        )
+    return ScenarioResult(
+        scenario_id="governed_finance_scorecard",
+        scenario_label="Finance - Actual versus Plan Scorecard",
+        matched=True,
+        answer=f"For {baseline['period']}:\n" + "\n".join(f"- {line}" for line in lines),
+        calculations=[],
+        kg_context=[],
+        citations=list(baseline["citations"]),
+        assumptions=[],
+        hallucination_risk=_risk_none(
+            "Direct current-run actual, aligned plan and board-floor fields; no missing comparator is inferred."
+        ),
+        suggestions=[
+            "Which business units explain the EBITDA gap?",
+            "Rank the largest favourable and unfavourable cost variances",
+            "What needs executive attention now?",
+        ],
+        scenario_type="deterministic",
+        basis="Read directly from the governed finance KPI components for one reporting period.",
     )
 
 
@@ -3045,6 +3130,10 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
             result = _parse_financial_what_if_guard(prompt, context)
             if result is not None:
                 return _hydrate_scenario_result(result)
+        if _asks_for_governed_finance_scorecard(norm):
+            baseline = _governed_finance_baseline(context)
+            if baseline is not None:
+                return _hydrate_scenario_result(_finance_scorecard_result(baseline))
         if _asks_for_governed_ebitda_baseline(norm):
             baseline = _governed_finance_baseline(context)
             if baseline is not None:

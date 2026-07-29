@@ -1025,6 +1025,26 @@ def test_default_authenticated_citations_cover_correct_fail_closed_answers():
     )
     assert any(item["source_path"].endswith("Initiative_Register.xlsx") for item in capital)
 
+    strategy_signal = llm_qa._default_authenticated_evidence_citations(
+        question="What signals could materially change a BU's course?",
+        evidence={
+            "strategy": {
+                "available": True,
+                "source_files": [
+                    "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+                    "14_CEO_Office/CEO_Calendar.xlsx",
+                    "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+                    "21_Initiatives/Initiative_Register.xlsx",
+                    "17_Signals/Signals_Register_Jun2026.xlsx",
+                ],
+            }
+        },
+    )
+    assert any(
+        item["source_path"].endswith("Signals_Register_Jun2026.xlsx")
+        for item in strategy_signal
+    )
+
 
 def test_evidence_payload_exposes_governed_calendar_and_resolving_fallback():
     payload = llm_qa._build_evidence_payload(
