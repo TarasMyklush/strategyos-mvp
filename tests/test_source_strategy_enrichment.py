@@ -37,6 +37,12 @@ def test_legion_enrichment_contract_is_data_derived() -> None:
     )
     assert len(payload["assistant_profiles"]) == 5
     assert len(payload["achievements"]) == 6
+    assert all(item["evidence_refs"] for item in payload["achievements"])
+    assert all(
+        (DATASET / reference["file"]).is_file()
+        for item in payload["achievements"]
+        for reference in item["evidence_refs"]
+    )
     assert len(payload["daily_pulse"]) == 38
     assert payload["question_bank"]["question_count"] == 500
     assert payload["question_bank"]["theme_count"] == 18

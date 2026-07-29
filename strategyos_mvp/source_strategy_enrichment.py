@@ -242,6 +242,13 @@ def _resolving_references(value: Any, root: Path) -> list[dict[str, str]]:
         "bu_cost": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
         "business_events": "16_Business_Events/Business_Events_Register_Q4-2025_H1-2026.xlsx",
         "initiatives": "21_Initiatives/Initiative_Register.xlsx",
+        "cash_forecast": "07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx",
+        "board_pack_2025": "13_Historic_Correspondence/Board_Pack_Excerpt_FY2025_Review.txt",
+        "ar_invoices": "02_ERP_Extracts/AR_Invoices_H1_2026.xlsx",
+        "dammam_commissioning": "19_Document_Vault/Dammam_Hub_Commissioning_Jun2026.pptx",
+        "group_budget": "15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx",
+        "q2_flash": "19_Document_Vault/Q2_2026_Group_Flash_Results.xlsx",
+        "operational_actuals": "20_Board_KPIs/KPI_Operational_Actuals_Monthly.xlsx",
         "sop": "19_Document_Vault/AP_Controls_SOP_v3_Jun2026.pdf",
         "fx_policy": "19_Document_Vault/FX_Hedging_Policy_v2_Jan2026.docx",
         "signals": "17_Signals/Signals_Register_Jun2026.xlsx",
@@ -261,6 +268,20 @@ def _resolving_references(value: Any, root: Path) -> list[dict[str, str]]:
                 file_path = registry["remediation"]
             elif "bu_cost" in lowered or "cost_variance" in lowered:
                 file_path = registry["bu_cost"]
+            elif "cash_forecast" in lowered or "hedges sheet" in lowered:
+                file_path = registry["cash_forecast"]
+            elif "board_pack_excerpt_fy2025" in lowered:
+                file_path = registry["board_pack_2025"]
+            elif "ar_invoices_h1_2026" in lowered:
+                file_path = registry["ar_invoices"]
+            elif "dammam_hub_commissioning" in lowered:
+                file_path = registry["dammam_commissioning"]
+            elif "bu_group_budget" in lowered or "group strategy" in lowered:
+                file_path = registry["group_budget"]
+            elif "q2_2026_group_flash_results" in lowered:
+                file_path = registry["q2_flash"]
+            elif "kpi_operational_actuals" in lowered:
+                file_path = registry["operational_actuals"]
             elif "business_event" in lowered or re.search(r"\bev-\d+", lowered):
                 file_path = registry["business_events"]
             elif "initiative" in lowered or re.search(r"\binit-\d+", lowered):
@@ -275,8 +296,12 @@ def _resolving_references(value: Any, root: Path) -> list[dict[str, str]]:
                 file_path = registry["calendar"]
             elif "glidepath" in lowered or re.search(r"\bkpi-\d+", lowered):
                 file_path = registry["glidepaths"]
-        if file_path and (root / file_path).is_file():
-            candidates.append((file_path, part))
+        if file_path:
+            resolved = root / file_path
+            if not resolved.is_file():
+                resolved = _find(root, Path(file_path).name) or resolved
+            if resolved.is_file():
+                candidates.append((_relative(resolved, root) or file_path, part))
     seen: set[tuple[str, str]] = set()
     results: list[dict[str, str]] = []
     for file_path, locator in candidates:
