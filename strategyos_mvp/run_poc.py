@@ -328,7 +328,10 @@ def _execute_strategyos_workflow(
     # from those files instead of requiring a separate Oracle API request.
     summary["finance_kpi"] = derive_source_finance_kpis(dataset_root)
     summary["calendar_agenda"] = derive_calendar_agenda(dataset_root)
-    summary["strategy_enrichment"] = derive_strategy_enrichment(dataset_root)
+    summary["strategy_enrichment"] = derive_strategy_enrichment(
+        dataset_root,
+        finance_kpi=summary["finance_kpi"],
+    )
     summary["governed_signals"] = derive_governed_signals(dataset_root)
     # Multi-year context read from the dataset's strategic files, so the
     # assistant can answer trend questions the current-period run does not

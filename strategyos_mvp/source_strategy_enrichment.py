@@ -115,12 +115,41 @@ def _cost_of_drift(
     }
 
 
-def _plan_health(glidepaths: list[dict[str, Any]], source_file: str | None) -> dict[str, Any]:
+def _plan_health(
+    glidepaths: list[dict[str, Any]],
+    source_file: str | None,
+    finance_kpi: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    finance_components = (
+        finance_kpi.get("components")
+        if isinstance(finance_kpi, dict) and finance_kpi.get("authoritative") is True
+        else {}
+    )
+    finance_evidence = (
+        finance_kpi.get("evidence")
+        if isinstance(finance_kpi, dict) and isinstance(finance_kpi.get("evidence"), dict)
+        else {}
+    )
     commitments: list[dict[str, Any]] = []
     for row in glidepaths:
         kpi_id = str(row.get("KPI_ID") or "")
         actual = _number(row.get("Jun-2026 actual"))
         checkpoint = _number(row.get("Jun-2026 checkpoint"))
+        comparator_evidence: dict[str, Any] | None = None
+        # The supplied KPI-01 glidepath row labels revenue as 2.6% ahead but
+        # repeats the H1 actual in its checkpoint cell. The approved group
+        # budget is the authoritative H1 comparator already reconciled by the
+        # finance engine, so use that actual/plan pair instead of presenting a
+        # self-contradictory 100% score.
+        if kpi_id == "KPI-01" and isinstance(finance_components, dict):
+            revenue_actual = _number(finance_components.get("revenue_actual"))
+            revenue_plan = _number(finance_components.get("revenue_plan"))
+            if revenue_actual is not None and revenue_plan not in {None, 0}:
+                actual = revenue_actual / 1_000_000
+                checkpoint = revenue_plan / 1_000_000
+                comparator_evidence = dict(
+                    finance_evidence.get("revenue") or {}
+                ) if isinstance(finance_evidence, dict) else None
         lower_is_better = kpi_id in {"KPI-04", "KPI-10"}
         status = _measurement_status(row)
         score = _score(actual, checkpoint, lower_is_better)
@@ -140,6 +169,8 @@ def _plan_health(glidepaths: list[dict[str, Any]], source_file: str | None) -> d
             "rationale": row.get("Rationale"),
             "evidence": evidence,
         }
+        if comparator_evidence:
+            commitment["comparator_evidence"] = comparator_evidence
         if str(row.get("Status vs path") or "").casefold().startswith("behind"):
             commitment["cost_of_drift"] = _cost_of_drift(
                 actual=actual,
@@ -353,7 +384,11 @@ def _dated(rows: Iterable[dict[str, Any]], key: str) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda row: str(row.get(key) or ""))
 
 
-def derive_strategy_enrichment(dataset_root: Path) -> dict[str, Any]:
+def derive_strategy_enrichment(
+    dataset_root: Path,
+    *,
+    finance_kpi: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     root = Path(dataset_root)
     glidepath_path = _find(root, "Board_KPI_Glidepaths.xlsx")
     actuals_path = _find(root, "KPI_Operational_Actuals_Monthly.xlsx")
@@ -491,7 +526,11 @@ def derive_strategy_enrichment(dataset_root: Path) -> dict[str, Any]:
         "status": "ready" if glidepaths and initiatives and events else "partial",
         "virtual_now": "2026-06-01T08:00:00+03:00",
         "demo_window": {"start": "2026-06-01", "end": "2026-06-07"},
-        "plan_health": _plan_health(glidepaths, _relative(glidepath_path, root)),
+        "plan_health": _plan_health(
+            glidepaths,
+            _relative(glidepath_path, root),
+            finance_kpi,
+        ),
         "operational_actuals": {
             "row_count": len(actuals),
             "kpi_ids": sorted({str(row.get("KPI_ID")) for row in actuals if row.get("KPI_ID")}),

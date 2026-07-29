@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from strategyos_mvp.source_finance_kpis import derive_source_finance_kpis
 from strategyos_mvp.source_strategy_enrichment import derive_strategy_enrichment
 
 
@@ -45,6 +46,25 @@ def test_legion_enrichment_contract_is_data_derived() -> None:
     assert payload["assistant_memory"]["record_id"] == "RD-01"
     assert "SAR 88,594" in payload["assistant_memory"]["text"]
     assert payload["assistant_memory"]["evidence"]["sheet"] == "Decision_Log"
+
+
+def test_revenue_plan_health_uses_the_reconciled_h1_budget_comparator() -> None:
+    if not DATASET.exists():
+        return
+    finance = derive_source_finance_kpis(DATASET)
+    payload = derive_strategy_enrichment(DATASET, finance_kpi=finance)
+    revenue = next(
+        item
+        for item in payload["plan_health"]["commitments"]
+        if item["kpi_id"] == "KPI-01"
+    )
+
+    assert revenue["actual"] == 4006.0
+    assert revenue["checkpoint"] == 3904.0
+    assert revenue["score"] == 102.6
+    assert revenue["comparator_evidence"]["files"] == [
+        "15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx"
+    ]
 
 
 def test_three_planted_drifts_surface_without_answer_key_labels() -> None:
