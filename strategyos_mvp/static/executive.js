@@ -3025,6 +3025,22 @@
       var morningNote = morningNoteContract();
       var morningKey = state.activePersona + ":morning-" + morningNote.date;
       if (!threadStore()[morningKey]) {
+        var decisionMemory = getStrategyEnrichment().assistant_memory || null;
+        var morningMessages = [{
+          role: "assistant",
+          text: morningNote.text,
+          evidence_refs: morningNote.evidence_refs,
+          morning_note_date: morningNote.date,
+          timestamp: new Date().toISOString()
+        }];
+        if (decisionMemory && decisionMemory.text) {
+          morningMessages.push({
+            role: "assistant",
+            text: "Decision memory: " + decisionMemory.text,
+            evidence_refs: [decisionMemory.evidence].filter(Boolean),
+            timestamp: new Date().toISOString()
+          });
+        }
         threadStore()[morningKey] = {
           key: morningKey,
           title: "Morning note · " + morningNote.date,
@@ -3033,13 +3049,7 @@
           readOnly: true,
           kind: "morning_note",
           assistant: morningNote.assistant,
-          messages: [{
-            role: "assistant",
-            text: morningNote.text,
-            evidence_refs: morningNote.evidence_refs,
-            morning_note_date: morningNote.date,
-            timestamp: new Date().toISOString()
-          }],
+          messages: morningMessages,
           lastUpdated: new Date().toISOString()
         };
       }
@@ -5375,14 +5385,29 @@
     var event = item || {};
     var title = firstDefined(event.title, event.label, "this commitment");
     var prep = firstDefined(event.prep, event.foot, event.notes, "");
+    var planEvidence = safeArray(((getStrategyEnrichment().plan_health || {}).commitments))
+      .map(function (commitment) { return commitment && commitment.evidence && commitment.evidence.file; })
+      .filter(Boolean);
+    var isColdChain = /cold.?chain/i.test(title);
+    var isBoard = /board/i.test(title);
+    var isMondayBrief = /strategyos monday brief|group kpi review/i.test(title);
+    var decisionFrame = isColdChain
+      ? "Test the renegotiation mandate, the contract escalation and the Dammam insourcing alternative"
+      : isBoard
+        ? "Test the board decision against the approved pack and current Plan Health exceptions"
+        : isMondayBrief
+          ? "Test the current hero position, Plan Health exceptions and the largest business movers"
+          : "Pressure-test the decision using the recorded event context";
     return {
-      prompt: "For “" + title + "”, pressure-test the decision using this event context: " + prep,
+      prompt: "For “" + title + "”, " + decisionFrame.toLowerCase() + ": " + prep,
       refs: [
         firstDefined(event.source_path, event.evidence_ref, ""),
-        /cold.?chain/i.test(title) ? "19_Document_Vault/GulfColdChain_Renegotiation_Approval_Memo_Jun2026.pdf" : "",
-        /cold.?chain/i.test(title) ? "SIG-2026-11" : "",
-        /board/i.test(title) ? "current board pack" : ""
-      ].filter(Boolean)
+        isColdChain ? "04_Contracts/Gulf_ColdChain/CT-2023-014" : "",
+        isColdChain ? "19_Document_Vault/GulfColdChain_Renegotiation_Approval_Memo_Jun2026.pdf" : "",
+        isColdChain ? "SIG-2026-11" : "",
+        isBoard ? "current board pack" : "",
+        isMondayBrief ? "finance_kpis" : ""
+      ].concat((isBoard || isMondayBrief) ? planEvidence.slice(0, 2) : []).filter(Boolean)
     };
   }
 
@@ -5477,13 +5502,14 @@
     signals = safeArray(((enrichment.plan_health || {}).commitments)).filter(function (item) {
       return /^behind/i.test(String(firstDefined(item.status_vs_path, "")));
     }).map(function (item) {
-      var gap = item.actual != null && item.checkpoint != null
-        ? Math.abs(Number(item.checkpoint) - Number(item.actual)).toFixed(1) + firstDefined(item.unit, "")
-        : "not quantified";
+      var costOfDrift = item.cost_of_drift || {};
+      var gap = firstDefined(costOfDrift.statement, item.actual != null && item.checkpoint != null
+        ? Math.abs(Number(item.checkpoint) - Number(item.actual)).toFixed(1) + firstDefined(item.unit, "") + " to the approved checkpoint"
+        : "the source pack does not quantify the checkpoint gap");
       return {
         key: firstDefined(item.kpi_id, item.name),
         title: firstDefined(item.name, "Board commitment") + " is behind its June glidepath",
-        summary: "Cost of drift: " + gap + " to the approved checkpoint. " + firstDefined(item.rationale, ""),
+        summary: "Cost of drift: " + gap + " " + firstDefined(item.rationale, ""),
         classification: firstDefined(item.kpi_id, "Board KPI"),
         tone: "critical",
         context: { why_attached: firstDefined(item.rationale, ""), sources: [item.evidence] }
@@ -5629,6 +5655,9 @@
         return String(entry && entry.decision_key || '') === key;
       });
       var localChoice = (state.enrichmentDecisionChoices || {})[key];
+      var decisionStateLabel = localChoice
+        ? firstDefined((item.status_labels || {})[localChoice], localChoice)
+        : "Pending CEO decision";
       var choicesMarkup = safeArray(item.choices).length
         ? '<div class="decision-choice-row">' + safeArray(item.choices).map(function (choice) {
             return '<button type="button" data-enrichment-decision="' + escapeHtml(key) + '" data-enrichment-choice="' + escapeHtml(choice) + '" class="' + (localChoice === choice ? 'is-selected' : '') + '">' + escapeHtml(choice) + '</button>';
@@ -5658,7 +5687,7 @@
           : '<div class="decision-recommendation__actions"><button class="decision-record-button" type="button" data-record-decision="' + escapeHtml(key) + '" data-owner-id="' + escapeHtml(firstDefined(ownerResolution.selected_owner_id, '')) + '" data-owner-name="' + escapeHtml(firstDefined(ownerResolution.selected_owner_name, '')) + '" data-owner-role="' + escapeHtml(firstDefined(ownerResolution.selected_role, '')) + '" data-governed-due-date="' + escapeHtml(firstDefined(dueDate && dueDate.value, '')) + '">Record decision</button><span>Records your decision only · does not send or close the issue</span></div>',
         '</section>'
       ].join('') : '';
-      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Recommended decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'No executive authority request was supplied.')) + '</strong></div>' + choicesMarkup + recommendationMarkup + '<div class="executive-decision__foot"><span>Source · ' + escapeHtml(source) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Ask Hermes why →</button></div></div>' : '') + '</article>';
+      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-state' + (localChoice ? ' is-recorded' : '') + '">' + escapeHtml(decisionStateLabel) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Recommended decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'No executive authority request was supplied.')) + '</strong></div>' + choicesMarkup + recommendationMarkup + '<div class="executive-decision__foot"><span>Source · ' + escapeHtml(source) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Ask Hermes why →</button></div></div>' : '') + '</article>';
     }).join('') : '<div class="executive-empty-state"><strong>No decision is waiting for you</strong><p>No approval, intervention or direction is currently routed to the CEO.</p></div>';
 
     var signalMarkup = developmentsAndConcerns.length ? developmentsAndConcerns.map(function (item, index) {
@@ -5836,7 +5865,9 @@
     if (activityCard) {
       var activeLeadershipCount = leadershipTwins.filter(function (item) { return /^(active|monitoring)$/i.test(String(item && item.status || "")); }).length;
       var attentionLeadershipCount = leadershipTwins.filter(function (item) { return /^attention$/i.test(String(item && item.status || "")); }).length;
-      var profiles = safeArray(getStrategyEnrichment().assistant_profiles);
+      var profiles = safeArray(getStrategyEnrichment().assistant_profiles).filter(function (item) {
+        return /^(group ceo|group cfo|bu gm|board)/i.test(String(firstDefined(item.persona, "")));
+      });
       var readinessAverage = profiles.length ? Math.round(profiles.reduce(function (sum, item) { return sum + Number(item.readiness_pct || 0); }, 0) / profiles.length) : 0;
       var weakProfile = profiles.slice().sort(function (left, right) {
         return Number(left.readiness_pct || 0) - Number(right.readiness_pct || 0);
@@ -5846,9 +5877,10 @@
           + " has the lowest readiness at " + escapeHtml(String(weakProfile.readiness_pct)) + "%. "
           + escapeHtml(firstDefined(weakProfile.note, "A source refresh is recommended.")) + "</p>"
         : "";
-      var readinessMarkup = profiles.length ? '<div class="assistant-readiness"><div class="assistant-readiness__head"><div><span class="eyebrow">Assistant team readiness</span><h3>' + escapeHtml(String(readinessAverage)) + '% average readiness</h3></div><span>Freshness · context depth · usage</span></div><div class="assistant-readiness__grid">' + profiles.map(function (item) {
+      var readinessMarkup = profiles.length ? '<div class="assistant-readiness"><div class="assistant-readiness__head"><div><span class="eyebrow">Assistant team readiness</span><h3>' + escapeHtml(String(readinessAverage)) + '% average readiness</h3></div><span class="evidence-badge">Evidence verified · Assistant Profiles</span></div><div class="assistant-readiness__grid">' + profiles.map(function (item) {
         var breakdown = safeArray(item.readiness_breakdown);
-        return '<details><summary><strong>' + escapeHtml(firstDefined(item.assistant_name, item.persona)) + '</strong><span>' + escapeHtml(String(item.readiness_pct)) + '%</span></summary><p>' + escapeHtml(firstDefined(item.note, 'No readiness note supplied.')) + '</p><small>' + escapeHtml(breakdown.length === 3 ? 'Freshness ' + breakdown[0] + ' · Depth ' + breakdown[1] + ' · Usage ' + breakdown[2] : '') + '</small></details>';
+        var evidence = item.evidence || {};
+        return '<details><summary><strong>' + escapeHtml(firstDefined(item.assistant_name, item.persona)) + '</strong><span>' + escapeHtml(String(item.readiness_pct)) + '%</span></summary><p>' + escapeHtml(firstDefined(item.note, 'No readiness note supplied.')) + '</p><small>' + escapeHtml(breakdown.length === 3 ? 'Freshness ' + breakdown[0] + ' · Depth ' + breakdown[1] + ' · Usage ' + breakdown[2] : '') + '</small><small>Source · ' + escapeHtml(firstDefined(evidence.file, 'Assistant_Profiles.xlsx')) + ' · ' + escapeHtml(firstDefined(evidence.record_id, item.persona)) + '</small></details>';
       }).join('') + '</div>' + readinessSuggestion + '</div>' : '';
       activityCard.innerHTML = readinessMarkup + '<div class="twin-network-intro"><div><span class="eyebrow">Executive assistants</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist analysis and audit work is tracked under Agents.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
     }

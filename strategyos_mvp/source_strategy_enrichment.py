@@ -82,6 +82,39 @@ def _score(actual: float | None, checkpoint: float | None, lower_is_better: bool
     return max(0.0, min(1.2, raw))
 
 
+def _cost_of_drift(
+    *,
+    actual: float | None,
+    checkpoint: float | None,
+    unit: Any,
+    evidence: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Return a source-safe drift statement without inventing a SAR conversion.
+
+    Some operational KPIs (for example E-Rx volume share) have an observed
+    checkpoint gap but no source-backed volume-to-SAR conversion in the
+    enrichment pack.  The executive surface must show the quantified operating
+    gap and explicitly fail closed on money rather than manufacture a value.
+    """
+
+    if actual is None or checkpoint is None:
+        return None
+    gap = round(abs(checkpoint - actual), 2)
+    raw_unit = str(unit or "").strip()
+    gap_unit = "percentage points" if raw_unit == "%" else raw_unit or "units"
+    return {
+        "gap": gap,
+        "gap_unit": gap_unit,
+        "financial_effect_sar_per_week": None,
+        "financial_effect_status": "not_supplied",
+        "statement": (
+            f"{gap:g} {gap_unit} to the approved checkpoint; "
+            "the source pack does not supply a defensible SAR-per-week conversion."
+        ),
+        "evidence": evidence,
+    }
+
+
 def _plan_health(glidepaths: list[dict[str, Any]], source_file: str | None) -> dict[str, Any]:
     commitments: list[dict[str, Any]] = []
     for row in glidepaths:
@@ -91,23 +124,30 @@ def _plan_health(glidepaths: list[dict[str, Any]], source_file: str | None) -> d
         lower_is_better = kpi_id in {"KPI-04", "KPI-10"}
         status = _measurement_status(row)
         score = _score(actual, checkpoint, lower_is_better)
-        commitments.append(
-            {
-                "kpi_id": kpi_id,
-                "name": row.get("KPI_Name"),
-                "unit": row.get("Unit"),
-                "actual": actual,
-                "checkpoint": checkpoint,
-                "target_2028": _number(row.get("FY2028T")),
-                "status_vs_path": row.get("Status vs path"),
-                "measurement_status": status,
-                "direction": "lower_is_better" if lower_is_better else "higher_is_better",
-                "weight": 1.0,
-                "score": round(score * 100, 1) if score is not None else None,
-                "rationale": row.get("Rationale"),
-                "evidence": {"file": source_file, "sheet": "Glidepaths", "kpi_id": kpi_id},
-            }
-        )
+        evidence = {"file": source_file, "sheet": "Glidepaths", "kpi_id": kpi_id}
+        commitment = {
+            "kpi_id": kpi_id,
+            "name": row.get("KPI_Name"),
+            "unit": row.get("Unit"),
+            "actual": actual,
+            "checkpoint": checkpoint,
+            "target_2028": _number(row.get("FY2028T")),
+            "status_vs_path": row.get("Status vs path"),
+            "measurement_status": status,
+            "direction": "lower_is_better" if lower_is_better else "higher_is_better",
+            "weight": 1.0,
+            "score": round(score * 100, 1) if score is not None else None,
+            "rationale": row.get("Rationale"),
+            "evidence": evidence,
+        }
+        if str(row.get("Status vs path") or "").casefold().startswith("behind"):
+            commitment["cost_of_drift"] = _cost_of_drift(
+                actual=actual,
+                checkpoint=checkpoint,
+                unit=row.get("Unit"),
+                evidence=evidence,
+            )
+        commitments.append(commitment)
     live = [item for item in commitments if item["measurement_status"] == "live" and item["score"] is not None]
     estimated = [item for item in commitments if item["measurement_status"] == "estimated"]
     score = round(sum(float(item["score"]) for item in live) / len(live), 1) if live else None
@@ -160,6 +200,10 @@ def _decision_seeds(threads: list[dict[str, Any]], root: Path) -> list[dict[str,
                 "timing": "Before the June EUR payment run",
                 "choices": ["Approve", "Decline"],
                 "evidence_refs": [proposed.get("evidence_ref")],
+                "status_labels": {
+                    "Approve": "Approved for the June payment run",
+                    "Decline": "Declined",
+                },
             }
         )
     memo = _find(root, "GulfColdChain_Renegotiation_Approval_Memo_Jun2026.pdf")
@@ -175,9 +219,45 @@ def _decision_seeds(threads: list[dict[str, Any]], root: Path) -> list[dict[str,
                 "timing": "Current review",
                 "choices": ["Approve", "Hold"],
                 "evidence_refs": [_relative(memo, root), "SIG-2026-11"],
+                "status_labels": {
+                    "Approve": "Memo approved",
+                    "Hold": "Held for further review",
+                },
             }
         )
     return decisions
+
+
+def _assistant_memory(
+    rows: list[dict[str, Any]],
+    source_file: str | None,
+) -> dict[str, Any] | None:
+    """Build one auditable decision-memory sentence from the current log."""
+
+    recovered = [
+        row
+        for row in rows
+        if float(row.get("Recovered to date (SAR)") or 0) > 0
+        and str(row.get("Approval status") or "").casefold() == "approved"
+    ]
+    if not recovered:
+        return None
+    row = sorted(recovered, key=lambda item: str(item.get("Date") or ""), reverse=True)[0]
+    recovered_sar = float(row.get("Recovered to date (SAR)") or 0)
+    approved_by = str(row.get("Approved by") or "the accountable executive").strip()
+    decision_date = _iso(row.get("Date")) or "date not supplied"
+    return {
+        "record_id": row.get("ID"),
+        "text": (
+            f"{row.get('ID')} was approved by {approved_by} on {decision_date}; "
+            f"SAR {recovered_sar:,.0f} is recorded as recovered to date."
+        ),
+        "evidence": {
+            "file": source_file,
+            "sheet": "Decision_Log",
+            "record_id": row.get("ID"),
+        },
+    }
 
 
 def _dated(rows: Iterable[dict[str, Any]], key: str) -> list[dict[str, Any]]:
@@ -267,6 +347,11 @@ def derive_strategy_enrichment(dataset_root: Path) -> dict[str, Any]:
                 if value.strip().isdigit()
             ],
             "note": row.get("Note"),
+            "evidence": {
+                "file": _relative(profiles_path, root),
+                "sheet": "Assistant_Profiles",
+                "record_id": row.get("Persona"),
+            },
         }
         for row in profiles
     ]
@@ -331,6 +416,10 @@ def derive_strategy_enrichment(dataset_root: Path) -> dict[str, Any]:
         "assistant_profiles": profile_rows,
         "assistant_threads": thread_payload,
         "decision_seeds": _decision_seeds(thread_payload["threads"], root),
+        "assistant_memory": _assistant_memory(
+            current_audit_rows,
+            _relative(decisions_path, root),
+        ),
         "recovery_meter": recovery_meter,
         "remediation_decisions": remediation_rows,
         "question_bank": {

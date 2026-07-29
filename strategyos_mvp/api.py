@@ -7853,8 +7853,6 @@ def _ui_bootstrap(
             "dashboard": "/dashboard",
             "executive": "/executive",
             "workspace_contract": "/ui/workspace-contract/latest",
-            "public_latest_run": "/runs/latest" if CONFIG.login_required else "/public/runs/latest",
-            "public_report_preview": "/runs/latest/report-preview" if CONFIG.login_required else "/public/runs/latest/report-preview",
             "ui_session": "/ui/session",
             "qa": "/qa",
             "view_state_query_keys": {
@@ -7894,8 +7892,24 @@ def _executive_html(
     entry_route: str = "/app",
 ) -> str:
     asset_rev = _executive_asset_revision()
+    bootstrap_payload = _ui_bootstrap(view_state=view_state, entry_route=entry_route)
+
+    def customer_safe(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: customer_safe(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [customer_safe(item) for item in value]
+        if isinstance(value, str) and (
+            "/runs/" in value
+            or "/public/runs/" in value
+            or value.startswith("/app/workspace")
+        ):
+            return ""
+        return value
+
+    bootstrap_payload = customer_safe(bootstrap_payload)
     bootstrap_json = (
-        json.dumps(_ui_bootstrap(view_state=view_state, entry_route=entry_route))
+        json.dumps(bootstrap_payload)
         .replace("&", "\\u0026")
         .replace("<", "\\u003c")
         .replace(">", "\\u003e")

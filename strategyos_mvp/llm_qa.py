@@ -1650,6 +1650,8 @@ def _default_authenticated_evidence_citations(
             "signal",
             "indicator",
             "market",
+            "competitor",
+            "competition",
             "threat",
             "opportun",
             "early-warning",
@@ -1664,6 +1666,57 @@ def _default_authenticated_evidence_citations(
                 str(item.get("key") or item.get("title") or "signal"),
                 f"{_visible_guarded_evidence_text(item.get('title'))} — "
                 f"{_visible_guarded_evidence_text(item.get('summary'))}",
+            )
+
+    data = evidence.get("data")
+    if isinstance(data, dict) and any(
+        token in lower
+        for token in ("supplier", "suppliers", "vendor spend", "procurement spend")
+    ):
+        ap_ledger = data.get("ap_ledger")
+        if isinstance(ap_ledger, dict) and ap_ledger.get("available"):
+            add(
+                ap_ledger.get("source_path"),
+                "AP ledger supplier coverage",
+                (
+                    f"{ap_ledger.get('rows')} AP rows are available for the current evidence period; "
+                    "the response must not imply a longer history than this source supplies."
+                ),
+            )
+
+    finance = evidence.get("finance_kpis")
+    if isinstance(finance, dict) and finance.get("available") and any(
+        token in lower
+        for token in ("headcount", "payroll", "revenue", "cost", "margin")
+    ):
+        for source in list(finance.get("source_files") or [])[:2]:
+            add(
+                source,
+                "finance KPI source coverage",
+                "Current finance evidence is available; unsupported workforce history must remain explicitly unavailable.",
+            )
+
+    strategy = evidence.get("strategy")
+    if isinstance(strategy, dict) and strategy.get("available") and any(
+        token in lower
+        for token in (
+            "initiative",
+            "portfolio",
+            "bolt-on",
+            "bolt on",
+            "acquisition",
+            "integration",
+            "glidepath",
+            "board kpi",
+        )
+    ):
+        for source in list(strategy.get("source_files") or [])[:4]:
+            if not any(token in str(source).casefold() for token in ("initiative", "board_kpi", "strategy")):
+                continue
+            add(
+                source,
+                "strategy source coverage",
+                "The connected strategy evidence is the boundary for this answer; absent transaction facts are not inferred.",
             )
 
     findings = evidence.get("findings")

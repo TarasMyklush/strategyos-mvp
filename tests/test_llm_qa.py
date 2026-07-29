@@ -962,6 +962,64 @@ def test_evidence_payload_exposes_strategy_glidepaths_and_execution_context():
     assert "question_bank" not in strategy
 
 
+def test_default_authenticated_citations_cover_correct_fail_closed_answers():
+    evidence = {
+        "data": {
+            "ap_ledger": {
+                "available": True,
+                "rows": 120,
+                "source_path": "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
+            }
+        },
+        "finance_kpis": {
+            "available": True,
+            "source_files": ["15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx"],
+        },
+        "strategy": {
+            "available": True,
+            "source_files": [
+                "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+                "21_Initiatives/Initiative_Register.xlsx",
+            ],
+        },
+        "governed_signals": {
+            "available": True,
+            "source_file": "17_Signals/Signals_Register_Jun2026.xlsx",
+            "items": [
+                {
+                    "key": "SIG-1",
+                    "title": "Competitor delivery offer",
+                    "summary": "Market signal",
+                }
+            ],
+        },
+        "findings": [],
+    }
+    supplier = llm_qa._default_authenticated_evidence_citations(
+        question="Who are our top suppliers by spend over three years?",
+        evidence=evidence,
+    )
+    assert supplier[0]["source_path"].endswith("AP_Invoices_H1_2026.xlsx")
+
+    headcount = llm_qa._default_authenticated_evidence_citations(
+        question="How has headcount grown versus revenue and payroll?",
+        evidence=evidence,
+    )
+    assert headcount[0]["source_path"].endswith("BU_Group_Budget_2026.xlsx")
+
+    portfolio = llm_qa._default_authenticated_evidence_citations(
+        question="What is in the bolt-on portfolio?",
+        evidence=evidence,
+    )
+    assert any(item["source_path"].endswith("Initiative_Register.xlsx") for item in portfolio)
+
+    competitor = llm_qa._default_authenticated_evidence_citations(
+        question="What are our competitors' revenues and margins?",
+        evidence=evidence,
+    )
+    assert competitor[0]["source_path"].endswith("Signals_Register_Jun2026.xlsx")
+
+
 def test_evidence_payload_exposes_governed_calendar_and_resolving_fallback():
     payload = llm_qa._build_evidence_payload(
         bundle=_bundle(),

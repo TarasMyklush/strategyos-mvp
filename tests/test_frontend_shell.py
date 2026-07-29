@@ -393,6 +393,29 @@ def test_app_entry_embeds_parseable_executive_bootstrap_json():
     assert "enabled" in bootstrap["qa_modes"]["llm"]
 
 
+def test_executive_bootstrap_does_not_expose_internal_run_routes() -> None:
+    client = TestClient(api_module.app)
+    for route in ("/executive", "/executive?persona=board"):
+        response = client.get(route)
+        assert response.status_code == 200
+        assert "/runs/" not in response.text
+        assert "/public/runs/" not in response.text
+
+
+def test_legion_decisions_readiness_and_calendar_handoff_are_evidence_first() -> None:
+    js = _static_executive_js()
+    assert "item.cost_of_drift || {}" in js
+    assert "the source pack does not quantify the checkpoint gap" in js
+    assert "Pending CEO decision" in js
+    assert "target-decision-state" in js
+    assert "Decision memory: " in js
+    assert "Evidence verified · Assistant Profiles" in js
+    assert "/^(group ceo|group cfo|bu gm|board)/i" in js
+    assert "CT-2023-014" in js
+    assert "current board pack" in js
+    assert "finance_kpis" in js
+
+
 def test_app_entry_bootstrap_preserves_requested_view_state():
     client = TestClient(api_module.app)
     response = client.get("/app?persona=board&board=closed&driver=owed_upward&company=tenant-alpha&portfolio=release-readiness")
