@@ -660,7 +660,7 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
             else []
         )
         cost_by_label = {
-            str(row.get("label") or "").strip(): _decimal_or_none(row.get("variance_sar"))
+            str(row.get("label") or "").strip(): row
             for row in operating_cost_contributors
             if isinstance(row, Mapping) and str(row.get("label") or "").strip()
         }
@@ -670,13 +670,22 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
                 continue
             label = str(row.get("label") or "").strip()
             revenue_variance = _decimal_or_none(row.get("variance_sar"))
-            cost_variance = cost_by_label.get(label)
+            cost_row = cost_by_label.get(label)
+            cost_variance = (
+                _decimal_or_none(cost_row.get("variance_sar"))
+                if isinstance(cost_row, Mapping)
+                else None
+            )
             if not label or revenue_variance is None or cost_variance is None:
                 continue
             ebitda_bu_bridge.append(
                 {
                     "label": label,
+                    "revenue_actual": _decimal_or_none(row.get("value_sar")),
+                    "revenue_plan": _decimal_or_none(row.get("plan_sar")),
                     "revenue_variance": revenue_variance,
+                    "operating_cost_actual": _decimal_or_none(cost_row.get("value_sar")),
+                    "operating_cost_plan": _decimal_or_none(cost_row.get("plan_sar")),
                     "operating_cost_variance": cost_variance,
                     "ebitda_variance": revenue_variance - cost_variance,
                 }
@@ -685,6 +694,17 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
             key=lambda row: abs(Decimal(row["ebitda_variance"])),
             reverse=True,
         )
+        cost_components = (
+            operating_cost_details.get("cost_components")
+            if isinstance(operating_cost_details.get("cost_components"), Mapping)
+            else {}
+        )
+        cost_component_rows = [
+            dict(row)
+            for row in list(cost_components.get("rows") or [])
+            if isinstance(row, Mapping)
+        ]
+        cost_component_source = str(cost_components.get("source_file") or "").strip()
 
         return {
             "source_key": key,
@@ -700,6 +720,8 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
             "cash_balance": cash_balance,
             "board_floor": board_floor,
             "ebitda_bu_bridge": ebitda_bu_bridge,
+            "cost_component_rows": cost_component_rows,
+            "cost_component_source": cost_component_source,
             "inferred_components": inferred_components,
             "citations": citations,
         }
@@ -1530,6 +1552,121 @@ def _asks_for_governed_ebitda_bu_bridge(normalized_prompt: str) -> bool:
             token in normalized_prompt
             for token in ("which bu", "which business unit", "explain the gap", "explains the gap")
         )
+    )
+
+
+def _governed_bu_budget_row(
+    normalized_prompt: str,
+    baseline: Mapping[str, Any],
+) -> Mapping[str, Any] | None:
+    if not any(
+        token in normalized_prompt
+        for token in ("against budget", "versus budget", "against plan", "versus plan")
+    ):
+        return None
+    candidates = [
+        row
+        for row in (baseline.get("ebitda_bu_bridge") or [])
+        if isinstance(row, Mapping) and str(row.get("label") or "").strip()
+    ]
+    exact = [
+        row
+        for row in candidates
+        if _normalize(str(row.get("label") or "")) in normalized_prompt
+    ]
+    return exact[0] if len(exact) == 1 else None
+
+
+def _finance_bu_budget_result(
+    baseline: Mapping[str, Any],
+    row: Mapping[str, Any],
+) -> ScenarioResult:
+    label = str(row["label"])
+    revenue_actual = row.get("revenue_actual")
+    revenue_plan = row.get("revenue_plan")
+    cost_actual = row.get("operating_cost_actual")
+    cost_plan = row.get("operating_cost_plan")
+    if any(value is None for value in (revenue_actual, revenue_plan, cost_actual, cost_plan)):
+        return _scenario_missing_data_result(
+            scenario_id="governed_bu_budget_bridge",
+            scenario_label="Finance - Business-unit Budget Bridge",
+            answer=(
+                f"The current evidence does not supply a complete aligned revenue and "
+                f"operating-cost budget bridge for {label}, so I cannot explain its gap safely."
+            ),
+            missing_inputs=["bu_revenue_actual_and_plan", "bu_cost_actual_and_plan"],
+            prompt_numbers=[],
+            suggestions=["Connect the approved BU budget bridge"],
+        )
+
+    revenue_actual_value = Decimal(revenue_actual)
+    revenue_plan_value = Decimal(revenue_plan)
+    cost_actual_value = Decimal(cost_actual)
+    cost_plan_value = Decimal(cost_plan)
+    ebitda_actual = revenue_actual_value - cost_actual_value
+    ebitda_plan = revenue_plan_value - cost_plan_value
+    ebitda_variance = ebitda_actual - ebitda_plan
+    ebitda_direction = "favourable" if ebitda_variance >= 0 else "unfavourable"
+
+    drivers = [
+        driver
+        for driver in (baseline.get("cost_component_rows") or [])
+        if isinstance(driver, Mapping)
+        and str(driver.get("business_unit") or "").strip().casefold() == label.casefold()
+    ][:3]
+    driver_lines = []
+    for driver in drivers:
+        variance = _decimal_or_none(driver.get("variance_sar"))
+        if variance is None:
+            continue
+        direction = "above" if variance > 0 else "below" if variance < 0 else "at"
+        explanation = str(driver.get("driver") or "").strip()
+        driver_lines.append(
+            f"- {driver.get('component') or 'Cost line'}: "
+            f"{_sar_executive_decimal(abs(variance))} {direction} plan"
+            + (f" — {explanation}." if explanation else ".")
+        )
+
+    answer = (
+        f"For {baseline['period']}, {label} revenue is "
+        f"{_sar_executive_decimal(revenue_actual_value)} versus "
+        f"{_sar_executive_decimal(revenue_plan_value)} plan. EBITDA is "
+        f"{_sar_executive_decimal(ebitda_actual)} versus "
+        f"{_sar_executive_decimal(ebitda_plan)} plan — "
+        f"{_sar_executive_decimal(abs(ebitda_variance))} {ebitda_direction}."
+    )
+    if driver_lines:
+        answer += "\nThe largest supplied cost explanations are:\n" + "\n".join(driver_lines)
+    else:
+        answer += (
+            "\nThe aligned BU budget proves the net gap, but no component-level "
+            "cost explanation is supplied for this business unit."
+        )
+
+    citations = list(baseline["citations"])
+    cost_source = str(baseline.get("cost_component_source") or "").strip()
+    if cost_source and driver_lines:
+        citations.append(
+            {
+                "source_path": cost_source,
+                "locator": f"Cost component rows / {label}",
+                "excerpt": "Ranked component variances and supplied driver notes for the selected business unit.",
+            }
+        )
+    return ScenarioResult(
+        scenario_id="governed_bu_budget_bridge",
+        scenario_label="Finance - Business-unit Budget Bridge",
+        matched=True,
+        answer=answer,
+        calculations=[],
+        kg_context=[],
+        citations=citations,
+        assumptions=[],
+        basis=(
+            "Deterministic business-unit actual-versus-plan bridge from the approved "
+            "group budget, with component explanations only where the cost-variance "
+            "workbook supplies them."
+        ),
     )
 
 
@@ -3260,12 +3397,17 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
             baseline = _governed_finance_baseline(context)
             if baseline is not None:
                 return _hydrate_scenario_result(_finance_scorecard_result(baseline))
+        baseline = _governed_finance_baseline(context)
+        if baseline is not None:
+            bu_budget_row = _governed_bu_budget_row(norm, baseline)
+            if bu_budget_row is not None:
+                return _hydrate_scenario_result(
+                    _finance_bu_budget_result(baseline, bu_budget_row)
+                )
         if _asks_for_governed_ebitda_bu_bridge(norm):
-            baseline = _governed_finance_baseline(context)
             if baseline is not None:
                 return _hydrate_scenario_result(_finance_ebitda_bu_bridge_result(baseline))
         if _asks_for_governed_ebitda_baseline(norm):
-            baseline = _governed_finance_baseline(context)
             if baseline is not None:
                 return _hydrate_scenario_result(_finance_baseline_result(baseline))
 

@@ -718,6 +718,79 @@ def test_bu_ebitda_gap_uses_deterministic_matched_revenue_and_cost_bridge():
     assert result.citations[0]["source_path"].endswith("BU_Group_Budget_2026.xlsx")
 
 
+def test_named_bu_budget_question_uses_deterministic_budget_and_cost_drivers():
+    result = parse_scenario(
+        "How is Mizan Pharma Manufacturing performing against budget this half, and what explains the gap?",
+        {
+            "public_context_packet": {},
+            "summary": {
+                "finance_kpi": {
+                    "reporting_period_key": "H1 2026",
+                    "components": {
+                        "revenue_actual": "4006000000",
+                        "revenue_plan": "3904000000",
+                        "operating_cost_actual": "3389076000",
+                        "operating_cost_plan": "3294976000",
+                        "ebitda_actual": "616924000",
+                        "ebitda_plan": "609024000",
+                    },
+                    "evidence": {
+                        "revenue": {
+                            "details": {
+                                "contributors": {
+                                    "revenue": [
+                                        {
+                                            "label": "Mizan Pharma Manufacturing",
+                                            "value_sar": "748000000",
+                                            "plan_sar": "733000000",
+                                            "variance_sar": "15000000",
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "operating_cost": {
+                            "details": {
+                                "contributors": {
+                                    "operating_cost": [
+                                        {
+                                            "label": "Mizan Pharma Manufacturing",
+                                            "value_sar": "537800000",
+                                            "plan_sar": "528500000",
+                                            "variance_sar": "9300000",
+                                        }
+                                    ]
+                                },
+                                "cost_components": {
+                                    "available": True,
+                                    "source_file": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+                                    "rows": [
+                                        {
+                                            "business_unit": "Mizan Pharma Manufacturing",
+                                            "component": "COGS",
+                                            "variance_sar": "6600000",
+                                            "driver": "Volume, specialty mix and API input inflation.",
+                                        }
+                                    ],
+                                },
+                            }
+                        },
+                        "ebitda_margin": {
+                            "files": ["15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx"]
+                        },
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.scenario_id == "governed_bu_budget_bridge"
+    assert "revenue is SAR 748.0M versus SAR 733.0M plan" in result.answer
+    assert "EBITDA is SAR 210.2M versus SAR 204.5M plan" in result.answer
+    assert "COGS: SAR 6.6M above plan" in result.answer
+    assert len(result.citations) == 2
+
+
 def test_authenticated_digital_health_without_actual_data_does_not_use_synthetic_baseline():
     result = parse_scenario(
         "Simulate Digital Health flat by end of year",

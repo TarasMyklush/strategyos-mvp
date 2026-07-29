@@ -5587,6 +5587,12 @@ def test_auto_tabular_lookup_boundary_rejects_compound_keyword_traps():
     assert not any(api_module._auto_question_is_narrow_tabular_lookup(value) for value in rejected)
 
 
+def test_calendar_agenda_recognizes_plural_weekly_ceo_judgment_question():
+    assert api_module._assistant_question_is_calendar_agenda(
+        "Which of my meetings this week actually need me, and what should I know walking in?"
+    )
+
+
 def test_kpi_headline_router_uses_run_labels_and_defers_analysis(monkeypatch):
     cards = [
         {"key": "revenue", "label": "Revenue", "metric": "SAR 4.0B"},

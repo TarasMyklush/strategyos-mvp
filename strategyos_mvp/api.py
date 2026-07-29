@@ -12069,10 +12069,20 @@ def _assistant_question_is_calendar_agenda(question: str) -> bool:
     norm = " ".join(str(question or "").casefold().split())
     if any(term in norm for term in ("calendar", "agenda")):
         return True
-    asks_about_meeting = bool(re.search(r"\b(meeting|appointment)\b", norm))
+    asks_about_meeting = bool(re.search(r"\b(meetings?|appointments?)\b", norm))
     asks_about_timing = any(
         term in norm
-        for term in ("next", "upcoming", "today", "tomorrow", "scheduled", "prepare")
+        for term in (
+            "next",
+            "upcoming",
+            "today",
+            "tomorrow",
+            "this week",
+            "scheduled",
+            "prepare",
+            "walking in",
+            "need me",
+        )
     )
     return asks_about_meeting and asks_about_timing
 
