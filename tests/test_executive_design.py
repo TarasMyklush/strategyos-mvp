@@ -10,7 +10,13 @@ from strategyos_mvp.executive_design import (
 
 
 PERSONA_IDS = ("ceo", "cfo", "gm", "bucfo", "logistics", "board")
-ALLOWED_PERSONA_KEYS = {"assistant", "assistantRole", "indexLabel"}
+ALLOWED_PERSONA_KEYS = {
+    "assistant",
+    "assistantRole",
+    "indexLabel",
+    "label",
+    "documentTitle",
+}
 FORBIDDEN_RUNTIME_TERMS = (
     "tamween",
     "nupco",
@@ -36,6 +42,9 @@ def test_all_personas_are_identity_only() -> None:
 
 
 def test_persona_names_remain_stable() -> None:
+    assert executive_persona_design("ceo")["label"] == "Group CEO"
+    assert executive_persona_design("cfo")["label"] == "Group CFO"
+    assert executive_persona_design("board")["label"] == "Board room"
     assert executive_persona_design("ceo")["assistant"] == "Hermes"
     assert executive_persona_design("cfo")["assistant"] == "Atlas"
     assert executive_persona_design("gm")["assistant"] == "Iris"
