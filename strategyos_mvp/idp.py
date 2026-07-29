@@ -178,8 +178,15 @@ def _role_options_html() -> str:
             if username in CONFIG.idp_test_users
         }
     rows: list[str] = []
+    # The hosted sign-in page is a customer surface, not an operations
+    # catalogue. Internal operator/reviewer/system identities remain valid at
+    # the token endpoint for automation and support, but are never advertised
+    # to a customer in the role picker.
+    customer_roles = {"executive", "bu"}
     for username, payload in sorted(users.items(), key=lambda item: item[1]["role"]):
         role = payload["role"]
+        if role not in customer_roles:
+            continue
         label = ROLE_LABELS.get(role, role.replace("_", " ").title())
         rows.append(
             f'<option value="{html.escape(username)}" data-role="{html.escape(role)}">'

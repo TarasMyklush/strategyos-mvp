@@ -10,9 +10,21 @@ from strategyos_mvp.skills.finance_controls import run_all_finance_skills
 
 
 OCR_CRITICAL_PDFS = (
-    "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf",
-    "08_Invoices/Invoice_AlRashidCo_V1187_INV-2026-1404.pdf",
+    "EmiratesNBD_EUR_Jan-Jun_2026.pdf",
+    "V1187_INV-2026-1404.pdf",
 )
+
+
+def _unique_pdf_path(filename_fragment: str) -> str:
+    matches = [
+        path.relative_to(SOURCE_DATASET).as_posix()
+        for path in SOURCE_DATASET.rglob("*.pdf")
+        if filename_fragment.casefold() in path.name.casefold()
+    ]
+    assert len(matches) == 1, (
+        f"Expected one OCR-critical PDF matching {filename_fragment!r}; found {matches}"
+    )
+    return matches[0]
 
 
 def test_citation_resolver_resolves_structured_row():
@@ -42,7 +54,7 @@ def test_quality_report_tracks_ocr_and_citation_health():
     assert emirates[0]["verification"]["verified"] or emirates[0]["needs_ocr"]
     invoice = [
         item for item in report["pdf_sources"]
-        if "Invoice_AlRashidCo_V1187_INV-2026-1404.pdf" in item["source_path"]
+        if "V1187_INV-2026-1404.pdf" in item["source_path"]
     ]
     assert invoice
     assert invoice[0]["verification"]["verified"] or invoice[0]["needs_ocr"]
@@ -50,6 +62,7 @@ def test_quality_report_tracks_ocr_and_citation_health():
 
 @pytest.mark.parametrize("rel_path", OCR_CRITICAL_PDFS)
 def test_ocr_acceptance_harness_verifies_default_dataset_critical_pdfs(rel_path: str):
+    rel_path = _unique_pdf_path(rel_path)
     target = SOURCE_DATASET / Path(rel_path)
     assert target.exists(), f"Missing OCR-critical file under default dataset path: {target}"
 

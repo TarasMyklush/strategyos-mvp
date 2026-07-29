@@ -7,7 +7,7 @@ from typing import Any
 
 from .citation_resolver import resolve_findings, validate_quantitative_claims
 from .ingestion import DataBundle
-from .ingestion import OCR_REQUIRED_VERIFICATIONS
+from .ingestion import ocr_required_verification_for_path
 from .models import Finding
 
 MINIMUM_RESOLVED_CITATIONS_PER_FINDING = 3
@@ -77,7 +77,7 @@ def assess_finding_evidence(bundle: DataBundle, findings: list[Finding]) -> list
             {
                 citation.source_path
                 for citation in finding.citations
-                if citation.source_path in OCR_REQUIRED_VERIFICATIONS
+                if ocr_required_verification_for_path(citation.source_path)
                 and not (_pdf_verification_summary(bundle, citation.source_path) or {}).get("verified")
             }
         )
@@ -228,9 +228,10 @@ def pdf_source_summary(bundle: DataBundle) -> list[dict[str, Any]]:
 
 
 def _pdf_verification_summary(bundle: DataBundle, rel_path: str) -> dict[str, Any] | None:
-    label, terms = OCR_REQUIRED_VERIFICATIONS.get(rel_path, (None, ()))
-    if not label:
+    verification = ocr_required_verification_for_path(rel_path)
+    if verification is None:
         return None
+    label, terms = verification
     excerpt = bundle.evidence.pdf_excerpt(rel_path, terms)
     return {
         "label": label,

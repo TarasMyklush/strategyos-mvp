@@ -4147,6 +4147,7 @@ def _executive_modes_payload(
             "default_driver_key": "cash_pulse",
             "default_board_state": "pre",
             "assistant": "Atlas",
+            "availability": "locked",
         },
         {
             "persona_id": "gm",
@@ -4156,6 +4157,7 @@ def _executive_modes_payload(
             "default_driver_key": "cash_pulse",
             "default_board_state": "pre",
             "assistant": "Iris",
+            "availability": "locked",
         },
         {
             "persona_id": "bucfo",
@@ -4165,15 +4167,7 @@ def _executive_modes_payload(
             "default_driver_key": "owed_upward",
             "default_board_state": "pre",
             "assistant": "Argus",
-        },
-        {
-            "persona_id": "logistics",
-            "label": "Logistics",
-            "detail": "Vega · cold chain, service, cost",
-            "summary": "Keeps service-cost and operational dependency signal visible without turning the executive surface into an ops console.",
-            "default_driver_key": "runtime_governance",
-            "default_board_state": "closed",
-            "assistant": "Vega",
+            "availability": "locked",
         },
         {
             "persona_id": "board",
@@ -4182,9 +4176,11 @@ def _executive_modes_payload(
             "summary": "Focuses on the governed board packet, supplementary questions, and frozen-snapshot discipline.",
             "default_driver_key": "board_packet",
             "default_board_state": "live",
-            "assistant": "Hermes",
+            "assistant": "Minerva",
+            "availability": "live",
         },
     ]
+    personas[0]["availability"] = "live"
     for item in personas:
         blueprint = executive_persona_design(str(item.get("persona_id") or "ceo"))
         # Only persona NAMING (assistant name/role, index label) comes from the

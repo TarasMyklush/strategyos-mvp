@@ -9973,3 +9973,49 @@ body {
   .found-money-strip { grid-template-columns: 1fr; }
   .found-money-strip > span { display: none; }
 }
+.persona-lock-state {
+  max-width: 880px;
+  margin: 72px auto;
+  padding: clamp(32px, 6vw, 72px);
+  text-align: center;
+}
+.persona-lock-state h1 {
+  margin: 12px 0 16px;
+  font-family: var(--serif);
+  font-size: clamp(38px, 5vw, 64px);
+  font-weight: 400;
+}
+.persona-lock-state p {
+  max-width: 660px;
+  margin: 0 auto 28px;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.6;
+}
+.persona-lock-state button {
+  border: 1px solid var(--navy);
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  padding: 12px 20px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.a2a-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.decision-evidence-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.decision-evidence-row > span:first-child {
+  color: var(--muted);
+  font-size: 13px;
+}

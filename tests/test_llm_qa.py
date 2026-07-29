@@ -1019,6 +1019,12 @@ def test_default_authenticated_citations_cover_correct_fail_closed_answers():
     )
     assert competitor[0]["source_path"].endswith("Signals_Register_Jun2026.xlsx")
 
+    capital = llm_qa._default_authenticated_evidence_citations(
+        question="Where should the next SAR 100M of capital go for the best risk-adjusted return?",
+        evidence=evidence,
+    )
+    assert any(item["source_path"].endswith("Initiative_Register.xlsx") for item in capital)
+
 
 def test_evidence_payload_exposes_governed_calendar_and_resolving_fallback():
     payload = llm_qa._build_evidence_payload(

@@ -370,7 +370,11 @@ def answer_question(
     citations = _normalize_citations(parsed.get("citations"))
     if public_mode:
         citations = _normalize_public_packet_citations(citations, packet=public_packet, question=question)
-    elif not citations and _normalize_bool(parsed.get("matched", True)):
+    elif not citations:
+        # A fail-closed answer still needs to show the governed boundary that
+        # proves why the requested fact cannot be answered. Citations do not
+        # turn an unavailable fact into a match; they make the refusal
+        # auditable.
         citations = _default_authenticated_evidence_citations(
             question=question,
             evidence=evidence,
@@ -1708,6 +1712,9 @@ def _default_authenticated_evidence_citations(
             "integration",
             "glidepath",
             "board kpi",
+            "capital",
+            "investment",
+            "risk-adjusted",
         )
     ):
         for source in list(strategy.get("source_files") or [])[:4]:

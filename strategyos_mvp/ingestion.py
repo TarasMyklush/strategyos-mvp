@@ -32,7 +32,33 @@ OCR_REQUIRED_VERIFICATIONS: dict[str, tuple[str, tuple[str, ...]]] = {
         ("INV-2026-1404", "300187452100003", "SAR 21,793.20"),
     ),
 }
+_OCR_REQUIRED_VERIFICATION_FILENAME_TOKENS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "EmiratesNBD_EUR_Jan-Jun_2026.pdf": OCR_REQUIRED_VERIFICATIONS[
+        "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf"
+    ],
+    "V1187_INV-2026-1404.pdf": OCR_REQUIRED_VERIFICATIONS[
+        "08_Invoices/Invoice_AlRashidCo_V1187_INV-2026-1404.pdf"
+    ],
+}
 RUN_CONTEXT_FILENAME = ".strategyos_run_context.json"
+
+
+def ocr_required_verification_for_path(
+    rel_path: str,
+) -> tuple[str, tuple[str, ...]] | None:
+    """Resolve OCR verification by evidence identity, not mutable vendor naming."""
+    exact = OCR_REQUIRED_VERIFICATIONS.get(rel_path)
+    if exact:
+        return exact
+    filename = Path(rel_path).name
+    return next(
+        (
+            verification
+            for token, verification in _OCR_REQUIRED_VERIFICATION_FILENAME_TOKENS.items()
+            if token in filename
+        ),
+        None,
+    )
 
 
 @dataclass
@@ -187,14 +213,11 @@ def check_quality(bundle: DataBundle) -> list[DataQualityIssue]:
             issues.append(DataQualityIssue("warning", rel, f"OCR attempted but unresolved pages remain: {failed_pages}"))
         else:
             issues.append(DataQualityIssue("info", rel, f"OCR completed with {status.get('engine')} for pages {status.get('empty_pages')}."))
-    for rel, (label, terms) in OCR_REQUIRED_VERIFICATIONS.items():
-        if rel not in bundle.evidence.manifest:
-            # This dataset doesn't contain the file at all (e.g. a real
-            # dataset, not the synthetic fixture these entries describe) --
-            # nothing to verify, and reporting a missing-evidence issue for
-            # a file that was never part of this dataset would be a false
-            # positive on every non-fixture run.
+    for rel in bundle.evidence.manifest:
+        verification = ocr_required_verification_for_path(rel)
+        if verification is None:
             continue
+        label, terms = verification
         status = bundle.evidence.ocr_status.get(rel, {})
         excerpt = bundle.evidence.pdf_excerpt(rel, terms)
         if excerpt:

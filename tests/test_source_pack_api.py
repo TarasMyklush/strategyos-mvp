@@ -462,6 +462,14 @@ def test_source_pack_staged_equivalent_dataset_preserves_core_finance_findings(t
     for index, source in enumerate(sorted(source_dataset.rglob("*")), start=1):
         if not source.is_file():
             continue
+        # This fixture exercises filename-independent classification of the
+        # current run model. Historic ledgers are deliberately not flattened
+        # into it: once both directory and filename period signals have been
+        # erased, several structurally identical, dateless trial balances are
+        # genuinely ambiguous and production must fail closed.
+        relative_parts = source.relative_to(source_dataset).parts
+        if relative_parts and relative_parts[0] in {"09_Historic_ERP", "10_Historic_POs"}:
+            continue
         destination = staged_root / f"renamed-{index:03d}{source.suffix.lower()}"
         shutil.copy2(source, destination)
 
@@ -485,7 +493,7 @@ def test_source_pack_staged_equivalent_dataset_preserves_core_finance_findings(t
 
         assert staged.status_code == 200
         payload = staged.json()
-        assert payload["task_readiness"]["ready_for_run"] is True
+        assert payload["task_readiness"]["ready_for_run"] is True, payload["task_readiness"]
 
         baseline_findings = run_all_finance_skills(load_dataset(source_dataset))
         staged_findings = run_all_finance_skills(load_dataset(Path(payload["normalized_dataset_root"])))

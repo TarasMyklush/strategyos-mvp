@@ -174,7 +174,87 @@ def _thread_payload(path: Path | None, root: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         payload = {"threads": []}
     threads = payload.get("threads") if isinstance(payload, dict) else []
-    return {"threads": threads if isinstance(threads, list) else [], "source_file": _relative(path, root)}
+    normalized_threads: list[dict[str, Any]] = []
+    for raw_thread in threads if isinstance(threads, list) else []:
+        if not isinstance(raw_thread, dict):
+            continue
+        thread = dict(raw_thread)
+        normalized_turns: list[dict[str, Any]] = []
+        for raw_turn in thread.get("turns") or []:
+            if not isinstance(raw_turn, dict):
+                continue
+            turn = dict(raw_turn)
+            turn["evidence_refs"] = _resolving_references(
+                turn.get("evidence_ref"),
+                root,
+            )
+            normalized_turns.append(turn)
+        thread["turns"] = normalized_turns
+        normalized_threads.append(thread)
+    return {"threads": normalized_threads, "source_file": _relative(path, root)}
+
+
+def _resolving_references(value: Any, root: Path) -> list[dict[str, str]]:
+    """Convert workbook prose references into file + locator contracts.
+
+    Dataset seed threads intentionally read like human notes. The UI and
+    assistant runtime need a deterministic reference shape instead of opaque
+    strings such as "Remediation log RD-01/04". This resolver only maps
+    records to files that really exist in the current source pack.
+    """
+
+    text = str(value or "").strip()
+    if not text or text == "—":
+        return []
+    registry = {
+        "remediation": "19_Document_Vault/Remediation_Decision_Log_Jun2026.xlsx",
+        "bu_cost": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+        "business_events": "16_Business_Events/Business_Events_Register_Q4-2025_H1-2026.xlsx",
+        "initiatives": "21_Initiatives/Initiative_Register.xlsx",
+        "sop": "19_Document_Vault/AP_Controls_SOP_v3_Jun2026.pdf",
+        "fx_policy": "19_Document_Vault/FX_Hedging_Policy_v2_Jan2026.docx",
+        "signals": "17_Signals/Signals_Register_Jun2026.xlsx",
+        "calendar": "14_CEO_Office/CEO_Calendar_Mizan_Apr-Jul_2026.xlsx",
+        "glidepaths": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+    }
+    candidates: list[tuple[str, str]] = []
+    for part in (item.strip() for item in text.split(";")):
+        lowered = part.casefold()
+        filename_match = re.search(r"[\w.-]+\.(?:xlsx|pdf|docx|pptx|txt|csv)", part, re.I)
+        file_path: str | None = None
+        if filename_match:
+            found = _find(root, filename_match.group(0))
+            file_path = _relative(found, root)
+        if not file_path:
+            if "remediation" in lowered or re.search(r"\brd-\d+", lowered):
+                file_path = registry["remediation"]
+            elif "bu_cost" in lowered or "cost_variance" in lowered:
+                file_path = registry["bu_cost"]
+            elif "business_event" in lowered or re.search(r"\bev-\d+", lowered):
+                file_path = registry["business_events"]
+            elif "initiative" in lowered or re.search(r"\binit-\d+", lowered):
+                file_path = registry["initiatives"]
+            elif "sop" in lowered:
+                file_path = registry["sop"]
+            elif "hedging_policy" in lowered or "fx_hedging" in lowered:
+                file_path = registry["fx_policy"]
+            elif "signal" in lowered or re.search(r"\bsig-\d+", lowered):
+                file_path = registry["signals"]
+            elif "calendar" in lowered or "monday brief" in lowered:
+                file_path = registry["calendar"]
+            elif "glidepath" in lowered or re.search(r"\bkpi-\d+", lowered):
+                file_path = registry["glidepaths"]
+        if file_path and (root / file_path).is_file():
+            candidates.append((file_path, part))
+    seen: set[tuple[str, str]] = set()
+    results: list[dict[str, str]] = []
+    for file_path, locator in candidates:
+        key = (file_path, locator)
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append({"file": file_path, "locator": locator})
+    return results
 
 
 def _decision_seeds(threads: list[dict[str, Any]], root: Path) -> list[dict[str, Any]]:
@@ -199,7 +279,10 @@ def _decision_seeds(threads: list[dict[str, Any]], root: Path) -> list[dict[str,
                 "raised_by": "Atlas · Group CFO assistant",
                 "timing": "Before the June EUR payment run",
                 "choices": ["Approve", "Decline"],
-                "evidence_refs": [proposed.get("evidence_ref")],
+                "evidence_refs": _resolving_references(
+                    proposed.get("evidence_ref"),
+                    root,
+                ),
                 "status_labels": {
                     "Approve": "Approved for the June payment run",
                     "Decline": "Declined",
@@ -218,7 +301,13 @@ def _decision_seeds(threads: list[dict[str, Any]], root: Path) -> list[dict[str,
                 "raised_by": "Sara Al-Mahmoud · Group CFO",
                 "timing": "Current review",
                 "choices": ["Approve", "Hold"],
-                "evidence_refs": [_relative(memo, root), "SIG-2026-11"],
+                "evidence_refs": [
+                    {"file": _relative(memo, root), "locator": "approval memo"},
+                    {
+                        "file": "17_Signals/Signals_Register_Jun2026.xlsx",
+                        "locator": "SIG-2026-11",
+                    },
+                ],
                 "status_labels": {
                     "Approve": "Memo approved",
                     "Hold": "Held for further review",
@@ -297,7 +386,7 @@ def derive_strategy_enrichment(dataset_root: Path) -> dict[str, Any]:
             "date": _iso(row.get("Date")),
             "headline": row.get("Display_headline") or row.get("Event"),
             "recognition_target": row.get("Recognition_target"),
-            "evidence_refs": [value.strip() for value in str(row.get("Evidence") or "").split(";") if value.strip()],
+            "evidence_refs": _resolving_references(row.get("Evidence"), root),
         }
         for row in events
         if str(row.get("Positive?") or "").upper() == "Y"
@@ -310,7 +399,7 @@ def derive_strategy_enrichment(dataset_root: Path) -> dict[str, Any]:
             "owner": row.get("Owner"),
             "kpi_link": row.get("KPI_link"),
             "note": row.get("Latest_note"),
-            "evidence_refs": [row.get("Evidence_Ref")],
+            "evidence_refs": _resolving_references(row.get("Evidence_Ref"), root),
         }
         for row in initiatives
         if str(row.get("Status") or "").casefold() not in {"on-track", "done"}
@@ -321,7 +410,7 @@ def derive_strategy_enrichment(dataset_root: Path) -> dict[str, Any]:
             "milestone": row.get("Milestone"),
             "due": _iso(row.get("Due")),
             "status": row.get("Status"),
-            "evidence_refs": [row.get("Evidence_Ref")],
+            "evidence_refs": _resolving_references(row.get("Evidence_Ref"), root),
         }
         for row in milestones
         if any(token in str(row.get("Status") or "").casefold() for token in ("late", "missed", "at-risk"))

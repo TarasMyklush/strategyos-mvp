@@ -21,6 +21,19 @@ def test_legion_enrichment_contract_is_data_derived() -> None:
     assert payload["operational_actuals"]["row_count"] == 250
     assert len(payload["assistant_threads"]["threads"]) == 2
     assert all(len(thread["turns"]) == 8 for thread in payload["assistant_threads"]["threads"])
+    factual_turns = [
+        turn
+        for thread in payload["assistant_threads"]["threads"]
+        for turn in thread["turns"]
+        if turn.get("evidence_ref") not in {None, "", "—"}
+    ]
+    assert factual_turns
+    assert all(turn["evidence_refs"] for turn in factual_turns)
+    assert all(
+        (DATASET / reference["file"]).is_file()
+        for turn in factual_turns
+        for reference in turn["evidence_refs"]
+    )
     assert len(payload["assistant_profiles"]) == 5
     assert len(payload["achievements"]) == 6
     assert len(payload["daily_pulse"]) == 38
@@ -69,3 +82,8 @@ def test_legion_decisions_carry_visible_session_statuses() -> None:
         "Approve": "Memo approved",
         "Hold": "Held for further review",
     }
+    assert all(
+        (DATASET / reference["file"]).is_file()
+        for decision in decisions.values()
+        for reference in decision["evidence_refs"]
+    )

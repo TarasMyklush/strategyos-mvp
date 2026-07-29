@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -128,6 +129,44 @@ def _sheet_names_match(contract: DetectorRoleContract, sheet_names: list[str]) -
     return expected.issubset(normalized)
 
 
+def _candidate_latest_date(
+    path: Path,
+    contract: DetectorRoleContract,
+    mapping: dict[str, str],
+) -> datetime | None:
+    """Return the newest role date so history cannot shadow current data.
+
+    Discovery used to take the first structurally matching file. Once a source
+    pack includes both FY history and current-period ledgers, a renamed current
+    file could therefore lose to an older canonical-looking workbook. The
+    role's mapped date columns are the deterministic tie-breaker.
+    """
+
+    if not contract.date_columns:
+        return None
+    try:
+        if path.suffix.lower() == ".csv":
+            frame = pd.read_csv(path, usecols=lambda column: str(column) in set(mapping.values()))
+        elif path.suffix.lower() == ".tsv":
+            frame = pd.read_csv(path, sep="\t", usecols=lambda column: str(column) in set(mapping.values()))
+        else:
+            frame = pd.read_excel(path, usecols=lambda column: str(column) in set(mapping.values()))
+    except Exception:
+        return None
+    latest: datetime | None = None
+    for canonical in contract.date_columns:
+        source_column = mapping.get(canonical, canonical)
+        if source_column not in frame.columns:
+            continue
+        parsed = pd.to_datetime(frame[source_column], errors="coerce").dropna()
+        if parsed.empty:
+            continue
+        candidate = parsed.max().to_pydatetime()
+        if latest is None or candidate > latest:
+            latest = candidate
+    return latest
+
+
 def _candidate_paths(dataset_root: Path, contract: DetectorRoleContract) -> list[Path]:
     default_path = dataset_root / contract.default_relative_path
     candidates: list[Path] = []
@@ -225,6 +264,7 @@ def _resolve_detector_contract(dataset_root: Path, contract: DetectorRoleContrac
                 expected_sheet_names=contract.expected_sheet_names,
             )
 
+    matches: list[tuple[Path, dict[str, str], list[str]]] = []
     for candidate in _candidate_paths(dataset_root, contract):
         try:
             columns, sheet_names = _load_preview(candidate)
@@ -233,6 +273,27 @@ def _resolve_detector_contract(dataset_root: Path, contract: DetectorRoleContrac
         if contract.role == "cash_forecast":
             if not _sheet_names_match(contract, sheet_names):
                 continue
+            matches.append((candidate, {}, sheet_names))
+            continue
+        mapping = _match_columns(contract, columns)
+        if mapping is None:
+            continue
+        matches.append((candidate, mapping, sheet_names))
+    if matches:
+        if contract.date_columns:
+            ranked = sorted(
+                matches,
+                key=lambda item: (
+                    _candidate_latest_date(item[0], contract, item[1]) or datetime.min,
+                    -len(item[0].relative_to(dataset_root).parts),
+                    item[0].as_posix(),
+                ),
+                reverse=True,
+            )
+        else:
+            ranked = matches
+        candidate, mapping, sheet_names = ranked[0]
+        if contract.role == "cash_forecast":
             return ResolvedDetectorContract(
                 role=contract.role,
                 attribute_name=contract.attribute_name,
@@ -243,9 +304,6 @@ def _resolve_detector_contract(dataset_root: Path, contract: DetectorRoleContrac
                 column_mapping={},
                 expected_sheet_names=contract.expected_sheet_names,
             )
-        mapping = _match_columns(contract, columns)
-        if mapping is None:
-            continue
         return ResolvedDetectorContract(
             role=contract.role,
             attribute_name=contract.attribute_name,

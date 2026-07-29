@@ -413,7 +413,7 @@ def test_legion_decisions_readiness_and_calendar_handoff_are_evidence_first() ->
     assert "/^(group ceo|group cfo|bu gm|board)/i" in js
     assert "CT-2023-014" in js
     assert "current board pack" in js
-    assert "finance_kpis" in js
+    assert "20_Board_KPIs/Board_KPI_Glidepaths.xlsx" in js
 
 
 def test_app_entry_bootstrap_preserves_requested_view_state():
@@ -664,7 +664,12 @@ def test_ui_session_and_workspace_contract_use_governed_routes_for_authenticated
         assert payload["executive_modes"]["state_contract"]["requested"]["persona"] == "board"
         assert payload["executive_modes"]["driver_focus"][0]["driver_key"] == "board_packet"
         assert any(item["persona_id"] == "cfo" for item in payload["executive_modes"]["personas"])
-        assert any(item["persona_id"] == "logistics" for item in payload["executive_modes"]["personas"])
+        assert not any(item["persona_id"] == "logistics" for item in payload["executive_modes"]["personas"])
+        board_persona = next(item for item in payload["executive_modes"]["personas"] if item["persona_id"] == "board")
+        assert board_persona["assistant"] == "Minerva"
+        assert board_persona["availability"] == "live"
+        cfo_persona = next(item for item in payload["executive_modes"]["personas"] if item["persona_id"] == "cfo")
+        assert cfo_persona["availability"] == "locked"
         assert payload["board_portal"]["presentation_state"] == "closed"
         assert payload["board_portal"]["lifecycle_flow"][2]["presented"] is True
         assert payload["board_portal"]["state_detail"]["state"] == "closed"
