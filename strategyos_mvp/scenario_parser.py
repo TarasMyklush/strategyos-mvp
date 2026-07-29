@@ -639,6 +639,53 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
                 "excerpt": "",
             }]
 
+        revenue_details = (
+            evidence.get("revenue", {}).get("details", {})
+            if isinstance(evidence.get("revenue"), Mapping)
+            else {}
+        )
+        operating_cost_details = (
+            evidence.get("operating_cost", {}).get("details", {})
+            if isinstance(evidence.get("operating_cost"), Mapping)
+            else {}
+        )
+        revenue_contributors = (
+            revenue_details.get("contributors", {}).get("revenue", [])
+            if isinstance(revenue_details.get("contributors"), Mapping)
+            else []
+        )
+        operating_cost_contributors = (
+            operating_cost_details.get("contributors", {}).get("operating_cost", [])
+            if isinstance(operating_cost_details.get("contributors"), Mapping)
+            else []
+        )
+        cost_by_label = {
+            str(row.get("label") or "").strip(): _decimal_or_none(row.get("variance_sar"))
+            for row in operating_cost_contributors
+            if isinstance(row, Mapping) and str(row.get("label") or "").strip()
+        }
+        ebitda_bu_bridge: list[dict[str, Any]] = []
+        for row in revenue_contributors:
+            if not isinstance(row, Mapping):
+                continue
+            label = str(row.get("label") or "").strip()
+            revenue_variance = _decimal_or_none(row.get("variance_sar"))
+            cost_variance = cost_by_label.get(label)
+            if not label or revenue_variance is None or cost_variance is None:
+                continue
+            ebitda_bu_bridge.append(
+                {
+                    "label": label,
+                    "revenue_variance": revenue_variance,
+                    "operating_cost_variance": cost_variance,
+                    "ebitda_variance": revenue_variance - cost_variance,
+                }
+            )
+        ebitda_bu_bridge.sort(
+            key=lambda row: abs(Decimal(row["ebitda_variance"])),
+            reverse=True,
+        )
+
         return {
             "source_key": key,
             "period": str(payload.get("reporting_period_key") or summary.get("reporting_period") or "current governed period"),
@@ -652,6 +699,7 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
             "ebitda_plan": ebitda_plan,
             "cash_balance": cash_balance,
             "board_floor": board_floor,
+            "ebitda_bu_bridge": ebitda_bu_bridge,
             "inferred_components": inferred_components,
             "citations": citations,
         }
@@ -1471,6 +1519,84 @@ def _asks_for_governed_finance_scorecard(normalized_prompt: str) -> bool:
         all(token in normalized_prompt for token in required)
         and any(token in normalized_prompt for token in ("budget", "plan"))
         and any(token in normalized_prompt for token in ("one view", "where are we", "summary"))
+    )
+
+
+def _asks_for_governed_ebitda_bu_bridge(normalized_prompt: str) -> bool:
+    return (
+        "ebitda" in normalized_prompt
+        and any(token in normalized_prompt for token in ("budget", "plan"))
+        and any(
+            token in normalized_prompt
+            for token in ("which bu", "which business unit", "explain the gap", "explains the gap")
+        )
+    )
+
+
+def _finance_ebitda_bu_bridge_result(baseline: Mapping[str, Any]) -> ScenarioResult:
+    def signed_sar(value: Decimal) -> str:
+        if value == 0:
+            return _sar_executive_decimal(value)
+        sign = "+" if value > 0 else "−"
+        return f"{sign}{_sar_executive_decimal(abs(value))}"
+
+    actual = baseline.get("ebitda")
+    plan = baseline.get("ebitda_plan")
+    bridge = [
+        row
+        for row in (baseline.get("ebitda_bu_bridge") or [])
+        if isinstance(row, Mapping)
+    ]
+    if actual is None or plan is None or not bridge:
+        return _scenario_missing_data_result(
+            scenario_id="governed_ebitda_bu_bridge",
+            scenario_label="Finance - EBITDA Business-unit Bridge",
+            answer=(
+                "The current evidence does not supply both an aligned group EBITDA plan "
+                "and matched business-unit revenue and operating-cost variance rows, so I "
+                "cannot attribute the EBITDA gap safely."
+            ),
+            missing_inputs=["ebitda_plan", "matched_bu_revenue_and_cost_variances"],
+            prompt_numbers=[],
+            suggestions=["Connect the approved BU budget bridge"],
+        )
+
+    actual_value = Decimal(actual)
+    plan_value = Decimal(plan)
+    variance = actual_value - plan_value
+    relation = "above" if variance > 0 else "below" if variance < 0 else "at"
+    direction = "favourable" if variance >= 0 else "unfavourable"
+    rows = []
+    for row in bridge[:8]:
+        contribution = Decimal(row["ebitda_variance"])
+        contribution_direction = "favourable" if contribution >= 0 else "unfavourable"
+        rows.append(
+            f"- {row['label']}: {_sar_executive_decimal(abs(contribution))} "
+            f"{contribution_direction} "
+            f"(revenue variance {signed_sar(Decimal(row['revenue_variance']))}; "
+            f"operating-cost variance {signed_sar(Decimal(row['operating_cost_variance']))})."
+        )
+    answer = (
+        f"For {baseline['period']}, group EBITDA is {_sar_executive_decimal(actual_value)} "
+        f"versus {_sar_executive_decimal(plan_value)} plan — "
+        f"{_sar_executive_decimal(abs(variance))} {relation} plan ({direction}).\n"
+        "The governed BU bridge is:\n"
+        + "\n".join(rows)
+    )
+    return ScenarioResult(
+        scenario_id="governed_ebitda_bu_bridge",
+        scenario_label="Finance - EBITDA Business-unit Bridge",
+        matched=True,
+        answer=answer,
+        calculations=[],
+        kg_context=[],
+        citations=list(baseline["citations"]),
+        assumptions=[],
+        basis=(
+            "Deterministic EBITDA variance and BU attribution from the aligned group budget; "
+            "each BU contribution equals its governed revenue variance less its governed "
+            "operating-cost variance."
+        ),
     )
 
 
@@ -3134,6 +3260,10 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
             baseline = _governed_finance_baseline(context)
             if baseline is not None:
                 return _hydrate_scenario_result(_finance_scorecard_result(baseline))
+        if _asks_for_governed_ebitda_bu_bridge(norm):
+            baseline = _governed_finance_baseline(context)
+            if baseline is not None:
+                return _hydrate_scenario_result(_finance_ebitda_bu_bridge_result(baseline))
         if _asks_for_governed_ebitda_baseline(norm):
             baseline = _governed_finance_baseline(context)
             if baseline is not None:

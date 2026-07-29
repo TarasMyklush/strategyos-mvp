@@ -962,7 +962,17 @@ def _finance_kpi_evidence(summary: dict[str, Any]) -> dict[str, Any]:
         "reporting_currency": payload.get("reporting_currency"),
         "components": {
             key: components.get(key)
-            for key in ("revenue_actual", "revenue_plan", "cogs_actual", "operating_cost_actual", "ebitda_actual", "cash_balance")
+            for key in (
+                "revenue_actual",
+                "revenue_plan",
+                "cogs_actual",
+                "operating_cost_actual",
+                "operating_cost_plan",
+                "ebitda_actual",
+                "ebitda_plan",
+                "cash_balance",
+                "board_floor",
+            )
             if key in components
         },
         "contributors": {
@@ -1796,7 +1806,7 @@ def _default_authenticated_evidence_citations(
     finance = evidence.get("finance_kpis")
     if isinstance(finance, dict) and finance.get("available") and any(
         token in lower
-        for token in ("headcount", "payroll", "revenue", "cost", "margin")
+        for token in ("headcount", "payroll", "revenue", "cost", "margin", "ebitda", "budget")
     ):
         for source in list(finance.get("source_files") or [])[:2]:
             add(

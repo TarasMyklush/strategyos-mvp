@@ -1199,6 +1199,40 @@ def test_authenticated_citation_fallback_resolves_signals_not_arbitrary_sources(
     )
 
 
+def test_finance_evidence_exposes_aligned_plan_fields_and_ebitda_citation_fallback():
+    evidence = llm_qa._finance_kpi_evidence(
+        {
+            "finance_kpi": {
+                "authoritative": True,
+                "components": {
+                    "revenue_actual": "4006000000",
+                    "revenue_plan": "3904000000",
+                    "operating_cost_actual": "3389076000",
+                    "operating_cost_plan": "3291152000",
+                    "ebitda_actual": "616924000",
+                    "ebitda_plan": "612848000",
+                    "cash_balance": "1410000000",
+                    "board_floor": "1200000000",
+                },
+                "evidence": {
+                    "ebitda_margin": {
+                        "files": ["15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx"]
+                    }
+                },
+            }
+        }
+    )
+
+    assert evidence["components"]["operating_cost_plan"] == "3291152000"
+    assert evidence["components"]["ebitda_plan"] == "612848000"
+    assert evidence["components"]["board_floor"] == "1200000000"
+    citations = llm_qa._default_authenticated_evidence_citations(
+        question="What is EBITDA versus budget?",
+        evidence={"finance_kpis": evidence},
+    )
+    assert citations[0]["source_path"].endswith("BU_Group_Budget_2026.xlsx")
+
+
 def test_authenticated_citation_fallback_resolves_vendor_contract_findings():
     evidence = llm_qa._build_evidence_payload(
         bundle=_bundle(),

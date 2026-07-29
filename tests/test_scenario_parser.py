@@ -662,6 +662,62 @@ def test_bu_ebitda_synthesis_is_not_claimed_as_a_baseline_lookup():
         ) is False
 
 
+def test_bu_ebitda_gap_uses_deterministic_matched_revenue_and_cost_bridge():
+    result = parse_scenario(
+        "What is group EBITDA vs budget this half, and which BUs explain the gap?",
+        {
+            "public_context_packet": {},
+            "summary": {
+                "finance_kpi": {
+                    "reporting_period_key": "H1 2026",
+                    "components": {
+                        "revenue_actual": "4006000000",
+                        "revenue_plan": "3904000000",
+                        "operating_cost_actual": "3389076000",
+                        "operating_cost_plan": "3291152000",
+                        "ebitda_actual": "616924000",
+                        "ebitda_plan": "612848000",
+                    },
+                    "evidence": {
+                        "revenue": {
+                            "details": {
+                                "contributors": {
+                                    "revenue": [
+                                        {
+                                            "label": "Tamween",
+                                            "variance_sar": "74000000",
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "operating_cost": {
+                            "details": {
+                                "contributors": {
+                                    "operating_cost": [
+                                        {
+                                            "label": "Tamween",
+                                            "variance_sar": "71200000",
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "ebitda_margin": {
+                            "files": ["15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx"]
+                        },
+                    },
+                }
+            },
+        },
+    )
+
+    assert result.scenario_id == "governed_ebitda_bu_bridge"
+    assert "SAR 616.9M versus SAR 612.8M plan" in result.answer
+    assert "Tamween: SAR 2.8M favourable" in result.answer
+    assert result.citations[0]["source_path"].endswith("BU_Group_Budget_2026.xlsx")
+
+
 def test_authenticated_digital_health_without_actual_data_does_not_use_synthetic_baseline():
     result = parse_scenario(
         "Simulate Digital Health flat by end of year",
