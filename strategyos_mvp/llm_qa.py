@@ -366,6 +366,12 @@ def answer_question(
     )
     if calendar_repair is not None:
         parsed = {**parsed, **calendar_repair}
+    domain_repair = _governed_domain_coverage_repair(
+        question=question,
+        evidence=evidence,
+    )
+    if domain_repair is not None:
+        parsed = {**parsed, **domain_repair}
 
     citations = _normalize_citations(parsed.get("citations"))
     if public_mode:
@@ -796,6 +802,105 @@ def _governed_calendar_contradiction_repair(
         "basis": "Governed CEO calendar for the current seven-day projection window.",
         "citations": citations,
     }
+
+
+def _governed_domain_coverage_repair(
+    *,
+    question: str,
+    evidence: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Fail closed when a question requires a domain source the run lacks.
+
+    Finance rows can contain words such as "payroll" or a one-off staffing
+    note, but they are not a workforce register. Likewise, cost composition is
+    not a monthly cash-flow use statement. An LLM must not convert those nearby
+    keywords into a confident answer to a different question.
+    """
+
+    normalized = " ".join(str(question or "").casefold().split())
+    if not normalized:
+        return None
+
+    source_paths: set[str] = set()
+
+    def collect(value: Any, key: str = "") -> None:
+        if isinstance(value, dict):
+            for child_key, child_value in value.items():
+                collect(child_value, str(child_key))
+        elif isinstance(value, list):
+            for child in value:
+                collect(child, key)
+        elif key in {"source_path", "source_file", "source_files"}:
+            source_paths.add(str(value or "").casefold())
+
+    collect(evidence)
+
+    workforce_question = bool(
+        re.search(
+            r"\b(?:vacanc(?:y|ies)|headcount|turnover|workforce|staffing|"
+            r"saudisation|recruitment|employee(?:s)?|people)\b",
+            normalized,
+        )
+    )
+    workforce_source = any(
+        any(token in path for token in ("headcount", "workforce", "vacancy", "people_", "hr_"))
+        for path in source_paths
+    )
+    if workforce_question and not workforce_source:
+        return {
+            "matched": False,
+            "answer": (
+                "A governed workforce and vacancy register is not supplied in this evidence pack. "
+                "The finance data can show payroll and operating-cost effects, but it cannot identify "
+                "vacancy hotspots, headcount movements or compliance gaps reliably. Connect the HR "
+                "headcount, vacancies and workforce-plan sources to answer this."
+            ),
+            "basis": "Governed domain-coverage check: finance evidence is not a workforce register.",
+            "citations": [],
+            "suggestions": [
+                "Show the payroll variance by business unit",
+                "Which operating-cost movements are supported by current evidence?",
+            ],
+        }
+
+    monthly_cash_use_question = bool(
+        re.search(
+            r"\bwhere (?:does|did|is) (?:our )?(?:operating )?cash\b.{0,40}\bgo\b",
+            normalized,
+        )
+        or re.search(r"\bmonthly cash (?:use|uses|outflow|outflows)\b", normalized)
+    )
+    cash_use_source = any(
+        any(
+            token in path
+            for token in (
+                "cash_flow",
+                "cashflow",
+                "cash_uses",
+                "cash_usage",
+                "treasury_transactions",
+                "payments_register",
+            )
+        )
+        for path in source_paths
+    )
+    if monthly_cash_use_question and not cash_use_source:
+        return {
+            "matched": False,
+            "answer": (
+                "A governed monthly cash-flow use schedule is not supplied in this evidence pack. "
+                "The current data shows cost composition, AP activity, cash forecasts and balances, "
+                "but those do not prove where all operating cash actually went each month. Connect "
+                "the cash-flow statement or classified treasury transaction ledger to answer this."
+            ),
+            "basis": "Governed domain-coverage check: cost composition is not cash-use evidence.",
+            "citations": [],
+            "suggestions": [
+                "Show the current cash position versus the approved floor",
+                "Show AP spend by supplier from the current ledger",
+            ],
+        }
+    return None
 
 
 def _finance_kpi_evidence(summary: dict[str, Any]) -> dict[str, Any]:

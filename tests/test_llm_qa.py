@@ -1108,6 +1108,48 @@ def test_governed_calendar_repairs_only_a_provable_absence_contradiction():
     )
 
 
+def test_governed_domain_coverage_repair_rejects_keyword_substitution():
+    finance_only = {
+        "finance_kpis": {
+            "available": True,
+            "source_files": [
+                "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+                "15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx",
+            ],
+        },
+        "data": {
+            "ap_ledger": {
+                "available": True,
+                "source_path": "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
+            }
+        },
+    }
+
+    vacancy = llm_qa._governed_domain_coverage_repair(
+        question="Where are our vacancy hotspots, and what do they cost us?",
+        evidence=finance_only,
+    )
+    assert vacancy is not None
+    assert vacancy["matched"] is False
+    assert "workforce and vacancy register is not supplied" in vacancy["answer"]
+
+    cash_use = llm_qa._governed_domain_coverage_repair(
+        question="Where does our operating cash actually go each month?",
+        evidence=finance_only,
+    )
+    assert cash_use is not None
+    assert cash_use["matched"] is False
+    assert "monthly cash-flow use schedule is not supplied" in cash_use["answer"]
+
+    assert (
+        llm_qa._governed_domain_coverage_repair(
+            question="What is our cash position versus the floor?",
+            evidence=finance_only,
+        )
+        is None
+    )
+
+
 def test_authenticated_citation_fallback_resolves_signals_not_arbitrary_sources():
     citations = llm_qa._default_authenticated_evidence_citations(
         question="Which leading risk indicators should I watch?",

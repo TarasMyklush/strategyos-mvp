@@ -14110,6 +14110,8 @@ def _governed_reference_result(
         for item in matches
         if item.get("kind") == "kpi"
     }
+    if any(label and label in normalized_question for label in kpi_labels):
+        return None
     requested_kpi_match = next(
         (
             item
@@ -14122,17 +14124,7 @@ def _governed_reference_result(
     )
     if requested_kpi_match is not None:
         requested_label = str(requested_kpi_match.get("label") or "").casefold().strip()
-        distinct_component_is_named = any(
-            item.get("kind") == "kpi_component"
-            and str(item.get("label") or "").casefold().strip()
-            and str(item.get("label") or "").casefold().strip() not in requested_label
-            and re.search(
-                r"\b" + re.escape(str(item.get("label") or "").casefold().strip()) + r"\b",
-                normalized_question,
-            )
-            for item in matches
-        )
-        if requested_label and requested_label in normalized_question and not distinct_component_is_named:
+        if requested_label and requested_label in normalized_question:
             return None
     component = next(
         (
@@ -14144,6 +14136,38 @@ def _governed_reference_result(
         None,
     )
     if component is None:
+        return None
+
+    # A component row can answer a specific lookup ("Tell me about COGS",
+    # "Elaborate on SAR 109.9M") but it must not hijack a synthesis request
+    # merely because the question contains a bridge label such as EBITDA.
+    # Those broader questions need the evidence-reasoning path to compare BUs,
+    # measures and budget positions together.
+    component_label = str(component.get("label") or "").casefold().strip()
+    names_component = bool(
+        component_label
+        and re.search(r"\b" + re.escape(component_label) + r"\b", normalized_question)
+    )
+    specific_lookup = bool(
+        _question_is_reference_followup(question)
+        or _parse_amount_references(question)
+        or (
+            names_component
+            and re.search(
+                r"\b(?:what is|what's|tell me about|explain|elaborate|describe|show)\b",
+                normalized_question,
+            )
+        )
+    )
+    synthesis_request = bool(
+        re.search(
+            r"\b(?:which bu|which business unit|across the group|one view|"
+            r"versus budget|vs budget|explain the gap|improvement potential|"
+            r"primary lever|ranked by impact)\b",
+            normalized_question,
+        )
+    )
+    if not specific_lookup or synthesis_request:
         return None
 
     card = component.get("card") if isinstance(component.get("card"), Mapping) else {}

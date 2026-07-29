@@ -5185,6 +5185,7 @@ def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
                         "readout": "Margin before depreciation, amortisation, interest and tax.",
                         "calculation": {"formula": "EBITDA / Revenue"},
                         "drivers": [
+                            {"label": "EBITDA", "value": "SAR 616.9M", "share_pct": 15.4},
                             {"label": "Revenue", "value": "SAR 385.1M", "share_pct": None},
                             {"label": "Cost of goods sold", "value": "SAR 75.5M", "share_pct": None},
                         ],
@@ -5213,6 +5214,18 @@ def test_whole_kpi_question_defers_to_the_kpi_contract(monkeypatch):
         "the EBITDA amount bridge row must not intercept a question that "
         "explicitly names the whole EBITDA margin KPI"
     )
+    for synthesis_question in (
+        "What is group EBITDA vs budget this half, and which BUs explain the gap?",
+        "Which BU has the best EBITDA improvement potential and what is the primary lever?",
+        "Where are we versus budget on revenue, cost, EBITDA and cash — one view?",
+    ):
+        assert api_module._governed_reference_result(
+            context,
+            question=synthesis_question,
+            assistant_context={},
+            history=[],
+            public_safe=False,
+        ) is None, "multi-measure and BU synthesis must not collapse to one EBITDA component row"
 
     component = api_module._governed_reference_result(
         context, question="Elaborate on SAR 109.9M", assistant_context={}, history=[], public_safe=False
