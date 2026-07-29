@@ -16324,7 +16324,7 @@ def data_qa(
                 response_mode="deterministic",
                 base_payload={
                     "matched": False,
-                    "answer": "I don't have a deterministic answer for that yet. Try one of these:",
+                    "answer": "I don't have enough supported evidence to answer that yet. Try one of these:",
                     "citations": [],
                     "suggestions": list(SCENARIO_SUGGESTIONS),
                 },
@@ -16333,7 +16333,7 @@ def data_qa(
                     persona=persona,
                     qa_result={
                         "matched": False,
-                        "answer": "I don't have a deterministic answer for that yet. Try one of these:",
+                        "answer": "I don't have enough supported evidence to answer that yet. Try one of these:",
                         "citations": [],
                         "suggestions": list(SCENARIO_SUGGESTIONS),
                     },
@@ -16370,7 +16370,7 @@ def data_qa(
             response_mode="deterministic",
             base_payload={
                 "matched": False,
-                "answer": "I don't have a deterministic answer for that yet. Try one of these:",
+                "answer": "I don't have enough supported evidence to answer that yet. Try one of these:",
                 "citations": [],
                 "suggestions": list(SCENARIO_SUGGESTIONS),
             },
@@ -16379,7 +16379,7 @@ def data_qa(
                 persona=persona,
                 qa_result={
                     "matched": False,
-                    "answer": "I don't have a deterministic answer for that yet. Try one of these:",
+                    "answer": "I don't have enough supported evidence to answer that yet. Try one of these:",
                     "citations": [],
                     "suggestions": list(SCENARIO_SUGGESTIONS),
                 },

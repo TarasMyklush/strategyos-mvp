@@ -2895,7 +2895,7 @@ def _parse_generic(prompt: str, context: dict[str, Any]) -> ScenarioResult:
         scenario_id="generic_scenario",
         scenario_label=SCENARIO_LABELS["generic_scenario"],
         matched=False,
-        answer="I don't have a deterministic scenario parser for that prompt yet. Try one of these:",
+        answer="I don't have enough supported evidence to model that scenario yet. Try one of these:",
         calculations=[],
         kg_context=[],
         citations=[],

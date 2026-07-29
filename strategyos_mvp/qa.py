@@ -769,7 +769,7 @@ def answer_question(question: str, *, bundle: _DataBundle, findings: list[_Findi
             }
     return {
         "matched": False,
-        "answer": "I don't have a deterministic answer for that yet. Try one of these:",
+        "answer": "I don't have enough supported evidence to answer that yet. Try one of these:",
         "citations": [],
         "suggestions": list(SUGGESTIONS),
     }
