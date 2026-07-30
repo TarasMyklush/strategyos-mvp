@@ -8584,7 +8584,29 @@ body {
 }
 
 .executive-decision__toggle.target-feed-row {
-  grid-template-columns: 8px minmax(0, 1fr) auto auto auto 16px;
+  /* Three auto columns (state, source, timing) will each take their content
+     width before the 1fr title gets any, collapsing the decision title to one
+     word per line.  Give the title a real minimum and let the metadata shrink
+     and ellipsise instead -- the title is the part the CEO reads. */
+  grid-template-columns: 8px minmax(190px, 1.6fr) auto minmax(0, auto) minmax(0, auto) 16px;
+}
+
+.executive-decision__toggle.target-feed-row .target-decision-source,
+.executive-decision__toggle.target-feed-row .target-feed-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .executive-decision__toggle.target-feed-row {
+    grid-template-columns: 8px minmax(0, 1fr) auto 16px;
+  }
+  .executive-decision__toggle.target-feed-row .target-decision-source,
+  .executive-decision__toggle.target-feed-row .target-feed-meta {
+    display: none;
+  }
 }
 
 .target-awareness-row {

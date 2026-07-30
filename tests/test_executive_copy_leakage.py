@@ -352,3 +352,33 @@ def test_morning_note_never_renders_a_null_pulse_value_to_the_ceo() -> None:
     # Reuse the existing money formatter rather than adding a second one.
     assert "formatSarBrief" not in source
     assert "formatSarCompact(sales)" in source
+
+
+def test_developments_card_keeps_a_positive_item_when_concerns_fill_it() -> None:
+    """The card sorts critical -> watch -> positive, then truncates.
+
+    With six drifting items -- the normal case -- every achievement sorted to
+    the back and was cut, so the CEO saw a wall of red and no recognition.
+    The truncation now reserves the last slot for a positive item.
+    """
+    source = _read(EXECUTIVE_JS)
+
+    assert "function keepPositive(" in source
+    assert "function withPositiveItem(" in source
+    assert "withPositiveItem(developmentsAndConcerns, 6)" in source
+    assert "}).slice(0, 6);" not in source, (
+        "A bare slice() after the tone sort drops every positive item."
+    )
+
+
+def test_decision_title_column_cannot_collapse() -> None:
+    """Three auto columns starved the 1fr title down to ~15px.
+
+    The decision headline wrapped one word per line and overlapped the status
+    chip.  The title now has a real minimum and the metadata ellipsises.
+    """
+    css = _read(ROOT / "strategyos_mvp" / "static" / "executive.css")
+
+    assert "grid-template-columns: 8px minmax(190px, 1.6fr) auto minmax(0, auto) minmax(0, auto) 16px;" in css
+    assert "grid-template-columns: 8px minmax(0, 1fr) auto auto auto 16px;" not in css
+    assert "text-overflow: ellipsis;" in css

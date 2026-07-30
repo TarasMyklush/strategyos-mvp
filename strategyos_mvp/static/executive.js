@@ -5717,13 +5717,26 @@
     // always cut the good news off the end.  Keep the card short, but never
     // let it become a wall of drift with nothing recognised: reserve the last
     // visible slot for an achievement whenever one is in the window.
-    function withAchievement(items, limit) {
+    // Truncate to `limit`, but never truncate away the good news.  Positive
+    // items are appended after (and sorted behind) concerns, so a plain
+    // slice() removes all of them exactly when the business needs one most.
+    function keepPositive(items, limit, isPositive) {
       var list = safeArray(items);
       var head = list.slice(0, limit);
-      if (head.some(function (item) { return (item || {}).classification === "Achievement"; })) return head;
-      var win = list.find(function (item) { return (item || {}).classification === "Achievement"; });
+      if (head.some(isPositive)) return head;
+      var win = list.find(isPositive);
       if (!win) return head;
       return head.slice(0, Math.max(0, limit - 1)).concat([win]);
+    }
+    function withAchievement(items, limit) {
+      return keepPositive(items, limit, function (item) {
+        return (item || {}).classification === "Achievement";
+      });
+    }
+    function withPositiveItem(items, limit) {
+      return keepPositive(items, limit, function (item) {
+        return awarenessTone((item || {}).tone) === "positive";
+      });
     }
     var developments = liveGovernedMode
       ? withAchievement(developmentsSection.items, 3)
@@ -5810,7 +5823,13 @@
     }).sort(function (left, right) {
       var rank = { critical: 0, watch: 1, positive: 2 };
       return rank[awarenessTone(left.tone)] - rank[awarenessTone(right.tone)];
-    }).slice(0, 6);
+    });
+    // Concerns sort ahead of good news, so a plain slice() drops every
+    // achievement whenever six items already need attention -- which is the
+    // normal case.  Keep the card short, but never let it become a wall of
+    // drift with nothing recognised: reserve the last slot for a positive
+    // item when one is present.
+    developmentsAndConcerns = withPositiveItem(developmentsAndConcerns, 6);
     var seenDecisions = {};
     decisions = decisions.filter(function (item) {
       var key = String(firstDefined(item.key, item.title, "")).trim().toLowerCase();
