@@ -1717,13 +1717,30 @@
     var pulse = safeArray(enrichment.daily_pulse).find(function (item) {
       return String(firstDefined(item.Date, item.date, "")).slice(0, 10) === activeVirtualDate();
     });
-    var pulseNote = pulse ? String(firstDefined(pulse.Notes, pulse.notes, "")).trim() : "";
+    // Most pulse rows carry no note; firstDefined() treats null as present, so
+    // guard against rendering the string "null" to the CEO.
+    var rawPulseNote = pulse ? firstDefined(pulse.Notes, pulse.notes, "") : "";
+    var pulseNote = (rawPulseNote === null || rawPulseNote === undefined) ? "" : String(rawPulseNote).trim();
+    if (pulseNote === "null" || pulseNote === "undefined" || pulseNote === "None") pulseNote = "";
     var dayLine = "";
     if (todaysWins.length) {
       dayLine = " Good news today: " + firstDefined(todaysWins[0].headline, "a milestone was recorded")
         + (todaysWins[0].recognition_target ? " Worth a note to " + todaysWins[0].recognition_target + "." : "");
     } else if (pulseNote) {
       dayLine = " Today: " + pulseNote;
+    } else if (pulse) {
+      // No note for this day, but the pulse still carries the day's own
+      // numbers.  Read the sales and collections measures by matching the
+      // column meaning rather than a fixed header string, so a dataset that
+      // renames them keeps working.
+      var salesKey = Object.keys(pulse).find(function (key) { return /sales/i.test(key); });
+      var collectKey = Object.keys(pulse).find(function (key) { return /collection/i.test(key); });
+      var sales = salesKey ? Number(pulse[salesKey]) : NaN;
+      var collected = collectKey ? Number(pulse[collectKey]) : NaN;
+      var measures = [];
+      if (Number.isFinite(sales)) measures.push("sales " + formatSarCompact(sales));
+      if (Number.isFinite(collected)) measures.push("collections " + formatSarCompact(collected));
+      if (measures.length) dayLine = " Today's pulse: " + measures.join(", ") + ".";
     }
     return {
       assistant: assistant,

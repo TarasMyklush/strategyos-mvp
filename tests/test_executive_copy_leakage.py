@@ -331,3 +331,24 @@ def test_group_ebitda_uses_the_stated_amount_not_a_rounded_margin() -> None:
     assert '"ebitdah1actualsarm"' in source
     assert 'group_total.get("actual_ebitda") is not None' in source
     assert 'group_total.get("plan_ebitda") is not None' in source
+
+
+def test_morning_note_never_renders_a_null_pulse_value_to_the_ceo() -> None:
+    """Most daily-pulse rows carry Notes: null.
+
+    ``firstDefined`` treats null as present, so a naive String() would put the
+    literal text "null" in front of the CEO.  When there is no note the day's
+    own measures are used instead, read by column meaning rather than a fixed
+    header so a renamed dataset still works.
+    """
+    source = _read(EXECUTIVE_JS)
+
+    assert 'pulseNote === "null"' in source, (
+        "A null pulse note must not reach the CEO as the string 'null'."
+    )
+    assert "Today's pulse: " in source
+    assert "/sales/i.test(key)" in source
+    assert "/collection/i.test(key)" in source
+    # Reuse the existing money formatter rather than adding a second one.
+    assert "formatSarBrief" not in source
+    assert "formatSarCompact(sales)" in source
