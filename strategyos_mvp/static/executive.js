@@ -1585,6 +1585,60 @@
     return base.toISOString().slice(0, 10);
   }
 
+  // The "since you were here" window: how far back an item still counts as
+  // news.  Derived from the demo window the run supplies, never a fixed date,
+  // so a dataset with a different anchor keeps working.
+  function lastVisitDate() {
+    var demoWindow = getStrategyEnrichment().demo_window || {};
+    var start = String(firstDefined(demoWindow.start, getStrategyEnrichment().virtual_now, "")).slice(0, 10);
+    if (!start) return "";
+    var base = new Date(start + "T12:00:00Z");
+    base.setUTCDate(base.getUTCDate() - 4);
+    return base.toISOString().slice(0, 10);
+  }
+
+  // Items dated in [lastVisitDate, activeVirtualDate] -- what happened while
+  // the executive was away.
+  function isSinceLastVisit(value) {
+    var itemDate = String(firstDefined(value, "")).slice(0, 10);
+    if (!itemDate) return false;
+    var floor = lastVisitDate();
+    return itemDate <= activeVirtualDate() && (!floor || itemDate >= floor);
+  }
+
+  // "Since you were here": what has landed in the window, counted from the
+  // same records the card lists, so the count and the list can never disagree.
+  function renderSinceYouWereHereNote() {
+    var note = $("lower-rail-note");
+    if (!note) return;
+    var idle = "business movements and signals to keep in view — no action implied";
+    if (state.activePersona !== "ceo" || !getStrategyEnrichment().virtual_now) {
+      note.textContent = idle;
+      return;
+    }
+    var enrichment = getStrategyEnrichment();
+    var achievements = safeArray(enrichment.achievements).filter(function (item) {
+      return isSinceLastVisit(item.date);
+    }).length;
+    var drifts = safeArray(enrichment.initiative_drifts).length + safeArray(enrichment.milestone_drifts).length;
+    var behind = safeArray((enrichment.plan_health || {}).commitments).filter(function (item) {
+      return /^behind/i.test(String(firstDefined(item.status_vs_path, "")));
+    }).length;
+    if (!achievements && !drifts && !behind) {
+      note.textContent = idle;
+      return;
+    }
+    var since = lastVisitDate();
+    var label = since
+      ? new Date(since + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "long" })
+      : "your last visit";
+    var parts = [];
+    if (drifts) parts.push(String(drifts) + " development" + (drifts === 1 ? "" : "s"));
+    if (achievements) parts.push(String(achievements) + " achievement" + (achievements === 1 ? "" : "s"));
+    if (behind) parts.push(String(behind) + " item" + (behind === 1 ? "" : "s") + " crossed your materiality line");
+    note.textContent = "Since " + label + ": " + parts.join(" · ");
+  }
+
   function activeAssistantProfile() {
     var persona = getPersonaLabel(state.activePersona).toLowerCase();
     return safeArray(getStrategyEnrichment().assistant_profiles).find(function (item) {
@@ -3613,6 +3667,7 @@
       if (driverHint) driverHint.textContent = hasPercentDrivers ? "All figures: % of plan" : "All figures: current measures";
     }
     if (lowerHeading) lowerHeading.textContent = state.activePersona === "ceo" ? "Developments & concerns" : "What matters now";
+    renderSinceYouWereHereNote();
     var developmentsHeading = $("developments-heading");
     if (developmentsHeading) developmentsHeading.textContent = "Decisions for you";
     var boardOnly = state.activePersona === "board";
@@ -4253,7 +4308,11 @@
       hasScore = true;
       score = Number(preferredHero.score);
     }
+    // clampedScore drives the ring geometry and the tone thresholds, so it has
+    // to stay inside 0-100.  displayScore is what the CEO reads: running ahead
+    // of plan is a real, reportable result and must not be flattened to 100.
     var clampedScore = Math.max(0, Math.min(100, score));
+    var displayScore = Number.isFinite(score) ? Math.round(score * 10) / 10 : 0;
     var prompts = getHeroPrompts();
     var calendarContract = (state.latestPacket && state.latestPacket.calendar_agenda) || {};
     var upcomingCommitments = Number(calendarContract.upcoming_item_count);
@@ -4269,6 +4328,7 @@
       hasScore = true;
       score = Number(enrichedPlanHealth.score);
       clampedScore = Math.max(0, Math.min(100, score));
+      displayScore = Number.isFinite(score) ? Math.round(score * 10) / 10 : 0;
     }
     var miniStats = [
       { label: "Coverage", value: String(firstDefined(enrichedPlanHealth.live_count, 0)) + " of " + String(firstDefined(enrichedPlanHealth.commitment_count, 10)) + " live" },
@@ -4302,7 +4362,7 @@
     var heroStatusText = reviewGate
       ? "Review required"
       : hasScore
-        ? String(clampedScore || 0) + "% of plan"
+        ? String(displayScore || 0) + "% of plan"
         : "Business view ready";
     var heroStatusCaption = reviewGate
       ? "An item is waiting for executive sign-off."
@@ -4319,7 +4379,7 @@
     if (heroEl) heroEl.classList.add("tone-" + semanticTone);
     if (heroStatusEl) heroStatusEl.classList.add("tone-" + semanticTone);
     $("hero-score").innerHTML = hasScore && !reviewGate
-      ? '<span>' + escapeHtml(String(clampedScore || 0)) + '</span><small>plan health</small>'
+      ? '<span>' + escapeHtml(String(displayScore || 0)) + '</span><small>plan health</small>'
       : '<span class="hero-status__fallback">' + escapeHtml(heroStatusText) + '</span>';
     $("hero-cap").textContent = heroStatusCaption;
     var statusSignalEl = $("hero-status-signal");
@@ -5564,8 +5624,7 @@
         context: { why_attached: firstDefined(item.status, ""), sources: safeArray(item.evidence_refs) }
       };
     })).concat(safeArray(enrichment.achievements).filter(function (item) {
-      var itemDate = String(firstDefined(item.date, ""));
-      return itemDate && itemDate <= activeVirtualDate() && itemDate >= "2026-05-28";
+      return isSinceLastVisit(item.date);
     }).map(function (item) {
       return {
         key: firstDefined(item.event_id, item.headline),
@@ -5578,9 +5637,21 @@
     })).concat(signals);
     var delegated = priorities.delegated_summary || null;
     var fallbackFindings = safeArray(findingsSection.items).length ? safeArray(findingsSection.items) : safeArray(blueprint.findings);
+    // Concerns are appended before achievements, so a plain slice() would
+    // always cut the good news off the end.  Keep the card short, but never
+    // let it become a wall of drift with nothing recognised: reserve the last
+    // visible slot for an achievement whenever one is in the window.
+    function withAchievement(items, limit) {
+      var list = safeArray(items);
+      var head = list.slice(0, limit);
+      if (head.some(function (item) { return (item || {}).classification === "Achievement"; })) return head;
+      var win = list.find(function (item) { return (item || {}).classification === "Achievement"; });
+      if (!win) return head;
+      return head.slice(0, Math.max(0, limit - 1)).concat([win]);
+    }
     var developments = liveGovernedMode
-      ? safeArray(developmentsSection.items).slice(0, 3)
-      : (safeArray(blueprint.developments).length ? safeArray(blueprint.developments).slice(0, 3) : safeArray(lowerRail.developments).slice(0, 3));
+      ? withAchievement(developmentsSection.items, 3)
+      : (safeArray(blueprint.developments).length ? withAchievement(blueprint.developments, 3) : withAchievement(lowerRail.developments, 3));
     var calendarAgenda = (state.latestPacket && state.latestPacket.calendar_agenda) || {};
     var projectionAsOf = String(firstDefined(calendarAgenda.projection_as_of, "")).slice(0, 10);
     var projectionThrough = String(firstDefined(calendarAgenda.projection_through, "")).slice(0, 10);

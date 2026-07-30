@@ -402,7 +402,11 @@ def test_executive_js_live_database_mode_does_not_fallback_to_synthetic_rails():
     js = js_path.read_text(encoding="utf-8")
 
     assert 'diagnostics.mode === "live" && ["database", "governed_artifacts"]' in js
-    assert "liveGovernedMode\n      ? safeArray(developmentsSection.items)" in js
+    # Live mode reads the database section; the synthetic blueprint rail is only
+    # reachable in the non-live branch.  (The items pass through
+    # withAchievement(), which reserves a slot for good news but never changes
+    # the source.)
+    assert "liveGovernedMode\n      ? withAchievement(developmentsSection.items, 3)" in js
     assert "liveGovernedMode\n      ? safeArray(weekSection.items)" in js
     assert "developmentsPanel.hidden = false" in js
     assert "Pending CEO decisions" in js

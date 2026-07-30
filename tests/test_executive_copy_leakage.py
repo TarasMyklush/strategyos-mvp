@@ -136,3 +136,53 @@ def test_executive_greeting_addresses_the_modelled_executive_not_the_login() -> 
         "The hero greeting must resolve through greetedOwnerName(), not "
         f"{hero_assignment.group(1)}() — otherwise a test login is greeted by name."
     )
+
+
+def test_achievements_window_is_derived_not_a_hardcoded_date() -> None:
+    """B2: good news must survive, and the window must come from the run.
+
+    The achievements filter used a literal "2026-05-28" floor, which silently
+    stops working the moment the dataset anchor moves.  The window is now
+    derived from the run's own demo_window.
+    """
+    source = _read(EXECUTIVE_JS)
+
+    assert '"2026-05-28"' not in source, (
+        "Achievement recency was pinned to a hardcoded date; derive it from demo_window."
+    )
+    assert "function lastVisitDate()" in source
+    assert "function isSinceLastVisit(" in source
+    assert "isSinceLastVisit(item.date)" in source
+
+
+def test_developments_card_reserves_a_slot_for_an_achievement() -> None:
+    """Concerns are concatenated first, so a plain slice() drops all good news."""
+    source = _read(EXECUTIVE_JS)
+
+    assert "function withAchievement(" in source
+    assert "withAchievement(developmentsSection.items, 3)" in source
+    assert "safeArray(developmentsSection.items).slice(0, 3)" not in source
+
+
+def test_since_you_were_here_count_line_is_rendered() -> None:
+    """B2 header count line, counted from the same records the card lists."""
+    source = _read(EXECUTIVE_JS)
+    html = _read(EXECUTIVE_HTML)
+
+    assert 'id="lower-rail-note"' in html, "The count line needs a render target."
+    assert "function renderSinceYouWereHereNote()" in source
+    assert '"Since " + label + ": " + parts.join(" · ")' in source
+
+
+def test_plan_health_ring_shows_a_score_above_plan_instead_of_flattening_it() -> None:
+    """Running ahead of plan is a real result; 101.2 must not render as 100.
+
+    The ring arc still clamps to 0-100 because that is geometry, but the number
+    the CEO reads is the true score.
+    """
+    source = _read(EXECUTIVE_JS)
+
+    assert "var displayScore" in source
+    assert 'String(displayScore || 0) + "% of plan"' in source
+    assert "escapeHtml(String(displayScore || 0)) + '</span><small>plan health</small>'" in source
+    assert "escapeHtml(String(clampedScore || 0)) + '</span><small>plan health</small>'" not in source
