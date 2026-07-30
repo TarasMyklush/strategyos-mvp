@@ -70,7 +70,11 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     assert "Diagnostics" in executive_html
     assert "AI Assistants" in executive_html
     assert "Agents" in executive_html
-    assert "Hermes" in executive_html
+    # The shell ships a neutral "Ask" placeholder; the server substitutes the
+    # persona's assistant name (Hermes / Minerva / Atlas) before serving, so a
+    # board page never carries the CEO assistant in its markup.
+    assert 'id="assistant-heading">Ask</h3>' in executive_html
+    assert "Hermes" not in executive_html
     assert "Knowledge" in executive_html
     assert "The group index" in executive_html
     assert "Think and model on your data" in executive_html

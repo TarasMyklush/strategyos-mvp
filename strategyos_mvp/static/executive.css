@@ -9918,7 +9918,7 @@ body {
 }
 .plan-coverage-table > div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(100px, auto);
+  grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(64px, auto)) minmax(72px, auto) minmax(96px, auto);
   gap: 14px;
   align-items: center;
   padding: 9px 12px;
@@ -9926,8 +9926,22 @@ body {
 }
 .plan-coverage-table > div:last-child { border-bottom: 0; }
 .plan-coverage-table span { font-size: 12px; }
-.plan-coverage-table strong { font-size: 12px; }
+.plan-coverage-table strong { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 .plan-coverage-table small { color: var(--muted, #77736b); text-align: right; }
+.plan-coverage-row--head span,
+.plan-coverage-row--head strong,
+.plan-coverage-row--head small {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted, #77736b);
+}
+.plan-coverage-table .grounding-badge { font-size: 9px; }
+@media (max-width: 720px) {
+  .plan-coverage-table { overflow-x: auto; }
+  .plan-coverage-table > div { min-width: 560px; }
+}
 .decision-choice-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
 .decision-choice-row button {
   border: 1px solid var(--navy, #26345f);

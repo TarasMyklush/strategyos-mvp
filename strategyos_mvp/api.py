@@ -7929,11 +7929,16 @@ def _executive_html(
         'id="persona-label">Group CEO</span>',
         f'id="persona-label">{persona_label}</span>',
     )
-    if assistant_name and assistant_name != "Hermes":
-        # Render the correct identity before hydration. The client still keeps
-        # this synchronized after persona changes, but board/CFO HTML must
-        # never flash or expose the CEO assistant as its default.
-        html_text = html_text.replace("Ask Hermes", f"Ask {assistant_name}")
+    # Render the correct identity before hydration.  The shell ships a neutral
+    # "Ask" placeholder rather than one persona's assistant, so a board page
+    # can never serve "Hermes" in its markup even for the instant before the
+    # client hydrates -- hiding a name with CSS still leaves it in the HTML.
+    if assistant_name:
+        html_text = html_text.replace(">Ask</", f">Ask {assistant_name}</")
+        html_text = html_text.replace('placeholder="Ask…"', f'placeholder="Ask {assistant_name}…"')
+        html_text = html_text.replace(
+            'aria-label="Ask your assistant"', f'aria-label="Ask {assistant_name}"'
+        )
     if view_state and view_state.get("persona") == "ceo":
         lines = html_text.split("\n")
         lines = [

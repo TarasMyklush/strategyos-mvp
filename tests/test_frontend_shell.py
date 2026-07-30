@@ -1441,7 +1441,10 @@ def test_leaders_corner_renders_four_real_selectable_videos_without_hijacking_pl
     assert "renderHomeTargetExtensions();" in leaders
     assert "video reel · drop footage" not in leaders
     assert "data-leader-discuss" not in leaders.split('<div class="vlog-player"', 1)[1].split("</div>", 1)[0]
-    assert "Ask Hermes about this topic" in leaders
+    # The label follows the active persona's assistant rather than naming the
+    # CEO's assistant on every surface.
+    assert "about this topic</button>" in leaders
+    assert "assistantNameForState()" in leaders
 
 
 def test_leaders_corner_player_is_responsive_and_thumbnail_library_is_compact():

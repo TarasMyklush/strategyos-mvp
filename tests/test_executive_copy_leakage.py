@@ -248,3 +248,86 @@ def test_executive_payload_strings_have_no_internal_vocabulary() -> None:
             f"{phrase!r} reaches the CEO through the run payload. "
             f"Rewrite it in executive language (spec ground rule G3): {offenders[:2]}"
         )
+
+
+def test_board_surface_does_not_ship_other_personas_assistant_names() -> None:
+    """B3: the board sees Minerva only -- in the markup, not just visually.
+
+    Hiding a name with CSS still ships it: a grep of the served HTML finds
+    Hermes on a board surface, which is exactly what the spec's acceptance
+    test checks.  The threads are withheld from the board markup instead.
+    """
+    source = _read(EXECUTIVE_JS)
+    html = _read(EXECUTIVE_HTML)
+
+    assert 'state.activePersona === "board"\n        ? []' in source, (
+        "Assistant-to-assistant threads must be withheld from board markup."
+    )
+    # The static shell must not hardcode one persona's assistant either; JS
+    # fills the real name in after hydration.
+    assert "Ask Hermes" not in html, (
+        "executive.html ships 'Ask Hermes' before hydration, so a board page "
+        "load serves another persona's assistant name."
+    )
+
+
+def test_morning_note_carries_the_days_own_news() -> None:
+    """B4: the note must change when the day scrubber advances."""
+    source = _read(EXECUTIVE_JS)
+
+    assert "var todaysWins" in source
+    assert "enrichment.daily_pulse" in source
+    assert "Good news today: " in source
+
+
+def test_plan_coverage_table_shows_actual_path_and_target_with_evidence() -> None:
+    """B1: per-KPI drill is a table with actual vs on-path vs 2028 target."""
+    source = _read(EXECUTIVE_JS)
+
+    assert "coverageValue(item.checkpoint, item.unit)" in source
+    assert "coverageValue(item.target_2028, item.unit)" in source
+    assert "plan-coverage-row--head" in source
+    assert "groundingBadgeMarkup(null, {" in source
+
+
+def test_open_assistant_threads_survive_a_reload() -> None:
+    """B5: 'close and reopen -> conversation still there' includes a reload."""
+    source = _read(EXECUTIVE_JS)
+
+    assert "function persistA2AOpenThreads()" in source
+    assert "function restoreA2AOpenThreads()" in source
+    assert "openA2AThreadKeys: restoreA2AOpenThreads()" in source
+
+
+def test_historic_context_states_the_scope_of_trend_and_drivers() -> None:
+    """The multi-year trend and its drivers can be different entities.
+
+    Reporting a division trend and explaining it with group-sized drivers is
+    incoherent -- a SAR 2,120M driver cannot account for SAR 43M of growth.
+    """
+    from pathlib import Path as _Path
+
+    historic = ROOT / "strategyos_mvp" / "source_historic_context.py"
+    source = _read(_Path(historic))
+
+    assert "def _scope_of(" in source
+    assert '"annual_revenue_scope"' in source
+    assert '"revenue_drivers_scope"' in source
+    assert '"scope_warning"' in source
+
+    qa = _read(ROOT / "strategyos_mvp" / "llm_qa.py")
+    assert "annual_revenue_scope" in qa
+    assert "scope_warning" in qa
+    assert "cannot account for a trend" in qa, (
+        "The prompt must forbid explaining a movement with a different entity's driver."
+    )
+
+
+def test_group_ebitda_uses_the_stated_amount_not_a_rounded_margin() -> None:
+    """Reconstructing EBITDA from a 1-dp margin moved the group figure ~SAR 1M."""
+    source = _read(ROOT / "strategyos_mvp" / "source_finance_kpis.py")
+
+    assert '"ebitdah1budgetsarm"' in source
+    assert '"ebitdah1actualsarm"' in source
+    assert 'group_total.get("actual_ebitda") is not None' in source
+    assert 'group_total.get("plan_ebitda") is not None' in source

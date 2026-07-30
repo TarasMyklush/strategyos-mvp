@@ -63,6 +63,25 @@ def _num(value: Any) -> float | None:
         return None
 
 
+def _scope_of(path: Path) -> str:
+    """Which reporting entity a historic file describes.
+
+    The trend and the drivers come from different workbooks, and in this
+    dataset they are different entities: the strategic annual summary is the
+    division, the group P&L driver sheet is the whole group.  Stating the
+    scope on each block is what stops an answer explaining a division trend
+    with group-sized drivers.  Derived from the file, never assumed.
+    """
+    name = path.name.casefold()
+    if "group" in name or "_bu_" in name or name.startswith("bu_"):
+        return "group"
+    if "division" in name or "reconcil" in name:
+        return "division"
+    # Strategic analytics in this pack are division-level; say so rather than
+    # implying a group figure we cannot support.
+    return "as reported in " + path.name
+
+
 def _annual_revenue(root: Path) -> dict[str, Any] | None:
     """The year-by-year net revenue trend from the strategic annual summary."""
     path = _find(root, "revenue", "analytics")
@@ -97,7 +116,7 @@ def _annual_revenue(root: Path) -> dict[str, Any] | None:
         )
     if len(series) < 2:
         return None
-    return {"source_file": path.name, "series": series}
+    return {"source_file": path.name, "series": series, "scope": _scope_of(path)}
 
 
 def _revenue_drivers(root: Path) -> dict[str, Any] | None:
@@ -127,7 +146,7 @@ def _revenue_drivers(root: Path) -> dict[str, Any] | None:
         )
     if not drivers:
         return None
-    return {"source_file": path.name, "drivers": drivers}
+    return {"source_file": path.name, "drivers": drivers, "scope": _scope_of(path)}
 
 
 def derive_historic_context(dataset_root: Path | str) -> dict[str, Any]:
@@ -159,6 +178,17 @@ def derive_historic_context(dataset_root: Path | str) -> dict[str, Any]:
     }
     if annual:
         payload["annual_revenue"] = annual["series"]
+        payload["annual_revenue_scope"] = annual.get("scope")
     if drivers:
         payload["revenue_drivers"] = drivers["drivers"]
+        payload["revenue_drivers_scope"] = drivers.get("scope")
+    if annual and drivers and annual.get("scope") != drivers.get("scope"):
+        # The two blocks describe different entities.  Say so explicitly: a
+        # driver worth thousands of millions cannot explain a trend worth tens.
+        payload["scope_warning"] = (
+            f"The revenue trend is {annual.get('scope')} scope and the named drivers are "
+            f"{drivers.get('scope')} scope. They are not like-for-like: do not use these "
+            "drivers to explain the size of the trend movement without saying which "
+            "entity each figure covers."
+        )
     return payload

@@ -232,8 +232,22 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         variance = _decimal(_cell(values, headers, "h1var"))
         plan_margin = _decimal(_cell(values, headers, "ebitdabudget"))
         actual_margin = _decimal(_cell(values, headers, "ebitdah1est"))
+        # The workbook states EBITDA twice: as a rounded 1-dp margin and as an
+        # exact SAR amount.  Prefer the amount.  Reconstructing it from the
+        # rounded margin moves the group figure by ~SAR 1M (617.0 -> 616.9,
+        # 608.1 -> 609.0), which is a visible discrepancy against the source
+        # a CFO would open.
+        plan_amount = _decimal(_cell(values, headers, "ebitdah1budgetsarm"))
+        actual_amount = _decimal(_cell(values, headers, "ebitdah1actualsarm"))
         if _normal(unit).startswith("group") and None not in {actual, plan, plan_margin, actual_margin}:
-            group_total = {"actual": actual, "plan": plan, "actual_margin": actual_margin, "plan_margin": plan_margin}
+            group_total = {
+                "actual": actual,
+                "plan": plan,
+                "actual_margin": actual_margin,
+                "plan_margin": plan_margin,
+                "actual_ebitda": actual_amount,
+                "plan_ebitda": plan_amount,
+            }
             continue
         # The GROUP total above is used for CEO headlines, but is never a
         # business-unit mover.  Rows without a stated EBITDA margin (such as
@@ -257,8 +271,20 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     million = Decimal("1000000")
     revenue_actual = (group_total["actual"] if group_total else sum((row["actual"] for row in units), Decimal())) * million
     revenue_plan = (group_total["plan"] if group_total else sum((row["plan"] for row in units), Decimal())) * million
-    ebitda_actual = ((revenue_actual / million) * group_total["actual_margin"] / 100 if group_total else sum((row["actual"] * row["actual_margin"] / 100 for row in units), Decimal())) * million
-    ebitda_plan = ((revenue_plan / million) * group_total["plan_margin"] / 100 if group_total else sum((row["plan"] * row["plan_margin"] / 100 for row in units), Decimal())) * million
+    # Use the workbook's stated EBITDA amount when it supplies one; only fall
+    # back to reconstructing it from the rounded margin when it does not.
+    if group_total and group_total.get("actual_ebitda") is not None:
+        ebitda_actual = group_total["actual_ebitda"] * million
+    elif group_total:
+        ebitda_actual = (revenue_actual / million) * group_total["actual_margin"] / 100 * million
+    else:
+        ebitda_actual = sum((row["actual"] * row["actual_margin"] / 100 for row in units), Decimal()) * million
+    if group_total and group_total.get("plan_ebitda") is not None:
+        ebitda_plan = group_total["plan_ebitda"] * million
+    elif group_total:
+        ebitda_plan = (revenue_plan / million) * group_total["plan_margin"] / 100 * million
+    else:
+        ebitda_plan = sum((row["plan"] * row["plan_margin"] / 100 for row in units), Decimal()) * million
     operating_cost_actual = revenue_actual - ebitda_actual
     operating_cost_plan = revenue_plan - ebitda_plan
     cash = _group_cash_floor(budget_book, budget_path, root)

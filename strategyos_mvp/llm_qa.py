@@ -77,6 +77,12 @@ it to answer questions about prior years, growth over time, and what drove
 change -- never say historic data is unavailable while that block is present.
 When it is absent, the run genuinely holds only the current period; say so
 plainly.
+The trend and its drivers may describe different reporting entities. Read
+``annual_revenue_scope`` and ``revenue_drivers_scope`` before combining them.
+If ``scope_warning`` is present the two are not like-for-like: name the entity
+each figure covers, and never present a driver as explaining the size of a
+movement measured on a different entity. A driver worth thousands of millions
+cannot account for a trend that moved by tens of millions.
 When ``evidence.finance_kpis.contributors.available`` is true, answer questions
 about contributors directly from its ranked scope rows: name the leading line,
 its magnitude and supplied share. Never say component-level drivers are
@@ -591,7 +597,13 @@ def _historic_context_evidence(summary: dict[str, Any]) -> dict[str, Any]:
         "basis": payload.get("basis"),
         "source_files": payload.get("source_files") or [],
         "annual_revenue": payload.get("annual_revenue") or [],
+        # The trend and the drivers can describe different reporting entities.
+        # Carry each scope, and the explicit warning when they disagree, so the
+        # answer cannot silently explain a division trend with group drivers.
+        "annual_revenue_scope": payload.get("annual_revenue_scope"),
         "revenue_drivers": payload.get("revenue_drivers") or [],
+        "revenue_drivers_scope": payload.get("revenue_drivers_scope"),
+        "scope_warning": payload.get("scope_warning"),
     }
 
 

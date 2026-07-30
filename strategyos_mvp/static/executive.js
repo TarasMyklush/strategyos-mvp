@@ -1606,6 +1606,26 @@
     return itemDate <= activeVirtualDate() && (!floor || itemDate >= floor);
   }
 
+  // B5: an assistant conversation the CEO opened stays open across a close and
+  // reopen -- including a page reload, which is what "still there" means to
+  // someone who walked away from the desk.  In-memory state alone loses it.
+  var A2A_OPEN_KEY = "strategyos.executive.a2a-open.v1";
+
+  function persistA2AOpenThreads() {
+    try {
+      window.localStorage.setItem(A2A_OPEN_KEY, JSON.stringify(state.openA2AThreadKeys || {}));
+    } catch (_error) { /* storage unavailable; in-memory state still applies */ }
+  }
+
+  function restoreA2AOpenThreads() {
+    try {
+      var raw = window.localStorage.getItem(A2A_OPEN_KEY);
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_error) { return {}; }
+  }
+
   // "Since you were here": what has landed in the window, counted from the
   // same records the card lists, so the count and the list can never disagree.
   function renderSinceYouWereHereNote() {
@@ -1687,9 +1707,27 @@
         + (todaysEvent.when ? " at " + todaysEvent.when : "")
         + " — I have attached its preparation context."
       : "There is no high-signal calendar commitment recorded for this demo day.";
+    // What landed on this specific day.  Without this the note reads the same
+    // on every virtual day, because the drifting KPI and the next commitment
+    // both move slowly; the day's own news is what makes advancing the clock
+    // visibly change the surface.
+    var todaysWins = safeArray(enrichment.achievements).filter(function (item) {
+      return String(firstDefined(item.date, "")).slice(0, 10) === activeVirtualDate();
+    });
+    var pulse = safeArray(enrichment.daily_pulse).find(function (item) {
+      return String(firstDefined(item.Date, item.date, "")).slice(0, 10) === activeVirtualDate();
+    });
+    var pulseNote = pulse ? String(firstDefined(pulse.Notes, pulse.notes, "")).trim() : "";
+    var dayLine = "";
+    if (todaysWins.length) {
+      dayLine = " Good news today: " + firstDefined(todaysWins[0].headline, "a milestone was recorded")
+        + (todaysWins[0].recognition_target ? " Worth a note to " + todaysWins[0].recognition_target + "." : "");
+    } else if (pulseNote) {
+      dayLine = " Today: " + pulseNote;
+    }
     return {
       assistant: assistant,
-      text: greeting + " " + stateLine + " " + connection,
+      text: greeting + " " + stateLine + " " + connection + dayLine,
       evidence_refs: [
         drifting && drifting.evidence && drifting.evidence.file,
         todaysEvent && firstDefined(todaysEvent.source_path, todaysEvent.evidence_ref, todaysEvent.prep)
@@ -4433,8 +4471,29 @@
       var coverageButton = safeArray(enrichedPlanHealth.commitments).length
         ? '<button type="button" class="plan-coverage-chip" data-plan-coverage-toggle aria-expanded="' + (state.planCoverageOpen ? 'true' : 'false') + '">' + escapeHtml(firstDefined(enrichedPlanHealth.coverage_label, 'Plan coverage')) + '</button>'
         : '';
-      var coverageTable = state.planCoverageOpen ? '<div class="plan-coverage-table">' + safeArray(enrichedPlanHealth.commitments).map(function (item) {
-        return '<div><span>' + escapeHtml(firstDefined(item.name, item.kpi_id, 'Board commitment')) + '</span><strong>' + escapeHtml(item.actual == null ? 'Not supplied' : String(item.actual) + (item.unit === '%' ? '%' : ' ' + firstDefined(item.unit, ''))) + '</strong><small>' + escapeHtml(firstDefined(item.status_vs_path, item.measurement_status, '')) + '</small></div>';
+      // B1: actual vs this year's checkpoint vs the 2028 target, one row per
+      // board commitment, each row carrying its own evidence badge.  A value
+      // that is not supplied says so rather than rendering a blank cell.
+      function coverageValue(value, unit) {
+        if (value === null || value === undefined || value === "") return "Not supplied";
+        return String(value) + (unit === "%" ? "%" : (unit ? " " + unit : ""));
+      }
+      var coverageTable = state.planCoverageOpen ? '<div class="plan-coverage-table" role="table">'
+        + '<div class="plan-coverage-row plan-coverage-row--head" role="row">'
+        + '<span>Board commitment</span><strong>Actual</strong><strong>On-path</strong><strong>2028 target</strong><small>Status</small><small>Evidence</small></div>'
+        + safeArray(enrichedPlanHealth.commitments).map(function (item) {
+        var evidence = item.evidence && typeof item.evidence === "object" ? item.evidence : {};
+        return '<div class="plan-coverage-row" role="row" title="' + escapeHtml(firstDefined(item.rationale, '')) + '">'
+          + '<span>' + escapeHtml(firstDefined(item.name, item.kpi_id, 'Board commitment')) + '</span>'
+          + '<strong>' + escapeHtml(coverageValue(item.actual, item.unit)) + '</strong>'
+          + '<strong>' + escapeHtml(coverageValue(item.checkpoint, item.unit)) + '</strong>'
+          + '<strong>' + escapeHtml(coverageValue(item.target_2028, item.unit)) + '</strong>'
+          + '<small>' + escapeHtml(firstDefined(item.status_vs_path, item.measurement_status, '')) + '</small>'
+          + '<small>' + groundingBadgeMarkup(null, {
+              status: evidence.file ? "grounded" : "needs_evidence",
+              source: firstDefined(evidence.file, "")
+            }) + '</small>'
+          + '</div>';
       }).join('') + '</div>' : '';
       coverageHost.innerHTML = coverageButton + coverageTable;
       var coverageToggle = coverageHost.querySelector('[data-plan-coverage-toggle]');
@@ -6021,7 +6080,12 @@
 
     if (collaborationCard) {
       var events = safeArray(collaboration.recent_events);
-      var seededThreads = safeArray(((getStrategyEnrichment().assistant_threads || {}).threads));
+      // The board sees Minerva only.  Withhold the CEO/CFO/GM assistant
+      // threads from the board markup entirely rather than hiding them with
+      // CSS -- a name that is merely invisible is still in the served HTML.
+      var seededThreads = state.activePersona === "board"
+        ? []
+        : safeArray(((getStrategyEnrichment().assistant_threads || {}).threads));
       var openHandoffs = Number(firstDefined(collaboration.open_handoff_count, collaboration.pending_request_count, 0)) || 0;
       var resolvedHandoffs = Number(firstDefined(collaboration.resolved_handoff_count, 0)) || 0;
       var attentionHandoffs = Number(firstDefined(collaboration.executive_attention_count, 0)) || 0;
@@ -6051,6 +6115,7 @@
           var key = details.getAttribute("data-a2a-thread") || "";
           state.openA2AThreadKeys = state.openA2AThreadKeys || {};
           state.openA2AThreadKeys[key] = details.open;
+          persistA2AOpenThreads();
         };
       });
     }
@@ -6152,7 +6217,7 @@
       var thumbnails = videos.map(function (item, index) {
         return '<button type="button" class="vlog-item' + (index === leaderIndex ? ' is-active' : '') + '" data-leader-index="' + index + '" aria-label="Play ' + escapeHtml(item.topic) + '" aria-current="' + (index === leaderIndex ? 'true' : 'false') + '"><span class="vlog-item__image" style="background-image:url(&quot;https://i.ytimg.com/vi/' + escapeHtml(item.id) + '/hqdefault.jpg&quot;)"><span aria-hidden="true">▶</span><small>' + escapeHtml(item.dur) + '</small></span><strong>' + escapeHtml(item.topic) + '</strong><em>' + escapeHtml(item.who) + '</em></button>';
       }).join('');
-      leadersPanel.innerHTML = '<div class="leaders-vlog"><div class="leaders-vlog__badge">✦ Leaders’ Corner · video</div><div class="leaders-vlog__title">Short counsel, senior practitioners</div><div class="vlog-player"><iframe src="' + escapeHtml(videoSrc) + '" title="' + escapeHtml(video.topic) + '" loading="eager" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><div class="vlog-meta"><strong>' + escapeHtml(video.topic) + '</strong><span>' + escapeHtml(video.who) + ' <em>· ' + escapeHtml(video.role) + '</em></span><p>' + escapeHtml(video.summary) + '</p><div class="vlog-actions"><button type="button" data-leader-discuss="' + escapeHtml(videoPrompt) + '">Ask Hermes about this topic</button><a href="' + escapeHtml(videoUrl) + '" target="_blank" rel="noopener noreferrer">Open on YouTube ↗</a></div></div><div class="vlog-library" aria-label="Leaders’ Corner videos">' + thumbnails + '</div></div>';
+      leadersPanel.innerHTML = '<div class="leaders-vlog"><div class="leaders-vlog__badge">✦ Leaders’ Corner · video</div><div class="leaders-vlog__title">Short counsel, senior practitioners</div><div class="vlog-player"><iframe src="' + escapeHtml(videoSrc) + '" title="' + escapeHtml(video.topic) + '" loading="eager" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><div class="vlog-meta"><strong>' + escapeHtml(video.topic) + '</strong><span>' + escapeHtml(video.who) + ' <em>· ' + escapeHtml(video.role) + '</em></span><p>' + escapeHtml(video.summary) + '</p><div class="vlog-actions"><button type="button" data-leader-discuss="' + escapeHtml(videoPrompt) + '">Ask ' + escapeHtml(assistantNameForState()) + ' about this topic</button><a href="' + escapeHtml(videoUrl) + '" target="_blank" rel="noopener noreferrer">Open on YouTube ↗</a></div></div><div class="vlog-library" aria-label="Leaders’ Corner videos">' + thumbnails + '</div></div>';
       safeArray(leadersPanel.querySelectorAll('[data-leader-discuss]')).forEach(function (button) { button.onclick = function () { askAssistant(button.getAttribute('data-leader-discuss') || '', button, { entrypoint: 'leaders_corner' }); }; });
       safeArray(leadersPanel.querySelectorAll('[data-leader-index]')).forEach(function (button) {
         button.onclick = function () {
@@ -6709,7 +6774,7 @@
       planCoverageOpen: false,
       demoDayOffset: 0,
       thinkingSeed: null,
-      openA2AThreadKeys: {},
+      openA2AThreadKeys: restoreA2AOpenThreads(),
       openOutlookKeys: {},
       openCalendarIndex: 0,
       agentSummaryOpen: false,
