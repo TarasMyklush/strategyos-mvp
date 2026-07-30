@@ -3905,7 +3905,7 @@ def _board_portal_payload(
     pre_note = (
         "Keep the packet inside the executive lane until open challenged evidence is closed and supplementary answers are board-ready."
         if challenged_count
-        else "No open challenged cases are recorded; keep the packet bounded to the reconciled evidence and approval lane."
+        else "No open challenges are recorded. Only signed-off material reaches the board."
     )
     state_detail = {
         "pre": {
@@ -4024,7 +4024,7 @@ def _board_portal_payload(
                 "key": "recoverable_value",
                 "label": "Recoverable value",
                 "value": _format_sar_brief((summary or {}).get("total_recoverable_sar")),
-                "sub": "latest governed run",
+                "sub": "confirmed in this review",
                 "grounding": {
                     "status": (
                         "grounded"
@@ -4075,7 +4075,7 @@ def _board_portal_payload(
                 "key": "report_count",
                 "label": "Board packet reports",
                 "value": report_count,
-                "sub": "surfaced artifacts",
+                "sub": "reports in the board pack",
                 "grounding": {
                     "status": "grounded" if report_count else "needs_evidence",
                     "source": "governed artifact registry",
@@ -4972,16 +4972,16 @@ def _chat_threads_payload(
             }
         )
     preview_status = str((summary or {}).get("status") or "available")
-    preview_stage = current_stage.replace("_", " ")
     preview_status_label = preview_status.replace("_", " ")
+    # Executive copy never names an internal pipeline stage (writer, reviewer,
+    # analyst).  The CEO cares whether the board pack is ready, not which
+    # stage of our own workflow produced it.
     if preview_status_label == "missing":
-        workflow_preview = "No current governed run is available yet."
-    elif preview_status_label == "available":
-        workflow_preview = "Board context is available."
-    elif preview_status_label == preview_stage:
-        workflow_preview = f"Board context is {preview_status_label}."
+        workflow_preview = "No board pack has been prepared yet."
+    elif preview_status_label in {"available", "complete", "completed"}:
+        workflow_preview = "Board pack is ready for CEO review."
     else:
-        workflow_preview = f"Board context is {preview_status_label} at {preview_stage}."
+        workflow_preview = "Board pack is still being prepared."
     if challenged_count:
         workflow_preview += f" · {challenged_count} challenged item{'s' if challenged_count != 1 else ''}"
     threads = [
@@ -5201,7 +5201,7 @@ def _agents_surface_payload(
             latest = pending_requests[0]
             current_activity = str(latest.get("subject") or "Waiting for another assistant to respond.")
         elif last_wake:
-            current_activity = "Monitoring its governed KPIs; no open investigation is recorded."
+            current_activity = "Watching its KPIs; nothing under investigation."
         current_activity = _executive_twin_activity(current_activity)
         twins.append(
             {
@@ -9623,14 +9623,14 @@ def record_executive_decision(
         if requested_due_date and requested_due_date != governed_value:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="The requested date does not match the governed milestone. Refresh before changing it.",
+                detail="That date no longer matches the scheduled checkpoint. Refresh before changing it.",
             )
         due_date_contract = dict(governed_due_date)
     else:
         if not requested_due_date:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Choose a due date; no governed milestone is available.",
+                detail="No due date is set yet — when do you want it?",
             )
         try:
             date.fromisoformat(requested_due_date)
@@ -13979,7 +13979,7 @@ def _kpi_mover_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
     if note:
         parts.append(f"{author}: {note}.")
     parts.append(
-        "Evidence boundary: the note is governed commentary, but it does not by itself prove that this issue caused the full KPI movement or quantify the financial effect."
+        "Evidence boundary: this is business-unit commentary, and it does not by itself prove that this issue caused the full KPI movement or quantify the financial effect."
     )
     parts.append(
         f"Next decision input: request {required_quantification}. Do not change guidance from this note alone."

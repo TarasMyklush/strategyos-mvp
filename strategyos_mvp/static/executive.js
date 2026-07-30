@@ -1597,11 +1597,18 @@
     }) || {};
   }
 
+  // The person this surface is addressed to: the executive the active persona
+  // models, falling back to the signed-in account only when the dataset does
+  // not name one.  Single source of truth for every greeting.
+  function greetedOwnerName() {
+    return String(firstDefined(activeAssistantProfile().named_by, sessionDisplayName(), "")).trim();
+  }
+
   function morningNoteContract() {
     var enrichment = getStrategyEnrichment();
     var profile = activeAssistantProfile();
     var assistant = firstDefined(profile.assistant_name, assistantNameForState(), "Hermes");
-    var ownerName = String(firstDefined(profile.named_by, sessionDisplayName(), "")).trim();
+    var ownerName = greetedOwnerName();
     var greeting = state.activePersona === "board"
       ? "Good morning."
       : "Good morning" + (ownerName ? ", " + ownerName.split(/\s+/)[0] : "") + ".";
@@ -4234,7 +4241,10 @@
     }
     var boardPortal = getBoardPortal();
     var agents = (state.latestPacket && state.latestPacket.agents) || {};
-    var fullName = sessionDisplayName();
+    // Greet the modelled executive this persona represents, not the sign-in
+    // account.  activeAssistantProfile().named_by is the same source the
+    // morning note greets by, so the hero and the note never disagree.
+    var fullName = greetedOwnerName();
     var firstName = fullName ? fullName.split(/\s+/)[0] : getPersonaLabel(state.activePersona);
     var preferredHero = hero && (hero.summary || hero.body || hero.score_note) ? hero : (blueprint.health || {});
     var hasScore = hero.score !== undefined && hero.score !== null && hero.score !== "";
@@ -5288,9 +5298,9 @@
         : '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).concat(safeArray(stateDetail.secondary_actions).slice(0, 2)).map(function (item) {
         return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '" aria-label="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '" title="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '">' + escapeHtml(humanizeToken(item)) + '</button>';
       }).join("") + '</div>'),
-      '<div class="board-detail-grid"><section class="board-panel"><p class="detail-eyebrow">Meeting posture</p><div class="mini-list"><div class="board-deck"><div><strong>' + escapeHtml(firstDefined((board.meeting || {}).design_title, (board.meeting || {}).title, "Board meeting")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined((board.meeting || {}).date, (board.meeting || {}).when, "Board timing pending")) + '</p></div><span class="pill-inline ok">' + escapeHtml(firstDefined((board.meeting || {}).room, "board-safe")) + '</span></div></div></section><section class="board-panel"><p class="detail-eyebrow">Lifecycle actions</p><div class="mini-list">' + (actions.length ? actions.map(function (item) {
+      '<div class="board-detail-grid"><section class="board-panel"><p class="detail-eyebrow">Meeting posture</p><div class="mini-list"><div class="board-deck"><div><strong>' + escapeHtml(firstDefined((board.meeting || {}).design_title, (board.meeting || {}).title, "Board meeting")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined((board.meeting || {}).date, (board.meeting || {}).when, "Board timing pending")) + '</p></div><span class="pill-inline ok">' + escapeHtml(firstDefined((board.meeting || {}).room, "board-safe")) + '</span></div></div></section><section class="board-panel"><p class="detail-eyebrow">What needs your action</p><div class="mini-list">' + (actions.length ? actions.map(function (item) {
         return '<div class="board-action"><div><strong>' + escapeHtml(firstDefined(item.item, "Action")) + '</strong><small>' + escapeHtml(firstDefined(item.owner, "Owner")) + '</small></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.due, "next")) + '</span></div>';
-      }).join("") : '<div class="discovery-empty">No lifecycle actions are attached to this state.</div>') + '</div></section></div>',
+      }).join("") : '<div class="discovery-empty">Nothing needs your action at this stage.</div>') + '</div></section></div>',
       stateSpecific
     ].join("");
     // Post-innerHTML re-sync: portal.innerHTML replacement triggers CSSOM
@@ -6339,7 +6349,7 @@
       return;
     }
     reportCard.innerHTML = [
-      '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Board reports' : 'Report surface') + '</p><h3 class="detail-title">' + (state.activePersona === "ceo" ? 'Board reports' : 'Previewable report routes') + '</h3></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '</span></div>',
+      '<div class="detail-head"><div><p class="detail-eyebrow">' + (state.activePersona === "ceo" ? 'Board reports' : 'Report surface') + '</p><h3 class="detail-title">' + (state.activePersona === "ceo" ? 'Board reports' : 'Reports in the board pack') + '</h3></div><span class="pill-inline ' + toneClass(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '">' + escapeHtml(statusLabel(firstDefined(publication.publish_state, 'draft'))) + '</span></div>',
       '<p class="detail-copy">Overview, cases, evidence, and reports now sit as one workspace. This rail keeps the board-safe output explicit.</p>',
       '<div class="mini-list">' + safeArray(publication.available_artifacts).slice(0, 5).map(function (item) {
         var formatLabel = function (fmt) {

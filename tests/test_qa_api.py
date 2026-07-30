@@ -2365,7 +2365,8 @@ def test_board_status_thread_does_not_repeat_the_same_lifecycle_value(monkeypatc
         publication={"challenged_cases": 0, "approval_status": "pending", "board_pack": {}},
     )
 
-    assert chat["threads"][0]["preview"] == "Board context is awaiting review."
+    # Executive copy never names an internal pipeline stage.
+    assert chat["threads"][0]["preview"] == "Board pack is still being prepared."
 
 
 def test_assistant_chat_authenticated_graph_route_returns_graph_provenance(monkeypatch):
@@ -5833,6 +5834,8 @@ def test_record_executive_decision_requires_idempotency_and_a_real_due_date(monk
             },
         )
         assert no_date.status_code == 400
-        assert "Choose a due date" in no_date.json()["detail"]
+        # This detail is surfaced to the CEO (executive.js throws payload.detail),
+        # so it follows the executive copy rule rather than API phrasing.
+        assert "No due date is set yet" in no_date.json()["detail"]
     finally:
         _restore_env(original)

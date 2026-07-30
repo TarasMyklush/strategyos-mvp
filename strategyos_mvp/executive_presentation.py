@@ -450,7 +450,7 @@ def _recommendation_sentence(recommendation: Mapping[str, Any]) -> str:
         return f"Recommended action: assign {owner_label} and request a {deliverable.lower()} by {due_date['value']}."
     return (
         f"Recommended action: assign {owner_label} and request a {deliverable.lower()}. "
-        "A due date needs your input because no governed milestone is available."
+        "No due date is set yet — when do you want it?"
     )
 
 
@@ -711,7 +711,7 @@ def _executive_kpi_signal(
         "decision_contract": decision_contract,
         "context": {
             "what": readout + contributor_assertion,
-            "why_attached": "This signal is attached because the current actual is compared with the aligned plan and ranked governed components.",
+            "why_attached": "This is here because the current actual sits against the approved plan, with the largest contributing lines ranked.",
             "sources": [str(item) for item in evidence_files if str(item)][:5],
         },
     }
