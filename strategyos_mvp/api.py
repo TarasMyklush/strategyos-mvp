@@ -1116,7 +1116,7 @@ def _build_public_safe_assistant_packet(
             "value": _format_sar_brief(metrics.get("total_recoverable_sar")),
             "sub": "Current governed value",
             "status": "Current governed value",
-            "detail": "Current governed run; latest governed run cash boundary: recoverable value is summed from persisted governed findings.",
+            "detail": "Recoverable value confirmed across the findings in this review.",
         },
         {
             "driver_key": "cases_in_view",
@@ -1126,7 +1126,7 @@ def _build_public_safe_assistant_packet(
             "value": str(int(metrics.get("finding_count") or 0)),
             "sub": "Governed cases",
             "status": "Governed cases",
-            "detail": "Board review scope from the latest governed run: finding rows persisted for the selected run.",
+            "detail": "The cases in scope for this board review.",
         },
         {
             "driver_key": "evidence_readiness",
@@ -1136,7 +1136,7 @@ def _build_public_safe_assistant_packet(
             "value": _format_ratio_display(metrics.get("resolved_count"), metrics.get("citation_count")),
             "sub": "Citation chain",
             "status": "Citation chain",
-            "detail": "Board evidence posture from the latest governed run: challenged items, CEO review, and next action depend on resolved citations over total persisted citations.",
+            "detail": "How much of the board evidence resolves to source: challenges, your review and the next step all follow from this.",
         },
         {
             "driver_key": "items_needing_closure",
@@ -1146,7 +1146,7 @@ def _build_public_safe_assistant_packet(
             "value": str(int(metrics.get("challenged_count") or 0)),
             "sub": "Reviewer attention",
             "status": "Reviewer attention",
-            "detail": "Challenged board items from the latest governed run: persisted challenged items still visible in the review posture.",
+            "detail": "Board items still challenged and awaiting closure.",
         },
     ]
 
@@ -1558,7 +1558,7 @@ def _latest_case_payload(
     if run_payload.get("status") != "ok":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No latest governed run is available.",
+            detail="No analysis has been published yet.",
         )
     for item in run_payload.get("findings", []) or []:
         if str(item.get("case_id") or item.get("finding_id") or "") == str(case_id):
@@ -2543,7 +2543,7 @@ def _bounded_plan_health_payload(
             summary="No governed finance packet has landed yet, so multi-domain posture stays at substrate level only.",
             boundary="Finance-derived signal only — StrategyOS is composing executive posture from current cases, evidence, release, and runtime boundary data, not a full enterprise strategy compiler.",
             root_label="Governed plan posture",
-            root_summary="Finance, evidence, release, and runtime lanes are wired as a truthful substrate; live posture appears after the first governed run.",
+            root_summary="The workspace is ready; figures appear once the first analysis has run.",
             tone="neutral",
             child_ids=("finance", "evidence", "release", "runtime"),
             next_action="run_first_governed_packet",
@@ -2582,7 +2582,7 @@ def _bounded_plan_health_payload(
         summary=summary_text,
         boundary="Finance-derived signal only — StrategyOS is composing executive posture from current cases, evidence, release, and runtime boundary data, not a full enterprise strategy compiler.",
         root_label="Governed plan posture",
-        root_summary=f"{case_count} governed case{'s' if case_count != 1 else ''}, {_format_ratio_display(resolved_count, citation_count)} citations, and {artifact_count} surfaced artifact{'s' if artifact_count != 1 else ''} currently define the bounded executive plan readout.",
+        root_summary=f"This readout rests on {case_count} case{'s' if case_count != 1 else ''}, {_format_ratio_display(resolved_count, citation_count)} citations resolved, and {artifact_count} report{'s' if artifact_count != 1 else ''}.",
         tone=tone,
         child_ids=("finance", "evidence", "release", "runtime"),
         next_action=_governed_next_action(summary, rows, audit_summary),
@@ -3498,7 +3498,7 @@ def _strategy_substrate_payload(
             reasoning_id="protect-value",
             claim="Protect the current value signal before broadening strategy claims.",
             status="backed" if total_recoverable > 0 else "thin",
-            rationale=f"The latest governed run surfaces {_format_sar_brief(total_recoverable)} across {case_count} cases, so value capture is the only strategy branch with direct quantitative support right now.",
+            rationale=f"This review surfaces {_format_sar_brief(total_recoverable)} across {case_count} cases, so value capture is the only strategy branch with direct quantitative support right now.",
             evidence_basis=("summary.total_recoverable_sar", "finding_rows.recoverable_sar"),
             portfolio_id="finance-diagnostics",
             affected_node_ids=("value_capture", "cash_recovery_signal", "working_capital_signal"),

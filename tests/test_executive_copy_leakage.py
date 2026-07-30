@@ -186,3 +186,65 @@ def test_plan_health_ring_shows_a_score_above_plan_instead_of_flattening_it() ->
     assert 'String(displayScore || 0) + "% of plan"' in source
     assert "escapeHtml(String(displayScore || 0)) + '</span><small>plan health</small>'" in source
     assert "escapeHtml(String(clampedScore || 0)) + '</span><small>plan health</small>'" not in source
+
+
+API = ROOT / "strategyos_mvp" / "api.py"
+
+# Strings that reach the CEO through the run payload rather than a template.
+# KPI driver "detail" lines and plan-health "root_summary" both render in
+# executive.js (driver.detail at the summary body and KPI drill; the plan
+# health summary under the hero).  The first live probe after the copy pass
+# still found "latest governed run" nine times in the served payload, because
+# only template strings had been checked -- operator-lane help text may keep
+# its own vocabulary, so this is scoped to the executive-facing keys.
+PAYLOAD_FACING_PHRASES = (
+    "latest governed run",
+    "surfaced artifact",
+    "bounded executive plan readout",
+)
+
+EXECUTIVE_PAYLOAD_KEYS = ("detail", "root_summary", "rationale")
+
+
+def _executive_payload_strings(path: Path) -> list[str]:
+    """String values assigned to executive-facing payload keys.
+
+    Covers both ``{"detail": "..."}`` dict entries and ``root_summary="..."``
+    keyword arguments.
+    """
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if (
+                    isinstance(key, ast.Constant)
+                    and key.value in EXECUTIVE_PAYLOAD_KEYS
+                    and isinstance(value, ast.Constant)
+                    and isinstance(value.value, str)
+                ):
+                    found.append(value.value)
+        elif isinstance(node, ast.Call):
+            for kw in node.keywords:
+                if (
+                    kw.arg in EXECUTIVE_PAYLOAD_KEYS
+                    and isinstance(kw.value, ast.Constant)
+                    and isinstance(kw.value.value, str)
+                ):
+                    found.append(kw.value.value)
+    return found
+
+
+def test_executive_payload_strings_have_no_internal_vocabulary() -> None:
+    """KPI driver details and plan-health summaries are executive copy too."""
+    literals = _executive_payload_strings(API)
+    assert literals, "Expected to find executive payload strings to check."
+
+    for phrase in PAYLOAD_FACING_PHRASES:
+        offenders = [text for text in literals if phrase in text]
+        assert not offenders, (
+            f"{phrase!r} reaches the CEO through the run payload. "
+            f"Rewrite it in executive language (spec ground rule G3): {offenders[:2]}"
+        )

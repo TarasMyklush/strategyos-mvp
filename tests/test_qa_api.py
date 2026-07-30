@@ -2109,7 +2109,8 @@ def test_assistant_chat_public_ceo_margin_pressure_prompt_returns_packet_answer(
         assert payload["matched"] is True
         text = payload["answer"].lower()
         assert "current governed drivers" in text
-        assert "latest governed run" in text
+        # Grounded in the KPI driver details (copy is now executive language).
+        assert "recoverable value confirmed" in text
         assert all(marker not in text for marker in ("fx", "api", "healthcare occupancy", "tamween"))
         assert "public-safe" not in text
         assert "deterministic" not in text
@@ -2867,7 +2868,8 @@ def test_public_ceo_margin_pressure_prompt_returns_business_answer_without_debug
         assert payload["run_id"] == "latest-public"
         assert payload["run_mode"] == "public-safe"
         assert "current governed" in answer
-        assert "latest governed run" in answer
+        # Grounded in the KPI driver details (copy is now executive language).
+        assert "recoverable value confirmed" in answer
         assert all(marker not in answer for marker in ("fx", "api", "healthcare", "occupancy", "tamween"))
 
         for banned in (
