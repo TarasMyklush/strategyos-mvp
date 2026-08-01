@@ -949,6 +949,10 @@ def test_evidence_payload_exposes_strategy_glidepaths_and_execution_context():
                     ],
                 },
                 "question_bank": {"count": 500},
+                "executive_policy": {
+                    "status": "needs_input",
+                    "missing_inputs": ["materiality_thresholds"],
+                },
                 "source_files": ["20_Board_KPIs/Board_KPI_Glidepaths.xlsx"],
             }
         },
@@ -959,6 +963,7 @@ def test_evidence_payload_exposes_strategy_glidepaths_and_execution_context():
     assert strategy["plan_health"]["commitments"][0]["actual"] == 36.2
     assert strategy["initiative_drifts"][0]["initiative_id"] == "INIT-06"
     assert strategy["assistant_threads"]["threads"][0]["turns"][0]["to"] == "Iris"
+    assert strategy["executive_policy"]["missing_inputs"] == ["materiality_thresholds"]
     assert "question_bank" not in strategy
 
 

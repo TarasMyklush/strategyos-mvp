@@ -700,6 +700,7 @@ def _strategy_enrichment_evidence(summary: dict[str, Any]) -> dict[str, Any]:
             for item in list(payload.get("remediation_decisions") or [])[:24]
             if isinstance(item, dict)
         ],
+        "executive_policy": dict(payload.get("executive_policy") or {}),
         "source_files": list(payload.get("source_files") or [])[:24],
     }
 

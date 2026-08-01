@@ -18,6 +18,11 @@ def test_legion_enrichment_contract_is_data_derived() -> None:
     assert plan["commitment_count"] == 10
     assert plan["live_count"] == 7
     assert plan["estimated_count"] == 3
+    assert plan["denominator_label"] == "of plan"
+    assert plan["display_score"] == 101
+    assert plan["holding_count"] == 6
+    assert plan["behind_count"] == 1
+    assert plan["exception_labels"] == ["E-Rx share of retail Rx volume"]
     assert len(payload["operational_actuals"]["kpi_ids"]) == 5
     assert payload["operational_actuals"]["row_count"] == 250
     assert len(payload["assistant_threads"]["threads"]) == 2
@@ -52,6 +57,8 @@ def test_legion_enrichment_contract_is_data_derived() -> None:
     assert payload["assistant_memory"]["record_id"] == "RD-01"
     assert "SAR 88,594" in payload["assistant_memory"]["text"]
     assert payload["assistant_memory"]["evidence"]["sheet"] == "Decision_Log"
+    assert payload["executive_policy"]["status"] in {"ready", "needs_input"}
+    assert "capabilities" in payload["executive_policy"]
 
 
 def test_revenue_plan_health_uses_the_reconciled_h1_budget_comparator() -> None:
@@ -87,7 +94,7 @@ def test_three_planted_drifts_surface_without_answer_key_labels() -> None:
     assert cost_of_drift["gap_unit"] == "percentage points"
     assert cost_of_drift["financial_effect_sar_per_week"] is None
     assert cost_of_drift["financial_effect_status"] == "not_supplied"
-    assert "does not supply a defensible SAR-per-week conversion" in cost_of_drift["statement"]
+    assert "required operating inputs are not connected" in cost_of_drift["statement"]
     assert any(item["initiative_id"] == "INIT-10" for item in payload["initiative_drifts"])
     assert any(
         item["initiative_id"] == "INIT-07" and str(item["status"]).startswith("LATE")

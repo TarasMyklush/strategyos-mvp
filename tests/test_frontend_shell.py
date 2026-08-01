@@ -423,7 +423,7 @@ def test_cfo_executive_html_is_atlas_correct_before_hydration() -> None:
 def test_legion_decisions_readiness_and_calendar_handoff_are_evidence_first() -> None:
     js = _static_executive_js()
     assert "item.cost_of_drift || {}" in js
-    assert "the source pack does not quantify the checkpoint gap" in js
+    assert "the required operating inputs are not connected for a financial conversion" in js
     assert "Pending CEO decision" in js
     assert "target-decision-state" in js
     assert "Decision memory: " in js
@@ -431,7 +431,7 @@ def test_legion_decisions_readiness_and_calendar_handoff_are_evidence_first() ->
     assert "/^(group ceo|group cfo|bu gm|board)/i" in js
     assert "CT-2023-014" in js
     assert "current board pack" in js
-    assert "20_Board_KPIs/Board_KPI_Glidepaths.xlsx" in js
+    assert 'source_label: "Board KPI glidepaths"' in js
 
 
 def test_app_entry_bootstrap_preserves_requested_view_state():
@@ -2759,7 +2759,7 @@ def test_assistant_drawer_state_initialized():
 # ── Hermes Assistant Drawer CEO UX ──
 
 def test_ceo_drawer_no_banned_strings():
-    """CEO assistant drawer must not show PRE-BOARD, writable, governed packet, History in default state."""
+    """CEO assistant copy stays executive-safe while retaining conversation controls."""
     # Banned strings that must NOT appear in the CEO drawer's visible text
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
     # Verify that CEO-codepath text assignments don't include banned strings
@@ -2772,15 +2772,14 @@ def test_ceo_drawer_no_banned_strings():
     # but they must be inside blocks guarded against CEO
     # Check that the CEO-facing text strings are clean
     ceo_facing_texts = [
-        'I can answer using the current board pack.',
         'Ask a question to begin.',
-        'assistantName + " will answer here using the current board pack."',
+        'answers from your current executive data and cited business records.',
+        "Start a new conversation",
+        "Toggle thread history",
     ]
     for text in ceo_facing_texts:
         assert text in executive_js, f"Expected CEO-facing text not found: {text}"
-    # Verify no banned strings appear in CEO-guarded code paths
-    # The History toggle injection should be guarded: 'state.activePersona !== "ceo"'
-    assert 'state.activePersona !== "ceo"' in executive_js, "CEO guard missing for persona-specific code"
+    assert 'assistantName + " will answer here using the current board pack."' not in executive_js
 
 
 def test_ceo_drawer_single_column_default():

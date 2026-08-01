@@ -38,6 +38,114 @@ def _records(path: Path | None, sheet_name: str) -> list[dict[str, Any]]:
     ]
 
 
+def _first_sheet_records(path: Path | None) -> list[dict[str, Any]]:
+    if path is None:
+        return []
+    try:
+        book = load_workbook(path, data_only=True, read_only=True)
+        sheet = book[book.sheetnames[0]]
+    except Exception:
+        return []
+    rows = iter(sheet.values)
+    headers = [str(value or "").strip() for value in next(rows, ())]
+    return [
+        {headers[index]: value for index, value in enumerate(row) if index < len(headers)}
+        for row in rows
+        if any(value is not None and str(value).strip() for value in row)
+    ]
+
+
+def _executive_policy_contract(
+    root: Path,
+    *,
+    events: list[dict[str, Any]],
+    initiatives: list[dict[str, Any]],
+    signals: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Load optional chief-of-staff policy inputs without inventing values."""
+
+    file_contracts = {
+        "kpi_value_conversions": _find(root, "KPI_Value_Conversions.xlsx"),
+        "materiality_thresholds": _find(root, "Materiality_Thresholds.xlsx"),
+        "organisation_escalation": _find(root, "Organisation_Escalation_Map.xlsx"),
+    }
+    records = {
+        key: _first_sheet_records(path)
+        for key, path in file_contracts.items()
+    }
+    display_rows = list(events) + list(initiatives) + list(signals)
+    display_atom_count = sum(
+        1
+        for row in display_rows
+        if str(row.get("Display_headline_short") or "").strip()
+    )
+    weekly_value_count = sum(
+        1
+        for row in display_rows
+        if _number(row.get("Cost_per_week_SAR")) is not None
+    )
+    def has_fields(record: dict[str, Any], *aliases: tuple[str, ...]) -> bool:
+        normalized = {
+            re.sub(r"[^a-z0-9]+", "_", str(key).casefold()).strip("_"): value
+            for key, value in record.items()
+        }
+        return all(
+            any(str(normalized.get(alias) or "").strip() for alias in group)
+            for group in aliases
+        )
+
+    conversions_ready = any(
+        has_fields(
+            row,
+            ("kpi_id",),
+            ("sar_per_unit_logic", "sar_per_unit", "conversion_logic"),
+            ("source", "source_ref", "evidence_ref"),
+        )
+        for row in records["kpi_value_conversions"]
+    )
+    thresholds_ready = any(
+        has_fields(
+            row,
+            ("scope",),
+            ("metric",),
+            ("attention_threshold",),
+            ("decision_threshold",),
+            ("rationale",),
+        )
+        for row in records["materiality_thresholds"]
+    )
+    escalation_ready = any(
+        has_fields(
+            row,
+            ("name",),
+            ("role",),
+            ("unit",),
+            ("reports_to",),
+        )
+        for row in records["organisation_escalation"]
+    )
+    required = {
+        "kpi_value_conversions": conversions_ready,
+        "materiality_thresholds": thresholds_ready,
+        "organisation_escalation": escalation_ready,
+        "display_headlines": display_atom_count > 0,
+        "weekly_value_atoms": weekly_value_count > 0,
+    }
+    return {
+        "status": "ready" if all(required.values()) else "needs_input",
+        "capabilities": required,
+        "missing_inputs": [key for key, available in required.items() if not available],
+        "kpi_value_conversions": records["kpi_value_conversions"],
+        "materiality_thresholds": records["materiality_thresholds"],
+        "organisation_escalation": records["organisation_escalation"],
+        "display_atom_count": display_atom_count,
+        "weekly_value_count": weekly_value_count,
+        "source_files": {
+            key: _relative(path, root) for key, path in file_contracts.items() if path
+        },
+    }
+
+
 def _number(value: Any) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
@@ -64,6 +172,17 @@ def _relative(path: Path | None, root: Path) -> str | None:
         return path.relative_to(root).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _display_headline(row: dict[str, Any], *fallback_keys: str) -> str | None:
+    supplied = str(row.get("Display_headline_short") or "").strip()
+    if supplied:
+        return supplied[:60].rstrip()
+    for key in fallback_keys:
+        value = str(row.get(key) or "").strip()
+        if value:
+            return value if len(value) <= 60 else value[:57].rstrip() + "…"
+    return None
 
 
 def _measurement_status(row: dict[str, Any]) -> str:
@@ -109,7 +228,8 @@ def _cost_of_drift(
         "financial_effect_status": "not_supplied",
         "statement": (
             f"{gap:g} {gap_unit} to the approved checkpoint; "
-            "the source pack does not supply a defensible SAR-per-week conversion."
+            "a SAR-per-week conversion is not available because the required "
+            "operating inputs are not connected."
         ),
         "evidence": evidence,
     }
@@ -181,11 +301,22 @@ def _plan_health(
         commitments.append(commitment)
     live = [item for item in commitments if item["measurement_status"] == "live" and item["score"] is not None]
     estimated = [item for item in commitments if item["measurement_status"] == "estimated"]
+    behind = [
+        item
+        for item in live
+        if str(item.get("status_vs_path") or "").casefold().startswith("behind")
+    ]
     score = round(sum(float(item["score"]) for item in live) / len(live), 1) if live else None
     return {
         "score": score,
+        "display_score": round(score) if score is not None else None,
+        "denominator_label": "of plan",
+        "verdict": "On plan" if score is not None and score >= 95 else "Action needed",
         "commitment_count": len(commitments),
         "live_count": len(live),
+        "holding_count": max(0, len(live) - len(behind)),
+        "behind_count": len(behind),
+        "exception_labels": [str(item.get("name") or item.get("kpi_id") or "Commitment") for item in behind],
         "estimated_count": len(estimated),
         "missing_count": len(commitments) - len(live) - len(estimated),
         "coverage_label": (
@@ -419,6 +550,7 @@ def derive_strategy_enrichment(
     actuals_path = _find(root, "KPI_Operational_Actuals_Monthly.xlsx")
     initiatives_path = _find(root, "Initiative_Register.xlsx")
     events_path = _find(root, "Business_Events_Register_Q4-2025_H1-2026.xlsx")
+    signals_path = _find(root, "Signals_Register_Jun2026.xlsx")
     pulse_path = _find(root, "Daily_Flash_May-Jun_2026.xlsx")
     profiles_path = _find(root, "Assistant_Profiles.xlsx")
     threads_path = _find(root, "A2A_Seed_Threads.json")
@@ -430,6 +562,7 @@ def derive_strategy_enrichment(
     initiatives = _records(initiatives_path, "Initiative_Register")
     milestones = _records(initiatives_path, "Milestones")
     events = _records(events_path, "Events_Register")
+    signals = _records(signals_path, "Signals_Register")
     pulse = _records(pulse_path, "Daily_Flash")
     profiles = _records(profiles_path, "Assistant_Profiles")
     remediation_rows = [
@@ -439,12 +572,18 @@ def derive_strategy_enrichment(
     ]
     question_rows = _records(question_bank_path, "CEO_Question_Bank")
     thread_payload = _thread_payload(threads_path, root)
+    executive_policy = _executive_policy_contract(
+        root,
+        events=events,
+        initiatives=initiatives,
+        signals=signals,
+    )
 
     achievements = [
         {
             "event_id": row.get("Event_ID"),
             "date": _iso(row.get("Date")),
-            "headline": row.get("Display_headline") or row.get("Event"),
+            "headline": _display_headline(row, "Display_headline", "Event"),
             "recognition_target": row.get("Recognition_target"),
             "evidence_refs": _resolving_references(row.get("Evidence"), root),
         }
@@ -454,11 +593,12 @@ def derive_strategy_enrichment(
     initiative_drifts = [
         {
             "initiative_id": row.get("INIT_ID"),
-            "title": row.get("Initiative"),
+            "title": _display_headline(row, "Initiative"),
             "status": row.get("Status"),
             "owner": row.get("Owner"),
             "kpi_link": row.get("KPI_link"),
             "note": row.get("Latest_note"),
+            "cost_per_week_sar": _number(row.get("Cost_per_week_SAR")),
             "evidence_refs": _resolving_references(row.get("Evidence_Ref"), root),
         }
         for row in initiatives
@@ -467,9 +607,10 @@ def derive_strategy_enrichment(
     milestone_drifts = [
         {
             "initiative_id": row.get("INIT_ID"),
-            "milestone": row.get("Milestone"),
+            "milestone": _display_headline(row, "Milestone"),
             "due": _iso(row.get("Due")),
             "status": row.get("Status"),
+            "cost_per_week_sar": _number(row.get("Cost_per_week_SAR")),
             "evidence_refs": _resolving_references(row.get("Evidence_Ref"), root),
         }
         for row in milestones
@@ -568,6 +709,7 @@ def derive_strategy_enrichment(
         "daily_pulse": pulse_rows,
         "assistant_profiles": profile_rows,
         "assistant_threads": thread_payload,
+        "executive_policy": executive_policy,
         "decision_seeds": _decision_seeds(thread_payload["threads"], root),
         "assistant_memory": _assistant_memory(
             current_audit_rows,
@@ -592,6 +734,7 @@ def derive_strategy_enrichment(
                 _relative(threads_path, root),
                 _relative(decisions_path, root),
                 _relative(question_bank_path, root),
+                *tuple(executive_policy.get("source_files", {}).values()),
             ) if value
         ],
     }

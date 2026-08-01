@@ -35,17 +35,46 @@
     if (reference && typeof reference === "object") {
       return {
         file: String(firstDefined(reference.file, reference.source_path, "")),
+        label: String(firstDefined(reference.source_label, reference.display_label, "")),
         locator: String(firstDefined(reference.locator, reference.record_id, reference.kpi_id, ""))
       };
     }
-    return { file: String(reference || ""), locator: "" };
+    return { file: String(reference || ""), label: "", locator: "" };
+  }
+
+  var EXECUTIVE_SOURCE_FOLDERS = {
+    "01_bank_statements": "Bank statements",
+    "02_erp_extracts": "Finance ledger",
+    "07_cash_forecast": "Cash forecast",
+    "08_invoices": "Invoices",
+    "12_group_financials": "Group financials",
+    "14_ceo_office": "CEO calendar",
+    "15_budgets_forecasts": "Division budget",
+    "16_business_events": "Business events",
+    "17_signals": "Business signals",
+    "19_document_vault": "Decision documents",
+    "20_board_kpis": "Board KPI records",
+    "21_initiatives": "Initiative register",
+    "24_executive_policy": "Executive policy"
+  };
+
+  function businessSourceLabel(value) {
+    var path = String(value || "").replace(/\\/g, "/").trim();
+    if (!path) return "Business record";
+    if (/^public_packet:/i.test(path)) return "Current executive briefing";
+    var parts = path.split("/").filter(Boolean);
+    var file = parts.pop() || path;
+    var invoice = file.match(/Invoice[_ -]*(.*?)[_ -]+(INV[-A-Za-z0-9]+)/i);
+    if (invoice) return invoice[1].replace(/[_-]+/g, " ").trim() + " invoice " + invoice[2];
+    var fileLabel = file.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+    var folder = parts.slice().reverse().map(function (part) { return EXECUTIVE_SOURCE_FOLDERS[part.toLowerCase()]; }).find(Boolean);
+    return [fileLabel || "Business record", folder].filter(Boolean).join(" · ");
   }
 
   function evidenceReferenceLabel(reference) {
     var parts = evidenceReferenceParts(reference);
     if (!parts.file) return "";
-    var fileName = parts.file.split("/").pop();
-    return [fileName, parts.locator].filter(Boolean).join(" · ");
+    return [firstDefined(parts.label, businessSourceLabel(parts.file)), parts.locator].filter(Boolean).join(" · ");
   }
 
   function evidenceReferencesText(references) {
@@ -114,6 +143,29 @@
     return '<table class="assistant-md-table">' + head + body + '</table>';
   }
 
+  function renderAssistantStructuredAnswer(rawText, payload) {
+    var text = String(rawText || "").trim();
+    if (!text) return '<div class="assistant-answer-dashboard"><p class="assistant-answer-verdict">No answer was returned.</p></div>';
+    var blocks = payload && payload.executive_blocks && typeof payload.executive_blocks === "object" ? payload.executive_blocks : {};
+    var plain = text.replace(/^#+\s*/gm, "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
+    var sentences = plain.split(/(?<=[.!?])\s+(?=[A-Z0-9])/).filter(Boolean);
+    var verdict = firstDefined(blocks.verdict, sentences[0], plain);
+    var recommendationIndex = sentences.findIndex(function (sentence, index) {
+      return index > 0 && /\b(?:recommend|should|next|decision|confirm|approve|hold|ask|protect)\b/i.test(sentence);
+    });
+    var recommendation = firstDefined(blocks.recommendation, recommendationIndex > 0 ? sentences[recommendationIndex] : "");
+    var detailSentences = blocks.detail ? [blocks.detail] : sentences.filter(function (_sentence, index) {
+      return index !== 0 && index !== recommendationIndex;
+    });
+    var metrics = safeArray(blocks.figures).length ? safeArray(blocks.figures).slice(0, 4) : executiveMetricTokens(plain, 4);
+    return '<div class="assistant-answer-dashboard">'
+      + '<p class="assistant-answer-verdict">' + renderAssistantMarkdownToHtml(verdict) + '</p>'
+      + (metrics.length ? '<div class="assistant-answer-stats">' + metrics.map(function (metric) { return '<span>' + escapeHtml(metric) + '</span>'; }).join('') + '</div>' : '')
+      + (recommendation ? '<p class="assistant-answer-recommendation"><span>Recommended next move</span>' + renderAssistantMarkdownToHtml(recommendation) + '</p>' : '')
+      + (detailSentences.length ? '<details class="assistant-answer-more"><summary>More context</summary><div>' + renderAssistantMarkdownToHtml(detailSentences.join(' ')) + '</div></details>' : '')
+      + '</div>';
+  }
+
   function humanizeToken(token) {
     if (!token) return "—";
     return String(token)
@@ -161,6 +213,15 @@
       .replace(/\brun findings\b/gi, "reviewed findings")
       .replace(/\bformula steps\b/gi, "calculation checks")
       .replace(/\bgrounding level\b/gi, "evidence confidence")
+      .replace(/\bthe source pack\b/gi, "the connected business records")
+      .replace(/\bsource pack\b/gi, "business records")
+      .replace(/\bcurrent governed run\b/gi, "current verified review")
+      .replace(/\blatest governed run\b/gi, "latest verified review")
+      .replace(/\bgoverned run\b/gi, "verified review")
+      .replace(/\bserver[- ]resolved\b/gi, "verified")
+      .replace(/\bPLANTED(?:\s+DRIFT)?\b\s*[-—:]?\s*/gi, "")
+      .replace(/\bANSWER[ _-]?KEY\b\s*[-—:]?\s*/gi, "")
+      .replace(/\(?\bPattern\s+\d+\b\)?\s*[-—:]?\s*/gi, "")
       .replace(/[ \t]+/g, " ")
       .replace(/ *\n */g, "\n")
       .replace(/\n{3,}/g, "\n\n")
@@ -681,6 +742,11 @@
     var requestId = firstDefined(requestOptions && requestOptions.requestId, body && body.trace_id, "");
     if (requestId) headers["X-Request-ID"] = requestId;
     var abortController = typeof AbortController === "function" ? new AbortController() : null;
+    if (path === ASSISTANT_ENDPOINT && state && state.activeAssistantAbortController) {
+      state.activeAssistantAbortController._strategyosSuperseded = true;
+      state.activeAssistantAbortController.abort();
+    }
+    if (path === ASSISTANT_ENDPOINT && state) state.activeAssistantAbortController = abortController;
     var timeoutId = null;
     var timeoutError = new Error("Assistant request timed out after " + timeoutMs + "ms");
     timeoutError.endpoint = path;
@@ -745,11 +811,16 @@
       networkError.endpoint = path;
       networkError.status = 0;
       networkError.requestId = requestId;
-      networkError.errorType = error && error.name === "AbortError" ? "timeout" : "network_error";
+      networkError.errorType = error && error.name === "AbortError"
+        ? (abortController && abortController._strategyosCancelled ? "cancelled" : abortController && abortController._strategyosSuperseded ? "superseded" : "timeout")
+        : "network_error";
       networkError.cause = error;
       throw networkError;
     }).finally(function () {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (path === ASSISTANT_ENDPOINT && state && state.activeAssistantAbortController === abortController) {
+        state.activeAssistantAbortController = null;
+      }
     });
   }
 
@@ -1203,6 +1274,44 @@
     };
   }
 
+  function getExecutiveStateSnapshot() {
+    var diagnostics = getExecutiveDiagnostics();
+    var sections = diagnostics.sections || {};
+    var priorities = sections.executive_priorities || {};
+    var enrichment = getStrategyEnrichment();
+    var planExceptions = safeArray((enrichment.plan_health || {}).commitments).filter(function (item) {
+      return /^behind/i.test(String(firstDefined(item && item.status_vs_path, "")));
+    });
+    var decisions = safeArray(enrichment.decision_seeds)
+      .concat(safeArray(priorities.decisions), safeArray(priorities.inbound_requests))
+      .filter(function (item) {
+        return item && item.action_required !== false && firstDefined(item.title, "");
+      });
+    var decisionKeys = {};
+    decisions = decisions.filter(function (item, index) {
+      var key = String(firstDefined(item.key, item.id, item.title, "decision-" + index)).toLowerCase();
+      if (decisionKeys[key]) return false;
+      decisionKeys[key] = true;
+      return true;
+    });
+    var activeThreads = safeArray((enrichment.assistant_threads || {}).threads).filter(function (thread) {
+      return !/^(closed|resolved|complete)$/i.test(String(firstDefined(thread && thread.status, "active")));
+    });
+    var concernCount = planExceptions.length
+      + safeArray(enrichment.initiative_drifts).length
+      + safeArray(enrichment.milestone_drifts).length;
+    concernCount = Math.max(concernCount, getExecutiveAttention().count);
+    return {
+      concernCount: concernCount,
+      planExceptions: planExceptions,
+      pendingDecisions: decisions,
+      pendingDecisionCount: decisions.length,
+      activeThreads: activeThreads,
+      activeThreadCount: activeThreads.length,
+      attachmentCount: safeArray(state.reviewFiles && state.reviewFiles.files).length
+    };
+  }
+
   function getBoardPortal() {
     return (state.latestPacket && state.latestPacket.board_portal) || {};
   }
@@ -1264,18 +1373,22 @@
     return firstDefined(labels[matchingKey], suppliedLabel.replace(/\s+Assistant$/i, ""), "AI leader");
   }
 
-  function leadershipActivityCopy(item) {
+  function leadershipActivityCopy(item, snapshot) {
     var activity = String(firstDefined(
       item && item.current_activity,
       "Ready for the next leadership review."
     )).trim();
     // Runtime controls are valuable evidence but are not a CEO status update.
     if (/(runtime\s+governance|policy\s+gate|object\s+storage\s+sync|model_provider|batch_apis|hosted_ocr|external\s+mode)/i.test(activity)) {
-      return "Monitoring the operating environment; no executive action is currently required.";
+      return snapshot && snapshot.concernCount
+        ? "Monitoring " + snapshot.concernCount + " current business exception" + (snapshot.concernCount === 1 ? "" : "s") + "; no assistant-owned action is assigned."
+        : "Monitoring the operating environment; no executive action is currently required.";
     }
     return activity
       .replace(/governed\s+KPIs?/gi, "key performance measures")
-      .replace(/no open investigation is recorded/gi, "no assistant investigation is currently escalated");
+      .replace(/no open investigation is recorded/gi, snapshot && snapshot.concernCount
+        ? "current business exceptions remain visible on the CEO agenda; no assistant-owned investigation is assigned"
+        : "no assistant-owned investigation is currently escalated");
   }
 
   function leadershipPriorityCopy(count) {
@@ -1291,6 +1404,7 @@
 
   function getAssistantNetworkMeta() {
     var team = getLeadershipTeam();
+    var snapshot = getExecutiveStateSnapshot();
     var activeCount = team.filter(function (item) {
       return ["active", "monitoring"].indexOf(String(firstDefined(item.status, "ready")).toLowerCase()) >= 0;
     }).length;
@@ -1303,7 +1417,9 @@
       label: "Hermes' AI leadership team",
       hint: team.length
         ? activeCount + " assistant" + (activeCount === 1 ? " is" : "s are") + " active"
-          + (attentionCount ? " · " + attentionHint : " · 0 assistant investigations need review")
+          + (attentionCount ? " · " + attentionHint : " · no assistant-owned review")
+          + (snapshot.pendingDecisionCount ? " · " + snapshot.pendingDecisionCount + " CEO decision" + (snapshot.pendingDecisionCount === 1 ? "" : "s") : "")
+          + (snapshot.concernCount ? " · " + snapshot.concernCount + " business exception" + (snapshot.concernCount === 1 ? "" : "s") : "")
         : "No AI leadership team is configured for this workspace yet.",
       active_count: activeCount,
       attention_count: attentionCount,
@@ -1324,6 +1440,7 @@
   }
 
   function getAssistantNetwork() {
+    var snapshot = getExecutiveStateSnapshot();
     return getLeadershipTeam().map(function (item, index) {
       var status = firstDefined(item && item.status, "ready");
       var openPriorities = Number(firstDefined(item && item.active_investigation_count, 0)) || 0;
@@ -1335,7 +1452,7 @@
         tone: status,
         assistant: firstDefined(item && item.assistant_name, item && item.display_name, "AI assistant " + (index + 1)),
         who: role,
-        unit: leadershipActivityCopy(item),
+        unit: leadershipActivityCopy(item, snapshot),
         stateLabel: leadershipStatusLabel(status),
         businessOutput: leadershipPriorityCopy(openPriorities),
         decisionScope: leadershipDecisionCopy(decisionsNeeded),
@@ -1350,6 +1467,27 @@
   }
 
   function getAssistantExchanges() {
+    var seeded = safeArray((getStrategyEnrichment().assistant_threads || {}).threads);
+    if (seeded.length) {
+      return seeded.map(function (thread, index) {
+        var participants = safeArray(thread.participants);
+        var counterpart = participants.find(function (name) { return !/^hermes$/i.test(String(name || "")); }) || participants[0] || "AI assistant";
+        return {
+          id: firstDefined(thread.thread_id, thread.id, "assistant-thread-" + index),
+          with: counterpart,
+          unit: participants.join(" ↔ ") || "AI leadership team",
+          status: firstDefined(thread.status, "active"),
+          topic: firstDefined(thread.topic, "Current leadership priority"),
+          messages: safeArray(thread.turns).map(function (turn) {
+            return {
+              from: firstDefined(turn.from, "Assistant"),
+              text: firstDefined(turn.text, ""),
+              evidence_refs: safeArray(turn.evidence_refs)
+            };
+          })
+        };
+      });
+    }
     var exchanges = getAssistantNetwork().map(function (item, index) {
       var name = firstDefined(item.assistant, "AI assistant " + (index + 1));
       var status = firstDefined(item.tone, "ready");
@@ -1621,18 +1759,19 @@
     }) || calendarItems.find(function (item) {
       return String(firstDefined(item.date, "")).slice(0, 10) >= activeVirtualDate();
     });
+    var evidenceRefs = [
+      drifting && drifting.evidence,
+      todaysEvent && firstDefined(todaysEvent.evidence, todaysEvent.source_path, todaysEvent.evidence_ref, "")
+    ].filter(Boolean);
     var connection = todaysEvent
       ? "Your next high-signal commitment is " + firstDefined(todaysEvent.title, todaysEvent.label, "the calendar review")
         + (todaysEvent.when ? " at " + todaysEvent.when : "")
-        + " — I have attached its preparation context."
+        + (evidenceRefs.length ? " — its preparation context is available below." : " — no preparation attachment is available yet.")
       : "There is no high-signal calendar commitment recorded for this demo day.";
     return {
       assistant: assistant,
       text: greeting + " " + stateLine + " " + connection,
-      evidence_refs: [
-        drifting && drifting.evidence && drifting.evidence.file,
-        todaysEvent && firstDefined(todaysEvent.source_path, todaysEvent.evidence_ref, todaysEvent.prep)
-      ].filter(Boolean),
+      evidence_refs: evidenceRefs,
       date: activeVirtualDate()
     };
   }
@@ -2659,6 +2798,18 @@
       return {
         answer: "That took too long to come back. Ask again, or try a narrower question.",
         retryable: true
+      };
+    }
+    if (errorType === "cancelled") {
+      return {
+        answer: "Request cancelled. Your question is preserved if you want to retry it.",
+        retryable: true
+      };
+    }
+    if (errorType === "superseded") {
+      return {
+        answer: "This request was replaced by your newer question.",
+        retryable: false
       };
     }
     return {
@@ -3767,7 +3918,11 @@
     });
     scroll.innerHTML = exchangeMessages.length ? exchangeMessages.map(function (message) {
       var mine = firstDefined(message.from, '') === assistantName;
-      return '<div class="a2a-msg' + (mine ? ' mine' : '') + '"><span class="a2a-from">' + escapeHtml(firstDefined(message.from, 'Assistant')) + '</span><div class="a2a-bubble">' + escapeHtml(firstDefined(message.text, '')) + '</div></div>';
+      var metrics = executiveMetricTokens(firstDefined(message.text, ''), 4);
+      var figures = metrics.length ? '<div class="a2a-number-chips">' + metrics.map(function (metric) { return '<strong>' + escapeHtml(metric) + '</strong>'; }).join('') + '</div>' : '';
+      var refs = safeArray(message.evidence_refs);
+      var refsMarkup = refs.length ? '<div class="a2a-evidence">' + refs.map(function (reference) { return '<span class="evidence-badge">' + escapeHtml(evidenceReferenceLabel(reference)) + '</span>'; }).join('') + '</div>' : '';
+      return '<div class="a2a-msg' + (mine ? ' mine' : '') + '"><span class="a2a-from">' + escapeHtml(firstDefined(message.from, 'Assistant')) + '</span><div class="a2a-bubble">' + figures + '<span>' + escapeHtml(firstDefined(message.text, '')) + '</span>' + refsMarkup + '</div></div>';
     }).join('') : '<div class="a2a-msg"><span class="a2a-from">Hermes</span><div class="a2a-bubble">No assistant status is visible yet. Hermes will show named AI specialists here once the leadership team is configured.</div></div>';
     scroll.scrollTop = scroll.scrollHeight;
     if (footNote) footNote.textContent = '⇄ ' + assistantName + ' will bring you only decisions or exceptions';
@@ -4208,6 +4363,45 @@
     return "flat";
   }
 
+  function executiveMetricTokens(value, limit) {
+    var matches = String(value || "").match(/(?:\bSAR\s*~?\s*[\d,.]+\s*[KMB]?\b|[+\-−]?\d+(?:\.\d+)?\s*%|[+\-−]\d+(?:\.\d+)?\s*(?:pts?|days?|weeks?))/gi) || [];
+    var seen = {};
+    return matches.map(function (token) { return token.replace(/\s+/g, " ").trim(); }).filter(function (token) {
+      var key = token.toLowerCase();
+      if (seen[key]) return false;
+      seen[key] = true;
+      return true;
+    }).slice(0, Math.max(1, limit || 3));
+  }
+
+  function executiveMetricChipMarkup(value, className) {
+    return executiveMetricTokens(value, 3).map(function (token) {
+      return '<span class="' + escapeHtml(className || "executive-metric-chip") + '">' + escapeHtml(token) + '</span>';
+    }).join("");
+  }
+
+  function planCommitmentBulletMarkup(item) {
+    var actual = Number(item && item.actual);
+    var checkpoint = Number(item && item.checkpoint);
+    var target = Number(firstDefined(item && item.target_2028, item && item.target));
+    var values = [actual, checkpoint, target].filter(Number.isFinite);
+    if (values.length < 2) return '<span class="plan-bullet plan-bullet--missing">Comparison unavailable</span>';
+    var min = Math.min.apply(Math, values);
+    var max = Math.max.apply(Math, values);
+    var padding = Math.max((max - min) * 0.18, Math.abs(max || 1) * 0.03, 0.5);
+    min -= padding;
+    max += padding;
+    function position(value) {
+      return Number.isFinite(value) ? Math.max(2, Math.min(98, ((value - min) / (max - min || 1)) * 100)) : null;
+    }
+    var status = /^behind/i.test(String(firstDefined(item && item.status_vs_path, ""))) ? "behind" : "holding";
+    return '<span class="plan-bullet plan-bullet--' + status + '" role="img" aria-label="Actual ' + escapeHtml(String(item.actual)) + ', on-path ' + escapeHtml(String(item.checkpoint)) + (Number.isFinite(target) ? ', target ' + escapeHtml(String(target)) : '') + '"><span class="plan-bullet__track"></span>'
+      + (Number.isFinite(target) ? '<i class="plan-bullet__target" style="left:' + position(target).toFixed(1) + '%" title="2028 target"></i>' : '')
+      + (Number.isFinite(checkpoint) ? '<i class="plan-bullet__checkpoint" style="left:' + position(checkpoint).toFixed(1) + '%" title="Current path"></i>' : '')
+      + (Number.isFinite(actual) ? '<i class="plan-bullet__actual" style="left:' + position(actual).toFixed(1) + '%" title="Actual"></i>' : '')
+      + '</span>';
+  }
+
   function renderHero() {
     var diagnostics = getExecutiveDiagnostics();
     var blueprint = getPersonaBlueprint(state.activePersona);
@@ -4255,10 +4449,14 @@
       getExecutiveAttention().count
     );
     var enrichedPlanHealth = (getStrategyEnrichment().plan_health || {});
+    var displayScore = 0;
     if (enrichedPlanHealth.score !== undefined && enrichedPlanHealth.score !== null) {
       hasScore = true;
       score = Number(enrichedPlanHealth.score);
       clampedScore = Math.max(0, Math.min(100, score));
+      displayScore = Number.isFinite(Number(enrichedPlanHealth.display_score))
+        ? Number(enrichedPlanHealth.display_score)
+        : Math.round(score);
     }
     var miniStats = [
       { label: "Coverage", value: String(firstDefined(enrichedPlanHealth.live_count, 0)) + " of " + String(firstDefined(enrichedPlanHealth.commitment_count, 10)) + " live" },
@@ -4284,20 +4482,26 @@
       };
     }
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
+    var planExceptionLabels = safeArray(enrichedPlanHealth.exception_labels);
+    var planBehindCount = Number(firstDefined(enrichedPlanHealth.behind_count, planExceptionLabels.length, 0)) || 0;
+    var planHoldingCount = Number(firstDefined(enrichedPlanHealth.holding_count, Math.max(0, Number(enrichedPlanHealth.live_count || 0) - planBehindCount), 0)) || 0;
+    var planExceptionSummary = planBehindCount
+      ? planHoldingCount + " of " + String(firstDefined(enrichedPlanHealth.live_count, enrichedPlanHealth.commitment_count, 0)) + " commitments holding · " + planBehindCount + " behind" + (planExceptionLabels.length ? ": " + planExceptionLabels.join(", ") : "")
+      : planHoldingCount + " commitments holding · no exception is currently behind";
     var statusSignal = reviewGate
       ? "Your decision"
       : hasScore
-        ? (clampedScore >= 95 ? "On plan" : clampedScore >= 85 ? "Watch" : "Action needed")
+        ? firstDefined(enrichedPlanHealth.verdict, score >= 95 ? "On plan" : score >= 85 ? "Watch" : "Action needed")
         : "Current";
     var heroStatusText = reviewGate
       ? "Review required"
       : hasScore
-        ? String(clampedScore || 0) + "% of plan"
+        ? String(displayScore || 0) + "% of plan"
         : "Business view ready";
     var heroStatusCaption = reviewGate
       ? "An item is waiting for executive sign-off."
       : hasScore
-        ? "Measured against the latest approved plan."
+        ? planExceptionSummary
         : "Built from the latest available operating data.";
     var semanticTone = heroSemanticTone(hero);
     var heroEl = $("hero");
@@ -4309,7 +4513,7 @@
     if (heroEl) heroEl.classList.add("tone-" + semanticTone);
     if (heroStatusEl) heroStatusEl.classList.add("tone-" + semanticTone);
     $("hero-score").innerHTML = hasScore && !reviewGate
-      ? '<span>' + escapeHtml(String(clampedScore || 0)) + '</span><small>plan health</small>'
+      ? '<span>' + escapeHtml(String(displayScore || 0)) + '%</span><small>of plan</small>'
       : '<span class="hero-status__fallback">' + escapeHtml(heroStatusText) + '</span>';
     $("hero-cap").textContent = heroStatusCaption;
     var statusSignalEl = $("hero-status-signal");
@@ -4364,7 +4568,8 @@
         ? '<button type="button" class="plan-coverage-chip" data-plan-coverage-toggle aria-expanded="' + (state.planCoverageOpen ? 'true' : 'false') + '">' + escapeHtml(firstDefined(enrichedPlanHealth.coverage_label, 'Plan coverage')) + '</button>'
         : '';
       var coverageTable = state.planCoverageOpen ? '<div class="plan-coverage-table">' + safeArray(enrichedPlanHealth.commitments).map(function (item) {
-        return '<div><span>' + escapeHtml(firstDefined(item.name, item.kpi_id, 'Board commitment')) + '</span><strong>' + escapeHtml(item.actual == null ? 'Not supplied' : String(item.actual) + (item.unit === '%' ? '%' : ' ' + firstDefined(item.unit, ''))) + '</strong><small>' + escapeHtml(firstDefined(item.status_vs_path, item.measurement_status, '')) + '</small></div>';
+        var isBehind = /^behind/i.test(String(firstDefined(item.status_vs_path, '')));
+        return '<div class="plan-coverage-row' + (isBehind ? ' is-behind' : '') + '"><span>' + escapeHtml(firstDefined(item.name, item.kpi_id, 'Board commitment')) + '</span>' + planCommitmentBulletMarkup(item) + '<strong>' + escapeHtml(item.actual == null ? 'Not supplied' : String(item.actual) + (item.unit === '%' ? '%' : ' ' + firstDefined(item.unit, ''))) + '</strong><small><i class="plan-status-pip" aria-hidden="true"></i>' + escapeHtml(firstDefined(item.status_vs_path, item.measurement_status, '')) + '</small></div>';
       }).join('') + '</div>' : '';
       coverageHost.innerHTML = coverageButton + coverageTable;
       var coverageToggle = coverageHost.querySelector('[data-plan-coverage-toggle]');
@@ -5426,7 +5631,7 @@
         isColdChain ? { file: "19_Document_Vault/GulfColdChain_Renegotiation_Approval_Memo_Jun2026.pdf", locator: "approval mandate" } : "",
         isColdChain ? { file: "17_Signals/Signals_Register_Jun2026.xlsx", locator: "SIG-2026-11" } : "",
         isBoard ? { file: "19_Document_Vault/Document_Manifest.xlsx", locator: "current approved board pack" } : "",
-        isMondayBrief ? { file: "20_Board_KPIs/Board_KPI_Glidepaths.xlsx", locator: "current Plan Health" } : ""
+        isMondayBrief ? { file: "20_Board_KPIs/Board_KPI_Glidepaths.xlsx", source_label: "Board KPI glidepaths", locator: "current Plan Health" } : ""
       ].concat((isBoard || isMondayBrief) ? planEvidence.slice(0, 2) : []).filter(Boolean)
     };
   }
@@ -5525,13 +5730,16 @@
       var costOfDrift = item.cost_of_drift || {};
       var gap = firstDefined(costOfDrift.statement, item.actual != null && item.checkpoint != null
         ? Math.abs(Number(item.checkpoint) - Number(item.actual)).toFixed(1) + firstDefined(item.unit, "") + " to the approved checkpoint"
-        : "the source pack does not quantify the checkpoint gap");
+        : "the required operating inputs are not connected for a financial conversion");
       return {
         key: firstDefined(item.kpi_id, item.name),
         title: firstDefined(item.name, "Board commitment") + " is behind its June glidepath",
         summary: "Cost of drift: " + gap + " " + firstDefined(item.rationale, ""),
         classification: firstDefined(item.kpi_id, "Board KPI"),
         tone: "critical",
+        owner: firstDefined(item.owner, item.accountable_owner, ""),
+        actual: item.actual,
+        checkpoint: item.checkpoint,
         context: { why_attached: firstDefined(item.rationale, ""), sources: [item.evidence] }
       };
     }).concat(safeArray(enrichment.initiative_drifts).map(function (item) {
@@ -5539,18 +5747,20 @@
       return {
         key: firstDefined(item.initiative_id, item.title),
         title: firstDefined(item.title, "Initiative drift"),
-        summary: "Cost of drift: " + firstDefined(item.note, "delivery impact requires review."),
-        classification: firstDefined(item.initiative_id, "Initiative"),
-        tone: status === "late" || status === "deferred" ? "critical" : "watch",
+          summary: (item.cost_per_week_sar != null ? "Cost of drift: " + formatSarCompact(item.cost_per_week_sar) + " per week. " : "") + firstDefined(item.note, "Delivery impact requires review."),
+          classification: firstDefined(item.initiative_id, "Initiative"),
+          tone: status === "late" || status === "deferred" ? "critical" : "watch",
+          owner: firstDefined(item.owner, item.accountable_owner, ""),
         context: { why_attached: firstDefined(item.note, ""), sources: safeArray(item.evidence_refs) }
       };
     })).concat(safeArray(enrichment.milestone_drifts).map(function (item) {
       return {
         key: firstDefined(item.initiative_id, "") + "-" + firstDefined(item.milestone, ""),
         title: firstDefined(item.milestone, "Milestone drift"),
-        summary: "Cost of drift: " + firstDefined(item.status, "delivery timing is at risk."),
-        classification: firstDefined(item.initiative_id, "Milestone"),
-        tone: /late|missed/i.test(String(item.status || "")) ? "critical" : "watch",
+          summary: (item.cost_per_week_sar != null ? "Cost of drift: " + formatSarCompact(item.cost_per_week_sar) + " per week. " : "") + firstDefined(item.status, "Delivery timing is at risk."),
+          classification: firstDefined(item.initiative_id, "Milestone"),
+          tone: /late|missed/i.test(String(item.status || "")) ? "critical" : "watch",
+          owner: firstDefined(item.owner, item.accountable_owner, ""),
         context: { why_attached: firstDefined(item.status, ""), sources: safeArray(item.evidence_refs) }
       };
     })).concat(safeArray(enrichment.achievements).filter(function (item) {
@@ -5561,8 +5771,9 @@
         key: firstDefined(item.event_id, item.headline),
         title: firstDefined(item.headline, "Achievement"),
         summary: item.recognition_target ? "Recognition suggested for " + item.recognition_target + "." : "",
-        classification: "Achievement",
-        tone: "positive",
+          classification: "Achievement",
+          tone: "positive",
+          owner: firstDefined(item.recognition_target, item.owner, ""),
         context: { why_attached: "Recorded since your last visit.", sources: safeArray(item.evidence_refs) }
       };
     })).concat(signals);
@@ -5606,7 +5817,10 @@
           title: firstDefined(item.title, 'Business signal'),
           summary: firstDefined(item.impact, item.detail, ''),
           classification: firstDefined(item.tag, item.category, 'Operational development'),
-          tone: awarenessTone(firstDefined(item.tone, item.kind))
+          tone: awarenessTone(firstDefined(item.tone, item.kind)),
+          owner: firstDefined(item.owner, item.accountable_owner, ''),
+          actual: item.actual,
+          checkpoint: firstDefined(item.checkpoint, item.plan, item.target)
         };
       })).concat(fallbackFindings.map(function (item, index) {
         return {
@@ -5614,7 +5828,8 @@
           title: firstDefined(item.title, 'Material business signal'),
           summary: firstDefined(item.summary, item.detail, ''),
           classification: firstDefined(item.tag, item.classification, item.category, 'Finance finding'),
-          tone: awarenessTone(firstDefined(item.tone, 'watch'))
+          tone: awarenessTone(firstDefined(item.tone, 'watch')),
+          owner: firstDefined(item.owner, item.accountable_owner, '')
         };
       }));
     if (delegated) {
@@ -5699,6 +5914,19 @@
         firstDefined(ownerResolution.selected_owner_name, ''),
         firstDefined(ownerResolution.selected_role, item.owner, '')
       ].filter(Boolean).join(' · ');
+      var decisionMetricTokens = executiveMetricTokens([
+        firstDefined(item.cost_of_yes, ''),
+        firstDefined(item.cost_of_no, ''),
+        firstDefined(item.summary, ''),
+        firstDefined(item.decision, '')
+      ].join(' '), 2);
+      var decisionMetricMarkup = decisionMetricTokens.length
+        ? '<span class="decision-card-metrics">' + decisionMetricTokens.map(function (token) { return '<span>' + escapeHtml(token) + '</span>'; }).join('') + '</span>'
+        : '';
+      var decisionOwnerAvatar = ownerLabel
+        ? '<span class="signal-owner" title="' + escapeHtml(ownerLabel) + '">' + escapeHtml(initialsFromName(ownerLabel)) + '</span>'
+        : '';
+      var decisionFactsMarkup = '<div class="decision-key-facts"><div><span>Raised by</span><strong>' + escapeHtml(source) + '</strong></div><div><span>Timing</span><strong>' + escapeHtml(timing) + '</strong></div>' + (decisionMetricTokens.length ? '<div><span>Material figures</span><strong>' + escapeHtml(decisionMetricTokens.join(' · ')) + '</strong></div>' : '') + '</div>';
       var facts = safeArray(ownerResolution.match_facts).slice(0, 4);
       var recommendationMarkup = recommendation ? [
         '<section class="decision-recommendation" aria-label="Verified recommendation">',
@@ -5714,7 +5942,7 @@
           : '<div class="decision-recommendation__actions"><button class="decision-record-button" type="button" data-record-decision="' + escapeHtml(key) + '" data-owner-id="' + escapeHtml(firstDefined(ownerResolution.selected_owner_id, '')) + '" data-owner-name="' + escapeHtml(firstDefined(ownerResolution.selected_owner_name, '')) + '" data-owner-role="' + escapeHtml(firstDefined(ownerResolution.selected_role, '')) + '" data-governed-due-date="' + escapeHtml(firstDefined(dueDate && dueDate.value, '')) + '">Record decision</button><span>Records your decision only · does not send or close the issue</span></div>',
         '</section>'
       ].join('') : '';
-      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span><span class="target-decision-state' + (localChoice ? ' is-recorded' : '') + '">' + escapeHtml(decisionStateLabel) + '</span><span class="target-decision-source">' + escapeHtml(source) + '</span><span class="target-feed-meta">' + escapeHtml(timing) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body"><p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Recommended decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'No executive authority request was supplied.')) + '</strong></div>' + choicesMarkup + recommendationMarkup + decisionEvidenceMarkup + '<div class="executive-decision__foot"><span>Raised by · ' + escapeHtml(source) + '</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Ask Hermes why →</button></div></div>' : '') + '</article>';
+      return '<article class="executive-decision tone-' + escapeHtml(priority) + (isOpen ? ' is-open' : '') + '"><button class="executive-decision__toggle target-feed-row" type="button" data-decision-toggle="' + escapeHtml(key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(priority + ' priority') + '"></span><span class="target-feed-title">' + escapeHtml(firstDefined(item.title, 'Executive decision')) + '</span>' + decisionMetricMarkup + decisionOwnerAvatar + '<span class="target-decision-state' + (localChoice ? ' is-recorded' : '') + '">' + escapeHtml(decisionStateLabel) + '</span><span class="target-feed-caret" aria-hidden="true">' + (isOpen ? '−' : '+') + '</span></button>' + (isOpen ? '<div class="executive-decision__body">' + decisionFactsMarkup + '<p class="target-feed-detail"><span>Why this is here</span>' + escapeHtml(firstDefined(item.summary, '')) + '</p><div class="executive-decision__ask"><span>Recommended decision</span><strong>' + escapeHtml(firstDefined(item.decision, 'No executive authority request was supplied.')) + '</strong></div>' + choicesMarkup + recommendationMarkup + decisionEvidenceMarkup + '<div class="executive-decision__foot"><span>Decision remains with you</span><button type="button" data-executive-prompt="' + escapeHtml(firstDefined(item.prompt, 'Prepare the decision brief.')) + '">Ask Hermes why →</button></div></div>' : '') + '</article>';
     }).join('') : '<div class="executive-empty-state"><strong>No decision is waiting for you</strong><p>No approval, intervention or direction is currently routed to the CEO.</p></div>';
 
     var signalMarkup = developmentsAndConcerns.length ? developmentsAndConcerns.map(function (item, index) {
@@ -5723,18 +5951,25 @@
       var metricName = String(title).split(':')[0].trim();
       var inferredClassification = metricName.length <= 28 ? 'Group KPI · ' + metricName : 'Group KPI';
       var classification = firstDefined(item.tag, item.classification, item.category, inferredClassification);
-      var statement = [title, firstDefined(item.summary, '')].filter(Boolean).join(' — ');
+      var summary = firstDefined(item.summary, '');
       var context = item.context && typeof item.context === 'object' ? item.context : {};
       var sources = safeArray(context.sources).filter(Boolean);
-      var hasContext = Boolean(context.what || context.why_attached || sources.length);
-      var row = '<span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(tone === 'critical' ? 'Red concern' : tone === 'positive' ? 'Green positive development' : 'Amber watch item') + '"></span><span class="target-feed-title">' + escapeHtml(statement) + '</span><span class="target-feed-tag">' + escapeHtml(classification) + '</span>';
+      var hasContext = Boolean(summary || context.what || context.why_attached || sources.length);
+      var metricChips = executiveMetricChipMarkup([title, summary].filter(Boolean).join(' '), 'signal-delta-chip');
+      var owner = String(firstDefined(item.owner, '')).trim();
+      var ownerMarkup = owner ? '<span class="signal-owner" title="' + escapeHtml(owner) + '">' + escapeHtml(initialsFromName(owner)) + '</span>' : '';
+      var registerKey = /^(?:KPI|INIT|EV|SIG)-/i.test(String(classification)) ? String(classification) : '';
+      var classificationMarkup = registerKey
+        ? '<button type="button" class="target-feed-tag target-feed-tag--action" data-register-entry="' + escapeHtml(registerKey) + '" aria-label="Open register detail for ' + escapeHtml(registerKey) + '">' + escapeHtml(classification) + '</button>'
+        : '<span class="target-feed-tag">' + escapeHtml(classification) + '</span>';
+      var row = '<span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(tone === 'critical' ? 'Red concern' : tone === 'positive' ? 'Green positive development' : 'Amber watch item') + '"></span><span class="target-feed-title">' + escapeHtml(title) + '</span><span class="signal-metrics">' + metricChips + '</span>' + ownerMarkup + classificationMarkup;
       if (!hasContext) return '<article class="executive-signal target-awareness-row tone-' + escapeHtml(tone) + '">' + row + '</article>';
       var contextMeta = [
         context.probability ? 'Probability · ' + context.probability : '',
         context.horizon ? 'Horizon · ' + context.horizon : '',
         sources.length ? 'Source · ' + evidenceReferencesText(sources) : ''
       ].filter(Boolean);
-      return '<details class="executive-signal executive-signal--context tone-' + escapeHtml(tone) + '"><summary class="target-awareness-row">' + row + '<span class="target-feed-caret" aria-hidden="true">+</span></summary><div class="executive-signal-context"><p><strong>Why it is here</strong>' + escapeHtml(firstDefined(context.why_attached, context.what)) + '</p>' + (context.leading_indicator ? '<p><strong>Watch</strong>' + escapeHtml(context.leading_indicator) + '</p>' : '') + (context.recommended_action ? '<p><strong>Response already in the data</strong>' + escapeHtml(context.recommended_action) + '</p>' : '') + (contextMeta.length ? '<small>' + escapeHtml(contextMeta.join(' · ')) + '</small>' : '') + '</div></details>';
+      return '<details class="executive-signal executive-signal--context tone-' + escapeHtml(tone) + '"><summary class="target-awareness-row">' + row + '<span class="target-feed-caret" aria-hidden="true">+</span></summary><div class="executive-signal-context">' + (summary ? '<p><strong>What changed</strong>' + escapeHtml(summary) + '</p>' : '') + (context.why_attached || context.what ? '<p><strong>Why it is here</strong>' + escapeHtml(firstDefined(context.why_attached, context.what)) + '</p>' : '') + (context.leading_indicator ? '<p><strong>Watch</strong>' + escapeHtml(context.leading_indicator) + '</p>' : '') + (context.recommended_action ? '<p><strong>Response already in the data</strong>' + escapeHtml(context.recommended_action) + '</p>' : '') + (contextMeta.length ? '<small>' + escapeHtml(contextMeta.join(' · ')) + '</small>' : '') + '</div></details>';
     }).join('') : '<div class="executive-empty-state"><strong>No material performance exception</strong><p>The current headline measures remain within the executive tolerance.</p></div>';
 
     if (findingsPanel) {
@@ -5761,6 +5996,20 @@
     }
 
     safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
+      safeArray(panel && panel.querySelectorAll('[data-register-entry]')).forEach(function (button) {
+        button.onclick = function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          var disclosure = button.closest('details');
+          if (disclosure) disclosure.open = true;
+          var context = disclosure && disclosure.querySelector('.executive-signal-context');
+          if (context) {
+            context.setAttribute('tabindex', '-1');
+            context.focus({ preventScroll: true });
+            context.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        };
+      });
       safeArray(panel && panel.querySelectorAll('[data-executive-prompt]')).forEach(function (button) {
         button.onclick = function () { askAssistant(button.getAttribute('data-executive-prompt') || '', button); };
       });
@@ -5956,12 +6205,16 @@
         var isOpen = Boolean((state.openA2AThreadKeys || {})[threadKey]);
         return '<details data-a2a-thread="' + escapeHtml(threadKey) + '"' + (isOpen ? ' open' : '') + '><summary><span><strong>' + escapeHtml(firstDefined(thread.topic, 'Assistant conversation')) + '</strong><small>' + escapeHtml(safeArray(thread.participants).join(' ↔ ')) + '</small></span><em>' + escapeHtml(String(safeArray(thread.turns).length)) + ' messages</em></summary><ol>' + safeArray(thread.turns).map(function (turn) {
           var references = safeArray(turn.evidence_refs);
+          var turnMetrics = executiveMetricTokens(firstDefined(turn.text, ''), 4);
+          var metricMarkup = turnMetrics.length
+            ? '<div class="a2a-number-chips">' + turnMetrics.map(function (metric) { return '<strong>' + escapeHtml(metric) + '</strong>'; }).join('') + '</div>'
+            : '';
           var evidenceMarkup = references.length
             ? '<div class="a2a-evidence">' + references.map(function (reference) {
                 return '<span class="evidence-badge">' + escapeHtml(evidenceReferenceLabel(reference)) + '</span>';
               }).join('') + '</div>'
             : '';
-          return '<li><span>' + escapeHtml(firstDefined(turn.from, 'Assistant')) + ' → ' + escapeHtml(firstDefined(turn.to, 'Assistant')) + '</span><p>' + escapeHtml(firstDefined(turn.text, '')) + '</p>' + evidenceMarkup + '</li>';
+          return '<li><span>' + escapeHtml(firstDefined(turn.from, 'Assistant')) + ' → ' + escapeHtml(firstDefined(turn.to, 'Assistant')) + '</span>' + metricMarkup + '<p>' + escapeHtml(firstDefined(turn.text, '')) + '</p>' + evidenceMarkup + '</li>';
         }).join('') + '</ol></details>';
       }).join('') + '</div>' : '';
       collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Items moving between executive-role assistants</span></div></div><p class="twin-explainer">This view shows coordination between AI Assistants. Work completed by specialist agents—and each agent’s review trail—is available under Agents.</p>' + seededMarkup + (seededThreads.length ? '' : '<div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>')) + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
@@ -6133,10 +6386,25 @@
         _closeHermesDrawer();
       };
     }
-    // Inject thread list toggle for narrow/mobile screens (non-CEO personas only)
-    if (state.activePersona !== "ceo") {
-      var headActions = drawer && drawer.querySelector('.assistant-head__actions');
-      if (headActions && !headActions.querySelector('.assistant-threads-toggle')) {
+    // Conversation controls are part of the assistant contract for every
+    // persona. They are navigation, not board-only workflow controls.
+    var headActions = drawer && drawer.querySelector('.assistant-head__actions');
+    if (headActions) {
+      if (!headActions.querySelector('.assistant-thread-new-button')) {
+        var newButton = document.createElement('button');
+        newButton.type = 'button';
+        newButton.className = 'assistant-thread-new-button';
+        newButton.textContent = 'New';
+        newButton.setAttribute('aria-label', 'Start a new conversation');
+        newButton.onclick = function () {
+          createWritableThread();
+          renderAssistantStudio();
+          var input = $("assistant-input");
+          if (input) input.focus();
+        };
+        headActions.insertBefore(newButton, closeButton);
+      }
+      if (!headActions.querySelector('.assistant-threads-toggle')) {
         var toggleBtn = document.createElement('button');
         toggleBtn.type = 'button';
         toggleBtn.className = 'assistant-threads-toggle';
@@ -6148,6 +6416,7 @@
           var layout = drawer.querySelector('.assistant-layout');
           if (threadsPane) {
             var collapsed = threadsPane.classList.toggle('is-collapsed');
+            threadsPane.classList.toggle('is-mobile-open', !collapsed);
             toggleBtn.setAttribute('aria-expanded', String(!collapsed));
             toggleBtn.textContent = collapsed ? 'History \u25B8' : 'History \u25BE';
             if (layout) layout.classList.toggle('threads-collapsed', collapsed);
@@ -6158,7 +6427,9 @@
     }
 
     if (assistantHeading) assistantHeading.textContent = "Ask " + assistantName;
-    if (assistantSubtitle) assistantSubtitle.textContent = assistantName + " will answer here using the current board pack.";
+    if (assistantSubtitle) assistantSubtitle.textContent = state.activePersona === "board"
+      ? assistantName + " answers from the approved board material and its evidence."
+      : assistantName + " answers from your current executive data and cited business records.";
     var assistantInput = $("assistant-input");
     if (assistantInput) {
       assistantInput.placeholder = "Ask " + assistantName + "…";
@@ -6260,6 +6531,8 @@
         var retryButton = '';
         if (role === 'assistant' && message.status === 'failed' && message.retryPrompt) {
           retryButton = '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-retry-index="' + escapeHtml(String(entry.index)) + '">Retry now</button></div>';
+        } else if (role === 'assistant' && message.status === 'pending') {
+          retryButton = '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-cancel="true">Cancel request</button></div>';
         }
         var caseLinks = '';
         if (role === 'assistant' && message.status === 'ok' && safeArray(message.caseLinks).length) {
@@ -6277,7 +6550,14 @@
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));
-        var answerMarkup = '<p>' + bodyHtml + '</p>';
+        var answerMarkup = role === 'assistant'
+          ? renderAssistantStructuredAnswer(firstDefined(message.text, ''), payload)
+          : '<p>' + bodyHtml + '</p>';
+        var citationMarkup = role === 'assistant' && safeArray(payload.citations).length
+          ? '<details class="assistant-citation-list"><summary>Evidence · ' + escapeHtml(String(safeArray(payload.citations).length)) + ' source' + (safeArray(payload.citations).length === 1 ? '' : 's') + '</summary><div>' + safeArray(payload.citations).map(function (citation) {
+              return '<article><strong>' + escapeHtml(evidenceReferenceLabel(citation)) + '</strong>' + (citation.excerpt ? '<span>' + escapeHtml(wordSlice(citation.excerpt, 120)) + '</span>' : '') + '</article>';
+            }).join('') + '</div></details>'
+          : '';
         var evidenceRefsMarkup = role === 'assistant' && safeArray(message.evidence_refs).length
           ? '<div class="assistant-message__actions">' + safeArray(message.evidence_refs).map(function (reference) {
               return '<button type="button" class="assistant-retry-button" data-morning-evidence="' + escapeHtml(reference) + '">Source · ' + escapeHtml(String(reference).split('/').pop()) + '</button>';
@@ -6290,11 +6570,21 @@
             + (sections.general_practice_suggests ? '<section class="assistant-answer-block assistant-answer-block--advisory"><span>General practice suggests</span><p>' + renderAssistantMarkdownToHtml(sections.general_practice_suggests) + '</p></section>' : '')
             + '</div>';
         }
-        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + (tierLabel ? '<em class="assistant-tier assistant-tier--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</em>' : '') + '</span>' + answerMarkup + evidenceRefsMarkup + failureMeta + retryButton + caseLinks + '</div>';
+        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + (tierLabel ? '<em class="assistant-tier assistant-tier--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</em>' : '') + '</span>' + answerMarkup + evidenceRefsMarkup + citationMarkup + failureMeta + retryButton + caseLinks + '</div>';
       }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No messages yet</span><p>Ask a question to begin.</p></div>';
       safeArray(messages.querySelectorAll('[data-assistant-retry-index]')).forEach(function (button) {
         button.onclick = function () {
           retryAssistantMessage(current.key, Number(button.getAttribute('data-assistant-retry-index') || '-1'), button);
+        };
+      });
+      safeArray(messages.querySelectorAll('[data-assistant-cancel]')).forEach(function (button) {
+        button.onclick = function () {
+          if (state.activeAssistantAbortController) {
+            state.activeAssistantAbortController._strategyosCancelled = true;
+            state.activeAssistantAbortController.abort();
+          }
+          button.disabled = true;
+          button.textContent = 'Cancelling…';
         };
       });
       safeArray(messages.querySelectorAll('[data-assistant-case-id]')).forEach(function (button) {
@@ -6595,6 +6885,7 @@
       activeThreadKey: "",
       activeView: requested.agent ? "agents" : "home",
       a2aOpen: false,
+      activeAssistantAbortController: null,
       activeA2AExchange: "",
       drawerOpen: false,
       drawerReturnFocusEl: null,

@@ -1571,7 +1571,7 @@ def test_authenticated_assistant_explains_file_processing_workflow(monkeypatch):
         assert "/source-packs" in payload["answer"]
         assert "Start analysis" in payload["answer"]
         assert "reviewer approves" in payload["answer"]
-        assert "latest governed run" in payload["answer"]
+        assert "latest verified review" in payload["answer"]
         assert payload["hallucination_risk"]["level"] == "none"
     finally:
         _restore_env(original)
@@ -1943,7 +1943,7 @@ def test_assistant_chat_no_run_deterministic_question_returns_safe_fallback(monk
         assert payload["run_mode"] == "no-run"
         assert payload["matched"] is False
         assert payload["llm_fallback_attempted"] is False
-        assert "No completed governed run is available yet" in payload["answer"]
+        assert "No completed verified review is available yet" in payload["answer"]
         assert "NoneType" not in payload["answer"]
         assert "NoneType" not in payload["basis"]
     finally:
@@ -2109,7 +2109,7 @@ def test_assistant_chat_public_ceo_margin_pressure_prompt_returns_packet_answer(
         assert payload["matched"] is True
         text = payload["answer"].lower()
         assert "current governed drivers" in text
-        assert "latest governed run" in text
+        assert "latest verified review" in text
         assert all(marker not in text for marker in ("fx", "api", "healthcare occupancy", "tamween"))
         assert "public-safe" not in text
         assert "deterministic" not in text
@@ -2866,7 +2866,7 @@ def test_public_ceo_margin_pressure_prompt_returns_business_answer_without_debug
         assert payload["run_id"] == "latest-public"
         assert payload["run_mode"] == "public-safe"
         assert "current governed" in answer
-        assert "latest governed run" in answer
+        assert "latest verified review" in answer
         assert all(marker not in answer for marker in ("fx", "api", "healthcare", "occupancy", "tamween"))
 
         for banned in (
@@ -3209,7 +3209,7 @@ def test_public_assistant_exact_fx_board_review_prompt_returns_substantive_answe
         answer = payload["answer"].lower()
         assert payload["status"] == "ok"
         assert "i couldn't reach the shared assistant service just now." not in answer
-        assert "current governed run" in answer
+        assert "current verified review" in answer
         assert "no illustrative hedge assumptions" in answer
         assert all(marker not in answer for marker in ("sar 9k", "19.2%", "60% eur"))
         assert payload["trace"]["entrypoint_context"]["entrypoint"] == "finding_cta"
@@ -3366,7 +3366,7 @@ def test_public_board_portal_hedge_downside_prompt_returns_hedge_answer_not_gene
         assert "outside the available" not in answer
         # Must state the governed data boundary instead of inserting demo values.
         assert "hedge" in answer
-        assert "current governed run" in answer
+        assert "current verified review" in answer
         assert "no illustrative hedge assumptions" in answer
         assert all(marker not in answer for marker in ("60%", "15 bps", "sar 9k"))
         assert not payload["citations"]
@@ -3402,7 +3402,7 @@ def test_public_board_portal_jv_funded_from_cash_prompt_returns_jv_answer_not_ge
         assert "outside the available" not in answer
         # Must state the governed data boundary instead of inserting demo values.
         assert any(token in answer for token in ("jv", "joint venture", "fund", "cash", "liquidity"))
-        assert "current governed run" in answer
+        assert "current verified review" in answer
         assert "no illustrative funding assumptions" in answer
         assert not payload["citations"]
     finally:
@@ -3592,7 +3592,7 @@ def test_public_quick_prompt_regression_still_returns_grounded_answer(monkeypatc
         assert payload["status"] == "ok"
         assert payload["matched"] is True
         assert payload["assistant_context"]["entrypoint"] == "quick_prompt"
-        assert "current governed run" in answer
+        assert "current verified review" in answer
         assert "no illustrative hedge assumptions" in answer
         assert all(marker not in answer for marker in ("19.2%", "15 bps", "sar 9k", "60% eur"))
     finally:
@@ -3619,7 +3619,7 @@ def test_public_quick_prompt_what_would_60_percent_hedge_save_returns_fx_specifi
         answer = payload["answer"].lower()
         assert payload["status"] == "ok"
         assert payload["matched"] is True
-        assert "current governed run" in answer
+        assert "current verified review" in answer
         assert "no illustrative hedge assumptions" in answer
         assert all(marker not in answer for marker in ("60%", "15 bps", "sar 9k"))
         assert "revenue remains ahead while the board still needs a clean margin story" not in answer

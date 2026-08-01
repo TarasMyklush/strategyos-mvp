@@ -805,16 +805,44 @@ def test_knowledge_graph_subtitle_grammar():
     )
 
 
+def test_register_id_chips_open_their_governed_detail():
+    js = _static_executive_js()
+    css = (
+        Path(__file__).resolve().parent.parent
+        / "strategyos_mvp"
+        / "static"
+        / "executive.css"
+    ).read_text()
+
+    assert 'data-register-entry="' in js
+    assert "button.closest('details')" in js
+    assert "disclosure.open = true" in js
+    assert ".target-feed-tag--action" in css
+
+
+def test_round_two_interactions_keep_their_governed_handoffs():
+    js = _static_executive_js()
+
+    assert 'data-demo-day' in js
+    assert 'state.demoDayOffset = Number' in js
+    assert 'renderPersonaView();' in js
+    assert 'openThinkingModeForEvent(activeEvent)' in js
+    assert 'data-calendar-quick-action="brief"' in js
+    assert 'decision_status: "recorded"' in js
+    assert 'delivery_status: "not_delivered"' in js
+    assert 'underlying_issue_status: "open"' in js
+    assert 'agent-activity-summary' in js
+
+
 def test_hermes_header_phrase_clean():
-    """#11: Hermes header must use 'Ask Hermes' heading and 'Answers from the current board pack' subtitle."""
+    """#11: Hermes header follows the active persona without leaking board copy."""
     js = _static_executive_js()
 
     assert 'assistantHeading.textContent = "Ask " + assistantName' in js, (
         "Assistant header heading must follow the active persona's assistant"
     )
-    assert 'assistantName + " will answer here using the current board pack."' in js, (
-        "Assistant subtitle must follow the active persona's assistant"
-    )
+    assert 'answers from your current executive data and cited business records.' in js
+    assert 'answers from the approved board material and its evidence.' in js
     # Old jargon must not appear
     assert "named, threaded chief-of-staff follow-up" not in js, (
         "Hermes header must NOT contain old jargon phrase"
@@ -2239,14 +2267,14 @@ def test_leadership_status_does_not_read_raw_execution_events():
     assert "getExecutionLog" not in status_block
     assert "Execution log" not in status_block
     assert "Current status" in status_block
-    assert "function leadershipActivityCopy(item)" in js
+    assert "function leadershipActivityCopy(item, snapshot)" in js
     assert "key performance measures" in js
     assert "Portfolio under review" in js
 
 
 def test_assistant_counts_do_not_inherit_unrelated_ceo_priority_counts():
     js = _static_executive_js()
-    activity_block = js.split("function leadershipActivityCopy(item)")[1].split(
+    activity_block = js.split("function leadershipActivityCopy(item, snapshot)")[1].split(
         "function leadershipPriorityCopy", 1
     )[0]
     meta_block = js.split("function getAssistantNetworkMeta()")[1].split(
