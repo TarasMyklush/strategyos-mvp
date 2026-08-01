@@ -12,6 +12,7 @@ import re
 import socket
 import time
 from dataclasses import asdict, is_dataclass
+from http.client import BadStatusLine, IncompleteRead, RemoteDisconnected
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -1231,7 +1232,14 @@ def _post_with_retry(
             retryable = _is_retryable_transport_reason(exc.reason)
             last_error = RuntimeError(f"{provider_label} provider is unavailable: {exc.reason}")
             reason = f"urlerror:{type(exc.reason).__name__}"
-        except (TimeoutError, socket.timeout, ConnectionResetError) as exc:
+        except (
+            TimeoutError,
+            socket.timeout,
+            ConnectionResetError,
+            IncompleteRead,
+            RemoteDisconnected,
+            BadStatusLine,
+        ) as exc:
             retryable = True
             last_error = RuntimeError(f"{provider_label} provider transport failed: {exc}")
             reason = type(exc).__name__

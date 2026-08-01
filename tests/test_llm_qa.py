@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import socket
 from dataclasses import replace
+from http.client import IncompleteRead
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -1810,6 +1811,52 @@ def test_transport_retries_transient_provider_failure_and_records_trace(monkeypa
     assert result["answer"] == "Recovered after retry."
     assert result["llm_status"]["transport"]["retries"] >= 1
     assert result["llm_status"]["transport"]["calls"][0]["outcome"] == "success"
+
+
+def test_transport_retries_truncated_chunked_provider_response(monkeypatch):
+    calls = {"count": 0}
+    sleeps: list[float] = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise IncompleteRead(b'{"choices":')
+            return b'{"choices":[{"message":{"content":"recovered"}}]}'
+
+    monkeypatch.setattr(llm_qa, "urlopen", lambda *_args, **_kwargs: FakeResponse())
+    monkeypatch.setattr(llm_qa.time, "sleep", lambda seconds: sleeps.append(seconds))
+    trace: list[dict[str, object]] = []
+
+    body = llm_qa._post_with_retry(
+        request=object(),
+        timeout_seconds=30,
+        provider_label="LLM",
+        max_attempts=3,
+        backoff_seconds=0.25,
+        max_backoff_seconds=1.5,
+        transport_trace=trace,
+    )
+
+    assert json.loads(body)["choices"][0]["message"]["content"] == "recovered"
+    assert calls["count"] == 2
+    assert sleeps == [0.25]
+    assert trace == [
+        {
+            "provider": "llm",
+            "attempts": 2,
+            "retries": 1,
+            "retry_reasons": ["IncompleteRead"],
+            "timeout_seconds": 30,
+            "outcome": "success",
+        }
+    ]
 
 
 def test_prompt_does_not_narrate_evidence_scope_for_general_questions():
