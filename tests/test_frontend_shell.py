@@ -462,6 +462,15 @@ def test_app_entry_uses_content_hashed_executive_assets():
     assert "__EXECUTIVE_ASSET_REV__" not in html
 
 
+def test_executive_enrichment_controls_use_theme_aware_contrast_tokens():
+    css = Path("strategyos_mvp/static/executive.css").read_text(encoding="utf-8")
+
+    assert "var(--navy, #26345f)" not in css
+    assert ".plan-coverage-chip" in css
+    assert "color: var(--accent, #26345f);" in css
+    assert "color: var(--accent-ink, #fff);" in css
+
+
 def test_entry_routes_static_assets_only_use_the_bounded_video_origins():
     html = _app_entry_response()
     js = _static_executive_js()
