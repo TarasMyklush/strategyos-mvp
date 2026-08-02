@@ -471,6 +471,20 @@ def test_executive_enrichment_controls_use_theme_aware_contrast_tokens():
     assert "color: var(--accent-ink, #fff);" in css
 
 
+def test_executive_theme_and_assistant_composer_state_are_centralized():
+    js = _static_executive_js()
+
+    assert 'EXECUTIVE_THEME_STORAGE_KEY = "strategyos.executive.theme"' in js
+    assert "theme: storedExecutiveTheme()" in js
+    assert "applyExecutiveTheme(state.theme);" in js
+    assert js.count('document.documentElement.setAttribute("data-theme", normalized)') == 1
+    assert "function syncAssistantComposerState()" in js
+    assert 'submit.disabled = pending || !String(input.value || "").trim();' in js
+    assert "if (state.assistantRequestPending) return;" in js
+    assert "state.assistantRequestPending = true;" in js
+    assert "state.assistantRequestPending = false;" in js
+
+
 def test_entry_routes_static_assets_only_use_the_bounded_video_origins():
     html = _app_entry_response()
     js = _static_executive_js()

@@ -7,9 +7,26 @@
   if (bootstrap.environment) {}
   if (bootstrap.api_auth_enabled) {}
   var _tokenKey = "strategyos.ui.token";
+  var EXECUTIVE_THEME_STORAGE_KEY = "strategyos.executive.theme";
   var ASSISTANT_ENDPOINT = "/assistant/chat";
   var ASSISTANT_TRANSPORT_FALLBACK = "I couldn't reach the shared assistant service just now.";
   var BOOTSTRAP_ASSISTANT_CONTEXT = bootstrap.assistant_public_context || {};
+
+  function storedExecutiveTheme() {
+    try {
+      var stored = String(window.localStorage.getItem(EXECUTIVE_THEME_STORAGE_KEY) || "").toLowerCase();
+      if (stored === "light" || stored === "dark") return stored;
+    } catch (_error) {}
+    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  }
+
+  function applyExecutiveTheme(theme) {
+    var normalized = theme === "dark" ? "dark" : "light";
+    if (state) state.theme = normalized;
+    document.documentElement.setAttribute("data-theme", normalized);
+    try { window.localStorage.setItem(EXECUTIVE_THEME_STORAGE_KEY, normalized); } catch (_error) {}
+    return normalized;
+  }
   function safeArray(value) {
     if (Array.isArray(value)) return value;
     if (value && typeof value.forEach === 'function') return Array.from(value);
@@ -915,6 +932,17 @@
     }, 0);
   }
 
+  function syncAssistantComposerState() {
+    var form = $("assistant-form");
+    var input = $("assistant-input");
+    var submit = form && form.querySelector('button[type="submit"]');
+    if (!form || !input) return;
+    var pending = Boolean(state && state.assistantRequestPending);
+    input.disabled = pending;
+    form.classList.toggle("assistant-form--loading", pending);
+    if (submit) submit.disabled = pending || !String(input.value || "").trim();
+  }
+
   /* ── Unified Hermes drawer opening — single source of truth ── */
   var _drawerKeydown = null;
 
@@ -1079,6 +1107,11 @@
     if (!cleanPrompt) return;
     // openAssistantDrawer(validChip) is the single shared drawer-opening path.
     var validChip = isAssistantFeedbackTarget(sourceChip) ? sourceChip : null;
+    if (state.assistantRequestPending) {
+      openAssistantDrawer(validChip);
+      return;
+    }
+    state.assistantRequestPending = true;
     var originalText = null;
     if (validChip) {
       originalText = validChip.textContent;
@@ -1098,13 +1131,13 @@
       pending.element.appendChild(spinner);
     }
     openAssistantDrawer(validChip);
-    // Show loading state in the input area when no source chip provides feedback
+    // Keep one visible, single-flight request state regardless of which
+    // executive surface launched the question.
     var form = $("assistant-form");
     var input = $("assistant-input");
-    if (!validChip && form && input) {
-      input.disabled = true;
+    if (form && input) {
       input.placeholder = 'Thinking\u2026';
-      form.classList.add('assistant-form--loading');
+      syncAssistantComposerState();
     }
     var pendingThread = threadStore()[threadKey];
     var result;
@@ -1121,10 +1154,10 @@
     } finally {
       // A request must always leave its loading state, including when the
       // browser aborts a transport or a rendering helper throws.
-      if (!validChip && form && input) {
-        input.disabled = false;
-        input.placeholder = 'Ask Hermes\u2026';
-        form.classList.remove('assistant-form--loading');
+      state.assistantRequestPending = false;
+      if (form && input) {
+        input.placeholder = firstDefined(input.getAttribute("aria-label"), "Ask Hermes") + '\u2026';
+        syncAssistantComposerState();
         focusAssistantInput();
       }
       if (validChip) {
@@ -3600,8 +3633,7 @@
     }
     if (themeBtn) {
       themeBtn.onclick = function () {
-        state.theme = state.theme === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', state.theme);
+        applyExecutiveTheme(state.theme === 'dark' ? 'light' : 'dark');
         close();
         renderTopbar();
       };
@@ -3661,8 +3693,7 @@
       themeToggle.textContent = state.theme === "dark" ? "☀" : "◐";
       themeToggle.setAttribute("aria-label", "Switch to " + (state.theme === "dark" ? "light" : "dark") + " theme");
       themeToggle.onclick = function () {
-        state.theme = state.theme === "dark" ? "light" : "dark";
-        document.documentElement.setAttribute("data-theme", state.theme);
+        applyExecutiveTheme(state.theme === "dark" ? "light" : "dark");
         renderTopbar();
       };
     }
@@ -3702,8 +3733,7 @@
         var themeAction = tip.querySelector('[data-avatar-action="theme"]');
         if (themeAction) {
           themeAction.onclick = function () {
-            state.theme = state.theme === "dark" ? "light" : "dark";
-            document.documentElement.setAttribute("data-theme", state.theme);
+            applyExecutiveTheme(state.theme === "dark" ? "light" : "dark");
             tip.remove();
             renderTopbar();
           };
@@ -6708,6 +6738,7 @@
         };
       });
     }
+    syncAssistantComposerState();
     maybeAutoRetryLatestFailure(current);
   }
 
@@ -6947,13 +6978,17 @@
     var form = $("assistant-form");
     var input = $("assistant-input");
     if (!form || !input) return;
+    input.addEventListener("input", syncAssistantComposerState);
     form.addEventListener("submit", function (event) {
       event.preventDefault();
+      if (state.assistantRequestPending) return;
       var message = String(input.value || "").trim();
       if (!message) return;
       askAssistant(message, null);
       input.value = "";
+      syncAssistantComposerState();
     });
+    syncAssistantComposerState();
   }
 
   function bindViewNav() {
@@ -6983,11 +7018,12 @@
       activeView: requested.agent ? "agents" : "home",
       a2aOpen: false,
       activeAssistantAbortController: null,
+      assistantRequestPending: false,
       activeA2AExchange: "",
       drawerOpen: false,
       drawerReturnFocusEl: null,
       failedAssistantAutoRetried: {},
-      theme: document.documentElement.getAttribute("data-theme") || "light",
+      theme: storedExecutiveTheme(),
       discoveryFilter: "all",
       discoveryQuery: "",
       assistantCatalogueOpen: false,
@@ -7024,6 +7060,8 @@
       openAgentLogId: "",
       approvedAgentIds: {}
     };
+
+  applyExecutiveTheme(state.theme);
 
   if (!state._kgDragBindingsAttached) {
     window.addEventListener('mousemove', function (event) {
