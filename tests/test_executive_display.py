@@ -47,3 +47,23 @@ def test_source_display_label_is_generic_for_new_dataset_files() -> None:
     assert executive_source_label("24_Executive_Policy/Materiality_Thresholds.xlsx") == (
         "Materiality Thresholds · Executive policy"
     )
+
+
+def test_folder_only_tokens_are_humanized_in_executive_copy() -> None:
+    visible = executive_display_text(
+        "Missing connections: 20_Board_KPIs, 17_Signals, Inventory_Movements."
+    )
+
+    assert visible == (
+        "Missing connections: Board KPI records, Business signals, Inventory movements."
+    )
+    assert executive_text_has_internal_leak(visible) is False
+
+
+def test_business_unit_note_hides_internal_budget_folder() -> None:
+    visible = executive_display_text(
+        "Revenue ahead; margin behind — division bridge in 15_Budgets_Forecasts"
+    )
+
+    assert visible == "Revenue ahead; margin behind — division bridge in Division budget"
+    assert executive_text_has_internal_leak(visible) is False

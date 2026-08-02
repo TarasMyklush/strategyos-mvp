@@ -2368,6 +2368,25 @@ def test_board_status_thread_does_not_repeat_the_same_lifecycle_value(monkeypatc
     assert chat["threads"][0]["preview"] == "Board context is awaiting review."
 
 
+def test_completed_board_status_uses_executive_language_not_pipeline_stage(monkeypatch):
+    monkeypatch.setattr(api_module, "_finding_rows_from_summary", lambda summary: [])
+
+    chat = api_module._chat_threads_payload(
+        {"run_id": "run-1", "status": "completed", "current_stage": "writer"},
+        {"role": "operator", "authenticated": True},
+        executive_modes={
+            "active_persona_id": "board",
+            "active_board_state": "pre",
+            "active_driver_key": "board_packet",
+            "personas": [{"persona_id": "board", "label": "Board room"}],
+        },
+        board_portal={"presentation_state": "pre"},
+        publication={"challenged_cases": 0, "approval_status": "pending", "board_pack": {}},
+    )
+
+    assert chat["threads"][0]["preview"] == "Board context is complete and ready for review."
+
+
 def test_assistant_chat_authenticated_graph_route_returns_graph_provenance(monkeypatch):
     original, client = _client_with_auth()
     try:

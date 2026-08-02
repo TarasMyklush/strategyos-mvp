@@ -109,6 +109,37 @@ def test_reconcile_message_routing_audit_backfills_legacy_inbox_once(tmp_path):
     assert routing[0]["audit_source"] == "inbox_reconciliation"
 
 
+def test_reconcile_batches_governance_log_write(tmp_path, monkeypatch):
+    repositories = build_repositories(tmp_path / "twins")
+    for index in range(3):
+        repositories.inboxes.append(
+            "cfo",
+            {
+                "message_id": f"legacy-batch-{index}",
+                "sender_role": "ceo",
+                "recipient_role": "cfo",
+                "message_type": "data_request",
+                "subject": "Legacy governed request",
+                "created_at": "2026-07-01T09:00:00+00:00",
+            },
+        )
+
+    writes = 0
+    original_write = repositories.governance._write_file
+
+    def counted_write(*args, **kwargs):
+        nonlocal writes
+        writes += 1
+        return original_write(*args, **kwargs)
+
+    monkeypatch.setattr(repositories.governance, "_write_file", counted_write)
+
+    result = reconcile_message_routing_audit(repositories=repositories)
+
+    assert result == {"scanned": 3, "created": 3, "quarantined": 0}
+    assert writes == 1
+
+
 def test_reconcile_quarantines_unknown_recipient_and_closes_request(tmp_path):
     repositories = build_repositories(tmp_path / "twins")
     repositories.requests.save(

@@ -48,6 +48,13 @@ _FOLDER_LABELS = {
     "99_historic_context": "Historic business context",
 }
 
+_DISPLAY_TOKEN_LABELS = {
+    "inventory_movements": "Inventory movements",
+    "assistant_profiles": "Assistant profiles",
+    "board_kpi_glidepaths": "Board KPI glidepaths",
+    "remediation_decision_log": "Remediation decision log",
+}
+
 _PATH_TOKEN = re.compile(
     r"(?<![\w])(?:\d{2}_[A-Za-z0-9_-]+/)+(?:[A-Za-z0-9_.() -]+\.(?:xlsx|xls|csv|pdf|docx|pptx|txt|json))",
     re.IGNORECASE,
@@ -139,6 +146,8 @@ def executive_display_text(value: Any) -> str:
     for pattern in _ANSWER_KEY_PATTERNS:
         text = pattern.sub("", text)
     text = _PATH_TOKEN.sub(lambda match: executive_source_label(match.group(0)), text)
+    for token, label in {**_FOLDER_LABELS, **_DISPLAY_TOKEN_LABELS}.items():
+        text = re.sub(rf"\b{re.escape(token)}\b/?", label, text, flags=re.IGNORECASE)
     for pattern, replacement in _INTERNAL_COPY:
         text = pattern.sub(replacement, text)
     text = re.sub(r"\bthe connected business records was\b", "the connected business records were", text, flags=re.IGNORECASE)
@@ -199,8 +208,12 @@ def executive_text_has_internal_leak(value: Any) -> bool:
     """CI helper for the chief-of-staff copy gate."""
 
     text = str(value or "")
+    token_pattern = "|".join(
+        re.escape(token) for token in (*_FOLDER_LABELS, *_DISPLAY_TOKEN_LABELS)
+    )
     return bool(
         re.search(r"\b(?:PLANTED|ANSWER[ _-]?KEY|Pattern\s+\d+)\b", text, re.IGNORECASE)
         or _PATH_TOKEN.search(text)
+        or re.search(rf"\b(?:{token_pattern})\b", text, re.IGNORECASE)
         or re.search(r"\b(?:source pack|governed run|server[- ]resolved)\b", text, re.IGNORECASE)
     )

@@ -45,6 +45,8 @@
   var EXECUTIVE_SOURCE_FOLDERS = {
     "01_bank_statements": "Bank statements",
     "02_erp_extracts": "Finance ledger",
+    "05_purchase_orders": "Purchase orders",
+    "06_email_correspondence": "Business correspondence",
     "07_cash_forecast": "Cash forecast",
     "08_invoices": "Invoices",
     "12_group_financials": "Group financials",
@@ -57,6 +59,30 @@
     "21_initiatives": "Initiative register",
     "24_executive_policy": "Executive policy"
   };
+
+  var EXECUTIVE_SOURCE_TOKENS = {
+    "inventory_movements": "Inventory movements",
+    "assistant_profiles": "Assistant profiles",
+    "board_kpi_glidepaths": "Board KPI glidepaths",
+    "remediation_decision_log": "Remediation decision log"
+  };
+
+  function businessSourceTokenLabel(value) {
+    var raw = String(value || "").trim();
+    var key = raw.replace(/\/$/, "").toLowerCase();
+    return EXECUTIVE_SOURCE_FOLDERS[key]
+      || EXECUTIVE_SOURCE_TOKENS[key]
+      || humanizeToken(raw.replace(/\/$/, ""));
+  }
+
+  function executiveRouteLabel(value) {
+    var raw = String(value || "").trim();
+    if (!raw) return "";
+    var path = raw.split("?")[0].replace(/\/+$/, "");
+    if (/\/report-preview$/i.test(path)) return "Board pack preview";
+    if (/^\//.test(path) || /^https?:\/\//i.test(path)) return "Governed workspace";
+    return scrubExecutiveTechnicalLanguage(raw);
+  }
 
   function businessSourceLabel(value) {
     var path = String(value || "").replace(/\\/g, "/").trim();
@@ -72,9 +98,23 @@
   }
 
   function evidenceReferenceLabel(reference) {
+    if (typeof reference === "string") {
+      return reference.split(";").map(function (chunk) {
+        var raw = String(chunk || "").trim();
+        if (!raw || raw === "—") return "";
+        var pathMatch = raw.match(/(?:\d{2}_[A-Za-z0-9_-]+\/)?[A-Za-z0-9_.() -]+\.(?:xlsx|xls|csv|pdf|docx|pptx|txt|json)/i);
+        if (!pathMatch) return scrubExecutiveTechnicalLanguage(raw);
+        var label = businessSourceLabel(pathMatch[0]);
+        var locator = scrubExecutiveTechnicalLanguage(raw.slice(pathMatch.index + pathMatch[0].length).trim());
+        return [label, locator].filter(Boolean).join(" · ");
+      }).filter(Boolean).join(" · ");
+    }
     var parts = evidenceReferenceParts(reference);
     if (!parts.file) return "";
-    return [firstDefined(parts.label, businessSourceLabel(parts.file)), parts.locator].filter(Boolean).join(" · ");
+    var sourceLabel = scrubExecutiveTechnicalLanguage(firstDefined(parts.label, businessSourceLabel(parts.file)));
+    var locatorLabel = scrubExecutiveTechnicalLanguage(parts.locator);
+    if (locatorLabel === sourceLabel) locatorLabel = "";
+    return [sourceLabel, locatorLabel].filter(Boolean).join(" · ");
   }
 
   function evidenceReferencesText(references) {
@@ -195,6 +235,17 @@
   function scrubExecutiveTechnicalLanguage(text) {
     text = String(text || "").trim();
     if (!text) return "";
+    text = text.replace(/(?:\d{2}_[A-Za-z0-9_-]+\/)+[A-Za-z0-9_.() -]+\.(?:xlsx|xls|csv|pdf|docx|pptx|txt|json)/gi, function (match) {
+      return businessSourceLabel(match);
+    });
+    Object.keys(EXECUTIVE_SOURCE_FOLDERS).forEach(function (key) {
+      var pattern = new RegExp("\\b" + key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\/?", "gi");
+      text = text.replace(pattern, EXECUTIVE_SOURCE_FOLDERS[key]);
+    });
+    Object.keys(EXECUTIVE_SOURCE_TOKENS).forEach(function (key) {
+      var pattern = new RegExp("\\b" + key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "gi");
+      text = text.replace(pattern, EXECUTIVE_SOURCE_TOKENS[key]);
+    });
     Object.keys(EXECUTIVE_FINANCE_LABELS).forEach(function (key) {
       var pattern = new RegExp("\\b" + key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "gi");
       text = text.replace(pattern, EXECUTIVE_FINANCE_LABELS[key]);
@@ -3169,7 +3220,24 @@
     var seededThreads = safeArray(chat.threads);
     seededThreads.forEach(function (thread, index) {
       var key = firstDefined(thread.thread_id, state.activePersona + ":" + firstDefined(thread.key, "thread-" + (index + 1)));
-      if (!threadStore()[key]) {
+      var existingThread = threadStore()[key];
+      if (existingThread && thread.kind === "system") {
+        var governedPreview = firstDefined(thread.preview, "Board status is attached here.");
+        existingThread.title = firstDefined(thread.title, "Board status");
+        existingThread.preview = governedPreview;
+        existingThread.route = firstDefined(thread.route, "");
+        existingThread.readOnly = true;
+        existingThread.kind = "system";
+        existingThread.assistant = firstDefined(thread.assistant, assistantName);
+        existingThread.messages = [{
+          role: "assistant",
+          text: governedPreview,
+          timestamp: firstDefined(existingThread.messages && existingThread.messages[0] && existingThread.messages[0].timestamp, new Date().toISOString())
+        }];
+        existingThread.lastUpdated = new Date().toISOString();
+        return;
+      }
+      if (!existingThread) {
         var morningNote = morningNoteContract();
         var initial = {
           role: "assistant",
@@ -3245,15 +3313,17 @@
     var persona = getPersonaContract(state.activePersona);
     var assistantName = firstDefined((getChatContract().assistant || {}).name, persona.assistant, blueprint.assistant, "Hermes");
     var key = state.activePersona + ":followup-" + Date.now();
-    var preview = String(firstDefined(seedPreview, "Writable board-safe thread.")).trim();
+    var isBoardConversation = state.activePersona === "board";
+    var contextLabel = isBoardConversation ? "the CEO-approved board pack" : "your current executive briefing";
+    var preview = String(firstDefined(seedPreview, isBoardConversation ? "Writable board-safe thread." : "Writable executive thread.")).trim();
     var silentInitialMessage = Boolean(options && options.silentInitialMessage);
     var initialMessage = seedPreview && String(seedPreview).trim()
-      ? "I'll look up \u201c" + String(seedPreview).slice(0, 48) + (String(seedPreview).length > 48 ? "\u2026" : "") + "\u201d against the current board pack."
-      : "I can answer using the current board pack. What would you like to know?";
+      ? "I'll look up \u201c" + String(seedPreview).slice(0, 48) + (String(seedPreview).length > 48 ? "\u2026" : "") + "\u201d against " + contextLabel + "."
+      : "I can answer using " + contextLabel + ". What would you like to know?";
     threadStore()[key] = {
       key: key,
       title: seedTitle || ("New conversation · " + nowStamp()),
-      preview: preview || "Writable board-safe thread.",
+      preview: preview || (isBoardConversation ? "Writable board-safe thread." : "Writable executive thread."),
       route: state.activePersona === "ceo" ? "" : firstDefined(getPublication().preview_route, ""),
       readOnly: false,
       kind: "followup",
@@ -4402,6 +4472,44 @@
       + '</span>';
   }
 
+  function executivePlanHealthPresentation(hero, preferredHero, planHealth, selectedSignal) {
+    var planScoreAvailable = planHealth.score !== undefined && planHealth.score !== null && planHealth.score !== "";
+    var rawScore = planScoreAvailable
+      ? planHealth.score
+      : firstDefined(preferredHero && preferredHero.score, hero && hero.score, null);
+    var score = Number(rawScore);
+    var hasScore = rawScore !== null && rawScore !== "" && Number.isFinite(score);
+    var rawDisplayScore = planScoreAvailable
+      ? firstDefined(planHealth.display_score, planHealth.score)
+      : rawScore;
+    var displayScore = Number(rawDisplayScore);
+    if (!Number.isFinite(displayScore)) displayScore = hasScore ? Math.round(score) : 0;
+
+    var exceptionLabels = safeArray(planHealth.exception_labels);
+    var hasCommitmentDetail = [
+      planHealth.live_count,
+      planHealth.commitment_count,
+      planHealth.holding_count,
+      planHealth.behind_count
+    ].some(function (value) { return value !== undefined && value !== null; }) || exceptionLabels.length > 0;
+    var behindCount = Number(firstDefined(planHealth.behind_count, exceptionLabels.length, 0)) || 0;
+    var holdingCount = Number(firstDefined(planHealth.holding_count, Math.max(0, Number(planHealth.live_count || 0) - behindCount), 0)) || 0;
+    var caption = hasCommitmentDetail
+      ? (behindCount
+        ? holdingCount + " of " + String(firstDefined(planHealth.live_count, planHealth.commitment_count, 0)) + " commitments holding · " + behindCount + " behind" + (exceptionLabels.length ? ": " + exceptionLabels.join(", ") : "")
+        : holdingCount + " commitments holding · no exception is currently behind")
+      : scrubExecutiveTechnicalLanguage(firstDefined(selectedSignal && selectedSignal.headline, selectedSignal && selectedSignal.readout, hero && hero.body, "Current performance compared with plan."));
+
+    return {
+      hasScore: hasScore,
+      score: hasScore ? score : 0,
+      clampedScore: hasScore ? Math.max(0, Math.min(100, score)) : 0,
+      displayScore: hasScore ? displayScore : 0,
+      caption: caption,
+      verdict: firstDefined(planHealth.verdict, score >= 95 ? "On plan" : score >= 85 ? "Watch" : "Action needed")
+    };
+  }
+
   function renderHero() {
     var diagnostics = getExecutiveDiagnostics();
     var blueprint = getPersonaBlueprint(state.activePersona);
@@ -4431,13 +4539,6 @@
     var fullName = sessionDisplayName();
     var firstName = fullName ? fullName.split(/\s+/)[0] : getPersonaLabel(state.activePersona);
     var preferredHero = hero && (hero.summary || hero.body || hero.score_note) ? hero : (blueprint.health || {});
-    var hasScore = hero.score !== undefined && hero.score !== null && hero.score !== "";
-    var score = Number(firstDefined(hero.score, 0));
-    if (preferredHero && preferredHero.score !== undefined && preferredHero.score !== null && preferredHero.score !== "") {
-      hasScore = true;
-      score = Number(preferredHero.score);
-    }
-    var clampedScore = Math.max(0, Math.min(100, score));
     var prompts = getHeroPrompts();
     var calendarContract = (state.latestPacket && state.latestPacket.calendar_agenda) || {};
     var upcomingCommitments = Number(calendarContract.upcoming_item_count);
@@ -4449,15 +4550,11 @@
       getExecutiveAttention().count
     );
     var enrichedPlanHealth = (getStrategyEnrichment().plan_health || {});
-    var displayScore = 0;
-    if (enrichedPlanHealth.score !== undefined && enrichedPlanHealth.score !== null) {
-      hasScore = true;
-      score = Number(enrichedPlanHealth.score);
-      clampedScore = Math.max(0, Math.min(100, score));
-      displayScore = Number.isFinite(Number(enrichedPlanHealth.display_score))
-        ? Number(enrichedPlanHealth.display_score)
-        : Math.round(score);
-    }
+    var planPresentation = executivePlanHealthPresentation(hero, preferredHero, enrichedPlanHealth, selectedSignal);
+    var hasScore = planPresentation.hasScore;
+    var score = planPresentation.score;
+    var clampedScore = planPresentation.clampedScore;
+    var displayScore = planPresentation.displayScore;
     var miniStats = [
       { label: "Coverage", value: String(firstDefined(enrichedPlanHealth.live_count, 0)) + " of " + String(firstDefined(enrichedPlanHealth.commitment_count, 10)) + " live" },
       { label: "Board", value: statusLabel(firstDefined(state.activeBoard, boardPortal.presentation_state, boardPortal.state, "pre")) },
@@ -4482,16 +4579,10 @@
       };
     }
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
-    var planExceptionLabels = safeArray(enrichedPlanHealth.exception_labels);
-    var planBehindCount = Number(firstDefined(enrichedPlanHealth.behind_count, planExceptionLabels.length, 0)) || 0;
-    var planHoldingCount = Number(firstDefined(enrichedPlanHealth.holding_count, Math.max(0, Number(enrichedPlanHealth.live_count || 0) - planBehindCount), 0)) || 0;
-    var planExceptionSummary = planBehindCount
-      ? planHoldingCount + " of " + String(firstDefined(enrichedPlanHealth.live_count, enrichedPlanHealth.commitment_count, 0)) + " commitments holding · " + planBehindCount + " behind" + (planExceptionLabels.length ? ": " + planExceptionLabels.join(", ") : "")
-      : planHoldingCount + " commitments holding · no exception is currently behind";
     var statusSignal = reviewGate
       ? "Your decision"
       : hasScore
-        ? firstDefined(enrichedPlanHealth.verdict, score >= 95 ? "On plan" : score >= 85 ? "Watch" : "Action needed")
+        ? planPresentation.verdict
         : "Current";
     var heroStatusText = reviewGate
       ? "Review required"
@@ -4501,7 +4592,7 @@
     var heroStatusCaption = reviewGate
       ? "An item is waiting for executive sign-off."
       : hasScore
-        ? planExceptionSummary
+        ? planPresentation.caption
         : "Built from the latest available operating data.";
     var semanticTone = heroSemanticTone(hero);
     var heroEl = $("hero");
@@ -4824,7 +4915,7 @@
       high += visualPadding;
     }
     var span = Math.max(1, high - low);
-    var chart = { width: 360, left: 44, right: 344, top: 18, bottom: 130 };
+    var chart = { width: 360, left: 58, right: 344, top: 18, bottom: 130 };
     var pathFor = function (series) {
       return series.map(function (value, index) {
         var x = series.length === 1 ? (chart.left + chart.right) / 2 : chart.left + (index * (chart.right - chart.left)) / (series.length - 1);
@@ -4840,7 +4931,7 @@
     var yTicks = [high, (high + low) / 2, low];
     var yGrid = yTicks.map(function (value) {
       var y = chart.bottom - ((value - low) / span) * (chart.bottom - chart.top);
-      return '<line class="kpi-trend__grid" x1="' + chart.left + '" x2="' + chart.right + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"></line><text class="kpi-trend__axis kpi-trend__axis--y" x="0" y="' + (y + 3).toFixed(1) + '">' + escapeHtml(formatExecutiveTrendValue(value, driver)) + '</text>';
+      return '<line class="kpi-trend__grid" x1="' + chart.left + '" x2="' + chart.right + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"></line><text class="kpi-trend__axis kpi-trend__axis--y" x="52" y="' + (y + 3).toFixed(1) + '" text-anchor="end">' + escapeHtml(formatExecutiveTrendValue(value, driver)) + '</text>';
     }).join('');
     var xLabels = actual.map(function (_value, index) {
       var x = actual.length === 1 ? (chart.left + chart.right) / 2 : chart.left + (index * (chart.right - chart.left)) / (actual.length - 1);
@@ -4907,7 +4998,7 @@
         ? '<button type="button" class="kpi-movement__gm' + (noteOpen ? ' is-open' : '') + '" data-kpi-mover-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>' + escapeHtml(firstDefined(item.gm, 'GM note')) + '</span></button>'
         : '';
       var noteMarkup = gm && noteOpen
-        ? '<blockquote class="kpi-movement__note"><strong>' + escapeHtml(firstDefined(gm.who, 'GM')) + '</strong>' + escapeHtml(firstDefined(gm.note, 'No commentary was supplied.')) + '</blockquote>'
+        ? '<blockquote class="kpi-movement__note"><strong>' + escapeHtml(firstDefined(gm.who, 'GM')) + '</strong>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(gm.note, 'No commentary was supplied.'))) + '</blockquote>'
         : '';
       return '<div class="kpi-movement__item tone-' + entry.direction + '"><div class="kpi-movement__row"><span class="kpi-movement__direction kpi-movement__direction--' + entry.direction + '">' + entry.glyph + '</span><strong>' + escapeHtml(firstDefined(item.name, 'Movement')) + '</strong><small>' + escapeHtml(firstDefined(item.delta, '')) + '</small>' + gmMarkup + '</div>' + noteMarkup + '</div>';
     }).join('');
@@ -5135,7 +5226,7 @@
           var noteKey = firstDefined(driver.driver_key, driver.key, '') + ':' + firstDefined(item.name, 'mover');
           var noteOpen = state.openDriverNoteKey === noteKey;
           var gm = item.gm || null;
-          return '<div class="mover-flat ' + (noteOpen ? 'is-open' : '') + '"><div class="mover-flat__row"><span class="mover-flat__dir tone-' + escapeHtml(entry.tone) + '">' + escapeHtml(entry.glyph) + '</span><span class="mover-flat__name">' + escapeHtml(firstDefined(item.name, 'Signal')) + '</span><span class="mover-flat__delta">' + escapeHtml(firstDefined(item.delta, '')) + '</span>' + (gm ? '<button type="button" class="gm-chip gm-chip--avatar' + (noteOpen ? ' is-open' : '') + '" data-driver-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>GM note</span></button>' : '<span class="gm-none" title="No GM note is attached to this mover yet.">No GM note</span>') + '</div>' + (gm && noteOpen ? '<blockquote class="gm-note"><span class="gm-note-who">' + escapeHtml(firstDefined(gm.who, 'GM')) + '</span>' + escapeHtml(firstDefined(gm.note, '')) + '</blockquote>' : '') + '</div>';
+          return '<div class="mover-flat ' + (noteOpen ? 'is-open' : '') + '"><div class="mover-flat__row"><span class="mover-flat__dir tone-' + escapeHtml(entry.tone) + '">' + escapeHtml(entry.glyph) + '</span><span class="mover-flat__name">' + escapeHtml(firstDefined(item.name, 'Signal')) + '</span><span class="mover-flat__delta">' + escapeHtml(firstDefined(item.delta, '')) + '</span>' + (gm ? '<button type="button" class="gm-chip gm-chip--avatar' + (noteOpen ? ' is-open' : '') + '" data-driver-note="' + escapeHtml(noteKey) + '"><span class="asst-avatar sm">' + escapeHtml(initialsFromName(gm.who)) + '</span><span>GM note</span></button>' : '<span class="gm-none" title="No GM note is attached to this mover yet.">No GM note</span>') + '</div>' + (gm && noteOpen ? '<blockquote class="gm-note"><span class="gm-note-who">' + escapeHtml(firstDefined(gm.who, 'GM')) + '</span>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(gm.note, ''))) + '</blockquote>' : '') + '</div>';
         }).join('') : '<div class="discovery-empty">No movement is attached yet.</div>') + '</div></div></div>',
         '<div class="chips">' + safeArray(driver.chips).map(function (chip) { return '<button class="chip" type="button" data-driver-chip="' + escapeHtml(chip) + '">' + escapeHtml(chip) + '</button>'; }).join('') + '</div>',
         '<form class="chips-own" id="driver-composer"><label class="sr-only" for="driver-input">Ask Hermes about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '</label><input id="driver-input" class="driver-input" type="text" placeholder="Ask Hermes about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '…" /><button type="submit">Send</button></form>',
@@ -5440,6 +5531,7 @@
     var publication = getPublication();
     var reconciliation = publication.reconciliation || {};
     var portal = $("board-portal");
+    var boardAssistantName = assistantNameForState();
     var note = $("board-note");
     if (note) note.textContent = firstDefined(board.governance_note, "Board-safe lifecycle, materials, and context.");
     if (!portal) return;
@@ -5482,16 +5574,16 @@
         var flags = [];
         if (item.actual) flags.push('<span class="pill-inline ok">actual</span>');
         if (item.presented) flags.push('<span class="pill-inline warn">presented</span>');
-        if (item.next_action && item.presented) flags.push('<button type="button" class="pill-inline board-status-chip board-status-chip--action" data-board-action="' + escapeHtml(String(item.next_action)) + '" aria-label="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '" title="Ask Hermes what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</button>');
+        if (item.next_action && item.presented) flags.push('<button type="button" class="pill-inline board-status-chip board-status-chip--action" data-board-action="' + escapeHtml(String(item.next_action)) + '" aria-label="Ask ' + escapeHtml(boardAssistantName) + ' what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '" title="Ask ' + escapeHtml(boardAssistantName) + ' what to do next: ' + escapeHtml(boardActionLabel(item.next_action)) + '">Next: ' + escapeHtml(boardActionLabel(item.next_action)) + '</button>');
         return '<div class="lifecycle-step' + (item.presented ? ' is-presented' : '') + '"><div><strong>' + escapeHtml(firstDefined(item.label, item.state_id, 'State')) + '</strong><p class="list-copy">' + escapeHtml(firstDefined(item.detail, 'Board posture.')) + '</p></div><div class="lifecycle-step__flags">' + flags.join('') + '</div></div>';
       }).join("") + '</div>',
       '<div class="snapshot-grid"><div class="snapshot-card" data-snapshot="deck" title="Click for details"><strong>Deck release</strong><span>' + escapeHtml(statusLabel(firstDefined(deckRelease.status, 'pending'))) + '</span><span class="panel-note">' + escapeHtml(String(firstDefined(deckRelease.report_count, 0)) + ' reports in the board pack') + '</span></div><div class="snapshot-card" data-snapshot="frozen" title="Click for details"><strong>Frozen snapshot</strong><span>' + escapeHtml(statusLabel(firstDefined(snapshot.status, 'frozen'))) + '</span><span class="panel-note">' + escapeHtml(firstDefined(snapshot.summary, 'Closed meetings retain a saved snapshot.')) + '</span></div></div>',
       (state.activePersona === "ceo"
         ? '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).map(function (item) {
-            return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '" aria-label="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '" title="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '">Review: ' + escapeHtml(humanizeToken(item)) + '</button>';
+            return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '" aria-label="Ask ' + escapeHtml(boardAssistantName) + ' to review ' + escapeHtml(humanizeToken(item)) + '" title="Ask ' + escapeHtml(boardAssistantName) + ' to review ' + escapeHtml(humanizeToken(item)) + '">Review: ' + escapeHtml(humanizeToken(item)) + '</button>';
           }).join("") + '</div>'
         : '<div class="board-action-grid">' + safeArray(stateDetail.primary_actions).slice(0, 2).concat(safeArray(stateDetail.secondary_actions).slice(0, 2)).map(function (item) {
-        return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '" aria-label="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '" title="Ask Hermes to review ' + escapeHtml(humanizeToken(item)) + '">' + escapeHtml(humanizeToken(item)) + '</button>';
+        return '<button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-board-action="' + escapeHtml(String(item)) + '" aria-label="Ask ' + escapeHtml(boardAssistantName) + ' to review ' + escapeHtml(humanizeToken(item)) + '" title="Ask ' + escapeHtml(boardAssistantName) + ' to review ' + escapeHtml(humanizeToken(item)) + '">' + escapeHtml(humanizeToken(item)) + '</button>';
       }).join("") + '</div>'),
       '<div class="board-detail-grid"><section class="board-panel"><p class="detail-eyebrow">Meeting posture</p><div class="mini-list"><div class="board-deck"><div><strong>' + escapeHtml(firstDefined((board.meeting || {}).design_title, (board.meeting || {}).title, "Board meeting")) + '</strong><p class="list-copy">' + escapeHtml(firstDefined((board.meeting || {}).date, (board.meeting || {}).when, "Board timing pending")) + '</p></div><span class="pill-inline ok">' + escapeHtml(firstDefined((board.meeting || {}).room, "board-safe")) + '</span></div></div></section><section class="board-panel"><p class="detail-eyebrow">Lifecycle actions</p><div class="mini-list">' + (actions.length ? actions.map(function (item) {
         return '<div class="board-action"><div><strong>' + escapeHtml(firstDefined(item.item, "Action")) + '</strong><small>' + escapeHtml(firstDefined(item.owner, "Owner")) + '</small></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.due, "next")) + '</span></div>';
@@ -6151,12 +6243,12 @@
       var readinessSuggestion = weakProfile && Number(weakProfile.readiness_pct || 0) < 70
         ? '<p class="assistant-readiness__suggestion">' + escapeHtml(firstDefined(weakProfile.assistant_name, "This assistant"))
           + " has the lowest readiness at " + escapeHtml(String(weakProfile.readiness_pct)) + "%. "
-          + escapeHtml(firstDefined(weakProfile.note, "A source refresh is recommended.")) + "</p>"
+          + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(weakProfile.note, "A source refresh is recommended."))) + "</p>"
         : "";
       var readinessMarkup = profiles.length ? '<div class="assistant-readiness"><div class="assistant-readiness__head"><div><span class="eyebrow">Assistant team readiness</span><h3>' + escapeHtml(String(readinessAverage)) + '% average readiness</h3></div><span class="evidence-badge">Evidence verified · Assistant Profiles</span></div><div class="assistant-readiness__grid">' + profiles.map(function (item) {
         var breakdown = safeArray(item.readiness_breakdown);
         var evidence = item.evidence || {};
-        return '<details><summary><strong>' + escapeHtml(firstDefined(item.assistant_name, item.persona)) + '</strong><span>' + escapeHtml(String(item.readiness_pct)) + '%</span></summary><p>' + escapeHtml(firstDefined(item.note, 'No readiness note supplied.')) + '</p><small>' + escapeHtml(breakdown.length === 3 ? 'Freshness ' + breakdown[0] + ' · Depth ' + breakdown[1] + ' · Usage ' + breakdown[2] : '') + '</small><small>Source · ' + escapeHtml(firstDefined(evidence.file, 'Assistant_Profiles.xlsx')) + ' · ' + escapeHtml(firstDefined(evidence.record_id, item.persona)) + '</small></details>';
+        return '<details><summary><strong>' + escapeHtml(firstDefined(item.assistant_name, item.persona)) + '</strong><span>' + escapeHtml(String(item.readiness_pct)) + '%</span></summary><p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.note, 'No readiness note supplied.'))) + '</p><small>' + escapeHtml(breakdown.length === 3 ? 'Freshness ' + breakdown[0] + ' · Depth ' + breakdown[1] + ' · Usage ' + breakdown[2] : '') + '</small><small>Source · ' + escapeHtml(evidenceReferenceLabel({ file: firstDefined(evidence.file, 'Assistant_Profiles.xlsx'), locator: firstDefined(evidence.record_id, item.persona) })) + '</small></details>';
       }).join('') + '</div>' + readinessSuggestion + '</div>' : '';
       activityCard.innerHTML = readinessMarkup + '<div class="twin-network-intro"><div><span class="eyebrow">Executive assistants</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist analysis and audit work is tracked under Agents.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
     }
@@ -6166,7 +6258,7 @@
         var id = String(firstDefined(item.role, item.twin_id, "twin"));
         var isOpen = state.openAgentId === id;
         var status = String(firstDefined(item.status, "ready"));
-        return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.current_activity, "Ready to support the next leadership review."))) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div>' + renderLeadershipStatus(item) + '<div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.authority, "Responsibilities will appear when available."))) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div></div>' : '') + '</article>';
+        return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(scrubExecutiveTechnicalLanguage(leadershipActivityCopy(item, getExecutiveStateSnapshot()))) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div>' + renderLeadershipStatus(item) + '<div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.authority, "Responsibilities will appear when available."))) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div></div>' : '') + '</article>';
       }).join('') : '<div class="network-empty">No AI assistants match this search.</div>') + '</div>';
       var search = networkCard.querySelector('#twin-network-search');
       if (search) search.oninput = function () {
@@ -6203,7 +6295,7 @@
       var seededMarkup = seededThreads.length ? '<div class="a2a-seeded-threads">' + seededThreads.map(function (thread, index) {
         var threadKey = String(firstDefined(thread.thread_id, thread.id, "a2a-" + index));
         var isOpen = Boolean((state.openA2AThreadKeys || {})[threadKey]);
-        return '<details data-a2a-thread="' + escapeHtml(threadKey) + '"' + (isOpen ? ' open' : '') + '><summary><span><strong>' + escapeHtml(firstDefined(thread.topic, 'Assistant conversation')) + '</strong><small>' + escapeHtml(safeArray(thread.participants).join(' ↔ ')) + '</small></span><em>' + escapeHtml(String(safeArray(thread.turns).length)) + ' messages</em></summary><ol>' + safeArray(thread.turns).map(function (turn) {
+        return '<details data-a2a-thread="' + escapeHtml(threadKey) + '"' + (isOpen ? ' open' : '') + '><summary><span><strong>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(thread.topic, 'Assistant conversation'))) + '</strong><small>' + escapeHtml(safeArray(thread.participants).join(' ↔ ')) + '</small></span><em>' + escapeHtml(String(safeArray(thread.turns).length)) + ' messages</em></summary><ol>' + safeArray(thread.turns).map(function (turn) {
           var references = safeArray(turn.evidence_refs);
           var turnMetrics = executiveMetricTokens(firstDefined(turn.text, ''), 4);
           var metricMarkup = turnMetrics.length
@@ -6214,7 +6306,7 @@
                 return '<span class="evidence-badge">' + escapeHtml(evidenceReferenceLabel(reference)) + '</span>';
               }).join('') + '</div>'
             : '';
-          return '<li><span>' + escapeHtml(firstDefined(turn.from, 'Assistant')) + ' → ' + escapeHtml(firstDefined(turn.to, 'Assistant')) + '</span>' + metricMarkup + '<p>' + escapeHtml(firstDefined(turn.text, '')) + '</p>' + evidenceMarkup + '</li>';
+          return '<li><span>' + escapeHtml(firstDefined(turn.from, 'Assistant')) + ' → ' + escapeHtml(firstDefined(turn.to, 'Assistant')) + '</span>' + metricMarkup + '<p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(turn.text, ''))) + '</p>' + evidenceMarkup + '</li>';
         }).join('') + '</ol></details>';
       }).join('') + '</div>' : '';
       collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Items moving between executive-role assistants</span></div></div><p class="twin-explainer">This view shows coordination between AI Assistants. Work completed by specialist agents—and each agent’s review trail—is available under Agents.</p>' + seededMarkup + (seededThreads.length ? '' : '<div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>')) + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
@@ -6496,7 +6588,7 @@
         var boardStateLabel = statusLabel(firstDefined(state.activeBoard, (getChatContract().assistant || {}).board_state, 'pre'));
         tools.push('<span class="assistant-tool-chip">' + escapeHtml(boardStateLabel) + '</span>');
       }
-      if (current && current.route && state.activePersona !== "ceo") tools.push('<span class="assistant-tool-chip">' + escapeHtml(current.route) + '</span>');
+      if (current && current.route && state.activePersona !== "ceo") tools.push('<span class="assistant-tool-chip">' + escapeHtml(executiveRouteLabel(current.route)) + '</span>');
       if (latestFailure && latestFailure.message && latestFailure.message.retryPrompt) {
         tools.push('<button type="button" class="assistant-tool-chip assistant-tool-chip--action" data-assistant-retry-latest="true">Retry now</button>');
       }
@@ -6699,10 +6791,15 @@
       button.textContent = String(index + 1) + " Jun";
       button.className = Number(state.demoDayOffset || 0) === index ? "is-active" : "";
       button.setAttribute("data-demo-day", String(index));
+      button.setAttribute("aria-pressed", Number(state.demoDayOffset || 0) === index ? "true" : "false");
       button.onclick = function () {
         state.demoDayOffset = Number(this.getAttribute("data-demo-day") || 0);
         state.activeThreadKey = "";
-        renderPersonaView();
+        state.openWeekIndex = 0;
+        renderHero();
+        renderCalendarAgenda();
+        renderLowerRailFidelity();
+        renderDemoClock();
       };
       scrubber.appendChild(button);
     }

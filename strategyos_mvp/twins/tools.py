@@ -200,6 +200,20 @@ def _ensure_message_routing_audit(
     audit_source: str,
 ) -> bool:
     """Write the durable governance event paired with an inbox message."""
+    record = _message_routing_audit_record(message, audit_source=audit_source)
+    if record is None:
+        return False
+    _, created = repositories.governance.ensure_routing_event(
+        record
+    )
+    return created
+
+
+def _message_routing_audit_record(
+    message: dict[str, Any],
+    *,
+    audit_source: str,
+) -> dict[str, Any] | None:
     from datetime import datetime, timezone
     from uuid import uuid4
 
@@ -207,33 +221,30 @@ def _ensure_message_routing_audit(
     source_role = str(message.get("sender_role") or "").strip()
     target_role = str(message.get("recipient_role") or "").strip()
     if not message_id or not source_role or not target_role:
-        return False
-    _, created = repositories.governance.ensure_routing_event(
-        {
-            "event_id": f"route-{uuid4().hex[:12]}",
-            "event_type": "message_dispatched",
-            "event_category": "inter_twin_message",
-            "source_role": source_role,
-            "target_role": target_role,
-            "item_id": message_id,
-            "request_message_id": str(
-                message.get("request_message_id")
-                or message.get("parent_message_id")
-                or message_id
-            ),
-            "title": str(message.get("subject") or "Governed handoff"),
-            "reason": f"{str(message.get('message_type') or 'message').replace('_', ' ')} delivered to governed inbox",
-            "message_type": str(message.get("message_type") or "notification"),
-            "priority": str(message.get("priority") or "normal"),
-            "delivery_status": str(message.get("status") or "pending"),
-            "actor_role": source_role,
-            "actor_subject": f"digital-twin:{source_role}",
-            "audit_source": audit_source,
-            "idempotency_key": f"message-dispatch:{message_id}",
-            "timestamp": str(message.get("created_at") or datetime.now(timezone.utc).isoformat()),
-        }
-    )
-    return created
+        return None
+    return {
+        "event_id": f"route-{uuid4().hex[:12]}",
+        "event_type": "message_dispatched",
+        "event_category": "inter_twin_message",
+        "source_role": source_role,
+        "target_role": target_role,
+        "item_id": message_id,
+        "request_message_id": str(
+            message.get("request_message_id")
+            or message.get("parent_message_id")
+            or message_id
+        ),
+        "title": str(message.get("subject") or "Governed handoff"),
+        "reason": f"{str(message.get('message_type') or 'message').replace('_', ' ')} delivered to governed inbox",
+        "message_type": str(message.get("message_type") or "notification"),
+        "priority": str(message.get("priority") or "normal"),
+        "delivery_status": str(message.get("status") or "pending"),
+        "actor_role": source_role,
+        "actor_subject": f"digital-twin:{source_role}",
+        "audit_source": audit_source,
+        "idempotency_key": f"message-dispatch:{message_id}",
+        "timestamp": str(message.get("created_at") or datetime.now(timezone.utc).isoformat()),
+    }
 
 
 def reconcile_message_routing_audit(
@@ -253,6 +264,11 @@ def reconcile_message_routing_audit(
     scanned = 0
     created = 0
     quarantined = 0
+    routing_records: list[dict[str, Any]] = []
+    rejected_records: list[dict[str, Any]] = []
+    inbox_updates: dict[str, dict[str, dict[str, Any]]] = {}
+    request_updates: dict[str, dict[str, dict[str, Any]]] = {}
+    pending_removals: dict[str, set[str]] = {}
     valid_recipients = set(TWIN_CATALOG) | {"human"}
     for inbox_role, messages in (repo_set.inboxes.list() or {}).items():
         for message in messages or []:
@@ -264,36 +280,22 @@ def reconcile_message_routing_audit(
                 now_iso = datetime.now(timezone.utc).isoformat()
                 if str(message.get("routing_status") or "") != "unroutable":
                     quarantined += 1
-                repo_set.inboxes.update(
-                    str(inbox_role),
-                    message_id,
-                    {
+                    inbox_updates.setdefault(str(inbox_role), {})[message_id] = {
                         "status": "expired",
                         "routing_status": "unroutable",
                         "routing_error": "No configured Digital Twin recipient",
                         "quarantined_at": now_iso,
-                    },
-                )
-                if sender_role and message_id:
-                    repo_set.requests.update(
-                        sender_role,
-                        message_id,
-                        {
+                    }
+                    if sender_role and message_id:
+                        request_updates.setdefault(sender_role, {})[message_id] = {
                             "status": "failed",
                             "routing_status": "unroutable",
                             "failed_at": now_iso,
                             "updated_at": now_iso,
                             "gaps_remaining": ["No configured Digital Twin recipient"],
-                        },
-                    )
-                    state = repo_set.states.load(sender_role) or {}
-                    pending = dict(state.get("pending_requests") or {})
-                    if message_id in pending:
-                        pending.pop(message_id, None)
-                        state["pending_requests"] = pending
-                        repo_set.states.save(sender_role, state)
-                repo_set.governance.ensure_routing_event(
-                    {
+                        }
+                        pending_removals.setdefault(sender_role, set()).add(message_id)
+                rejected_records.append({
                         "event_id": f"route-rejected-{message_id}",
                         "event_type": "message_routing_rejected",
                         "event_category": "routing_exception",
@@ -307,15 +309,21 @@ def reconcile_message_routing_audit(
                         "audit_source": "inbox_reconciliation",
                         "idempotency_key": f"message-routing-rejected:{message_id}",
                         "timestamp": str(message.get("created_at") or now_iso),
-                    }
-                )
+                    })
                 continue
-            if _ensure_message_routing_audit(
-                repo_set,
+            record = _message_routing_audit_record(
                 message,
                 audit_source="inbox_reconciliation",
-            ):
-                created += 1
+            )
+            if record is not None:
+                routing_records.append(record)
+    repo_set.inboxes.update_many(inbox_updates)
+    for role, updates in request_updates.items():
+        repo_set.requests.update_many(role, updates)
+    for role, request_ids in pending_removals.items():
+        repo_set.states.remove_pending_requests(role, request_ids)
+    repo_set.governance.ensure_routing_events(rejected_records)
+    _, created = repo_set.governance.ensure_routing_events(routing_records)
     return {"scanned": scanned, "created": created, "quarantined": quarantined}
 
 

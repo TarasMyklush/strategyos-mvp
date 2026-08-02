@@ -1001,14 +1001,87 @@ def test_board_portal_review_buttons_use_plain_english_prompts():
     )
 
 
-def test_board_portal_buttons_expose_plain_english_hermes_action_labels():
-    """Board Portal CTAs must read as human actions, not inert status styling."""
+def test_board_portal_buttons_expose_persona_correct_action_labels():
+    """Board Portal CTAs must name the active assistant, including Minerva."""
     js = _static_executive_js()
 
-    assert 'aria-label="Ask Hermes what to do next: ' in js
-    assert 'aria-label="Ask Hermes to review ' in js
+    assert "var boardAssistantName = assistantNameForState();" in js
+    assert "aria-label=\"Ask ' + escapeHtml(boardAssistantName) + ' what to do next: " in js
+    assert "aria-label=\"Ask ' + escapeHtml(boardAssistantName) + ' to review " in js
     assert 'Next: ' in js
     assert 'Review: ' in js
+
+
+def test_ceo_conversation_does_not_claim_board_pack_context():
+    js = _static_executive_js()
+    thread_block = js.split("function createWritableThread")[1].split(
+        "function nowStamp", 1
+    )[0]
+
+    assert 'state.activePersona === "board"' in thread_block
+    assert '"your current executive briefing"' in thread_block
+    assert '"the CEO-approved board pack"' in thread_block
+
+
+def test_demo_day_scrubber_uses_targeted_rerender_and_selected_state():
+    js = _static_executive_js()
+    scrubber_block = js.split("function renderDemoClock()")[1].split(
+        "function renderPersonaView", 1
+    )[0]
+
+    assert 'button.setAttribute("aria-pressed"' in scrubber_block
+    assert "renderHero();" in scrubber_block
+    assert "renderLowerRailFidelity();" in scrubber_block
+    assert "renderPersonaView();" not in scrubber_block
+
+
+def test_executive_renderers_scrub_notes_readiness_and_a2a_copy():
+    js = _static_executive_js()
+
+    assert "scrubExecutiveTechnicalLanguage(firstDefined(gm.note" in js
+    assert "scrubExecutiveTechnicalLanguage(firstDefined(weakProfile.note" in js
+    assert "scrubExecutiveTechnicalLanguage(firstDefined(thread.topic" in js
+    assert "scrubExecutiveTechnicalLanguage(firstDefined(turn.text" in js
+    assert "leadershipActivityCopy(item, getExecutiveStateSnapshot())" in js
+
+
+def test_plan_health_exception_caption_is_visible_below_ring():
+    css = _static_executive_css()
+    final_hero_block = css.split(".view-panel--home > .hero .hero-status {")[1].split(
+        ".view-panel--home > .hero .hero-status__fallback", 1
+    )[0]
+
+    assert ".hero-status__caption" in final_hero_block
+    assert "display: block" in final_hero_block
+    assert "width: 126px" in final_hero_block
+
+
+def test_headline_and_driver_share_one_plan_score_presentation_contract():
+    js = _static_executive_js()
+
+    contract = js.split("function executivePlanHealthPresentation", 1)[1].split("function renderHero", 1)[0]
+    assert "var rawScore = planScoreAvailable" in contract
+    assert "var rawDisplayScore = planScoreAvailable" in contract
+    assert "hasCommitmentDetail" in contract
+    assert "executivePlanHealthPresentation(hero, preferredHero, enrichedPlanHealth, selectedSignal)" in js
+
+
+def test_assistant_metadata_uses_business_labels_not_internal_routes():
+    js = _static_executive_js()
+
+    assert "function executiveRouteLabel(value)" in js
+    assert "escapeHtml(executiveRouteLabel(current.route))" in js
+
+
+def test_authoritative_system_threads_refresh_without_overwriting_user_threads():
+    js = _static_executive_js()
+    seeded = js.split("var seededThreads = safeArray(chat.threads);", 1)[1].split(
+        "if (getStrategyEnrichment().virtual_now)", 1
+    )[0]
+
+    assert 'if (existingThread && thread.kind === "system")' in seeded
+    assert "existingThread.preview = governedPreview" in seeded
+    assert "if (!existingThread)" in seeded
 
 
 def test_avatar_profile_action_is_wired_not_dead():

@@ -174,6 +174,32 @@ class TwinInboxRepository(_JsonRepository):
         self._mutate_file(self._path, {}, _update)
         return updated_message
 
+    def update_many(
+        self,
+        updates: dict[str, dict[str, dict[str, Any]]],
+    ) -> int:
+        """Apply inbox-envelope updates with a single repository mutation."""
+        updated_count = 0
+
+        def _update(inboxes: dict[str, Any]) -> dict[str, Any]:
+            nonlocal updated_count
+            for role, role_updates in updates.items():
+                messages = list(inboxes.get(role, []))
+                for index, message in enumerate(messages):
+                    payload = role_updates.get(str(message.get("message_id") or ""))
+                    if payload is None:
+                        continue
+                    updated = copy.deepcopy(message)
+                    updated.update(copy.deepcopy(payload))
+                    messages[index] = updated
+                    updated_count += 1
+                inboxes[role] = _jsonable(messages)
+            return inboxes
+
+        if updates:
+            self._mutate_file(self._path, {}, _update)
+        return updated_count
+
     def consume(self, role: str) -> list[dict[str, Any]]:
         consumed: list[dict[str, Any]] = []
 
@@ -290,6 +316,24 @@ class TwinStateRepository(_JsonRepository):
         updated = self._mutate_file(self._role_path(role), {}, _update)
         return copy.deepcopy(updated)
 
+    def remove_pending_requests(self, role: str, request_ids: set[str]) -> int:
+        """Remove several pending requests in one state-file mutation."""
+        removed = 0
+
+        def _update(state: dict[str, Any]) -> dict[str, Any]:
+            nonlocal removed
+            pending = dict(state.get("pending_requests") or {})
+            for request_id in request_ids:
+                if request_id in pending:
+                    pending.pop(request_id, None)
+                    removed += 1
+            state["pending_requests"] = pending
+            return state
+
+        if request_ids and self._role_path(role).exists():
+            self._mutate_file(self._role_path(role), {}, _update)
+        return removed
+
 
 class TwinRequestRepository(_JsonRepository):
     def __init__(self, base_path: Path) -> None:
@@ -328,6 +372,31 @@ class TwinRequestRepository(_JsonRepository):
         updated = copy.deepcopy(current)
         updated.update(copy.deepcopy(payload))
         return self.save(role, updated)
+
+    def update_many(
+        self,
+        role: str,
+        updates: dict[str, dict[str, Any]],
+    ) -> int:
+        """Apply request updates with one read/write of a role file."""
+        updated_count = 0
+
+        def _update(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            nonlocal updated_count
+            for index, record in enumerate(records):
+                request_id = str(record.get("request_message_id") or "")
+                payload = updates.get(request_id)
+                if payload is None:
+                    continue
+                updated = copy.deepcopy(record)
+                updated.update(copy.deepcopy(payload))
+                records[index] = updated
+                updated_count += 1
+            return records
+
+        if updates and self._role_path(role).exists():
+            self._mutate_file(self._role_path(role), [], _update)
+        return updated_count
 
     def list(
         self,
@@ -406,6 +475,52 @@ class GovernanceRepository(_JsonRepository):
             return records
 
         self._mutate_file(self._routing_path, [], _ensure)
+        return copy.deepcopy(selected), created
+
+    def ensure_routing_events(
+        self,
+        records: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Persist a batch of idempotent routing events in one file mutation.
+
+        Startup reconciliation can inspect thousands of durable inbox messages.
+        Reading and rewriting the complete routing log once per message makes
+        that work quadratic as the log grows, so reconciliation uses this batch
+        variant while normal message delivery keeps the single-record API.
+        """
+        def _identity(record: dict[str, Any]) -> tuple[str, str, str, str]:
+            return (
+                str(record.get("source_role") or ""),
+                str(record.get("item_id") or ""),
+                str(record.get("event_type") or ""),
+                str(record.get("idempotency_key") or ""),
+            )
+
+        if not records:
+            return [], 0
+
+        selected: list[dict[str, Any]] = []
+        created = 0
+        # This intentionally avoids ``_mutate_file``. That generic helper
+        # deep-copies the entire value before and after a mutation, which is
+        # useful for small repositories but disproportionately expensive for a
+        # multi-megabyte append-only audit log during process startup.
+        with self._file_lock(self._routing_path):
+            existing_records = self._read_file(self._routing_path, [])
+            by_identity = {_identity(item): item for item in existing_records}
+            for record in records:
+                identity = _identity(record)
+                existing = by_identity.get(identity)
+                if existing is not None:
+                    selected.append(existing)
+                    continue
+                persisted = copy.deepcopy(record)
+                existing_records.append(persisted)
+                by_identity[identity] = persisted
+                selected.append(persisted)
+                created += 1
+            if created:
+                self._write_file(self._routing_path, existing_records)
         return copy.deepcopy(selected), created
 
     def save_audit_entry(self, record: dict[str, Any]) -> dict[str, Any]:

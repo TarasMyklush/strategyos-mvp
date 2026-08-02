@@ -4941,7 +4941,6 @@ def _chat_threads_payload(
         or executive_modes.get("active_board_state")
         or "pre"
     )
-    current_stage = _normalize_lifecycle_stage((summary or {}).get("current_stage"))
     challenged_count = int(publication.get("challenged_cases") or 0)
     run_id = str((summary or {}).get("run_id") or "latest")
     active_driver_key = str(executive_modes.get("active_driver_key") or "board_packet")
@@ -4979,17 +4978,17 @@ def _chat_threads_payload(
                 ),
             }
         )
-    preview_status = str((summary or {}).get("status") or "available")
-    preview_stage = current_stage.replace("_", " ")
-    preview_status_label = preview_status.replace("_", " ")
-    if preview_status_label == "missing":
-        workflow_preview = "No current governed run is available yet."
-    elif preview_status_label == "available":
-        workflow_preview = "Board context is available."
-    elif preview_status_label == preview_stage:
-        workflow_preview = f"Board context is {preview_status_label}."
-    else:
-        workflow_preview = f"Board context is {preview_status_label} at {preview_stage}."
+    preview_status = str((summary or {}).get("status") or "available").strip().lower()
+    workflow_preview = {
+        "missing": "No current governed run is available yet.",
+        "available": "Board context is available.",
+        "completed": "Board context is complete and ready for review.",
+        "awaiting_review": "Board context is awaiting review.",
+        "approved": "Board context is approved.",
+        "running": "Board context is being prepared.",
+        "in_progress": "Board context is being prepared.",
+        "failed": "Board context needs attention before review.",
+    }.get(preview_status, f"Board context is {preview_status.replace('_', ' ')}.")
     if challenged_count:
         workflow_preview += f" · {challenged_count} challenged item{'s' if challenged_count != 1 else ''}"
     threads = [
