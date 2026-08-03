@@ -195,6 +195,24 @@ def _role_options_html() -> str:
     return "\n".join(rows)
 
 
+def _login_username_control_html() -> str:
+    """Render a preview picker without exposing account inventory in production."""
+    options = _role_options_html() if CONFIG.idp_test_users else ""
+    if options:
+        return (
+            "<label>Preview user"
+            '<select id="username" autocomplete="username" required>'
+            '<option value="" selected disabled>Choose an authorized preview user</option>'
+            f"{options}</select>"
+            "</label>"
+        )
+    return (
+        "<label>Username"
+        '<input id="username" type="text" autocomplete="username" required />'
+        "</label>"
+    )
+
+
 @app.get("/.well-known/openid-configuration")
 def openid_configuration() -> dict[str, Any]:
     issuer = str(CONFIG.idp_issuer or "").strip().rstrip("/")
@@ -223,6 +241,7 @@ def health_live() -> dict[str, str]:
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page() -> HTMLResponse:
+    username_control = _login_username_control_html()
     html_body = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -256,9 +275,7 @@ def login_page() -> HTMLResponse:
     <h1>Sign in to StrategyOS</h1>
     <p>Use your authorized StrategyOS account to continue.</p>
     <form id="login-form">
-      <label>Username
-        <input id="username" type="text" autocomplete="username" required />
-      </label>
+      {username_control}
       <label>Password
         <input id="password" type="password" autocomplete="current-password" required autofocus />
       </label>

@@ -108,8 +108,10 @@ def test_login_page_is_human_friendly_and_security_tagged():
         assert response.headers["content-security-policy"].startswith("default-src 'self'")
         assert response.headers["x-robots-tag"] == "noindex, nofollow"
         assert "Customer sign-in" in response.text
-        assert 'id="username" type="text"' in response.text
-        assert "executive.tester" not in response.text
+        assert 'select id="username"' in response.text
+        assert "Choose an authorized preview user" in response.text
+        assert "executive.tester" in response.text
+        assert "bu.tester" in response.text
         assert "operator.tester" not in response.text
         assert "reviewer.tester" not in response.text
         assert "tenant-admin.tester" not in response.text
@@ -117,6 +119,28 @@ def test_login_page_is_human_friendly_and_security_tagged():
         assert "operator.local" not in response.text
         assert "Sign out from your profile menu" in response.text
         assert "localStorage.removeItem" in response.text
+    finally:
+        _restore_env(original)
+
+
+def test_login_page_keeps_production_username_inventory_private():
+    original = _apply_env(
+        {
+            "STRATEGYOS_IDP_ISSUER": "https://strategyos.example.test",
+            "STRATEGYOS_IDP_CLIENT_ID": "strategyos-production-client",
+            "STRATEGYOS_IDP_CLIENT_SECRET": "production-secret",
+            "STRATEGYOS_IDP_TEST_USERS": None,
+        }
+    )
+    try:
+        response = TestClient(idp_module.app).get("/login")
+
+        assert response.status_code == 200
+        assert 'id="username" type="text"' in response.text
+        assert 'select id="username"' not in response.text
+        assert "Preview user" not in response.text
+        assert "operator.local" not in response.text
+        assert "reviewer.local" not in response.text
     finally:
         _restore_env(original)
 
