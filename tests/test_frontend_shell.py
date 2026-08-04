@@ -1263,10 +1263,16 @@ def test_ceo_operating_rails_flow_independently_when_a_decision_expands():
         operating_grid.index('<div class="ceo-action-column">')
     ]
     action_column = operating_grid[operating_grid.index('<div class="ceo-action-column">'):]
-    assert awareness_column.index('id="priority-section"') < awareness_column.index('id="week-ahead-section"')
+    assert 'id="priority-section"' in awareness_column
+    assert 'id="week-ahead-section"' not in awareness_column
     assert action_column.index('id="developments-section"') < action_column.index('id="review-files-section"')
+    assert action_column.index('</div>\n\n        <section class="section target-flow-section" id="week-ahead-section"') > action_column.index('id="review-files-section"')
     assert ".ceo-awareness-column,\n.ceo-action-column {\n  display: grid;\n  align-content: start;" in css
+    assert "#week-ahead-section {\n  grid-column: 1 / -1;\n  width: 100%;\n  min-width: 0;\n  container-type: inline-size;" in css
+    assert "#week-ahead-section #week-panel {\n  display: grid;\n  grid-template-columns: minmax(0, 1.08fr) minmax(340px, .92fr);" in css
+    assert "@container (max-width: 760px)" in css
     assert ".ceo-awareness-column,\n  .ceo-action-column {\n    display: contents;" in css
+    assert ".fidelity-operating-grid > .target-flow-section,\n  .ceo-awareness-column > .target-flow-section,\n  .ceo-action-column > .target-flow-section {\n    width: 100%;" in css
     assert "#priority-section { order: 1; }" in css
     assert "#developments-section { order: 2; }" in css
     assert "#week-ahead-section { order: 3; }" in css

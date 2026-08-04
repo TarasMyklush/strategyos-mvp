@@ -8440,6 +8440,13 @@ body {
   gap: 22px;
 }
 
+#week-ahead-section {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  container-type: inline-size;
+}
+
 .ceo-awareness-column > .target-flow-section,
 .ceo-action-column > .target-flow-section,
 #week-ahead-section {
@@ -9066,10 +9073,21 @@ body {
 }
 
 /* Calendar rows and preparation controls match the target dimensions. */
+#week-ahead-section #week-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(340px, .92fr);
+  align-items: start;
+  gap: 18px;
+}
+
 #week-ahead-section #week-panel .week-rail-v2 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+#week-ahead-section #week-panel > .fidelity-empty {
+  grid-column: 1 / -1;
 }
 
 #week-ahead-section #week-panel .event-chip {
@@ -9131,7 +9149,7 @@ body {
 }
 
 #week-ahead-section #week-panel .prep {
-  margin-top: 12px;
+  margin-top: 0;
   padding: 15px 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -9219,6 +9237,16 @@ body {
   margin-top: 0;
   padding: 8px 12px;
   font-size: 11.5px;
+}
+
+@container (max-width: 760px) {
+  #week-ahead-section #week-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #week-ahead-section #week-panel .prep {
+    margin-top: 12px;
+  }
 }
 
 /* One shared gravity heading, then the target's dashed sandbox and counsel card. */
@@ -9413,6 +9441,12 @@ body {
   .ceo-awareness-column,
   .ceo-action-column {
     display: contents;
+  }
+
+  .fidelity-operating-grid > .target-flow-section,
+  .ceo-awareness-column > .target-flow-section,
+  .ceo-action-column > .target-flow-section {
+    width: 100%;
   }
 
   #priority-section { order: 1; }
