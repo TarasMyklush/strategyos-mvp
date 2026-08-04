@@ -1105,6 +1105,10 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert "border-bottom: 1px solid var(--accent);" in css
     assert ".driver-tile > .driver-meta > .grounding-badge" in css
     assert "position: absolute;\n  top: 8px;\n  right: 8px;" in css
+    assert "margin-top: 24px;" in css
+    assert "max-width: calc(100% - 16px);" in css
+    assert "transform: translateX(-50%);" in css
+    assert "text-wrap: balance;" in css
     assert "grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);" in css
     assert ".hero-status__heading" in css
     assert ".hero-status__signal.is-attention" in css

@@ -7538,6 +7538,29 @@ body {
   white-space: nowrap;
 }
 
+/* Narrow four-up KPI cards must keep governance copy inside their own tile.
+   Center the badge, allow the exceptional long status to wrap, and reserve
+   one extra line above the ring so neither neighboring cards nor the metric
+   itself can be obscured. */
+@container (max-width: 230px) {
+  .driver-ring-stage {
+    margin-top: 24px;
+  }
+
+  .driver-tile > .driver-meta > .grounding-badge {
+    left: 50%;
+    right: auto;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100% - 16px);
+    justify-content: center;
+    transform: translateX(-50%);
+    white-space: normal;
+    text-align: center;
+    text-wrap: balance;
+  }
+}
+
 .topbar-theme-toggle {
   display: inline-grid;
   width: 34px;
