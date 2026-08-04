@@ -1053,7 +1053,7 @@ def test_plan_health_exception_caption_is_visible_below_ring():
 
     assert ".hero-status__caption" in final_hero_block
     assert "display: block" in final_hero_block
-    assert "width: 126px" in final_hero_block
+    assert "width: 128px" in final_hero_block
 
 
 def test_headline_and_driver_share_one_plan_score_presentation_contract():
@@ -2552,6 +2552,42 @@ def test_hero_frame_ring_and_message_share_the_kpi_semantic_contract():
     assert "place-self: center" in status_value
 
 
+def test_ring_typography_separates_numbers_from_units_and_respects_safe_geometry():
+    """Display metrics must stay clear of the gauge stroke at every supported length."""
+    js = _static_executive_js()
+    css = _static_executive_css()
+
+    assert 'class="hero-status__metric"' in js
+    assert 'class="hero-status__number"' in js
+    assert 'class="hero-status__unit" aria-hidden="true">%</span>' in js
+    assert "'<span>' + escapeHtml(String(displayScore || 0)) + '%</span>'" not in js
+    assert 'class="driver-pct driver-pct--ratio' in js
+    assert 'class="driver-pct__main">' in js
+    assert "ratioValue.replace(/[^0-9]/g, \"\").length >= 4" in js
+    assert 'driver-pct--compact' in js
+    assert 'class="pct-sign"' not in js
+
+    hero_ring = css.split(".view-panel--home > .hero .hero-status__value {", 1)[1].split("}", 1)[0]
+    assert "width: 128px" in hero_ring
+    assert "height: 128px" in hero_ring
+    assert "border: 6px solid" in hero_ring
+    assert ".hero-status__number" in css
+    assert "font-size: 38px" in css
+    assert ".hero-status__unit" in css
+    assert "font-size: 18px" in css
+
+    ratio_block = css.split(".driver-pct--ratio {", 1)[1].split("}", 1)[0]
+    assert "display: inline-flex" in ratio_block
+    assert "max-width: 84px" in ratio_block
+    assert "align-items: baseline" in ratio_block
+    assert "white-space: nowrap" in ratio_block
+    assert ".driver-pct--ratio .driver-pct__main" in css
+    assert "font-size: 30px" in css
+    assert ".driver-pct--ratio.driver-pct--compact .driver-pct__main" in css
+    assert "font-size: 26px" in css
+    assert ".pct-sign" not in css
+
+
 def test_hero_morning_brief_is_structured_and_scan_safe():
     """Hermes may speak first, but never as a passive paragraph in the hero."""
     html = _ceo_executive_html()
@@ -2587,6 +2623,8 @@ def test_hero_morning_brief_is_structured_and_scan_safe():
     assert '"hero-briefing-signal-title": note.signal_title' in render_block
     assert '"hero-briefing-next-title": note.next_title' in render_block
     assert '"hero-briefing-compact-assistant": note.assistant + " · "' in render_block
+    assert '.replace(/^StrategyOS\\s+/i, "")' in js
+    assert '.replace(/\\s+[—-]\\s+/, " · ")' in js
 
 
 def test_hero_morning_brief_opens_its_exact_governed_thread():

@@ -1868,7 +1868,9 @@
         : "Behind path"
       : "";
     var nextTitle = todaysEvent
-      ? firstDefined(todaysEvent.title, todaysEvent.label, "Calendar review")
+      ? String(firstDefined(todaysEvent.title, todaysEvent.label, "Calendar review"))
+        .replace(/^StrategyOS\s+/i, "")
+        .replace(/\s+[—-]\s+/, " · ")
       : "No governed commitment recorded";
     var nextWhen = todaysEvent ? firstDefined(todaysEvent.when, "") : "";
     return {
@@ -2530,7 +2532,9 @@
       return '<div class="driver-pct driver-pct--metric"><span class="driver-pct__main">—</span><span class="driver-pct__unit">data gap</span></div>';
     }
     if (driverHasPercent(driver)) {
-      return '<div class="driver-pct">' + escapeHtml(driverPercentValue(driver).toFixed(1)) + '<span class="pct-sign">%</span></div><div class="driver-ofplan">' + escapeHtml(driverRingCaption(driver)) + '</div>';
+      var ratioValue = driverPercentValue(driver).toFixed(1);
+      var ratioClass = ratioValue.replace(/[^0-9]/g, "").length >= 4 ? " driver-pct--compact" : "";
+      return '<div class="driver-pct driver-pct--ratio' + ratioClass + '"><span class="driver-pct__main">' + escapeHtml(ratioValue) + '</span><span class="driver-pct__unit" aria-hidden="true">%</span></div><div class="driver-ofplan">' + escapeHtml(driverRingCaption(driver)) + '</div>';
     }
     var metric = String(firstDefined(driver && driver.metric, '—')).trim();
     var moneyMatch = metric.match(/^([A-Z]{3})\s+([+-]?\d[\d,.]*)([KMBT]?)$/i);
@@ -4706,7 +4710,7 @@
     if (heroEl) heroEl.classList.add("tone-" + semanticTone);
     if (heroStatusEl) heroStatusEl.classList.add("tone-" + semanticTone);
     $("hero-score").innerHTML = hasScore && !reviewGate
-      ? '<span>' + escapeHtml(String(displayScore || 0)) + '%</span><small>of plan</small>'
+      ? '<span class="hero-status__metric"><span class="hero-status__number">' + escapeHtml(String(displayScore || 0)) + '</span><span class="hero-status__unit" aria-hidden="true">%</span></span><small>of plan</small>'
       : '<span class="hero-status__fallback">' + escapeHtml(heroStatusText) + '</span>';
     $("hero-cap").textContent = heroStatusCaption;
     var statusSignalEl = $("hero-status-signal");
