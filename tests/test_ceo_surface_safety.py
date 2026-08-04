@@ -2578,13 +2578,18 @@ def test_ring_typography_separates_numbers_from_units_and_respects_safe_geometry
 
     ratio_block = css.split(".driver-pct--ratio {", 1)[1].split("}", 1)[0]
     assert "display: inline-flex" in ratio_block
-    assert "max-width: 84px" in ratio_block
+    assert "max-width: 66px" in ratio_block
     assert "align-items: baseline" in ratio_block
     assert "white-space: nowrap" in ratio_block
     assert ".driver-pct--ratio .driver-pct__main" in css
-    assert "font-size: 30px" in css
+    assert "font-size: 28px" in css
     assert ".driver-pct--ratio.driver-pct--compact .driver-pct__main" in css
-    assert "font-size: 26px" in css
+    assert "font-size: 23px" in css
+    assert "width: 112px;\n  height: 112px;\n  min-height: 112px" in css
+    assert ".driver-pct--ratio.driver-pct--compact .driver-pct__unit" in css
+    assert "font-size: 10px" in css
+    assert "font-size: 19px" in css
+    assert "font-size: 8px" in css
     assert ".pct-sign" not in css
 
 

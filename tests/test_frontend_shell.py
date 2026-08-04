@@ -1094,7 +1094,7 @@ def test_executive_surface_bundles_reference_display_font_and_ring_tokens():
     assert '"Helvetica Neue", Helvetica, Arial, sans-serif' in css
     assert "gap: 13px;" in css
     assert "padding: 24px 18px 20px;" in css
-    assert "width: 104px;\n  height: 104px;\n  min-height: 104px;" in css
+    assert "width: 112px;\n  height: 112px;\n  min-height: 112px;" in css
     assert "container-type: inline-size;" in css
     assert ".driver-pct--money" in css
     assert ".driver-foot__metric" in css

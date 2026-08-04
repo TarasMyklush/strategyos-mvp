@@ -5564,8 +5564,8 @@ html[data-theme="dark"] .trend-axis {
 }
 
 .driver-ring-stage .driver-ring {
-  width: 104px;
-  height: 104px;
+  width: 112px;
+  height: 112px;
 }
 
 .driver-ring-copy {
@@ -5583,32 +5583,35 @@ html[data-theme="dark"] .trend-axis {
   line-height: 1;
 }
 
+/* The 112px rendered gauge has an 84px painted inner diameter. Keep ratio
+   copy within 66px so every supported value retains at least 9px of optical
+   clearance from the actual stroke, not merely from the SVG viewport. */
 .driver-pct--ratio {
   display: inline-flex;
-  max-width: 84px;
+  max-width: 66px;
   align-items: baseline;
   justify-content: center;
   white-space: nowrap;
 }
 
 .driver-pct--ratio .driver-pct__main {
-  font-size: 30px;
+  font-size: 28px;
   line-height: 1;
 }
 
 .driver-pct--ratio .driver-pct__unit {
-  margin-left: 1px;
+  margin-left: 0;
   color: var(--muted);
-  font-size: 16px;
+  font-size: 12px;
   line-height: 1;
 }
 
 .driver-pct--ratio.driver-pct--compact .driver-pct__main {
-  font-size: 26px;
+  font-size: 23px;
 }
 
 .driver-pct--ratio.driver-pct--compact .driver-pct__unit {
-  font-size: 13px;
+  font-size: 10px;
 }
 
 .driver-pct--metric {
@@ -7386,9 +7389,9 @@ body {
 }
 
 .driver-ring-stage {
-  width: 104px;
-  height: 104px;
-  min-height: 104px;
+  width: 112px;
+  height: 112px;
+  min-height: 112px;
 }
 
 .driver-meta {
@@ -7495,13 +7498,24 @@ body {
     height: 96px;
   }
 
-  .driver-pct--ratio .driver-pct__main,
-  .driver-pct--money .driver-pct__main {
+  .driver-pct--ratio .driver-pct__main {
     font-size: 24px;
   }
 
   .driver-pct--ratio .driver-pct__unit {
-    font-size: 12px;
+    font-size: 9px;
+  }
+
+  .driver-pct--ratio.driver-pct--compact .driver-pct__main {
+    font-size: 19px;
+  }
+
+  .driver-pct--ratio.driver-pct--compact .driver-pct__unit {
+    font-size: 8px;
+  }
+
+  .driver-pct--money .driver-pct__main {
+    font-size: 24px;
   }
 
   .driver-label {
