@@ -2552,6 +2552,70 @@ def test_hero_frame_ring_and_message_share_the_kpi_semantic_contract():
     assert "place-self: center" in status_value
 
 
+def test_hero_morning_brief_is_structured_and_scan_safe():
+    """Hermes may speak first, but never as a passive paragraph in the hero."""
+    html = _ceo_executive_html()
+    js = _static_executive_js()
+    css = _static_executive_css()
+
+    assert 'id="hero-morning-briefing"' in html
+    assert 'class="hero-briefing"' in html
+    assert 'id="hero-briefing-signal-title"' in html
+    assert 'id="hero-briefing-signal-value"' in html
+    assert 'id="hero-briefing-compact-assistant"' in html
+    assert 'id="hero-briefing-next-title"' in html
+    assert 'id="hero-briefing-next-when"' in html
+    assert "hero-morning-note" not in html
+    assert "hero-morning-note" not in css
+
+    briefing_css = css.split(".hero-briefing {", 1)[1].split("}", 1)[0]
+    assert "display: grid" in briefing_css
+    assert "min-height: 58px" in briefing_css
+    assert "grid-template-columns" in briefing_css
+    assert "white-space: nowrap" in css
+    assert "text-overflow: ellipsis" in css
+    compact_block = css.split(".hero-briefing:hover .hero-briefing__action", 1)[1].split(
+        "@media (max-width: 480px)", 1
+    )[0]
+    assert "@media (max-width: 980px)" in compact_block
+    assert "grid-template-columns: minmax(0, 1fr) auto" in compact_block
+
+    render_block = js.split('var morningBriefing = $("hero-morning-briefing")', 1)[1].split(
+        "var reviewGate", 1
+    )[0]
+    assert "note.text" not in render_block
+    assert '"hero-briefing-signal-title": note.signal_title' in render_block
+    assert '"hero-briefing-next-title": note.next_title' in render_block
+    assert '"hero-briefing-compact-assistant": note.assistant + " · "' in render_block
+
+
+def test_hero_morning_brief_opens_its_exact_governed_thread():
+    """The compact rail must reveal its detail, not whichever chat was active."""
+    js = _static_executive_js()
+    render_block = js.split('var morningBriefing = $("hero-morning-briefing")', 1)[1].split(
+        "var reviewGate", 1
+    )[0]
+
+    assert "function morningThreadKey(note)" in js
+    assert "ensureThreads();" in render_block
+    assert "state.activeThreadKey = morningThreadKey(note);" in render_block
+    assert "openAssistantDrawer(morningBriefing);" in render_block
+    assert "function morningThreadPreview(note)" in js
+    assert "preview: morningThreadPreview(morningNote)" in js
+
+
+def test_morning_brief_drawer_header_stays_compact_on_mobile():
+    css = _static_executive_css()
+    mobile_block = css.rsplit("@media (max-width: 720px) {", 1)[1]
+
+    assert ".assistant-conversation__head" in mobile_block
+    assert "grid-template-columns: minmax(0, 1fr)" in mobile_block
+    assert "#assistant-thread-title" in mobile_block
+    assert "text-overflow: ellipsis" in mobile_block
+    assert "#assistant-thread-meta" in mobile_block
+    assert "-webkit-line-clamp: 2" in mobile_block
+
+
 def test_hero_does_not_manufacture_a_headline_when_nothing_was_found():
     from strategyos_mvp.executive_presentation import _hero
 

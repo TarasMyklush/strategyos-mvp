@@ -22,6 +22,7 @@ The “agent collaboration” visible in the CEO app is currently a governed mod
 
 Hermes appears in several places:
 
+- compact hero briefing rail (exception + next commitment only; full note opens in the drawer);
 - bottom `Ask Hermes` launcher;
 - assistant drawer;
 - hero prompt chips;

@@ -1831,6 +1831,13 @@
       return /^behind/i.test(String(firstDefined(item.status_vs_path, "")));
     });
     var driftCost = drifting && drifting.cost_of_drift && drifting.cost_of_drift.statement;
+    var driftActual = drifting ? metricNumber(drifting.actual) : null;
+    var driftCheckpoint = drifting ? metricNumber(drifting.checkpoint) : null;
+    var driftDelta = driftActual !== null && driftCheckpoint !== null
+      ? Math.abs(driftCheckpoint - driftActual)
+      : null;
+    var driftUnit = String(firstDefined(drifting && drifting.unit, "")).trim();
+    var driftDeltaUnit = driftUnit === "%" ? "pts" : driftUnit;
     var stateLine = drifting
       ? firstDefined(drifting.name, drifting.kpi_id, "A board commitment") + " is behind its June path at "
         + firstDefined(drifting.actual, "—") + firstDefined(drifting.unit, "") + " versus "
@@ -1852,12 +1859,43 @@
         + (todaysEvent.when ? " at " + todaysEvent.when : "")
         + (evidenceRefs.length ? " — its preparation context is available below." : " — no preparation attachment is available yet.")
       : "There is no high-signal calendar commitment recorded for this demo day.";
+    var signalTitle = drifting
+      ? firstDefined(drifting.name, drifting.kpi_id, "Board commitment")
+      : "No exception identified";
+    var signalValue = drifting
+      ? driftDelta !== null
+        ? String(Number(driftDelta.toFixed(1))) + (driftDeltaUnit ? " " + driftDeltaUnit : "") + " behind path"
+        : "Behind path"
+      : "";
+    var nextTitle = todaysEvent
+      ? firstDefined(todaysEvent.title, todaysEvent.label, "Calendar review")
+      : "No governed commitment recorded";
+    var nextWhen = todaysEvent ? firstDefined(todaysEvent.when, "") : "";
     return {
       assistant: assistant,
       text: greeting + " " + stateLine + " " + connection,
+      signal_label: drifting ? "Exception" : "Current position",
+      signal_title: signalTitle,
+      signal_value: signalValue,
+      signal_tone: drifting ? "attention" : "current",
+      next_label: todaysEvent ? "Next commitment" : "Calendar",
+      next_title: nextTitle,
+      next_when: nextWhen,
       evidence_refs: evidenceRefs,
       date: activeVirtualDate()
     };
+  }
+
+  function morningThreadKey(note) {
+    return state.activePersona + ":morning-" + firstDefined(note && note.date, activeVirtualDate());
+  }
+
+  function morningThreadPreview(note) {
+    var signal = firstDefined(note && note.signal_title, "Current position")
+      + (note && note.signal_value ? " · " + note.signal_value : "");
+    var next = firstDefined(note && note.next_title, "No governed commitment recorded")
+      + (note && note.next_when ? " · " + note.next_when : "");
+    return signal + " · Next: " + next;
   }
 
   function recordSessionDecisionInChat(key, choice, title) {
@@ -3297,36 +3335,42 @@
     });
     if (getStrategyEnrichment().virtual_now) {
       var morningNote = morningNoteContract();
-      var morningKey = state.activePersona + ":morning-" + morningNote.date;
-      if (!threadStore()[morningKey]) {
-        var decisionMemory = getStrategyEnrichment().assistant_memory || null;
-        var morningMessages = [{
+      var morningKey = morningThreadKey(morningNote);
+      var existingMorning = threadStore()[morningKey] || {};
+      var morningTimestamp = firstDefined(
+        existingMorning.messages && existingMorning.messages[0] && existingMorning.messages[0].timestamp,
+        new Date().toISOString()
+      );
+      var decisionMemory = getStrategyEnrichment().assistant_memory || null;
+      var morningMessages = [{
+        role: "assistant",
+        text: morningNote.text,
+        evidence_refs: morningNote.evidence_refs,
+        morning_note_date: morningNote.date,
+        timestamp: morningTimestamp
+      }];
+      if (decisionMemory && decisionMemory.text) {
+        morningMessages.push({
           role: "assistant",
-          text: morningNote.text,
-          evidence_refs: morningNote.evidence_refs,
-          morning_note_date: morningNote.date,
-          timestamp: new Date().toISOString()
-        }];
-        if (decisionMemory && decisionMemory.text) {
-          morningMessages.push({
-            role: "assistant",
-            text: "Decision memory: " + decisionMemory.text,
-            evidence_refs: [decisionMemory.evidence].filter(Boolean),
-            timestamp: new Date().toISOString()
-          });
-        }
-        threadStore()[morningKey] = {
-          key: morningKey,
-          title: "Morning note · " + morningNote.date,
-          preview: morningNote.text,
-          route: "",
-          readOnly: true,
-          kind: "morning_note",
-          assistant: morningNote.assistant,
-          messages: morningMessages,
-          lastUpdated: new Date().toISOString()
-        };
+          text: "Decision memory: " + decisionMemory.text,
+          evidence_refs: [decisionMemory.evidence].filter(Boolean),
+          timestamp: firstDefined(
+            existingMorning.messages && existingMorning.messages[1] && existingMorning.messages[1].timestamp,
+            morningTimestamp
+          )
+        });
       }
+      threadStore()[morningKey] = {
+        key: morningKey,
+        title: "Morning note · " + morningNote.date,
+        preview: morningThreadPreview(morningNote),
+        route: "",
+        readOnly: true,
+        kind: "morning_note",
+        assistant: morningNote.assistant,
+        messages: morningMessages,
+        lastUpdated: firstDefined(existingMorning.lastUpdated, morningTimestamp)
+      };
     }
     if (!state.activeThreadKey || !threadStore()[state.activeThreadKey]) {
       state.activeThreadKey = firstDefined(chat.active_thread_id, seededThreads[0] && seededThreads[0].thread_id, Object.keys(threadStore())[0]);
@@ -4598,14 +4642,42 @@
       : "Good morning, " + firstName;
     $("hero-head").textContent = firstDefined(preferredHero.headline, preferredHero.summary, hero.summary, hero.label, getPlanHealth().label, "Plan health overview");
     $("hero-body").textContent = firstDefined(preferredHero.body, hero.body, getPlanHealth().summary, "Awaiting executive diagnostics.");
-    var morningTeaser = $("hero-morning-note");
-    if (morningTeaser) {
+    var morningBriefing = $("hero-morning-briefing");
+    if (morningBriefing) {
       var note = morningNoteContract();
-      morningTeaser.hidden = !getStrategyEnrichment().virtual_now;
-      morningTeaser.textContent = note.assistant + ": " + note.text;
-      morningTeaser.onclick = function () {
+      var briefingFields = {
+        "hero-briefing-assistant": note.assistant,
+        "hero-briefing-compact-assistant": note.assistant + " · ",
+        "hero-briefing-signal-label": note.signal_label,
+        "hero-briefing-signal-title": note.signal_title,
+        "hero-briefing-signal-value": note.signal_value,
+        "hero-briefing-next-label": note.next_label,
+        "hero-briefing-next-title": note.next_title,
+        "hero-briefing-next-when": note.next_when
+      };
+      Object.keys(briefingFields).forEach(function (id) {
+        var field = $(id);
+        if (!field) return;
+        var value = String(firstDefined(briefingFields[id], ""));
+        field.textContent = value;
+        field.title = value;
+        if (id === "hero-briefing-signal-value" || id === "hero-briefing-next-when") {
+          field.hidden = !value;
+        }
+      });
+      morningBriefing.hidden = !getStrategyEnrichment().virtual_now;
+      morningBriefing.setAttribute("data-tone", note.signal_tone);
+      var signalAria = note.signal_title + (note.signal_value ? ", " + note.signal_value : "");
+      var nextAria = note.next_title + (note.next_when ? " at " + note.next_when : "");
+      morningBriefing.setAttribute(
+        "aria-label",
+        "Open " + note.assistant + " morning briefing. " + signalAria
+          + ". " + note.next_label + ": " + nextAria + "."
+      );
+      morningBriefing.onclick = function () {
         ensureThreads();
-        openAssistantDrawer(morningTeaser);
+        state.activeThreadKey = morningThreadKey(note);
+        openAssistantDrawer(morningBriefing);
       };
     }
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";

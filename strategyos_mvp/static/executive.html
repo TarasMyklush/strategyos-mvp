@@ -80,7 +80,30 @@
           <p class="eyebrow" id="hero-eyebrow">Group CEO briefing</p>
           <h1 class="hero-title" id="hero-head">Preparing your executive briefing</h1>
           <p class="hero-body" id="hero-body">Loading the latest verified executive briefing…</p>
-          <button class="hero-morning-note" id="hero-morning-note" type="button" hidden></button>
+          <button class="hero-briefing" id="hero-morning-briefing" type="button" aria-label="Open morning briefing" hidden>
+            <span class="hero-briefing__identity">
+              <span class="hero-briefing__mark" aria-hidden="true">◆</span>
+              <span class="hero-briefing__identity-copy">
+                <strong id="hero-briefing-assistant">Hermes</strong>
+                <small>Morning brief</small>
+              </span>
+            </span>
+            <span class="hero-briefing__item hero-briefing__item--signal">
+              <small><span class="hero-briefing__compact-assistant" id="hero-briefing-compact-assistant">Hermes · </span><span id="hero-briefing-signal-label">Exception</span></small>
+              <span class="hero-briefing__line">
+                <strong id="hero-briefing-signal-title">Current position</strong>
+                <em id="hero-briefing-signal-value"></em>
+              </span>
+            </span>
+            <span class="hero-briefing__item hero-briefing__item--next">
+              <small id="hero-briefing-next-label">Next commitment</small>
+              <span class="hero-briefing__line">
+                <strong id="hero-briefing-next-title">Calendar review</strong>
+                <em id="hero-briefing-next-when"></em>
+              </span>
+            </span>
+            <span class="hero-briefing__action">Open brief <span aria-hidden="true">→</span></span>
+          </button>
           <div class="hero-plan-coverage" id="hero-plan-coverage"></div>
           <blockquote class="hero-quote" id="hero-quote" hidden></blockquote>
           <p class="hero-byline" id="hero-byline"></p>

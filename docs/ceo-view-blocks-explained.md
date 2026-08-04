@@ -68,6 +68,7 @@ It displays:
 
 - greeting;
 - executive summary;
+- compact morning briefing rail with the leading exception and next commitment;
 - score/ring;
 - board state;
 - report count;
@@ -86,6 +87,8 @@ Data sources:
 What it does:
 
 - renders the executive posture from the latest governed packet;
+- lets Hermes speak first through a scan-safe signal rail rather than passive prose;
+- opens the exact read-only morning briefing thread when that rail is selected;
 - computes and draws the circular score ring client-side;
 - renders mini stats from board, report, agent, and review data;
 - sends prompt-chip clicks to Hermes through `askAssistant()`.
@@ -431,4 +434,3 @@ The CEO view is a board-readiness cockpit:
 - knowledge graph = evidence relationships;
 - board portal = board-safe lifecycle and reports;
 - Hermes = contextual explanation and next-action interface.
-
