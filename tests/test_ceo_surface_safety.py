@@ -91,7 +91,7 @@ def test_ceo_jargon_replacements():
     assert "Runs on your infrastructure" not in js, (
         "Sovereign text must be CEO-friendly"
     )
-    assert "Your AI interfaces to the leadership team" in js, (
+    assert "Leadership assistant readiness" in js, (
         "AI team must use CEO-friendly leadership vocabulary"
     )
     for internal_copy in (
@@ -671,7 +671,7 @@ def test_ceo_digital_twin_cards_and_search_are_interactive():
     js = _static_executive_js()
 
     assert "data-twin-toggle" in js
-    assert "twin-network-search" in js
+    assert "data-readiness-profile" in js
     assert "state.openAgentId = state.openAgentId === id ? '' : id" in js
     assert "showAgentInstallRequest(item, sourceEl)" in js, (
         "connector installation must remain a separate governed flow"
@@ -736,7 +736,7 @@ def test_ai_team_search_stays_in_agents_workspace():
     js = _static_executive_js()
 
     assert 'data-view-target="agents"' in _ceo_executive_html()
-    assert "state.discoveryQuery = search.value || '';" in js
+    assert "data-readiness-profile" in js
     assert "renderAgentsDiscovery();" in js
     assert "Show me the agent catalogue" not in js, (
         "CEO Browse All Agents must not submit a canned assistant prompt"
@@ -831,7 +831,7 @@ def test_round_two_interactions_keep_their_governed_handoffs():
     assert 'decision_status: "recorded"' in js
     assert 'delivery_status: "not_delivered"' in js
     assert 'underlying_issue_status: "open"' in js
-    assert 'agent-activity-summary' in js
+    assert 'agent-task-summary' in js
 
 
 def test_hermes_header_phrase_clean():
@@ -2281,8 +2281,8 @@ def test_twins_and_specialist_functions_are_separate_ceo_surfaces():
     assert 'id="a2a-fab"' not in html
     assert 'id="a2a-panel"' not in html
     assert 'id="assistant-drawer"' in html
-    assert "AI Assistants represent leaders. Agents complete specialist work." in js
-    assert "Specialist analysis and audit work is tracked under Agents." in js
+    assert "Agents analyse, audit or prepare defined work against an explicit business objective" in js
+    assert "Assistant collaboration" in js
 
 
 def test_finance_function_workspace_uses_recorded_audit_events_and_exposes_stuck_state():
@@ -2300,11 +2300,11 @@ def test_finance_function_workspace_uses_recorded_audit_events_and_exposes_stuck
     assert 'name: "Finance Auditor"' in review_block
     assert 'stateKey = /\\b(locked|resolved|approved|complete|completed|closed|accepted)\\b/' in review_block
     assert '"stuck"' in review_block
-    assert "Recorded review trail" in render_block
-    assert "Expand a finding to see this agent’s work" in render_block
+    assert "Open full audit log" in render_block
+    assert "Mission and objective" in render_block
     assert "function-card__trail" in render_block
     assert "data-function-finding-toggle" not in render_block
-    assert 'entrypoint: "function_review"' in render_block
+    assert "agent-task-rows" in render_block
     assert "Current agent execution" in render_block
     assert "getRecordedRuntimeAgents()" in render_block
     assert "renderRuntimeAgentCard" in render_block

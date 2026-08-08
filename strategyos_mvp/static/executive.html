@@ -32,6 +32,7 @@
         <button class="view-tile" type="button" role="tab" data-view-target="agents" aria-controls="view-agents" aria-selected="false">AI Assistants</button>
         <button class="view-tile" type="button" role="tab" data-view-target="functions" aria-controls="view-functions" aria-selected="false">Agents</button>
         <button class="view-tile" type="button" role="tab" data-view-target="knowledge" aria-controls="view-knowledge" aria-selected="false" title="Evidence">Knowledge</button>
+        <button class="view-tile" type="button" role="tab" data-view-target="authority" aria-controls="view-authority" aria-selected="false">Authority Matrix</button>
       </nav>
     </div>
 
@@ -235,6 +236,19 @@
       </section>
 
     </section>
+
+    <section class="view-panel" data-view-panel="authority" id="view-authority" role="tabpanel" aria-hidden="true" hidden>
+      <section class="section" aria-labelledby="authority-heading">
+        <div class="section-head section-head--split">
+          <div>
+            <h2 class="section-title" id="authority-heading">Authority Matrix</h2>
+            <p class="section-note">Published information and action rights for executive personas, assistants and agents.</p>
+          </div>
+          <span class="evidence-badge">Governance policy · readable by everyone</span>
+        </div>
+        <article class="card detail-card authority-matrix-card" id="authority-matrix-panel"></article>
+      </section>
+    </section>
   </main>
 
   <footer class="composed-footer" id="composed-footer">
@@ -261,6 +275,7 @@
         </div>
         <div class="assistant-head__actions">
           <span class="pill-inline ok" id="assistant-state">ready</span>
+          <button class="assistant-maximize" id="assistant-maximize" type="button" aria-label="Maximize assistant" aria-pressed="false">Expand</button>
           <button class="assistant-close" id="assistant-close" type="button" aria-label="Close assistant">✕</button>
         </div>
       </div>
@@ -285,6 +300,18 @@
       </div>
     </article>
   </aside>
+
+  <div class="conversation-log-scrim" id="conversation-log-scrim" hidden></div>
+  <section class="conversation-log-modal" id="conversation-log-modal" hidden role="dialog" aria-modal="true" aria-labelledby="conversation-log-title">
+    <div class="conversation-log-modal__head">
+      <div>
+        <span class="eyebrow">Assistant collaboration</span>
+        <h3 class="detail-title" id="conversation-log-title">Complete conversation log</h3>
+      </div>
+      <button type="button" id="conversation-log-close" aria-label="Close complete conversation log">✕</button>
+    </div>
+    <div id="conversation-log-body" class="conversation-log-modal__body"></div>
+  </section>
 
   <script id="strategyos-executive-bootstrap" type="application/json">__STRATEGYOS_EXECUTIVE_BOOTSTRAP__</script>
   <script>window.STRATEGYOS_X=window.STRATEGYOS_X||{threads:{},assistants:{}};</script>

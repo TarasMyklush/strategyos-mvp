@@ -8,6 +8,7 @@
   if (bootstrap.api_auth_enabled) {}
   var _tokenKey = "strategyos.ui.token";
   var EXECUTIVE_THEME_STORAGE_KEY = "strategyos.executive.theme";
+  var ASSISTANT_EXPANDED_STORAGE_KEY = "strategyos.executive.assistantExpanded";
   var ASSISTANT_ENDPOINT = "/assistant/chat";
   var ASSISTANT_TRANSPORT_FALLBACK = "I couldn't reach the shared assistant service just now.";
   var BOOTSTRAP_ASSISTANT_CONTEXT = bootstrap.assistant_public_context || {};
@@ -18,6 +19,10 @@
       if (stored === "light" || stored === "dark") return stored;
     } catch (_error) {}
     return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  }
+
+  function storedAssistantExpanded() {
+    try { return window.localStorage.getItem(ASSISTANT_EXPANDED_STORAGE_KEY) === "true"; } catch (_error) { return false; }
   }
 
   function applyExecutiveTheme(theme) {
@@ -776,6 +781,22 @@
   function fetchJson(path) {
     return fetch(path, { headers: authHeaders() }).then(function (response) {
       return response.ok ? response.json() : null;
+    });
+  }
+
+  function putJson(path, body) {
+    var headers = authHeaders();
+    headers["Content-Type"] = "application/json";
+    return fetch(path, { method: "PUT", headers: headers, body: JSON.stringify(body || {}) }).then(function (response) {
+      return parseJsonResponse(response).then(function (payload) {
+        if (!response.ok) {
+          var error = new Error(firstDefined(payload && payload.detail, "Request failed with status " + response.status));
+          error.status = response.status;
+          error.payload = payload;
+          throw error;
+        }
+        return payload;
+      });
     });
   }
 
@@ -2251,24 +2272,14 @@
     var openCount = review.stuck_count + review.working_count;
     var activeReviewAgents = review.functions.filter(function (item) { return item.entries.length > 0; });
     var recoverableConfirmed = Number(firstDefined((state.latestPacket || {}).total_recoverable_sar, 0)) || 0;
-    var activitySummary = activeReviewAgents.length + " agents · " + review.total_count + " steps · "
-      + review.round_count + " review rounds — " + review.locked_count + " findings locked, "
-      + formatSarCompact(recoverableConfirmed) + " recoverable confirmed.";
+    var completedTasks = review.locked_count;
+    var pendingTasks = openCount;
+    var queuedTasks = getRecordedRuntimeAgents().filter(function (item) {
+      return /queued|pending|waiting/i.test(String(firstDefined(item.status, item.state, '')));
+    }).length;
 
     if (overview) {
-      overview.innerHTML = '<p class="agent-activity-summary">' + escapeHtml(activitySummary) + '</p><div class="function-separation"><div class="function-separation__copy"><span class="eyebrow">Two different kinds of AI</span><h3>AI Assistants represent leaders. Agents complete specialist work.</h3><p><strong>AI Assistants</strong> are aligned to accountable executive roles such as the Group CFO. <strong>Agents</strong> analyse, audit or prepare defined work. Each agent exposes its own evidence-backed activity and review trail below.</p></div><div class="function-overview-actions"><button type="button" class="function-team-link" data-function-view-team>View AI Assistants</button><button type="button" class="function-brief-btn" data-function-ask>Ask Hermes for CEO brief</button></div></div><div class="function-review-summary"><div class="function-review-state tone-' + escapeHtml(statusTone) + '"><span>Current finance review</span><strong>' + escapeHtml(statusLabel) + '</strong><small>' + escapeHtml(review.status === "complete" ? "Every recorded finding is locked." : review.status === "stuck" ? review.stuck_count + " finding" + (review.stuck_count === 1 ? " is" : "s are") + " waiting for resolution." : review.status === "working" ? openCount + " finding" + (openCount === 1 ? " remains" : "s remain") + " open." : review.reason) + '</small></div><div><strong>' + escapeHtml(String(review.findings.length)) + '</strong><span>findings reviewed</span></div><div><strong>' + escapeHtml(String(review.locked_count)) + '</strong><span>locked</span></div><div class="' + (openCount ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(openCount)) + '</strong><span>open or stuck</span></div><div><strong>' + escapeHtml(String(review.round_count)) + '</strong><span>review rounds</span></div></div>';
-      var teamLink = overview.querySelector('[data-function-view-team]');
-      if (teamLink) teamLink.onclick = function () { switchView("agents"); };
-      var askButton = overview.querySelector('[data-function-ask]');
-      if (askButton) askButton.onclick = function () {
-        askAssistant('Give me a CEO brief on the Finance Analyst–Finance Auditor review: what was completed, what remains open or stuck, the material implication, and whether I need to intervene.', askButton, {
-          entrypoint: "function_review",
-          function_ids: ["finance-analyst", "finance-auditor"],
-          finding_count: review.findings.length,
-          locked_count: review.locked_count,
-          stuck_count: review.stuck_count
-        });
-      };
+      overview.innerHTML = '<p class="agent-definition">Agents analyse, audit or prepare defined work against an explicit business objective and leave a reviewable trail.</p><div class="agent-task-summary"><div><strong>' + escapeHtml(String(completedTasks)) + '</strong><span>Completed</span></div><div class="' + (pendingTasks ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(pendingTasks)) + '</strong><span>Pending</span></div><div><strong>' + escapeHtml(String(queuedTasks)) + '</strong><span>Queued</span></div></div>';
     }
 
     if (roster) {
@@ -2281,7 +2292,10 @@
           if (!entries.length) return "";
           return '<details class="function-finding state-' + escapeHtml(finding.state) + '"><summary class="function-finding__head"><span><strong>' + escapeHtml(finding.id) + '</strong><small>' + escapeHtml(String(entries.length)) + ' ' + escapeHtml(item.name) + ' step' + (entries.length === 1 ? '' : 's') + '</small></span><em class="function-state tone-' + escapeHtml(functionStateTone(finding.state)) + '">' + escapeHtml(functionStateLabel(finding.state)) + '</em><span class="function-card__caret" aria-hidden="true">›</span></summary><div class="function-finding__body"><ol class="function-step-list">' + entries.slice().reverse().map(renderFunctionStep).join('') + '</ol></div></details>';
         }).filter(Boolean).join("");
-        return '<details class="function-card"><summary class="function-card__summary"><div class="function-card__head"><span class="function-card__icon" aria-hidden="true">' + escapeHtml(item.name === "Finance Auditor" ? "A" : "F") + '</span><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.purpose) + '</span></div><em class="function-state tone-' + escapeHtml(functionStateTone(item.state)) + '">' + escapeHtml(functionStateLabel(item.state)) + '</em><span class="function-card__caret" aria-hidden="true">›</span></div><div class="function-card__facts"><span><strong>' + escapeHtml(String(item.entries.length)) + '</strong> recorded step' + (item.entries.length === 1 ? '' : 's') + '</span><span>' + escapeHtml(item.output) + '</span></div></summary><div class="function-card__latest"><span>Latest recorded work</span><p>' + escapeHtml(functionAuditCopy(latest.detail || (item.entries.length ? functionActionLabel(latest.action) : "No work recorded for this run."))) + '</p>' + (latest.round_no !== null && latest.round_no !== undefined ? '<small>Round ' + escapeHtml(String(latest.round_no)) + '</small>' : '') + '</div><div class="function-card__trail"><div class="function-card__trail-head"><strong>Recorded review trail</strong><span>Expand a finding to see this agent’s work</span></div><div class="function-finding-list">' + (roleFindings || '<div class="function-empty"><p>No review steps are recorded for this agent.</p></div>') + '</div></div></details>';
+        var mission = item.name + ' — ' + (item.name === 'Finance Auditor'
+          ? 'independently verifies cash-leakage findings in the current remediation programme, protecting ' + formatSarCompact(recoverableConfirmed) + ' of confirmed recovery.'
+          : 'builds evidence-backed recovery cases in the current remediation programme so accountable owners can act on ' + formatSarCompact(recoverableConfirmed) + '.');
+        return '<details class="function-card"><summary class="function-card__summary"><div class="function-card__head"><span class="function-card__icon" aria-hidden="true">' + escapeHtml(item.name === "Finance Auditor" ? "A" : "F") + '</span><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(mission) + '</span></div><em class="function-state tone-' + escapeHtml(functionStateTone(item.state)) + '">' + escapeHtml(functionStateLabel(item.state)) + '</em><span class="function-card__caret" aria-hidden="true">›</span></div></summary><div class="agent-objective"><span>Mission and objective</span><p>' + escapeHtml(mission) + '</p></div><div class="agent-task-rows"><div><span>Complete</span><strong>' + escapeHtml(String(item.entries.length)) + ' recorded steps</strong></div><div><span>Running</span><strong>' + escapeHtml(functionAuditCopy(latest.detail || item.output)) + '</strong></div><div class="' + (item.state === 'stuck' ? 'needs-attention' : '') + '"><span>Needs decision</span><strong>' + escapeHtml(item.state === 'stuck' ? 'Reviewer decision required · open Decisions for you' : 'No executive decision requested') + '</strong></div></div><details class="agent-audit-log"><summary>Open full audit log</summary><div class="function-card__trail"><div class="function-finding-list">' + (roleFindings || '<div class="function-empty"><p>No review steps are recorded for this agent.</p></div>') + '</div></div></details></details>';
       }).join('');
       var runtimeAgents = getRecordedRuntimeAgents().slice(0, 6);
       var financeSection = activeCards
@@ -6009,6 +6023,107 @@
       if (["positive", "green", "up", "success", "favourable", "favorable", "win"].indexOf(tone) >= 0) return "positive";
       return "watch";
     }
+    function developmentReferenceIds(item) {
+      var haystack = [
+        item && item.key,
+        item && item.classification,
+        item && item.summary,
+        item && item.title,
+        item && item.context && item.context.why_attached,
+        item && item.context && item.context.what
+      ].concat(safeArray(item && item.evidence_refs), safeArray(item && item.context && item.context.sources))
+        .map(function (value) { return typeof value === "object" ? JSON.stringify(value) : String(value || ""); })
+        .join(" ");
+      var matches = haystack.match(/\b(?:EV|SIG|INIT)-[A-Za-z0-9-]+\b/gi) || [];
+      return matches.filter(function (value, index) { return matches.indexOf(value) === index; });
+    }
+    function cachedDevelopmentBrief(item) {
+      var keys = [item && item.key, item && item.classification, item && item.title]
+        .map(function (value) { return String(value || '').toLowerCase(); })
+        .filter(Boolean);
+      return safeArray(enrichment.development_briefs).find(function (brief) {
+        var briefKeys = [brief && brief.item_id, brief && brief.title]
+          .map(function (value) { return String(value || '').toLowerCase(); });
+        return keys.some(function (key) {
+          return briefKeys.some(function (briefKey) { return key === briefKey || key.indexOf(briefKey) === 0 || briefKey.indexOf(key) === 0; });
+        });
+      }) || {};
+    }
+    function developmentWhat(item) {
+      var cached = cachedDevelopmentBrief(item);
+      if (cached.what) return String(cached.what);
+      var actual = item && item.actual;
+      var checkpoint = item && item.checkpoint;
+      var unit = String(firstDefined(item && item.unit, ""));
+      if (actual !== undefined && actual !== null && checkpoint !== undefined && checkpoint !== null) {
+        var gap = Number(checkpoint) - Number(actual);
+        var gapText = Number.isFinite(gap) ? " — " + Math.abs(gap).toFixed(1).replace(/\.0$/, "") + unit + (gap >= 0 ? " behind" : " ahead") : "";
+        return firstDefined(item.title, "This measure") + " moved to " + actual + unit + " versus the approved " + checkpoint + unit + " checkpoint" + gapText + ".";
+      }
+      return wordSlice(firstDefined(item && item.what_changed, item && item.summary, item && item.title, "The recorded business position changed."), 260);
+    }
+    function developmentWhy(item) {
+      var cached = cachedDevelopmentBrief(item);
+      if (cached.why) return String(cached.why);
+      var why = String(firstDefined(item && item.why_it_is_here, item && item.context && item.context.why_attached, item && item.context && item.context.what, "")).trim();
+      var what = developmentWhat(item);
+      var refs = developmentReferenceIds(item);
+      if (!why || why === String(firstDefined(item && item.summary, "")).trim() || what.indexOf(why) >= 0) {
+        why = refs.length
+          ? "The linked operating event or initiative is the current candidate driver; causality still needs executive confirmation."
+          : "Cause is not yet established; the current data does not provide a distinct, evidenced driver."
+      }
+      return wordSlice(why, 240) + (refs.length ? " (" + refs.slice(0, 3).join(" · ") + ")" : "");
+    }
+    function developmentBriefPrompt(item) {
+      var refs = developmentReferenceIds(item);
+      return "Prepare a decision-ready briefing on " + firstDefined(item && item.title, item && item.key, "this development") + ". Explain the trend, likely causes, exposure, options and related decisions. Distinguish verified facts from hypotheses and use the linked evidence" + (refs.length ? ": " + refs.join(", ") : ".");
+    }
+    function openDevelopmentBrief(item, sourceEl) {
+      var itemId = String(firstDefined(item && item.key, item && item.classification, item && item.title, "development")).replace(/[^A-Za-z0-9_-]+/g, "-");
+      var threadKey = state.activePersona + ":development:" + itemId;
+      ensureThreads();
+      var cached = cachedDevelopmentBrief(item);
+      if (!threadStore()[threadKey]) {
+        var prompt = developmentBriefPrompt(item);
+        var cachedMessages = cached.rich_briefing ? [
+          { role: "user", text: prompt, status: "ok", timestamp: new Date().toISOString() },
+          {
+            role: "assistant",
+            text: String(cached.rich_briefing),
+            status: "ok",
+            timestamp: new Date().toISOString(),
+            evidence_refs: safeArray(cached.evidence_refs),
+            payload: { determinism_tier: "derived_insight", synthesis_provider: cached.synthesized_by || enrichment.synthesis_provider }
+          }
+        ] : [];
+        threadStore()[threadKey] = {
+          key: threadKey,
+          title: firstDefined(item && item.title, "Development briefing"),
+          preview: "Trend, causes, exposure, options and related decisions.",
+          route: "",
+          readOnly: false,
+          kind: "finding",
+          assistant: firstDefined(getPersonaContract(state.activePersona).assistant, "Hermes"),
+          messages: cachedMessages,
+          anchor_id: itemId,
+          lastUpdated: new Date().toISOString()
+        };
+      }
+      state.activeThreadKey = threadKey;
+      saveStoredThreads();
+      if (safeArray(threadStore()[threadKey].messages).length) {
+        openAssistantDrawer(sourceEl);
+        return;
+      }
+      askAssistant(developmentBriefPrompt(item), sourceEl, {
+        entrypoint: "development_learn_more",
+        finding_id: itemId,
+        what_changed: developmentWhat(item),
+        why_it_is_here: developmentWhy(item),
+        evidence_refs: developmentReferenceIds(item)
+      });
+    }
     var developmentsAndConcerns = signals.concat(developments.map(function (item, index) {
         return {
           key: 'development-' + index,
@@ -6018,7 +6133,11 @@
           tone: awarenessTone(firstDefined(item.tone, item.kind)),
           owner: firstDefined(item.owner, item.accountable_owner, ''),
           actual: item.actual,
-          checkpoint: firstDefined(item.checkpoint, item.plan, item.target)
+          checkpoint: firstDefined(item.checkpoint, item.plan, item.target),
+          context: {
+            why_attached: firstDefined(item.why_it_is_here, item.cause, item.reason, ''),
+            sources: safeArray(firstDefined(item.evidence_refs, item.sources, []))
+          }
         };
       })).concat(fallbackFindings.map(function (item, index) {
         return {
@@ -6027,7 +6146,11 @@
           summary: firstDefined(item.summary, item.detail, ''),
           classification: firstDefined(item.tag, item.classification, item.category, 'Finance finding'),
           tone: awarenessTone(firstDefined(item.tone, 'watch')),
-          owner: firstDefined(item.owner, item.accountable_owner, '')
+          owner: firstDefined(item.owner, item.accountable_owner, ''),
+          context: {
+            why_attached: firstDefined(item.why_it_is_here, item.cause, item.reason, ''),
+            sources: safeArray(firstDefined(item.evidence_refs, item.sources, []))
+          }
         };
       }));
     if (delegated) {
@@ -6167,7 +6290,7 @@
         context.horizon ? 'Horizon · ' + context.horizon : '',
         sources.length ? 'Source · ' + evidenceReferencesText(sources) : ''
       ].filter(Boolean);
-      return '<details class="executive-signal executive-signal--context tone-' + escapeHtml(tone) + '"><summary class="target-awareness-row">' + row + '<span class="target-feed-caret" aria-hidden="true">+</span></summary><div class="executive-signal-context">' + (summary ? '<p><strong>What changed</strong>' + escapeHtml(summary) + '</p>' : '') + (context.why_attached || context.what ? '<p><strong>Why it is here</strong>' + escapeHtml(firstDefined(context.why_attached, context.what)) + '</p>' : '') + (context.leading_indicator ? '<p><strong>Watch</strong>' + escapeHtml(context.leading_indicator) + '</p>' : '') + (context.recommended_action ? '<p><strong>Response already in the data</strong>' + escapeHtml(context.recommended_action) + '</p>' : '') + (contextMeta.length ? '<small>' + escapeHtml(contextMeta.join(' · ')) + '</small>' : '') + '</div></details>';
+      return '<details class="executive-signal executive-signal--context tone-' + escapeHtml(tone) + '"><summary class="target-awareness-row">' + row + '<span class="target-feed-caret" aria-hidden="true">+</span></summary><div class="executive-signal-context"><p><strong>What changed</strong>' + escapeHtml(developmentWhat(item)) + '</p><p><strong>Why it is here</strong>' + escapeHtml(developmentWhy(item)) + '</p>' + (context.leading_indicator ? '<p><strong>Watch</strong>' + escapeHtml(context.leading_indicator) + '</p>' : '') + (context.recommended_action ? '<p><strong>Response already in the data</strong>' + escapeHtml(context.recommended_action) + '</p>' : '') + (contextMeta.length ? '<small>' + escapeHtml(contextMeta.join(' · ')) + '</small>' : '') + '<button type="button" class="development-learn-more" data-development-learn-more="' + escapeHtml(String(firstDefined(item.key, item.classification, item.title))) + '">Ask Hermes about this →</button></div></details>';
     }).join('') : '<div class="executive-empty-state"><strong>No material performance exception</strong><p>The current headline measures remain within the executive tolerance.</p></div>';
 
     if (findingsPanel) {
@@ -6182,6 +6305,17 @@
         button.onclick = function () {
           switchView("functions");
           showToast("Opened the agent review trail behind the recovery figure.");
+        };
+      });
+      safeArray(findingsPanel.querySelectorAll('[data-development-learn-more]')).forEach(function (button) {
+        button.onclick = function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          var itemKey = button.getAttribute('data-development-learn-more') || '';
+          var item = developmentsAndConcerns.find(function (candidate) {
+            return String(firstDefined(candidate.key, candidate.classification, candidate.title)) === itemKey;
+          });
+          if (item) openDevelopmentBrief(item, button);
         };
       });
     }
@@ -6336,12 +6470,36 @@
       return labels[String(status || "ready")] || humanizeToken(status);
     }
 
+    function canSeeTeamReadiness() {
+      var sessionRole = String(firstDefined((state.session || {}).display_role, (state.session || {}).role, "")).toLowerCase();
+      return authorityRight('persona:' + state.activePersona, 'assistant_team') !== 'none'
+        || /\b(?:ceo|cio)\b/.test(sessionRole);
+    }
+
+    function currentPersonaProfile(profiles) {
+      var personaLabel = getPersonaLabel(state.activePersona).toLowerCase();
+      return profiles.find(function (item) {
+        var itemPersona = String(firstDefined(item.persona, "")).toLowerCase();
+        if (state.activePersona === "ceo") return /group ceo/.test(itemPersona);
+        if (state.activePersona === "gm") return /(?:bu gm|general manager)/.test(itemPersona);
+        return itemPersona === personaLabel || itemPersona.indexOf(state.activePersona) >= 0;
+      }) || profiles[0];
+    }
+
+    function readinessTone(value) {
+      var score = Number(value || 0);
+      return score >= 80 ? "green" : score >= 60 ? "amber" : "red";
+    }
+
     if (activityCard) {
       var activeLeadershipCount = leadershipTwins.filter(function (item) { return /^(active|monitoring)$/i.test(String(item && item.status || "")); }).length;
       var attentionLeadershipCount = leadershipTwins.filter(function (item) { return /^attention$/i.test(String(item && item.status || "")); }).length;
       var profiles = safeArray(getStrategyEnrichment().assistant_profiles).filter(function (item) {
         return /^(group ceo|group cfo|bu gm|board)/i.test(String(firstDefined(item.persona, "")));
       });
+      var teamVisible = canSeeTeamReadiness();
+      var ownProfile = currentPersonaProfile(profiles);
+      var visibleProfiles = teamVisible ? profiles : [ownProfile].filter(Boolean);
       var readinessAverage = profiles.length ? Math.round(profiles.reduce(function (sum, item) { return sum + Number(item.readiness_pct || 0); }, 0) / profiles.length) : 0;
       var weakProfile = profiles.slice().sort(function (left, right) {
         return Number(left.readiness_pct || 0) - Number(right.readiness_pct || 0);
@@ -6351,31 +6509,35 @@
           + " has the lowest readiness at " + escapeHtml(String(weakProfile.readiness_pct)) + "%. "
           + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(weakProfile.note, "A source refresh is recommended."))) + "</p>"
         : "";
-      var readinessMarkup = profiles.length ? '<div class="assistant-readiness"><div class="assistant-readiness__head"><div><span class="eyebrow">Assistant team readiness</span><h3>' + escapeHtml(String(readinessAverage)) + '% average readiness</h3></div><span class="evidence-badge">Evidence verified · Assistant Profiles</span></div><div class="assistant-readiness__grid">' + profiles.map(function (item) {
+      var selectedProfile = visibleProfiles.find(function (item) {
+        return String(firstDefined(item.persona, item.assistant_name)) === String(state.openAgentId || firstDefined(ownProfile && ownProfile.persona, visibleProfiles[0] && visibleProfiles[0].persona));
+      }) || visibleProfiles[0];
+      var readinessMarkup = visibleProfiles.length ? '<div class="assistant-readiness"><div class="assistant-readiness__head"><div><span class="eyebrow">' + (teamVisible ? 'Leadership assistant readiness' : 'Your assistant') + '</span><h3>' + (teamVisible ? escapeHtml(String(readinessAverage)) + '% team average' : 'Private readiness view') + '</h3></div><span class="evidence-badge">Authority Matrix · ' + (teamVisible ? 'CEO/CIO view' : 'own assistant only') + '</span></div><div class="assistant-readiness__grid">' + visibleProfiles.map(function (item) {
         var breakdown = safeArray(item.readiness_breakdown);
-        var evidence = item.evidence || {};
-        return '<details><summary><strong>' + escapeHtml(firstDefined(item.assistant_name, item.persona)) + '</strong><span>' + escapeHtml(String(item.readiness_pct)) + '%</span></summary><p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.note, 'No readiness note supplied.'))) + '</p><small>' + escapeHtml(breakdown.length === 3 ? 'Freshness ' + breakdown[0] + ' · Depth ' + breakdown[1] + ' · Usage ' + breakdown[2] : '') + '</small><small>Source · ' + escapeHtml(evidenceReferenceLabel({ file: firstDefined(evidence.file, 'Assistant_Profiles.xlsx'), locator: firstDefined(evidence.record_id, item.persona) })) + '</small></details>';
-      }).join('') + '</div>' + readinessSuggestion + '</div>' : '';
-      activityCard.innerHTML = readinessMarkup + '<div class="twin-network-intro"><div><span class="eyebrow">Executive assistants</span><h3>Your AI interfaces to the leadership team</h3><p>Each assistant is aligned to a real executive role—such as Group CFO or Group Manager—and maintains that role’s priorities, responsibilities and escalation path. Specialist analysis and audit work is tracked under Agents.</p></div><div class="twin-network-metrics"><div><strong>' + escapeHtml(String(leadershipTwins.length)) + '</strong><span>role interfaces</span></div><div><strong>' + escapeHtml(String(activeLeadershipCount)) + '</strong><span>working now</span></div><div><strong>' + escapeHtml(String(attentionLeadershipCount)) + '</strong><span>need review</span></div></div></div>';
+        var profileKey = String(firstDefined(item.persona, item.assistant_name));
+        return '<button type="button" class="assistant-readiness-card' + (selectedProfile === item ? ' is-active' : '') + '" data-readiness-profile="' + escapeHtml(profileKey) + '"><span class="assistant-readiness-card__owner">' + escapeHtml(firstDefined(item.persona, 'Executive owner')) + '</span><strong>' + escapeHtml(firstDefined(item.assistant_name, 'Assistant')) + '</strong><span class="assistant-readiness-ring tone-' + readinessTone(item.readiness_pct) + '" style="--readiness:' + escapeHtml(String(Math.max(0, Math.min(100, Number(item.readiness_pct || 0))))) + '"><em>' + escapeHtml(String(item.readiness_pct)) + '%</em></span><small>' + escapeHtml(breakdown.length === 3 ? 'Freshness ' + breakdown[0] + ' · Depth ' + breakdown[1] + ' · Usage ' + breakdown[2] : 'Open readiness detail') + '</small></button>';
+      }).join('') + '</div>' + (selectedProfile ? '<div class="assistant-readiness-detail"><div><span class="eyebrow">' + escapeHtml(firstDefined(selectedProfile.assistant_name, 'Assistant')) + ' detail</span><h3>' + escapeHtml(firstDefined(selectedProfile.persona, 'Executive assistant')) + '</h3></div><p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(selectedProfile.note, 'No readiness note supplied.'))) + '</p><div class="assistant-readiness-detail__facts"><span><strong>' + escapeHtml(String(firstDefined(selectedProfile.connected_sources, '—'))) + '</strong>connected sources</span><span><strong>' + escapeHtml(String(firstDefined(selectedProfile.threads_30d, 0))) + '</strong>threads in 30 days</span><span><strong>' + escapeHtml(String(firstDefined(selectedProfile.last_refresh, '—'))) + '</strong>last refresh</span></div></div>' : '') + readinessSuggestion + '</div>' : '';
+      activityCard.innerHTML = readinessMarkup;
+      safeArray(activityCard.querySelectorAll('[data-readiness-profile]')).forEach(function (button) {
+        button.onclick = function () {
+          state.openAgentId = button.getAttribute('data-readiness-profile') || '';
+          renderAgentsDiscovery();
+        };
+      });
     }
 
     if (networkCard) {
-      networkCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">AI assistants by executive role</span><span class="ach-hint">Who each assistant represents and its current state</span></div><label class="disco-search twin-search"><span class="disco-search-icon">⌕</span><span class="sr-only">Search AI assistants</span><input id="twin-network-search" type="search" value="' + escapeHtml(state.discoveryQuery || '') + '" placeholder="Search roles, responsibilities or KPIs…" autocomplete="off" /></label></div><div class="twin-card-list">' + (twins.length ? twins.map(function (item) {
+      var ownTwin = twins.find(function (item) {
+        var role = String(firstDefined(item.role, item.twin_id, '')).toLowerCase();
+        return role === state.activePersona || (state.activePersona === 'ceo' && /ceo/.test(role)) || (state.activePersona === 'gm' && /gm|group_manager/.test(role));
+      }) || twins[0];
+      var ownTwins = ownTwin ? [ownTwin] : [];
+      networkCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Your assistant</span><span class="ach-hint">Priorities, decisions needed and active work for your current persona</span></div></div><div class="twin-card-list">' + (ownTwins.length ? ownTwins.map(function (item) {
         var id = String(firstDefined(item.role, item.twin_id, "twin"));
         var isOpen = state.openAgentId === id;
         var status = String(firstDefined(item.status, "ready"));
         return '<article class="twin-card status-' + escapeHtml(status) + '"><button type="button" class="twin-card__head" data-twin-toggle="' + escapeHtml(id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"><span class="twin-avatar">' + escapeHtml((item.assistant_name || item.display_name || "AI").slice(0, 1)) + '</span><span class="twin-card__identity"><strong>' + escapeHtml(twinTitle(item)) + '</strong><span>' + escapeHtml(scrubExecutiveTechnicalLanguage(leadershipActivityCopy(item, getExecutiveStateSnapshot()))) + '</span></span><span class="twin-status"><i></i>' + escapeHtml(twinStatus(status)) + '</span><span class="agent-caret' + (isOpen ? ' is-open' : '') + '">›</span></button>' + (isOpen ? '<div class="twin-card__body"><div class="twin-facts"><div><span>Open priorities</span><strong>' + escapeHtml(String(firstDefined(item.active_investigation_count, 0))) + '</strong></div><div><span>Decisions needed</span><strong>' + escapeHtml(String(firstDefined(item.pending_request_count, 0))) + '</strong></div><div><span>Completed reviews</span><strong>' + escapeHtml(String(firstDefined(item.cycle_count, 0))) + '</strong></div></div>' + renderLeadershipStatus(item) + '<div class="twin-detail"><span class="eyebrow">Responsibilities</span><p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(item.authority, "Responsibilities will appear when available."))) + '</p></div><div class="twin-detail"><span class="eyebrow">Business focus</span><div class="twin-tags">' + safeArray(item.kpis_owned).map(function (kpi) { return '<span>' + escapeHtml(humanizeToken(kpi)) + '</span>'; }).join('') + '</div></div><div class="twin-detail"><span class="eyebrow">Executive escalation</span><p>' + escapeHtml(safeArray(item.escalation_path).map(humanizeToken).join(' → ') || 'No executive escalation is currently required') + '</p></div></div>' : '') + '</article>';
-      }).join('') : '<div class="network-empty">No AI assistants match this search.</div>') + '</div>';
-      var search = networkCard.querySelector('#twin-network-search');
-      if (search) search.oninput = function () {
-        state.discoveryQuery = search.value || '';
-        renderAgentsDiscovery();
-        var next = $("twin-network-search");
-        if (next) {
-          next.focus();
-          if (typeof next.setSelectionRange === "function") next.setSelectionRange(next.value.length, next.value.length);
-        }
-      };
+      }).join('') : '<div class="network-empty">No assistant is configured for this persona.</div>') + '</div>';
       safeArray(networkCard.querySelectorAll('[data-twin-toggle]')).forEach(function (button) {
         button.onclick = function () {
           var id = button.getAttribute('data-twin-toggle') || '';
@@ -6391,17 +6553,40 @@
       var openHandoffs = Number(firstDefined(collaboration.open_handoff_count, collaboration.pending_request_count, 0)) || 0;
       var resolvedHandoffs = Number(firstDefined(collaboration.resolved_handoff_count, 0)) || 0;
       var attentionHandoffs = Number(firstDefined(collaboration.executive_attention_count, 0)) || 0;
-      var completedCycles = Number(firstDefined(runtime.completed_cycle_count, runtime.cycle_count, 0)) || 0;
       var collaborationMeaning = attentionHandoffs
         ? attentionHandoffs + ' item' + (attentionHandoffs === 1 ? ' requires' : 's require') + ' your attention.'
         : (openHandoffs ? openHandoffs + ' item' + (openHandoffs === 1 ? ' is' : 's are') + ' progressing with the leadership team.' : 'No assistant handoff requires your attention.');
       var noEventCopy = openHandoffs
         ? 'Items are progressing; no decision is requested from you yet.'
         : 'No recent leadership-team activity needs review.';
+      function a2aSummary(thread) {
+        var turns = safeArray(thread.turns);
+        var supplied = String(firstDefined(thread.executive_summary, thread.summary, '')).trim();
+        if (supplied) return wordSlice(scrubExecutiveTechnicalLanguage(supplied), 360);
+        var firstTurn = turns[0] || {};
+        var lastTurn = turns[turns.length - 1] || {};
+        var participants = safeArray(thread.participants).join(' and ') || 'The assistants';
+        return wordSlice(participants + ' reviewed ' + String(firstDefined(thread.topic, 'the current issue')).toLowerCase() + '. They established ' + firstDefined(firstTurn.text, 'the starting position') + ' Next: ' + firstDefined(lastTurn.text, 'confirm the accountable follow-up.'), 360);
+      }
       var seededMarkup = seededThreads.length ? '<div class="a2a-seeded-threads">' + seededThreads.map(function (thread, index) {
         var threadKey = String(firstDefined(thread.thread_id, thread.id, "a2a-" + index));
-        var isOpen = Boolean((state.openA2AThreadKeys || {})[threadKey]);
-        return '<details data-a2a-thread="' + escapeHtml(threadKey) + '"' + (isOpen ? ' open' : '') + '><summary><span><strong>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(thread.topic, 'Assistant conversation'))) + '</strong><small>' + escapeHtml(safeArray(thread.participants).join(' ↔ ')) + '</small></span><em>' + escapeHtml(String(safeArray(thread.turns).length)) + ' messages</em></summary><ol>' + safeArray(thread.turns).map(function (turn) {
+        var metrics = safeArray(thread.key_figures).length
+          ? safeArray(thread.key_figures).slice(0, 5)
+          : executiveMetricTokens(safeArray(thread.turns).map(function (turn) { return firstDefined(turn.text, ''); }).join(' '), 5);
+        return '<article class="a2a-summary-card"><div class="a2a-summary-card__head"><span><strong>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(thread.topic, 'Assistant conversation'))) + '</strong><small>' + escapeHtml(safeArray(thread.participants).join(' ↔ ')) + '</small></span><em class="function-state tone-' + escapeHtml(functionStateTone(firstDefined(thread.status, 'complete'))) + '">' + escapeHtml(humanizeToken(firstDefined(thread.status, 'complete'))) + '</em></div><p>' + escapeHtml(a2aSummary(thread)) + '</p>' + (metrics.length ? '<div class="a2a-number-chips">' + metrics.map(function (metric) { return '<strong>' + escapeHtml(metric) + '</strong>'; }).join('') + '</div>' : '') + '<button type="button" class="a2a-open-log" data-a2a-open-log="' + escapeHtml(threadKey) + '">Open complete conversation log</button></article>';
+      }).join('') + '</div>' : '';
+      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Executive summary of assistant-to-assistant exchanges</span></div></div>' + seededMarkup + (seededThreads.length ? '' : '<div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>'));
+      safeArray(collaborationCard.querySelectorAll('[data-a2a-open-log]')).forEach(function (button) {
+        button.onclick = function () {
+          var key = button.getAttribute('data-a2a-open-log') || '';
+          var thread = seededThreads.find(function (item, index) { return String(firstDefined(item.thread_id, item.id, 'a2a-' + index)) === key; });
+          if (!thread) return;
+          var modal = $('conversation-log-modal');
+          var scrim = $('conversation-log-scrim');
+          var title = $('conversation-log-title');
+          var body = $('conversation-log-body');
+          if (title) title.textContent = firstDefined(thread.topic, 'Complete conversation log');
+          if (body) body.innerHTML = '<ol>' + safeArray(thread.turns).map(function (turn) {
           var references = safeArray(turn.evidence_refs);
           var turnMetrics = executiveMetricTokens(firstDefined(turn.text, ''), 4);
           var metricMarkup = turnMetrics.length
@@ -6412,23 +6597,98 @@
                 return '<span class="evidence-badge">' + escapeHtml(evidenceReferenceLabel(reference)) + '</span>';
               }).join('') + '</div>'
             : '';
-          return '<li><span>' + escapeHtml(firstDefined(turn.from, 'Assistant')) + ' → ' + escapeHtml(firstDefined(turn.to, 'Assistant')) + '</span>' + metricMarkup + '<p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(turn.text, ''))) + '</p>' + evidenceMarkup + '</li>';
-        }).join('') + '</ol></details>';
-      }).join('') + '</div>' : '';
-      collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Items moving between executive-role assistants</span></div></div><p class="twin-explainer">This view shows coordination between AI Assistants. Work completed by specialist agents—and each agent’s review trail—is available under Agents.</p>' + seededMarkup + (seededThreads.length ? '' : '<div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>')) + (completedCycles ? '<p class="twin-runtime-note">' + escapeHtml(String(completedCycles)) + ' review cycle' + (completedCycles === 1 ? '' : 's') + ' completed</p>' : '');
-      safeArray(collaborationCard.querySelectorAll('[data-a2a-thread]')).forEach(function (details) {
-        details.ontoggle = function () {
-          var key = details.getAttribute("data-a2a-thread") || "";
-          state.openA2AThreadKeys = state.openA2AThreadKeys || {};
-          state.openA2AThreadKeys[key] = details.open;
+            return '<li><span>' + escapeHtml(firstDefined(turn.from, 'Assistant')) + ' → ' + escapeHtml(firstDefined(turn.to, 'Assistant')) + '</span>' + metricMarkup + '<p>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(turn.text, ''))) + '</p>' + evidenceMarkup + '</li>';
+          }).join('') + '</ol>';
+          if (modal) modal.hidden = false;
+          if (scrim) scrim.hidden = false;
+          state.openA2AThreadKeys[key] = true;
         };
       });
+      var closeLog = function () {
+        var modal = $('conversation-log-modal');
+        var scrim = $('conversation-log-scrim');
+        if (modal) modal.hidden = true;
+        if (scrim) scrim.hidden = true;
+      };
+      if ($('conversation-log-close')) $('conversation-log-close').onclick = closeLog;
+      if ($('conversation-log-scrim')) $('conversation-log-scrim').onclick = closeLog;
     }
 
     if (automationCard) {
       automationCard.hidden = true;
       automationCard.innerHTML = '';
     }
+  }
+
+  function defaultAuthorityMatrix() {
+    return {
+      version: "§3 · Executive information and action rights",
+      domains: ["finance", "hr", "contracts", "board_materials", "assistant_team"],
+      subjects: [
+        { id: "persona:ceo", label: "Group CEO", type: "persona", rights: { finance: "analyse", hr: "analyse", contracts: "recommend", board_materials: "analyse", assistant_team: "analyse" } },
+        { id: "persona:cio", label: "Group CIO", type: "persona", rights: { finance: "view", hr: "view", contracts: "view", board_materials: "view", assistant_team: "analyse" } },
+        { id: "persona:gm", label: "BU General Manager", type: "persona", rights: { finance: "view", hr: "view", contracts: "none", board_materials: "none", assistant_team: "none" } },
+        { id: "assistant:hermes", label: "Hermes", type: "assistant", rights: { finance: "recommend", hr: "view", contracts: "recommend", board_materials: "recommend", assistant_team: "analyse" } },
+        { id: "assistant:iris", label: "Iris", type: "assistant", rights: { finance: "view", hr: "view", contracts: "none", board_materials: "none", assistant_team: "none" } },
+        { id: "agent:finance-auditor", label: "Finance Auditor", type: "agent", rights: { finance: "recommend", hr: "none", contracts: "analyse", board_materials: "none", assistant_team: "none" } }
+      ],
+      approver_chains: {
+        finance_action: "Group CFO → Group CEO",
+        contract_action: "Legal → Group CFO → Group CEO",
+        board_release: "Company Secretary → Group CEO"
+      }
+    };
+  }
+
+  function authorityRight(subjectId, domain) {
+    var matrix = state.authorityMatrix || defaultAuthorityMatrix();
+    var subject = safeArray(matrix.subjects).find(function (item) { return item.id === subjectId; });
+    return String(firstDefined(subject && subject.rights && subject.rights[domain], "none"));
+  }
+
+  function renderAuthorityMatrix() {
+    var panel = $('authority-matrix-panel');
+    if (!panel) return;
+    var matrix = state.authorityMatrix || defaultAuthorityMatrix();
+    state.authorityMatrix = matrix;
+    var sessionRole = String(firstDefined((state.session || {}).display_role, (state.session || {}).role, '')).toLowerCase();
+    var canEdit = state.authorityEditable === true && (state.activePersona === 'ceo' || /\b(?:ceo|cio|executive|admin|system)\b/.test(sessionRole));
+    var rights = ['none', 'view', 'analyse', 'recommend', 'act-with-approval'];
+    var header = '<div class="authority-grid__header"><strong>Subject</strong>' + safeArray(matrix.domains).map(function (domain) { return '<strong>' + escapeHtml(humanizeToken(domain)) + '</strong>'; }).join('') + '</div>';
+    var rows = safeArray(matrix.subjects).map(function (subject) {
+      return '<div class="authority-grid__row"><span><strong>' + escapeHtml(subject.label) + '</strong><small>' + escapeHtml(subject.type) + '</small></span>' + safeArray(matrix.domains).map(function (domain) {
+        var value = authorityRight(subject.id, domain);
+        if (!canEdit) return '<span class="authority-right right-' + escapeHtml(value) + '">' + escapeHtml(humanizeToken(value)) + '</span>';
+        return '<label><span class="sr-only">' + escapeHtml(subject.label + ' · ' + domain) + '</span><select data-authority-subject="' + escapeHtml(subject.id) + '" data-authority-domain="' + escapeHtml(domain) + '">' + rights.map(function (right) { return '<option value="' + escapeHtml(right) + '"' + (right === value ? ' selected' : '') + '>' + escapeHtml(humanizeToken(right)) + '</option>'; }).join('') + '</select></label>';
+      }).join('') + '</div>';
+    }).join('');
+    var chains = Object.keys(matrix.approver_chains || {}).map(function (key) {
+      var chain = Array.isArray(matrix.approver_chains[key]) ? matrix.approver_chains[key].join(' → ') : matrix.approver_chains[key];
+      return '<div><span>' + escapeHtml(humanizeToken(key)) + '</span><strong>' + escapeHtml(chain) + '</strong></div>';
+    }).join('');
+    var versionLabel = typeof matrix.version === 'number' ? '§3 · Published version ' + matrix.version : matrix.version;
+    panel.innerHTML = '<div class="authority-matrix-intro"><div><span class="eyebrow">' + escapeHtml(versionLabel) + '</span><h3>Published authority</h3><p>Every assistant and agent checks these rights before information is displayed or work is proposed.</p></div><span class="pill-inline ' + (canEdit ? 'ok' : 'warn') + '">' + (canEdit ? 'CEO/CIO editing enabled' : 'Read-only published policy') + '</span></div><div class="authority-grid">' + header + rows + '</div><div class="authority-approvals"><span class="eyebrow">Approver chains</span>' + chains + '</div>';
+    safeArray(panel.querySelectorAll('[data-authority-subject]')).forEach(function (select) {
+      select.onchange = async function () {
+        var subject = safeArray(matrix.subjects).find(function (item) { return item.id === select.getAttribute('data-authority-subject'); });
+        if (!subject) return;
+        var previous = subject.rights[select.getAttribute('data-authority-domain')];
+        subject.rights[select.getAttribute('data-authority-domain')] = select.value;
+        select.disabled = true;
+        try {
+          var saved = await putJson('/authority-matrix', { matrix: matrix, expected_version: matrix.version });
+          state.authorityMatrix = saved.matrix;
+          state.authorityEditable = saved.editable === true;
+          renderAuthorityMatrix();
+          renderAgentsDiscovery();
+          showToast('Published Authority Matrix updated.');
+        } catch (error) {
+          subject.rights[select.getAttribute('data-authority-domain')] = previous;
+          renderAuthorityMatrix();
+          showToast(error && error.status === 409 ? 'Authority Matrix changed. Refresh and try again.' : 'Authority Matrix update failed.');
+        }
+      };
+    });
   }
 
   function renderReviewFiles() {
@@ -6553,6 +6813,7 @@
     var launcher = $("chat-launcher");
     var topbarLauncher = $("topbar-assistant-launch");
     var closeButton = $("assistant-close");
+    var maximizeButton = $("assistant-maximize");
     var threads = personaThreadRecords();
     var current = threadStore()[currentThreadKey()];
     if (current) markThreadTransportFailuresRetryable(current);
@@ -6563,6 +6824,7 @@
       drawer.setAttribute("aria-modal", state.drawerOpen ? "true" : "false");
       drawer.setAttribute("aria-hidden", state.drawerOpen ? "false" : "true");
       drawer.setAttribute("role", "dialog");
+      drawer.classList.toggle("is-maximized", Boolean(state.assistantExpanded));
     }
     if (scrim) {
       scrim.hidden = !state.drawerOpen;
@@ -6582,6 +6844,15 @@
     if (closeButton) {
       closeButton.onclick = function () {
         _closeHermesDrawer();
+      };
+    }
+    if (maximizeButton) {
+      maximizeButton.textContent = state.assistantExpanded ? "Restore" : "Expand";
+      maximizeButton.setAttribute("aria-pressed", String(Boolean(state.assistantExpanded)));
+      maximizeButton.onclick = function () {
+        state.assistantExpanded = !state.assistantExpanded;
+        try { window.localStorage.setItem(ASSISTANT_EXPANDED_STORAGE_KEY, String(state.assistantExpanded)); } catch (_error) {}
+        renderAssistantStudio();
       };
     }
     // Conversation controls are part of the assistant contract for every
@@ -6870,6 +7141,7 @@
       agents: "AI Assistants",
       functions: "Agents",
       knowledge: "Knowledge",
+      authority: "Authority Matrix",
       reports: "Reports"
     };
     document.title = "StrategyOS — " + personaLabel + " " + firstDefined(viewLabels[state.activeView], "Workspace");
@@ -6965,6 +7237,7 @@
     renderHomeTargetExtensions();
     renderFunctionsWorkspace();
     renderKnowledgeGraph();
+    renderAuthorityMatrix();
     renderAssistantStudio();
     renderReportSurface();
     renderSummary();
@@ -6993,12 +7266,14 @@
         fetchJson(latestRunRouteForSession(session) + buildQuery(params)),
         session.authenticated ? fetchJson("/api/v1/agent-network") : Promise.resolve(null),
         session.authenticated ? fetchJson("/executive/files") : Promise.resolve(null),
-        session.authenticated ? fetchJson("/executive/decisions") : Promise.resolve(null)
+        session.authenticated ? fetchJson("/executive/decisions") : Promise.resolve(null),
+        fetchJson("/authority-matrix")
       ]);
       var latestPacket = packetAndNetwork[0];
       var agentNetwork = packetAndNetwork[1];
       var reviewFiles = packetAndNetwork[2];
       var decisionRecords = packetAndNetwork[3];
+      var authorityPolicy = packetAndNetwork[4];
 
       state.latestPacket = latestPacket || {};
       state.agentNetwork = agentNetwork && agentNetwork.status === "ok" ? agentNetwork : null;
@@ -7006,6 +7281,10 @@
       state.decisionRecords = decisionRecords && decisionRecords.status === "ok"
         ? safeArray(decisionRecords.records)
         : safeArray(state.decisionRecords);
+      state.authorityMatrix = authorityPolicy && authorityPolicy.status === "ok"
+        ? authorityPolicy.matrix
+        : state.authorityMatrix;
+      state.authorityEditable = Boolean(authorityPolicy && authorityPolicy.editable);
       state.session = session;
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
@@ -7097,6 +7376,7 @@
       assistantRequestPending: false,
       activeA2AExchange: "",
       drawerOpen: false,
+      assistantExpanded: storedAssistantExpanded(),
       drawerReturnFocusEl: null,
       failedAssistantAutoRetried: {},
       theme: storedExecutiveTheme(),
@@ -7134,7 +7414,9 @@
       agentSummaryOpen: false,
       openAgentId: firstDefined(requested.agent, ""),
       openAgentLogId: "",
-      approvedAgentIds: {}
+      approvedAgentIds: {},
+      authorityEditable: false,
+      authorityMatrix: defaultAuthorityMatrix()
     };
 
   applyExecutiveTheme(state.theme);

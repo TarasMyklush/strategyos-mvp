@@ -427,7 +427,8 @@ def test_legion_decisions_readiness_and_calendar_handoff_are_evidence_first() ->
     assert "Pending CEO decision" in js
     assert "target-decision-state" in js
     assert "Decision memory: " in js
-    assert "Evidence verified · Assistant Profiles" in js
+    assert "Authority Matrix · " in js
+    assert "assistant-readiness-ring" in js
     assert "/^(group ceo|group cfo|bu gm|board)/i" in js
     assert "CT-2023-014" in js
     assert "current board pack" in js
@@ -786,7 +787,7 @@ def test_digital_twin_cards_open_in_place_and_keep_connector_install_separate():
     executive_css = Path("strategyos_mvp/static/executive.css").read_text(encoding="utf-8")
 
     assert "data-twin-toggle" in executive_js
-    assert "twin-network-search" in executive_js
+    assert "data-readiness-profile" in executive_js
     assert "state.openAgentId = state.openAgentId === id ? '' : id" in executive_js
     assert "showAgentInstallRequest(item, sourceEl)" in executive_js
     assert "Agent installation is available from the operator surface" not in executive_js
@@ -1435,9 +1436,11 @@ def test_assistant_drawer_and_messages_are_bounded_to_prevent_cropped_chat():
 
     assert "width: min(560px" in drawer_block
     assert "max-width: 560px" in drawer_block
-    assert "max-width: min(86%" in message_block
+    assert "width: 100%" in message_block
+    assert "max-width: none" in message_block
     assert "overflow-wrap: anywhere" in message_block
-    assert "max-width: min(78%" in user_block
+    assert "width: 100%" in user_block
+    assert "max-width: none" in user_block
 
 
 def test_assistant_drawer_css_z_index_layering():

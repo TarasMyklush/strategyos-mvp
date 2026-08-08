@@ -19,6 +19,7 @@ from typing import Any, Callable
 
 from .. import state_store
 from ..config import CONFIG
+from ..authority_matrix import authority_decision, get_authority_matrix
 from .registry import TOOL_RISK_CLASSES
 
 
@@ -36,6 +37,7 @@ class ToolExecutionContext:
     run_id: str | None
     allowed_evidence_ids: tuple[str, ...] = ()
     capability_claims: Any | None = None
+    authority_subject_id: str | None = None
 
 
 class ToolNotFound(Exception):
@@ -442,6 +444,29 @@ def invoke_tool(
         raise ToolNotFound(f"no handler registered for tool key {tool_key!r}")
 
     tool_risk_class = TOOL_RISK_CLASSES.get(tool_key, "restricted")
+    if ctx.authority_subject_id:
+        domain = (
+            "board_materials" if tool_key.startswith(("board_pack.", "publication.", "review."))
+            else "assistant_team" if tool_key.startswith("runtime.")
+            else "contracts" if tool_key.startswith("evidence.")
+            else "finance"
+        )
+        required_right = (
+            "view" if tool_risk_class == "read_only"
+            else "recommend" if tool_risk_class == "prepare"
+            else "act-with-approval"
+        )
+        decision = authority_decision(
+            get_authority_matrix(ctx.tenant_id),
+            subject_id=ctx.authority_subject_id,
+            domain=domain,
+            required_right=required_right,
+        )
+        if not decision["allowed"]:
+            raise ToolInputInvalid(
+                f"{decision['subject_label']} cannot {required_right} {domain.replace('_', ' ')} — "
+                f"Authority Matrix {decision['matrix_row']}."
+            )
     if tool_risk_class != "read_only":
         if capability_claims is None:
             raise ToolInputInvalid(

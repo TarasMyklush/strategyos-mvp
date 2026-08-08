@@ -106,8 +106,8 @@ def test_executive_ui_distinguishes_assistants_from_functions_and_status_panel()
     html = (root / "executive.html").read_text(encoding="utf-8")
 
     assert '<h2 class="section-title" id="agents-heading">AI Assistants</h2>' in html
-    assert "AI assistants by executive role" in js
-    assert "Specialist analysis and audit work is tracked under Agents." in js
+    assert "Your assistant" in js
+    assert "AI assistants by executive role" not in js
     assert 'data-view-target="functions"' in html
     assert 'id="subtools-panel" hidden' in html
     assert "automationCard.hidden = true" in js
@@ -116,9 +116,9 @@ def test_executive_ui_distinguishes_assistants_from_functions_and_status_panel()
     assert ".agents-col-head .ach-title" in css
     assert ".agents-col-head .ach-hint" in css
     assert "text-align: left" in css
-    assert "This view shows coordination between AI Assistants" in js
+    assert "Executive summary of assistant-to-assistant exchanges" in js
     assert "Assistant collaboration" in js
-    assert "Who each assistant represents" in js
+    assert "Priorities, decisions needed and active work for your current persona" in js
     assert "executive twins" not in js.lower()
     assert 'String(getLeadershipTeam().length) + " assistants"' in js
     assert "scrubExecutiveTechnicalLanguage(firstDefined(item.authority" in js

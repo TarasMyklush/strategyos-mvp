@@ -34,6 +34,14 @@ from .auth import (
     require_live_health_access,
     require_role,
 )
+from .authority_matrix import (
+    assistant_subject,
+    authority_decision,
+    classify_request,
+    get_authority_matrix,
+    refusal_payload,
+    save_authority_matrix,
+)
 from .config import CONFIG
 from .executive_design import (
     executive_board_design,
@@ -253,6 +261,11 @@ class AssistantChatRequest(BaseModel):
     source: str | None = None
     entrypoint: str | None = None
     history: list[dict[str, Any]] | None = None
+
+
+class AuthorityMatrixUpdateRequest(BaseModel):
+    matrix: dict[str, Any]
+    expected_version: int | None = None
 
 
 from .twins.api import (
@@ -9637,7 +9650,7 @@ def record_executive_decision(
         if not requested_due_date:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Choose a due date; no governed milestone is available.",
+                detail="Choose a due date; StrategyOS will not invent one.",
             )
         try:
             date.fromisoformat(requested_due_date)
@@ -16541,6 +16554,57 @@ def data_qa(
     )
 
 
+@app.get("/authority-matrix")
+def authority_matrix_read(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> dict[str, Any]:
+    matrix = get_authority_matrix(_principal_tenant_id(principal))
+    role = str(principal.get("role") or "anonymous")
+    editable = bool(principal.get("auth_disabled")) or principal_has_any_role(
+        role, "executive", "tenant_admin", "system"
+    )
+    return {"status": "ok", "matrix": matrix, "editable": editable}
+
+
+@app.put("/authority-matrix")
+def authority_matrix_update(
+    request: AuthorityMatrixUpdateRequest,
+    principal: dict[str, Any] = require_role("executive", "tenant_admin", "system"),
+) -> dict[str, Any]:
+    actor = str(principal.get("subject") or principal.get("role") or "authority-editor")
+    try:
+        matrix = save_authority_matrix(
+            _principal_tenant_id(principal),
+            request.matrix,
+            actor=actor,
+            expected_version=request.expected_version,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        code = status.HTTP_409_CONFLICT if "changed since" in message else status.HTTP_422_UNPROCESSABLE_ENTITY
+        raise HTTPException(status_code=code, detail=message) from exc
+    return {"status": "ok", "matrix": matrix, "editable": True}
+
+
+def _assistant_authority_refusal(
+    request: AssistantChatRequest,
+    principal: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    tenant_id = _principal_tenant_id(principal)
+    matrix = get_authority_matrix(tenant_id)
+    domain, required_right = classify_request(
+        request.question,
+        request.assistant_context or request.context,
+    )
+    decision = authority_decision(
+        matrix,
+        subject_id=assistant_subject(request.persona),
+        domain=domain,
+        required_right=required_right,
+    )
+    return None if decision["allowed"] else refusal_payload(decision)
+
+
 @app.post("/assistant/chat")
 async def assistant_chat(
     request: AssistantChatRequest,
@@ -16550,6 +16614,9 @@ async def assistant_chat(
     authenticated = bool(principal.get("authenticated"))
     if CONFIG.login_required:
         _require_login_if_enabled(principal)
+        denied = _assistant_authority_refusal(request, principal)
+        if denied is not None:
+            return denied
         return await _assistant_chat_response(
             request,
             public_safe=False,
@@ -16562,6 +16629,9 @@ async def assistant_chat(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="A valid identity token is required.",
             )
+        denied = _assistant_authority_refusal(request, principal)
+        if denied is not None:
+            return denied
         return await _assistant_chat_response(request, public_safe=True)
 
     if not principal_has_any_role(role, *PRODUCT_READ_ROLES):
@@ -16569,6 +16639,10 @@ async def assistant_chat(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This identity is not permitted for this endpoint.",
         )
+
+    denied = _assistant_authority_refusal(request, principal)
+    if denied is not None:
+        return denied
 
     return await _assistant_chat_response(request, public_safe=False, authenticated_role=role)
 

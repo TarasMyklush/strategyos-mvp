@@ -173,6 +173,7 @@ def execute_agent_task_job(
         run_id=(running_task.get("input_json") or {}).get("run_id")
         or (running_task.get("context_manifest_json") or {}).get("run_id"),
         capability_claims=capability_claims,
+        authority_subject_id=f"agent:{agent_definition.agent_key}",
     )
 
     try:

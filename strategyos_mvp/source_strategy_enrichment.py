@@ -15,6 +15,8 @@ from typing import Any, Iterable
 
 from openpyxl import load_workbook
 
+from .executive_synthesis import synthesize_strategy_enrichment
+
 
 def _find(root: Path, name: str) -> Path | None:
     wanted = name.casefold()
@@ -688,7 +690,7 @@ def derive_strategy_enrichment(
         {str(row.get("Theme") or "").strip() for row in question_rows if row.get("Theme")}
     )
 
-    return {
+    payload = {
         "status": "ready" if glidepaths and initiatives and events else "partial",
         "virtual_now": "2026-06-01T08:00:00+03:00",
         "demo_window": {"start": "2026-06-01", "end": "2026-06-07"},
@@ -738,3 +740,4 @@ def derive_strategy_enrichment(
             ) if value
         ],
     }
+    return synthesize_strategy_enrichment(payload)

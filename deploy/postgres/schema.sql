@@ -1,5 +1,22 @@
 create extension if not exists pgcrypto;
 
+create table if not exists strategyos_authority_matrices (
+    tenant_key text primary key,
+    version integer not null,
+    matrix_json jsonb not null,
+    updated_by text not null,
+    updated_at timestamptz not null default now()
+);
+
+create table if not exists strategyos_authority_matrix_audit (
+    id uuid primary key default gen_random_uuid(),
+    tenant_key text not null,
+    version integer not null,
+    matrix_json jsonb not null,
+    actor text not null,
+    created_at timestamptz not null default now()
+);
+
 create table if not exists strategyos_runs (
     id uuid primary key default gen_random_uuid(),
     created_at timestamptz not null default now(),

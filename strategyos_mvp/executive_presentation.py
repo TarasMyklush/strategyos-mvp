@@ -450,7 +450,7 @@ def _recommendation_sentence(recommendation: Mapping[str, Any]) -> str:
         return f"Recommended action: assign {owner_label} and request a {deliverable.lower()} by {due_date['value']}."
     return (
         f"Recommended action: assign {owner_label} and request a {deliverable.lower()}. "
-        "A due date needs your input because no governed milestone is available."
+        "A due date needs your input; StrategyOS will not invent one."
     )
 
 
