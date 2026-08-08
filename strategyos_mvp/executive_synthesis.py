@@ -30,7 +30,9 @@ def _cache_root() -> Path:
     configured = os.getenv("STRATEGYOS_EXECUTIVE_SYNTHESIS_CACHE_DIR")
     if configured:
         return Path(configured).expanduser().resolve()
-    return Path(__file__).resolve().parents[2] / ".strategyos_mvp_data" / "executive_synthesis"
+    workspace = os.getenv("STRATEGYOS_WORKSPACE_ROOT")
+    base = Path(workspace).expanduser().resolve() if workspace else Path(__file__).resolve().parents[1]
+    return base / ".strategyos_mvp_data" / "executive_synthesis"
 
 
 def _jsonable(value: Any) -> Any:

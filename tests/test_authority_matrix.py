@@ -98,3 +98,9 @@ def test_agent_tool_is_denied_before_handler_executes(authority_store, monkeypat
     with pytest.raises(ToolInputInvalid, match=r"Authority Matrix §3, agent:cash-recovery × finance"):
         agent_tools.invoke_tool("findings.read", context, {})
     assert called is False
+
+
+def test_default_store_uses_writable_workspace_root(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("STRATEGYOS_AUTHORITY_DATA_DIR", raising=False)
+    monkeypatch.setenv("STRATEGYOS_WORKSPACE_ROOT", str(tmp_path))
+    assert authority_module._data_root() == tmp_path / ".strategyos_mvp_data" / "authority"

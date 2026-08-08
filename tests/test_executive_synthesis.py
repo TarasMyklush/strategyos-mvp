@@ -81,3 +81,9 @@ def test_ungrounded_provider_numbers_are_rejected(tmp_path, monkeypatch) -> None
     brief = result["development_briefs"][0]
     assert brief["synthesized_by"] == "deterministic-correlation"
     assert "999" not in brief["what"]
+
+
+def test_default_cache_uses_writable_workspace_root(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("STRATEGYOS_EXECUTIVE_SYNTHESIS_CACHE_DIR", raising=False)
+    monkeypatch.setenv("STRATEGYOS_WORKSPACE_ROOT", str(tmp_path))
+    assert synthesis._cache_root() == tmp_path / ".strategyos_mvp_data" / "executive_synthesis"
