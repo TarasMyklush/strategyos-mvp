@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 
 try:
     from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
+    from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
@@ -34,6 +35,7 @@ from .auth import (
     require_live_health_access,
     require_role,
 )
+from .agent_studio_api import router as agent_studio_router
 from .authority_matrix import (
     assistant_subject,
     authority_decision,
@@ -303,6 +305,15 @@ app = FastAPI(
     lifespan=_app_lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://demo.strategyos.live"],
+    allow_credentials=False,
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=3600,
+)
+
 
 @app.middleware("http")
 async def prevent_assistant_response_caching(request: Request, call_next: Any) -> Any:
@@ -339,6 +350,7 @@ def _executive_asset_revision() -> str:
     return _asset_revision(*_EXECUTIVE_ASSET_REV_FILES)
 app.include_router(twin_router)
 app.include_router(agent_runtime_router)
+app.include_router(agent_studio_router)
 
 ARTIFACT_PREVIEW_LIMIT_BYTES = 24_000
 ARTIFACT_JSON_PARSE_LIMIT_BYTES = 200_000
