@@ -31,7 +31,7 @@ from .llm_qa import _call_openai_compatible_chat
 
 router = APIRouter(prefix="/public/agent-studio", tags=["agent-studio"])
 
-MAX_DOWNLOAD_BYTES = 350_000
+MAX_DOWNLOAD_BYTES = 750_000
 MAX_VISIBLE_TEXT = 24_000
 ALLOWED_CONTENT_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
 EXPECTED_NODE_IDS = ("trigger", "understand", "retrieve", "decide", "respond", "complete")
