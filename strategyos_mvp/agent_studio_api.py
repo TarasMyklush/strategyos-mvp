@@ -155,9 +155,10 @@ def _read_website(url: str) -> dict[str, str]:
             content_type = str(response.headers.get_content_type() or "").lower()
             if not any(content_type.startswith(item) for item in ALLOWED_CONTENT_TYPES):
                 raise ValueError("The website did not return readable HTML or text.")
-            body = response.read(MAX_DOWNLOAD_BYTES + 1)
-            if len(body) > MAX_DOWNLOAD_BYTES:
-                raise ValueError("The website page is too large for this demo.")
+            # Large marketing pages are common. Read only the bounded prefix;
+            # HTMLParser tolerates a truncated document and useful business
+            # context is normally concentrated near the start of the page.
+            body = response.read(MAX_DOWNLOAD_BYTES)
             charset = response.headers.get_content_charset() or "utf-8"
             final_url = response.geturl()
     except (HTTPError, URLError, TimeoutError) as exc:
