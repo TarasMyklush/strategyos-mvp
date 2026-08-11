@@ -34,6 +34,22 @@ def test_private_destination_is_rejected(monkeypatch: pytest.MonkeyPatch) -> Non
         agent_studio_api._assert_public_destination("https://example.com")
 
 
+def test_client_rendered_page_uses_metadata_as_business_context() -> None:
+    extractor = agent_studio_api._TextExtractor()
+    extractor.feed("""
+      <html><head>
+        <title>LEGION — AI Operating System</title>
+        <meta name="description" content="Persistent intelligence for AI-native software delivery.">
+        <meta property="og:description" content="Specialist orchestration and multi-repo intelligence.">
+        <script type="module" src="/assets/app.js"></script>
+      </head><body><div id="root"></div></body></html>
+    """)
+    context = extractor.visible_text()
+    assert "LEGION" in context
+    assert "Persistent intelligence" in context
+    assert "Specialist orchestration" in context
+
+
 def test_generated_logic_must_have_canonical_six_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         agent_studio_api,

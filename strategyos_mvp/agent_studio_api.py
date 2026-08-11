@@ -59,9 +59,17 @@ class _TextExtractor(HTMLParser):
         self._blocked_depth = 0
         self._parts: list[str] = []
         self.title = ""
+        self.metadata: list[str] = []
         self._in_title = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() == "meta":
+            values = {str(key).lower(): str(value or "").strip() for key, value in attrs}
+            label = (values.get("name") or values.get("property") or "").lower()
+            content = values.get("content", "")
+            if label in {"description", "og:description", "twitter:description", "og:title"} and content:
+                if content not in self.metadata:
+                    self.metadata.append(content[:500])
         if tag.lower() in {"script", "style", "noscript", "svg", "template"}:
             self._blocked_depth += 1
         if tag.lower() == "title":
@@ -84,7 +92,9 @@ class _TextExtractor(HTMLParser):
         self._parts.append(clean)
 
     def visible_text(self) -> str:
-        return "\n".join(self._parts)[:MAX_VISIBLE_TEXT]
+        body_text = "\n".join(self._parts)
+        context = [self.title, *self.metadata, body_text]
+        return "\n".join(part for part in context if part)[:MAX_VISIBLE_TEXT]
 
 
 def _normalize_public_url(value: str) -> str:
@@ -167,8 +177,11 @@ def _read_website(url: str) -> dict[str, str]:
     extractor = _TextExtractor()
     extractor.feed(body.decode(charset, errors="replace"))
     text = extractor.visible_text()
-    if len(text) < 80:
-        raise ValueError("The website did not expose enough readable text.")
+    if len(text) < 40:
+        # A successful client-rendered page may expose only a title in its
+        # server HTML. The requested outcome is still sufficient for a useful
+        # first draft, so do not turn sparse markup into a dead end.
+        text = f"Website title: {extractor.title or urlparse(final_url).hostname}. The page is client-rendered; use the owner's stated outcome as the primary context."
     return {"url": final_url, "title": extractor.title, "text": text}
 
 
