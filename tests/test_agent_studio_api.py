@@ -50,7 +50,7 @@ def test_client_rendered_page_uses_metadata_as_business_context() -> None:
     assert "Specialist orchestration" in context
 
 
-def test_generated_logic_must_have_canonical_six_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generated_agent_contains_business_specific_routes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         agent_studio_api,
         "CONFIG",
@@ -64,13 +64,12 @@ def test_generated_logic_must_have_canonical_six_nodes(monkeypatch: pytest.Monke
           "summary":"Qualifies callers and books a consultation.",
           "opening_line":"Hello, how can I help?",
           "assumptions":["Transfer during office hours", "Use a 30-minute appointment"],
-          "logic":[
-            {"id":"trigger","title":"Trigger","description":"Answer inbound calls"},
-            {"id":"understand","title":"Understand","description":"Identify need and urgency"},
-            {"id":"retrieve","title":"Retrieve","description":"Use approved website knowledge"},
-            {"id":"decide","title":"Decide","description":"Answer, book or transfer"},
-            {"id":"respond","title":"Respond","description":"Guide the caller to the right step"},
-            {"id":"complete","title":"Complete","description":"Save outcome and context"}
+          "flow":[
+            {"id":"incoming-call","kind":"entry","title":"Incoming call","condition":"","action":"Greet the caller and ask what they need","test_utterance":"Hello"},
+            {"id":"product-question","kind":"route","title":"Product question","condition":"Caller asks what the product does","action":"Answer from approved website knowledge","test_utterance":"What does your product do?"},
+            {"id":"qualified-buyer","kind":"route","title":"Qualified buyer","condition":"Caller wants to evaluate the product","action":"Ask one qualifying question and offer a consultation","test_utterance":"Can I see a demo?"},
+            {"id":"existing-customer","kind":"route","title":"Existing customer","condition":"Caller needs support","action":"Collect the issue and route to support","test_utterance":"I need help with my account"},
+            {"id":"safe-handoff","kind":"fallback","title":"Safe handoff","condition":"No route matches or facts are unavailable","action":"Explain the limit and offer a human handoff","test_utterance":"I have an unusual request"}
           ]
         }""",
     )
@@ -81,7 +80,8 @@ def test_generated_logic_must_have_canonical_six_nodes(monkeypatch: pytest.Monke
     )
 
     assert result["agent_name"] == "Maya"
-    assert [node["id"] for node in result["logic"]] == list(agent_studio_api.EXPECTED_NODE_IDS)
+    assert [node["kind"] for node in result["flow"]] == ["entry", "route", "route", "route", "fallback"]
+    assert result["flow"][1]["title"] == "Product question"
 
 
 def test_public_generate_route_allows_only_demo_origin(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -107,7 +107,11 @@ def test_public_generate_route_allows_only_demo_origin(monkeypatch: pytest.Monke
 
 def test_live_chat_uses_current_editable_logic(monkeypatch: pytest.MonkeyPatch) -> None:
     agent_studio_api._request_windows.clear()
-    monkeypatch.setattr(agent_studio_api, "_chat_with_agent", lambda request: f"Using: {request.logic[4]['description']}")
+    monkeypatch.setattr(
+        agent_studio_api,
+        "_chat_with_agent",
+        lambda request: {"reply": f"Using: {request.logic[4]['description']}", "active_node_id": "respond", "decision": "Matched response"},
+    )
     logic = [
         {"id": node_id, "title": node_id.title(), "description": "default"}
         for node_id in agent_studio_api.EXPECTED_NODE_IDS
@@ -126,3 +130,39 @@ def test_live_chat_uses_current_editable_logic(monkeypatch: pytest.MonkeyPatch) 
     )
     assert response.status_code == 200
     assert response.json()["reply"] == "Using: Always offer a discovery call"
+    assert response.json()["active_node_id"] == "respond"
+
+
+def test_live_chat_returns_the_matched_generated_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    agent_studio_api._request_windows.clear()
+    monkeypatch.setattr(
+        agent_studio_api,
+        "CONFIG",
+        SimpleNamespace(model_provider_enabled=True, llm_chat_enabled=True, llm_api_key="test"),
+    )
+    monkeypatch.setattr(
+        agent_studio_api,
+        "_call_openai_compatible_chat",
+        lambda **_kwargs: '{"reply":"I can help you book a demo.","active_node_id":"book-demo","decision":"The caller asked to evaluate the product."}',
+    )
+    flow = [
+        {"id": "incoming", "kind": "entry", "title": "Incoming", "condition": "", "action": "Greet", "test_utterance": "Hello"},
+        {"id": "questions", "kind": "route", "title": "Questions", "condition": "Asks a question", "action": "Answer", "test_utterance": "What is it?"},
+        {"id": "book-demo", "kind": "route", "title": "Book demo", "condition": "Wants a demo", "action": "Qualify and book", "test_utterance": "Show me a demo"},
+        {"id": "support", "kind": "route", "title": "Support", "condition": "Needs support", "action": "Collect issue", "test_utterance": "Help me"},
+        {"id": "handoff", "kind": "fallback", "title": "Human handoff", "condition": "No safe match", "action": "Offer a human", "test_utterance": "Something else"},
+    ]
+    response = TestClient(app).post(
+        "/public/agent-studio/chat",
+        headers={"Origin": "https://demo.strategyos.live"},
+        json={
+            "business_name": "Example",
+            "outcome": "book consultations",
+            "flow": flow,
+            "messages": [],
+            "user_message": "Can I see a demo?",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["active_node_id"] == "book-demo"
+    assert response.json()["decision"] == "The caller asked to evaluate the product."
