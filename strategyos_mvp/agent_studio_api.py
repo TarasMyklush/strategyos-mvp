@@ -335,8 +335,24 @@ def _chat_with_agent(request: AgentStudioChatRequest) -> dict[str, str]:
     for item in request.messages[-8:]:
         role = str(item.get("role") or "").lower()
         content = str(item.get("content") or "")[:700]
-        if role in {"user", "assistant"} and content:
-            history.append({"role": role, "content": content})
+        if role not in {"user", "assistant"} or not content:
+            continue
+        # Some OpenAI-compatible providers reject a conversation that starts
+        # with an assistant greeting or contains adjacent messages with the
+        # same role. Browser clients keep the opening line in their transcript,
+        # so normalize that display history into a provider-safe sequence.
+        if not history and role == "assistant":
+            continue
+        if history and history[-1]["role"] == role:
+            history[-1]["content"] = f"{history[-1]['content']}\n{content}"[:700]
+            continue
+        history.append({"role": role, "content": content})
+    latest_user_message = request.user_message.strip()
+    if history and history[-1]["role"] == "user":
+        history[-1]["content"] = f"{history[-1]['content']}\n{latest_user_message}"[:700]
+        latest_turn: list[dict[str, str]] = []
+    else:
+        latest_turn = [{"role": "user", "content": latest_user_message}]
     system = f"""You are the voice AI agent for {request.business_name}.
 Desired business outcome: {request.outcome}
 Editable business decision flow: {json.dumps(flow, ensure_ascii=False)}
@@ -349,7 +365,7 @@ Return JSON only with reply, active_node_id, and decision. active_node_id must b
         messages=[
             {"role": "system", "content": system},
             *history,
-            {"role": "user", "content": request.user_message.strip()},
+            *latest_turn,
         ],
         temperature=0.25,
         max_tokens=450,

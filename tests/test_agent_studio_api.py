@@ -166,3 +166,45 @@ def test_live_chat_returns_the_matched_generated_route(monkeypatch: pytest.Monke
     assert response.status_code == 200
     assert response.json()["active_node_id"] == "book-demo"
     assert response.json()["decision"] == "The caller asked to evaluate the product."
+
+
+def test_live_chat_normalizes_browser_transcript_for_follow_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        agent_studio_api,
+        "CONFIG",
+        SimpleNamespace(model_provider_enabled=True, llm_chat_enabled=True, llm_api_key="test"),
+    )
+    captured: dict[str, object] = {}
+
+    def fake_chat(**kwargs: object) -> str:
+        captured.update(kwargs)
+        return '{"reply":"Updated answer","active_node_id":"pricing","decision":"Matched pricing."}'
+
+    monkeypatch.setattr(agent_studio_api, "_call_openai_compatible_chat", fake_chat)
+    flow = [
+        {"id": "incoming", "kind": "entry", "title": "Incoming", "condition": "", "action": "Greet", "test_utterance": "Hello"},
+        {"id": "questions", "kind": "route", "title": "Questions", "condition": "Asks a question", "action": "Answer", "test_utterance": "What is it?"},
+        {"id": "pricing", "kind": "route", "title": "Pricing", "condition": "Asks about cost", "action": "Offer sales", "test_utterance": "What does it cost?"},
+        {"id": "support", "kind": "route", "title": "Support", "condition": "Needs support", "action": "Collect issue", "test_utterance": "Help me"},
+        {"id": "handoff", "kind": "fallback", "title": "Human handoff", "condition": "No safe match", "action": "Offer a human", "test_utterance": "Something else"},
+    ]
+    request = agent_studio_api.AgentStudioChatRequest(
+        business_name="Example",
+        outcome="answer questions",
+        flow=flow,
+        messages=[
+            {"role": "assistant", "content": "Opening greeting"},
+            {"role": "user", "content": "First question"},
+            {"role": "assistant", "content": "First answer"},
+            {"role": "user", "content": "Failed retry"},
+            {"role": "user", "content": "Another retry"},
+        ],
+        user_message="What does it cost?",
+    )
+    result = agent_studio_api._chat_with_agent(request)
+    messages = captured["messages"]
+    assert isinstance(messages, list)
+    assert [item["role"] for item in messages] == ["system", "user", "assistant", "user"]
+    assert messages[1]["content"] == "First question"
+    assert messages[3]["content"] == "Failed retry\nAnother retry\nWhat does it cost?"
+    assert result["active_node_id"] == "pricing"
