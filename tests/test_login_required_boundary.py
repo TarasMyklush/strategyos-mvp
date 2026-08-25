@@ -41,7 +41,17 @@ def test_login_required_mode_exposes_only_login_until_a_session_exists(monkeypat
     try:
         client = TestClient(api_module.app, base_url="https://strategyos.test")
 
-        for path in ("/", "/app", "/dashboard", "/executive", "/guide", "/plan"):
+        for path in (
+            "/",
+            "/app",
+            "/dashboard",
+            "/executive",
+            "/guide",
+            "/architecture",
+            "/architecture/business",
+            "/architecture/technical",
+            "/plan",
+        ):
             response = client.get(path, follow_redirects=False)
             assert response.status_code == 307, path
             assert response.headers["location"] == "/login"

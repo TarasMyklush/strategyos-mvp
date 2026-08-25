@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="The implemented StrategyOS technical architecture, trust boundaries and runtime flow." />
+  <title>StrategyOS technical architecture</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/static/architecture.css?v=architecture-20260825a" />
+</head>
+<body>
+  <header class="topbar"><div class="topbar__inner"><a class="brand" href="/executive"><span class="brand__mark" aria-hidden="true"></span><span>StrategyOS</span></a><nav aria-label="Architecture navigation"><a href="/architecture">Overview</a><a href="/architecture/business">For leaders</a><a href="/architecture/technical" aria-current="page">Technical view</a></nav></div></header>
+  <main>
+    <section class="hero" aria-labelledby="technical-title">
+      <div><span class="eyebrow">Technical architecture</span><h1 id="technical-title">Governed intelligence, enforced end to end.</h1><p class="hero__lede">StrategyOS combines deterministic business logic, evidence-grounded retrieval and bounded AI workflows. Identity, tenant, authority, review and effect controls are enforced server-side across the same runtime.</p></div>
+      <aside class="hero__aside"><strong>Deployment model</strong><p>Containerised Python/FastAPI application with persistent relational, graph, vector, object and queue services. The public edge exposes only the authenticated application boundary.</p></aside>
+    </section>
+
+    <section class="section" aria-labelledby="stack-title">
+      <div class="section__intro"><span class="eyebrow">System layers</span><h2 id="stack-title">The implemented stack</h2><p>Each layer has a distinct responsibility. AI interpretation does not replace source validation, calculation or policy enforcement.</p></div>
+      <div class="architecture-stack">
+        <article class="architecture-layer"><span class="architecture-layer__name">Role surfaces</span><span class="architecture-layer__body">Executive briefing, Hermes, assistants, specialist-agent trails, reviewer and operator workflows.</span><span class="architecture-layer__tech">HTML · CSS · JavaScript</span></article>
+        <article class="architecture-layer architecture-layer--governance"><span class="architecture-layer__name">Identity & authority</span><span class="architecture-layer__body">Tenant-scoped session, persona rights, domain classification, published authority matrix, capability tokens and approval chains.</span><span class="architecture-layer__tech">OIDC edge · server policy</span></article>
+        <article class="architecture-layer"><span class="architecture-layer__name">Application API</span><span class="architecture-layer__body">Authenticated read models, review endpoints, run lifecycle, assistant dialogue and agent execution interfaces.</span><span class="architecture-layer__tech">Python · FastAPI</span></article>
+        <article class="architecture-layer"><span class="architecture-layer__name">Governed runtime</span><span class="architecture-layer__body">Run state, checkpoints, review gates, task registry, idempotency, effect keys, worker orchestration and audit events.</span><span class="architecture-layer__tech">LangGraph · Hatchet · Redis</span></article>
+        <article class="architecture-layer"><span class="architecture-layer__name">Business intelligence</span><span class="architecture-layer__body">Source quality, KPI calculation, plan comparison, detectors, reconciliation, evidence resolution and executive synthesis.</span><span class="architecture-layer__tech">deterministic Python</span></article>
+        <article class="architecture-layer"><span class="architecture-layer__name">Retrieval & relationships</span><span class="architecture-layer__body">Entity lineage and relationship queries plus semantic retrieval over approved evidence and historical context.</span><span class="architecture-layer__tech">Neo4j · Qdrant</span></article>
+        <article class="architecture-layer"><span class="architecture-layer__name">Persistence</span><span class="architecture-layer__body">Tenant-scoped runs, approvals, policies and audit records; source files and generated artifacts remain addressable and traceable.</span><span class="architecture-layer__tech">PostgreSQL · S3/MinIO</span></article>
+        <article class="architecture-layer"><span class="architecture-layer__name">Source adapters</span><span class="architecture-layer__body">Folder and upload intake today, with the same validated source-pack contract available for enterprise-system adapters.</span><span class="architecture-layer__tech">manifest · hashes · OCR</span></article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="request-title">
+      <div class="section__intro"><span class="eyebrow">Request lifecycle</span><h2 id="request-title">One enforcement sequence</h2><p>A browser request, assistant question or agent tool call cannot bypass the server-side trust boundary.</p></div>
+      <div class="sequence">
+        <article class="sequence__row"><strong>Authenticate</strong><p>Resolve the session at the trusted edge and establish tenant, subject and product role. Hosted surfaces fail closed without a valid identity.</p></article>
+        <article class="sequence__row"><strong>Authorise</strong><p>Classify the information domain and required right, then resolve the effective authority row and policy version before retrieval.</p></article>
+        <article class="sequence__row"><strong>Retrieve</strong><p>Select only permitted run state, evidence, graph relationships and semantic context. Preserve source and citation identifiers.</p></article>
+        <article class="sequence__row"><strong>Compute</strong><p>Run deterministic calculations and detectors. Models may explain results, but they do not manufacture KPI truth.</p></article>
+        <article class="sequence__row"><strong>Review</strong><p>Pause governed publication or consequential work when evidence, approval or authority is incomplete.</p></article>
+        <article class="sequence__row"><strong>Execute safely</strong><p>Verify capability scope, approval state, idempotency and effect keys before any tool handler performs a consequential effect.</p></article>
+        <article class="sequence__row"><strong>Audit</strong><p>Persist the request, evidence, policy decision, review, result and execution state so every visible status has a source of truth.</p></article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="boundary-title">
+      <div class="section__intro"><span class="eyebrow">Deterministic / model boundary</span><h2 id="boundary-title">The model is not the control plane</h2><p>StrategyOS uses model reasoning where language and synthesis help. Governance-critical truth remains outside the model.</p></div>
+      <table class="truth-table">
+        <thead><tr><th>Concern</th><th>Deterministic control</th><th>Model-assisted role</th></tr></thead>
+        <tbody>
+          <tr><td>KPI truth</td><td>Period alignment, actual/plan arithmetic, sign semantics, reconciliation and source checks.</td><td>Explain implications in role-appropriate language.</td></tr>
+          <tr><td>Evidence</td><td>Source identifiers, hashes, lineage, citation resolution and access filtering.</td><td>Summarise the permitted evidence set and identify an unanswered question.</td></tr>
+          <tr><td>Authority</td><td>Published matrix, subject/domain/right resolution, approver chain and capability token.</td><td>Recommend a next step within the allowed action class.</td></tr>
+          <tr><td>Commitments</td><td>Owner match facts, due-date basis, confirmation requirement and execution effect.</td><td>Propose wording or candidates without self-authorising.</td></tr>
+          <tr><td>Status</td><td>Run, review, task and execution event state.</td><td>Translate recorded state into a concise briefing.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" aria-labelledby="data-title">
+      <div class="section__intro"><span class="eyebrow">Data and state</span><h2 id="data-title">Different stores, one governed run</h2><p>Each storage service answers a different technical question; the run identifier and tenant boundary keep their projections coherent.</p></div>
+      <div class="card-grid">
+        <article class="card"><span class="card__mark"></span><strong>PostgreSQL · transactional truth</strong><p>Runs, checkpoints, approvals, policies, tasks, audit events and publication state.</p></article>
+        <article class="card"><span class="card__mark card__mark--green"></span><strong>Object storage · evidence artifacts</strong><p>Source files, extracted artifacts and generated outputs with stable addresses.</p></article>
+        <article class="card"><span class="card__mark card__mark--amber"></span><strong>Neo4j · relationship truth</strong><p>Entities, KPI/value-driver structure, ownership, source lineage and cross-domain relationships.</p></article>
+        <article class="card"><span class="card__mark card__mark--red"></span><strong>Qdrant · semantic retrieval</strong><p>Vector search over approved evidence and context, filtered by the active tenant and governed run.</p></article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="operations-title">
+      <div class="section__intro"><span class="eyebrow">Operations and resilience</span><h2 id="operations-title">Deploy, observe, recover</h2><p>The runtime is packaged as a portable container stack and verified at both dependency and user-surface boundaries.</p></div>
+      <div class="card-grid">
+        <article class="card"><span class="card__mark card__mark--green"></span><strong>Authenticated public edge</strong><p>TLS terminates at the edge; application and data services remain private. Production is designed for customer OIDC and non-root deployment.</p></article>
+        <article class="card"><span class="card__mark"></span><strong>Health and readiness</strong><p>Liveness is separate from authenticated readiness checks for database, graph, object, OCR, identity and governed runtime dependencies.</p></article>
+        <article class="card"><span class="card__mark card__mark--amber"></span><strong>Observable workflows</strong><p>Run jobs, checkpoints, worker events, review state and agent execution logs expose operational state without exposing hidden reasoning.</p></article>
+        <article class="card"><span class="card__mark card__mark--red"></span><strong>Recoverable state</strong><p>Persistent stores and evidence artifacts are backed up and restored independently; deployment rollback does not erase governed data.</p></article>
+      </div>
+    </section>
+
+    <div class="callout"><span class="callout__icon">✓</span><div><strong>The architectural invariant</strong><p>Every business claim, access decision and consequential effect must be traceable to a governed run, a policy decision and a persisted record. The interface is a projection of that state—not a parallel source of truth.</p></div></div>
+    <section class="cta" aria-labelledby="technical-cta-title"><div><span class="eyebrow">Translate the stack</span><h2 id="technical-cta-title">Share the business view</h2><p>Use the leader-facing page to explain the same system without infrastructure terminology.</p></div><a class="button" href="/architecture/business">Open business view</a></section>
+  </main>
+  <footer class="footer"><div class="footer__inner"><span>StrategyOS · Technical architecture</span><nav><a href="/architecture">Architecture home</a><a href="/executive">Live briefing</a></nav></div></footer>
+</body>
+</html>

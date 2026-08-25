@@ -134,6 +134,7 @@ def test_guide_route_renders_plain_english_public_guide():
     assert "operating cost below plan" in html
     assert "operating cost above plan" in html
     assert 'href="/executive"' in html
+    assert 'href="/architecture"' in html
     assert 'href="/login"' not in html
     assert 'href="/app"' not in html
     assert 'href="/plan"' not in html
@@ -156,6 +157,45 @@ def test_guide_route_renders_plain_english_public_guide():
         assert unsafe_phrase not in html_lower
 
 
+def test_architecture_routes_explain_one_current_system_at_two_levels():
+    client = TestClient(api_module.app)
+
+    overview = client.get("/architecture")
+    business = client.get("/architecture/business")
+    technical = client.get("/architecture/technical")
+
+    assert overview.status_code == 200
+    assert business.status_code == 200
+    assert technical.status_code == 200
+
+    assert "One system" in overview.text
+    assert 'href="/architecture/business"' in overview.text
+    assert 'href="/architecture/technical"' in overview.text
+    assert "implemented product boundary" in overview.text.lower()
+
+    assert "Architecture for leaders" in business.text
+    assert "One truth, different responsibilities" in business.text
+    assert "What StrategyOS will not pretend" in business.text
+    assert "The human makes the call" in business.text
+
+    assert "Technical architecture" in technical.text
+    assert "The implemented stack" in technical.text
+    assert "The model is not the control plane" in technical.text
+    assert "PostgreSQL" in technical.text
+    assert "Neo4j" in technical.text
+    assert "Qdrant" in technical.text
+    assert "capability" in technical.text.lower()
+
+    combined = (overview.text + business.text + technical.text).lower()
+    for stale_claim in (
+        "current architecture is a passive system",
+        "architecture evolution",
+        "eight to twelve weeks",
+        "target state",
+    ):
+        assert stale_claim not in combined
+
+
 def test_homepage_renders_minimal_executive_diagnostics_surface():
     html = _homepage_response()
 
@@ -163,6 +203,7 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert "StrategyOS — Group CEO Briefing" in html
     assert marker in html
     assert 'href="/guide"' in html
+    assert 'href="/architecture"' in html
     assert "How it works" in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)

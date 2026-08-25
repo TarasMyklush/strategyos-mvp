@@ -8737,11 +8737,35 @@ def executive_cockpit(
 def architecture_page(
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> Any:
-    """Serve the architecture evolution page."""
+    """Serve the current architecture overview."""
     login_redirect = _login_or_authorized_html(principal)
     if login_redirect is not None:
         return login_redirect
     template_path = STATIC_DIR / "architecture.html"
+    return HTMLResponse(template_path.read_text(encoding="utf-8"))
+
+
+@app.get("/architecture/business", response_class=HTMLResponse)
+def architecture_business_page(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
+    """Serve the plain-language architecture view for leaders."""
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
+    template_path = STATIC_DIR / "architecture-business.html"
+    return HTMLResponse(template_path.read_text(encoding="utf-8"))
+
+
+@app.get("/architecture/technical", response_class=HTMLResponse)
+def architecture_technical_page(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
+    """Serve the implemented technical architecture and trust boundaries."""
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
+    template_path = STATIC_DIR / "architecture-technical.html"
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
 
 
