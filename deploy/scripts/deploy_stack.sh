@@ -26,6 +26,14 @@ if [ -n "${COMPOSE_PROJECT_NAME}" ]; then
   PROJECT_NAME_ARG=" --project-name ${COMPOSE_PROJECT_NAME}"
 fi
 
+# A host-managed provider overlay survives source/env regeneration. It contains
+# no application image pins and is enabled only after provider acceptance tests.
+PROVIDER_ENV_ARGS=""
+if ssh ${SSH_OPTS} "${TARGET_HOST}" "test -f '${TARGET_DIR}/provider-codex/enabled' && test -f '${TARGET_DIR}/provider-codex/provider.env' && test -f '${TARGET_DIR}/provider-codex/compose.yml'"; then
+  COMPOSE_FILE_ARGS="${COMPOSE_FILE_ARGS} -f ${TARGET_DIR}/provider-codex/compose.yml"
+  PROVIDER_ENV_ARGS=" --env-file ${TARGET_DIR}/provider-codex/provider.env"
+fi
+
 RSYNC_SSH_ARGS=()
 if [ -n "${SSH_OPTS}" ]; then
   RSYNC_SSH_ARGS=(-e "ssh ${SSH_OPTS}")
@@ -66,11 +74,11 @@ rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_SECRETS_ENV}" "${TARGET_HOST}:${TARGET
 
 if [ -n "${STRATEGYOS_API_IMAGE:-}" ]; then
   ssh ${SSH_OPTS} "${TARGET_HOST}" "docker pull '${STRATEGYOS_API_IMAGE}'"
-  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS} pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS} up -d --no-build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
 else
-  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets up -d --build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS} pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS} up -d --build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
 fi
 
-ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets up -d --no-deps caddy && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
+ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS} up -d --no-deps caddy && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS} exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
 
 echo "Deployment complete. Run: TARGET_HOST=${TARGET_HOST} deploy/scripts/check_health.sh"
