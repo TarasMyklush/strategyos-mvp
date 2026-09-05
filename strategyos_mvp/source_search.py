@@ -132,12 +132,14 @@ def targeted_financial_records(evidence, question):
         patterns += ['group_bu_pnl']
     if re.search(r'\b(?:peer|peers|competitor|competitors)\b', text):
         patterns += ['competitor_financials', 'group_bu_pnl']
+    if re.search(r'\b(?:synergy|synergies|insourcing)\b', text):
+        patterns += ['synergy_programme_charter', 'synergy_program_charter']
     customer_question = bool(re.search(r'\b(?:customer|customers|profitability|pricing|prices|terms)\b', text))
     revenue_question = bool(re.search(r'\b(?:revenue|growth|segment|segments)\b', text))
     if customer_question or revenue_question:
         patterns += ['revenue_analytics']
     manifest = {path: entry for path, entry in evidence.manifest.items()
-                if path.lower().endswith('.xlsx') and any(token in Path(path).stem.casefold() for token in patterns)}
+                if path.lower().endswith(('.xlsx', '.docx')) and any(token in Path(path).stem.casefold() for token in patterns)}
     if not manifest:
         return {'status': 'not_applicable', 'records': []}
     scoped = SimpleNamespace(dataset_root=evidence.dataset_root, manifest=manifest, pdf_text={})

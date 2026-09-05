@@ -55,3 +55,21 @@ def test_targeted_payroll_coverage_is_hash_checked_and_question_bounded(tmp_path
     assert result['coverage_complete'] and result['records'][0]['source_path'] == path.name
     path.write_bytes(b'changed')
     assert targeted_financial_records(evidence, 'What is headcount?')['status'] == 'unavailable'
+
+
+def test_targeted_synergy_charter_retains_every_role_in_source_order(tmp_path):
+    import hashlib
+    from types import SimpleNamespace
+    from zipfile import ZipFile
+    from strategyos_mvp.source_search import targeted_financial_records
+    rows=[('Programme','Owner'),('SYN-01','Group COO'),('SYN-02','Group CIO'),('SYN-03','Group Property')]
+    xml='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>'
+    xml+=''.join('<w:tr>'+''.join('<w:tc><w:p><w:r><w:t>'+value+'</w:t></w:r></w:p></w:tc>' for value in row)+'</w:tr>' for row in rows)
+    xml+='</w:tbl></w:body></w:document>'
+    path=tmp_path/'Synergy_Programme_Charter.docx'
+    with ZipFile(path,'w') as archive: archive.writestr('word/document.xml',xml)
+    evidence=SimpleNamespace(dataset_root=tmp_path,manifest={path.name:{'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}})
+    result=targeted_financial_records(evidence,'Who owns synergy delivery?')
+    text='\n'.join(row['text'] for row in result['records'])
+    assert result['coverage_complete'] and text.index('Group COO') < text.index('Group CIO') < text.index('Group Property')
+    assert all(row['locator'].startswith('Document paragraph ') for row in result['records'])
