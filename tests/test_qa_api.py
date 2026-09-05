@@ -5594,6 +5594,8 @@ def test_auto_tabular_lookup_boundary_rejects_compound_keyword_traps():
         "Top 5 vendors by spend",
         "How many distinct customers are there?",
         "How much did we pay Saudi Trading Co?",
+        "Show me the aging of receivables by segment — where is risk building?",
+        "AR ageing by segment",
     )
     rejected = (
         "What would a group-wide energy programme save, given the SEC tariff steps?",
@@ -5601,6 +5603,8 @@ def test_auto_tabular_lookup_boundary_rejects_compound_keyword_traps():
         "How does our pharmacist pay compare to market?",
         "Which invoices don't reconcile between lines and headers?",
         "What is the fully-loaded profitability of our top 10 customers?",
+        "Show me receivables aging and recommend which business to acquire",
+        "Show me the aging of receivables by segment — where is risk building and what is revenue?",
     )
     assert all(api_module._auto_question_is_narrow_tabular_lookup(value) for value in accepted)
     assert not any(api_module._auto_question_is_narrow_tabular_lookup(value) for value in rejected)
@@ -5610,6 +5614,40 @@ def test_calendar_agenda_recognizes_plural_weekly_ceo_judgment_question():
     assert api_module._assistant_question_is_calendar_agenda(
         "Which of my meetings this week actually need me, and what should I know walking in?"
     )
+
+
+def test_auto_aging_question_reaches_reconciled_calculation_without_provider(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        monkeypatch.setattr(api_module, "_resolve_qa_context", lambda run_id: {
+            "bundle": object(), "findings": [], "summary": {"run_id": "run-aging"},
+            "run_id": "run-aging", "run_mode": "full", "kg_nodes": [], "kg_edges": [],
+        })
+        monkeypatch.setattr(api_module, "parse_scenario", lambda *args, **kwargs: _parsed_scenario())
+        monkeypatch.setattr(api_module, "route_graph_question", lambda *args, **kwargs: {"matched": False})
+        monkeypatch.setattr(api_module, "_route_keyword_retrieval", lambda *args, **kwargs: {"matched": False})
+        calls = []
+        def calculated(question, **kwargs):
+            calls.append(question)
+            return {"matched": True, "available": True, "intent": "receivables_aging",
+                    "answer": "Open receivables are SAR 570.00 across 3 invoices.",
+                    "basis": "Invoices less applied receipts through the reporting cutoff.",
+                    "value": {"total_open_sar": "570"}, "citations": [], "suggestions": []}
+        monkeypatch.setattr(api_module.qa_engine, "answer_question", calculated)
+        def forbidden(*args, **kwargs):
+            raise AssertionError("A complete aging calculation must not call a model")
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", forbidden)
+        monkeypatch.setattr(api_module.llm_qa, "answer_general_question", forbidden)
+        question = "Show me the aging of receivables by segment — where is risk building?"
+        response = client.post("/assistant/chat", json={"question": question, "persona": "ceo", "mode": "auto"}, headers={"X-API-Key": "operator-key"})
+        assert response.status_code == 200
+        assert calls == [question]
+        payload = response.json()
+        assert payload["matched"] is True
+        assert payload["answered_by"] == "tabular"
+        assert "570.00" in payload["answer"]
+    finally:
+        _restore_env(original)
 
 
 def test_forward_signal_review_is_deterministic_and_cited():

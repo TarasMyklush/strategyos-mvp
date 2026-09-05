@@ -14810,6 +14810,8 @@ def _auto_question_is_narrow_tabular_lookup(question: str) -> bool:
         r"how many distinct (?:vendors|suppliers|customers)(?: are there)?",
         r"how much did we pay [a-z0-9][a-z0-9 .&'/-]{2,80}",
         r"what are (?:the )?working[- ]capital drift signals",
+        r"(?:show (?:me )?|what is )?(?:the )?(?:aging|ageing) of (?:receivables|ar)(?: by segment)?(?:\s*[—–-]\s*where is risk building)?",
+        r"(?:show (?:me )?)?(?:receivables|ar) (?:aging|ageing)(?: by segment)?",
     )
     return any(re.fullmatch(pattern, norm) for pattern in patterns)
 

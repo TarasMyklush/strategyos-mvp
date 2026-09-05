@@ -407,7 +407,7 @@ def answer_question(
             {"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)},
             {"role": "user", "content": "Numerical validation rejected these value/unit pairs: " + json.dumps(rejected)
              + ". Citation validation errors: " + json.dumps(citation_errors)
-             + ". Rewrite the JSON answer using only explicitly supplied evidence figures. Remove unsupported totals, ratios and inferred units; explain missing calculations in words. Do not use these rejected values as evidence. Use exact source paths and single row/page/paragraph locators from the supplied records. Return matched=false when the evidence cannot answer the question."},
+             + ". Rewrite the JSON answer using only explicitly supplied evidence figures. Remove unsupported totals, ratios and inferred units; explain missing calculations in words. Do not use these rejected values as evidence. Do not mention validation, rejected values, repair attempts or internal processing in the answer; describe only business evidence and missing inputs. Use exact source paths and single row/page/paragraph locators from the supplied records. Return matched=false when the evidence cannot answer the question."},
         ]
         try:
             repaired = _parse_json_answer(_call_openai_compatible_chat(
