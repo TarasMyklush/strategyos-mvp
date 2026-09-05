@@ -451,3 +451,17 @@ def test_group_cost_component_driver_table_is_discovered_by_schema(tmp_path):
     assert payload["rows"][0]["business_unit"] == "Distribution"
     assert payload["rows"][0]["variance_sar"] == "2900000.00"
     assert payload["rows"][0]["driver"] == "Contract escalation"
+
+
+def test_exact_ebitda_amounts_take_precedence_over_rounded_margins(tmp_path):
+    from openpyxl import Workbook
+    wb=Workbook();ws=wb.active;ws.title='BU_Budget_2026'
+    ws.append(['Business Unit','H1 Budget','H1 Actual/Est (SAR M)','H1 Var','EBITDA Budget %','EBITDA H1 Est %','EBITDA H1 Budget (SAR M)','EBITDA H1 Actual (SAR M)'])
+    ws.append(['North',100,105,5,10,12,10.04,12.56])
+    ws.append(['GROUP',100,105,5,10,12,10.04,12.56])
+    wb.save(tmp_path/'BU_Group_Budget_2026.xlsx')
+    result=derive_source_finance_kpis(tmp_path)
+    assert result['components']['ebitda_actual']=='12560000.00'
+    assert result['components']['ebitda_plan']=='10040000.00'
+    assert result['components']['operating_cost_actual']=='92440000.00'
+    assert result['evidence']['operating_cost']['details']['contributors']['operating_cost'][0]['value_sar']=='92440000.00'

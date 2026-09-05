@@ -232,8 +232,15 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         variance = _decimal(_cell(values, headers, "h1var"))
         plan_margin = _decimal(_cell(values, headers, "ebitdabudget"))
         actual_margin = _decimal(_cell(values, headers, "ebitdah1est"))
+        actual_ebitda = _decimal(_cell(values, headers, "ebitdah1actualsarm"))
+        plan_ebitda = _decimal(_cell(values, headers, "ebitdah1budgetsarm"))
+        if actual_ebitda is None and actual is not None and actual_margin is not None:
+            actual_ebitda = actual * actual_margin / 100
+        if plan_ebitda is None and plan is not None and plan_margin is not None:
+            plan_ebitda = plan * plan_margin / 100
         if _normal(unit).startswith("group") and None not in {actual, plan, plan_margin, actual_margin}:
-            group_total = {"actual": actual, "plan": plan, "actual_margin": actual_margin, "plan_margin": plan_margin}
+            group_total = {"actual": actual, "plan": plan, "actual_margin": actual_margin, "plan_margin": plan_margin,
+                           "actual_ebitda": actual_ebitda, "plan_ebitda": plan_ebitda}
             continue
         # The GROUP total above is used for CEO headlines, but is never a
         # business-unit mover.  Rows without a stated EBITDA margin (such as
@@ -247,6 +254,8 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
             "variance": variance,
             "plan_margin": plan_margin,
             "actual_margin": actual_margin,
+            "actual_ebitda": actual_ebitda,
+            "plan_ebitda": plan_ebitda,
             "note": str(_cell(values, headers, "note") or "").strip(),
         })
     if not units:
@@ -257,8 +266,8 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     million = Decimal("1000000")
     revenue_actual = (group_total["actual"] if group_total else sum((row["actual"] for row in units), Decimal())) * million
     revenue_plan = (group_total["plan"] if group_total else sum((row["plan"] for row in units), Decimal())) * million
-    ebitda_actual = ((revenue_actual / million) * group_total["actual_margin"] / 100 if group_total else sum((row["actual"] * row["actual_margin"] / 100 for row in units), Decimal())) * million
-    ebitda_plan = ((revenue_plan / million) * group_total["plan_margin"] / 100 if group_total else sum((row["plan"] * row["plan_margin"] / 100 for row in units), Decimal())) * million
+    ebitda_actual = (group_total["actual_ebitda"] if group_total else sum((row["actual_ebitda"] for row in units), Decimal())) * million
+    ebitda_plan = (group_total["plan_ebitda"] if group_total else sum((row["plan_ebitda"] for row in units), Decimal())) * million
     operating_cost_actual = revenue_actual - ebitda_actual
     operating_cost_plan = revenue_plan - ebitda_plan
     cash = _group_cash_floor(budget_book, budget_path, root)
@@ -335,8 +344,8 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     )
     operating_cost_contributors = _group_contributor_rows(
         units,
-        actual_value=lambda row: row["actual"] * (Decimal("100") - row["actual_margin"]) / 100,
-        plan_value=lambda row: row["plan"] * (Decimal("100") - row["plan_margin"]) / 100,
+        actual_value=lambda row: row["actual"] - row["actual_ebitda"],
+        plan_value=lambda row: row["plan"] - row["plan_ebitda"],
     )
     cost_components = _group_cost_component_drivers(root)
     evidence_base = {
@@ -350,7 +359,7 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
             "details": {**evidence_base["details"], "contributors": {"revenue": revenue_contributors}},
             "summary": f"H1 actual and plan aggregated across {len(units)} business units from the approved group budget.",
         },
-        "ebitda_margin": {**evidence_base, "summary": "H1 EBITDA is reconstructed from each business unit's H1 revenue and stated EBITDA margin; no group allocation has been added."},
+        "ebitda_margin": {**evidence_base, "summary": "H1 EBITDA uses the supplied financial amounts where present. Revenue times the stated margin is used only when no amount is supplied; no group allocation has been added."},
         "operating_cost": {
             **evidence_base,
             "files": sorted(
@@ -539,8 +548,8 @@ def _group_movers(units: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
                 margin_row["note"] = note
             (margin_lifting if margin_delta > 0 else margin_dragging).append((abs(margin_delta), margin_row))
 
-        actual_cost = unit["actual"] * (Decimal("1") - unit["actual_margin"] / Decimal("100"))
-        plan_cost = unit["plan"] * (Decimal("1") - unit["plan_margin"] / Decimal("100"))
+        actual_cost = unit["actual"] - unit.get("actual_ebitda", unit["actual"] * unit["actual_margin"] / Decimal("100"))
+        plan_cost = unit["plan"] - unit.get("plan_ebitda", unit["plan"] * unit["plan_margin"] / Decimal("100"))
         cost_delta = actual_cost - plan_cost
         if cost_delta != 0:
             cost_row = {

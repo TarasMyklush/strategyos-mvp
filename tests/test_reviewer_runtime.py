@@ -143,3 +143,12 @@ def test_resume_preserves_the_approved_finance_calendar_signal_and_source_contex
     assert summary["source_pack"] == approved_source_pack
     assert summary["detector_report"] == {"status": "complete"}
     assert summary["checkpoint_count"] == 2
+
+
+def test_writer_resume_preserves_reviewed_search_and_projection_provenance():
+    from strategyos_mvp.reviewer_runtime import _preserve_approved_context
+    prior={'source_search':{'status':'ready','point_count':37537,'model_revision':'pinned'},'projection_rebuild':{'finance_sha256':'reviewed','approval_status':'pending'}}
+    target={};_preserve_approved_context(target,prior)
+    assert target==prior
+    prior['source_search']['status']='failed'
+    assert target['source_search']['status']=='ready'

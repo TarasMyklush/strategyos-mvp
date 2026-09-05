@@ -32,6 +32,8 @@ _APPROVED_CONTEXT_KEYS = (
     "governed_signals",
     "historic_context",
     "source_pack",
+    "source_search",
+    "projection_rebuild",
     "detector_report",
     "run_mode",
     "available_roles",
