@@ -119,6 +119,24 @@ def test_qa_requires_auth(monkeypatch):
         _restore_env(original)
 
 
+def test_chat_rejects_empty_invalid_mode_and_oversized_questions_before_loading(monkeypatch):
+    original, client = _client_with_auth()
+    try:
+        def forbidden(*args, **kwargs):
+            raise AssertionError("Invalid input must not load company data or call a provider")
+        monkeypatch.setattr(api_module, "_resolve_qa_context", forbidden)
+        monkeypatch.setattr(api_module.llm_qa, "answer_question", forbidden)
+        for body, expected in (({"question": "   "}, 400),
+                               ({"question": "Revenue?", "mode": "invalid"}, 400),
+                               ({"question": "x" * 16001}, 422)):
+            response = client.post('/assistant/chat', json=body, headers={'X-API-Key': 'operator-key'})
+            assert response.status_code == expected
+        response = client.post('/qa', json={'question': 'x' * 16001}, headers={'X-API-Key': 'operator-key'})
+        assert response.status_code == 422
+    finally:
+        _restore_env(original)
+
+
 def test_ceo_kpi_answers_are_intent_specific_and_share_governed_truth(monkeypatch):
     monkeypatch.setattr(
         api_module,
@@ -5596,12 +5614,13 @@ def test_auto_tabular_lookup_boundary_rejects_compound_keyword_traps():
         "How much did we pay Saudi Trading Co?",
         "Show me the aging of receivables by segment — where is risk building?",
         "AR ageing by segment",
+        "Which invoices don't reconcile between lines and headers?",
     )
     rejected = (
         "What would a group-wide energy programme save, given the SEC tariff steps?",
         "Which lost customers should we try to win back, and at what price?",
         "How does our pharmacist pay compare to market?",
-        "Which invoices don't reconcile between lines and headers?",
+        "Which invoices don't reconcile between lines and headers, and should we acquire another business?",
         "What is the fully-loaded profitability of our top 10 customers?",
         "Show me receivables aging and recommend which business to acquire",
         "Show me the aging of receivables by segment — where is risk building and what is revenue?",

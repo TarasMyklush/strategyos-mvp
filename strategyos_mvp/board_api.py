@@ -91,6 +91,8 @@ def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = re
     for step in frozen["board_portal"].get("lifecycle_flow", []):
         step["actual"] = step.get("state_id") == "closed"
         step["presented"] = step.get("state_id") == "closed"
+        step["next_action"] = "inspect_frozen_snapshot" if step["presented"] else None
+        step["allowed_actions"] = ["inspect_frozen_snapshot", "review_board_memory"] if step["presented"] else []
     context["executive_packet"] = frozen
     files = {}
     root = Path(str(summary.get("run_dir") or "")).resolve()

@@ -24,7 +24,7 @@ try:
     from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
-    from pydantic import BaseModel
+    from pydantic import BaseModel, Field
 except Exception as exc:  # pragma: no cover - optional cloud dependency
     raise RuntimeError(
         "FastAPI and pydantic are required to run the StrategyOS API."
@@ -236,7 +236,7 @@ class OraclePilotValidationRequest(BaseModel):
 
 
 class QaRequest(BaseModel):
-    question: str
+    question: str = Field(max_length=16000)
     run_id: str | None = None
     mode: str | None = "auto"
     persona: str | None = None
@@ -250,7 +250,7 @@ class QaRequest(BaseModel):
 
 
 class AssistantChatRequest(BaseModel):
-    question: str
+    question: str = Field(max_length=16000)
     run_id: str | None = None
     mode: str | None = "auto"
     persona: str | None = None
@@ -14810,6 +14810,7 @@ def _auto_question_is_narrow_tabular_lookup(question: str) -> bool:
         r"how many distinct (?:vendors|suppliers|customers)(?: are there)?",
         r"how much did we pay [a-z0-9][a-z0-9 .&'/-]{2,80}",
         r"what are (?:the )?working[- ]capital drift signals",
+        r"which invoices (?:don't|do not) reconcile between lines and headers",
         r"(?:show (?:me )?|what is )?(?:the )?(?:aging|ageing) of (?:receivables|ar)(?: by segment)?(?:\s*[—–-]\s*where is risk building)?",
         r"(?:show (?:me )?)?(?:receivables|ar) (?:aging|ageing)(?: by segment)?",
     )

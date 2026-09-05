@@ -114,3 +114,44 @@ def retrieve(run_id, question):
         return {'status': 'unavailable', 'reason': result.get('reason')}
     return {'status': 'ready', 'records': [{key: row.get(key) for key in
             ('source_path', 'source_hash', 'locator', 'text', 'score')} for row in result.get('results', [])]}
+
+
+def targeted_financial_records(evidence, question):
+    """Complement semantic hits with bounded, explicitly named financial tables.
+
+    A narrow topic contract prevents a near-neighbour search miss from being
+    presented as absence of a connected payroll or peer-comparison workbook.
+    """
+    import re
+    from types import SimpleNamespace
+    text = str(question).casefold()
+    patterns = []
+    if re.search(r'\b(?:employee|employees|headcount|payroll|wage|wages)\b', text):
+        patterns += ['headcount_payroll']
+    if re.search(r'\bper employee\b', text):
+        patterns += ['group_bu_pnl']
+    if re.search(r'\b(?:peer|peers|competitor|competitors)\b', text):
+        patterns += ['competitor_financials', 'group_bu_pnl']
+    customer_question = bool(re.search(r'\b(?:customer|customers|profitability|pricing|prices|terms)\b', text))
+    revenue_question = bool(re.search(r'\b(?:revenue|growth|segment|segments)\b', text))
+    if customer_question or revenue_question:
+        patterns += ['revenue_analytics']
+    manifest = {path: entry for path, entry in evidence.manifest.items()
+                if path.lower().endswith('.xlsx') and any(token in Path(path).stem.casefold() for token in patterns)}
+    if not manifest:
+        return {'status': 'not_applicable', 'records': []}
+    scoped = SimpleNamespace(dataset_root=evidence.dataset_root, manifest=manifest, pdf_text={})
+    records = []; characters = 0
+    try:
+        for path, digest, locator, content in source_records(scoped):
+            if 'revenue_analytics' in Path(path).stem.casefold():
+                customer_sheet = locator.startswith(('Customer_Profitability', 'Top_Customers'))
+                if customer_sheet != customer_question:
+                    continue
+            if len(records) >= 96 or characters + len(content) > 30000:
+                return {'status': 'bounded', 'coverage_complete': False, 'records': records}
+            records.append({'source_path': path, 'source_hash': digest, 'locator': locator, 'text': content})
+            characters += len(content)
+    except (ValueError, OSError):
+        return {'status': 'unavailable', 'reason': 'Required source bytes failed verification.', 'records': []}
+    return {'status': 'ready', 'coverage_complete': True, 'records': records}

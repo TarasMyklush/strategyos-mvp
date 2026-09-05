@@ -57,6 +57,18 @@ Configure the target GitHub environment with host/user/target directory, public 
 
 Every release must record commit, image digest, schema identity, source-pack hash, run ID, approval status and provider/policy configuration together. Local consolidation does not deploy the application or select/approve live data.
 
+After health checks and selection of an approved, completed source run, execute the repository attestation command on the Docker host. It verifies all selected file hashes, compares running schema bytes with the host release, and atomically updates the operator-visible receipt. For the authorized synthetic preview:
+
+```sh
+python3 /opt/strategyos-branch/app/deploy/scripts/record_release.py \
+  --base /opt/strategyos-branch \
+  --container strategyos-branch-strategyos-api-1 \
+  --target https://new.strategyos.live \
+  --approval-basis 'Authorized synthetic preview QA; not business or board ratification'
+```
+
+Record `/api/deployment` after attestation and retain the previous receipt with rollback evidence. A successful container restart alone does not establish selected-source identity.
+
 ## Recovery
 
 ```sh

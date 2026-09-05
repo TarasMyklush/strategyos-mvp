@@ -22,7 +22,7 @@ def canonical_workbook_locator(bundle: DataBundle, rel_path: str, locator: str) 
     """Resolve an explicit record identifier to a unique hash-checked row."""
     if re.fullmatch(r'.+!Excel rows? \d+(?:-\d+)?', locator):
         return locator
-    identifier = re.fullmatch(r'(?:(.+?)(?:!| record ))?((?:SIG|KPI|EV|INIT|RD|CT)-[A-Za-z0-9-]+)', locator)
+    identifier = re.fullmatch(r'(?:(.+?)(?:!| record | ))?((?:SIG|KPI|EV|INIT|RD|CT)-[A-Za-z0-9-]+)', locator)
     business_unit = locator.removeprefix('Business unit / ') if locator.startswith('Business unit / ') else None
     if not identifier and not business_unit:
         return None
@@ -54,6 +54,39 @@ def canonical_workbook_locator(bundle: DataBundle, rel_path: str, locator: str) 
         return matches[0] if len(matches) == 1 else None
     finally:
         book.close()
+
+
+def citation_location_hints(bundle: DataBundle, citations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Supply candidate source rows for repair without silently choosing one."""
+    from openpyxl import load_workbook
+    hints = []
+    for item in citations[:12]:
+        source = str(item.get('source_path') or '')
+        identifier = re.search(r'\b(?:SIG|KPI|EV|INIT|RD|CT)-[A-Za-z0-9-]+\b', str(item.get('locator') or ''))
+        if not source.endswith('.xlsx') or not identifier:
+            continue
+        root = bundle.evidence.dataset_root.resolve(); path = (root / source).resolve()
+        entry = bundle.evidence.manifest.get(source) or {}
+        if not path.is_relative_to(root) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry.get('sha256'):
+            continue
+        candidates = []; book = load_workbook(path, read_only=True, data_only=True)
+        try:
+            for sheet in book:
+                rows = sheet.iter_rows(values_only=True); headers = next(rows, ())
+                columns = [i for i, key in enumerate(headers) if re.sub(r'[^a-z0-9]', '', str(key).lower()).endswith('id')]
+                for number, values in enumerate(rows, 2):
+                    if number > 10000:
+                        break
+                    if any(i < len(values) and str(values[i]).strip() == identifier[0] for i in columns):
+                        candidates.append({'locator': f'{sheet.title}!Excel row {number}',
+                            'row': dict(zip(map(str, headers), map(str, values)))})
+            if candidates:
+                hints.append({'source_path': source, 'candidate_count': len(candidates),
+                    'candidates': guard_untrusted_document_text(json.dumps(candidates[-8:]),
+                        source_name=source, max_chars=10000)['guarded_text']})
+        finally:
+            book.close()
+    return hints
 
 
 def verify_source_citations(bundle: DataBundle, citations: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
@@ -172,11 +205,50 @@ def resolve_payload(bundle: DataBundle, rel_path: str, locator: str, excerpt: st
         return resolve_structured_row(table_for_source(bundle, rel_path), locator)
     if rel_path.endswith(".pdf"):
         return resolve_pdf_page(bundle, rel_path, locator, excerpt)
+    if rel_path.endswith(".json"):
+        return resolve_json_record(bundle, rel_path, locator)
     if rel_path.endswith(('.txt', '.md', '.docx')) and re.fullmatch(r'(?:Text chunk|Document paragraph) \d+', locator):
         return resolve_source_text_location(bundle, rel_path, locator)
     if rel_path.endswith(".txt"):
         return resolve_text_file(bundle, rel_path)
     return {"source_type": "file", "excerpt": excerpt} if excerpt else None
+
+
+def resolve_json_record(bundle: DataBundle, rel_path: str, locator: str) -> dict[str, Any] | None:
+    """Resolve a unique explicit record ID, never a model-supplied excerpt."""
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}', locator):
+        return None
+    root = bundle.evidence.dataset_root.resolve()
+    path = (root / rel_path).resolve()
+    entry = bundle.evidence.manifest.get(rel_path) or {}
+    if not path.is_relative_to(root) or not path.is_file() or path.stat().st_size > 5_000_000:
+        return None
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != entry.get('sha256'):
+        return None
+    try:
+        pending = [(json.loads(raw), 0)]
+    except (ValueError, RecursionError):
+        return None
+    found = []; visited = 0
+    while pending:
+        value, depth = pending.pop(); visited += 1
+        if visited > 10000 or depth > 30:
+            return None
+        if isinstance(value, dict):
+            if any((key == 'id' or key.endswith('_id')) and item == locator for key, item in value.items()):
+                found.append(value)
+                if len(found) > 1:
+                    return None
+            pending.extend((item, depth + 1) for item in value.values() if isinstance(item, (dict, list)))
+        elif isinstance(value, list):
+            pending.extend((item, depth + 1) for item in value if isinstance(item, (dict, list)))
+    if len(found) != 1:
+        return None
+    return {'source_type': 'json_record', 'locator_type': 'file', 'locator_value': locator,
+            'record_id': locator, 'text_excerpt': guard_untrusted_document_text(
+                json.dumps(found[0], ensure_ascii=False), source_name=f'{rel_path} record {locator}',
+                max_chars=12000)['guarded_text']}
 
 
 def resolve_source_text_location(bundle: DataBundle, rel_path: str, locator: str) -> dict[str, Any] | None:

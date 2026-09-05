@@ -787,7 +787,7 @@ def test_named_bu_budget_question_uses_deterministic_budget_and_cost_drivers():
     assert result.scenario_id == "governed_bu_budget_bridge"
     assert "revenue is SAR 748.0M versus SAR 733.0M plan" in result.answer
     assert "EBITDA is SAR 210.2M versus SAR 204.5M plan" in result.answer
-    assert "COGS: SAR 6.6M above plan" in result.answer
+    assert "COGS: SAR 6.6M above fixed budget" in result.answer
     assert len(result.citations) == 2
 
 

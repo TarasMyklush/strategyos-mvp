@@ -671,7 +671,15 @@ def _handle_receivables_aging(question, bundle, findings):
     return answer(question,bundle) or {'matched':False,'available':False,'answer':'Receivables aging requires governed invoice, receipt and customer sources.','basis':'Source evidence unavailable.','citations':[]}
 
 
+def _handle_invoice_line_reconciliation(question, bundle, findings):
+    from .invoice_reconciliation import answer
+    return answer(question, bundle) or {'matched': False, 'available': False, 'answer': 'Invoice reconciliation requires aligned header and line extracts.', 'citations': []}
+
+
 INTENTS: tuple[_Intent, ...] = (
+    _Intent('invoice_line_reconciliation',
+            lambda q: bool(re.fullmatch(r"which invoices (?:don't|do not) reconcile between lines and headers[?.!]?", q)),
+            _handle_invoice_line_reconciliation),
     _Intent('receivables_aging',
             lambda q: _has_any(q, 'aging', 'ageing') and _has_any(q, 'receivable', 'receivables', 'ar'),
             _handle_receivables_aging),
@@ -765,14 +773,14 @@ def answer_question(question: str, *, bundle: _DataBundle, findings: list[_Findi
                 result.setdefault("citations", [])
                 result["intent"] = intent.name
                 return result
-        except Exception as exc:  # defensive: never crash the request on a bad question
+        except Exception:  # defensive: never claim a failed calculation is available
             return {
-                "matched": True,
+                "matched": False,
                 "answer": "I could not compute that from the current run.",
                 "value": None, "unit": None,
-                "basis": f"handler '{intent.name}' raised: {exc}",
+                "basis": "Required inputs could not be reconciled; a source correction is needed.",
                 "citations": [],
-                "available": True,
+                "available": False,
                 "intent": intent.name,
             }
     return {

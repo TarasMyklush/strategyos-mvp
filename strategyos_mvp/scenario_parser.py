@@ -1668,8 +1668,8 @@ def _finance_bu_budget_result(
         explanation = str(driver.get("driver") or "").strip()
         driver_lines.append(
             f"- {driver.get('component') or 'Cost line'}: "
-            f"{_sar_executive_decimal(abs(variance))} {direction} plan"
-            + (f" — {explanation}." if explanation else ".")
+            f"{_sar_executive_decimal(abs(variance))} {direction} fixed budget"
+            + (f". Source explanation: {explanation}." if explanation else ".")
         )
 
     answer = (
@@ -1681,7 +1681,9 @@ def _finance_bu_budget_result(
         f"{_sar_executive_decimal(abs(ebitda_variance))} {ebitda_direction}."
     )
     if driver_lines:
-        answer += "\nThe largest supplied cost explanations are:\n" + "\n".join(driver_lines)
+        answer += "\nThe largest supplied cost changes against fixed budget are:\n" + "\n".join(driver_lines)
+        if any("revenue-linked plan" in str(driver.get("driver") or "").casefold() for driver in drivers):
+            answer += "\nThe source's revenue-linked plan commentary uses a different comparator from the fixed-budget amounts above; no quantified flex-budget comparison is supplied."
     else:
         answer += (
             "\nThe aligned BU budget proves the net gap, but no component-level "

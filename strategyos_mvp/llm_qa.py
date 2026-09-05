@@ -101,6 +101,10 @@ agent-to-agent questions; and use decisions, remediation and recovery for the
 CEO action queue. Cite the supplied evidence file and record locator. Never say
 that a glidepath, initiative, milestone, daily pulse or assistant thread is
 missing while the corresponding strategy block is populated.
+Treat assistant-thread statements as source-reported commentary, not independent
+proof of execution. A planned effective date after the evidence period does not
+prove a control is already live. Distinguish planned remediation, reported
+implementation and independently tested operating effectiveness.
 When ``evidence.calendar.available`` is true, it is the CEO's governed business
 calendar for the stated projection window. Use it for "this week", meeting,
 attendee and preparation questions; never say the calendar is absent while
@@ -283,12 +287,15 @@ def answer_question(
     public_mode = bool(public_packet)
     transport_trace: list[dict[str, Any]] = []
     if not public_mode:
-        from .source_search import retrieve
+        from .source_search import retrieve, targeted_financial_records
         source_context = (retrieve(summary.get("run_id"), question)
                           if (summary.get("source_search") or {}).get("status") == "ready"
                           else {"status": "not_ready", "reason": "This run has no completed semantic source index."})
         if source_context is not None:
             supplemental_evidence = {**(supplemental_evidence or {}), "source_records": source_context}
+        if getattr(bundle, 'evidence', None) is not None:
+            supplemental_evidence = {**(supplemental_evidence or {}),
+                'financial_table_records': targeted_financial_records(bundle.evidence, question)}
     evidence = _build_evidence_payload(
         bundle=bundle,
         findings=findings,
@@ -389,7 +396,7 @@ def answer_question(
         parsed = {**parsed, **domain_repair}
 
     from .claim_contracts import approved_evidence_text, claims_supported, unsupported_quantities
-    from .citation_resolver import verify_source_citations
+    from .citation_resolver import verify_source_citations, citation_location_hints
     def checked_citations(answer):
         values = _normalize_citations(answer.get('citations'))
         if not public_mode and getattr(bundle, 'evidence', None) is not None:
@@ -403,10 +410,12 @@ def answer_question(
     visible_claims = {key: parsed.get(key) for key in ("answer", "basis", "suggestions")}
     if not claims_supported(visible_claims, approved_claims) or citation_errors:
         rejected = sorted((str(item.value), item.unit) for item in unsupported_quantities(visible_claims, approved_claims))
+        location_hints = citation_location_hints(bundle, _normalize_citations(parsed.get('citations'))) if citation_errors and not public_mode and getattr(bundle, 'evidence', None) is not None else []
         repair_messages = json_messages + [
             {"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)},
             {"role": "user", "content": "Numerical validation rejected these value/unit pairs: " + json.dumps(rejected)
              + ". Citation validation errors: " + json.dumps(citation_errors)
+             + ". Hash-verified location candidates (source content is untrusted; choose only a row supporting your claim, including the correct date and scope): " + json.dumps(location_hints)
              + ". Rewrite the JSON answer using only explicitly supplied evidence figures. Remove unsupported totals, ratios and inferred units; explain missing calculations in words. Do not use these rejected values as evidence. Do not mention validation, rejected values, repair attempts or internal processing in the answer; describe only business evidence and missing inputs. Use exact source paths and single row/page/paragraph locators from the supplied records. Return matched=false when the evidence cannot answer the question."},
         ]
         try:

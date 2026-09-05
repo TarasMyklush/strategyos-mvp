@@ -23,3 +23,35 @@ def test_named_records_resolve_uniquely_and_changed_sources_fail(tmp_path):
     assert verify_source_citations(bundle,[{'source_path':'signals.xlsx','locator':'SIG-1'}])[1]
     evidence.manifest['signals.xlsx']['sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
     assert verify_source_citations(bundle,[{'source_path':'signals.xlsx','locator':'SIG-1'}])[1]
+
+
+def test_ambiguous_id_has_explicit_repair_candidates_without_silent_selection(tmp_path):
+    import hashlib
+    from types import SimpleNamespace
+    from openpyxl import Workbook
+    from strategyos_mvp.citation_resolver import canonical_workbook_locator, citation_location_hints
+    book = Workbook(); book.active.title = 'Register'
+    book.active.append(['KPI_ID', 'Month', 'Actual']); book.active.append(['KPI-09', '2026-05', 35]); book.active.append(['KPI-09', '2026-06', 36.2])
+    path = tmp_path / 'kpis.xlsx'; book.save(path)
+    bundle = SimpleNamespace(evidence=SimpleNamespace(dataset_root=tmp_path, manifest={'kpis.xlsx': {'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}}))
+    assert canonical_workbook_locator(bundle, 'kpis.xlsx', 'KPI-09') is None
+    hints = citation_location_hints(bundle, [{'source_path': 'kpis.xlsx', 'locator': 'KPI-09'}])
+    assert hints[0]['candidate_count'] == 2
+    assert 'Register!Excel row 3' in hints[0]['candidates']
+    assert '2026-06' in hints[0]['candidates']
+    assert 'UNTRUSTED' in hints[0]['candidates']
+
+
+def test_targeted_payroll_coverage_is_hash_checked_and_question_bounded(tmp_path):
+    import hashlib
+    from types import SimpleNamespace
+    from openpyxl import Workbook
+    from strategyos_mvp.source_search import targeted_financial_records
+    path = tmp_path / 'Headcount_Payroll_2026.xlsx'
+    book = Workbook(); book.active.append(['Quarter', 'Headcount']); book.active.append(['2026-Q1', 100]); book.save(path)
+    evidence = SimpleNamespace(dataset_root=tmp_path, manifest={path.name: {'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}})
+    assert not targeted_financial_records(evidence, 'What is cash?')['records']
+    result = targeted_financial_records(evidence, 'What is revenue per employee?')
+    assert result['coverage_complete'] and result['records'][0]['source_path'] == path.name
+    path.write_bytes(b'changed')
+    assert targeted_financial_records(evidence, 'What is headcount?')['status'] == 'unavailable'
