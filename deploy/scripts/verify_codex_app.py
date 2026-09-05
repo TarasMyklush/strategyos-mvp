@@ -5,14 +5,25 @@ import sys
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from strategyos_mvp.config import load_config
+from strategyos_mvp.config import EXTERNAL_MODE_MODEL_PROVIDER, load_config
 from strategyos_mvp import llm_qa
 from strategyos_mvp.twins.reasoning import _call_litellm_reasoning
 
 config = load_config()
 status = llm_qa.chat_status(config)
-assert status["enabled"] and status["provider"] == "codex_cli", status
+assert config.llm_provider == "codex_cli", "Wrong configured provider"
 assert config.llm_base_url == "http://codex-gateway:8091/v1"
+if not (config.llm_chat_enabled and config.model_provider_enabled
+        and config.run_policy.allows(EXTERNAL_MODE_MODEL_PROVIDER)):
+    # The existing worker runs deterministically with model access disabled.
+    # A provider migration must not silently grant it new external authority.
+    assert "--http" not in sys.argv, "Interactive API unexpectedly disabled"
+    assert not status["enabled"], "Run-policy gate was bypassed"
+    print(json.dumps({"provider_configuration": config.llm_provider,
+                      "external_model_access": "disabled_by_existing_policy",
+                      "policy_preserved": True}), flush=True)
+    sys.exit(0)
+assert status["enabled"] and status["provider"] == "codex_cli", status
 answer = llm_qa._call_openai_compatible_chat(
     config=config,
     messages=[{"role": "system", "content": "Return JSON with answer='ok'."}, {"role": "user", "content": "Provider acceptance check"}],

@@ -12,6 +12,10 @@ evidence assembly, run-policy checks, citations, deterministic calculations and
 action approval gates. A private provider service translates text-only requests
 to `codex exec`. Neither the API nor worker receives the subscription login.
 There is no automatic DeepSeek fallback or new authority to execute actions.
+The background worker previously had LLM access disabled. Its provider routing
+is updated, but that policy remains disabled; the acceptance check verifies the
+restriction rather than enabling model access to satisfy a test. Specialist
+reasoning already authorized in the API continues through the new provider.
 
 The provider has its own unprivileged container, authentication home, temporary
 request directories, a private API network, and egress for Codex. It has no public
