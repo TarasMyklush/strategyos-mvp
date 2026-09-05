@@ -48,6 +48,14 @@ def test_answer_uses_changed_year_and_verified_complete_workbook(tmp_path):
     assert result['value']['group']['quarter_change']=='5'
     assert result['citations'][0]['locator']=='RenamedTable!Excel rows 2-6'
     assert 'SAR +5.00M' in answer(BUDGET,bundle)['answer']
+    book.active.insert_rows(3); book.save(path)
+    bundle.evidence.manifest[source]['sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
+    with_blank=answer(QUESTION,bundle)
+    assert with_blank['value']==result['value']
+    assert [c['locator'] for c in with_blank['citations']]==['RenamedTable!Excel rows 2-2','RenamedTable!Excel rows 4-7']
+    from strategyos_mvp.citation_resolver import verify_source_citations
+    verified, errors=verify_source_citations(bundle,with_blank['citations'])
+    assert not errors and all(c['resolved'] for c in verified)
     book.active['B2']=99;book.save(path)
     assert answer(QUESTION,bundle)['matched'] is False
     assert intent(QUESTION+' Also forecast 2030.') is None

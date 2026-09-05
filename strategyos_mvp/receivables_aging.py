@@ -70,7 +70,7 @@ def reconcile_aging(invoices, customers, receipts, *, as_of):
             'excess_applied_receipts_sar':str(excess), 'input_rows':input_rows}
 
 
-def _verified_workbook(bundle, source):
+def _verified_workbook(bundle, source, *, include_row_numbers=False):
     root = bundle.evidence.dataset_root.resolve(); path = (root/source).resolve()
     entry = bundle.evidence.manifest.get(source) or {}
     if not path.is_relative_to(root) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry.get('sha256'):
@@ -82,7 +82,9 @@ def _verified_workbook(bundle, source):
             rows = []
             for index, values in enumerate(iterator,2):
                 if index > 10000: raise ValueError('Workbook exceeds the bounded row contract')
-                if any(value is not None for value in values): rows.append(dict(zip(headers,values)))
+                if any(value is not None for value in values):
+                    row = dict(zip(headers,values))
+                    rows.append((index, row) if include_row_numbers else row)
             yield sheet.title, rows
     finally: book.close()
 

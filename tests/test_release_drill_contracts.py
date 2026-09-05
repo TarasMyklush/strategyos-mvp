@@ -166,3 +166,29 @@ def test_thread_reload_preserves_nonretryable_validation_and_auth_failures():
         assert result['retryable'] is False and result['needsRetry'] is False
         assert result['retryAction'] is False and 'Retry needed' not in result['preview']
     assert results[4]['retryable'] is True and results[4]['retryAction'] is True
+
+
+def test_deterministic_evidence_status_depends_on_resolution_not_citation_count():
+    source=Path('strategyos_mvp/static/executive.js').read_text()
+    start=source.index('  function executiveEvidenceConfidence(')
+    functions=source[start:source.index('  function assistantEvidenceSummary(',start)]
+    code="""
+    const safeArray = value => Array.isArray(value) ? value : [];
+    const firstDefined = (...values) => values.find(value => value !== undefined && value !== null);
+    const cleanMetaText = value => String(value || '');
+    const humanizeToken = value => value;
+    const executiveEvidenceBasis = value => value;
+    """+functions+"""
+    const base = {matched:true,hallucination_risk:{level:'none'},citations:[{resolved:true}]};
+    console.log(JSON.stringify([
+      qaAnswerMeta(base),
+      qaAnswerMeta({...base,citations:[{},{},{}]}),
+      qaAnswerMeta({...base,grounding_status:'needs_evidence'}),
+      qaAnswerMeta({...base,answered_by:'llm'})
+    ]));
+    """
+    resolved, unverified, missing, model=json.loads(subprocess.check_output(['node','-e',code],text=True))
+    assert 'Traced to source' in resolved
+    assert 'Traced to source' not in unverified and 'Strong' not in unverified
+    assert 'Source missing' in missing
+    assert 'Review before use' in model and 'Traced to source' not in model

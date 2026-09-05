@@ -2689,7 +2689,7 @@
   function executiveEvidenceConfidence(level, citations) {
     var clean = String(level || "").trim().toLowerCase();
     if (!clean) return citations > 0 ? "Evidence-backed" : "";
-    if (clean === "none") return citations > 0 ? "Partial" : "Not yet grounded";
+    if (clean === "none") return citations > 0 ? "Evidence-backed" : "Not yet grounded";
     if (clean === "low" || clean === "strong") return "Strong";
     if (clean === "medium" || clean === "partial") return "Partial";
     if (clean === "high") return "Needs review";
@@ -2723,17 +2723,16 @@
       parts.push("Review before use");
     }
 
-    // Bug 5 fix: derive grounding level from actual evidence when the backend
-    // reports "none" but citations exist — these are contradictory signals.
-    if (riskLevel === "none" && citations.length > 0) {
-      riskLevel = citations.length >= 3 ? "strong" : "partial";
-    }
+    // No model-generation risk is not missing evidence. Use resolved source
+    // status for deterministic answers; citation counts cannot establish it.
+    var resolvedCalculation = !modelProvided && payload.matched === true && riskLevel === "none"
+      && citations.length > 0 && citations.every(function (citation) { return citation.resolved === true; });
     var executiveBasis = executiveEvidenceBasis(basis);
     var confidence = groundingStatus === "grounded"
       ? "Traced to source"
       : (groundingStatus === "needs_evidence" || groundingStatus === "not_grounded"
         ? "Source missing"
-        : executiveEvidenceConfidence(riskLevel, citations.length));
+        : resolvedCalculation ? "Traced to source" : executiveEvidenceConfidence(riskLevel, citations.length));
     if (executiveBasis && !modelProvided) parts.push("Evidence basis: " + executiveBasis);
     if (!modelProvided && calculations.length) parts.push("Calculation: " + calculations.length + " check" + (calculations.length === 1 ? "" : "s") + " reconciled");
     if (citations.length) parts.push("Evidence: " + citations.length + " source" + (citations.length === 1 ? "" : "s") + " checked");

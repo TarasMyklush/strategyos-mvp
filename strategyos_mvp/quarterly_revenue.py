@@ -48,10 +48,15 @@ def answer(question, bundle):
     if len(sources) != 1: return None
     source = sources[0]; year = re.search(r'20\d{2}', PurePosixPath(source).name)[0]
     try:
-        sheets = [(name, rows) for name, rows in _verified_workbook(bundle, source)
-                  if rows and {'Business Unit', 'Q2 Revenue (SAR M)', 'Q2 Budget', 'H1 Revenue', 'H1 Budget'} <= rows[0].keys()]
+        sheets = [(name, rows) for name, rows in _verified_workbook(bundle, source, include_row_numbers=True)
+                  if rows and {'Business Unit', 'Q2 Revenue (SAR M)', 'Q2 Budget', 'H1 Revenue', 'H1 Budget'} <= rows[0][1].keys()]
         if len(sheets) != 1: raise ValueError('A unique complete flash table is required')
-        sheet, rows = sheets[0]; result = reconcile(rows)
+        sheet, numbered_rows = sheets[0]; result = reconcile([row for _, row in numbered_rows])
+        ranges = []
+        for number, _ in numbered_rows:
+            if ranges and number == ranges[-1][1] + 1: ranges[-1][1] = number
+            else: ranges.append([number, number])
+        if len(ranges) > 8: raise ValueError('The table exceeds the bounded citation-range contract')
     except (ValueError, KeyError):
         return {'matched': False, 'available': False, 'answer': 'The quarterly revenue table could not be reconciled. Please review its BU, elimination and group inputs.', 'citations': []}
     group = result['group']; elimination = result['eliminations']
@@ -72,4 +77,4 @@ def answer(question, bundle):
     return {'matched': True, 'available': True, 'answer': text,
             'basis': 'Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions.',
             'value': json.loads(json.dumps(result, default=str)), 'citations': [{'source_path': source, 'source_hash': bundle.evidence.manifest[source]['sha256'],
-                'locator': f'{sheet}!Excel rows 2-{len(rows)+1}', 'excerpt': 'Complete BU revenue, budget, eliminations and group reconciliation inputs.'}]}
+                'locator': f'{sheet}!Excel rows {start}-{end}', 'excerpt': 'Complete BU revenue, budget, eliminations and group reconciliation inputs.'} for start, end in ranges]}
