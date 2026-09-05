@@ -8,14 +8,14 @@ from typing import Any, Iterable
 
 REFERENCE = re.compile(r"\b(?:EV|SIG|INIT|KPI|RD|INV|PO|HD|CT)-[A-Za-z0-9-]+\b", re.I)
 QUANTITY = re.compile(
-    r"(?<![\w])(?:(SAR|USD|EUR|GBP|AED)\s*)?([-+]?\d[\d,]*(?:\.\d+)?)"
+    r"(?<![\w])(?:(SAR|USD|EUR|GBP|AED|CHF|JPY|CNY|INR|KWD|QAR|BHD|OMR|CAD|AUD|SGD|HKD)\s*)?([-+]?\d[\d,]*(?:\.\d+)?)"
     r"\s*(billion|million|thousand|trillion|[KMB](?![a-z])|%|bps|basis points?|percentage points?|pts?|days?|weeks?|months?|years?|x\b)?",
     re.I,
 )
 SCALES = {"k": Decimal(1000), "thousand": Decimal(1000), "m": Decimal(1000000),
           "million": Decimal(1000000), "b": Decimal(1000000000), "billion": Decimal(1000000000),
           "trillion": Decimal(1000000000000)}
-TABLE_AMOUNT = re.compile(r"\((SAR|USD|EUR|GBP|AED)\s*(K|M|B|million|thousand|billion)?\)\s*:\s*([-+]?\d[\d,]*(?:\.\d+)?)", re.I)
+TABLE_AMOUNT = re.compile(r"\((SAR|USD|EUR|GBP|AED|CHF|JPY|CNY|INR|KWD|QAR|BHD|OMR|CAD|AUD|SGD|HKD)\s*(K|M|B|million|thousand|billion)?\)\s*:\s*([-+]?\d[\d,]*(?:\.\d+)?)", re.I)
 TABLE_DELTA = re.compile(r"(?:^|;)\s*Delta vs budget\s*:\s*([-+]?\d[\d,]*(?:\.\d+)?)(?=\s*(?:;|\n|$))", re.I)
 
 

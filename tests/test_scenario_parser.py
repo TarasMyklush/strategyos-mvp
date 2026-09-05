@@ -813,3 +813,10 @@ def test_planning_assumptions_do_not_become_a_hedge_calculation():
         result=parse_scenario(question,{})
         assert result.scenario_id!='fx_hedge'
         assert not result.matched
+
+
+def test_productivity_and_peer_questions_do_not_return_group_margin():
+    from strategyos_mvp.scenario_parser import _asks_for_governed_ebitda_baseline
+    assert not _asks_for_governed_ebitda_baseline('what is revenue and ebitda per employee by bu, trending?')
+    assert not _asks_for_governed_ebitda_baseline('how does each bu ebitda margin compare to listed peers?')
+    assert _asks_for_governed_ebitda_baseline('what is current ebitda?')

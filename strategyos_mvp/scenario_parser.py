@@ -1521,6 +1521,14 @@ def _asks_for_governed_ebitda_baseline(normalized_prompt: str) -> bool:
             "improvement potential",
             "primary lever",
             "one view",
+            "per employee",
+            "per head",
+            "per customer",
+            "per segment",
+            "listed peers",
+            "each bu",
+            "each business unit",
+            "trending",
         )
     ):
         return False
@@ -1648,7 +1656,9 @@ def _finance_bu_budget_result(
         for driver in (baseline.get("cost_component_rows") or [])
         if isinstance(driver, Mapping)
         and str(driver.get("business_unit") or "").strip().casefold() == label.casefold()
-    ][:3]
+    ]
+    drivers.sort(key=lambda driver: abs(_decimal_or_none(driver.get("variance_sar")) or Decimal(0)), reverse=True)
+    drivers = drivers[:3]
     driver_lines = []
     for driver in drivers:
         variance = _decimal_or_none(driver.get("variance_sar"))
@@ -1678,15 +1688,18 @@ def _finance_bu_budget_result(
             "cost explanation is supplied for this business unit."
         )
 
-    citations = list(baseline["citations"])
+    citations = [{**citation, "locator": f"Business unit / {label}"}
+                 for citation in baseline["citations"]]
     cost_source = str(baseline.get("cost_component_source") or "").strip()
     if cost_source and driver_lines:
-        citations.append(
+        citations.extend(
             {
                 "source_path": cost_source,
-                "locator": f"Cost component rows / {label}",
-                "excerpt": "Ranked component variances and supplied driver notes for the selected business unit.",
+                "source_hash": baseline.get("cost_component_hash"),
+                "locator": driver.get("locator") or f"Cost component rows / {label}",
+                "excerpt": str(driver.get("driver") or ""),
             }
+            for driver in drivers
         )
     return ScenarioResult(
         scenario_id="governed_bu_budget_bridge",

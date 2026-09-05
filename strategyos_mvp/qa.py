@@ -666,7 +666,15 @@ def _handle_overdue(question: str, bundle: _DataBundle, findings: list[_Finding]
 # Intent registry (ordered: first match wins)
 # ---------------------------------------------------------------------------
 
+def _handle_receivables_aging(question, bundle, findings):
+    from .receivables_aging import answer
+    return answer(question,bundle) or {'matched':False,'available':False,'answer':'Receivables aging requires governed invoice, receipt and customer sources.','basis':'Source evidence unavailable.','citations':[]}
+
+
 INTENTS: tuple[_Intent, ...] = (
+    _Intent('receivables_aging',
+            lambda q: _has_any(q, 'aging', 'ageing') and _has_any(q, 'receivable', 'receivables', 'ar'),
+            _handle_receivables_aging),
     _Intent(
         "governed_case_links",
         lambda q: _has_any(q, "link", "links") and _has_any(q, "case", "cases", "finding", "findings"),

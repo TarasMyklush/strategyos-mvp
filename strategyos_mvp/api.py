@@ -11887,6 +11887,17 @@ def _assistant_response_payload(
                 payload["grounding_status"] = "grounded"
             elif str(scenario_result.get("scenario_type") or "") == "missing_data":
                 payload["grounding_status"] = "needs_evidence"
+    bundle = context.get("bundle")
+    if getattr(bundle, "evidence", None) is not None and payload.get("citations"):
+        from .citation_resolver import verify_source_citations
+        normalized_citations = []
+        for citation in payload["citations"]:
+            if citation.get("source_path") in bundle.evidence.manifest:
+                verified, errors = verify_source_citations(bundle, [citation])
+                normalized_citations.extend(verified or [{**citation, "resolved": False}])
+            else:
+                normalized_citations.append(citation)
+        payload["citations"] = normalized_citations
     answer_is_model_provided = (
         str(payload.get("answered_by") or "").strip().lower() == "llm"
         or str(payload.get("assistant_mode") or "").strip().lower() == "llm"
@@ -11908,6 +11919,10 @@ def _assistant_response_payload(
         payload["model_answer_disclosure"] = (
             "LLM-provided answer; not a governed calculation; human review required."
         )
+        if "llm_matched" in (base_result or {}):
+            payload["matched"] = bool(base_result["llm_matched"])
+        rejected = any((base_result or {}).get(key) == "rejected" for key in ("claim_validation", "citation_validation"))
+        payload["answer_status"] = "validation_rejected" if rejected else ("answered" if payload.get("matched") else "insufficient_evidence")
     else:
         payload.setdefault("answer_origin", "governed")
         payload.setdefault("human_review_required", False)

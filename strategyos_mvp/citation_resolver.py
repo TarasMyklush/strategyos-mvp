@@ -18,6 +18,68 @@ ROW_RE = re.compile(r"(?:Excel|CSV) row\s+(\d+)", re.I)
 PAGE_RE = re.compile(r"page\s+(\d+)", re.I)
 
 
+def canonical_workbook_locator(bundle: DataBundle, rel_path: str, locator: str) -> str | None:
+    """Resolve an explicit record identifier to a unique hash-checked row."""
+    if re.fullmatch(r'.+!Excel rows? \d+(?:-\d+)?', locator):
+        return locator
+    identifier = re.fullmatch(r'(?:(.+?)(?:!| record ))?((?:SIG|KPI|EV|INIT|RD|CT)-[A-Za-z0-9-]+)', locator)
+    business_unit = locator.removeprefix('Business unit / ') if locator.startswith('Business unit / ') else None
+    if not identifier and not business_unit:
+        return None
+    entry = bundle.evidence.manifest.get(rel_path)
+    root = bundle.evidence.dataset_root.resolve(); path = (root / rel_path).resolve()
+    if not entry or not path.is_relative_to(root) or not path.is_file():
+        return None
+    if hashlib.sha256(path.read_bytes()).hexdigest() != entry.get('sha256'):
+        return None
+    from openpyxl import load_workbook
+    book = load_workbook(path, read_only=True, data_only=True)
+    matches = []
+    try:
+        for sheet in book:
+            if identifier and identifier[1] and identifier[1] != sheet.title:
+                continue
+            rows = sheet.iter_rows(values_only=True)
+            headers = next(rows, ())
+            columns = [i for i, value in enumerate(headers)
+                       if (re.sub(r'[^a-z0-9]', '', str(value).lower()) in {'businessunit', 'bu'} if business_unit
+                           else re.sub(r'[^a-z0-9]', '', str(value).lower()).endswith('id'))]
+            if not columns:
+                continue
+            for number, values in enumerate(rows, 2):
+                if number > 10000:
+                    return None
+                if any(i < len(values) and str(values[i]).strip() == (business_unit or identifier[2]) for i in columns):
+                    matches.append(f'{sheet.title}!Excel row {number}')
+        return matches[0] if len(matches) == 1 else None
+    finally:
+        book.close()
+
+
+def verify_source_citations(bundle: DataBundle, citations: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    verified, errors = [], []
+    for item in citations:
+        source = str(item.get('source_path') or ''); locator = str(item.get('locator') or '')
+        entry = bundle.evidence.manifest.get(source)
+        if source.endswith('.xlsx'):
+            locator = canonical_workbook_locator(bundle, source, locator) or locator
+        expected_hash = (entry or {}).get('sha256')
+        if not expected_hash or item.get('source_hash') not in (None, '', expected_hash):
+            errors.append(f'{source}: source hash is absent or inconsistent with the approved manifest')
+            continue
+        root = bundle.evidence.dataset_root.resolve(); path = (root / source).resolve()
+        if not path.is_relative_to(root) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected_hash:
+            errors.append(f'{source}: source bytes do not match the approved manifest')
+            continue
+        citation = Citation(source, locator, str(item.get('excerpt') or ''), source_hash=expected_hash)
+        result = resolve_citation(bundle, citation)
+        if not result['resolved']:
+            errors.append(f'{source} / {locator}: exact source location does not resolve')
+            continue
+        verified.append({**item, 'locator': locator, 'source_hash': expected_hash, 'resolved': True})
+    return verified, errors
+
+
 def resolve_citation(bundle: DataBundle, citation: Citation) -> dict[str, Any]:
     rel_path = citation.source_path
     manifest_entry = bundle.evidence.manifest.get(rel_path, {})
@@ -79,6 +141,8 @@ def build_validation(
     locator_type = expected_locator_type(rel_path)
     if rel_path.endswith('.xlsx') and re.fullmatch(r'.+!Excel row \d+', locator):
         locator_type = 'row'
+    if rel_path.endswith('.xlsx') and re.fullmatch(r'.+!Excel rows \d+-\d+', locator):
+        locator_type = 'rows'
     locator_value = parse_locator_value(locator_type, locator)
     locator_resolved = payload is not None and locator_matches_payload(locator_type, locator_value, payload)
     file_present = bool(manifest_entry)
@@ -96,7 +160,7 @@ def build_validation(
 
 def resolve_payload(bundle: DataBundle, rel_path: str, locator: str, excerpt: str) -> dict[str, Any] | None:
     if rel_path.endswith(".xlsx"):
-        if re.fullmatch(r'.+!Excel row \d+', locator):
+        if re.fullmatch(r'.+!Excel rows? \d+(?:-\d+)?', locator):
             return resolve_manifest_workbook_row(bundle, rel_path, locator)
         if rel_path == "07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx":
             return resolve_workbook_sheet(bundle, locator)
@@ -131,7 +195,7 @@ def resolve_source_text_location(bundle: DataBundle, rel_path: str, locator: str
 
 def resolve_manifest_workbook_row(bundle: DataBundle, rel_path: str, locator: str) -> dict[str, Any] | None:
     """Resolve a source-addressed workbook row outside the legacy table map."""
-    match = re.fullmatch(r"(.+)!Excel row (\d+)", locator)
+    match = re.fullmatch(r"(.+)!Excel rows? (\d+)(?:-(\d+))?", locator)
     entry = bundle.evidence.manifest.get(rel_path)
     root = bundle.evidence.dataset_root.resolve()
     path = (root / rel_path).resolve()
@@ -144,10 +208,16 @@ def resolve_manifest_workbook_row(bundle: DataBundle, rel_path: str, locator: st
     try:
         if match[1] not in book.sheetnames:
             return None
-        sheet = book[match[1]]; row_number = int(match[2])
-        if row_number < 2 or row_number > 10000 or (sheet.max_row is not None and row_number > sheet.max_row):
+        sheet = book[match[1]]; row_number = int(match[2]); end = int(match[3] or match[2])
+        if row_number < 2 or end < row_number or end > 10000 or (sheet.max_row is not None and end > sheet.max_row):
             return None
         headers = next(sheet.iter_rows(min_row=1,max_row=1,values_only=True))
+        if match[3]:
+            rows = list(sheet.iter_rows(min_row=row_number,max_row=end,values_only=True))
+            if len(rows) != end-row_number+1 or any(all(value is None for value in row) for row in rows):
+                return None
+            return {"source_type":"structured_table", "locator_type":"rows", "locator_value":f'{row_number}-{end}',
+                    "sheet_name":sheet.title, "rows":[{str(key):normalize_value(value) for key,value in zip(headers,row) if key is not None} for row in rows]}
         values = next(sheet.iter_rows(min_row=row_number,max_row=row_number,values_only=True), None)
         if values is None:
             return None
@@ -269,6 +339,9 @@ def expected_locator_type(rel_path: str) -> str:
 
 
 def parse_locator_value(locator_type: str, locator: str) -> Any:
+    if locator_type == 'rows':
+        match = re.fullmatch(r'.+!Excel rows (\d+-\d+)', locator)
+        return match[1] if match else None
     if locator_type == "row":
         match = ROW_RE.search(locator or "")
         return int(match.group(1)) if match else None
@@ -282,8 +355,8 @@ def parse_locator_value(locator_type: str, locator: str) -> Any:
 def locator_matches_payload(locator_type: str, locator_value: Any, payload: dict[str, Any]) -> bool:
     if not locator_value:
         return False
-    if locator_type == "row":
-        return payload.get("locator_type") == "row" and payload.get("locator_value") == locator_value
+    if locator_type in {"row", "rows"}:
+        return payload.get("locator_type") == locator_type and payload.get("locator_value") == locator_value
     if locator_type == "page":
         return payload.get("locator_type") == "page" and payload.get("locator_value") == locator_value
     if locator_type == "sheet":

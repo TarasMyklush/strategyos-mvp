@@ -27,7 +27,7 @@ def test_renamed_metrics_and_stale_labels_do_not_control_status():
     assert all(row['status_vs_path']=='BEHIND' for row in result['commitments'])
 
 
-@pytest.mark.parametrize('candidate',['SAR 999M','USD 42,912','42,912%','SAR 42,912 billion',{'chart':{'caption':'SAR 999 trillion'}}])
+@pytest.mark.parametrize('candidate',['SAR 999M','USD 42,912','CHF 42,912','42,912%','SAR 42,912 billion',{'chart':{'caption':'SAR 999 trillion'}}])
 def test_invented_values_currency_and_units_fail_closed(candidate):
     assert not claims_supported(candidate,'SAR 42,912')
 

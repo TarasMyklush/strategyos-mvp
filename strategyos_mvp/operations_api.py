@@ -16,13 +16,18 @@ router=APIRouter()
 def deployment(principal: dict[str,Any]=require_role('executive','operator','reviewer','bu')):
     from .run_registry import load_latest_run_summary
     summary=load_latest_run_summary() or {}
+    guard_summary(summary)
     root=Path(str(summary.get('dataset') or summary.get('dataset_root') or ''))
     source=root/'release-source-manifest.json'
     source_manifest=json.loads(source.read_text()) if source.is_file() and summary else {}
     path=CONFIG.workspace_root/'.strategyos_mvp_data/releases/current.json'
     manifest=json.loads(path.read_text()) if path.is_file() else {}
-    return {'environment':CONFIG.environment_label,'application_revision':os.getenv('STRATEGYOS_RELEASE_SHA','unrecorded'),
-      'image_digest':manifest.get('image_digest'),'schema_sha256':manifest.get('schema_sha256'),
+    revision=os.getenv('STRATEGYOS_RELEASE_SHA','unrecorded')
+    application_matches=bool(manifest and revision!='unrecorded' and manifest.get('application_revision')==revision)
+    return {'environment':CONFIG.environment_label,'application_revision':revision,
+      'manifest_application_matches':application_matches,
+      'image_digest':manifest.get('image_digest') if application_matches else None,
+      'schema_sha256':manifest.get('schema_sha256') if application_matches else None,
       'selected_run_id':summary.get('run_id'),'manifest_run_matches':bool(manifest and manifest.get('run_id')==summary.get('run_id')),
       'source_digest':source_manifest.get('digest'),'source_classification':source_manifest.get('classification','not_declared'),
       'source_period':source_manifest.get('period'),'source_search':summary.get('source_search',{'status':'not_indexed'}),'data_region':os.getenv('STRATEGYOS_DATA_REGION','Not attested'),
@@ -71,4 +76,3 @@ def inference(principal: dict[str,Any]=require_role('operator','reviewer','tenan
        'billing_cost':None,'billing_status':'No provider billing rates or usage receipts configured.',
        'retention':{'metadata_days':30,'encrypted_payload_days':7},
        'slo_status':'Measured observations; contractual SLO and target workload not yet agreed.'}
-
