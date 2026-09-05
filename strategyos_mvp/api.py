@@ -14798,6 +14798,9 @@ def _auto_question_is_narrow_tabular_lookup(question: str) -> bool:
     """
 
     norm = " ".join(str(question or "").casefold().strip().rstrip("?.!").split())
+    from .quarterly_revenue import intent as quarterly_revenue_intent
+    if quarterly_revenue_intent(norm) is not None:
+        return True
     patterns = (
         r"(?:what is|show me) (?:the )?total recoverable(?: value| identified)?",
         r"show (?:me )?recoverable by (?:pattern|type|category)",

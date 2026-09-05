@@ -1,6 +1,7 @@
 import inspect
 import json
 import os
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -5635,7 +5636,12 @@ def test_calendar_agenda_recognizes_plural_weekly_ceo_judgment_question():
     )
 
 
-def test_auto_aging_question_reaches_reconciled_calculation_without_provider(monkeypatch):
+@pytest.mark.parametrize("question", [
+    "Show me the aging of receivables by segment — where is risk building?",
+    "Break down this quarter's revenue by segment — which segments are growing and which are shrinking?",
+    "What were the key movers of revenue vs budget this half — up and down, ranked by impact?",
+])
+def test_auto_reconciled_calculation_reaches_result_without_provider(monkeypatch, question):
     original, client = _client_with_auth()
     try:
         monkeypatch.setattr(api_module, "_resolve_qa_context", lambda run_id: {
@@ -5657,7 +5663,6 @@ def test_auto_aging_question_reaches_reconciled_calculation_without_provider(mon
             raise AssertionError("A complete aging calculation must not call a model")
         monkeypatch.setattr(api_module.llm_qa, "answer_question", forbidden)
         monkeypatch.setattr(api_module.llm_qa, "answer_general_question", forbidden)
-        question = "Show me the aging of receivables by segment — where is risk building?"
         response = client.post("/assistant/chat", json={"question": question, "persona": "ceo", "mode": "auto"}, headers={"X-API-Key": "operator-key"})
         assert response.status_code == 200
         assert calls == [question]

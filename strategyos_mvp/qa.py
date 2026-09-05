@@ -676,7 +676,18 @@ def _handle_invoice_line_reconciliation(question, bundle, findings):
     return answer(question, bundle) or {'matched': False, 'available': False, 'answer': 'Invoice reconciliation requires aligned header and line extracts.', 'citations': []}
 
 
+def _handle_quarterly_revenue(question, bundle, findings):
+    from .quarterly_revenue import answer
+    return answer(question, bundle) or {'matched': False, 'available': False, 'answer': 'Revenue comparison requires a unique complete quarterly flash table.', 'citations': []}
+
+
+def _asks_quarterly_revenue(question):
+    from .quarterly_revenue import intent
+    return intent(question) is not None
+
+
 INTENTS: tuple[_Intent, ...] = (
+    _Intent('quarterly_revenue', _asks_quarterly_revenue, _handle_quarterly_revenue),
     _Intent('invoice_line_reconciliation',
             lambda q: bool(re.fullmatch(r"which invoices (?:don't|do not) reconcile between lines and headers[?.!]?", q)),
             _handle_invoice_line_reconciliation),
