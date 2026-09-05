@@ -84,3 +84,14 @@ def test_released_board_materials_populate_existing_deck_list(monkeypatch):
     portal=api._board_portal_payload({'run_id':'a'},principal_role='executive')
     assert [item['title'] for item in portal['decks']]==['Approved memo']
     assert portal['frozen_snapshot']['status']=='live_packet'
+
+
+def test_session_expiry_returns_to_login_without_treating_forbidden_as_expired():
+    source=Path('strategyos_mvp/static/executive.js').read_text()
+    function=source[source.index('  function fetchJson('):source.index('  function putJson(')]
+    code="""const bootstrap={login_required:true};let cleared=0,redirects=[];let status=401;
+const clearStoredToken=()=>cleared++;const authHeaders=()=>({});const window={location:{replace:x=>redirects.push(x)}};
+const fetch=()=>Promise.resolve({status,ok:status===200,json:()=>Promise.resolve({ok:true})});
+"""+function+"""(async()=>{let rejected=false;try{await fetchJson('/ui/session')}catch(e){rejected=true};status=403;let forbidden=await fetchJson('/restricted');status=200;let success=await fetchJson('/ok');console.log(JSON.stringify({rejected,cleared,redirects,forbidden,success}));})();"""
+    result=json.loads(subprocess.check_output(['node','-e',code],text=True))
+    assert result=={'rejected':True,'cleared':1,'redirects':['/login'],'forbidden':None,'success':{'ok':True}}

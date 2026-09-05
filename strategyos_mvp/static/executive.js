@@ -807,6 +807,11 @@
 
   function fetchJson(path) {
     return fetch(path, { headers: authHeaders() }).then(function (response) {
+      if (response.status === 401 && bootstrap.login_required) {
+        clearStoredToken();
+        window.location.replace('/login');
+        throw new Error('Your session expired. Please sign in again.');
+      }
       return response.ok ? response.json() : null;
     });
   }
