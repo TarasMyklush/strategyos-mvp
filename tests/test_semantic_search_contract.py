@@ -46,3 +46,28 @@ def test_missing_model_manifest_fails_without_runtime_download(tmp_path,monkeypa
     (tmp_path/'model-manifest.json').write_text(json.dumps({'model_name':'wrong','revision':'wrong'}))
     with pytest.raises(RuntimeError,match='identity'):semantic_embeddings.model()
     semantic_embeddings.model.cache_clear()
+
+
+def test_write_only_workbook_without_dimension_metadata_is_indexed(tmp_path):
+    book=Workbook(write_only=True);sheet=book.create_sheet('Measurements');sheet.append(['Metric','Value']);sheet.append(['Zero',0]);path=tmp_path/'stream.xlsx';book.save(path)
+    evidence=SimpleNamespace(dataset_root=tmp_path,manifest={'stream.xlsx':{'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}},pdf_text={})
+    rows=list(source_search.source_records(evidence))
+    assert rows[0][2:] == ('Measurements!Excel row 2','Metric: Zero; Value: 0')
+
+
+def test_reindex_reuses_only_matching_scope_and_hash(monkeypatch):
+    monkeypatch.setattr(semantic_embeddings,'configured',lambda:True)
+    monkeypatch.setattr(source_search,'source_records',lambda evidence:iter([('a.xlsx','hash','Sheet!Excel row 2','A: 0')]))
+    monkeypatch.setattr(vector_store,'_run_filter',lambda run:None)
+    monkeypatch.setattr(vector_store,'_ensure_collection',lambda:None)
+    embedded=[];writes=[]
+    monkeypatch.setattr(semantic_embeddings,'embed_many',lambda texts:embedded.extend(texts) or [[1.0] for text in texts])
+    def request(method,path,payload):
+        if path.endswith('/points'):
+            return {'result':[{'id':payload['ids'][0],'payload':{'run_id':'run','tenant_slug':'tenant','source_hash':'hash'}}]}
+        writes.append(payload);return {}
+    monkeypatch.setattr(vector_store,'_qdrant_request',request)
+    result=source_search.sync_sources(run_id='run',tenant_slug='tenant',evidence=object())
+    assert result['reused_points']==1 and not embedded and not writes
+    result=source_search.sync_sources(run_id='run',tenant_slug='other',evidence=object())
+    assert result['reused_points']==0 and len(embedded)==1 and len(writes)==1

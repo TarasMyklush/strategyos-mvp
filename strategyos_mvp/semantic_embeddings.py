@@ -54,3 +54,18 @@ def _cached(text):
 
 def embed(text, *, query=False):
     return list(_cached(("query: " if query else "passage: ") + str(text)))
+
+
+def embed_many(texts):
+    if not texts:
+        return []
+    result = []
+    for vector in model().embed(["passage: " + str(text) for text in texts], batch_size=16):
+        values = vector.tolist()
+        norm = math.sqrt(sum(float(value) ** 2 for value in values))
+        if len(values) != DIMENSIONS or not math.isfinite(norm) or norm <= 0:
+            raise RuntimeError("Embedding model returned an invalid vector.")
+        result.append([float(value) / norm for value in values])
+    if len(result) != len(texts):
+        raise RuntimeError("Embedding model returned an incomplete batch.")
+    return result

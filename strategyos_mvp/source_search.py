@@ -1,5 +1,8 @@
 """Index approved source rows/pages with exact citations into the scoped collection."""
 from pathlib import Path
+from itertools import islice
+import logging
+logger = logging.getLogger(__name__)
 from . import semantic_embeddings, vector_store
 from .evidence import sha256_file
 
@@ -22,11 +25,13 @@ def source_records(evidence):
             book = load_workbook(path, read_only=True, data_only=True)
             try:
                 for sheet in book:
-                    if sheet.max_row > MAX_FILE_ROWS:
+                    if sheet.max_row is not None and sheet.max_row > MAX_FILE_ROWS:
                         raise ValueError(f'{relative}: worksheet exceeds the reviewed indexing capacity.')
                     rows = sheet.iter_rows(values_only=True)
                     headers = [str(x or '') for x in next(rows, ())]
                     for number, values in enumerate(rows, start=2):
+                        if number > MAX_FILE_ROWS:
+                            raise ValueError(f"{relative}: worksheet exceeds the reviewed indexing capacity.")
                         text = '; '.join(f'{headers[i] if i < len(headers) else i}: {value}' for i, value in enumerate(values) if value is not None)
                         if text:
                             yield relative, entry['sha256'], f'{sheet.title}!Excel row {number}', text[:vector_store.MAX_INDEX_TEXT]
@@ -41,24 +46,33 @@ def sync_sources(*, run_id, tenant_slug, evidence):
         raise ValueError("Source evidence is unavailable; indexing cannot continue.")
     vector_store._run_filter(run_id)  # Reject unknown or inaccessible runs before reading source files.
     vector_store._ensure_collection()
-    count, batch = 0, []
-    for relative, digest, locator, text in source_records(evidence):
-        count += 1
-        if count > MAX_CHUNKS:
-            raise ValueError('Source pack exceeds reviewed semantic indexing capacity.')
-        point = {'id': vector_store._point_id(run_id, 'source_chunk', relative, locator, text),
-                 'vector': semantic_embeddings.embed(Path(relative).stem + ': ' + text),
-                 'payload': {'run_id': run_id, 'tenant_slug': tenant_slug, 'point_type': 'source_chunk',
-                             'source_path': relative, 'source_hash': digest, 'locator': locator,
-                             'title': Path(relative).stem, 'text': text, 'excerpt': text[:700]}}
-        batch.append(point)
-        if len(batch) == 64:
-            vector_store._qdrant_request('PUT', f'/collections/{vector_store.COLLECTION_NAME}/points?wait=true', {'points': batch})
-            batch.clear()
-    if batch:
-        vector_store._qdrant_request('PUT', f'/collections/{vector_store.COLLECTION_NAME}/points?wait=true', {'points': batch})
-    return {'status': 'ready', 'point_count': count, 'collection': vector_store.COLLECTION_NAME,
-            'model_revision': semantic_embeddings.MODEL_REVISION}
+    # Preflight the entire bounded manifest before writing any index records.
+    records = list(islice(source_records(evidence), MAX_CHUNKS + 1))
+    if len(records) > MAX_CHUNKS:
+        raise ValueError('Source pack exceeds reviewed semantic indexing capacity.')
+    reused = 0
+    for offset in range(0, len(records), 64):
+        batch = []
+        for relative, digest, locator, text in records[offset:offset + 64]:
+            batch.append({'id': vector_store._point_id(run_id, 'source_chunk', relative, locator, text),
+                          'payload': {'run_id': run_id, 'tenant_slug': tenant_slug, 'point_type': 'source_chunk',
+                                      'source_path': relative, 'source_hash': digest, 'locator': locator,
+                                      'title': Path(relative).stem, 'text': text, 'excerpt': text[:700]}})
+        stored = vector_store._qdrant_request('POST', f'/collections/{vector_store.COLLECTION_NAME}/points',
+                    {'ids': [point['id'] for point in batch], 'with_payload': ['run_id', 'tenant_slug', 'source_hash'], 'with_vector': False})
+        existing = {str(point['id']): point.get('payload', {}) for point in stored.get('result', [])}
+        missing = [point for point in batch if not all(existing.get(point['id'], {}).get(key) == point['payload'][key]
+                   for key in ('run_id', 'tenant_slug', 'source_hash'))]
+        reused += len(batch) - len(missing)
+        vectors = semantic_embeddings.embed_many([point['payload']['title'] + ': ' + point['payload']['text'] for point in missing])
+        for point, vector in zip(missing, vectors):
+            point['vector'] = vector
+        if missing:
+            vector_store._qdrant_request('PUT', f'/collections/{vector_store.COLLECTION_NAME}/points?wait=true', {'points': missing})
+        if offset % 1024 == 0:
+            logger.info('Semantic source index: %s/%s records, %s reused', min(offset + 64, len(records)), len(records), reused)
+    return {'status': 'ready', 'point_count': len(records), 'reused_points': reused,
+            'collection': vector_store.COLLECTION_NAME, 'model_revision': semantic_embeddings.MODEL_REVISION}
 
 
 def retrieve(run_id, question):
