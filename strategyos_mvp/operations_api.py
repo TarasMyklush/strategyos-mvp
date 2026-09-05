@@ -25,7 +25,7 @@ def deployment(principal: dict[str,Any]=require_role('executive','operator','rev
       'image_digest':manifest.get('image_digest'),'schema_sha256':manifest.get('schema_sha256'),
       'selected_run_id':summary.get('run_id'),'manifest_run_matches':bool(manifest and manifest.get('run_id')==summary.get('run_id')),
       'source_digest':source_manifest.get('digest'),'source_classification':source_manifest.get('classification','not_declared'),
-      'source_period':source_manifest.get('period'),'data_region':os.getenv('STRATEGYOS_DATA_REGION','Not attested'),
+      'source_period':source_manifest.get('period'),'source_search':summary.get('source_search',{'status':'not_indexed'}),'data_region':os.getenv('STRATEGYOS_DATA_REGION','Not attested'),
       'model_provider':CONFIG.llm_provider if CONFIG.model_provider_enabled else 'disabled','model':CONFIG.llm_model if CONFIG.model_provider_enabled else None,
       'model_processing':os.getenv('STRATEGYOS_MODEL_PROCESSING_REGION','External provider; residency not attested') if CONFIG.model_provider_enabled else 'No model calls enabled',
       'run_policy':CONFIG.run_policy.mode,'approved_external_modes':list(CONFIG.run_policy.approved_external_modes),

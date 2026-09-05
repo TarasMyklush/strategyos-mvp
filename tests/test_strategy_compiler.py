@@ -41,3 +41,30 @@ def test_unapproved_ratification_arbitrary_code_and_nan_rejected():
     raw["status"] = "ratified"
     with pytest.raises(ValueError, match="Ratification requires"):
         compile_strategy(raw, available_bindings=set())
+
+
+def test_two_company_formulas_are_evaluated_without_client_specific_code():
+    from strategyos_mvp.strategy_compiler import evaluate_strategy
+    from decimal import Decimal
+    for company, actual, expected in [('company-a', 21, 42), ('company-b', 0, 0)]:
+        compiled=compile_strategy(plan(company),available_bindings={'active','eligible'})
+        result=evaluate_strategy(compiled,{'active':actual,'eligible':50})
+        assert result['measurements'][0]['actual']==expected
+        assert result['approval_status']=='proposed'
+    result=evaluate_strategy(compiled,{'active':0,'eligible':0})
+    assert result['measurements'][0]['actual'] is None
+    assert 'denominator' in result['measurements'][0]['reason']
+    result=evaluate_strategy(compiled,{'active':0})
+    assert result['measurements'][0]['missing_inputs']==['eligible']
+    result=evaluate_strategy(compiled,{'active':float('inf'),'eligible':50})
+    assert result['measurements'][0]['actual'] is None
+
+
+def test_sum_and_variance_preserve_signed_values_and_source_actual_arity():
+    from strategyos_mvp.strategy_compiler import evaluate_strategy
+    raw=plan('company-b');raw['commitments'][0].update(formula='variance',unit='SAR')
+    compiled=compile_strategy(raw,available_bindings={'active','eligible'})
+    assert evaluate_strategy(compiled,{'active':0,'eligible':50})['measurements'][0]['actual']==-50
+    raw['commitments'][0]['formula']='source_actual'
+    with pytest.raises(ValueError,match='exactly 1'):
+        compile_strategy(raw,available_bindings={'active','eligible'})

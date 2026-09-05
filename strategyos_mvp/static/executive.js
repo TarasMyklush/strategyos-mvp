@@ -607,6 +607,8 @@
           var frozen = await fetchJson('/runs/latest' + buildQuery({persona:'board',board:'closed',meeting:meetingId}));
           if (!frozen) throw new Error('The closed snapshot could not be loaded.');
           state.latestPacket = frozen;
+          state.reviewFiles = null;
+          renderReviewFiles(true);
           activateBoardState('closed');
         } catch (error) { state.boardMeetingId = ''; showToast(error.message || 'Board closure failed.'); }
         finally { state._boardClosePending = false; }
@@ -624,6 +626,7 @@
     // renderBoardStateTabs now has a fast path that avoids innerHTML
     // destroy-recreate when the mode list is unchanged.
     renderBoardStageSurface();
+    renderReportSurface();
     // Post-render guard: force intended tab state on whatever buttons exist.
     syncBoardStateTabUI(nextState);
     // Re-assert guard: if a concurrent refresh() reset activeBoard during
@@ -716,7 +719,7 @@
       "pending": "Pending",
       "in review": "Under review",
       "in_review": "Under review",
-      "live packet": "Frozen",
+      "live packet": "Not frozen",
       "live_packet": "Not frozen",
       "protected": "Guarded",
       "board_safe_preview": "View only",
@@ -3051,6 +3054,8 @@
       String((((state.session || {}).tenant_context || {}).tenant_id) || ""),
       String(activeRunId() || ""),
       String(state.activePersona || "ceo"),
+      String(state.activeBoard || "pre"),
+      String(state.boardMeetingId || ""),
       String(firstDefined(context.entrypoint, "drawer_input")),
       String(firstDefined(context.kpi_key, context.driver_key, "none")),
       String(firstDefined(context.kpi_question_intent, "free_text")),
@@ -6764,9 +6769,10 @@
     });
   }
 
-  function renderReviewFiles() {
+  function renderReviewFiles(force) {
     var panel = $("review-files-panel");
     if (!panel) return;
+    if (!force && panel.querySelector("details[open]")) return;
     var registry = state.reviewFiles || {};
     var groups = safeArray(registry.groups);
     var groupsMarkup = groups.length ? groups.map(function (group) {
@@ -6779,7 +6785,7 @@
     var capNote = registry.cap
       ? 'Showing up to ' + escapeHtml(String(registry.cap)) + ' relevance-selected files. '
       : '';
-    panel.innerHTML = '<div class="review-file-groups">' + groupsMarkup + '</div><p class="review-file-version-note">' + capNote + escapeHtml(firstDefined(registry.versioning, 'Latest file with the same name is shown. Version history is not yet available.')) + '</p><details class="review-file-upload"><summary>Upload an Office file</summary><form data-review-file-upload><label>File<input type="file" name="file" required accept=".xlsx,.docx,.pptx" /></label><label>Headline group<input type="text" name="group" maxlength="120" placeholder="e.g. Decision pack" /></label><label>Business scope<input type="text" name="scope" maxlength="120" placeholder="Optional" /></label><button type="submit">Upload for review</button><span data-review-file-status></span></form></details>';
+    panel.innerHTML = '<div class="review-file-groups">' + groupsMarkup + '</div><p class="review-file-version-note">' + capNote + escapeHtml(firstDefined(registry.versioning, 'Latest file with the same name is shown. Version history is not yet available.')) + '</p><details class="review-file-upload"><summary>Upload an Office file</summary><form data-review-file-upload><label>File<input type="file" name="file" required accept=".xlsx,.docx,.pptx" /></label><label>Headline group<input type="text" name="group" maxlength="120" placeholder="e.g. Decision pack" /></label><label>Business scope<input type="text" name="scope" maxlength="120" placeholder="Optional" /></label><button type="submit">Upload for review</button><span data-review-file-status role="status" aria-live="polite"></span></form></details>';
     var form = panel.querySelector('[data-review-file-upload]');
     if (form) {
       form.onsubmit = async function (event) {
@@ -6798,7 +6804,7 @@
           var payload = await parseJsonResponse(response);
           if (!response.ok) throw new Error(firstDefined(payload && payload.detail, 'Upload failed.'));
           state.reviewFiles = await fetchJson('/executive/files') || state.reviewFiles;
-          renderReviewFiles();
+          renderReviewFiles(true);
           showToast('Office file added to the CEO review list.');
         } catch (error) {
           if (statusEl) statusEl.textContent = firstDefined(error && error.message, 'Upload failed.');

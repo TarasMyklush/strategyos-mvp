@@ -466,7 +466,18 @@ def _execute_strategyos_workflow(
         knowledge_graph_path=result.get("artifacts", {}).get("knowledge_graph"),
     )
     from .source_search import sync_sources
-    summary["source_search"] = sync_sources(run_id=str(persisted_run_id), tenant_slug=CONFIG.tenant_slug, evidence=getattr(result.get("bundle"), "evidence", None))
+    try:
+        summary["source_search"] = sync_sources(run_id=str(persisted_run_id), tenant_slug=CONFIG.tenant_slug, evidence=getattr(result.get("bundle"), "evidence", None))
+    except Exception as exc:
+        summary["source_search"] = {"status": "failed", "reason": str(exc)}
+        summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        if persisted_run_id:
+            from .state_store import update_run_summary
+            update_run_summary(str(persisted_run_id), summary)
+        raise
+    if persisted_run_id and summary["source_search"].get("status") == "ready":
+        from .state_store import update_run_summary
+        update_run_summary(str(persisted_run_id), summary)
     attach_local_review_checkpoint(summary, result)
     summary["pointer_metadata"] = update_run_pointers(summary, summary_path)
     summary["latest_pointer"] = summary["pointer_metadata"]["latest"]

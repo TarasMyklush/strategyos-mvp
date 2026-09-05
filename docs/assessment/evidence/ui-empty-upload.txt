@@ -1,0 +1,353 @@
+- banner:
+  - link "StrategyOS home":
+    - generic: StrategyOS
+  - tablist "Executive views":
+    - tab "Diagnostics" [selected]
+    - tab "AI Assistants"
+    - tab "Agents"
+    - tab "Knowledge"
+    - tab "Authority Matrix"
+  - button "Group CEO":
+    - generic: Group CEO
+    - generic: ▾
+  - button "Switch to dark theme": ◐
+  - button "ET"
+- main:
+  - tabpanel:
+    - region "Operating cost needs executive intervention":
+      - paragraph: Good morning, Executive
+      - heading "Operating cost needs executive intervention" [level=1]
+      - paragraph: "Operating cost is 2.9% above plan for the current period. Recommended action: assign Business Unit CEO, Tamween Pharma Distribution and request a dated cost-remediation plan. A due date needs your input; StrategyOS will not invent one."
+      - 'button "Open Hermes morning briefing. E-Rx share of retail Rx volume, 1.8 pts behind path. Next commitment: Monday Brief · group KPI review at 08:00."':
+        - generic: Hermes · Exception
+        - strong: E-Rx share of retail Rx volume
+        - emphasis: 1.8 pts behind path
+        - generic "Next commitment"
+        - strong: Monday Brief · group KPI review
+        - emphasis: 08:00
+        - text: Open brief
+        - generic: →
+      - button "Computed on 7 of 10 live board commitments · 3 estimates shown separately"
+      - complementary "Executive status":
+        - generic: On plan
+        - strong:
+          - generic: "101"
+          - generic: "%"
+          - generic: of plan
+        - paragraph: "6 of 7 commitments holding · 1 behind: E-Rx share of retail Rx volume"
+    - region "The group index":
+      - heading "The group index" [level=2]
+      - paragraph: Percent of plan is the headline. Tap a KPI for its trend and drivers.
+      - button "102.6 of plan Revenue SAR 4006.0M 102.6% Of Plan Evidence verified":
+        - generic: "102.6"
+        - generic: "%"
+        - generic: of plan
+        - strong: Revenue
+        - generic: SAR 4006.0M
+        - generic: 102.6% Of Plan
+        - generic "Traced to current finance records": Evidence verified
+      - button "15.4 margin EBITDA margin 15.4% 20 Bps Vs Plan Evidence verified":
+        - generic: "15.4"
+        - generic: "%"
+        - generic: margin
+        - strong: EBITDA margin
+        - generic: 15.4%
+        - generic: 20 Bps Vs Plan
+        - generic "Traced to current finance records": Evidence verified
+      - button "102.9 of plan Operating cost SAR 3389.1M 102.9% Of Plan Evidence verified" [pressed]:
+        - generic: "102.9"
+        - generic: "%"
+        - generic: of plan
+        - strong: Operating cost
+        - generic: SAR 3389.1M
+        - generic: 102.9% Of Plan
+        - generic "Traced to current finance records": Evidence verified
+      - button "117.5 of floor Cash vs floor SAR 1410.0M SAR 210.0M Above Floor Evidence verified":
+        - generic: "117.5"
+        - generic: "%"
+        - generic: of floor
+        - strong: Cash vs floor
+        - generic: SAR 1410.0M
+        - generic: SAR 210.0M Above Floor
+        - generic "Traced to current finance records": Evidence verified
+    - region "Executive readout":
+      - article:
+        - heading "Operating cost" [level=3]
+        - generic: 2.9% above plan
+        - strong: SAR 3389.1M
+        - button "Show the work"
+        - generic "Traced to current finance records": Evidence verified
+        - generic: Reporting trajectory
+        - generic: Tamween division monthly COGS plus cash operating cost; group H1 headline is shown above.
+        - generic: Actual
+        - generic: Plan
+        - img "Operating cost actual versus plan across 2026-01, 2026-02, 2026-03, 2026-04, 2026-05, 2026-06":
+          - generic: SAR 40.6M
+          - generic: SAR 28.9M
+          - generic: SAR 17.3M
+          - 'generic "Jan 2026: SAR 40.6M"'
+          - 'generic "Feb 2026: SAR 34.6M"'
+          - 'generic "Mar 2026: SAR 30.2M"'
+          - 'generic "Apr 2026: SAR 24.5M"'
+          - 'generic "May 2026: SAR 22.1M"'
+          - 'generic "Jun 2026: SAR 17.3M"'
+          - generic: Jan 2026
+          - generic: Feb 2026
+          - generic: Mar 2026
+          - generic: Apr 2026
+          - generic: May 2026
+          - generic: Jun 2026
+        - generic: Latest
+        - strong: SAR 17.3M
+        - generic: Jun 2026
+        - generic: Change
+        - strong: −SAR 4.8M
+        - generic: versus May 2026
+        - generic: What moved it
+        - text: Business-unit total cost-to-EBITDA movement against the approved H1 plan.
+        - generic: ↘
+        - strong: Mizan Pharmacy Retail
+        - generic: SAR 5.4M below plan
+        - button "BN BU note":
+          - generic: BN
+          - generic: BU note
+        - generic: ↘
+        - strong: Mizan Healthcare Services
+        - generic: SAR 3.4M below plan
+        - button "BN BU note":
+          - generic: BN
+          - generic: BU note
+        - generic: ↗
+        - strong: Tamween Pharma Distribution
+        - generic: SAR 71.2M above plan
+        - button "BN BU note":
+          - generic: BN
+          - generic: BU note
+        - generic: ↗
+        - strong: Mizan E-Pharmacy
+        - generic: SAR 14.9M above plan
+        - button "BN BU note":
+          - generic: BN
+          - generic: BU note
+        - region "Ask Hermes about Operating cost":
+          - button "Do I need to intervene?"
+          - button "Who owns it—and why?"
+          - button "What changes the outlook?"
+          - button "Consult general practice"
+          - generic: Ask Hermes about Operating cost
+          - textbox "Ask Hermes about Operating cost":
+            - /placeholder: Ask a decision question about Operating cost...
+          - button "Ask"
+    - region "Developments & concerns":
+      - heading "Developments & concerns" [level=2]
+      - paragraph: business movements and signals to keep in view — no action implied
+      - article:
+        - generic "Found money":
+          - button "Identified SAR 1.21M":
+            - generic: Identified
+            - strong: SAR 1.21M
+          - button "Locked SAR 794K":
+            - generic: Locked
+            - strong: SAR 794K
+          - button "Source-reported recovery SAR 247K":
+            - generic: Source-reported recovery
+            - strong: SAR 247K
+        - generic "Red concern E-Rx share of retail Rx volume is behind its June glidepath Open register detail for KPI-09":
+          - img "Red concern"
+          - generic: E-Rx share of retail Rx volume is behind its June glidepath
+          - button "Open register detail for KPI-09": KPI-09
+          - generic: +
+        - generic "Red concern Clinical-services counters — 140 stores by 2028 NA Open register detail for INIT-07":
+          - img "Red concern"
+          - generic: Clinical-services counters — 140 stores by 2028
+          - generic "Noura Al-Sheikh (CEO Pharmacy Retail)": NA
+          - button "Open register detail for INIT-07": INIT-07
+          - generic: +
+        - generic "Red concern Modern Pharmacy pricing-grid rebuild FA Open register detail for INIT-10":
+          - img "Red concern"
+          - generic: Modern Pharmacy pricing-grid rebuild
+          - generic "Faisal Al-Harbi + Lina Al-Qahtani (KAM)": FA
+          - button "Open register detail for INIT-10": INIT-10
+          - generic: +
+        - generic "Red concern E-Rx share 38% checkpoint 38% 36.2% Open register detail for INIT-06":
+          - img "Red concern"
+          - generic: E-Rx share 38% checkpoint
+          - generic: 38%
+          - generic: 36.2%
+          - button "Open register detail for INIT-06": INIT-06
+          - generic: +
+        - generic "Red concern 60 counters live Open register detail for INIT-07":
+          - img "Red concern"
+          - generic: 60 counters live
+          - button "Open register detail for INIT-07": INIT-07
+          - generic: +
+        - 'generic "Red concern API supply concentration: India/China regulatory tightening + logistics costs push API prices +6-9% YoY; 74% of group API from 2 countries. +6-9% 74% SAR 15-25M Threat · Manufacturing; Distribution"':
+          - img "Red concern"
+          - generic: "API supply concentration: India/China regulatory tightening + logistics costs push API prices +6-9% YoY; 74% of group API from 2 countries."
+          - generic: +6-9%
+          - generic: 74%
+          - generic: SAR 15-25M
+          - generic: Threat · Manufacturing; Distribution
+          - generic: +
+    - region "Decisions for you":
+      - heading "Decisions for you" [level=2]
+      - paragraph: approvals, interventions and direction that need your call
+      - article:
+        - generic: Pending CEO decisions
+        - article:
+          - button "watch priority Apply hedge coverage to the June EUR payment run Pending CEO decision":
+            - img "watch priority"
+            - generic: Apply hedge coverage to the June EUR payment run
+            - generic: Pending CEO decision
+            - generic: +
+        - article:
+          - button "critical priority Approve the Gulf Cold-Chain renegotiation mandate Pending CEO decision":
+            - img "critical priority"
+            - generic: Approve the Gulf Cold-Chain renegotiation mandate
+            - generic: Pending CEO decision
+            - generic: +
+        - article:
+          - button "watch priority Hold the board pack for final sign-off R Pending CEO decision":
+            - img "watch priority"
+            - generic: Hold the board pack for final sign-off
+            - generic "Reviewer": R
+            - generic: Pending CEO decision
+            - generic: +
+        - article:
+          - 'button "watch priority Operating cost: Off plan 2.9% BU Pending CEO decision"':
+            - img "watch priority"
+            - generic: "Operating cost: Off plan"
+            - generic: 2.9%
+            - generic "Business Unit CEO, Tamween Pharma Distribution": BU
+            - generic: Pending CEO decision
+            - generic: +
+    - region "Available files for review":
+      - heading "Available files for review" [level=2]
+      - paragraph: documents relevant to the current briefing — latest version only
+      - article:
+        - strong: No relevant Office files
+        - paragraph: No Office file is relevant to the current governed developments or decisions.
+        - paragraph: Showing up to 8 relevance-selected files. Latest file with the same name is shown. Version history is not yet available.
+        - generic "Upload an Office file"
+        - text: File
+        - button "File"
+        - text: Headline group
+        - textbox "Headline group":
+          - /placeholder: e.g. Decision pack
+        - text: Business scope
+        - textbox "Business scope":
+          - /placeholder: Optional
+        - button "Upload for review"
+        - generic: The uploaded file is not a safe, readable Office document.
+    - region "Week ahead":
+      - heading "Week ahead" [level=2]
+      - paragraph: your calendar, AI-triaged — a launchpad, not a list
+      - article:
+        - button "Mon 01 Jun · StrategyOS Monday Brief — group KPI review · 08:00":
+          - generic: Mon 01 Jun
+          - generic: StrategyOS Monday Brief — group KPI review
+        - button "Tue 02 Jun · Q2 2026 Board of Directors meeting · 09:00":
+          - generic: Tue 02 Jun
+          - generic: Q2 2026 Board of Directors meeting
+        - button "Wed 03 Jun · Executive Committee · 10:00":
+          - generic: Wed 03 Jun
+          - generic: Executive Committee
+        - button "Wed 03 Jun · Gulf Cold-Chain contract renegotiation — strategy session · 14:00":
+          - generic: Wed 03 Jun
+          - generic: Gulf Cold-Chain contract renegotiation — strategy session
+        - button "See 1 more"
+        - generic: ⚑ prep StrategyOS Monday Brief — group KPI review · 08:00
+        - paragraph: "Weekly cortex review: revenue vs plan, cash pulse, BU exceptions. Briefing file auto-attached."
+        - button "◇ Open in thinking mode":
+          - strong: ◇ Open in thinking mode
+        - button "⤓ Request missing data":
+          - strong: ⤓ Request missing data
+        - generic: Ask StrategyOS to prepare something for this event
+        - generic: Ask StrategyOS to prepare something for this event
+        - textbox "Ask StrategyOS to prepare something for this event":
+          - /placeholder: e.g. draft my opening line…
+        - button "Ask StrategyOS": ↑
+    - region "Think and model on your data":
+      - heading "Think and model on your data" [level=2]
+      - paragraph: the gravity layer — think, don’t act
+      - article:
+        - generic: ◇ Thinking mode
+        - heading "Model a what-if on your own data" [level=3]
+        - paragraph:
+          - text: A sovereign sandbox that runs in your chat — on the current verified figures, with
+          - strong: no side effects
+          - text: .
+        - generic: ◇ Type a what-if and play — nothing here acts
+        - generic: Model a scenario on your data
+        - textbox "Model a scenario on your data":
+          - /placeholder: e.g. what if the largest revenue driver changes by 5%?
+        - button "Run scenario": ↑
+        - generic: or start from one of these
+        - button "Does the cost position require intervention, and which owner has the largest controllable gap?"
+        - button "What are the three decisions I need to make before the next commitment, with one owner and deadline for each?"
+        - button "What changed since the last executive review, and which item now crosses the CEO materiality threshold?"
+      - region "Leaders’ Corner":
+        - heading "Leaders’ Corner" [level=2]
+        - paragraph: short counsel, senior practitioners
+        - article:
+          - generic: ✦ Leaders’ Corner · video
+          - generic: Short counsel, senior practitioners
+          - iframe:
+            - generic "YouTube Video Player"
+            - button "Play video":
+            - button "Hide player controls"
+            - 'link "Enterprise AI Strategy and CEO Leadership, with McKinsey & Company | CXOTalk #851"':
+              - /url: https://www.youtube.com/watch?v=uTRKdCY4HdE
+            - link "CXOTalk":
+              - /url: /channel/UCGeqHuR3eUU5tnmgjkqZazw
+              - generic: CXOTalk
+            - button "thumbnail-image":
+              - img "thumbnail-image"
+            - generic: CXOTalk
+            - generic: 267k subscribers
+          - strong: Enterprise AI Strategy and CEO Leadership
+          - text: McKinsey & Company
+          - emphasis: · CEO leadership · enterprise AI strategy
+          - paragraph: How CEOs can move from AI experiments to enterprise adoption while aligning governance, organisation and strategy.
+          - button "Ask Hermes about this topic"
+          - link "Open on YouTube ↗":
+            - /url: https://www.youtube.com/watch?v=uTRKdCY4HdE
+          - generic "Leaders’ Corner videos":
+            - button "Play Enterprise AI Strategy and CEO Leadership":
+              - generic: ▶
+              - generic: ~45 min
+              - strong: Enterprise AI Strategy and CEO Leadership
+              - emphasis: McKinsey & Company
+            - button "Play Aligning AI with Enterprise Strategy":
+              - generic: ▶
+              - generic: ~40 min
+              - strong: Aligning AI with Enterprise Strategy
+              - emphasis: Leon Gordon, CEO at Onyx Data
+            - button "Play Agentic AI Governance and Enterprise-Scale Execution":
+              - generic: ▶
+              - generic: ~50 min
+              - strong: Agentic AI Governance and Enterprise-Scale Execution
+              - emphasis: SiliconANGLE theCUBE
+            - button "Play Bridge Strategy and Execution with Decision-Ready Views":
+              - generic: ▶
+              - generic: ~35 min
+              - strong: Bridge Strategy and Execution with Decision-Ready Views
+              - emphasis: Tempo
+- contentinfo:
+  - generic: Prepared by StrategyOS from the approved strategy and verified company data.
+  - link "How it works":
+    - /url: /guide
+  - link "Architecture":
+    - /url: /architecture
+  - generic: Demo clock · Mon, 1 Jun 2026 · last verified refresh 06:14 Riyadh
+  - generic "Demo day":
+    - button "1 Jun" [pressed]
+    - button "2 Jun"
+    - button "3 Jun"
+    - button "4 Jun"
+    - button "5 Jun"
+    - button "6 Jun"
+    - button "7 Jun"
+- button "◆ Ask Hermes":
+  - generic: ◆
+  - text: Ask Hermes

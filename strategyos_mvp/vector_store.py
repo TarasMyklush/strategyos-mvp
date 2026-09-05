@@ -494,7 +494,7 @@ def _embed_text(text: str, *, query: bool = False) -> list[float]:
 
 def _embedding_backend() -> str:
     if semantic_embeddings.configured():
-        return "local_multilingual_minilm_pinned"
+        return "local_multilingual_e5_pinned"
     return HASH_FALLBACK_BACKEND
 
 

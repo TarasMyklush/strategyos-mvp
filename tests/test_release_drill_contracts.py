@@ -64,3 +64,23 @@ def test_generic_workbook_citation_resolves_exact_sheet_row_and_detects_changes(
     assert resolve_manifest_workbook_row(bundle,'../costs.xlsx','Costs!Excel row 2') is None
     book.active['B2']=100;book.save(path)
     assert resolve_manifest_workbook_row(bundle,'costs.xlsx','Costs!Excel row 2') is None
+
+
+def test_live_board_label_does_not_claim_immutable_closure():
+    import subprocess
+    from pathlib import Path
+    source=Path('strategyos_mvp/static/executive.js').read_text()
+    function=source[source.index('  function statusLabel('):source.index('  function ',source.index('  function statusLabel(')+10)]
+    output=subprocess.check_output(['node','-e',function+";console.log(statusLabel('live_packet'));"],text=True)
+    assert output.strip()=='Not frozen'
+
+
+def test_released_board_materials_populate_existing_deck_list(monkeypatch):
+    from strategyos_mvp import api
+    monkeypatch.setattr(api,'_finding_rows_from_summary',lambda s:[])
+    monkeypatch.setattr(api,'_latest_run_audit_summary_payload',lambda s:{})
+    monkeypatch.setattr(api,'_bounded_plan_health_payload',lambda *a:{})
+    monkeypatch.setattr(api,'_summary_publication_payload',lambda *a,**k:{'status':'published','publish_state':'published','publish_ready':True,'available_artifacts':[{'title':'Approved memo','artifact_key':'memo','restricted':False},{'title':'Restricted case','restricted':True}]})
+    portal=api._board_portal_payload({'run_id':'a'},principal_role='executive')
+    assert [item['title'] for item in portal['decks']]==['Approved memo']
+    assert portal['frozen_snapshot']['status']=='live_packet'

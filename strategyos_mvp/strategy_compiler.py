@@ -76,9 +76,9 @@ def compile_strategy(raw: dict[str, Any], *, available_bindings: set[str], previ
     plan = StrategyPlan.model_validate(raw)
     missing = sorted({binding for item in plan.commitments for binding in item.bindings} - available_bindings)
     for item in plan.commitments:
-        expected = 2 if item.formula in {"ratio", "variance"} else None
+        expected = 2 if item.formula in {"ratio", "variance"} else 1 if item.formula == "source_actual" else None
         if expected and len(item.bindings) != expected:
-            raise ValueError(f"{item.id}: {item.formula} requires exactly two bound fields.")
+            raise ValueError(f"{item.id}: {item.formula} requires exactly {expected} bound fields.")
     payload = plan.model_dump(mode="json")
     fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     prior = {item["id"]: item for item in (previous or {}).get("commitments", [])}
@@ -89,3 +89,57 @@ def compile_strategy(raw: dict[str, Any], *, available_bindings: set[str], previ
             "missing_bindings": missing, "changed_commitments": changed,
             "recompile_required": bool(changed),
             "downstream_invalidations": [{"commitment_id": key, "surfaces": ["diagnostics", "briefing", "drift"]} for key in changed]}
+
+
+def evaluate_strategy(compiled: dict[str, Any], measurements: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate only declared formulas; missing/invalid inputs never become zero.
+
+    The result keeps the plan's approval state. Calculation is not ratification.
+    Percent ratios multiply by 100; other ratios retain their declared scale.
+    """
+    from decimal import Decimal, InvalidOperation
+    plan = StrategyPlan.model_validate({key: value for key, value in compiled.items() if key in StrategyPlan.model_fields})
+    results = []
+    for item in plan.commitments:
+        missing = [key for key in item.bindings if key not in measurements or measurements[key] is None]
+        reason = None
+        actual = None
+        try:
+            values = []
+            for key in item.bindings:
+                raw = measurements.get(key)
+                if raw is None:
+                    continue
+                if isinstance(raw, bool):
+                    raise ValueError('Boolean values are not financial measurements.')
+                number = Decimal(str(raw))
+                if not number.is_finite():
+                    raise ValueError('Measurements must be finite.')
+                values.append(number)
+            if missing:
+                reason = 'Missing bound measurements: ' + ', '.join(missing)
+            elif item.formula == 'source_actual':
+                if len(values) != 1:
+                    raise ValueError('source_actual requires exactly one field.')
+                actual = values[0]
+            elif item.formula == 'sum':
+                actual = sum(values, Decimal(0))
+            elif item.formula in {'ratio', 'variance'}:
+                if len(values) != 2:
+                    raise ValueError('This formula requires exactly two fields.')
+                if item.formula == 'variance':
+                    actual = values[0] - values[1]
+                elif values[1] == 0:
+                    reason = 'The denominator is zero; the ratio is undefined.'
+                else:
+                    actual = values[0] / values[1] * (100 if item.unit == '%' else 1)
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            reason = 'Invalid bound measurement: ' + str(exc)
+        results.append({'commitment_id': item.id, 'actual': float(actual) if actual is not None else None,
+                        'unit': item.unit, 'target': item.target, 'formula': item.formula,
+                        'bindings': list(item.bindings), 'source': item.source.model_dump(),
+                        'measurement_status': 'calculated' if actual is not None else 'needs_input',
+                        'missing_inputs': missing, 'reason': reason})
+    return {'plan_id': plan.plan_id, 'company_id': plan.company_id, 'plan_version': plan.version,
+            'approval_status': plan.status, 'compilation_hash': compiled.get('compilation_hash'),
+            'measurements': results}

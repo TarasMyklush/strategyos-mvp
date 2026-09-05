@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from .auth import require_role
-from .strategy_compiler import compile_strategy
+from .strategy_compiler import compile_strategy, evaluate_strategy
 
 router = APIRouter()
 
@@ -38,7 +38,9 @@ def read(principal: dict[str, Any] = require_role("executive")):
         path = (root / source["path"]).resolve()
         source["resolved"] = path.is_relative_to(root) and path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == source["sha256"]
         source["route"] = f"/api/intent/commitments/{commitment['id']}/source"
-    return {**compiled, "run_id": summary.get("run_id"),
+    health = (summary.get("strategy_enrichment") or {}).get("plan_health") or {}
+    measurements = {str(item.get("kpi_id")) + ".actual": item.get("actual") for item in health.get("commitments", [])}
+    return {**compiled, "evaluation": evaluate_strategy(compiled, measurements), "run_id": summary.get("run_id"),
             "amendment_status": "supplied" if compiled["amendments"] else "No amendment register supplied. No changes have been inferred."}
 
 
