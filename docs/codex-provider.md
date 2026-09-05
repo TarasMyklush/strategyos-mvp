@@ -30,12 +30,23 @@ No shell-sandbox bypass or unconfined container permissions are required.
 The pinned CLI version is 0.149.0, matching the inspected WebAgents deployment.
 The Docker image digest, not its mutable tag, should be used for releases.
 
-## Preview deployment and rollback
+## Preview deployment, production promotion, and rollback
 
 The `StrategyOS Codex Provider Preview` workflow tests and builds the provider,
 then changes **only** the provider routing for `new.strategyos.live`. It retains
 the exact currently running API and worker images; no UI, dataset or database
 release is bundled with this change. Production `strategyos.live` is untouched.
+
+Production promotion is a separate, manually dispatched `StrategyOS Codex
+Provider Production` workflow, added after the user's explicit production
+authorization. It verifies preview acceptance and promotes the exact tested
+provider image digest, without rebuilding it or deploying a new app image.
+It uses the same isolated setup under `/opt/strategyos/provider-codex`. The
+deployment tool defaults to preview; production requires `--target production`.
+Both environments run live probes before switching and authenticated application
+checks afterward. Failed checks roll back provider routing.
+The production workflow uses the existing live-server GitHub environment named
+`hetzner-qa` (a legacy label), not the `hetzner-branch` preview credentials.
 
 Host-managed files live in `/opt/strategyos-branch/provider-codex`, outside release
 syncs. The deployment owner provisions `auth/auth.json` using a Codex ChatGPT login.

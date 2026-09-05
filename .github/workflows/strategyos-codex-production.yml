@@ -1,0 +1,68 @@
+name: StrategyOS Codex Provider Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: strategyos-deploy-hetzner-qa
+  cancel-in-progress: false
+
+env:
+  # Promote the exact image accepted on preview; never rebuild or use latest.
+  PROVIDER_IMAGE: ghcr.io/tarasmyklush/strategyos-mvp-codex-provider@sha256:bce497fb7da939b0c8e60d27a9fec9c7f45f72f73045f626a7186c4612a9226a
+
+jobs:
+  production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Legacy name of the EXISTING live-server environment, also used by the
+    # full production deployment. Keep its credentials and deployment lock.
+    environment: hetzner-qa
+    env:
+      TARGET_HOST: ${{ vars.HETZNER_USER }}@${{ vars.HETZNER_HOST }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: '3.12'
+      - name: Verify preview acceptance and provider contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh run view 33947632930 --repo "$GITHUB_REPOSITORY" --json conclusion --jq .conclusion)" = success
+          test "$(gh run view 33947632930 --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)" = 6eb923bd48e884c5a6a7b83764cb03e6892cc56e
+          python -m pip install fastapi==0.116.1 uvicorn==0.35.0 httpx pytest
+          python -m pytest -q tests/test_codex_gateway.py tests/test_codex_deployment_target.py
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
+        run: |
+          test -n "$DEPLOY_KEY" && test -n "$KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+      - name: Stage verified provider without changing production routing
+        run: |
+          ssh "$TARGET_HOST" 'install -d -m 750 /opt/strategyos/provider-codex'
+          scp deploy/scripts/manage_codex_provider.py deploy/scripts/probe_codex_provider.py deploy/scripts/verify_codex_app.py deploy/docker-compose.codex.yml "$TARGET_HOST:/opt/strategyos/provider-codex/"
+          ssh "$TARGET_HOST" "docker pull '$PROVIDER_IMAGE' && python3 /opt/strategyos/provider-codex/manage_codex_provider.py prepare --target production --image '$PROVIDER_IMAGE' --overlay /opt/strategyos/provider-codex/docker-compose.codex.yml --auth-source /opt/strategyos-branch/provider-codex/auth/auth.json"
+      - name: Verify production provider before switching
+        run: ssh "$TARGET_HOST" 'docker exec -i strategyos-codex-gateway-1 python - < /opt/strategyos/provider-codex/probe_codex_provider.py'
+      - name: Switch production provider, keeping running app images
+        run: ssh "$TARGET_HOST" 'python3 /opt/strategyos/provider-codex/manage_codex_provider.py activate --target production'
+      - name: Authenticated production acceptance; rollback on failure
+        run: |
+          if ! ssh "$TARGET_HOST" 'docker exec -i strategyos-strategyos-api-1 python - --http < /opt/strategyos/provider-codex/verify_codex_app.py && docker exec -i strategyos-strategyos-worker-1 python - < /opt/strategyos/provider-codex/verify_codex_app.py'; then
+            ssh "$TARGET_HOST" 'python3 /opt/strategyos/provider-codex/manage_codex_provider.py rollback --target production'
+            exit 1
+          fi
+          if ! curl --fail --silent --show-error --retry 5 https://strategyos.live/ -o /dev/null; then
+            ssh "$TARGET_HOST" 'python3 /opt/strategyos/provider-codex/manage_codex_provider.py rollback --target production'
+            exit 1
+          fi
