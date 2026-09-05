@@ -65,9 +65,43 @@ def test_reindex_reuses_only_matching_scope_and_hash(monkeypatch):
     def request(method,path,payload):
         if path.endswith('/points'):
             return {'result':[{'id':payload['ids'][0],'payload':{'run_id':'run','tenant_slug':'tenant','source_hash':'hash'}}]}
-        writes.append(payload);return {}
+        if method == 'PUT': writes.append(payload)
+        return {}
     monkeypatch.setattr(vector_store,'_qdrant_request',request)
     result=source_search.sync_sources(run_id='run',tenant_slug='tenant',evidence=object())
     assert result['reused_points']==1 and not embedded and not writes
     result=source_search.sync_sources(run_id='run',tenant_slug='other',evidence=object())
     assert result['reused_points']==0 and len(embedded)==1 and len(writes)==1
+
+
+def test_source_index_includes_text_briefings_and_office_paragraphs(tmp_path):
+    from zipfile import ZipFile
+    (tmp_path/'brief.txt').write_text('Inventory build requires working capital. اختبار')
+    with ZipFile(tmp_path/'charter.docx','w') as archive:
+        archive.writestr('word/document.xml','<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Owner: review committee</w:t></w:r></w:p></w:body></w:document>')
+    manifest={path.name:{'sha256':hashlib.sha256(path.read_bytes()).hexdigest()} for path in tmp_path.iterdir()}
+    evidence=SimpleNamespace(dataset_root=tmp_path,manifest=manifest,pdf_text={})
+    rows=list(source_search.source_records(evidence))
+    assert {row[0] for row in rows}=={'brief.txt','charter.docx'}
+    assert rows[0][2]=='Text chunk 1' and 'اختبار' in rows[0][3]
+    assert rows[1][2:] == ('Document paragraph 1','Owner: review committee')
+
+
+def test_source_citations_resolve_streamed_rows_and_exact_text_locations(tmp_path):
+    from strategyos_mvp.citation_resolver import resolve_citation
+    from strategyos_mvp.models import Citation
+    book=Workbook(write_only=True);sheet=book.create_sheet('Hedges');sheet.append(['Value']);sheet.append([0])
+    relative='07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx';path=tmp_path/relative;path.parent.mkdir();book.save(path)
+    (tmp_path/'brief.txt').write_text('Verified brief with zero change.')
+    evidence=SimpleNamespace(dataset_root=tmp_path,manifest={p:{'sha256':hashlib.sha256((tmp_path/p).read_bytes()).hexdigest()} for p in (relative,'brief.txt')},pdf_text={})
+    bundle=SimpleNamespace(evidence=evidence)
+    for source,locator in ((relative,'Hedges!Excel row 2'),('brief.txt','Text chunk 1')):
+        assert resolve_citation(bundle,Citation(source,locator,source_hash=evidence.manifest[source]['sha256']))['resolved']
+    assert not resolve_citation(bundle,Citation('brief.txt','Text chunk 999',source_hash=evidence.manifest['brief.txt']['sha256']))['resolved']
+
+
+def test_question_bank_is_not_indexed_even_with_an_arbitrary_filename(tmp_path):
+    book=Workbook();book.active.append(['Question','Answer type','Where StrategyOS finds the answer']);book.active.append(['What is revenue?','Lookup','Budget'])
+    path=tmp_path/'business.xlsx';book.save(path)
+    evidence=SimpleNamespace(dataset_root=tmp_path,manifest={path.name:{'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}},pdf_text={})
+    assert list(source_search.source_records(evidence))==[]

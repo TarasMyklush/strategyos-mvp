@@ -13,6 +13,9 @@ MAX_CHUNKS = 50000
 def source_records(evidence):
     root = evidence.dataset_root.resolve()
     for relative, entry in sorted(evidence.manifest.items()):
+        from .source_governance import initial_source_disposition, CONTROL_PLANE, EVALUATOR_ONLY
+        if initial_source_disposition(relative) in {CONTROL_PLANE, EVALUATOR_ONLY}:
+            continue
         path = (root / relative).resolve()
         if not path.is_relative_to(root) or not path.is_file() or sha256_file(path) != entry['sha256']:
             raise ValueError('Source changed after ingestion; semantic indexing was stopped.')
@@ -20,6 +23,25 @@ def source_records(evidence):
             for page, text in enumerate(evidence.pdf_text[relative], start=1):
                 for chunk in vector_store._chunk_text(text):
                     yield relative, entry['sha256'], f'PDF page {page}', chunk
+        elif path.suffix.lower() in {'.txt', '.md'}:
+            text = path.read_text(encoding='utf-8-sig')
+            if len(text) > 2_000_000:
+                raise ValueError(f'{relative}: text exceeds reviewed indexing capacity.')
+            for number, chunk in enumerate(vector_store._chunk_text(text), start=1):
+                yield relative, entry['sha256'], f'Text chunk {number}', chunk
+        elif path.suffix.lower() == '.docx':
+            from zipfile import ZipFile
+            from xml.etree import ElementTree
+            with ZipFile(path) as archive:
+                info = archive.getinfo('word/document.xml')
+                if info.file_size > 2_000_000:
+                    raise ValueError(f'{relative}: document exceeds reviewed indexing capacity.')
+                document = ElementTree.fromstring(archive.read(info))
+            namespace = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+            for number, paragraph in enumerate(document.iter(namespace + 'p'), start=1):
+                text = ''.join(node.text or '' for node in paragraph.iter(namespace + 't'))
+                for chunk in vector_store._chunk_text(text):
+                    yield relative, entry['sha256'], f'Document paragraph {number}', chunk
         elif path.suffix.lower() == '.xlsx':
             from openpyxl import load_workbook
             book = load_workbook(path, read_only=True, data_only=True)
@@ -29,6 +51,9 @@ def source_records(evidence):
                         raise ValueError(f'{relative}: worksheet exceeds the reviewed indexing capacity.')
                     rows = sheet.iter_rows(values_only=True)
                     headers = [str(x or '') for x in next(rows, ())]
+                    header_keys = {header.strip().casefold() for header in headers}
+                    if 'question' in header_keys and {'answer type', 'where strategyos finds the answer'} & header_keys:
+                        continue
                     for number, values in enumerate(rows, start=2):
                         if number > MAX_FILE_ROWS:
                             raise ValueError(f"{relative}: worksheet exceeds the reviewed indexing capacity.")
@@ -50,6 +75,12 @@ def sync_sources(*, run_id, tenant_slug, evidence):
     records = list(islice(source_records(evidence), MAX_CHUNKS + 1))
     if len(records) > MAX_CHUNKS:
         raise ValueError('Source pack exceeds reviewed semantic indexing capacity.')
+    allowed_paths = sorted({record[0] for record in records})
+    obsolete_filter = {'must': [{'key':key, 'match':{'value':value}} for key,value in
+                       (('run_id',run_id),('tenant_slug',tenant_slug),('point_type','source_chunk'))]}
+    if allowed_paths:
+        obsolete_filter['must_not'] = [{'key':'source_path','match':{'any':allowed_paths}}]
+    vector_store._qdrant_request('POST', f'/collections/{vector_store.COLLECTION_NAME}/points/delete?wait=true', {'filter':obsolete_filter})
     reused = 0
     for offset in range(0, len(records), 64):
         batch = []

@@ -66,7 +66,7 @@ def initial_source_disposition(relative_path: str, *, supported: bool = True) ->
     name = parts[-1] if parts else ""
     if any(part in _CONTROL_PLANE_PARTS for part in parts):
         return CONTROL_PLANE
-    if name.startswith("readme"):
+    if name.startswith("readme") or any('question_bank' in part or 'answer_key' in part for part in parts):
         return EVALUATOR_ONLY
     if any(part in _RESTRICTED_PARTS for part in parts) or "ceo_calendar" in name:
         return RESTRICTED_CONTEXT

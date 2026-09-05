@@ -77,6 +77,8 @@ def build_validation(
     payload: dict[str, Any] | None,
 ) -> dict[str, Any]:
     locator_type = expected_locator_type(rel_path)
+    if rel_path.endswith('.xlsx') and re.fullmatch(r'.+!Excel row \d+', locator):
+        locator_type = 'row'
     locator_value = parse_locator_value(locator_type, locator)
     locator_resolved = payload is not None and locator_matches_payload(locator_type, locator_value, payload)
     file_present = bool(manifest_entry)
@@ -94,6 +96,8 @@ def build_validation(
 
 def resolve_payload(bundle: DataBundle, rel_path: str, locator: str, excerpt: str) -> dict[str, Any] | None:
     if rel_path.endswith(".xlsx"):
+        if re.fullmatch(r'.+!Excel row \d+', locator):
+            return resolve_manifest_workbook_row(bundle, rel_path, locator)
         if rel_path == "07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx":
             return resolve_workbook_sheet(bundle, locator)
         table = table_for_source(bundle, rel_path)
@@ -104,9 +108,25 @@ def resolve_payload(bundle: DataBundle, rel_path: str, locator: str, excerpt: st
         return resolve_structured_row(table_for_source(bundle, rel_path), locator)
     if rel_path.endswith(".pdf"):
         return resolve_pdf_page(bundle, rel_path, locator, excerpt)
+    if rel_path.endswith(('.txt', '.md', '.docx')) and re.fullmatch(r'(?:Text chunk|Document paragraph) \d+', locator):
+        return resolve_source_text_location(bundle, rel_path, locator)
     if rel_path.endswith(".txt"):
         return resolve_text_file(bundle, rel_path)
     return {"source_type": "file", "excerpt": excerpt} if excerpt else None
+
+
+def resolve_source_text_location(bundle: DataBundle, rel_path: str, locator: str) -> dict[str, Any] | None:
+    from .source_search import source_records
+    from types import SimpleNamespace
+    entry = bundle.evidence.manifest.get(rel_path)
+    if not entry:
+        return None
+    evidence = SimpleNamespace(dataset_root=bundle.evidence.dataset_root, manifest={rel_path:entry}, pdf_text={})
+    chunks = [text for _, _, location, text in source_records(evidence) if location == locator]
+    if not chunks:
+        return None
+    return {'source_type':'text', 'locator_type':'file', 'locator_value':locator,
+            'text_excerpt':guard_untrusted_document_text(' '.join(chunks), source_name=rel_path, max_chars=2000)['guarded_text']}
 
 
 def resolve_manifest_workbook_row(bundle: DataBundle, rel_path: str, locator: str) -> dict[str, Any] | None:
@@ -125,10 +145,12 @@ def resolve_manifest_workbook_row(bundle: DataBundle, rel_path: str, locator: st
         if match[1] not in book.sheetnames:
             return None
         sheet = book[match[1]]; row_number = int(match[2])
-        if row_number < 2 or row_number > sheet.max_row:
+        if row_number < 2 or row_number > 10000 or (sheet.max_row is not None and row_number > sheet.max_row):
             return None
         headers = next(sheet.iter_rows(min_row=1,max_row=1,values_only=True))
-        values = next(sheet.iter_rows(min_row=row_number,max_row=row_number,values_only=True))
+        values = next(sheet.iter_rows(min_row=row_number,max_row=row_number,values_only=True), None)
+        if values is None:
+            return None
         return {"source_type": "structured_table", "locator_type": "row", "locator_value": row_number,
                 "sheet_name": sheet.title, "row": {str(key): normalize_value(value) for key,value in zip(headers,values) if key is not None}}
     finally:
