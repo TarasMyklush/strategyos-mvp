@@ -1,0 +1,38 @@
+{
+  "matched": true,
+  "available": true,
+  "answer": "The current AR extract covers 800 of 800 invoice headers. 1 invoices differ from their summed line amounts by more than SAR 0.01.\nLargest exceptions (up to 10):\nAR-2026-0202: header SAR 201,603.08; lines SAR 209,370.36; lines minus header SAR 7,767.28.\nMissing line coverage: 0 headers; orphan invoice IDs in lines: 0. This reconciles the supplied VAT-inclusive AR line amounts to AR headers; AP line coverage is not supplied by this calculation.",
+  "basis": "Signed line amounts summed by invoice; compare with the same extract header at a SAR 0.01 tolerance. Missing, duplicate and orphan IDs remain explicit.",
+  "value": {
+    "header_count": 800,
+    "covered_invoice_count": 800,
+    "mismatches": [
+      {
+        "invoice_id": "AR-2026-0202",
+        "header_sar": "201603.08",
+        "lines_sar": "209370.36",
+        "difference_sar": "7767.28"
+      }
+    ],
+    "missing_lines": [],
+    "orphan_lines": [],
+    "tolerance_sar": "0.01"
+  },
+  "citations": [
+    {
+      "source_path": "02_ERP_Extracts/AR_Invoices_H1_2026.xlsx",
+      "source_hash": "981e2d9ef12025aa83263e8b299a7271133d4f5eadd39592ee5c3185f845ee0b",
+      "locator": "AR_Invoices!Excel rows 2-801",
+      "excerpt": "Complete current AR header/line reconciliation inputs.",
+      "resolved": true
+    },
+    {
+      "source_path": "02_ERP_Extracts/AR_Invoice_Lines_H1_2026.xlsx",
+      "source_hash": "19af48332a331c5b7efc4ce0bcdee0af151af356263d2b1e404939d0bc72f46f",
+      "locator": "AR_Lines!Excel rows 2-2831",
+      "excerpt": "Complete current AR header/line reconciliation inputs.",
+      "resolved": true
+    }
+  ],
+  "intent": "invoice_line_reconciliation"
+}

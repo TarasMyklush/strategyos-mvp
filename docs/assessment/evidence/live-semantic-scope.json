@@ -1,0 +1,1 @@
+{"run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559", "collection": "strategyos_multilingual_e5_761b726d_384_v1", "embedding_backend": "local_multilingual_e5_pinned", "tenant_canary_excluded": true, "wrong_tenant_run_denied": true, "group_run_denied_to_bu": true, "same_scope_result_count": 50, "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78"}

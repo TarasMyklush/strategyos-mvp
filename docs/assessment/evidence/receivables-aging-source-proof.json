@@ -1,0 +1,1497 @@
+{
+  "source_hashes": {
+    "02_ERP_Extracts/AR_Invoices_H1_2026.xlsx": {
+      "sha256": "981e2d9ef12025aa83263e8b299a7271133d4f5eadd39592ee5c3185f845ee0b"
+    },
+    "03_Master_Data/Customer_Master.xlsx": {
+      "sha256": "e8fdd7ccd58ebc87fc866dca39d4dd503a5e089c502673e17ee45b8df4987fc9"
+    },
+    "02_ERP_Extracts/AR_Receipts_H1_2026.xlsx": {
+      "sha256": "5271d7b4793d461d5a0384f8f45a9df35148ccba20f39b533adaa6a85e0db999"
+    }
+  },
+  "result": {
+    "matched": true,
+    "available": true,
+    "answer": "As of 2026-06-30, open receivables total SAR 109,539,119.43 across 235 invoices.\nGovernment Commissary — Current: SAR 19,914,114.61; 1–30 days: SAR 7,310,694.23; 31–60 days: SAR 453,476.20; 61–90 days: SAR 0.00; 90+ days: SAR 0.00; total SAR 27,678,285.04.\nHospital + clinic — Current: SAR 14,155,275.50; 1–30 days: SAR 1,673,082.89; 31–60 days: SAR 0.00; 61–90 days: SAR 0.00; 90+ days: SAR 0.00; total SAR 15,828,358.39.\nModern Pharmacy — Current: SAR 21,192,762.48; 1–30 days: SAR 6,073,328.31; 31–60 days: SAR 2,324,508.29; 61–90 days: SAR 0.00; 90+ days: SAR 0.00; total SAR 29,590,599.08.\nWorkforce Health — Current: SAR 27,571,421.26; 1–30 days: SAR 5,936,486.98; 31–60 days: SAR 2,164,213.56; 61–90 days: SAR 769,755.12; 90+ days: SAR 0.00; total SAR 36,441,876.92.\nNo open balance is over 90 days past due. This is a dated concentration snapshot; it does not establish a worsening trend without comparable earlier snapshots.",
+    "basis": "Open invoice amount less signed applied receipts through cutoff; age measured from due date. Zero balances excluded; overpayments disclosed separately; customer segments joined by Customer_ID.",
+    "citations": [
+      {
+        "source_path": "02_ERP_Extracts/AR_Receipts_H1_2026.xlsx",
+        "source_hash": "5271d7b4793d461d5a0384f8f45a9df35148ccba20f39b533adaa6a85e0db999",
+        "locator": "AR_Receipts!Excel rows 2-585",
+        "excerpt": "Applied receipts through the stated cutoff; later receipts excluded."
+      },
+      {
+        "source_path": "02_ERP_Extracts/AR_Invoices_H1_2026.xlsx",
+        "source_hash": "981e2d9ef12025aa83263e8b299a7271133d4f5eadd39592ee5c3185f845ee0b",
+        "locator": "AR_Invoices!Excel rows 2-801",
+        "excerpt": "Source invoice balances/due dates and customer segment mapping."
+      },
+      {
+        "source_path": "03_Master_Data/Customer_Master.xlsx",
+        "source_hash": "e8fdd7ccd58ebc87fc866dca39d4dd503a5e089c502673e17ee45b8df4987fc9",
+        "locator": "Customer_Master!Excel rows 2-86",
+        "excerpt": "Source invoice balances/due dates and customer segment mapping."
+      }
+    ],
+    "value": {
+      "as_of": "2026-06-30",
+      "rows": [
+        {
+          "segment": "Government Commissary",
+          "Current": "19914114.61",
+          "1–30 days": "7310694.23",
+          "31–60 days": "453476.20",
+          "61–90 days": "0",
+          "90+ days": "0",
+          "total_sar": "27678285.04"
+        },
+        {
+          "segment": "Hospital + clinic",
+          "Current": "14155275.50",
+          "1–30 days": "1673082.89",
+          "31–60 days": "0",
+          "61–90 days": "0",
+          "90+ days": "0",
+          "total_sar": "15828358.39"
+        },
+        {
+          "segment": "Modern Pharmacy",
+          "Current": "21192762.48",
+          "1–30 days": "6073328.31",
+          "31–60 days": "2324508.29",
+          "61–90 days": "0",
+          "90+ days": "0",
+          "total_sar": "29590599.08"
+        },
+        {
+          "segment": "Workforce Health",
+          "Current": "27571421.26",
+          "1–30 days": "5936486.98",
+          "31–60 days": "2164213.56",
+          "61–90 days": "769755.12",
+          "90+ days": "0",
+          "total_sar": "36441876.92"
+        }
+      ],
+      "open_invoice_count": 235,
+      "total_open_sar": "109539119.43",
+      "excess_applied_receipts_sar": "96200.00",
+      "input_rows": [
+        {
+          "invoice_id": "AR-2026-0451",
+          "segment": "Workforce Health",
+          "days_overdue": 58,
+          "open_sar": "527426.43"
+        },
+        {
+          "invoice_id": "AR-2026-0678",
+          "segment": "Workforce Health",
+          "days_overdue": 56,
+          "open_sar": "493354.72"
+        },
+        {
+          "invoice_id": "AR-2026-0185",
+          "segment": "Workforce Health",
+          "days_overdue": 45,
+          "open_sar": "150184.34"
+        },
+        {
+          "invoice_id": "AR-2026-0783",
+          "segment": "Workforce Health",
+          "days_overdue": 60,
+          "open_sar": "192881.37"
+        },
+        {
+          "invoice_id": "AR-2026-0040",
+          "segment": "Workforce Health",
+          "days_overdue": 70,
+          "open_sar": "746031.88"
+        },
+        {
+          "invoice_id": "AR-2026-0447",
+          "segment": "Workforce Health",
+          "days_overdue": 37,
+          "open_sar": "313115.43"
+        },
+        {
+          "invoice_id": "AR-2026-0283",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 49,
+          "open_sar": "762184.25"
+        },
+        {
+          "invoice_id": "AR-2026-0404",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 49,
+          "open_sar": "771455.53"
+        },
+        {
+          "invoice_id": "AR-2026-0135",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 33,
+          "open_sar": "146043.93"
+        },
+        {
+          "invoice_id": "AR-2026-0706",
+          "segment": "Workforce Health",
+          "days_overdue": 63,
+          "open_sar": "23723.24"
+        },
+        {
+          "invoice_id": "AR-2026-0772",
+          "segment": "Workforce Health",
+          "days_overdue": 25,
+          "open_sar": "874651.38"
+        },
+        {
+          "invoice_id": "AR-2026-0015",
+          "segment": "Government Commissary",
+          "days_overdue": 39,
+          "open_sar": "18195.54"
+        },
+        {
+          "invoice_id": "AR-2026-0211",
+          "segment": "Government Commissary",
+          "days_overdue": 24,
+          "open_sar": "65844.87"
+        },
+        {
+          "invoice_id": "AR-2026-0585",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 24,
+          "open_sar": "661537.46"
+        },
+        {
+          "invoice_id": "AR-2026-0681",
+          "segment": "Government Commissary",
+          "days_overdue": 21,
+          "open_sar": "185545.87"
+        },
+        {
+          "invoice_id": "AR-2026-0018",
+          "segment": "Workforce Health",
+          "days_overdue": 20,
+          "open_sar": "266760.68"
+        },
+        {
+          "invoice_id": "AR-2026-0626",
+          "segment": "Hospital + clinic",
+          "days_overdue": 20,
+          "open_sar": "482156.21"
+        },
+        {
+          "invoice_id": "AR-2026-0201",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 34,
+          "open_sar": "627667.74"
+        },
+        {
+          "invoice_id": "AR-2026-0206",
+          "segment": "Workforce Health",
+          "days_overdue": 34,
+          "open_sar": "487251.27"
+        },
+        {
+          "invoice_id": "AR-2026-0652",
+          "segment": "Workforce Health",
+          "days_overdue": 19,
+          "open_sar": "202903.19"
+        },
+        {
+          "invoice_id": "AR-2026-0703",
+          "segment": "Government Commissary",
+          "days_overdue": 19,
+          "open_sar": "502303.56"
+        },
+        {
+          "invoice_id": "AR-2026-0700",
+          "segment": "Government Commissary",
+          "days_overdue": 33,
+          "open_sar": "435280.66"
+        },
+        {
+          "invoice_id": "AR-2026-0365",
+          "segment": "Government Commissary",
+          "days_overdue": 16,
+          "open_sar": "113034.19"
+        },
+        {
+          "invoice_id": "AR-2026-0469",
+          "segment": "Workforce Health",
+          "days_overdue": 16,
+          "open_sar": "892561.11"
+        },
+        {
+          "invoice_id": "AR-2026-0799",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 31,
+          "open_sar": "17156.84"
+        },
+        {
+          "invoice_id": "AR-2026-0429",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 30,
+          "open_sar": "554262.5"
+        },
+        {
+          "invoice_id": "AR-2026-0481",
+          "segment": "Workforce Health",
+          "days_overdue": 30,
+          "open_sar": "374015.14"
+        },
+        {
+          "invoice_id": "AR-2026-0263",
+          "segment": "Workforce Health",
+          "days_overdue": 14,
+          "open_sar": "707136.52"
+        },
+        {
+          "invoice_id": "AR-2026-0600",
+          "segment": "Workforce Health",
+          "days_overdue": 12,
+          "open_sar": "123696.13"
+        },
+        {
+          "invoice_id": "AR-2026-0182",
+          "segment": "Government Commissary",
+          "days_overdue": 11,
+          "open_sar": "756583.48"
+        },
+        {
+          "invoice_id": "AR-2026-0630",
+          "segment": "Government Commissary",
+          "days_overdue": 24,
+          "open_sar": "616273.7"
+        },
+        {
+          "invoice_id": "AR-2026-0645",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 22,
+          "open_sar": "697966.02"
+        },
+        {
+          "invoice_id": "AR-2026-0292",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 21,
+          "open_sar": "196185.02"
+        },
+        {
+          "invoice_id": "AR-2026-0800",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 20,
+          "open_sar": "723852.47"
+        },
+        {
+          "invoice_id": "AR-2026-0073",
+          "segment": "Workforce Health",
+          "days_overdue": 17,
+          "open_sar": "462700.48"
+        },
+        {
+          "invoice_id": "AR-2026-0295",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "43589.46"
+        },
+        {
+          "invoice_id": "AR-2026-0406",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "123443.07"
+        },
+        {
+          "invoice_id": "AR-2026-0110",
+          "segment": "Government Commissary",
+          "days_overdue": 29,
+          "open_sar": "922741.53"
+        },
+        {
+          "invoice_id": "AR-2026-0622",
+          "segment": "Workforce Health",
+          "days_overdue": 29,
+          "open_sar": "162333.09"
+        },
+        {
+          "invoice_id": "AR-2026-0470",
+          "segment": "Government Commissary",
+          "days_overdue": 28,
+          "open_sar": "768373.36"
+        },
+        {
+          "invoice_id": "AR-2026-0419",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "777805.36"
+        },
+        {
+          "invoice_id": "AR-2026-0613",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 12,
+          "open_sar": "800641.56"
+        },
+        {
+          "invoice_id": "AR-2026-0721",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "212360.86"
+        },
+        {
+          "invoice_id": "AR-2026-0576",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 26,
+          "open_sar": "773790.78"
+        },
+        {
+          "invoice_id": "AR-2026-0689",
+          "segment": "Government Commissary",
+          "days_overdue": 11,
+          "open_sar": "451860.73"
+        },
+        {
+          "invoice_id": "AR-2026-0744",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "433527.46"
+        },
+        {
+          "invoice_id": "AR-2026-0009",
+          "segment": "Hospital + clinic",
+          "days_overdue": 9,
+          "open_sar": "634273.4"
+        },
+        {
+          "invoice_id": "AR-2026-0024",
+          "segment": "Workforce Health",
+          "days_overdue": 24,
+          "open_sar": "849198.8"
+        },
+        {
+          "invoice_id": "AR-2026-0092",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "18030.97"
+        },
+        {
+          "invoice_id": "AR-2026-0241",
+          "segment": "Government Commissary",
+          "days_overdue": 9,
+          "open_sar": "183794.92"
+        },
+        {
+          "invoice_id": "AR-2026-0701",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 24,
+          "open_sar": "368847.42"
+        },
+        {
+          "invoice_id": "AR-2026-0747",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "948053.93"
+        },
+        {
+          "invoice_id": "AR-2026-0083",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 7,
+          "open_sar": "444453.09"
+        },
+        {
+          "invoice_id": "AR-2026-0279",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "665564.02"
+        },
+        {
+          "invoice_id": "AR-2026-0021",
+          "segment": "Government Commissary",
+          "days_overdue": 21,
+          "open_sar": "484310.51"
+        },
+        {
+          "invoice_id": "AR-2026-0113",
+          "segment": "Government Commissary",
+          "days_overdue": 21,
+          "open_sar": "559643.64"
+        },
+        {
+          "invoice_id": "AR-2026-0192",
+          "segment": "Workforce Health",
+          "days_overdue": 6,
+          "open_sar": "264696.59"
+        },
+        {
+          "invoice_id": "AR-2026-0647",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "249497.56"
+        },
+        {
+          "invoice_id": "AR-2026-0651",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "469856.71"
+        },
+        {
+          "invoice_id": "AR-2026-0790",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 4,
+          "open_sar": "851791.99"
+        },
+        {
+          "invoice_id": "AR-2026-0342",
+          "segment": "Government Commissary",
+          "days_overdue": 3,
+          "open_sar": "893397.87"
+        },
+        {
+          "invoice_id": "AR-2026-0665",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "627267.28"
+        },
+        {
+          "invoice_id": "AR-2026-0080",
+          "segment": "Government Commissary",
+          "days_overdue": 17,
+          "open_sar": "171737.41"
+        },
+        {
+          "invoice_id": "AR-2026-0101",
+          "segment": "Workforce Health",
+          "days_overdue": 1,
+          "open_sar": "755833.87"
+        },
+        {
+          "invoice_id": "AR-2026-0544",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "149918.31"
+        },
+        {
+          "invoice_id": "AR-2026-0154",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "64395.95"
+        },
+        {
+          "invoice_id": "AR-2026-0168",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "502165.84"
+        },
+        {
+          "invoice_id": "AR-2026-0231",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "852340.82"
+        },
+        {
+          "invoice_id": "AR-2026-0432",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "408544.32"
+        },
+        {
+          "invoice_id": "AR-2026-0437",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "382161.31"
+        },
+        {
+          "invoice_id": "AR-2026-0053",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "692204.09"
+        },
+        {
+          "invoice_id": "AR-2026-0755",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "740769.48"
+        },
+        {
+          "invoice_id": "AR-2026-0025",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "327775.19"
+        },
+        {
+          "invoice_id": "AR-2026-0414",
+          "segment": "Hospital + clinic",
+          "days_overdue": 10,
+          "open_sar": "556653.28"
+        },
+        {
+          "invoice_id": "AR-2026-0060",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "476341.32"
+        },
+        {
+          "invoice_id": "AR-2026-0204",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "914061.6"
+        },
+        {
+          "invoice_id": "AR-2026-0558",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "593381.71"
+        },
+        {
+          "invoice_id": "AR-2026-0696",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "786126.14"
+        },
+        {
+          "invoice_id": "AR-2026-0391",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "698666.48"
+        },
+        {
+          "invoice_id": "AR-2026-0494",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "116302.19"
+        },
+        {
+          "invoice_id": "AR-2026-0727",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "78438.87"
+        },
+        {
+          "invoice_id": "AR-2026-0557",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "115519.89"
+        },
+        {
+          "invoice_id": "AR-2026-0749",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "531805.39"
+        },
+        {
+          "invoice_id": "AR-2026-0121",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "336339.53"
+        },
+        {
+          "invoice_id": "AR-2026-0387",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "246807.37"
+        },
+        {
+          "invoice_id": "AR-2026-0343",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "771778.61"
+        },
+        {
+          "invoice_id": "AR-2026-0372",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "514910.05"
+        },
+        {
+          "invoice_id": "AR-2026-0686",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "15541.0"
+        },
+        {
+          "invoice_id": "AR-2026-0715",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "285743.52"
+        },
+        {
+          "invoice_id": "AR-2026-0768",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "399793.53"
+        },
+        {
+          "invoice_id": "AR-2026-0137",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "535019.85"
+        },
+        {
+          "invoice_id": "AR-2026-0532",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "86761.63"
+        },
+        {
+          "invoice_id": "AR-2026-0729",
+          "segment": "Government Commissary",
+          "days_overdue": 4,
+          "open_sar": "501390.4"
+        },
+        {
+          "invoice_id": "AR-2026-0132",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "774211.96"
+        },
+        {
+          "invoice_id": "AR-2026-0553",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "664803.64"
+        },
+        {
+          "invoice_id": "AR-2026-0765",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "686461.8"
+        },
+        {
+          "invoice_id": "AR-2026-0029",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "125586.36"
+        },
+        {
+          "invoice_id": "AR-2026-0020",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "202344.11"
+        },
+        {
+          "invoice_id": "AR-2026-0346",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "63209.17"
+        },
+        {
+          "invoice_id": "AR-2026-0388",
+          "segment": "Government Commissary",
+          "days_overdue": 1,
+          "open_sar": "133858.19"
+        },
+        {
+          "invoice_id": "AR-2026-0529",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "451107.45"
+        },
+        {
+          "invoice_id": "AR-2026-0710",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "180304.15"
+        },
+        {
+          "invoice_id": "AR-2026-0313",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "847819.73"
+        },
+        {
+          "invoice_id": "AR-2026-0368",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "189553.81"
+        },
+        {
+          "invoice_id": "AR-2026-0498",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "42471.67"
+        },
+        {
+          "invoice_id": "AR-2026-0751",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "607076.35"
+        },
+        {
+          "invoice_id": "AR-2026-0103",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "85035.66"
+        },
+        {
+          "invoice_id": "AR-2026-0166",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "599650.58"
+        },
+        {
+          "invoice_id": "AR-2026-0078",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "927291.93"
+        },
+        {
+          "invoice_id": "AR-2026-0640",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "736424.82"
+        },
+        {
+          "invoice_id": "AR-2026-0704",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "894691.6"
+        },
+        {
+          "invoice_id": "AR-2026-0724",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "154589.47"
+        },
+        {
+          "invoice_id": "AR-2026-0349",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "415011.13"
+        },
+        {
+          "invoice_id": "AR-2026-0376",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "168867.01"
+        },
+        {
+          "invoice_id": "AR-2026-0385",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "441738.43"
+        },
+        {
+          "invoice_id": "AR-2026-0614",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "470465.04"
+        },
+        {
+          "invoice_id": "AR-2026-0265",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "363590.67"
+        },
+        {
+          "invoice_id": "AR-2026-0354",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "49962.3"
+        },
+        {
+          "invoice_id": "AR-2026-0510",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "896736.8"
+        },
+        {
+          "invoice_id": "AR-2026-0583",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "138659.12"
+        },
+        {
+          "invoice_id": "AR-2026-0086",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "127233.62"
+        },
+        {
+          "invoice_id": "AR-2026-0545",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "292869.33"
+        },
+        {
+          "invoice_id": "AR-2026-0675",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "307993.47"
+        },
+        {
+          "invoice_id": "AR-2026-0062",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "350282.58"
+        },
+        {
+          "invoice_id": "AR-2026-0165",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "518547.59"
+        },
+        {
+          "invoice_id": "AR-2026-0559",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "457640.67"
+        },
+        {
+          "invoice_id": "AR-2026-0586",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "490926.17"
+        },
+        {
+          "invoice_id": "AR-2026-0118",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "141414.14"
+        },
+        {
+          "invoice_id": "AR-2026-0448",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "470627.64"
+        },
+        {
+          "invoice_id": "AR-2026-0477",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "941652.86"
+        },
+        {
+          "invoice_id": "AR-2026-0001",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "15892.78"
+        },
+        {
+          "invoice_id": "AR-2026-0140",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "519090.19"
+        },
+        {
+          "invoice_id": "AR-2026-0275",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "614839.11"
+        },
+        {
+          "invoice_id": "AR-2026-0578",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "253496.77"
+        },
+        {
+          "invoice_id": "AR-2026-0611",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "477731.52"
+        },
+        {
+          "invoice_id": "AR-2026-0641",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "480488.65"
+        },
+        {
+          "invoice_id": "AR-2026-0339",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "275480.55"
+        },
+        {
+          "invoice_id": "AR-2026-0361",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "401581.53"
+        },
+        {
+          "invoice_id": "AR-2026-0189",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "766903.14"
+        },
+        {
+          "invoice_id": "AR-2026-0199",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "316974.09"
+        },
+        {
+          "invoice_id": "AR-2026-0250",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "106518.93"
+        },
+        {
+          "invoice_id": "AR-2026-0302",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "259572.53"
+        },
+        {
+          "invoice_id": "AR-2026-0321",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "859052.54"
+        },
+        {
+          "invoice_id": "AR-2026-0334",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "916539.48"
+        },
+        {
+          "invoice_id": "AR-2026-0438",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "727389.92"
+        },
+        {
+          "invoice_id": "AR-2026-0589",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "432849.25"
+        },
+        {
+          "invoice_id": "AR-2026-0738",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "581768.66"
+        },
+        {
+          "invoice_id": "AR-2026-0777",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "765295.22"
+        },
+        {
+          "invoice_id": "AR-2026-0047",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "367049.42"
+        },
+        {
+          "invoice_id": "AR-2026-0209",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "140577.56"
+        },
+        {
+          "invoice_id": "AR-2026-0238",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "633318.49"
+        },
+        {
+          "invoice_id": "AR-2026-0444",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "870484.48"
+        },
+        {
+          "invoice_id": "AR-2026-0605",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "939147.01"
+        },
+        {
+          "invoice_id": "AR-2026-0619",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "12670.58"
+        },
+        {
+          "invoice_id": "AR-2026-0694",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "631170.5"
+        },
+        {
+          "invoice_id": "AR-2026-0730",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "904037.57"
+        },
+        {
+          "invoice_id": "AR-2026-0677",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "404244.08"
+        },
+        {
+          "invoice_id": "AR-2026-0713",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "134245.38"
+        },
+        {
+          "invoice_id": "AR-2026-0718",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "699312.72"
+        },
+        {
+          "invoice_id": "AR-2026-0055",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "268304.83"
+        },
+        {
+          "invoice_id": "AR-2026-0099",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "396015.67"
+        },
+        {
+          "invoice_id": "AR-2026-0336",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "785612.31"
+        },
+        {
+          "invoice_id": "AR-2026-0394",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "449688.3"
+        },
+        {
+          "invoice_id": "AR-2026-0513",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "258232.23"
+        },
+        {
+          "invoice_id": "AR-2026-0293",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "205778.63"
+        },
+        {
+          "invoice_id": "AR-2026-0416",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "97211.75"
+        },
+        {
+          "invoice_id": "AR-2026-0459",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "568053.46"
+        },
+        {
+          "invoice_id": "AR-2026-0742",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "387089.51"
+        },
+        {
+          "invoice_id": "AR-2026-0131",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "616157.64"
+        },
+        {
+          "invoice_id": "AR-2026-0169",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "754648.36"
+        },
+        {
+          "invoice_id": "AR-2026-0207",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "491669.34"
+        },
+        {
+          "invoice_id": "AR-2026-0666",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "47156.66"
+        },
+        {
+          "invoice_id": "AR-2026-0672",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "596939.58"
+        },
+        {
+          "invoice_id": "AR-2026-0038",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "745926.16"
+        },
+        {
+          "invoice_id": "AR-2026-0081",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "611888.5"
+        },
+        {
+          "invoice_id": "AR-2026-0584",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "114636.25"
+        },
+        {
+          "invoice_id": "AR-2026-0449",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "924789.2"
+        },
+        {
+          "invoice_id": "AR-2026-0542",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "108184.52"
+        },
+        {
+          "invoice_id": "AR-2026-0735",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "892736.08"
+        },
+        {
+          "invoice_id": "AR-2026-0122",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "540849.23"
+        },
+        {
+          "invoice_id": "AR-2026-0778",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "433047.11"
+        },
+        {
+          "invoice_id": "AR-2026-0150",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "247680.84"
+        },
+        {
+          "invoice_id": "AR-2026-0228",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "514798.02"
+        },
+        {
+          "invoice_id": "AR-2026-0423",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "403285.89"
+        },
+        {
+          "invoice_id": "AR-2026-0440",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "706627.88"
+        },
+        {
+          "invoice_id": "AR-2026-0100",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "135189.57"
+        },
+        {
+          "invoice_id": "AR-2026-0239",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "8583.11"
+        },
+        {
+          "invoice_id": "AR-2026-0668",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "692910.78"
+        },
+        {
+          "invoice_id": "AR-2026-0072",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "385502.22"
+        },
+        {
+          "invoice_id": "AR-2026-0180",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "759051.52"
+        },
+        {
+          "invoice_id": "AR-2026-0203",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "488973.04"
+        },
+        {
+          "invoice_id": "AR-2026-0353",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "387890.74"
+        },
+        {
+          "invoice_id": "AR-2026-0683",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "890867.26"
+        },
+        {
+          "invoice_id": "AR-2026-0079",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "925904.64"
+        },
+        {
+          "invoice_id": "AR-2026-0125",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "75327.44"
+        },
+        {
+          "invoice_id": "AR-2026-0389",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "160366.29"
+        },
+        {
+          "invoice_id": "AR-2026-0400",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "236437.4"
+        },
+        {
+          "invoice_id": "AR-2026-0428",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "817483.4"
+        },
+        {
+          "invoice_id": "AR-2026-0439",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "686428.27"
+        },
+        {
+          "invoice_id": "AR-2026-0580",
+          "segment": "Hospital + clinic",
+          "days_overdue": 0,
+          "open_sar": "184911.35"
+        },
+        {
+          "invoice_id": "AR-2026-0648",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "284167.54"
+        },
+        {
+          "invoice_id": "AR-2026-0798",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "536465.25"
+        },
+        {
+          "invoice_id": "AR-2026-0017",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "137161.01"
+        },
+        {
+          "invoice_id": "AR-2026-0061",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "390288.95"
+        },
+        {
+          "invoice_id": "AR-2026-0178",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "384470.77"
+        },
+        {
+          "invoice_id": "AR-2026-0561",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "182639.75"
+        },
+        {
+          "invoice_id": "AR-2026-0049",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "711183.83"
+        },
+        {
+          "invoice_id": "AR-2026-0344",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "824590.22"
+        },
+        {
+          "invoice_id": "AR-2026-0396",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "46164.51"
+        },
+        {
+          "invoice_id": "AR-2026-0467",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "781394.81"
+        },
+        {
+          "invoice_id": "AR-2026-0795",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "451145.06"
+        },
+        {
+          "invoice_id": "AR-2026-0298",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "63938.79"
+        },
+        {
+          "invoice_id": "AR-2026-0409",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "266001.64"
+        },
+        {
+          "invoice_id": "AR-2026-0526",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "944319.18"
+        },
+        {
+          "invoice_id": "AR-2026-0261",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "673082.53"
+        },
+        {
+          "invoice_id": "AR-2026-0566",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "531417.83"
+        },
+        {
+          "invoice_id": "AR-2026-0579",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "597673.3"
+        },
+        {
+          "invoice_id": "AR-2026-0623",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "842794.17"
+        },
+        {
+          "invoice_id": "AR-2026-0682",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "85394.84"
+        },
+        {
+          "invoice_id": "AR-2026-0687",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "781522.74"
+        },
+        {
+          "invoice_id": "AR-2026-0144",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "650450.03"
+        },
+        {
+          "invoice_id": "AR-2026-0490",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "162226.3"
+        },
+        {
+          "invoice_id": "AR-2026-0527",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "323255.32"
+        },
+        {
+          "invoice_id": "AR-2026-0685",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "756644.75"
+        },
+        {
+          "invoice_id": "AR-2026-0067",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "269870.42"
+        },
+        {
+          "invoice_id": "AR-2026-0221",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "794260.73"
+        },
+        {
+          "invoice_id": "AR-2026-0319",
+          "segment": "Government Commissary",
+          "days_overdue": 0,
+          "open_sar": "812705.52"
+        },
+        {
+          "invoice_id": "AR-2026-0588",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "613507.18"
+        },
+        {
+          "invoice_id": "AR-2026-0649",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "793203.58"
+        },
+        {
+          "invoice_id": "AR-2026-0784",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "281211.94"
+        },
+        {
+          "invoice_id": "AR-2026-0788",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "510482.18"
+        },
+        {
+          "invoice_id": "AR-2026-0227",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "507682.84"
+        },
+        {
+          "invoice_id": "AR-2026-0306",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "749521.87"
+        },
+        {
+          "invoice_id": "AR-2026-0366",
+          "segment": "Workforce Health",
+          "days_overdue": 0,
+          "open_sar": "816054.09"
+        },
+        {
+          "invoice_id": "AR-2026-0707",
+          "segment": "Modern Pharmacy",
+          "days_overdue": 0,
+          "open_sar": "296659.25"
+        }
+      ]
+    },
+    "unit": "SAR"
+  },
+  "all_citations_resolved": true
+}

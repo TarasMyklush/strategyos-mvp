@@ -1,6 +1,6 @@
 # StrategyOS product requirements
 
-Canonical specification · consolidated 5 September 2026 · implementation baseline `c03e958`
+Canonical specification · consolidated 5 September 2026 · original assessment baseline `c03e958`; current deployment is identified by the [release receipt](assessment/evidence/preview-release.json)
 
 This is the single active requirements document. It replaces the dated technical/design specifications, execution plans and R2/R4 punch lists. It defines intended behavior; it does not certify that every requirement is implemented. The [gap register](assessment/gap-register.json) and [assessment](assessment/gap-analysis.md) record the evidence and remaining work. Architecture belongs in [architecture.md](architecture.md); release and operating instructions belong in [operations.md](operations.md) and the deployment runbook.
 
@@ -16,7 +16,7 @@ Resolved conflicts:
 | Palette | Sage, ochre and terracotta. Earlier red/amber/green wording and v3's green achievement wording do not override R4. |
 | Preview personas | CEO and Board are the supported executive preview. Other personas may be visibly unavailable. This does not fulfill the four-persona enterprise requirement. |
 | Assistant | Deterministic arithmetic and permission checks remain authoritative; provider-backed narrative must answer the actual question from permitted evidence. External context is separately labelled. |
-| Authority | A published matrix is a policy requirement, not proof of complete enforcement. G06/G07 remain open. |
+| Authority | A published matrix is a policy requirement, not proof of complete enforcement. Full acceptance is tracked in G06/G07. |
 | Decisions | A recorded approval is distinct from an executed business action. Demo/session state must be identified as such. |
 | Product identity | StrategyOS remains the application name. KYVERN video exports are presentation assets; they do not constitute an application rename. A configurable name/logo remains R4 work. |
 | Delivery claims | Earlier “complete”, “production-ready” and historical green test reports are superseded by the current evidence and open gaps. |

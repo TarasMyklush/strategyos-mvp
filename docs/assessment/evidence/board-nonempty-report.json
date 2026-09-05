@@ -1,0 +1,9 @@
+{
+  "meeting_id": "qa-nonempty-report-ab0bdd6d-a52e-468a-be85-59021fc38559",
+  "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+  "snapshot_digest": "47210a4a176ab313ae5c54f7aa0fc7b0aa62756cadf9b4163bb90bfdff04d2c2",
+  "route": "/api/board/meetings/qa-nonempty-report-ab0bdd6d-a52e-468a-be85-59021fc38559/files/qa.md",
+  "bytes": 5735,
+  "sha256": "e3cba32c6131515058ebc0c290004e36589769e0a65f7883b3374b963fc55c21",
+  "purpose": "Owned synthetic QA meeting verifies future closures skip empty optional Q&A reports; older immutable meetings are unchanged."
+}

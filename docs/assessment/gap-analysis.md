@@ -2,11 +2,19 @@
 
 Assessment date: 2026-09-05. Reviewed baseline: `c03e95816dedf6dedf05778cb725d42a84c29de2`.
 
-StrategyOS has substantive governed finance analysis, executive surfaces and specialist runtime code. It has not substantiated the complete reusable, continuously operating enterprise System of Intent. Local consolidation aligns code, requirements and source data; it does not itself close hosted-release or product gaps.
+The preview now runs the enriched approved synthetic dataset with durable review state, scoped local semantic retrieval, immutable board records and encrypted inference audit. The register below separates verified corrections from incomplete acceptance. It does not claim a complete enterprise product or a passed factual assistant gate.
 
-The register contains **33 gaps: 8 P0, 21 P1 and 4 P2**. 4 have partial remediation and 0 are closed. These are risk priorities, not a completion percentage.
+The register contains **33 gaps: 8 P0, 21 P1 and 4 P2**. 22 have partial remediation and 6 are closed. These are risk priorities, not a completion percentage.
 
-## Baseline and validation limits
+## Current scope
+
+All P0/P1 application work and UI QA; actual external ERP/treasury/calendar connections deferred by user. No real-world dispatch is simulated as completed.
+
+User requires preserving the existing UI. Removed new pages, navigation and language controls on 2026-09-05. Keep existing layouts, CSS, branding and controls; integrate functional corrections through existing surfaces.
+
+[Current validation](validation.md) and the [preview release receipt](evidence/preview-release.json) identify tested behavior and the deployed code/data combination. Historical evidence below is retained for traceability, not as the current deployment status.
+
+## Original assessment and validation limits
 
 The baseline assessment compared main `9fa5316` and candidate `c03e958`, inspected requirements, ran portable tests, reproduced targeted defects offline and sampled authenticated preview behavior. The live executive JavaScript matched the candidate; the backend image was not attested. The selected preview run awaited review and lacked enriched strategy/calendar/plan data. Logout returned 404 and the session could still read a protected run. No approval, upload, deployment, board-close mutation or destructive live security test was performed.
 
@@ -18,44 +26,44 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 | ID | Priority | Area | Gap | Closure |
 |---|---|---|---|---|
-| [G01](#g01) | P0 | Release and data | Live preview lacks the strategy dataset | open |
+| [G01](#g01) | P0 | Release and data | Live preview lacks the strategy dataset | closed |
 | [G02](#g02) | P0 | Release and data | Local release aligned; remote and hosted release identity remain open | partial |
-| [G03](#g03) | P0 | Quantitative correctness | Zero values disappear from Plan Health | open |
-| [G04](#g04) | P1 | Quantitative correctness | Drift and direction depend on dataset labels and IDs | open |
-| [G05](#g05) | P0 | AI assurance | Grounded synthesis accepts fabricated additional numbers | open |
-| [G06](#g06) | P0 | Access control | Authority enforcement is weaker than its published contract | open |
-| [G07](#g07) | P0 | Access control | Shared multi-tenant run isolation is incomplete | open |
-| [G08](#g08) | P0 | Board governance | Frozen board memory is not demonstrated as an immutable snapshot | open |
-| [G09](#g09) | P1 | Access control | Live sign-out does not invalidate the session | open |
+| [G03](#g03) | P0 | Quantitative correctness | Zero values disappear from Plan Health | closed |
+| [G04](#g04) | P1 | Quantitative correctness | Drift and direction depend on dataset labels and IDs | partial |
+| [G05](#g05) | P0 | AI assurance | Grounded synthesis accepts fabricated additional numbers | partial |
+| [G06](#g06) | P0 | Access control | Authority enforcement is weaker than its published contract | partial |
+| [G07](#g07) | P0 | Access control | Shared multi-tenant run isolation is incomplete | partial |
+| [G08](#g08) | P0 | Board governance | Frozen board memory is not demonstrated as an immutable snapshot | closed |
+| [G09](#g09) | P1 | Access control | Live sign-out does not invalidate the session | closed |
 | [G10](#g10) | P0 | Validation | Question-bank reporting does not measure the required answer quality | open |
 | [G11](#g11) | P1 | Validation | Portable datasets fixed; external-service acceptance remains open | partial |
-| [G12](#g12) | P1 | Product foundation | A reusable strategy-to-KPI compiler is missing | open |
-| [G13](#g13) | P1 | Product foundation | Intent Vault and governed amendments are missing | open |
-| [G14](#g14) | P1 | Data integration | Production connectors and incremental ingestion are missing | open |
-| [G15](#g15) | P1 | Drift and freshness | Continuous drift and historical Plan Health remain partial | open |
-| [G16](#g16) | P1 | Financial domain | Cross-system entity resolution and consolidation need broader proof | open |
-| [G17](#g17) | P1 | Financial domain | Recovery meter is limited to the first eight decision rows | open |
-| [G18](#g18) | P1 | Financial domain | Working-capital drift uses settlement-day proxies | open |
-| [G19](#g19) | P1 | Drift and decisions | Cost-of-drift conversion is a limit, not a completed feature | open |
-| [G20](#g20) | P1 | Drift and decisions | Decision Velocity is not implemented | open |
-| [G21](#g21) | P1 | Drift and decisions | Recording a decision is not closed-loop execution | open |
-| [G22](#g22) | P1 | Agents and memory | Agent experiences are not one continuous state model | open |
-| [G23](#g23) | P1 | Retrieval | Configured vector search is still a lexical/hash fallback | open |
+| [G12](#g12) | P1 | Product foundation | A reusable strategy-to-KPI compiler is missing | partial |
+| [G13](#g13) | P1 | Product foundation | Intent Vault and governed amendments are missing | partial |
+| [G14](#g14) | P1 | Data integration | Production connectors and incremental ingestion are missing | deferred |
+| [G15](#g15) | P1 | Drift and freshness | Continuous drift and historical Plan Health remain partial | partial |
+| [G16](#g16) | P1 | Financial domain | Cross-system entity resolution and consolidation need broader proof | partial |
+| [G17](#g17) | P1 | Financial domain | Recovery meter is limited to the first eight decision rows | closed |
+| [G18](#g18) | P1 | Financial domain | Working-capital drift uses settlement-day proxies | partial |
+| [G19](#g19) | P1 | Drift and decisions | Cost-of-drift conversion is a limit, not a completed feature | partial |
+| [G20](#g20) | P1 | Drift and decisions | Decision Velocity is not implemented | partial |
+| [G21](#g21) | P1 | Drift and decisions | Recording a decision is not closed-loop execution | partial |
+| [G22](#g22) | P1 | Agents and memory | Agent experiences are not one continuous state model | partial |
+| [G23](#g23) | P1 | Retrieval | Configured vector search is still a lexical/hash fallback | partial |
 | [G24](#g24) | P2 | Thinking Mode | The two R4 structured thinking frameworks are missing | open |
-| [G25](#g25) | P1 | Personas | CFO and BU experiences are not a complete four-persona product | open |
-| [G26](#g26) | P1 | Sovereignty | Deployment policy exists; tier proof and visible residency do not | open |
-| [G27](#g27) | P1 | Localization and access | Arabic/RTL support and complete accessibility acceptance are absent | open |
+| [G25](#g25) | P1 | Personas | CFO and BU experiences are not a complete four-persona product | partial |
+| [G26](#g26) | P1 | Sovereignty | Deployment policy exists; tier proof and visible residency do not | partial |
+| [G27](#g27) | P1 | Localization and access | Arabic/RTL support and complete accessibility acceptance are absent | partial |
 | [G28](#g28) | P2 | Brand and UX | Rename token and remaining R4 display improvements are incomplete | open |
-| [G29](#g29) | P1 | Operations | Application rollback is not a tested data recovery plan | open |
-| [G30](#g30) | P1 | Operations | SLOs, capacity, inference audit and cost controls are not demonstrated | open |
+| [G29](#g29) | P1 | Operations | Application rollback is not a tested data recovery plan | partial |
+| [G30](#g30) | P1 | Operations | SLOs, capacity, inference audit and cost controls are not demonstrated | partial |
 | [G31](#g31) | P2 | Maintainability | Packaging cleaned; dependency locking and module separation remain open | partial |
-| [G32](#g32) | P1 | Validation and data safety | Test isolation and stale local pointers remediated; broader integration controls remain open | partial |
+| [G32](#g32) | P1 | Validation and data safety | Test isolation and stale local pointers remediated; broader integration controls remain open | closed |
 | [G33](#g33) | P2 | Commercial readiness | Commercial scope and first-client acceptance remain unsettled | open |
 
 <a id="g01"></a>
 ## G01 · P0 · Live preview lacks the strategy dataset
 
-**Current position:** The authenticated latest-run response is awaiting_review / pending / paused_before_writer. It contains eight locked finance findings, but zero board commitments, no assistant profiles, unavailable calendar, and missing actual-versus-plan comparators and board cash floor. All five executive-policy capability flags are false. The run directory carries an August 8 timestamp; that timestamp is not a current service-health measurement.
+**Current position:** Preview now selects the approved, completed enriched run with 169 hash-verified source files, 10 commitments (7 measured, 3 estimated), exact workbook EBITDA, plan comparators and synthetic executive context. The approval is authorized preview QA, not business ratification.
 
 **Impact:** The core CEO promise cannot be demonstrated from the current selected run. A working UI and populated finance figures conceal how much strategic context is absent.
 
@@ -65,14 +73,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Release owner + data owner + designated reviewer
 
-**Evidence classification:** Live-confirmed
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Live run snapshot](<evidence/live-run.json>); [Live question probes](<evidence/live-question-probes.json>).
 
 <a id="g02"></a>
 ## G02 · P0 · Local release aligned; remote and hosted release identity remain open
 
-**Current position:** Local main was fast-forwarded from 9fa5316 to c03e958 (121 commits), then consolidated. GitHub main and the full hosted release/data manifest remain unaligned or unverified; the live frontend alone matched c03e958 during the assessment.
+**Current position:** Preview has an attested code/image/schema/source/run receipt. Canonical main and remote reconciliation remain in progress; production is intentionally unchanged.
 
 **Impact:** An ordinary main-based deployment can replace newer product behavior with an older build. Review reports, release code, and data are not one reproducible baseline.
 
@@ -82,14 +90,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Engineering lead + release owner
 
-**Evidence classification:** Confirmed in local and remote refs
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Live asset comparison](<evidence/live-access-checks.json>); [Branch deployment workflow](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/.github/workflows/strategyos-branch-deploy.yml#L1>).
 
 <a id="g03"></a>
 ## G03 · P0 · Zero values disappear from Plan Health
 
-**Current position:** _measurement_status uses value-or-empty, treating numeric zero as missing; _score independently rejects actual == 0. A valid growth KPI at 0 against a 100 target produces score=null, live_count=0 and missing_count=1.
+**Current position:** Metric contracts distinguish zero, missing and invalid values and apply explicit direction and zero-denominator rules. Regression coverage passes.
 
 **Impact:** A completely failed commitment can disappear from the measured average. A legitimate zero incident rate also needs explicit lower-is-better semantics.
 
@@ -99,14 +107,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Quantitative engine owner
 
-**Evidence classification:** Reproduced offline
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Plan Health input and score logic](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L190>); [Reproduction](<evidence/audit-probe-results.json>).
 
 <a id="g04"></a>
 ## G04 · P1 · Drift and direction depend on dataset labels and IDs
 
-**Current position:** Direction is lower-is-better only for KPI-04 and KPI-10; weights are fixed at 1.0; estimates are partly selected by KPI ID; periods are fixed June-2026 columns. behind_count is copied from the source Status vs path string. A probe with actual 80 versus checkpoint 100 and a stale ON label yields score 80 but zero behind and one holding. A new client cost KPI at 120/100 is scored 120%, despite a lower-is-better direction field.
+**Current position:** Direction, weights, periods and arithmetic-derived status are configurable and tested with renamed metrics. Client plan weights still need owner ratification.
 
 **Impact:** New client metrics and updated measurements can reverse the intended meaning or leave exceptions hidden.
 
@@ -116,14 +124,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Quantitative engine + product owner
 
-**Evidence classification:** Reproduced offline / code-confirmed
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Composite implementation](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L240>); [Reproduction](<evidence/audit-probe-results.json>).
 
 <a id="g05"></a>
 ## G05 · P0 · Grounded synthesis accepts fabricated additional numbers
 
-**Current position:** The development guard checks that the first two original numbers still occur in WHAT and one expected reference occurs in WHY. It accepts extra invented SAR 999M claims in WHAT, WHY and rich_briefing. Thread summaries and key_figures accept provider replacements without an equivalent numeric check. Both probes were labelled llm-batch-grounded.
+**Current position:** Provider quantities and exact source citations are checked against approved evidence with at most one repair. Workbook units, bounded rounding, ambiguous record locations and missing-source wording were corrected after live QA. Rejected answers remain unmatched. Full factual acceptance is not yet established.
 
 **Impact:** An evidence badge can accompany an unsupported quantitative claim, violating the defining deterministic-number contract.
 
@@ -133,14 +141,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** AI platform + quantitative QA
 
-**Evidence classification:** Reproduced offline
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Synthesis acceptance](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/executive_synthesis.py#L204>); [Probe results](<evidence/audit-probe-results.json>).
 
 <a id="g06"></a>
 ## G06 · P0 · Authority enforcement is weaker than its published contract
 
-**Current position:** The assistant checks the subject selected from the request persona, rather than intersecting it with an authenticated persona entitlement. A keyword classifier selects a single domain before broad context retrieval. The default CFO policy denies Show employee compensation as HR, but allows Show salaries and bonuses as finance. Board maps to assistant:hermes rather than a separate Minerva subject. The separate /qa path does not call _assistant_authority_refusal.
+**Current position:** Shared authorization guards run before scoped loaders and propagate through provider executor threads. Service-backed negative tests pass. Remaining complete multi-persona UI acceptance is tracked in G25.
 
 **Impact:** A caller-controlled persona, alternate endpoint, or differently worded request can change the effective permission decision. The observed classifier mismatch alone does not prove that protected records were returned.
 
@@ -150,14 +158,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Security + backend lead
 
-**Evidence classification:** Local reproduction and code review; no live data-disclosure test
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Authority classifier](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/authority_matrix.py#L218>); [Assistant boundary](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L16612>); [Published contract](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/docs/authority-matrix-mvp.md#L17>); [Probe results](<evidence/audit-probe-results.json>).
 
 <a id="g07"></a>
 ## G07 · P0 · Shared multi-tenant run isolation is incomplete
 
-**Current position:** Agent-runtime records and canonical finance tables have tenant scoping, but core strategyos_runs has no tenant_id column; get_run_detail selects by run ID only. Latest-run/output selection also uses deployment-global state. A generic bu role is not equivalent to a specific BU entitlement.
+**Current position:** Run, tenant and BU guards and scoped retrieval are implemented and service-tested. Live semantic canary testing excludes foreign tenants and rejects wrong-run/BU scope. Full product-wide multi-persona acceptance remains open.
 
 **Impact:** The code does not substantiate the shared multi-tenant tier or per-BU confidentiality claim end to end. Separate deployment isolation can reduce this exposure for an initial pilot.
 
@@ -167,14 +175,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Security + data architecture
 
-**Evidence classification:** Code-confirmed architectural gap
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Run schema](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/deploy/postgres/schema.sql#L20>); [Run lookup](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/state_store.py#L372>); [Pointer selection](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/run_registry.py#L84>).
 
 <a id="g08"></a>
 ## G08 · P0 · Frozen board memory is not demonstrated as an immutable snapshot
 
-**Current position:** _board_portal_payload constructs closed/frozen metadata from the supplied current summary and publication status. Its frozen_snapshot object carries status and explanatory text, not a persisted meeting snapshot identifier and immutable content binding. Related payloads still refer to the latest run. The review document marks this invariant protected, but that is not an implementation proof.
+**Current position:** Immutable database snapshots retain approved figures, answers and exact file bytes. The original closed meeting remained byte-identical after an upload, service restart and a newly approved/reprocessed company run. A second meeting closed through the UI and immediately switched to frozen routes.
 
 **Impact:** A closed meeting may describe a frozen record while later source/run changes alter what is displayed or what the assistant can use.
 
@@ -184,14 +192,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Board product owner + backend lead
 
-**Evidence classification:** Code-confirmed gap; live lifecycle not mutated
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Board payload construction](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L3883>); [Frozen object](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L4017>).
 
 <a id="g09"></a>
 ## G09 · P1 · Live sign-out does not invalidate the session
 
-**Current position:** The frontend calls POST /auth/logout. On the authenticated preview this returned HTTP 404. A subsequent GET /runs/latest with the same audit session still returned HTTP 200. The inspected source contains a logout handler, so this points to deployment/routing or backend-version mismatch.
+**Current position:** Caddy recreation fixes stale mounted routes; logout invalidates protected access. Cross-tab sign-out and expired-session login redirects passed actual UI QA.
 
 **Impact:** Users can believe they signed out while the protected session remains usable.
 
@@ -201,14 +209,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Identity + deployment owner
 
-**Evidence classification:** Live-reproduced
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Live logout check](<evidence/live-logout-check.json>); [Frontend logout](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/static/executive.js#L3812>); [Identity logout handler](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/idp.py#L364>).
 
 <a id="g10"></a>
 ## G10 · P0 · Question-bank reporting does not measure the required answer quality
 
-**Current position:** run_ceo_question_corpus scores non-empty text, visible determinism tier and a self-reported derivability flag. It does not compare numerical truth, resolve citations or score question relevance. A fabricated uncited SAR 999 trillion response is counted as answered and tiered with zero violations. Historical 50/500 reports exist, but do not establish current-build acceptance.
+**Current position:** The fixed stratified 50-question sample completed on revision 4efaf51. It did not pass factual acceptance: source/citation/retrieval and calculation gaps remain explicit. Earlier audit-context and quota-limited attempts are retained separately. Corrected source retrieval and deterministic reconciliation are being retested; no routing-based pass rate is claimed.
 
 **Impact:** A high answered count can be mistaken for the specified 45/50 correct, resolving-citation and zero-fabrication gate.
 
@@ -218,14 +226,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** QA lead + domain reviewer
 
-**Evidence classification:** Reproduced offline
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Corpus scorer](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/qa_regression_corpus.py#L57>); [Probe results](<evidence/audit-probe-results.json>).
 
 <a id="g11"></a>
 ## G11 · P1 · Portable datasets fixed; external-service acceptance remains open
 
-**Current position:** Enrichment inputs and the exact POC-2 pack are now repository-owned and portable; the four enrichment tests no longer silently return when data is missing. External-service tests still require dedicated integration environments and cannot be claimed from a portable run.
+**Current position:** The full suite runs against real PostgreSQL and Neo4j with zero skips. The latest completed service suite passed 1,771 tests. Actual CEO/board UI checks cover login/logout, uploads, durable conversations, source details and immutable reports; factual acceptance remains open.
 
 **Impact:** A green suite is not evidence that persistence, concurrent approval, current enriched data, browser interactions or frozen-board behavior works.
 
@@ -235,14 +243,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** QA + developer experience
 
-**Evidence classification:** Code-confirmed
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Nonportable enrichment tests](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/tests/test_source_strategy_enrichment.py#L8>); [CI workflow](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/.github/workflows/strategyos-ci.yml#L43>).
 
 <a id="g12"></a>
 ## G12 · P1 · A reusable strategy-to-KPI compiler is missing
 
-**Current position:** The current executive enrichment reads named workbooks and fixed columns; it does not compile an arbitrary company’s approved strategy into the Growth/Margin/Capital/Resilience/Sustainability tree. The older finance-only plan-health boundary explicitly disclaims a full enterprise strategy compiler.
+**Current position:** Structured strategy compilation, formula binding, invalid-input handling and recompile diffs are tested on two company configurations. Unstructured extraction and a completed client owner-review workflow remain unverified.
 
 **Impact:** Onboarding another client remains a custom data-and-code exercise instead of the product’s defining self-composition capability.
 
@@ -252,14 +260,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Product architect + knowledge engineer
 
-**Evidence classification:** Not found in inspected candidate
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Workbook discovery](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L21>); [Enrichment entry point](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L545>).
 
 <a id="g13"></a>
 ## G13 · P1 · Intent Vault and governed amendments are missing
 
-**Current position:** No top-level Intent surface, ratified plan version model, amendment log or KPI-to-amendment navigation was found. Authority Matrix is a useful prerequisite, but is not a plan-of-record store.
+**Current position:** Versioned Intent and amendment APIs exist. Existing navigation and real owner-ratified amendment records do not meet the full acceptance contract; no amendments were fabricated.
 
 **Impact:** Users can inspect performance but cannot inspect and govern the intent against which it is measured.
 
@@ -269,14 +277,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Product + intent/data lead
 
-**Evidence classification:** R4 requirement; not found in inspected candidate
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [R4 feature order](<../requirements.md>); [Executive shell](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/static/executive.html#L1>).
 
 <a id="g14"></a>
 ## G14 · P1 · Production connectors and incremental ingestion are missing
 
-**Current position:** The ingestion catalog contains workspace folder, browser upload, validated snapshot and a generic placeholder; all declare supports_incremental=False. Oracle canonical ingestion is substantive, but an ingestion API is not a maintained SAP/Oracle/MT940/M365 connector with credentials, cursors and failure recovery.
+**Current position:** Actual ERP, treasury, banking and calendar connections are explicitly deferred by the user. The release uses a labelled synthetic source pack and does not claim external cadence or delivery.
 
 **Impact:** The continuous intelligence product currently depends on manually prepared extracts and reprocessing.
 
@@ -286,14 +294,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Integration lead + client data owner
 
-**Evidence classification:** Code-confirmed
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Connector catalog](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/platform_foundation.py#L270>); [Oracle ingest authorization](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L9888>).
 
 <a id="g15"></a>
 ## G15 · P1 · Continuous drift and historical Plan Health remain partial
 
-**Current position:** Enrichment reads current workbook labels, fixed June checkpoints and a fixed June 1–7 virtual clock. Plan Health lacks the R4 13-week composite trajectory. Live assistant monitoring records have July 11 last-wake timestamps and cycle_count=1; this is stored run evidence, not proof that a scheduler is currently healthy.
+**Current position:** Historical measurement and drift APIs exist. Automatic operational source cadence and end-to-end freshness degradation require the deferred connection stage.
 
 **Impact:** A one-time dataset snapshot can look like ongoing monitoring; the cadence ladder and automatic escalation are not established.
 
@@ -303,14 +311,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Data platform + runtime owner
 
-**Evidence classification:** Code-confirmed / live evidence
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Fixed clock and enrichment](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L695>); [Live runtime payload](<evidence/live-run.json>).
 
 <a id="g16"></a>
 ## G16 · P1 · Cross-system entity resolution and consolidation need broader proof
 
-**Current position:** Finance and graph duplicate-vendor checks and Oracle canonical normalization exist. The inspected evidence does not establish a reusable stewarded identity crosswalk across ERP/procurement/bank/DMS, intercompany eliminations or daily FX revaluation across the whole group.
+**Current position:** Consolidation controls and regression cases cover aliases, intercompany amounts and dated FX. A client multi-system corpus and owner reconciliation remain future acceptance evidence.
 
 **Impact:** The finance POC’s successful planted patterns do not establish correct consolidated results for a new client’s messy multi-system records.
 
@@ -320,14 +328,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Finance data engineering + client finance reviewer
 
-**Evidence classification:** Partial implementation
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Finance resolution detector](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/skills/finance_controls.py#L515>); [Oracle normalization and controls](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/oracle_finance.py#L1>).
 
 <a id="g17"></a>
 ## G17 · P1 · Recovery meter is limited to the first eight decision rows
 
-**Current position:** current_audit_rows = remediation_rows[:8] controls the identified, recovered and fallback locked totals and assistant recovery memory. This encodes the original eight-case sample rather than an explicit run/case linkage.
+**Current position:** Recovery reconciliation includes all eligible rows, independent of visible decision-card limits; partial receipts, reversals and ordering invariance are covered by passing tests.
 
 **Impact:** Later valid recoveries can be omitted, and reordering a workbook can change reported totals.
 
@@ -337,14 +345,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Finance product + data engineering
 
-**Evidence classification:** Code-confirmed
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Recovery aggregation](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L653>).
 
 <a id="g18"></a>
 ## G18 · P1 · Working-capital drift uses settlement-day proxies
 
-**Current position:** compute_working_capital_drifts labels DSO/DPO but computes average settled invoice-to-collection/payment days in weekly invoice cohorts. It excludes unsettled invoices and averages the same trailing window being tested. The KPI specification defines balance/revenue or balance/COGS × period-days. Separate Oracle ratio calculations may exist; they do not remove this reporting mismatch.
+**Current position:** The canonical finance adapter computes DSO/DPO from explicit open balances and denominators, with unpaid-balance regression tests. The legacy audit still exposes clearly labelled collection/payment timing proxies. The new receivables aging reconciliation uses actual invoices, applied receipts and customer segments. Client finance review remains outstanding.
 
 **Impact:** A proxy can disagree materially with financial DSO/DPO and understate deterioration in unpaid invoices.
 
@@ -354,14 +362,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Finance engine owner
 
-**Evidence classification:** Code-confirmed requirements mismatch
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Current drift calculation](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/skills/finance_controls.py#L1039>); [KPI source extract](<evidence/verification-summary.json>).
 
 <a id="g19"></a>
 ## G19 · P1 · Cost-of-drift conversion is a limit, not a completed feature
 
-**Current position:** _cost_of_drift always returns financial_effect_sar_per_week=None. Optional value-conversion workbooks are inventoried for readiness but are not applied by that calculation. Current live policy inputs are absent. Some event/initiative weekly values can be displayed if supplied.
+**Current position:** Financial drift and approved factor bindings have deterministic contracts; missing factors remain missing inputs. Full client factor approval and end-to-end surface acceptance are not yet established.
 
 **Impact:** The product cannot consistently rank strategic drift by monetary consequence or time cost.
 
@@ -371,14 +379,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Domain owner + quantitative engine
 
-**Evidence classification:** Code-confirmed / missing live inputs
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Drift conversion](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L206>); [Executive policy inputs](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L60>).
 
 <a id="g20"></a>
 ## G20 · P1 · Decision Velocity is not implemented
 
-**Current position:** Decision recording exists, but no linked surfaced_at → decided_at → first_action_at measurement and no median/trend/queue-aging Decision Velocity card was found.
+**Current position:** Durable decision timestamps and verified first-action velocity are implemented and tested. A source-linked metric in the existing UI remains unverified.
 
 **Impact:** The headline business problem—decision latency—has no measured outcome in the product.
 
@@ -388,14 +396,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Product analytics + workflow owner
 
-**Evidence classification:** R4 requirement; not found in inspected candidate
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Decision record endpoint](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L9614>); [R4 work order](<../requirements.md>).
 
 <a id="g21"></a>
 ## G21 · P1 · Recording a decision is not closed-loop execution
 
-**Current position:** The newer executive decision endpoint durably records a recommendation/owner/date with idempotency, but returns delivery_status=not_delivered and underlying_issue_status=open. Demo seed choices also have session-state behavior. This is honest and useful, but not ERP execution or confirmed stakeholder delivery.
+**Current position:** Durable idempotent decisions, approval gates and evidence-based completion state are implemented. External dispatch and authoritative external completion are intentionally deferred.
 
 **Impact:** Users still need an external process to turn approval into assigned work, acknowledged ownership and verified completion.
 
@@ -405,14 +413,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Workflow + integration lead
 
-**Evidence classification:** Intentional current boundary / product gap
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Decision outcome contract](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L9614>); [Agent capabilities](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/agent_runtime/registry.py#L96>).
 
 <a id="g22"></a>
 ## G22 · P1 · Agent experiences are not one continuous state model
 
-**Current position:** There are deterministic analysis stages, durable specialist tasks, digital-twin stores and source-seeded assistant threads. The specialist registry has four actual workers. Live chat reports client_session/sessionStorage with server_memory=false; live twin metrics show no collaboration events and 20 routing gaps. Seeded A2A content is not proof of autonomous live cooperation.
+**Current position:** Private conversations persist across refresh and restart, with optimistic conflict detection. The specialist runtime exists, but one continuous delegated task through the existing chat and agent UI is not yet established.
 
 **Impact:** Status can disagree across assistants, tasks and decisions; conversational continuity depends on a browser session and selected run.
 
@@ -422,14 +430,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Agent platform + product architect
 
-**Evidence classification:** Partial implementation / live confirmation
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Specialist registry](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/agent_runtime/registry.py#L1>); [Seed threads](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L333>); [Live chat and twin state](<evidence/live-run.json>).
 
 <a id="g23"></a>
 ## G23 · P1 · Configured vector search is still a lexical/hash fallback
 
-**Current position:** vector_store declares hash_fallback, lexical_keyword and native_hybrid_supported=False. The current run’s Qdrant sample also reports hash_fallback. This is real persistent retrieval, but not demonstrated semantic similarity search.
+**Current position:** Pinned local multilingual E5 now indexes 37,537 eligible source records, including Office text, without evaluator question-bank leakage. Independent English/Arabic acceptance corpus achieved recall@3 0.90; live cross-scope canary tests and no-egress runtime checks passed. Client-agreed targets remain unratified.
 
 **Impact:** Paraphrases, cross-language questions and semantic entity similarity may miss evidence even when the documents exist.
 
@@ -439,7 +447,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Retrieval owner
 
-**Evidence classification:** Code and stored live-run evidence
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Vector contract](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/vector_store.py#L17>); [Live Qdrant sample](<evidence/live-run.json>).
 
@@ -463,7 +471,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g25"></a>
 ## G25 · P1 · CFO and BU experiences are not a complete four-persona product
 
-**Current position:** The later executive specification permits coming-soon locks for undifferentiated personas, and differentiated roles/runtime components exist. That satisfies honest preview gating, but not the original Group CFO, BU CEO/GM and BU CFO experience requirements.
+**Current position:** Unsupported personas remain explicitly disabled and an unassigned BU user is denied rather than receiving group data. A complete four-persona workflow is not delivered; no business assignment was guessed.
 
 **Impact:** The pilot can demonstrate the CEO lane, but should not promise equivalent decision workflows at all four altitudes.
 
@@ -473,14 +481,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Product owner + identity/data teams
 
-**Evidence classification:** Deliberately phased / partial
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Persona/mode definitions](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L4115>); [Persona source requirements](<evidence/verification-summary.json>).
 
 <a id="g26"></a>
 ## G26 · P1 · Deployment policy exists; tier proof and visible residency do not
 
-**Current position:** The code includes local-first run policy, external-mode approvals and proxy-OIDC deployment options. The required config-driven residency/model/egress marker was not found. A live run’s historical model-provider flag is not proof of current chat egress: the sampled assistant did use its LLM path.
+**Current position:** The release identifies its provider and pinned local embedding model; sealed local embedding runs without network. Separate deployment-tier factual gates and complete visible residency acceptance remain open.
 
 **Impact:** The four deployment tiers and sovereign/no-egress claim lack a release-specific acceptance record.
 
@@ -490,14 +498,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Deployment architect + security
 
-**Evidence classification:** Partial / not independently verified
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Run policy](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/config.py#L138>); [R4 residency marker](<../requirements.md>); [Live sample](<evidence/live-question-probes.json>).
 
 <a id="g27"></a>
 ## G27 · P1 · Arabic/RTL support and complete accessibility acceptance are absent
 
-**Current position:** The technical specification requires Arabic/English and full RTL from day one. The inspected application ships English templates; the Docker image installs English OCR only. Some accessibility features exist, including modal semantics and reduced-motion CSS, but no complete keyboard, screen-reader or RTL acceptance evidence was found.
+**Current position:** Arabic source text/search and keyboard/mobile checks have passed selected tests. Complete Arabic/RTL and screen-reader journeys are not verified; new language controls were removed to preserve the required UI.
 
 **Impact:** The current build does not substantiate its stated bilingual launch scope.
 
@@ -507,7 +515,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Frontend + localization QA
 
-**Evidence classification:** Not found / not fully tested
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Executive shell](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/static/executive.html#L1>); [OCR deployment](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/deploy/Dockerfile#L1>); [NFR requirements](<evidence/verification-summary.json>).
 
@@ -531,7 +539,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g29"></a>
 ## G29 · P1 · Application rollback is not a tested data recovery plan
 
-**Current position:** Deployment and rollback scripts exist and use image references and copied application directories. They do not establish coordinated database, object-store and workspace backup/restore, retention/deletion, or a tested RPO/RTO. Production deployment notes still list these as hardening work.
+**Current position:** An isolated PostgreSQL restore reconciled all recorded run, artifact, decision, conversation and board row digests. Workspace backup integrity was checked. Recovery times are measured observations, not agreed RPO/RTO commitments.
 
 **Impact:** A bad migration, deleted evidence file or host loss can break provenance and recovery even if the container image rolls back.
 
@@ -541,14 +549,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** SRE + data platform
 
-**Evidence classification:** Code-confirmed / operational evidence absent
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Rollback implementation](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/deploy/scripts/rollback_stack.sh#L1>); [Production hardening list](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/docs/production-deployment-plan.md#L73>).
 
 <a id="g30"></a>
 ## G30 · P1 · SLOs, capacity, inference audit and cost controls are not demonstrated
 
-**Current position:** Health/readiness checks, event trails, provider retries and concurrency tests exist. The review did not find a release acceptance report for the specified 20–50k-invoice envelope, end-to-end latency under load, source-freshness alerts, all-inference audit fields, per-tenant quotas or operating cost. Provider calls use a four-thread executor; bounded request timeouts alone do not prove bounded queued workload.
+**Current position:** Live encrypted inference records now retain authenticated tenant/user, model, timing and hash-verifiable request/response with tenant-bound encryption and expiry. Missing scope blocks provider calls; quota/retention tests pass. Target-volume load and agreed SLOs remain open; reservations are not billed-token or price evidence. A 20-request preview exercise with four concurrent clients completed all 15 permitted business reads and correctly denied five operator-only health reads; no service or transport errors occurred. This is not a target-capacity certification.
 
 **Impact:** Production responsiveness, backlog behavior and inference accountability are uncertain.
 
@@ -558,7 +566,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** SRE + AI platform + QA
 
-**Evidence classification:** Partial controls / validation gap
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Provider execution pool](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L138>); [Provider retry implementation](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/llm_qa.py#L1121>); [Concurrency proof tests](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/tests/test_agent_runtime_concurrency_postgres_e2e.py#L1>).
 
@@ -582,7 +590,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g32"></a>
 ## G32 · P1 · Test isolation and stale local pointers remediated; broader integration controls remain open
 
-**Current position:** The canonical test runner creates and removes isolated application and twin-state workspaces, strips inherited service/provider credentials, and selects explicit regression fixtures. Stale pre-existing latest/current pointers into pytest temporary runs were removed. General service/integration isolation still requires disciplined environment configuration.
+**Current position:** The test runner uses disposable application/output state, creates required directories before import and exercises atomic pointer persistence. Full service suites execute with no unexpected skips.
 
 **Impact:** Local validation can leave the application pointed at transient test data, and a passing report from a different environment cannot substitute for a clean current run.
 
@@ -592,7 +600,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** QA + runtime/data owner
 
-**Evidence classification:** Observed pre-existing state / test results
+**Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
 **Evidence:** [Pointer writer](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/run_registry.py#L47>); [Verification appendix](<evidence/verification-summary.json>).
 

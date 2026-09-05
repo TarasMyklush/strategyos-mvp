@@ -12,8 +12,8 @@
       "priority": "P0",
       "domain": "Release and data",
       "title": "Live preview lacks the strategy dataset",
-      "status": "Live-confirmed",
-      "observation": "The authenticated latest-run response is awaiting_review / pending / paused_before_writer. It contains eight locked finance findings, but zero board commitments, no assistant profiles, unavailable calendar, and missing actual-versus-plan comparators and board cash floor. All five executive-policy capability flags are false. The run directory carries an August 8 timestamp; that timestamp is not a current service-health measurement.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Preview now selects the approved, completed enriched run with 169 hash-verified source files, 10 commitments (7 measured, 3 estimated), exact workbook EBITDA, plan comparators and synthetic executive context. The approval is authorized preview QA, not business ratification.",
       "impact": "The core CEO promise cannot be demonstrated from the current selected run. A working UI and populated finance figures conceal how much strategic context is absent.",
       "action": "Select and validate the intended enriched source pack, rebuild its derived data, complete authorized reviewer sign-off, and promote it through a release manifest. Preserve the existing review gate.",
       "acceptance": "The selected release has the intended 10 commitments with honest live/estimated coverage, source-backed plan comparators, calendar and executive policy inputs; the run completes and all visible values trace to that exact pack.",
@@ -30,15 +30,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "closed",
+      "baseline_observation": "The authenticated latest-run response is awaiting_review / pending / paused_before_writer. It contains eight locked finance findings, but zero board commitments, no assistant profiles, unavailable calendar, and missing actual-versus-plan comparators and board cash floor. All five executive-policy capability flags are false. The run directory carries an August 8 timestamp; that timestamp is not a current service-health measurement."
     },
     {
       "id": "G02",
       "priority": "P0",
       "domain": "Release and data",
       "title": "Local release aligned; remote and hosted release identity remain open",
-      "status": "Confirmed in local and remote refs",
-      "observation": "Local main was fast-forwarded from 9fa5316 to c03e958 (121 commits), then consolidated. GitHub main and the full hosted release/data manifest remain unaligned or unverified; the live frontend alone matched c03e958 during the assessment.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Preview has an attested code/image/schema/source/run receipt. Canonical main and remote reconciliation remain in progress; production is intentionally unchanged.",
       "impact": "An ordinary main-based deployment can replace newer product behavior with an older build. Review reports, release code, and data are not one reproducible baseline.",
       "action": "Choose one release branch, reconcile the candidate through review, and record commit SHA, immutable image digest, schema version, source-pack hash, run ID and provider configuration together. Expose this manifest to operators.",
       "acceptance": "A clean checkout of the designated release recreates the approved application and selected data contract; rollback explicitly covers code, schema compatibility and selected run.",
@@ -63,8 +64,8 @@
       "priority": "P0",
       "domain": "Quantitative correctness",
       "title": "Zero values disappear from Plan Health",
-      "status": "Reproduced offline",
-      "observation": "_measurement_status uses value-or-empty, treating numeric zero as missing; _score independently rejects actual == 0. A valid growth KPI at 0 against a 100 target produces score=null, live_count=0 and missing_count=1.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Metric contracts distinguish zero, missing and invalid values and apply explicit direction and zero-denominator rules. Regression coverage passes.",
       "impact": "A completely failed commitment can disappear from the measured average. A legitimate zero incident rate also needs explicit lower-is-better semantics.",
       "action": "Distinguish None/unparseable from zero, define zero-denominator and zero-actual rules by metric direction, and preserve valid measurements in coverage.",
       "acceptance": "A higher-is-better 0/100 contributes 0%; a lower-is-better zero uses the approved bounded rule; missing input remains visibly missing.",
@@ -81,15 +82,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "closed",
+      "baseline_observation": "_measurement_status uses value-or-empty, treating numeric zero as missing; _score independently rejects actual == 0. A valid growth KPI at 0 against a 100 target produces score=null, live_count=0 and missing_count=1."
     },
     {
       "id": "G04",
       "priority": "P1",
       "domain": "Quantitative correctness",
       "title": "Drift and direction depend on dataset labels and IDs",
-      "status": "Reproduced offline / code-confirmed",
-      "observation": "Direction is lower-is-better only for KPI-04 and KPI-10; weights are fixed at 1.0; estimates are partly selected by KPI ID; periods are fixed June-2026 columns. behind_count is copied from the source Status vs path string. A probe with actual 80 versus checkpoint 100 and a stale ON label yields score 80 but zero behind and one holding. A new client cost KPI at 120/100 is scored 120%, despite a lower-is-better direction field.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Direction, weights, periods and arithmetic-derived status are configurable and tested with renamed metrics. Client plan weights still need owner ratification.",
       "impact": "New client metrics and updated measurements can reverse the intended meaning or leave exceptions hidden.",
       "action": "Introduce versioned metric metadata for direction, unit, weight, cadence, measurement quality and comparator; derive status from arithmetic with explicit tolerance bands.",
       "acceptance": "Rename/reorder KPI IDs and change periods without changing results; mutate actuals without editing labels and verify the correct exception; validate weights against the ratified plan.",
@@ -106,15 +108,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "Direction is lower-is-better only for KPI-04 and KPI-10; weights are fixed at 1.0; estimates are partly selected by KPI ID; periods are fixed June-2026 columns. behind_count is copied from the source Status vs path string. A probe with actual 80 versus checkpoint 100 and a stale ON label yields score 80 but zero behind and one holding. A new client cost KPI at 120/100 is scored 120%, despite a lower-is-better direction field."
     },
     {
       "id": "G05",
       "priority": "P0",
       "domain": "AI assurance",
       "title": "Grounded synthesis accepts fabricated additional numbers",
-      "status": "Reproduced offline",
-      "observation": "The development guard checks that the first two original numbers still occur in WHAT and one expected reference occurs in WHY. It accepts extra invented SAR 999M claims in WHAT, WHY and rich_briefing. Thread summaries and key_figures accept provider replacements without an equivalent numeric check. Both probes were labelled llm-batch-grounded.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Provider quantities and exact source citations are checked against approved evidence with at most one repair. Workbook units, bounded rounding, ambiguous record locations and missing-source wording were corrected after live QA. Rejected answers remain unmatched. Full factual acceptance is not yet established.",
       "impact": "An evidence badge can accompany an unsupported quantitative claim, violating the defining deterministic-number contract.",
       "action": "Represent each quantitative claim as a typed reference to an approved fact or calculation. Reject unbound numbers in every model-generated field, including summaries, charts and captions; validate causal claims separately.",
       "acceptance": "Adversarial provider responses retaining valid numbers while adding, changing or attaching false units, amounts or causes are rejected. All displayed numerical cells resolve to an approved calculation.",
@@ -131,15 +134,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "The development guard checks that the first two original numbers still occur in WHAT and one expected reference occurs in WHY. It accepts extra invented SAR 999M claims in WHAT, WHY and rich_briefing. Thread summaries and key_figures accept provider replacements without an equivalent numeric check. Both probes were labelled llm-batch-grounded."
     },
     {
       "id": "G06",
       "priority": "P0",
       "domain": "Access control",
       "title": "Authority enforcement is weaker than its published contract",
-      "status": "Local reproduction and code review; no live data-disclosure test",
-      "observation": "The assistant checks the subject selected from the request persona, rather than intersecting it with an authenticated persona entitlement. A keyword classifier selects a single domain before broad context retrieval. The default CFO policy denies Show employee compensation as HR, but allows Show salaries and bonuses as finance. Board maps to assistant:hermes rather than a separate Minerva subject. The separate /qa path does not call _assistant_authority_refusal.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Shared authorization guards run before scoped loaders and propagate through provider executor threads. Service-backed negative tests pass. Remaining complete multi-persona UI acceptance is tracked in G25.",
       "impact": "A caller-controlled persona, alternate endpoint, or differently worded request can change the effective permission decision. The observed classifier mismatch alone does not prove that protected records were returned.",
       "action": "Bind personas to authenticated entitlements, enforce per-resource and per-source permissions at retrieval, intersect user/assistant/tool authority, and apply the same policy to every query endpoint. Give Minerva a separate policy identity.",
       "acceptance": "Negative tests across users, personas, aliases, mixed-domain questions and /qa versus /assistant/chat demonstrate identical denials before restricted data is loaded.",
@@ -166,18 +170,19 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "The assistant checks the subject selected from the request persona, rather than intersecting it with an authenticated persona entitlement. A keyword classifier selects a single domain before broad context retrieval. The default CFO policy denies Show employee compensation as HR, but allows Show salaries and bonuses as finance. Board maps to assistant:hermes rather than a separate Minerva subject. The separate /qa path does not call _assistant_authority_refusal."
     },
     {
       "id": "G07",
       "priority": "P0",
       "domain": "Access control",
       "title": "Shared multi-tenant run isolation is incomplete",
-      "status": "Code-confirmed architectural gap",
-      "observation": "Agent-runtime records and canonical finance tables have tenant scoping, but core strategyos_runs has no tenant_id column; get_run_detail selects by run ID only. Latest-run/output selection also uses deployment-global state. A generic bu role is not equivalent to a specific BU entitlement.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Run, tenant and BU guards and scoped retrieval are implemented and service-tested. Live semantic canary testing excludes foreign tenants and rejects wrong-run/BU scope. Full product-wide multi-persona acceptance remains open.",
       "impact": "The code does not substantiate the shared multi-tenant tier or per-BU confidentiality claim end to end. Separate deployment isolation can reduce this exposure for an initial pilot.",
       "action": "Add tenant and business-scope ownership to runs, jobs, artifacts, citations, caches and retrieval; enforce the authenticated scope in every lookup, not just in the agent layer.",
-      "acceptance": "Two tenants and two BUs sharing infrastructure cannot list, resolve, retrieve, search, export or ask about each other\u2019s records, including guessed IDs and latest aliases.",
+      "acceptance": "Two tenants and two BUs sharing infrastructure cannot list, resolve, retrieve, search, export or ask about each other’s records, including guessed IDs and latest aliases.",
       "suggested_owner": "Security + data architecture",
       "evidence": [
         {
@@ -196,18 +201,19 @@
           "line": 84
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "Agent-runtime records and canonical finance tables have tenant scoping, but core strategyos_runs has no tenant_id column; get_run_detail selects by run ID only. Latest-run/output selection also uses deployment-global state. A generic bu role is not equivalent to a specific BU entitlement."
     },
     {
       "id": "G08",
       "priority": "P0",
       "domain": "Board governance",
       "title": "Frozen board memory is not demonstrated as an immutable snapshot",
-      "status": "Code-confirmed gap; live lifecycle not mutated",
-      "observation": "_board_portal_payload constructs closed/frozen metadata from the supplied current summary and publication status. Its frozen_snapshot object carries status and explanatory text, not a persisted meeting snapshot identifier and immutable content binding. Related payloads still refer to the latest run. The review document marks this invariant protected, but that is not an implementation proof.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Immutable database snapshots retain approved figures, answers and exact file bytes. The original closed meeting remained byte-identical after an upload, service restart and a newly approved/reprocessed company run. A second meeting closed through the UI and immediately switched to frozen routes.",
       "impact": "A closed meeting may describe a frozen record while later source/run changes alter what is displayed or what the assistant can use.",
       "action": "Persist a meeting snapshot containing the approved data, citations, report versions and content hashes. Resolve every closed-board read and question exclusively through that snapshot.",
-      "acceptance": "Close a meeting, change/reprocess current company data and restart services; the meeting\u2019s figures, files and answers remain identical and inaccessible data stays unavailable.",
+      "acceptance": "Close a meeting, change/reprocess current company data and restart services; the meeting’s figures, files and answers remain identical and inaccessible data stays unavailable.",
       "suggested_owner": "Board product owner + backend lead",
       "evidence": [
         {
@@ -221,15 +227,16 @@
           "line": 4017
         }
       ],
-      "closure_status": "open"
+      "closure_status": "closed",
+      "baseline_observation": "_board_portal_payload constructs closed/frozen metadata from the supplied current summary and publication status. Its frozen_snapshot object carries status and explanatory text, not a persisted meeting snapshot identifier and immutable content binding. Related payloads still refer to the latest run. The review document marks this invariant protected, but that is not an implementation proof."
     },
     {
       "id": "G09",
       "priority": "P1",
       "domain": "Access control",
       "title": "Live sign-out does not invalidate the session",
-      "status": "Live-reproduced",
-      "observation": "The frontend calls POST /auth/logout. On the authenticated preview this returned HTTP 404. A subsequent GET /runs/latest with the same audit session still returned HTTP 200. The inspected source contains a logout handler, so this points to deployment/routing or backend-version mismatch.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Caddy recreation fixes stale mounted routes; logout invalidates protected access. Cross-tab sign-out and expired-session login redirects passed actual UI QA.",
       "impact": "Users can believe they signed out while the protected session remains usable.",
       "action": "Align deployed identity routing and handler version, revoke the server token and expire the cookie, and make the UI handle a failed logout explicitly.",
       "acceptance": "After sign-out the same cookie cannot access a protected route; the response and browser navigation agree, including proxy and branch deployments.",
@@ -251,15 +258,16 @@
           "line": 364
         }
       ],
-      "closure_status": "open"
+      "closure_status": "closed",
+      "baseline_observation": "The frontend calls POST /auth/logout. On the authenticated preview this returned HTTP 404. A subsequent GET /runs/latest with the same audit session still returned HTTP 200. The inspected source contains a logout handler, so this points to deployment/routing or backend-version mismatch."
     },
     {
       "id": "G10",
       "priority": "P0",
       "domain": "Validation",
       "title": "Question-bank reporting does not measure the required answer quality",
-      "status": "Reproduced offline",
-      "observation": "run_ceo_question_corpus scores non-empty text, visible determinism tier and a self-reported derivability flag. It does not compare numerical truth, resolve citations or score question relevance. A fabricated uncited SAR 999 trillion response is counted as answered and tiered with zero violations. Historical 50/500 reports exist, but do not establish current-build acceptance.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "The fixed stratified 50-question sample completed on revision 4efaf51. It did not pass factual acceptance: source/citation/retrieval and calculation gaps remain explicit. Earlier audit-context and quota-limited attempts are retained separately. Corrected source retrieval and deterministic reconciliation are being retested; no routing-based pass rate is claimed.",
       "impact": "A high answered count can be mistaken for the specified 45/50 correct, resolving-citation and zero-fabrication gate.",
       "action": "Add held-out reference answers, calculation tolerances, actual citation resolution, relevance grading, theme-stratified sampling and per-question adjudication. Bind reports to build, source pack and model versions.",
       "acceptance": "The latest approved release answers at least 45 of 50 questions sampled across all 18 themes correctly with resolving citations and no fabricated numbers; publish the failed and refused questions separately.",
@@ -276,15 +284,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "open",
+      "baseline_observation": "run_ceo_question_corpus scores non-empty text, visible determinism tier and a self-reported derivability flag. It does not compare numerical truth, resolve citations or score question relevance. A fabricated uncited SAR 999 trillion response is counted as answered and tiered with zero violations. Historical 50/500 reports exist, but do not establish current-build acceptance."
     },
     {
       "id": "G11",
       "priority": "P1",
       "domain": "Validation",
       "title": "Portable datasets fixed; external-service acceptance remains open",
-      "status": "Code-confirmed",
-      "observation": "Enrichment inputs and the exact POC-2 pack are now repository-owned and portable; the four enrichment tests no longer silently return when data is missing. External-service tests still require dedicated integration environments and cannot be claimed from a portable run.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "The full suite runs against real PostgreSQL and Neo4j with zero skips. The latest completed service suite passed 1,771 tests. Actual CEO/board UI checks cover login/logout, uploads, durable conversations, source details and immutable reports; factual acceptance remains open.",
       "impact": "A green suite is not evidence that persistence, concurrent approval, current enriched data, browser interactions or frozen-board behavior works.",
       "action": "Vendor portable sanitized enrichment fixtures, use explicit skips for genuinely optional checks, and add mandatory isolated integration and browser acceptance jobs for the release.",
       "acceptance": "Clean CI executes the enrichment assertions, service-dependent security/transaction tests, and required CEO/board journeys; unexpected skips fail the release gate.",
@@ -309,9 +318,9 @@
       "priority": "P1",
       "domain": "Product foundation",
       "title": "A reusable strategy-to-KPI compiler is missing",
-      "status": "Not found in inspected candidate",
-      "observation": "The current executive enrichment reads named workbooks and fixed columns; it does not compile an arbitrary company\u2019s approved strategy into the Growth/Margin/Capital/Resilience/Sustainability tree. The older finance-only plan-health boundary explicitly disclaims a full enterprise strategy compiler.",
-      "impact": "Onboarding another client remains a custom data-and-code exercise instead of the product\u2019s defining self-composition capability.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Structured strategy compilation, formula binding, invalid-input handling and recompile diffs are tested on two company configurations. Unstructured extraction and a completed client owner-review workflow remain unverified.",
+      "impact": "Onboarding another client remains a custom data-and-code exercise instead of the product’s defining self-composition capability.",
       "action": "Build a versioned intent schema and human-reviewed compiler from strategy text to objectives, targets, measures, leading indicators, ownership, cadence and source bindings.",
       "acceptance": "Onboard a second anonymized company without code changes; prove target extraction, owner review, formula binding, recompile diffs and unsupported-input handling.",
       "suggested_owner": "Product architect + knowledge engineer",
@@ -327,15 +336,16 @@
           "line": 545
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "The current executive enrichment reads named workbooks and fixed columns; it does not compile an arbitrary company’s approved strategy into the Growth/Margin/Capital/Resilience/Sustainability tree. The older finance-only plan-health boundary explicitly disclaims a full enterprise strategy compiler."
     },
     {
       "id": "G13",
       "priority": "P1",
       "domain": "Product foundation",
       "title": "Intent Vault and governed amendments are missing",
-      "status": "R4 requirement; not found in inspected candidate",
-      "observation": "No top-level Intent surface, ratified plan version model, amendment log or KPI-to-amendment navigation was found. Authority Matrix is a useful prerequisite, but is not a plan-of-record store.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Versioned Intent and amendment APIs exist. Existing navigation and real owner-ratified amendment records do not meet the full acceptance contract; no amendments were fabricated.",
       "impact": "Users can inspect performance but cannot inspect and govern the intent against which it is measured.",
       "action": "Implement R4 F1 read-only first: versioned plan, commitments, initiatives, owners, ratification and amendment provenance. Reuse one schema for any future workshop-capture flow.",
       "acceptance": "Intent is reachable from navigation; every commitment exposes approval and last amendment; at least three real amendments resolve; every diagnostics KPI links to its plan version.",
@@ -352,17 +362,18 @@
           "line": 1
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "No top-level Intent surface, ratified plan version model, amendment log or KPI-to-amendment navigation was found. Authority Matrix is a useful prerequisite, but is not a plan-of-record store."
     },
     {
       "id": "G14",
       "priority": "P1",
       "domain": "Data integration",
       "title": "Production connectors and incremental ingestion are missing",
-      "status": "Code-confirmed",
-      "observation": "The ingestion catalog contains workspace folder, browser upload, validated snapshot and a generic placeholder; all declare supports_incremental=False. Oracle canonical ingestion is substantive, but an ingestion API is not a maintained SAP/Oracle/MT940/M365 connector with credentials, cursors and failure recovery.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Actual ERP, treasury, banking and calendar connections are explicitly deferred by the user. The release uses a labelled synthetic source pack and does not claim external cadence or delivery.",
       "impact": "The continuous intelligence product currently depends on manually prepared extracts and reprocessing.",
-      "action": "Choose the first client\u2019s actual ERP/AP/AR, treasury and calendar integrations; implement source contracts, incremental cursors, deduplication, retry/dead-letter handling and reconciliation.",
+      "action": "Choose the first client’s actual ERP/AP/AR, treasury and calendar integrations; implement source contracts, incremental cursors, deduplication, retry/dead-letter handling and reconciliation.",
       "acceptance": "Repeated and out-of-order source deliveries are idempotent; transactions, nightly bank balances and calendar updates arrive at their declared cadence with visible freshness and failure state.",
       "suggested_owner": "Integration lead + client data owner",
       "evidence": [
@@ -377,15 +388,16 @@
           "line": 9888
         }
       ],
-      "closure_status": "open"
+      "closure_status": "deferred",
+      "baseline_observation": "The ingestion catalog contains workspace folder, browser upload, validated snapshot and a generic placeholder; all declare supports_incremental=False. Oracle canonical ingestion is substantive, but an ingestion API is not a maintained SAP/Oracle/MT940/M365 connector with credentials, cursors and failure recovery."
     },
     {
       "id": "G15",
       "priority": "P1",
       "domain": "Drift and freshness",
       "title": "Continuous drift and historical Plan Health remain partial",
-      "status": "Code-confirmed / live evidence",
-      "observation": "Enrichment reads current workbook labels, fixed June checkpoints and a fixed June 1\u20137 virtual clock. Plan Health lacks the R4 13-week composite trajectory. Live assistant monitoring records have July 11 last-wake timestamps and cycle_count=1; this is stored run evidence, not proof that a scheduler is currently healthy.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Historical measurement and drift APIs exist. Automatic operational source cadence and end-to-end freshness degradation require the deferred connection stage.",
       "impact": "A one-time dataset snapshot can look like ongoing monitoring; the cadence ladder and automatic escalation are not established.",
       "action": "Separate demo clock from deployment time, persist metric observations and thresholds, schedule refresh/detection, and derive monitoring status from recent successful work and heartbeat evidence.",
       "acceptance": "New measurements automatically change drift state, historical trajectory and alerts; stale connectors and stopped workers visibly degrade readiness; slow KPIs do not fake daily movement.",
@@ -402,16 +414,17 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "Enrichment reads current workbook labels, fixed June checkpoints and a fixed June 1–7 virtual clock. Plan Health lacks the R4 13-week composite trajectory. Live assistant monitoring records have July 11 last-wake timestamps and cycle_count=1; this is stored run evidence, not proof that a scheduler is currently healthy."
     },
     {
       "id": "G16",
       "priority": "P1",
       "domain": "Financial domain",
       "title": "Cross-system entity resolution and consolidation need broader proof",
-      "status": "Partial implementation",
-      "observation": "Finance and graph duplicate-vendor checks and Oracle canonical normalization exist. The inspected evidence does not establish a reusable stewarded identity crosswalk across ERP/procurement/bank/DMS, intercompany eliminations or daily FX revaluation across the whole group.",
-      "impact": "The finance POC\u2019s successful planted patterns do not establish correct consolidated results for a new client\u2019s messy multi-system records.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Consolidation controls and regression cases cover aliases, intercompany amounts and dated FX. A client multi-system corpus and owner reconciliation remain future acceptance evidence.",
+      "impact": "The finance POC’s successful planted patterns do not establish correct consolidated results for a new client’s messy multi-system records.",
       "action": "Add confidence-scored identity mappings, merge/split review, legal-entity-aware matching, intercompany reconciliation and effective-dated FX policy.",
       "acceptance": "A multi-system corpus covers aliases, shared bank accounts, disputed matches, intercompany sweeps and FX-rate dates; every aggregate reconciles without double counting.",
       "suggested_owner": "Finance data engineering + client finance reviewer",
@@ -427,15 +440,16 @@
           "line": 1
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "Finance and graph duplicate-vendor checks and Oracle canonical normalization exist. The inspected evidence does not establish a reusable stewarded identity crosswalk across ERP/procurement/bank/DMS, intercompany eliminations or daily FX revaluation across the whole group."
     },
     {
       "id": "G17",
       "priority": "P1",
       "domain": "Financial domain",
       "title": "Recovery meter is limited to the first eight decision rows",
-      "status": "Code-confirmed",
-      "observation": "current_audit_rows = remediation_rows[:8] controls the identified, recovered and fallback locked totals and assistant recovery memory. This encodes the original eight-case sample rather than an explicit run/case linkage.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Recovery reconciliation includes all eligible rows, independent of visible decision-card limits; partial receipts, reversals and ordering invariance are covered by passing tests.",
       "impact": "Later valid recoveries can be omitted, and reordering a workbook can change reported totals.",
       "action": "Join recovery events to stable case and run identifiers; distinguish identified, verified, approved, collected and written-off amounts, with no row-position filter.",
       "acceptance": "Adding a ninth eligible recovery changes the meter correctly; shuffling rows does not; partial receipts and reversals reconcile to payment evidence.",
@@ -447,15 +461,16 @@
           "line": 653
         }
       ],
-      "closure_status": "open"
+      "closure_status": "closed",
+      "baseline_observation": "current_audit_rows = remediation_rows[:8] controls the identified, recovered and fallback locked totals and assistant recovery memory. This encodes the original eight-case sample rather than an explicit run/case linkage."
     },
     {
       "id": "G18",
       "priority": "P1",
       "domain": "Financial domain",
       "title": "Working-capital drift uses settlement-day proxies",
-      "status": "Code-confirmed requirements mismatch",
-      "observation": "compute_working_capital_drifts labels DSO/DPO but computes average settled invoice-to-collection/payment days in weekly invoice cohorts. It excludes unsettled invoices and averages the same trailing window being tested. The KPI specification defines balance/revenue or balance/COGS \u00d7 period-days. Separate Oracle ratio calculations may exist; they do not remove this reporting mismatch.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "The canonical finance adapter computes DSO/DPO from explicit open balances and denominators, with unpaid-balance regression tests. The legacy audit still exposes clearly labelled collection/payment timing proxies. The new receivables aging reconciliation uses actual invoices, applied receipts and customer segments. Client finance review remains outstanding.",
       "impact": "A proxy can disagree materially with financial DSO/DPO and understate deterioration in unpaid invoices.",
       "action": "Name settlement-speed metrics explicitly; implement the balance-based ratios with approved periods, open-item treatment and a prior-window baseline. Keep Task-1 overlap exclusions.",
       "acceptance": "Compare both metrics with a finance-reviewed example containing large unpaid balances; disclose formulas, weighting and windows and prove cash-impact reconciliation.",
@@ -472,15 +487,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "compute_working_capital_drifts labels DSO/DPO but computes average settled invoice-to-collection/payment days in weekly invoice cohorts. It excludes unsettled invoices and averages the same trailing window being tested. The KPI specification defines balance/revenue or balance/COGS × period-days. Separate Oracle ratio calculations may exist; they do not remove this reporting mismatch."
     },
     {
       "id": "G19",
       "priority": "P1",
       "domain": "Drift and decisions",
       "title": "Cost-of-drift conversion is a limit, not a completed feature",
-      "status": "Code-confirmed / missing live inputs",
-      "observation": "_cost_of_drift always returns financial_effect_sar_per_week=None. Optional value-conversion workbooks are inventoried for readiness but are not applied by that calculation. Current live policy inputs are absent. Some event/initiative weekly values can be displayed if supplied.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Financial drift and approved factor bindings have deterministic contracts; missing factors remain missing inputs. Full client factor approval and end-to-end surface acceptance are not yet established.",
       "impact": "The product cannot consistently rank strategic drift by monetary consequence or time cost.",
       "action": "Approve per-KPI conversion logic, source inputs and uncertainty bounds; compute where defensible and retain quantified nonfinancial gaps where not. Avoid requiring fabricated monetization.",
       "acceptance": "Financial drift reconciles to the variance bridge; nonfinancial conversions cite approved factors; missing factors produce a precise missing-input request, never an invented number.",
@@ -497,16 +513,17 @@
           "line": 60
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "_cost_of_drift always returns financial_effect_sar_per_week=None. Optional value-conversion workbooks are inventoried for readiness but are not applied by that calculation. Current live policy inputs are absent. Some event/initiative weekly values can be displayed if supplied."
     },
     {
       "id": "G20",
       "priority": "P1",
       "domain": "Drift and decisions",
       "title": "Decision Velocity is not implemented",
-      "status": "R4 requirement; not found in inspected candidate",
-      "observation": "Decision recording exists, but no linked surfaced_at \u2192 decided_at \u2192 first_action_at measurement and no median/trend/queue-aging Decision Velocity card was found.",
-      "impact": "The headline business problem\u2014decision latency\u2014has no measured outcome in the product.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Durable decision timestamps and verified first-action velocity are implemented and tested. A source-linked metric in the existing UI remains unverified.",
+      "impact": "The headline business problem—decision latency—has no measured outcome in the product.",
       "action": "Instrument immutable lifecycle events and compute the two medians and queue ages per scope; exclude pending actions from completed-duration medians and show their age separately.",
       "acceptance": "A recorded decision and subsequent verified first action update the correct metric; overdue open items remain visible; source events drill through from the card.",
       "suggested_owner": "Product analytics + workflow owner",
@@ -522,15 +539,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "Decision recording exists, but no linked surfaced_at → decided_at → first_action_at measurement and no median/trend/queue-aging Decision Velocity card was found."
     },
     {
       "id": "G21",
       "priority": "P1",
       "domain": "Drift and decisions",
       "title": "Recording a decision is not closed-loop execution",
-      "status": "Intentional current boundary / product gap",
-      "observation": "The newer executive decision endpoint durably records a recommendation/owner/date with idempotency, but returns delivery_status=not_delivered and underlying_issue_status=open. Demo seed choices also have session-state behavior. This is honest and useful, but not ERP execution or confirmed stakeholder delivery.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Durable idempotent decisions, approval gates and evidence-based completion state are implemented. External dispatch and authoritative external completion are intentionally deferred.",
       "impact": "Users still need an external process to turn approval into assigned work, acknowledged ownership and verified completion.",
       "action": "Build an explicit approved dispatch queue, connector-specific delivery, acknowledgement, escalation and outcome reconciliation. Keep proposal/approval/delivery/completion distinct.",
       "acceptance": "Retries cannot duplicate delivery; failures remain pending with a clear owner; a task closes only when authoritative completion evidence arrives.",
@@ -547,15 +565,16 @@
           "line": 96
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "The newer executive decision endpoint durably records a recommendation/owner/date with idempotency, but returns delivery_status=not_delivered and underlying_issue_status=open. Demo seed choices also have session-state behavior. This is honest and useful, but not ERP execution or confirmed stakeholder delivery."
     },
     {
       "id": "G22",
       "priority": "P1",
       "domain": "Agents and memory",
       "title": "Agent experiences are not one continuous state model",
-      "status": "Partial implementation / live confirmation",
-      "observation": "There are deterministic analysis stages, durable specialist tasks, digital-twin stores and source-seeded assistant threads. The specialist registry has four actual workers. Live chat reports client_session/sessionStorage with server_memory=false; live twin metrics show no collaboration events and 20 routing gaps. Seeded A2A content is not proof of autonomous live cooperation.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Private conversations persist across refresh and restart, with optimistic conflict detection. The specialist runtime exists, but one continuous delegated task through the existing chat and agent UI is not yet established.",
       "impact": "Status can disagree across assistants, tasks and decisions; conversational continuity depends on a browser session and selected run.",
       "action": "Define which runtime owns tasks, messages, decisions and memory; project all UI states from its events. Distinguish seeded/demo conversations from live tasks and implement cross-device authorized memory.",
       "acceptance": "One real request traces through delegation, evidence, approval and result; refresh/restart/another authorized device preserves the same task and conversation state.",
@@ -577,15 +596,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "There are deterministic analysis stages, durable specialist tasks, digital-twin stores and source-seeded assistant threads. The specialist registry has four actual workers. Live chat reports client_session/sessionStorage with server_memory=false; live twin metrics show no collaboration events and 20 routing gaps. Seeded A2A content is not proof of autonomous live cooperation."
     },
     {
       "id": "G23",
       "priority": "P1",
       "domain": "Retrieval",
       "title": "Configured vector search is still a lexical/hash fallback",
-      "status": "Code and stored live-run evidence",
-      "observation": "vector_store declares hash_fallback, lexical_keyword and native_hybrid_supported=False. The current run\u2019s Qdrant sample also reports hash_fallback. This is real persistent retrieval, but not demonstrated semantic similarity search.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Pinned local multilingual E5 now indexes 37,537 eligible source records, including Office text, without evaluator question-bank leakage. Independent English/Arabic acceptance corpus achieved recall@3 0.90; live cross-scope canary tests and no-egress runtime checks passed. Client-agreed targets remain unratified.",
       "impact": "Paraphrases, cross-language questions and semantic entity similarity may miss evidence even when the documents exist.",
       "action": "Add a deployment-approved embedding model, hybrid ranking, metadata/ACL filters and a versioned reindex process; measure recall independently of answer generation.",
       "acceptance": "A held-out corpus with paraphrases, entity aliases and Arabic/English queries meets agreed recall@k and citation precision targets without cross-scope leakage.",
@@ -602,7 +622,8 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "vector_store declares hash_fallback, lexical_keyword and native_hybrid_supported=False. The current run’s Qdrant sample also reports hash_fallback. This is real persistent retrieval, but not demonstrated semantic similarity search."
     },
     {
       "id": "G24",
@@ -634,11 +655,11 @@
       "priority": "P1",
       "domain": "Personas",
       "title": "CFO and BU experiences are not a complete four-persona product",
-      "status": "Deliberately phased / partial",
-      "observation": "The later executive specification permits coming-soon locks for undifferentiated personas, and differentiated roles/runtime components exist. That satisfies honest preview gating, but not the original Group CFO, BU CEO/GM and BU CFO experience requirements.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Unsupported personas remain explicitly disabled and an unassigned BU user is denied rather than receiving group data. A complete four-persona workflow is not delivered; no business assignment was guessed.",
       "impact": "The pilot can demonstrate the CEO lane, but should not promise equivalent decision workflows at all four altitudes.",
       "action": "Sequence one real CFO cockpit and one BU operating cockpit, with scope-aware KPIs, owned decisions and upward commentary; retain locks until each is accepted.",
-      "acceptance": "Persona changes alter data scope, responsibilities and workflow, not just labels; direct URLs cannot substitute another persona\u2019s header or access rights.",
+      "acceptance": "Persona changes alter data scope, responsibilities and workflow, not just labels; direct URLs cannot substitute another persona’s header or access rights.",
       "suggested_owner": "Product owner + identity/data teams",
       "evidence": [
         {
@@ -652,15 +673,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "The later executive specification permits coming-soon locks for undifferentiated personas, and differentiated roles/runtime components exist. That satisfies honest preview gating, but not the original Group CFO, BU CEO/GM and BU CFO experience requirements."
     },
     {
       "id": "G26",
       "priority": "P1",
       "domain": "Sovereignty",
       "title": "Deployment policy exists; tier proof and visible residency do not",
-      "status": "Partial / not independently verified",
-      "observation": "The code includes local-first run policy, external-mode approvals and proxy-OIDC deployment options. The required config-driven residency/model/egress marker was not found. A live run\u2019s historical model-provider flag is not proof of current chat egress: the sampled assistant did use its LLM path.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "The release identifies its provider and pinned local embedding model; sealed local embedding runs without network. Separate deployment-tier factual gates and complete visible residency acceptance remain open.",
       "impact": "The four deployment tiers and sovereign/no-egress claim lack a release-specific acceptance record.",
       "action": "Publish truthful per-deployment model, region, storage and egress configuration; verify air-gap operation and approved provider paths using the same release corpus.",
       "acceptance": "The screen matches actual deployment configuration; blocked egress cannot trigger an unapproved fallback; each supported local model passes the answer-quality gate.",
@@ -682,15 +704,16 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "The code includes local-first run policy, external-mode approvals and proxy-OIDC deployment options. The required config-driven residency/model/egress marker was not found. A live run’s historical model-provider flag is not proof of current chat egress: the sampled assistant did use its LLM path."
     },
     {
       "id": "G27",
       "priority": "P1",
       "domain": "Localization and access",
       "title": "Arabic/RTL support and complete accessibility acceptance are absent",
-      "status": "Not found / not fully tested",
-      "observation": "The technical specification requires Arabic/English and full RTL from day one. The inspected application ships English templates; the Docker image installs English OCR only. Some accessibility features exist, including modal semantics and reduced-motion CSS, but no complete keyboard, screen-reader or RTL acceptance evidence was found.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Arabic source text/search and keyboard/mobile checks have passed selected tests. Complete Arabic/RTL and screen-reader journeys are not verified; new language controls were removed to preserve the required UI.",
       "impact": "The current build does not substantiate its stated bilingual launch scope.",
       "action": "Introduce translation catalogs, direction-aware layout and number/date localization; add Arabic OCR where needed and test actual Arabic financial documents. Audit keyboard/focus, contrast and responsive layouts.",
       "acceptance": "Core intake, diagnostics, drill, chat, decision and board journeys work in Arabic and English with keyboard and screen reader; exported figures preserve units and meaning.",
@@ -712,7 +735,8 @@
           "line": null
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "The technical specification requires Arabic/English and full RTL from day one. The inspected application ships English templates; the Docker image installs English OCR only. Some accessibility features exist, including modal semantics and reduced-motion CSS, but no complete keyboard, screen-reader or RTL acceptance evidence was found."
     },
     {
       "id": "G28",
@@ -720,10 +744,10 @@
       "domain": "Brand and UX",
       "title": "Rename token and remaining R4 display improvements are incomplete",
       "status": "Code review / requirement gap",
-      "observation": "Product-name strings remain distributed through templates and output copy; no single PRODUCT_NAME configuration was found. R4\u2019s Plan Health trajectory and a reusable clickable FX reasoning chain are not established. Many later visual improvements are present, so the old blanket word-heavy finding should not be copied unchanged.",
+      "observation": "Product-name strings remain distributed through templates and output copy; no single PRODUCT_NAME configuration was found. R4’s Plan Health trajectory and a reusable clickable FX reasoning chain are not established. Many later visual improvements are present, so the old blanket word-heavy finding should not be copied unchanged.",
       "impact": "Rebranding and new executive elements can reintroduce inconsistent names, internal vocabulary or untraceable displays.",
       "action": "Centralize product identity and design tokens, finish the trajectory and one reusable reasoning-chain component, and verify copy at rendered-payload boundaries rather than banning internal API names in source code.",
-      "acceptance": "One configuration change renames the product; the FX fact\u2192objective\u2192gap\u2192confidence chain resolves in four taps; selected light/dark screenshots and collapsed-text rules are reviewed.",
+      "acceptance": "One configuration change renames the product; the FX fact→objective→gap→confidence chain resolves in four taps; selected light/dark screenshots and collapsed-text rules are reviewed.",
       "suggested_owner": "Design system owner",
       "evidence": [
         {
@@ -744,8 +768,8 @@
       "priority": "P1",
       "domain": "Operations",
       "title": "Application rollback is not a tested data recovery plan",
-      "status": "Code-confirmed / operational evidence absent",
-      "observation": "Deployment and rollback scripts exist and use image references and copied application directories. They do not establish coordinated database, object-store and workspace backup/restore, retention/deletion, or a tested RPO/RTO. Production deployment notes still list these as hardening work.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "An isolated PostgreSQL restore reconciled all recorded run, artifact, decision, conversation and board row digests. Workspace backup integrity was checked. Recovery times are measured observations, not agreed RPO/RTO commitments.",
       "impact": "A bad migration, deleted evidence file or host loss can break provenance and recovery even if the container image rolls back.",
       "action": "Define the authoritative recovery set, encrypted scheduled backups, retention, restore procedures and forward/backward schema compatibility; treat Neo4j/Qdrant as rebuildable projections where appropriate.",
       "acceptance": "Restore into a clean environment and reconcile approved runs, evidence hashes, decisions and board snapshots within agreed recovery objectives.",
@@ -762,15 +786,16 @@
           "line": 73
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "Deployment and rollback scripts exist and use image references and copied application directories. They do not establish coordinated database, object-store and workspace backup/restore, retention/deletion, or a tested RPO/RTO. Production deployment notes still list these as hardening work."
     },
     {
       "id": "G30",
       "priority": "P1",
       "domain": "Operations",
       "title": "SLOs, capacity, inference audit and cost controls are not demonstrated",
-      "status": "Partial controls / validation gap",
-      "observation": "Health/readiness checks, event trails, provider retries and concurrency tests exist. The review did not find a release acceptance report for the specified 20\u201350k-invoice envelope, end-to-end latency under load, source-freshness alerts, all-inference audit fields, per-tenant quotas or operating cost. Provider calls use a four-thread executor; bounded request timeouts alone do not prove bounded queued workload.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "Live encrypted inference records now retain authenticated tenant/user, model, timing and hash-verifiable request/response with tenant-bound encryption and expiry. Missing scope blocks provider calls; quota/retention tests pass. Target-volume load and agreed SLOs remain open; reservations are not billed-token or price evidence. A 20-request preview exercise with four concurrent clients completed all 15 permitted business reads and correctly denied five operator-only health reads; no service or transport errors occurred. This is not a target-capacity certification.",
       "impact": "Production responsiveness, backlog behavior and inference accountability are uncertain.",
       "action": "Instrument queue depth, p50/p95/p99 latency, freshness, OCR failures, reviewer age, provider token/cost usage and per-tenant quotas; test overload, restart and provider outage.",
       "acceptance": "Publish agreed SLOs and load results at target volume; alerts fire on seeded failures; inference records identify tenant/user, model/version, time, evidence and protected prompt/response references under a retention policy.",
@@ -792,7 +817,8 @@
           "line": 1
         }
       ],
-      "closure_status": "open"
+      "closure_status": "partial",
+      "baseline_observation": "Health/readiness checks, event trails, provider retries and concurrency tests exist. The review did not find a release acceptance report for the specified 20–50k-invoice envelope, end-to-end latency under load, source-freshness alerts, all-inference audit fields, per-tenant quotas or operating cost. Provider calls use a four-thread executor; bounded request timeouts alone do not prove bounded queued workload."
     },
     {
       "id": "G31",
@@ -830,8 +856,8 @@
       "priority": "P1",
       "domain": "Validation and data safety",
       "title": "Test isolation and stale local pointers remediated; broader integration controls remain open",
-      "status": "Observed pre-existing state / test results",
-      "observation": "The canonical test runner creates and removes isolated application and twin-state workspaces, strips inherited service/provider credentials, and selects explicit regression fixtures. Stale pre-existing latest/current pointers into pytest temporary runs were removed. General service/integration isolation still requires disciplined environment configuration.",
+      "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
+      "observation": "The test runner uses disposable application/output state, creates required directories before import and exercises atomic pointer persistence. Full service suites execute with no unexpected skips.",
       "impact": "Local validation can leave the application pointed at transient test data, and a passing report from a different environment cannot substitute for a clean current run.",
       "action": "Isolate all test output roots and prohibit promotion of temporary test runs to normal pointers. Make pointer writes atomic and validate referenced artifacts before promotion. Keep test harness setup explicit and separate harness failures from product defects.",
       "acceptance": "Running the complete suite leaves production/local-business pointers unchanged; interrupted writes cannot corrupt pointers; a clean test harness creates its required directories before importing application configuration.",
@@ -848,8 +874,8 @@
           "line": null
         }
       ],
-      "closure_status": "partial",
-      "baseline_observation": "Before this audit\u2019s tests, the workspace current/latest pointer referenced a pytest temporary run from September 4 rather than a durable business run. The pointer writer writes directly to global output-root files. The first candidate suite run had one configuration-path assertion failure caused by this audit creating its isolated workspace too late; this is a harness setup issue, not an application defect. See the verification appendix for results and the corrected focused rerun."
+      "closure_status": "closed",
+      "baseline_observation": "Before this audit’s tests, the workspace current/latest pointer referenced a pytest temporary run from September 4 rather than a durable business run. The pointer writer writes directly to global output-root files. The first candidate suite run had one configuration-path assertion failure caused by this audit creating its isolated workspace too late; this is a harness setup issue, not an application defect. See the verification appendix for results and the corrected focused rerun."
     },
     {
       "id": "G33",
@@ -857,7 +883,7 @@
       "domain": "Commercial readiness",
       "title": "Commercial scope and first-client acceptance remain unsettled",
       "status": "Requirements/process gap",
-      "observation": "The original spec leaves marketplace self-deployment, native/marketplace split, final input formats, model tiers and supported volumes open. The implementation\u2019s four specialist workers should not be presented as all proposed continuous domain agents or third-party marketplace products. No current signed first-client acceptance package was inspected.",
+      "observation": "The original spec leaves marketplace self-deployment, native/marketplace split, final input formats, model tiers and supported volumes open. The implementation’s four specialist workers should not be presented as all proposed continuous domain agents or third-party marketplace products. No current signed first-client acceptance package was inspected.",
       "impact": "Sales language can outrun tested capability and make custom integration work look included in the subscription.",
       "action": "Publish a supported/preview/roadmap matrix, choose the first-client use case and isolation posture, assign data/stewardship responsibilities, and define measurable commercial acceptance and ongoing support.",
       "acceptance": "Proposal, demo, deployment and acceptance checklist use the same capability baseline; marketplace deployment and additional personas are sold only at their verified status.",
@@ -878,5 +904,7 @@
     }
   ],
   "consolidated_at": "2026-09-05",
-  "scope_note": "Canonical local baseline; no hosted deployment or GitHub push performed by this consolidation. Concurrent Codex gateway work is preserved and excluded from consolidation validation."
+  "scope_note": "Canonical local baseline; no hosted deployment or GitHub push performed by this consolidation. Concurrent Codex gateway work is preserved and excluded from consolidation validation.",
+  "remediation_scope": "All P0/P1 application work and UI QA; actual external ERP/treasury/calendar connections deferred by user. No real-world dispatch is simulated as completed.",
+  "ui_constraint": "User requires preserving the existing UI. Removed new pages, navigation and language controls on 2026-09-05. Keep existing layouts, CSS, branding and controls; integrate functional corrections through existing surfaces."
 }

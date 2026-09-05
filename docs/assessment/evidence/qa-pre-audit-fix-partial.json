@@ -1,0 +1,3196 @@
+{
+  "deployment": {
+    "environment": "branch-preview",
+    "application_revision": "012951a",
+    "image_digest": "sha256:58d31f01b31710139b742dcd55df2c011d7ce780ee026023b9566fa6c5944877",
+    "schema_sha256": "6d8bd1c0f85db8d859216fdd3c5cfc982fdc07516153a6a65188e3314612bd55",
+    "selected_run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+    "manifest_run_matches": true,
+    "source_digest": "f0f632cde1a8f980d2000c54c2d65dd929019b0d5b463dc48c8a53a8ec88f2e3",
+    "source_classification": "synthetic_demo",
+    "source_period": "2026-06",
+    "source_search": {
+      "status": "ready",
+      "collection": "strategyos_multilingual_e5_761b726d_384_v1",
+      "point_count": 37537,
+      "reused_points": 18880,
+      "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
+    },
+    "data_region": "Not attested",
+    "model_provider": "codex_cli",
+    "model": "codex-subscription",
+    "model_processing": "External provider; residency not attested",
+    "run_policy": "external-approved",
+    "approved_external_modes": [
+      "object_storage_sync",
+      "model_provider_use"
+    ],
+    "external_business_connections": "deferred",
+    "fallback_provider": "none"
+  },
+  "scope": "Live authenticated API complement to separate human-style UI QA. Matched is routing status, not factual correctness.",
+  "rows": [
+    {
+      "id": "486",
+      "theme": "BU Deep-Dives (all 8 BUs)",
+      "question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?",
+      "http": 200,
+      "duration_seconds": 6.042,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "scenario",
+        "requested_mode": "auto",
+        "question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?",
+        "persona": "ceo",
+        "answered_by": "scenario",
+        "matched": true,
+        "answer": "For H1 2026, the largest supplied cost components in Mizan E-Pharmacy are: COGS: SAR 182.9M actual; SAR 174.2M fixed budget; SAR 8.7M above fixed budget. Logistics: SAR 42.2M actual; SAR 39.3M fixed budget; SAR 2.9M above fixed budget. Payroll: SAR 26.2M actual; SAR 25.3M fixed budget; SAR 900.0K above fixed budget.",
+        "basis": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.",
+        "why": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.",
+        "citations": [
+          {
+            "source_path": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+            "source_hash": "b3991edca75b7c0ec14359f5c8e181ceeda1a5725f8391717dabf27e9de7032b",
+            "locator": "BU_Cost_Variance_H1_2026!Excel row 46",
+            "excerpt": "COGS: actual SAR 182900000.00; fixed budget SAR 174200000.00",
+            "source_label": "BU Cost Variance · Group financials"
+          },
+          {
+            "source_path": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+            "source_hash": "b3991edca75b7c0ec14359f5c8e181ceeda1a5725f8391717dabf27e9de7032b",
+            "locator": "BU_Cost_Variance_H1_2026!Excel row 48",
+            "excerpt": "Logistics: actual SAR 42200000.00; fixed budget SAR 39300000.00",
+            "source_label": "BU Cost Variance · Group financials"
+          },
+          {
+            "source_path": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+            "source_hash": "b3991edca75b7c0ec14359f5c8e181ceeda1a5725f8391717dabf27e9de7032b",
+            "locator": "BU_Cost_Variance_H1_2026!Excel row 47",
+            "excerpt": "Payroll: actual SAR 26200000.00; fixed budget SAR 25300000.00",
+            "source_label": "BU Cost Variance · Group financials"
+          }
+        ],
+        "suggestions": [],
+        "trace": {
+          "persona": "ceo",
+          "question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?",
+          "mode": "scenario",
+          "matched": true,
+          "scenario_id": "governed_bu_cost_ranking",
+          "scenario_type": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget."
+          },
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": {
+              "prompt_id": "scenario:governed_bu_cost_ranking:v1",
+              "question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?",
+              "scenario_id": "governed_bu_cost_ranking",
+              "scenario_label": "Business-unit cost components",
+              "scenario_type": "deterministic",
+              "matched": true
+            }
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "scenario"
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "49afad14-2d80-4b5a-bdbd-c9bc6c371f84",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": {
+            "prompt_id": "scenario:governed_bu_cost_ranking:v1",
+            "question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?",
+            "scenario_id": "governed_bu_cost_ranking",
+            "scenario_label": "Business-unit cost components",
+            "scenario_type": "deterministic",
+            "matched": true
+          }
+        },
+        "audit_trail_id": "49afad14-2d80-4b5a-bdbd-c9bc6c371f84",
+        "hallucination_risk": {
+          "level": "none",
+          "score": 0.0,
+          "factors": [
+            {
+              "name": "deterministic_path",
+              "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Replay the cited basis and calculations to verify the answer."
+          ],
+          "verification_path": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget."
+        },
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget."
+          },
+          "traceable": true
+        },
+        "assistant_route": "scenario",
+        "orchestration_mode": "scenario",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "scenario_id": "governed_bu_cost_ranking",
+        "scenario_label": "Business-unit cost components",
+        "calculations": [],
+        "kg_context": [],
+        "assumptions": [
+          "Ranked by absolute actual cost. Source commentary may refer to a different flexible budget."
+        ],
+        "scenario_type": "deterministic",
+        "grounding_status": "grounded",
+        "answer_origin": "governed",
+        "human_review_required": false,
+        "determinism_tier": "governed_fact",
+        "response_sections": {
+          "from_your_data": "For H1 2026, the largest supplied cost components in Mizan E-Pharmacy are: COGS: SAR 182.9M actual; SAR 174.2M fixed budget; SAR 8.7M above fixed budget. Logistics: SAR 42.2M actual; SAR 39.3M fixed budget; SAR 2.9M above fixed budget. Payroll: SAR 26.2M actual; SAR 25.3M fixed budget; SAR 900.0K above fixed budget.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "49afad14-2d80-4b5a-bdbd-c9bc6c371f84"
+        },
+        "executive_blocks": {
+          "verdict": "For H1 2026, the largest supplied cost components in Mizan E-Pharmacy are: COGS: SAR 182.9M actual; SAR 174.2M fixed budget; SAR 8.7M above fixed budget.",
+          "figures": [
+            "SAR 182.9M",
+            "SAR 174.2M",
+            "SAR 8.7M",
+            "SAR 42.2M"
+          ],
+          "recommendation": null,
+          "detail": "Logistics: SAR 42.2M actual; SAR 39.3M fixed budget; SAR 2.9M above fixed budget. Payroll: SAR 26.2M actual; SAR 25.3M fixed budget; SAR 900.0K above fixed budget.",
+          "evidence_count": 3,
+          "chart": null
+        }
+      }
+    },
+    {
+      "id": "474",
+      "theme": "BU Deep-Dives (all 8 BUs)",
+      "question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?",
+      "http": 200,
+      "duration_seconds": 0.446,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "scenario",
+        "requested_mode": "auto",
+        "question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?",
+        "persona": "ceo",
+        "answered_by": "scenario",
+        "matched": true,
+        "answer": "For H1 2026, the largest supplied cost components in Tamween Pharma Distribution are: COGS: SAR 996.8M actual; SAR 933.3M fixed budget; SAR 63.5M above fixed budget. Payroll: SAR 68.7M actual; SAR 66.6M fixed budget; SAR 2.1M above fixed budget. Logistics: SAR 40.9M actual; SAR 38.0M fixed budget; SAR 2.9M above fixed budget.",
+        "basis": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.",
+        "why": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.",
+        "citations": [
+          {
+            "source_path": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+            "source_hash": "b3991edca75b7c0ec14359f5c8e181ceeda1a5725f8391717dabf27e9de7032b",
+            "locator": "BU_Cost_Variance_H1_2026!Excel row 13",
+            "excerpt": "COGS: actual SAR 996800000.00; fixed budget SAR 933300000.00",
+            "source_label": "BU Cost Variance · Group financials"
+          },
+          {
+            "source_path": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+            "source_hash": "b3991edca75b7c0ec14359f5c8e181ceeda1a5725f8391717dabf27e9de7032b",
+            "locator": "BU_Cost_Variance_H1_2026!Excel row 14",
+            "excerpt": "Payroll: actual SAR 68700000.00; fixed budget SAR 66600000.00",
+            "source_label": "BU Cost Variance · Group financials"
+          },
+          {
+            "source_path": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+            "source_hash": "b3991edca75b7c0ec14359f5c8e181ceeda1a5725f8391717dabf27e9de7032b",
+            "locator": "BU_Cost_Variance_H1_2026!Excel row 15",
+            "excerpt": "Logistics: actual SAR 40900000.00; fixed budget SAR 38000000.00",
+            "source_label": "BU Cost Variance · Group financials"
+          }
+        ],
+        "suggestions": [],
+        "trace": {
+          "persona": "ceo",
+          "question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?",
+          "mode": "scenario",
+          "matched": true,
+          "scenario_id": "governed_bu_cost_ranking",
+          "scenario_type": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget."
+          },
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": {
+              "prompt_id": "scenario:governed_bu_cost_ranking:v1",
+              "question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?",
+              "scenario_id": "governed_bu_cost_ranking",
+              "scenario_label": "Business-unit cost components",
+              "scenario_type": "deterministic",
+              "matched": true
+            }
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "scenario"
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "7230188f-d1fa-4327-9e58-c306bf374335",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": {
+            "prompt_id": "scenario:governed_bu_cost_ranking:v1",
+            "question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?",
+            "scenario_id": "governed_bu_cost_ranking",
+            "scenario_label": "Business-unit cost components",
+            "scenario_type": "deterministic",
+            "matched": true
+          }
+        },
+        "audit_trail_id": "7230188f-d1fa-4327-9e58-c306bf374335",
+        "hallucination_risk": {
+          "level": "none",
+          "score": 0.0,
+          "factors": [
+            {
+              "name": "deterministic_path",
+              "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Replay the cited basis and calculations to verify the answer."
+          ],
+          "verification_path": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget."
+        },
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget."
+          },
+          "traceable": true
+        },
+        "assistant_route": "scenario",
+        "orchestration_mode": "scenario",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "scenario_id": "governed_bu_cost_ranking",
+        "scenario_label": "Business-unit cost components",
+        "calculations": [],
+        "kg_context": [],
+        "assumptions": [
+          "Ranked by absolute actual cost. Source commentary may refer to a different flexible budget."
+        ],
+        "scenario_type": "deterministic",
+        "grounding_status": "grounded",
+        "answer_origin": "governed",
+        "human_review_required": false,
+        "determinism_tier": "governed_fact",
+        "response_sections": {
+          "from_your_data": "For H1 2026, the largest supplied cost components in Tamween Pharma Distribution are: COGS: SAR 996.8M actual; SAR 933.3M fixed budget; SAR 63.5M above fixed budget. Payroll: SAR 68.7M actual; SAR 66.6M fixed budget; SAR 2.1M above fixed budget. Logistics: SAR 40.9M actual; SAR 38.0M fixed budget; SAR 2.9M above fixed budget.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "7230188f-d1fa-4327-9e58-c306bf374335"
+        },
+        "executive_blocks": {
+          "verdict": "For H1 2026, the largest supplied cost components in Tamween Pharma Distribution are: COGS: SAR 996.8M actual; SAR 933.3M fixed budget; SAR 63.5M above fixed budget.",
+          "figures": [
+            "SAR 996.8M",
+            "SAR 933.3M",
+            "SAR 63.5M",
+            "SAR 68.7M"
+          ],
+          "recommendation": null,
+          "detail": "Payroll: SAR 68.7M actual; SAR 66.6M fixed budget; SAR 2.1M above fixed budget. Logistics: SAR 40.9M actual; SAR 38.0M fixed budget; SAR 2.9M above fixed budget.",
+          "evidence_count": 3,
+          "chart": null
+        }
+      }
+    },
+    {
+      "id": "489",
+      "theme": "BU Deep-Dives (all 8 BUs)",
+      "question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?",
+      "http": 200,
+      "duration_seconds": 0.455,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "scenario",
+        "requested_mode": "auto",
+        "question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?",
+        "persona": "ceo",
+        "answered_by": "scenario",
+        "matched": true,
+        "answer": "For H1 2026, Mizan Digital Health revenue is SAR 176.0M versus SAR 171.0M plan. EBITDA is SAR 37.8M versus SAR 35.9M plan — SAR 1.9M favourable. The largest supplied cost explanations are: - Payroll: SAR 1.6M above plan — Hiring BELOW revenue-linked plan — source of the margin beat. - IT & Digital: SAR 1.1M above plan — Cloud with MAU growth (920k ahead of plan). - Marketing: SAR 400.0K above plan — Payer/employer channel push.",
+        "basis": "Deterministic business-unit actual-versus-plan bridge from the approved group budget, with component explanations only where the cost-variance workbook supplies them.",
+        "why": "Deterministic business-unit actual-versus-plan bridge from the approved group budget, with component explanations only where the cost-variance workbook supplies them.",
+        "citations": [
+          {
+            "source_path": "15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx",
+            "locator": "Governed revenue, COGS, operating-cost and EBITDA baseline",
+            "excerpt": "",
+            "source_label": "BU Group Budget 2026 · Division budget"
+          },
+          {
+            "source_path": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+            "locator": "Cost component rows / Mizan Digital Health",
+            "excerpt": "Ranked component variances and supplied driver notes for the selected business unit.",
+            "source_label": "BU Cost Variance · Group financials"
+          }
+        ],
+        "suggestions": [],
+        "trace": {
+          "persona": "ceo",
+          "question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?",
+          "mode": "scenario",
+          "matched": true,
+          "scenario_id": "governed_bu_budget_bridge",
+          "scenario_type": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Deterministic business-unit actual-versus-plan bridge from the approved group budget, with component explanations only where the cost-variance workbook supplies them."
+          },
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": {
+              "prompt_id": "scenario:governed_bu_budget_bridge:v1",
+              "question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?",
+              "scenario_id": "governed_bu_budget_bridge",
+              "scenario_label": "Finance - Business-unit Budget Bridge",
+              "scenario_type": "deterministic",
+              "matched": true
+            }
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "scenario"
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "146e2c0f-caee-4c9b-87d2-60837106e742",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": {
+            "prompt_id": "scenario:governed_bu_budget_bridge:v1",
+            "question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?",
+            "scenario_id": "governed_bu_budget_bridge",
+            "scenario_label": "Finance - Business-unit Budget Bridge",
+            "scenario_type": "deterministic",
+            "matched": true
+          }
+        },
+        "audit_trail_id": "146e2c0f-caee-4c9b-87d2-60837106e742",
+        "hallucination_risk": {
+          "level": "none",
+          "score": 0.0,
+          "factors": [
+            {
+              "name": "deterministic_path",
+              "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Replay the cited basis and calculations to verify the answer."
+          ],
+          "verification_path": "Deterministic business-unit actual-versus-plan bridge from the approved group budget, with component explanations only where the cost-variance workbook supplies them."
+        },
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Deterministic business-unit actual-versus-plan bridge from the approved group budget, with component explanations only where the cost-variance workbook supplies them."
+          },
+          "traceable": true
+        },
+        "assistant_route": "scenario",
+        "orchestration_mode": "scenario",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "scenario_id": "governed_bu_budget_bridge",
+        "scenario_label": "Finance - Business-unit Budget Bridge",
+        "calculations": [],
+        "kg_context": [],
+        "assumptions": [],
+        "scenario_type": "deterministic",
+        "grounding_status": "grounded",
+        "answer_origin": "governed",
+        "human_review_required": false,
+        "determinism_tier": "governed_fact",
+        "response_sections": {
+          "from_your_data": "For H1 2026, Mizan Digital Health revenue is SAR 176.0M versus SAR 171.0M plan. EBITDA is SAR 37.8M versus SAR 35.9M plan — SAR 1.9M favourable. The largest supplied cost explanations are: - Payroll: SAR 1.6M above plan — Hiring BELOW revenue-linked plan — source of the margin beat. - IT & Digital: SAR 1.1M above plan — Cloud with MAU growth (920k ahead of plan). - Marketing: SAR 400.0K above plan — Payer/employer channel push.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "146e2c0f-caee-4c9b-87d2-60837106e742"
+        },
+        "executive_blocks": {
+          "verdict": "For H1 2026, Mizan Digital Health revenue is SAR 176.0M versus SAR 171.0M plan.",
+          "figures": [
+            "SAR 176.0M",
+            "SAR 171.0M",
+            "SAR 37.8M",
+            "SAR 35.9M"
+          ],
+          "recommendation": null,
+          "detail": "EBITDA is SAR 37.8M versus SAR 35.9M plan — SAR 1.9M favourable. The largest supplied cost explanations are: - Payroll: SAR 1.6M above plan — Hiring BELOW revenue-linked plan — source of the margin beat. - IT & Digital: SAR 1.1M above plan — Cloud with MAU growth (920k ahead of plan). - Marketing: SAR 400.0K above plan — Payer/employer channel push.",
+          "evidence_count": 2,
+          "chart": null
+        }
+      }
+    },
+    {
+      "id": "127",
+      "theme": "Budget, Forecast & Variance",
+      "question": "Whose forecasts are consistently best and worst in the group?",
+      "http": 200,
+      "duration_seconds": 17.423,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "Whose forecasts are consistently best and worst in the group?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "I cannot reliably name the consistently best or worst forecaster. This review identifies RF1 (May 2026) as the current living forecast and provides H1 actual-versus-plan results by business unit, but it does not supply a history of forecast submissions, owners, forecast dates, and subsequent actuals. Those inputs are required to assess consistency rather than a single-period variance.",
+        "basis": "The nearest governed evidence is the current RF1 forecast and H1 business-unit actual-versus-plan comparison; neither constitutes a multi-cycle forecast-accuracy scorecard.",
+        "why": "The nearest governed evidence is the current RF1 forecast and H1 business-unit actual-versus-plan comparison; neither constitutes a multi-cycle forecast-accuracy scorecard.",
+        "citations": [
+          {
+            "source_path": "15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx",
+            "locator": "Reconciliation!Excel row 14",
+            "excerpt": "RF1 (May-2026, Division budget) is the living forecast.",
+            "source_hash": null,
+            "finding_id": null,
+            "source_label": "BU Group Budget 2026 · Division budget"
+          },
+          {
+            "source_path": "15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx",
+            "locator": "BU_Budget_2026",
+            "excerpt": "H1 actual and plan aggregated across 8 business units from the approved group budget.",
+            "source_hash": null,
+            "finding_id": null,
+            "source_label": "BU Group Budget 2026 · Division budget"
+          }
+        ],
+        "suggestions": [
+          "Create a forecaster scorecard across prior forecast cycles using absolute percentage error, directional bias and forecast timeliness, mapped to each forecast owner.",
+          "Require at least three comparable forecast-versus-actual cycles before labeling anyone consistently best or worst."
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "Whose forecasts are consistently best and worst in the group?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 2 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The nearest governed evidence is the current RF1 forecast and H1 business-unit actual-versus-plan comparison; neither constitutes a multi-cycle forecast-accuracy scorecard."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "ee6c8fc3-771c-4f2f-acbf-d4681c185200",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "ee6c8fc3-771c-4f2f-acbf-d4681c185200",
+        "hallucination_risk": {
+          "level": "low",
+          "score": 0.18,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 2 citation(s)."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "The nearest governed evidence is the current RF1 forecast and H1 business-unit actual-versus-plan comparison; neither constitutes a multi-cycle forecast-accuracy scorecard."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 2 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The nearest governed evidence is the current RF1 forecast and H1 business-unit actual-versus-plan comparison; neither constitutes a multi-cycle forecast-accuracy scorecard."
+          },
+          "traceable": true
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "derived_insight",
+        "response_sections": {
+          "from_your_data": "I cannot reliably name the consistently best or worst forecaster. This review identifies RF1 (May 2026) as the current living forecast and provides H1 actual-versus-plan results by business unit, but it does not supply a history of forecast submissions, owners, forecast dates, and subsequent actuals. Those inputs are required to assess consistency rather than a single-period variance.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "ee6c8fc3-771c-4f2f-acbf-d4681c185200"
+        },
+        "executive_blocks": {
+          "verdict": "I cannot reliably name the consistently best or worst forecaster.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "This review identifies RF1 (May 2026) as the current living forecast and provides H1 actual-versus-plan results by business unit, but it does not supply a history of forecast submissions, owners, forecast dates, and subsequent actuals. Those inputs are required to assess consistency rather than a single-period variance.",
+          "evidence_count": 2,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "114",
+      "theme": "Budget, Forecast & Variance",
+      "question": "What should next year's budget assume about tariffs, wages and FX?",
+      "http": 200,
+      "duration_seconds": 0.493,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "scenario",
+        "requested_mode": "auto",
+        "question": "What should next year's budget assume about tariffs, wages and FX?",
+        "persona": "ceo",
+        "answered_by": "scenario",
+        "matched": true,
+        "answer": "I cannot calculate the hedge scenario from the current verified review because EUR exposure, FX movement or hedge-rate assumptions, hedge cost, and period are not all available.",
+        "basis": "Recognized numeric scenario intent, but required governed inputs were unavailable.",
+        "why": "Recognized numeric scenario intent, but required governed inputs were unavailable.",
+        "citations": [],
+        "suggestions": [
+          "Load EUR exposure and FX assumptions",
+          "Ask for current FX risk evidence"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "What should next year's budget assume about tariffs, wages and FX?",
+          "mode": "scenario",
+          "matched": true,
+          "scenario_id": "fx_hedge",
+          "scenario_type": "missing_data",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "fail_closed",
+                "detail": "No unsupported financial calculation was generated."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Load the missing governed inputs, then rerun the scenario."
+            ],
+            "verification_path": "Scenario validation stopped before calculation."
+          },
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": {
+              "prompt_id": "scenario:fx_hedge:v1",
+              "question": "What should next year's budget assume about tariffs, wages and FX?",
+              "scenario_id": "fx_hedge",
+              "scenario_label": "Finance - FX Hedge",
+              "scenario_type": "missing_data",
+              "matched": true
+            }
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "scenario"
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "771805e1-5971-420e-b27e-46bbc194bbf4",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": {
+            "prompt_id": "scenario:fx_hedge:v1",
+            "question": "What should next year's budget assume about tariffs, wages and FX?",
+            "scenario_id": "fx_hedge",
+            "scenario_label": "Finance - FX Hedge",
+            "scenario_type": "missing_data",
+            "matched": true
+          }
+        },
+        "audit_trail_id": "771805e1-5971-420e-b27e-46bbc194bbf4",
+        "hallucination_risk": {
+          "level": "none",
+          "score": 0.0,
+          "factors": [
+            {
+              "name": "fail_closed",
+              "detail": "No unsupported financial calculation was generated."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Load the missing governed inputs, then rerun the scenario."
+          ],
+          "verification_path": "Scenario validation stopped before calculation."
+        },
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "fail_closed",
+                "detail": "No unsupported financial calculation was generated."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Load the missing governed inputs, then rerun the scenario."
+            ],
+            "verification_path": "Scenario validation stopped before calculation."
+          },
+          "traceable": true
+        },
+        "assistant_route": "scenario",
+        "orchestration_mode": "scenario",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "scenario_id": "fx_hedge",
+        "scenario_label": "Finance - FX Hedge",
+        "calculations": [
+          {
+            "step_id": "scenario_validation",
+            "description": "Scenario request validation failed closed because governed inputs are missing",
+            "formula": "VALIDATE(required_inputs) before calculation",
+            "inputs": {
+              "missing_inputs": [
+                "eur_exposure",
+                "fx_rate_change_or_forward_rate",
+                "hedge_cost",
+                "scenario_period"
+              ],
+              "prompt_numbers": []
+            },
+            "result": "missing_governed_inputs",
+            "unit": null,
+            "citations": [],
+            "assumptions": []
+          }
+        ],
+        "kg_context": [],
+        "assumptions": [],
+        "scenario_type": "missing_data",
+        "grounding_status": "needs_evidence",
+        "answer_origin": "governed",
+        "human_review_required": false,
+        "determinism_tier": "derived_insight",
+        "response_sections": {
+          "from_your_data": "I cannot calculate the hedge scenario from the current verified review because EUR exposure, FX movement or hedge-rate assumptions, hedge cost, and period are not all available.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "771805e1-5971-420e-b27e-46bbc194bbf4"
+        },
+        "executive_blocks": {
+          "verdict": "I cannot calculate the hedge scenario from the current verified review because EUR exposure, FX movement or hedge-rate assumptions, hedge cost, and period are not all available.",
+          "figures": [],
+          "recommendation": null,
+          "detail": null,
+          "evidence_count": 0,
+          "chart": null
+        }
+      }
+    },
+    {
+      "id": "102",
+      "theme": "Budget, Forecast & Variance",
+      "question": "What changed between budget and the RF1 reforecast, and why?",
+      "http": 200,
+      "duration_seconds": 24.304,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "What changed between budget and the RF1 reforecast, and why?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+        "basis": "Numerical claim validation rejected the provider response.",
+        "why": "Numerical claim validation rejected the provider response.",
+        "citations": [],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "What changed between budget and the RF1 reforecast, and why?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "eb8a932b-642e-4c23-b7d0-cf934a2481ef",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "eb8a932b-642e-4c23-b7d0-cf934a2481ef",
+        "hallucination_risk": {
+          "level": "medium",
+          "score": 0.35,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 0 citation(s)."
+            }
+          ],
+          "traceable": false,
+          "traceability_gap": "LLM answer returned without explicit citations.",
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Numerical claim validation rejected the provider response."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "traceable": false
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "claim_validation": "rejected",
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "advisory",
+        "missing_layer": "external benchmark or market context",
+        "response_sections": {
+          "from_your_data": null,
+          "not_in_your_data": "The governed evidence stops at the external benchmark or market context layer.",
+          "general_practice_suggests": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source."
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": true,
+          "audit_trail_id": "eb8a932b-642e-4c23-b7d0-cf934a2481ef"
+        },
+        "executive_blocks": {
+          "verdict": "The generated answer contained a number or unit that could not be verified against the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Please use the governed calculation or request the missing source.",
+          "evidence_count": 0,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "154",
+      "theme": "Cash, Liquidity & Working Capital",
+      "question": "What would insourcing logistics do to working capital, not just cost?",
+      "http": 200,
+      "duration_seconds": 27.005,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "What would insourcing logistics do to working capital, not just cost?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+        "basis": "Numerical claim validation rejected the provider response.",
+        "why": "Numerical claim validation rejected the provider response.",
+        "citations": [],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "What would insourcing logistics do to working capital, not just cost?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "47b27c36-63ff-4913-90aa-0c0d860cef09",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "47b27c36-63ff-4913-90aa-0c0d860cef09",
+        "hallucination_risk": {
+          "level": "medium",
+          "score": 0.35,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 0 citation(s)."
+            }
+          ],
+          "traceable": false,
+          "traceability_gap": "LLM answer returned without explicit citations.",
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Numerical claim validation rejected the provider response."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "traceable": false
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "claim_validation": "rejected",
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "advisory",
+        "missing_layer": "external benchmark or market context",
+        "response_sections": {
+          "from_your_data": null,
+          "not_in_your_data": "The governed evidence stops at the external benchmark or market context layer.",
+          "general_practice_suggests": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source."
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": true,
+          "audit_trail_id": "47b27c36-63ff-4913-90aa-0c0d860cef09"
+        },
+        "executive_blocks": {
+          "verdict": "The generated answer contained a number or unit that could not be verified against the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Please use the governed calculation or request the missing source.",
+          "evidence_count": 0,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "152",
+      "theme": "Cash, Liquidity & Working Capital",
+      "question": "What is the cash impact of the inventory build for NUPCO call-offs?",
+      "http": 200,
+      "duration_seconds": 18.858,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "What is the cash impact of the inventory build for NUPCO call-offs?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+        "basis": "Numerical claim validation rejected the provider response.",
+        "why": "Numerical claim validation rejected the provider response.",
+        "citations": [],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "What is the cash impact of the inventory build for NUPCO call-offs?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "26303e06-a7be-4fa6-8b03-46531b12bfd2",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "26303e06-a7be-4fa6-8b03-46531b12bfd2",
+        "hallucination_risk": {
+          "level": "medium",
+          "score": 0.35,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 0 citation(s)."
+            }
+          ],
+          "traceable": false,
+          "traceability_gap": "LLM answer returned without explicit citations.",
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Numerical claim validation rejected the provider response."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "traceable": false
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "claim_validation": "rejected",
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "advisory",
+        "missing_layer": "external benchmark or market context",
+        "response_sections": {
+          "from_your_data": null,
+          "not_in_your_data": "The governed evidence stops at the external benchmark or market context layer.",
+          "general_practice_suggests": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source."
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": true,
+          "audit_trail_id": "26303e06-a7be-4fa6-8b03-46531b12bfd2"
+        },
+        "executive_blocks": {
+          "verdict": "The generated answer contained a number or unit that could not be verified against the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Please use the governed calculation or request the missing source.",
+          "evidence_count": 0,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "149",
+      "theme": "Cash, Liquidity & Working Capital",
+      "question": "Show me the aging of receivables by segment — where is risk building?",
+      "http": 200,
+      "duration_seconds": 21.511,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "Show me the aging of receivables by segment — where is risk building?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+        "basis": "Numerical claim validation rejected the provider response.",
+        "why": "Numerical claim validation rejected the provider response.",
+        "citations": [],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "Show me the aging of receivables by segment — where is risk building?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "b30d95e3-6231-48ae-98e5-c05906bf0f55",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "b30d95e3-6231-48ae-98e5-c05906bf0f55",
+        "hallucination_risk": {
+          "level": "medium",
+          "score": 0.35,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 0 citation(s)."
+            }
+          ],
+          "traceable": false,
+          "traceability_gap": "LLM answer returned without explicit citations.",
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Numerical claim validation rejected the provider response."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "traceable": false
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "claim_validation": "rejected",
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "advisory",
+        "missing_layer": "external benchmark or market context",
+        "response_sections": {
+          "from_your_data": null,
+          "not_in_your_data": "The governed evidence stops at the external benchmark or market context layer.",
+          "general_practice_suggests": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source."
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": true,
+          "audit_trail_id": "b30d95e3-6231-48ae-98e5-c05906bf0f55"
+        },
+        "executive_blocks": {
+          "verdict": "The generated answer contained a number or unit that could not be verified against the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Please use the governed calculation or request the missing source.",
+          "evidence_count": 0,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "311",
+      "theme": "Controls, Leakage & Audit",
+      "question": "What price variances exist against contracted prices, same SKU same period?",
+      "http": 200,
+      "duration_seconds": 16.799,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "What price variances exist against contracted prices, same SKU same period?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+        "basis": "Numerical claim validation rejected the provider response.",
+        "why": "Numerical claim validation rejected the provider response.",
+        "citations": [],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "What price variances exist against contracted prices, same SKU same period?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "f49227bb-b8e6-4e3b-b3a9-0b2ed7c60d9f",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "f49227bb-b8e6-4e3b-b3a9-0b2ed7c60d9f",
+        "hallucination_risk": {
+          "level": "medium",
+          "score": 0.35,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 0 citation(s)."
+            }
+          ],
+          "traceable": false,
+          "traceability_gap": "LLM answer returned without explicit citations.",
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Numerical claim validation rejected the provider response."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "traceable": false
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "claim_validation": "rejected",
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "advisory",
+        "missing_layer": "external benchmark or market context",
+        "response_sections": {
+          "from_your_data": null,
+          "not_in_your_data": "The governed evidence stops at the external benchmark or market context layer.",
+          "general_practice_suggests": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source."
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": true,
+          "audit_trail_id": "f49227bb-b8e6-4e3b-b3a9-0b2ed7c60d9f"
+        },
+        "executive_blocks": {
+          "verdict": "The generated answer contained a number or unit that could not be verified against the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Please use the governed calculation or request the missing source.",
+          "evidence_count": 0,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "305",
+      "theme": "Controls, Leakage & Audit",
+      "question": "Have we had duplicate payments before, and is the failure mode fixed?",
+      "http": 200,
+      "duration_seconds": 22.737,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "Have we had duplicate payments before, and is the failure mode fixed?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+        "basis": "Numerical claim validation rejected the provider response.",
+        "why": "Numerical claim validation rejected the provider response.",
+        "citations": [],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "Have we had duplicate payments before, and is the failure mode fixed?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "4206228a-dcdb-47e7-9234-4576372426a6",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "4206228a-dcdb-47e7-9234-4576372426a6",
+        "hallucination_risk": {
+          "level": "medium",
+          "score": 0.35,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 0 citation(s)."
+            }
+          ],
+          "traceable": false,
+          "traceability_gap": "LLM answer returned without explicit citations.",
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Numerical claim validation rejected the provider response."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "traceable": false
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "claim_validation": "rejected",
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "advisory",
+        "missing_layer": "external benchmark or market context",
+        "response_sections": {
+          "from_your_data": null,
+          "not_in_your_data": "The governed evidence stops at the external benchmark or market context layer.",
+          "general_practice_suggests": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source."
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": true,
+          "audit_trail_id": "4206228a-dcdb-47e7-9234-4576372426a6"
+        },
+        "executive_blocks": {
+          "verdict": "The generated answer contained a number or unit that could not be verified against the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Please use the governed calculation or request the missing source.",
+          "evidence_count": 0,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "313",
+      "theme": "Controls, Leakage & Audit",
+      "question": "What did the historic review find that the H1 audit missed?",
+      "http": 200,
+      "duration_seconds": 29.601,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "What did the historic review find that the H1 audit missed?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+        "basis": "Numerical claim validation rejected the provider response.",
+        "why": "Numerical claim validation rejected the provider response.",
+        "citations": [],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "What did the historic review find that the H1 audit missed?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "c8538e99-4b9e-425e-bb82-4d5f1426a93a",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "c8538e99-4b9e-425e-bb82-4d5f1426a93a",
+        "hallucination_risk": {
+          "level": "medium",
+          "score": 0.35,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 0 citation(s)."
+            }
+          ],
+          "traceable": false,
+          "traceability_gap": "LLM answer returned without explicit citations.",
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Numerical claim validation rejected the provider response."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "traceable": false
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "claim_validation": "rejected",
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "advisory",
+        "missing_layer": "external benchmark or market context",
+        "response_sections": {
+          "from_your_data": null,
+          "not_in_your_data": "The governed evidence stops at the external benchmark or market context layer.",
+          "general_practice_suggests": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source."
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": true,
+          "audit_trail_id": "c8538e99-4b9e-425e-bb82-4d5f1426a93a"
+        },
+        "executive_blocks": {
+          "verdict": "The generated answer contained a number or unit that could not be verified against the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Please use the governed calculation or request the missing source.",
+          "evidence_count": 0,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "188",
+      "theme": "Customers, Pricing & Contribution",
+      "question": "If we fired the bottom decile of customers, what would we lose and save?",
+      "http": 200,
+      "duration_seconds": 21.641,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "If we fired the bottom decile of customers, what would we lose and save?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+        "basis": "Numerical claim validation rejected the provider response.",
+        "why": "Numerical claim validation rejected the provider response.",
+        "citations": [],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "If we fired the bottom decile of customers, what would we lose and save?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "7d34f1c4-48c9-4cd3-a12c-9970cc967523",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "7d34f1c4-48c9-4cd3-a12c-9970cc967523",
+        "hallucination_risk": {
+          "level": "medium",
+          "score": 0.35,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 0 citation(s)."
+            }
+          ],
+          "traceable": false,
+          "traceability_gap": "LLM answer returned without explicit citations.",
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Numerical claim validation rejected the provider response."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "traceable": false
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "claim_validation": "rejected",
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "advisory",
+        "missing_layer": "external benchmark or market context",
+        "response_sections": {
+          "from_your_data": null,
+          "not_in_your_data": "The governed evidence stops at the external benchmark or market context layer.",
+          "general_practice_suggests": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source."
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": true,
+          "audit_trail_id": "7d34f1c4-48c9-4cd3-a12c-9970cc967523"
+        },
+        "executive_blocks": {
+          "verdict": "The generated answer contained a number or unit that could not be verified against the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Please use the governed calculation or request the missing source.",
+          "evidence_count": 0,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "165",
+      "theme": "Customers, Pricing & Contribution",
+      "question": "Which prices could we raise with least volume risk?",
+      "http": 200,
+      "duration_seconds": 24.987,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "Which prices could we raise with least volume risk?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+        "basis": "Numerical claim validation rejected the provider response.",
+        "why": "Numerical claim validation rejected the provider response.",
+        "citations": [],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "Which prices could we raise with least volume risk?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "3ec615d3-71db-4e80-97a0-2ec3fe69929e",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "3ec615d3-71db-4e80-97a0-2ec3fe69929e",
+        "hallucination_risk": {
+          "level": "medium",
+          "score": 0.35,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 0 citation(s)."
+            }
+          ],
+          "traceable": false,
+          "traceability_gap": "LLM answer returned without explicit citations.",
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Numerical claim validation rejected the provider response."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "medium",
+            "score": 0.35,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 0 citation(s)."
+              }
+            ],
+            "traceable": false,
+            "traceability_gap": "LLM answer returned without explicit citations.",
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Numerical claim validation rejected the provider response."
+          },
+          "traceable": false
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "claim_validation": "rejected",
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "advisory",
+        "missing_layer": "external benchmark or market context",
+        "response_sections": {
+          "from_your_data": null,
+          "not_in_your_data": "The governed evidence stops at the external benchmark or market context layer.",
+          "general_practice_suggests": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source."
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": true,
+          "audit_trail_id": "3ec615d3-71db-4e80-97a0-2ec3fe69929e"
+        },
+        "executive_blocks": {
+          "verdict": "The generated answer contained a number or unit that could not be verified against the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Please use the governed calculation or request the missing source.",
+          "evidence_count": 0,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "163",
+      "theme": "Customers, Pricing & Contribution",
+      "question": "Which customers' terms are out of line with policy?",
+      "http": 200,
+      "duration_seconds": 15.85,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "Which customers' terms are out of line with policy?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "KAUST Health Centre is the clearly evidenced exception: a 12% rebate and roughly 100-day payment terms make the account contribution-negative. The approved renegotiation mandate caps the rebate at 6% and moves to tiered service pricing. I cannot reliably classify other customers with Net 45 or Net 60 terms because the supplied evidence does not include the governing customer-credit policy or segment-specific term limits.",
+        "basis": "The remediation register explicitly identifies KAUST’s commercial terms as out of line and records the Board-approved corrective mandate. Customer-master records show several other customers on Net 45–60, but without policy thresholds those terms cannot be called non-compliant.",
+        "why": "The remediation register explicitly identifies KAUST’s commercial terms as out of line and records the Board-approved corrective mandate. Customer-master records show several other customers on Net 45–60, but without policy thresholds those terms cannot be called non-compliant.",
+        "citations": [
+          {
+            "source_path": "19_Document_Vault/Remediation_Decision_Log_Jun2026.xlsx",
+            "locator": "Decision_Log, RD-13",
+            "excerpt": "KAUST contribution-negative account (12% rebate, 100-day pay); renegotiation mandate: tiered service pricing; rebate cap 6%",
+            "source_hash": null,
+            "finding_id": "RD-13",
+            "source_label": "Remediation Decision Log · Decision documents"
+          },
+          {
+            "source_path": "17_Signals/Signals_Register_Jun2026.xlsx",
+            "locator": "SIG-2026-10",
+            "excerpt": "KAUST Health Centre contribution-negative (12% rebate + ~100-day collections).",
+            "source_hash": null,
+            "finding_id": "SIG-2026-10",
+            "source_label": "Signals Register · Business signals"
+          }
+        ],
+        "suggestions": [
+          "Complete a customer-wide exception report by connecting the approved credit policy, including standard terms by segment and approval thresholds for rebates and extended payment periods.",
+          "Prioritize the KAUST renegotiation under the Board mandate and track rebate, account DSO and renewal signature."
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "Which customers' terms are out of line with policy?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 2 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The remediation register explicitly identifies KAUST’s commercial terms as out of line and records the Board-approved corrective mandate. Customer-master records show several other customers on Net 45–60, but without policy thresholds those terms cannot be called non-compliant."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "c414b2e6-5e4d-485f-97d5-5b2874b2c6fa",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "c414b2e6-5e4d-485f-97d5-5b2874b2c6fa",
+        "hallucination_risk": {
+          "level": "low",
+          "score": 0.18,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 2 citation(s)."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "The remediation register explicitly identifies KAUST’s commercial terms as out of line and records the Board-approved corrective mandate. Customer-master records show several other customers on Net 45–60, but without policy thresholds those terms cannot be called non-compliant."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 2 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The remediation register explicitly identifies KAUST’s commercial terms as out of line and records the Board-approved corrective mandate. Customer-master records show several other customers on Net 45–60, but without policy thresholds those terms cannot be called non-compliant."
+          },
+          "traceable": true
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": true,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "determinism_tier": "derived_insight",
+        "response_sections": {
+          "from_your_data": "KAUST Health Centre is the clearly evidenced exception: a 12% rebate and roughly 100-day payment terms make the account contribution-negative. The approved renegotiation mandate caps the rebate at 6% and moves to tiered service pricing. I cannot reliably classify other customers with Net 45 or Net 60 terms because the supplied evidence does not include the governing customer-credit policy or segment-specific term limits.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "c414b2e6-5e4d-485f-97d5-5b2874b2c6fa"
+        },
+        "executive_blocks": {
+          "verdict": "KAUST Health Centre is the clearly evidenced exception: a 12% rebate and roughly 100-day payment terms make the account contribution-negative.",
+          "figures": [
+            "12%",
+            "6%"
+          ],
+          "recommendation": null,
+          "detail": "The approved renegotiation mandate caps the rebate at 6% and moves to tiered service pricing. I cannot reliably classify other customers with Net 45 or Net 60 terms because the supplied evidence does not include the governing customer-credit policy or segment-specific term limits.",
+          "evidence_count": 2,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    }
+  ],
+  "acceptance_status": "aborted: live provider executor lost authenticated audit scope; no acceptance claim"
+}

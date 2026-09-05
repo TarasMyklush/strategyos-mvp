@@ -1,6 +1,6 @@
 # StrategyOS architecture
 
-Canonical implementation description · baseline `c03e958` with the consolidation changes recorded in Git.
+Canonical implementation description · current source and data identity are recorded in the [preview release receipt](assessment/evidence/preview-release.json).
 
 ## Current system
 
@@ -27,22 +27,22 @@ flowchart LR
 |---|---|---|
 | Configuration | `strategyos_mvp/config.py`, `paths.py` | Explicit deployment environment overrides; local demo source root in `data/demo`. Credentials stay outside Git. |
 | Source intake | `source_pack.py`, `source_governance.py`, `data_roles.py`, `ingestion.py`, `ocr.py` | Classifies evidence/control/restricted/history; maps fields and records quality/readiness. Manual snapshot intake is implemented; incremental client connectors remain open. |
-| Evidence and finance | `evidence.py`, `citation_resolver.py`, `skills/finance_controls.py`, `source_finance_kpis.py` | Deterministic quantities and citations; source-specific assumptions and cross-client resolution need further proof. |
-| Strategy enrichment | `source_strategy_enrichment.py`, `source_calendar.py`, `source_signals.py` | Reads enriched registers and composes executive context. This is not a generic strategy-to-KPI compiler. |
+| Evidence and finance | `evidence.py`, `citation_resolver.py`, `skills/finance_controls.py`, `source_finance_kpis.py`, `receivables_aging.py`, `invoice_reconciliation.py` | Hash-checked quantities and exact source locations; aging uses applied receipts, and AR lines reconcile to the same extract headers. Source-specific assumptions and cross-client resolution need further proof. |
+| Strategy enrichment | `source_strategy_enrichment.py`, `source_calendar.py`, `source_signals.py` | Reads enriched registers and composes executive context. The separate structured intent/compiler contracts support versioning and formula bindings; unstructured extraction and owner ratification remain incomplete. |
 | Workflow/publication | `workflow.py`, `reviewer_runtime.py`, `run_executor.py`, `state_store.py`, `run_registry.py` | Review/resume and run state; Postgres/LangGraph and local paths differ. A pending run is not a completed publication. |
-| Executive API/UI | `api.py`, `executive_read_model.py`, `executive_presentation.py`, `static/executive.*` | Derived run-based view and contextual Ask. Session/demo interactions coexist with persisted state. |
-| QA and simulation | `qa.py`, `llm_qa.py`, `executive_synthesis.py`, `scenario_parser.py`, `assistants/` | Deterministic lookup/formulas plus optional provider narrative. Numeric claim validation still has a confirmed gap. |
-| Authority/identity | `auth.py`, `idp.py`, `authority_matrix.py`, `runtime_governance.py` | Authentication, policy matrix and capability checks exist; coverage across tenant/BU/data surfaces is incomplete. Matrix publication is not an isolation attestation. |
+| Executive API/UI | `api.py`, `executive_read_model.py`, `executive_presentation.py`, `static/executive.*` | Derived run-based view and contextual Ask. Private conversations and idempotent decisions persist in PostgreSQL; synthetic source context remains labelled demonstration data. |
+| QA and simulation | `qa.py`, `llm_qa.py`, `executive_synthesis.py`, `scenario_parser.py`, `assistants/` | Deterministic lookup/formulas plus optional provider narrative. Unsupported quantities and unverifiable citations are rejected, with at most one evidence-bounded repair. Factual acceptance remains separate from these mechanical checks. |
+| Authority/identity | `auth.py`, `idp.py`, `authority_matrix.py`, `runtime_governance.py`, `access_scope.py` | Authenticated scope guards run before data access and propagate through provider executors. Negative service tests cover tenant/run/BU boundaries; full multi-persona acceptance remains incomplete. |
 | Specialist runtime | `agent_runtime/` | Versioned registry, context, policies, capability tokens, tasks, events, typed handoffs, projections, workers and streaming. Cash Recovery, Evidence Closure, Board Pack and Runtime Guardrail workers do not imply that every proposed domain agent is running. |
 | Twins | `twins/` | Separate persona/state/orchestration surfaces and persistence. Unification with browser conversations and specialist tasks remains open. |
-| Retrieval/storage | `neo4j_store.py`, `knowledge_graph.py`, `graph_queries.py`, `vector_store.py`, `storage.py` | Graph and vector/object projections; relational run state remains authoritative. Hash-vector fallback is not semantic embedding quality. |
-| Operations | `deploy/`, `.github/workflows/` | Compose deployment, boundary checks, health, image build and rollback helpers; data restore, SLO and full tier acceptance require fresh proof. |
+| Retrieval/storage | `neo4j_store.py`, `knowledge_graph.py`, `graph_queries.py`, `vector_store.py`, `storage.py` | Graph and vector/object projections; relational run state remains authoritative. Pinned local E5 embeddings use a separate scoped collection. Source rows/pages/paragraphs are hash checked; targeted financial tables complement semantic retrieval without including evaluator material. |
+| Operations | `deploy/`, `.github/workflows/` | Compose deployment, boundary checks, health, image build and rollback helpers; isolated restore proof and release attestation are recorded; agreed SLOs and complete tier acceptance remain open. |
 
 ## Runtime invariants
 
 Human approval must remain separate from model recommendation and worker execution. Structured task/handoff/effect records are authoritative; natural-language messages cannot expand authority or become executable tool definitions. Capability decisions intersect user, tenant, agent, task and tool scope. Retry paths use idempotency/unique effects rather than promising exactly-once delivery.
 
-Postgres is the durable production business-state store; Hatchet schedules work, and Redis provides coordination/transport. Local JSON fallbacks are development behavior. Neo4j and Qdrant are rebuildable projections, not alternate authoritative approvals. Imported evaluator/control material must remain outside business evidence retrieval. A closed board packet requires immutable content/context; the current implementation has not yet proven that full invariant.
+Postgres is the durable production business-state store; Hatchet schedules work, and Redis provides coordination/transport. Local JSON fallbacks are development behavior. Neo4j and Qdrant are rebuildable projections, not alternate authoritative approvals. Imported evaluator/control material must remain outside business evidence retrieval. Closed board packets capture immutable context and file bytes in PostgreSQL. Recorded proofs preserve an older meeting across uploads, restart and reprocessing. Encrypted inference audit records tenant/user identity, request/response hashes, retention and reservation quotas; reservations are not billed-token or monetary receipts.
 
 ## Canonical repository and data
 

@@ -1,0 +1,79 @@
+{
+  "at": "2026-09-05T10:34:20.274684+00:00",
+  "scope": "Only owned intermediate preview deployments; production and unrelated apps untouched",
+  "removed_release_directories": [
+    {
+      "revision": "012951a",
+      "bytes": 27825334
+    },
+    {
+      "revision": "2db74d2",
+      "bytes": 27819896
+    },
+    {
+      "revision": "bb5ab9a",
+      "bytes": 27818647
+    },
+    {
+      "revision": "79701f4",
+      "bytes": 27812507
+    },
+    {
+      "revision": "b69551b",
+      "bytes": 27812325
+    },
+    {
+      "revision": "17c5678",
+      "bytes": 27810232
+    },
+    {
+      "revision": "71bbad7",
+      "bytes": 27806674
+    },
+    {
+      "revision": "4f35fb7",
+      "bytes": 27804775
+    },
+    {
+      "revision": "9dd645f",
+      "bytes": 27661260
+    },
+    {
+      "revision": "1cc8c75",
+      "bytes": 27636812
+    },
+    {
+      "revision": "ee6f533",
+      "bytes": 27587359
+    },
+    {
+      "revision": "bc360a3",
+      "bytes": 27572198
+    },
+    {
+      "revision": "702cc16",
+      "bytes": 27571414
+    }
+  ],
+  "removed_image_tags": [
+    "012951a",
+    "2db74d2",
+    "bb5ab9a",
+    "79701f4",
+    "b69551b",
+    "17c5678",
+    "71bbad7",
+    "9dd645f",
+    "1cc8c75",
+    "ee6f533",
+    "bc360a3",
+    "702cc16"
+  ],
+  "removed_completed_container": "strategyos-remediation-index",
+  "kept_revisions": [
+    "7e3d8c1",
+    "86475f8",
+    "b77a10b"
+  ],
+  "backup_directory_preserved": "/opt/strategyos-branch/backups/remediation-20260905"
+}

@@ -1,0 +1,24 @@
+{
+  "revision": "86475f8",
+  "test": "Actual operator-only inference health endpoint reports seeded QA quota exhaustion",
+  "result": {
+    "status": "attention",
+    "requests": 53,
+    "failures": 0,
+    "budget_blocks": 28,
+    "stalled": 0,
+    "p95_ms": 28955.799999999996,
+    "reserved_units": 11797185,
+    "alerts": [
+      "budget_blocks"
+    ],
+    "budget_basis": "Character-equivalent reservation units; not billable tokens or monetary cost.",
+    "billing_cost": null,
+    "billing_status": "No provider billing rates or usage receipts configured.",
+    "retention": {
+      "metadata_days": 30,
+      "encrypted_payload_days": 7
+    },
+    "slo_status": "Measured observations; contractual SLO and target workload not yet agreed."
+  }
+}

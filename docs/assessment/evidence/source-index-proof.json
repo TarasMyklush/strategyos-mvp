@@ -1,0 +1,12 @@
+{
+  "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+  "duration_seconds": 553.32,
+  "source_search": {
+    "status": "ready",
+    "point_count": 37537,
+    "reused_points": 18880,
+    "collection": "strategyos_multilingual_e5_761b726d_384_v1",
+    "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
+  },
+  "scope": "Source rows/pages/text/Word paragraphs; evaluator question bank excluded. Structured CSV ledgers remain available to governed arithmetic."
+}

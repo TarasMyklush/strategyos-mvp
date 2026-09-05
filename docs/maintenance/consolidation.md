@@ -1,6 +1,6 @@
 # StrategyOS consolidation receipt
 
-Completed locally on 5 September 2026.
+Original workspace consolidation completed on 5 September 2026. Current remediation status is recorded in [validation](../assessment/validation.md).
 
 ## Canonical state
 
@@ -29,7 +29,7 @@ Twenty-five old local branch references were retired, and eighteen missing-workt
 
 See [validation.md](../assessment/validation.md) for final results, skips and evidence. Data hashes and final video-master hash were verified after relocation. Source evidence links refer to the immutable reviewed commit, preserving audit traceability after deleting the duplicate source archive.
 
-No GitHub push, remote-branch deletion, hosted deployment, live source-pack promotion or human-review approval was performed. The external Agent Studio worktree belongs to a separate project and contains unique API work; it was retained outside the canonical application baseline. Concurrent Codex gateway files and deployment-script work appeared during cleanup and were preserved outside this consolidation's change/validation scope.
+The original cleanup did not push or deploy. Subsequent remediation deployed the enriched synthetic preview and reconciled/pushed canonical main with the concurrent gateway history; current revision and approvals are recorded in the release receipt. Production business connections remain deferred. The external Agent Studio worktree belongs to a separate project and contains unique API work; it was retained outside the canonical application baseline. Concurrent Codex gateway code and history have since been integrated. Exact pre-reconciliation working copies were preserved outside the workspace before the merge; the only merge conflict retained the provider overlay and the verified Caddy recreation fix.
 
 ## Recovery and future maintenance
 

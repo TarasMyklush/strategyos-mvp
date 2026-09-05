@@ -1,0 +1,15 @@
+{
+  "revision": "7e3d8c1",
+  "audit_id": "49bdfdc5-1ad1-4c85-b966-c8d2c13f2724",
+  "tenant": "strategyos-branch",
+  "subject": "https://new.strategyos.live/:executive.tester",
+  "provider": "codex_cli",
+  "model": "codex-subscription",
+  "status": "completed",
+  "duration_ms": 27873,
+  "payload_expires_at": "2026-09-12 10:12:04.590581+00:00",
+  "request_and_response_encrypted": true,
+  "both_hashes_verified": true,
+  "wrong_tenant_decryption_blocked": true,
+  "billing_tokens_or_price": "Not available; reservations are character-equivalent quota units"
+}

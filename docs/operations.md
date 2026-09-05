@@ -25,7 +25,7 @@ For a log and machine-readable result:
 .venv/bin/python scripts/test.py -q --junitxml=outputs/pytest.xml
 ```
 
-Tests requiring live Postgres/Neo4j/other services remain explicit integration work. Run those directly using their documented opt-in variables and dedicated disposable services; the isolated local runner deliberately strips those variables. `make postgres-proof` requires `STRATEGYOS_POSTGRES_E2E_DATABASE_URL` and truncates its dedicated proof tables. Never point that target at a business database.
+Tests requiring live Postgres/Neo4j/other services remain explicit integration work. Use `scripts/test.py --services` with `STRATEGYOS_POSTGRES_E2E_DATABASE_URL`, `STRATEGYOS_NEO4J_E2E_URI`, `STRATEGYOS_NEO4J_E2E_USER` and `STRATEGYOS_NEO4J_E2E_PASSWORD` pointing at disposable proof services. Without `--services`, the runner deliberately strips them. `make postgres-proof` requires `STRATEGYOS_POSTGRES_E2E_DATABASE_URL` and truncates its dedicated proof tables. Never point that target at a business database.
 
 Unit/portable success is not a factual assistant evaluation, immutable-board proof, production capacity result or compliance certification. Record skipped tests and run the acceptance gates in [requirements.md](requirements.md). The current consolidation results are stored under `docs/assessment/evidence`.
 
@@ -35,7 +35,7 @@ Use `main` as the application source. Validate the exact commit, then record com
 
 The GitHub CI workflow runs tests, validates Compose and builds an image. The deploy workflow is manually dispatched and environment scoped. The branch-deploy workflow is a temporary preview tool, not an alternative release authority. See [deploy/README.md](../deploy/README.md) for commands and environment contracts.
 
-The 5 September assessment found live executive JavaScript matching `c03e958`, but did not attest the whole backend image or runtime configuration. The selected preview run was awaiting review and lacked enriched strategy data. No deployment or run approval was performed during workspace consolidation. Refer to the gap register for current release blockers.
+The preview now selects an approved, completed synthetic source run. Run `deploy/scripts/record_release.py` on the Docker host after health checks to verify source and image/schema identity; the deployment runbook gives the preview command. The [release receipt](assessment/evidence/preview-release.json) and [validation](assessment/validation.md) supersede the original assessment observations. Production and actual ERP/treasury/calendar connections remain outside this remediation deployment.
 
 ## State and cleanup policy
 
@@ -58,8 +58,8 @@ Runtime validates the model identity and every file hash and performs no downloa
 An unset path retains the explicitly labelled legacy lexical mode. A configured
 but missing or changed model fails; it never substitutes another model.
 
-Reprocess the approved source pack to populate the separate 384-dimensional
-collection with exact workbook-row and PDF-page citations. Run and tenant filters
+Index the selected source pack through its governed processing workflow to populate the separate 384-dimensional
+collection with exact workbook-row, PDF-page and Office/text citations. Indexing is resumable and excludes evaluator questions; a restart does not require rebuilding unchanged points. Run and tenant filters
 apply before search. Source indexing rejects changed files and oversized packs;
 its readiness is recorded in the run. The English/Arabic synthetic retrieval gate
 is separate from factual answer quality and business approval.

@@ -1,0 +1,31 @@
+{
+  "target": "strategyos-branch",
+  "dump_sha256": "14558434e5230f2495c26ca33cc303c75d07da6235a3b955137f3574e0ed195e",
+  "dump_bytes": 551318625,
+  "restore_seconds": 116.092,
+  "total_seconds": 245.797,
+  "tables": {
+    "strategyos_runs": {
+      "count": 123,
+      "digest": "76f392d4ebcb247b891ef3d1a6f0bdb7"
+    },
+    "strategyos_artifacts": {
+      "count": 726,
+      "digest": "577fb9db7fc8f5feeb168e90f1956c1a"
+    },
+    "strategyos_board_snapshots": {
+      "count": 1,
+      "digest": "53a5b65c967c15847583e56cc548fa87"
+    },
+    "strategyos_executive_threads": {
+      "count": 4,
+      "digest": "b32c04949a1b2e21cb44789051e8803d"
+    },
+    "strategyos_decision_events": {
+      "count": 5,
+      "digest": "3a54f10c848bf812c86303f38ef31fd5"
+    }
+  },
+  "matches_live": true,
+  "scope": "Isolated recovery proof; measured duration, not an agreed RTO. No production service changed."
+}

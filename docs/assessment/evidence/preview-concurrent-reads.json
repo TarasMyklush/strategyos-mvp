@@ -1,0 +1,131 @@
+{
+  "revision": "4efaf51",
+  "scope": "20 read-only preview requests, four concurrent clients, while factual QA runs; an observation, not an agreed capacity or SLO claim.",
+  "concurrency": 4,
+  "duration_seconds": 7.757,
+  "all_success": false,
+  "rows": [
+    {
+      "path": "/health/live",
+      "status": 403,
+      "elapsed_ms": 147.94,
+      "bytes": 90
+    },
+    {
+      "path": "/api/deployment",
+      "status": 200,
+      "elapsed_ms": 471.91,
+      "bytes": 1027
+    },
+    {
+      "path": "/runs/latest?persona=ceo",
+      "status": 200,
+      "elapsed_ms": 4532.56,
+      "bytes": 512057
+    },
+    {
+      "path": "/authority-matrix",
+      "status": 200,
+      "elapsed_ms": 979.35,
+      "bytes": 2966
+    },
+    {
+      "path": "/health/live",
+      "status": 403,
+      "elapsed_ms": 146.8,
+      "bytes": 90
+    },
+    {
+      "path": "/api/deployment",
+      "status": 200,
+      "elapsed_ms": 213.52,
+      "bytes": 1027
+    },
+    {
+      "path": "/runs/latest?persona=ceo",
+      "status": 200,
+      "elapsed_ms": 3725.53,
+      "bytes": 512057
+    },
+    {
+      "path": "/authority-matrix",
+      "status": 200,
+      "elapsed_ms": 713.37,
+      "bytes": 2966
+    },
+    {
+      "path": "/health/live",
+      "status": 403,
+      "elapsed_ms": 170.96,
+      "bytes": 90
+    },
+    {
+      "path": "/api/deployment",
+      "status": 200,
+      "elapsed_ms": 203.17,
+      "bytes": 1027
+    },
+    {
+      "path": "/runs/latest?persona=ceo",
+      "status": 200,
+      "elapsed_ms": 4283.74,
+      "bytes": 512057
+    },
+    {
+      "path": "/authority-matrix",
+      "status": 200,
+      "elapsed_ms": 746.39,
+      "bytes": 2966
+    },
+    {
+      "path": "/health/live",
+      "status": 403,
+      "elapsed_ms": 146.54,
+      "bytes": 90
+    },
+    {
+      "path": "/api/deployment",
+      "status": 200,
+      "elapsed_ms": 186.94,
+      "bytes": 1027
+    },
+    {
+      "path": "/runs/latest?persona=ceo",
+      "status": 200,
+      "elapsed_ms": 4325.53,
+      "bytes": 512057
+    },
+    {
+      "path": "/authority-matrix",
+      "status": 200,
+      "elapsed_ms": 189.96,
+      "bytes": 2966
+    },
+    {
+      "path": "/health/live",
+      "status": 403,
+      "elapsed_ms": 189.6,
+      "bytes": 90
+    },
+    {
+      "path": "/api/deployment",
+      "status": 200,
+      "elapsed_ms": 277.44,
+      "bytes": 1027
+    },
+    {
+      "path": "/runs/latest?persona=ceo",
+      "status": 200,
+      "elapsed_ms": 3175.41,
+      "bytes": 512057
+    },
+    {
+      "path": "/authority-matrix",
+      "status": 200,
+      "elapsed_ms": 842.95,
+      "bytes": 2966
+    }
+  ],
+  "assessment": "15 permitted business reads returned 200; five operator-only health reads correctly returned 403 for the executive. No 5xx or transport errors. The raw all_success flag means all HTTP 200 and is not an authorization verdict.",
+  "expected_boundary_results_passed": true
+}

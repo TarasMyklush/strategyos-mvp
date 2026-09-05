@@ -1,23 +1,38 @@
 {
   "target": "https://new.strategyos.live",
-  "application_revision": "bc360a3",
-  "image_digest": "sha256:58c8e31193c4602b26ba41fe7e95a00779071f28ace402ab5156eb79e19eccf3",
-  "schema_sha256": "6d8bd1c0f85db8d859216fdd3c5cfc982fdc07516153a6a65188e3314612bd55",
+  "application_revision": "c72387d",
+  "image_digest": "sha256:2ff3bffe389461f681dffa66ab581e39856aa5da96d112e2927d5b10fe37759d",
   "schema_components": {
     "deploy/postgres/schema.sql": "337f16604880c9c5ccccff3e6712be9019961f34ad54af00d2d4768ba618e234",
     "strategyos_mvp/board_memory.py": "884bc0369feae30cb2b75d8f0e5bb42f8a46b4f5ead0d78204842ea95c6bc990",
     "strategyos_mvp/decision_lifecycle.py": "4650f05202e9b88a0afd4cad6c4fcf9cedac4a8ea327890b3ff54d1d6501f45f",
     "strategyos_mvp/conversation_state.py": "159a8ec16b00a320b7cb7ef0e279811346d26aa755e23e0da55983d46e055818",
-    "strategyos_mvp/inference_audit.py": "513d335e83c827695d69df9b2447fff9299dba2687e24b5e2198c68b664ad5ab"
+    "strategyos_mvp/inference_audit.py": "9497f43919d202c13cb859230a8d38b069eb9576ed8485977748dc90a3951548"
   },
-  "run_id": "ea9377df-6e7d-4ef4-b452-4682262668ea",
+  "schema_sha256": "f93974ba304b6a490ff6794f165df85c93b1c65d4ec8d313fff743f8f36aa343",
+  "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
   "source_digest": "f0f632cde1a8f980d2000c54c2d65dd929019b0d5b463dc48c8a53a8ec88f2e3",
   "source_file_count": 169,
   "source_classification": "synthetic_demo",
   "source_period": "2026-06",
   "approval_status": "approved",
-  "approval_basis": "Authorized automated synthetic-preview QA; not business/board ratification",
+  "approval_basis": "Authorized synthetic preview QA; not business or board ratification",
   "provider": "codex_cli",
-  "external_business_connections": "deferred",
-  "recorded_at": "2026-09-05T08:37:19.220084+00:00"
+  "source_search": {
+    "status": "ready",
+    "collection": "strategyos_multilingual_e5_761b726d_384_v1",
+    "point_count": 37537,
+    "reused_points": 18880,
+    "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
+  },
+  "projection_rebuild": {
+    "reason": "Use workbook EBITDA amounts instead of rounded margin reconstruction before reviewer approval",
+    "revision": "012951a",
+    "at": "2026-09-05T09:58:13.925220+00:00",
+    "source_digest": "f0f632cde1a8f980d2000c54c2d65dd929019b0d5b463dc48c8a53a8ec88f2e3",
+    "previous_finance_sha256": "fc1ef85e1e60b0101084c6bd20ace292c232fae2157053317a493f60b5cb0387",
+    "finance_sha256": "dfdf9e9882d9eebd41fa6afd473b1162989a315b1affa129a80d2f8f435927ec",
+    "approval_status": "pending"
+  },
+  "recorded_at": "2026-09-05T11:25:31.412851+00:00"
 }
