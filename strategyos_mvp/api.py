@@ -4066,6 +4066,8 @@ def _board_portal_payload(
                 else "No open challenged-case questions are recorded for this packet."
             ),
         },
+        "decks": [{"title": item.get("title") or item.get("artifact_key"), "status": publication.get("publish_state"), "by": "Approved report registry"}
+                  for item in publication.get("available_artifacts", []) if not item.get("restricted")] if publication.get("publish_ready") else [],
         "frozen_snapshot": {
             "status": "live_packet",
             "what_if_ready": False,

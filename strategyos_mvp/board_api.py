@@ -76,9 +76,12 @@ def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = re
     frozen["board_meeting_id"] = meeting_id
     frozen["run_source"] = "immutable_board_snapshot"
     frozen["board_portal"].update({"state": "closed", "presentation_state": "closed",
-        "state_label": "Closed", "state_hint": "collective memory"})
+        "state_label": "Closed", "state_hint": "collective memory", "actual_state": "closed"})
     frozen["board_portal"]["frozen_snapshot"] = {"status": "frozen", "board_safe": True,
         "what_if_ready": False, "summary": "This meeting reads only its immutable approved snapshot."}
+    for step in frozen["board_portal"].get("lifecycle_flow", []):
+        step["actual"] = step.get("state_id") == "closed"
+        step["presented"] = step.get("state_id") == "closed"
     context["executive_packet"] = frozen
     files = {}
     root = Path(str(summary.get("run_dir") or "")).resolve()
@@ -93,7 +96,7 @@ def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = re
         files[str(report["artifact_key"]) + path.suffix] = path.read_bytes()
     # Every report link in the frozen contract resolves to captured bytes.
     immutable_routes = {name: f"/api/board/meetings/{quote(meeting_id, safe='')}/files/{quote(name, safe='')}" for name in files}
-    primary = next((route for name, route in immutable_routes.items() if name.endswith('.pdf')), next(iter(immutable_routes.values()), None))
+    primary = next((route for name, route in immutable_routes.items() if name.endswith(('.pdf', '.md'))), next(iter(immutable_routes.values()), None))
     def freeze_links(value):
         if isinstance(value, dict):
             return {key: freeze_links(item) for key, item in value.items()}
@@ -131,7 +134,7 @@ def download(meeting_id: str, name: str, principal: dict[str, Any] = require_rol
     item = snapshot["packet"]["files"].get(name)
     if item is None:
         raise HTTPException(404, "Document not found in this snapshot.")
-    return Response(base64.b64decode(item["base64"]), media_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
+    return Response(base64.b64decode(item["base64"]), media_type="text/plain" if name.endswith(".md") else (mimetypes.guess_type(name)[0] or "application/octet-stream"),
                     headers={"ETag": item["sha256"], "Cache-Control": "private, no-store"})
 
 

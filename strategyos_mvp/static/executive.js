@@ -717,7 +717,7 @@
       "in review": "Under review",
       "in_review": "Under review",
       "live packet": "Frozen",
-      "live_packet": "Frozen",
+      "live_packet": "Not frozen",
       "protected": "Guarded",
       "board_safe_preview": "View only",
       "board_safe_publication": "View only",

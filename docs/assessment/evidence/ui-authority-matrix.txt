@@ -1,0 +1,574 @@
+- banner:
+  - link "StrategyOS home":
+    - generic: StrategyOS
+  - tablist "Executive views":
+    - tab "Diagnostics"
+    - tab "AI Assistants"
+    - tab "Agents"
+    - tab "Knowledge"
+    - tab "Authority Matrix" [active] [selected]
+  - button "Group CEO":
+    - generic: Group CEO
+    - generic: ▾
+  - button "Switch to dark theme": ◐
+  - button "ET"
+- main:
+  - tabpanel:
+    - region "Authority Matrix":
+      - heading "Authority Matrix" [level=2]
+      - paragraph: Published information and action rights for executive personas, assistants and agents.
+      - generic: Governance policy · readable by everyone
+      - article:
+        - text: §3 · Published version 1
+        - heading "Published authority" [level=3]
+        - paragraph: Every assistant and agent checks these rights before information is displayed or work is proposed.
+        - generic: CEO/CIO editing enabled
+        - strong: Subject
+        - strong: Finance
+        - strong: Hr
+        - strong: Contracts
+        - strong: Board Materials
+        - strong: Assistant Team
+        - strong: Group CEO
+        - generic: persona
+        - generic: Group CEO · finance
+        - combobox "Group CEO · finance":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Group CEO · hr
+        - combobox "Group CEO · hr":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Group CEO · contracts
+        - combobox "Group CEO · contracts":
+          - option "None"
+          - option "View"
+          - option "Analyse"
+          - option "Recommend" [selected]
+          - option "Act With Approval"
+        - generic: Group CEO · board_materials
+        - combobox "Group CEO · board_materials":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Group CEO · assistant_team
+        - combobox "Group CEO · assistant_team":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Group CIO
+        - generic: persona
+        - generic: Group CIO · finance
+        - combobox "Group CIO · finance":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Group CIO · hr
+        - combobox "Group CIO · hr":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Group CIO · contracts
+        - combobox "Group CIO · contracts":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Group CIO · board_materials
+        - combobox "Group CIO · board_materials":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Group CIO · assistant_team
+        - combobox "Group CIO · assistant_team":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: BU General Manager
+        - generic: persona
+        - generic: BU General Manager · finance
+        - combobox "BU General Manager · finance":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: BU General Manager · hr
+        - combobox "BU General Manager · hr":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: BU General Manager · contracts
+        - combobox "BU General Manager · contracts":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: BU General Manager · board_materials
+        - combobox "BU General Manager · board_materials":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: BU General Manager · assistant_team
+        - combobox "BU General Manager · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Hermes
+        - generic: assistant
+        - generic: Hermes · finance
+        - combobox "Hermes · finance":
+          - option "None"
+          - option "View"
+          - option "Analyse"
+          - option "Recommend" [selected]
+          - option "Act With Approval"
+        - generic: Hermes · hr
+        - combobox "Hermes · hr":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Hermes · contracts
+        - combobox "Hermes · contracts":
+          - option "None"
+          - option "View"
+          - option "Analyse"
+          - option "Recommend" [selected]
+          - option "Act With Approval"
+        - generic: Hermes · board_materials
+        - combobox "Hermes · board_materials":
+          - option "None"
+          - option "View"
+          - option "Analyse"
+          - option "Recommend" [selected]
+          - option "Act With Approval"
+        - generic: Hermes · assistant_team
+        - combobox "Hermes · assistant_team":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Atlas
+        - generic: assistant
+        - generic: Atlas · finance
+        - combobox "Atlas · finance":
+          - option "None"
+          - option "View"
+          - option "Analyse"
+          - option "Recommend" [selected]
+          - option "Act With Approval"
+        - generic: Atlas · hr
+        - combobox "Atlas · hr":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Atlas · contracts
+        - combobox "Atlas · contracts":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Atlas · board_materials
+        - combobox "Atlas · board_materials":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Atlas · assistant_team
+        - combobox "Atlas · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Minerva
+        - generic: assistant
+        - generic: Minerva · finance
+        - combobox "Minerva · finance":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Minerva · hr
+        - combobox "Minerva · hr":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Minerva · contracts
+        - combobox "Minerva · contracts":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Minerva · board_materials
+        - combobox "Minerva · board_materials":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Minerva · assistant_team
+        - combobox "Minerva · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Argus
+        - generic: assistant
+        - generic: Argus · finance
+        - combobox "Argus · finance":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Argus · hr
+        - combobox "Argus · hr":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Argus · contracts
+        - combobox "Argus · contracts":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Argus · board_materials
+        - combobox "Argus · board_materials":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Argus · assistant_team
+        - combobox "Argus · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Iris
+        - generic: assistant
+        - generic: Iris · finance
+        - combobox "Iris · finance":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Iris · hr
+        - combobox "Iris · hr":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Iris · contracts
+        - combobox "Iris · contracts":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Iris · board_materials
+        - combobox "Iris · board_materials":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Iris · assistant_team
+        - combobox "Iris · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Finance Analyst
+        - generic: agent
+        - generic: Finance Analyst · finance
+        - combobox "Finance Analyst · finance":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Finance Analyst · hr
+        - combobox "Finance Analyst · hr":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Finance Analyst · contracts
+        - combobox "Finance Analyst · contracts":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Finance Analyst · board_materials
+        - combobox "Finance Analyst · board_materials":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Finance Analyst · assistant_team
+        - combobox "Finance Analyst · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Finance Auditor
+        - generic: agent
+        - generic: Finance Auditor · finance
+        - combobox "Finance Auditor · finance":
+          - option "None"
+          - option "View"
+          - option "Analyse"
+          - option "Recommend" [selected]
+          - option "Act With Approval"
+        - generic: Finance Auditor · hr
+        - combobox "Finance Auditor · hr":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Finance Auditor · contracts
+        - combobox "Finance Auditor · contracts":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Finance Auditor · board_materials
+        - combobox "Finance Auditor · board_materials":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Finance Auditor · assistant_team
+        - combobox "Finance Auditor · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Cash Recovery Agent
+        - generic: agent
+        - generic: Cash Recovery Agent · finance
+        - combobox "Cash Recovery Agent · finance":
+          - option "None"
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval" [selected]
+        - generic: Cash Recovery Agent · hr
+        - combobox "Cash Recovery Agent · hr":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Cash Recovery Agent · contracts
+        - combobox "Cash Recovery Agent · contracts":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Cash Recovery Agent · board_materials
+        - combobox "Cash Recovery Agent · board_materials":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Cash Recovery Agent · assistant_team
+        - combobox "Cash Recovery Agent · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Evidence Closure Agent
+        - generic: agent
+        - generic: Evidence Closure Agent · finance
+        - combobox "Evidence Closure Agent · finance":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Evidence Closure Agent · hr
+        - combobox "Evidence Closure Agent · hr":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Evidence Closure Agent · contracts
+        - combobox "Evidence Closure Agent · contracts":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Evidence Closure Agent · board_materials
+        - combobox "Evidence Closure Agent · board_materials":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Evidence Closure Agent · assistant_team
+        - combobox "Evidence Closure Agent · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Board Pack Agent
+        - generic: agent
+        - generic: Board Pack Agent · finance
+        - combobox "Board Pack Agent · finance":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Board Pack Agent · hr
+        - combobox "Board Pack Agent · hr":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Board Pack Agent · contracts
+        - combobox "Board Pack Agent · contracts":
+          - option "None"
+          - option "View" [selected]
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Board Pack Agent · board_materials
+        - combobox "Board Pack Agent · board_materials":
+          - option "None"
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval" [selected]
+        - generic: Board Pack Agent · assistant_team
+        - combobox "Board Pack Agent · assistant_team":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - strong: Runtime Guardrail Agent
+        - generic: agent
+        - generic: Runtime Guardrail Agent · finance
+        - combobox "Runtime Guardrail Agent · finance":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Runtime Guardrail Agent · hr
+        - combobox "Runtime Guardrail Agent · hr":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Runtime Guardrail Agent · contracts
+        - combobox "Runtime Guardrail Agent · contracts":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Runtime Guardrail Agent · board_materials
+        - combobox "Runtime Guardrail Agent · board_materials":
+          - option "None" [selected]
+          - option "View"
+          - option "Analyse"
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Runtime Guardrail Agent · assistant_team
+        - combobox "Runtime Guardrail Agent · assistant_team":
+          - option "None"
+          - option "View"
+          - option "Analyse" [selected]
+          - option "Recommend"
+          - option "Act With Approval"
+        - generic: Approver chains
+        - generic: Finance Action
+        - strong: Group CFO → Group CEO
+        - generic: Contract Action
+        - strong: Legal → Group CFO → Group CEO
+        - generic: Board Release
+        - strong: Company Secretary → Group CEO
+- contentinfo:
+  - generic: Prepared by StrategyOS from the approved strategy and verified company data.
+  - link "How it works":
+    - /url: /guide
+  - link "Architecture":
+    - /url: /architecture
+  - generic: Demo clock · Mon, 1 Jun 2026 · last verified refresh 06:14 Riyadh
+  - generic "Demo day":
+    - button "1 Jun" [pressed]
+    - button "2 Jun"
+    - button "3 Jun"
+    - button "4 Jun"
+    - button "5 Jun"
+    - button "6 Jun"
+    - button "7 Jun"
+- button "◆ Ask Hermes":
+  - generic: ◆
+  - text: Ask Hermes
