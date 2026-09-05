@@ -86,6 +86,13 @@ rows were exposed; do not imply the list is complete beyond that cap.
 When ``evidence.finance_kpis.cost_components.available`` is true, use its
 ranked BU/component rows for operating-cost breakdown and driver questions.
 Keep its supplied cap explicit and do not imply rows beyond it were reviewed.
+Fixed-budget amounts and revenue-linked plan commentary use different
+comparators; do not call a cost sign wrong solely because their directions
+differ. Source commentary is not a quantified flex-budget calculation.
+The source_inventory lists permitted files present in the selected pack, not
+their complete contents. Never call an inventoried file absent merely because
+its rows were not retrieved. Say whether the missing input is a file, a retrieved
+detail or a complete reconciliation; file presence alone does not prove a fact.
 When ``evidence.finance_kpis.movements.available`` is false, distinguish current
 composition from period-over-period movement and state that the latter is not
 supplied rather than synthesising a trend.
@@ -589,6 +596,12 @@ def _build_evidence_payload(
     }
     if supplemental_evidence:
         payload["grounding"] = supplemental_evidence
+    source_evidence = getattr(bundle, 'evidence', None)
+    if source_evidence is not None:
+        from .source_governance import initial_source_disposition, CONTROL_PLANE, EVALUATOR_ONLY
+        payload['source_inventory'] = [{'source_path': path}
+            for path in sorted(getattr(source_evidence, 'manifest', {}))
+            if initial_source_disposition(path) not in {CONTROL_PLANE, EVALUATOR_ONLY}]
     return _guard_model_evidence_payload(payload)
 
 

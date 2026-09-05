@@ -673,6 +673,8 @@ def _detector_summary(bundle: DataBundle) -> str:
     executed = report["executed_detectors"]
     skipped = report["skipped_detectors"]
     total = len(executed) + len(skipped)
+    if total == 0:
+        return "Detector execution coverage was not recorded in this report."
     if not skipped:
         return f"{len(executed)}/{max(total, len(executed))} detectors executed; no detectors were skipped."
     return f"{len(executed)}/{total} detectors executed; {len(skipped)} skipped due to missing required roles."
