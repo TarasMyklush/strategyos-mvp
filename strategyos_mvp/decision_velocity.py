@@ -32,9 +32,9 @@ def summarize(records: Iterable[Mapping[str, Any]], *, now: datetime | None = No
                     raise ValueError("Action predates the recorded decision.")
                 action_hours.append((acted - decided).total_seconds() / 3600)
             start = decided or surfaced
-            if start and not acted:
+            if start and not acted and record.get("choice") != "Decline":
                 pending.append({"decision_key": record.get("decision_key"),
-                    "state": "awaiting_verified_action" if decided else "awaiting_decision",
+                    "state": "on_hold" if record.get("choice") == "Hold" else ("awaiting_verified_action" if decided else "awaiting_decision"),
                     "age_hours": round(max(0, (now - start).total_seconds() / 3600), 2),
                     "evidence_event_ids": record.get("event_ids", [])})
         except (ValueError, TypeError):

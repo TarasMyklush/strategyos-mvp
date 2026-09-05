@@ -38,3 +38,6 @@ testpaths = ["tests"]
 markers = [
   "integration: opt-in local integration checks that require external services",
 ]
+
+[project.optional-dependencies]
+search = ["fastembed==0.8.0"]

@@ -11,13 +11,14 @@ from typing import Any, Iterable
 from urllib import error, parse, request
 
 from .config import CONFIG
+from . import semantic_embeddings
 from .models import Citation, Finding
 
 
-COLLECTION_NAME = "strategyos_search_chunks"
+COLLECTION_NAME = semantic_embeddings.COLLECTION if semantic_embeddings.configured() else "strategyos_search_chunks"
 LEGACY_COLLECTION_NAME = "strategyos_findings"
-VECTOR_SIZE = 256
-TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_:\-/.]*")
+VECTOR_SIZE = semantic_embeddings.DIMENSIONS if semantic_embeddings.configured() else 256
+TOKEN_RE = re.compile(r"[^\W_][\w:\-/.]*", re.UNICODE)
 CHUNK_SIZE = 900
 CHUNK_OVERLAP = 120
 MAX_INDEX_TEXT = 4_000
@@ -25,7 +26,7 @@ MAX_RESULT_TEXT = 700
 MAX_SEARCH_LIMIT = 50
 MAX_SEARCH_CANDIDATES = 100
 HASH_FALLBACK_BACKEND = "hash_fallback"
-LEXICAL_KEYWORD_MODE = "lexical_keyword"
+LEXICAL_KEYWORD_MODE = "dense_semantic" if semantic_embeddings.configured() else "lexical_keyword"
 INDEXED_FILTER_FIELDS = (
     "run_id",
     "tenant_slug",
@@ -128,7 +129,7 @@ def vector_status_for_run(run_id: str | None) -> dict[str, Any]:
         status_payload = _vector_status_for_collection(
             run_id, COLLECTION_NAME, create=True
         )
-        if status_payload.get("status") == "ready":
+        if status_payload.get("status") == "ready" or semantic_embeddings.configured():
             return status_payload
         legacy_payload = _vector_status_for_collection(
             run_id, LEGACY_COLLECTION_NAME, create=False
@@ -187,7 +188,7 @@ def search_run_vectors(
             create=True,
         )
         collection = COLLECTION_NAME
-        if not raw_results and not _has_filters(filters):
+        if not raw_results and not _has_filters(filters) and not semantic_embeddings.configured():
             legacy_results = _search_collection(
                 LEGACY_COLLECTION_NAME,
                 query=query,
@@ -477,7 +478,9 @@ def _chunk_text(text: str) -> list[str]:
     return chunks
 
 
-def _embed_text(text: str) -> list[float]:
+def _embed_text(text: str, *, query: bool = False) -> list[float]:
+    if semantic_embeddings.configured():
+        return semantic_embeddings.embed(text, query=query)
     vector = [0.0] * VECTOR_SIZE
     tokens = TOKEN_RE.findall(text.lower())
     for token in tokens:
@@ -490,6 +493,8 @@ def _embed_text(text: str) -> list[float]:
 
 
 def _embedding_backend() -> str:
+    if semantic_embeddings.configured():
+        return "local_multilingual_minilm_pinned"
     return HASH_FALLBACK_BACKEND
 
 
@@ -634,6 +639,11 @@ def _search_collection(
                 return []
             raise
     candidate_limit = min(MAX_SEARCH_CANDIDATES, max(limit * 5, 20))
+    if semantic_embeddings.configured():
+        response = _qdrant_request("POST", f"/collections/{collection_name}/points/search", {
+            "vector": _embed_text(query, query=True), "filter": filter_payload, "limit": candidate_limit, "with_payload": True})
+        return list(response.get("result") or [])
+
     payload = _qdrant_request(
         "POST",
         f"/collections/{collection_name}/points/scroll",
@@ -662,7 +672,7 @@ def _rank_results(
             {
                 "point_id": point_id,
                 "result_type": payload.get("point_type") or "finding",
-                "score": round(lexical_score, 6),
+                "score": round(float(item.get("score") or 0) if semantic_embeddings.configured() else lexical_score, 6),
                 "ranking": {
                     "mode": LEXICAL_KEYWORD_MODE,
                     "lexical_score": round(lexical_score, 6),

@@ -1,5 +1,7 @@
 """Governed board closure and immutable read endpoints."""
 from pathlib import Path
+from urllib.parse import quote
+import mimetypes
 import base64
 from typing import Any
 
@@ -31,6 +33,11 @@ def _read(tenant: str, meeting: str):
 def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = require_role("executive")):
     from . import api
     tenant = api._principal_tenant_id(principal)
+    existing = board_memory.read_meeting(tenant, meeting_id)
+    if existing is not None:
+        if existing["packet"]["run_id"] != request.run_id:
+            raise HTTPException(409, "This meeting is already closed against another run.")
+        return {"meeting_id": meeting_id, "digest": existing["digest"], "idempotent_replay": True}
     summary = api._qa_summary_for_run(request.run_id)
     owner = (summary.get("tenant_context") or {}).get("tenant_id")
     if owner != tenant:
@@ -58,7 +65,22 @@ def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = re
     for commitment in context["plan_health"].get("commitments", []):
         if commitment.get("actual") is not None:
             context["approved_answers"][f"What was {commitment['name']}?"] = f"The approved snapshot records {commitment['name']} at {commitment['actual']} {commitment['unit']}, against checkpoint {commitment['checkpoint']} {commitment['unit']}. Measurement status: {commitment['measurement_status']}."
-    files = {"approved-board-context.json": board_memory.canonical(context).encode()}
+    rendered = api._summary_with_reconciled_metrics(summary, principal=principal,
+        view_state={"persona": "board", "board": "closed"})
+    # Retain only the board presentation contract, never raw run inputs or agents.
+    allowed = ("status", "run_id", "tenant_context", "approval_status", "total_recoverable_sar",
+               "locked_findings", "citation_count", "resolved_count", "challenged_cases", "report_count",
+               "plan_health", "publication", "board_portal", "executive_modes", "chat",
+               "assistant_public_context", "executive_diagnostics", "executive_presentation", "finance_kpi")
+    frozen = {key: rendered[key] for key in allowed if key in rendered}
+    frozen["board_meeting_id"] = meeting_id
+    frozen["run_source"] = "immutable_board_snapshot"
+    frozen["board_portal"].update({"state": "closed", "presentation_state": "closed",
+        "state_label": "Closed", "state_hint": "collective memory"})
+    frozen["board_portal"]["frozen_snapshot"] = {"status": "frozen", "board_safe": True,
+        "what_if_ready": False, "summary": "This meeting reads only its immutable approved snapshot."}
+    context["executive_packet"] = frozen
+    files = {}
     root = Path(str(summary.get("run_dir") or "")).resolve()
     if not root.is_relative_to(api.CONFIG.output_root.resolve()):
         raise HTTPException(409, "The approved run is outside the governed output directory.")
@@ -69,6 +91,20 @@ def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = re
         if not path.is_relative_to(root) or not path.is_file():
             raise HTTPException(409, "An approved document is unavailable; closure was not saved.")
         files[str(report["artifact_key"]) + path.suffix] = path.read_bytes()
+    # Every report link in the frozen contract resolves to captured bytes.
+    immutable_routes = {name: f"/api/board/meetings/{quote(meeting_id, safe='')}/files/{quote(name, safe='')}" for name in files}
+    primary = next((route for name, route in immutable_routes.items() if name.endswith('.pdf')), next(iter(immutable_routes.values()), None))
+    def freeze_links(value):
+        if isinstance(value, dict):
+            return {key: freeze_links(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [freeze_links(item) for item in value]
+        if isinstance(value, str) and value.startswith('/') and ('/runs/latest' in value or '/data/evidence' in value):
+            return primary
+        return value
+    context = freeze_links(context)
+    context["executive_packet"]["publication"]["preview_route"] = primary
+    files["approved-board-context.json"] = board_memory.canonical(context).encode()
     try:
         return board_memory.close_meeting(tenant, meeting_id, run_id=request.run_id,
             actor=str(principal.get("subject")), approved_context=context, files=files,
@@ -95,7 +131,7 @@ def download(meeting_id: str, name: str, principal: dict[str, Any] = require_rol
     item = snapshot["packet"]["files"].get(name)
     if item is None:
         raise HTTPException(404, "Document not found in this snapshot.")
-    return Response(base64.b64decode(item["base64"]), media_type="application/octet-stream",
+    return Response(base64.b64decode(item["base64"]), media_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
                     headers={"ETag": item["sha256"], "Cache-Control": "private, no-store"})
 
 

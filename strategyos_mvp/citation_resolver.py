@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from pathlib import Path
 from typing import Any
@@ -95,7 +96,10 @@ def resolve_payload(bundle: DataBundle, rel_path: str, locator: str, excerpt: st
     if rel_path.endswith(".xlsx"):
         if rel_path == "07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx":
             return resolve_workbook_sheet(bundle, locator)
-        return resolve_structured_row(table_for_source(bundle, rel_path), locator)
+        table = table_for_source(bundle, rel_path)
+        if table is not None:
+            return resolve_structured_row(table, locator)
+        return resolve_manifest_workbook_row(bundle, rel_path, locator)
     if rel_path.endswith(".csv"):
         return resolve_structured_row(table_for_source(bundle, rel_path), locator)
     if rel_path.endswith(".pdf"):
@@ -103,6 +107,32 @@ def resolve_payload(bundle: DataBundle, rel_path: str, locator: str, excerpt: st
     if rel_path.endswith(".txt"):
         return resolve_text_file(bundle, rel_path)
     return {"source_type": "file", "excerpt": excerpt} if excerpt else None
+
+
+def resolve_manifest_workbook_row(bundle: DataBundle, rel_path: str, locator: str) -> dict[str, Any] | None:
+    """Resolve a source-addressed workbook row outside the legacy table map."""
+    match = re.fullmatch(r"(.+)!Excel row (\d+)", locator)
+    entry = bundle.evidence.manifest.get(rel_path)
+    root = bundle.evidence.dataset_root.resolve()
+    path = (root / rel_path).resolve()
+    if not match or not entry or not path.is_relative_to(root) or not path.is_file():
+        return None
+    if hashlib.sha256(path.read_bytes()).hexdigest() != entry.get("sha256"):
+        return None
+    from openpyxl import load_workbook
+    book = load_workbook(path, read_only=True, data_only=True)
+    try:
+        if match[1] not in book.sheetnames:
+            return None
+        sheet = book[match[1]]; row_number = int(match[2])
+        if row_number < 2 or row_number > sheet.max_row:
+            return None
+        headers = next(sheet.iter_rows(min_row=1,max_row=1,values_only=True))
+        values = next(sheet.iter_rows(min_row=row_number,max_row=row_number,values_only=True))
+        return {"source_type": "structured_table", "locator_type": "row", "locator_value": row_number,
+                "sheet_name": sheet.title, "row": {str(key): normalize_value(value) for key,value in zip(headers,values) if key is not None}}
+    finally:
+        book.close()
 
 
 def resolve_structured_row(df: pd.DataFrame | None, locator: str) -> dict[str, Any] | None:

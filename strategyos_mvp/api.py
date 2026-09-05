@@ -10151,8 +10151,22 @@ def latest_run(
     portfolio: str | None = None,
     week: str | None = None,
     agent: str | None = None,
+    meeting: str | None = None,
     principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
+    if persona == "board" and board == "closed":
+        if not principal_has_any_role(str(principal.get("role") or ""), "executive"):
+            raise HTTPException(403, "Board memory requires executive access.")
+        if not meeting:
+            raise HTTPException(409, "Close or select a board meeting before opening collective memory.")
+        from . import board_memory
+        snapshot = board_memory.read_meeting(_principal_tenant_id(principal), meeting)
+        if snapshot is None:
+            raise HTTPException(404, "Closed meeting not found.")
+        packet = snapshot["packet"]["context"].get("executive_packet")
+        if packet is None:
+            raise HTTPException(409, "This older snapshot has no presentation packet; its original files remain available.")
+        return {**packet, "board_snapshot_digest": snapshot["digest"]}
     view_state = _requested_executive_view_state(
         persona=persona,
         board=board,
@@ -15374,7 +15388,7 @@ async def _assistant_chat_response(
     if (
         contextual_kpi_key
         and not explicit_modelling_request
-        and not _question_requires_analytical_result(question)
+        and (not _question_requires_analytical_result(question) or (contextual_kpi_key == "revenue" and re.search(r"\brevenue streams?\b", question, re.I)))
         and str(assistant_context.get("entrypoint") or "") in {"ceo_kpi_inline", "knowledge_graph"}
     ):
         kpi_result = _ceo_kpi_inline_result(

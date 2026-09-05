@@ -19,3 +19,11 @@ def test_missing_times_are_not_zero_and_invalid_order_does_not_improve_score():
     result = summarize([{"decision_key": "invalid", "surfaced_at": "2026-01-02T00:00:00Z", "decided_at": "2026-01-01T00:00:00Z"}])
     assert result["median_surfaced_to_decided_hours"] is None
     assert result["invalid_chronology"] == ["invalid"]
+
+
+def test_hold_and_decline_are_not_awaiting_approved_execution():
+    records = [{'decision_key': choice, 'choice': choice, 'surfaced_at': '2026-01-01T00:00:00Z',
+                'decided_at': '2026-01-01T01:00:00Z'} for choice in ('Hold', 'Decline', 'Approve')]
+    result = summarize(records, now=datetime(2026, 1, 2, tzinfo=timezone.utc))
+    assert [(x['decision_key'], x['state']) for x in result['pending']] == [('Hold', 'on_hold'), ('Approve', 'awaiting_verified_action')]
+    assert result['action_sample_count'] == 0

@@ -100,7 +100,7 @@ def test_executive_static_js_switches_latest_run_route_by_session_mode():
     assert 'return "/public/runs/latest";' in js
     assert 'var session = await fetchJson("/ui/session") || {};' in js
     assert 'fetchJson(latestRunRouteForSession(session) + buildQuery(params))' in js
-    assert 'session.authenticated ? fetchJson("/api/v1/agent-network")' in js
+    assert 'session.authenticated && !frozenBoard ? fetchJson("/api/v1/agent-network")' in js
 
 
 def test_workspace_chat_defaults_to_auto_qa_mode():

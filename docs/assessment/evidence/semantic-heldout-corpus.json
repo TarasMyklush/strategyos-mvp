@@ -1,0 +1,108 @@
+{
+  "model_revision": "faf4aa4225822f3bc6376869cb1164e8e3feedd0",
+  "threshold": {
+    "recall_at_3": 0.9
+  },
+  "pairs": [
+    {
+      "id": 0,
+      "document": "The supplier invoice was paid twice with the same invoice number and amount.",
+      "question": "Which vendor payments may have been duplicated?"
+    },
+    {
+      "id": 1,
+      "document": "The receivable is overdue by 120 days and collection has not been received.",
+      "question": "Show late customer balances awaiting collection."
+    },
+    {
+      "id": 2,
+      "document": "The foreign exchange hedge covers sixty percent of the euro payment exposure.",
+      "question": "How much EUR currency risk is protected?"
+    },
+    {
+      "id": 3,
+      "document": "The board meeting was closed with an immutable packet of approved reports.",
+      "question": "Can the historical board pack change after closure?"
+    },
+    {
+      "id": 4,
+      "document": "Revenue exceeded the approved budget because hospital sales increased.",
+      "question": "Why are sales ahead of plan?"
+    },
+    {
+      "id": 5,
+      "document": "Payroll expenses increased after the annual salary adjustment.",
+      "question": "What drove the rise in employee compensation costs?"
+    },
+    {
+      "id": 6,
+      "document": "A cash floor protects liquidity needed for upcoming operating payments.",
+      "question": "Do we have sufficient money above our minimum liquidity reserve?"
+    },
+    {
+      "id": 7,
+      "document": "A dormant vendor credit remains available to offset the next invoice.",
+      "question": "Are unused supplier credits available to recover?"
+    },
+    {
+      "id": 8,
+      "document": "The clinical service programme is delayed because trained pharmacists are unavailable.",
+      "question": "Why is pharmacy clinical rollout behind schedule?"
+    },
+    {
+      "id": 9,
+      "document": "The cold-chain logistics contract renews automatically with an uncapped price escalation.",
+      "question": "Which refrigerated transport agreement needs renewal negotiation?"
+    },
+    {
+      "id": 10,
+      "document": "Electronic prescription adoption is below the quarterly target.",
+      "question": "Is digital prescribing usage meeting our objective?"
+    },
+    {
+      "id": 11,
+      "document": "The manufacturing batch failed quality inspection and was written off.",
+      "question": "What production losses came from rejected products?"
+    },
+    {
+      "id": 12,
+      "document": "The user may access only records assigned to their business unit.",
+      "question": "Can a divisional manager read another unit’s data?"
+    },
+    {
+      "id": 13,
+      "document": "The data source is a spreadsheet uploaded manually for the June reporting period.",
+      "question": "Is this an automatic live ERP integration?"
+    },
+    {
+      "id": 14,
+      "document": "The decision was approved, but no action evidence has been verified.",
+      "question": "Has the authorized initiative actually started?"
+    },
+    {
+      "id": 15,
+      "document": "The cash forecast shows a shortfall caused by delayed customer receipts.",
+      "question": "هل تأخر تحصيل العملاء يسبب نقصاً في السيولة؟"
+    },
+    {
+      "id": 16,
+      "document": "A supplier invoice was paid twice and requires recovery of the duplicate payment.",
+      "question": "هل توجد فواتير موردين تم دفعها مرتين؟"
+    },
+    {
+      "id": 17,
+      "document": "The inventory balance increased because stock was purchased before the tender delivery.",
+      "question": "لماذا ارتفع المخزون قبل تسليم المناقصة؟"
+    },
+    {
+      "id": 18,
+      "document": "Group revenue and profitability are compared with the approved annual budget.",
+      "question": "كيف تقارن إيرادات المجموعة وأرباحها بالميزانية؟"
+    },
+    {
+      "id": 19,
+      "document": "The board snapshot preserves the approved meeting documents without later changes.",
+      "question": "أين النسخة الثابتة لوثائق اجتماع مجلس الإدارة؟"
+    }
+  ]
+}

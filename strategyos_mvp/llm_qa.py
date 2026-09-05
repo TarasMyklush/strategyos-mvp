@@ -275,6 +275,11 @@ def answer_question(
     public_packet = dict(public_context_packet or {})
     public_mode = bool(public_packet)
     transport_trace: list[dict[str, Any]] = []
+    if not public_mode:
+        from .source_search import retrieve
+        source_context = retrieve(summary.get("run_id"), question)
+        if source_context is not None:
+            supplemental_evidence = {**(supplemental_evidence or {}), "source_records": source_context}
     evidence = _build_evidence_payload(
         bundle=bundle,
         findings=findings,

@@ -1,0 +1,129 @@
+{
+  "selection": "Independent acceptance set authored after choosing E5, before observing its answers. No changes after scoring.",
+  "threshold": {
+    "recall_at_3": 0.9
+  },
+  "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+  "pairs": [
+    {
+      "id": 0,
+      "document": "Accounts receivable days use closing trade receivables divided by credit sales multiplied by period days.",
+      "question": "How is the customer collection period calculated?",
+      "citation": "acceptance-fixture:0"
+    },
+    {
+      "id": 1,
+      "document": "Accounts payable days equal trade payables divided by credit purchases times days in the period.",
+      "question": "ما طريقة حساب مدة سداد الموردين؟",
+      "citation": "acceptance-fixture:1"
+    },
+    {
+      "id": 2,
+      "document": "A recovery receipt partially settles a vendor claim. Remaining value stays open until additional receipts arrive.",
+      "question": "Does a partial refund close the entire recovery case?",
+      "citation": "acceptance-fixture:2"
+    },
+    {
+      "id": 3,
+      "document": "A reversal of a bank receipt reduces the amount collected for its recovery claim.",
+      "question": "ماذا يحدث للمبلغ المسترد عند عكس إيصال البنك؟",
+      "citation": "acceptance-fixture:3"
+    },
+    {
+      "id": 4,
+      "document": "The approved intercompany transfer has equal debit and credit amounts in the same reporting period. Both sides are eliminated on consolidation.",
+      "question": "Should an internal group cash movement be counted twice?",
+      "citation": "acceptance-fixture:4"
+    },
+    {
+      "id": 5,
+      "document": "Exchange rates are keyed to the transaction date. Missing date-specific rates leave conversion unavailable.",
+      "question": "Can the conversion use a rate from a different day?",
+      "citation": "acceptance-fixture:5"
+    },
+    {
+      "id": 6,
+      "document": "A held executive decision has no approved execution mandate and remains on hold.",
+      "question": "هل تعليق القرار يسمح ببدء التنفيذ؟",
+      "citation": "acceptance-fixture:6"
+    },
+    {
+      "id": 7,
+      "document": "A reviewed evidence receipt records the first verified action separately from the approval timestamp.",
+      "question": "Which event proves that approved work has actually begun?",
+      "citation": "acceptance-fixture:7"
+    },
+    {
+      "id": 8,
+      "document": "Each conversation belongs to its authenticated user, tenant, run and persona, and is saved in PostgreSQL.",
+      "question": "Can I recover my private chat after restarting the application?",
+      "citation": "acceptance-fixture:8"
+    },
+    {
+      "id": 9,
+      "document": "Two browser sessions editing the same conversation version cannot silently overwrite each other. The stale write returns a conflict.",
+      "question": "ماذا يحدث عند تعديل نفس المحادثة من جهازين؟",
+      "citation": "acceptance-fixture:9"
+    },
+    {
+      "id": 10,
+      "document": "Logout invalidates the browser session and protected pages require authentication again.",
+      "question": "Can I still open the dashboard after signing out?",
+      "citation": "acceptance-fixture:10"
+    },
+    {
+      "id": 11,
+      "document": "A source workbook citation records its file hash, worksheet name and exact Excel row number.",
+      "question": "كيف أتتبع الرقم إلى صفه الأصلي في الجدول؟",
+      "citation": "acceptance-fixture:11"
+    },
+    {
+      "id": 12,
+      "document": "A plan amendment records its reason, approval identity, date and affected commitments.",
+      "question": "Where do we find who approved changing the strategy target?",
+      "citation": "acceptance-fixture:12"
+    },
+    {
+      "id": 13,
+      "document": "An unratified plan remains proposed even when all formula bindings are available.",
+      "question": "Does successful compilation automatically approve the strategy?",
+      "citation": "acceptance-fixture:13"
+    },
+    {
+      "id": 14,
+      "document": "Higher-is-better performance of zero against a positive target contributes zero attainment; missing is a separate state.",
+      "question": "هل القيمة الصفرية تعني أن بيانات المؤشر مفقودة؟",
+      "citation": "acceptance-fixture:14"
+    },
+    {
+      "id": 15,
+      "document": "The payroll scenario applies a three percent increase to current payroll while holding all other assumptions constant.",
+      "question": "What assumptions support the employee wage sensitivity calculation?",
+      "citation": "acceptance-fixture:15"
+    },
+    {
+      "id": 16,
+      "document": "The external treasury connection is deferred. The cash figures come from a manually supplied source pack.",
+      "question": "هل أرصدة الخزينة متصلة بالبنك مباشرة الآن؟",
+      "citation": "acceptance-fixture:16"
+    },
+    {
+      "id": 17,
+      "document": "A restored database is checked against the original counts and hashes for approved runs, documents and board snapshots.",
+      "question": "How do we verify that the backup recovery preserved the evidence?",
+      "citation": "acceptance-fixture:17"
+    },
+    {
+      "id": 18,
+      "document": "The inference audit encrypts prompt and response content, identifies its key version, and deletes payloads after retention expires.",
+      "question": "كيف تتم حماية سجلات طلبات نموذج الذكاء الاصطناعي؟",
+      "citation": "acceptance-fixture:18"
+    },
+    {
+      "id": 19,
+      "document": "The release receipt binds the application revision, container image digest, selected run and source-pack manifest.",
+      "question": "How can I tell exactly which build and dataset are deployed?",
+      "citation": "acceptance-fixture:19"
+    }
+  ]
+}

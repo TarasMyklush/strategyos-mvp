@@ -35,7 +35,7 @@ COPY pyproject.toml README.md langgraph.json ./
 COPY deploy/postgres/schema.sql ./deploy/postgres/schema.sql
 COPY strategyos_mvp ./strategyos_mvp
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir ".[search]"
 
 RUN useradd --create-home --shell /bin/bash strategyos
 RUN mkdir -p /app/workspace/outputs /app/workspace/source_dataset \

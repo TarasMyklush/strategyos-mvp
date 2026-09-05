@@ -1,0 +1,212 @@
+{
+  "model_repository": "Xenova/multilingual-e5-small",
+  "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+  "questions": 20,
+  "recall_at_1": 0.65,
+  "recall_at_3": 0.9,
+  "duration_seconds": 0.223,
+  "peak_process_rss_bytes": 390201344,
+  "rows": [
+    {
+      "id": 0,
+      "top3": [
+        16,
+        0,
+        7
+      ],
+      "correct_at_1": false,
+      "correct_at_3": true
+    },
+    {
+      "id": 1,
+      "top3": [
+        7,
+        6,
+        15
+      ],
+      "correct_at_1": false,
+      "correct_at_3": false
+    },
+    {
+      "id": 2,
+      "top3": [
+        2,
+        6,
+        18
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 3,
+      "top3": [
+        19,
+        3,
+        1
+      ],
+      "correct_at_1": false,
+      "correct_at_3": true
+    },
+    {
+      "id": 4,
+      "top3": [
+        13,
+        15,
+        6
+      ],
+      "correct_at_1": false,
+      "correct_at_3": false
+    },
+    {
+      "id": 5,
+      "top3": [
+        5,
+        18,
+        4
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 6,
+      "top3": [
+        6,
+        10,
+        7
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 7,
+      "top3": [
+        16,
+        7,
+        1
+      ],
+      "correct_at_1": false,
+      "correct_at_3": true
+    },
+    {
+      "id": 8,
+      "top3": [
+        8,
+        10,
+        15
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 9,
+      "top3": [
+        9,
+        16,
+        7
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 10,
+      "top3": [
+        10,
+        13,
+        8
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 11,
+      "top3": [
+        11,
+        15,
+        1
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 12,
+      "top3": [
+        12,
+        13,
+        19
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 13,
+      "top3": [
+        9,
+        13,
+        12
+      ],
+      "correct_at_1": false,
+      "correct_at_3": true
+    },
+    {
+      "id": 14,
+      "top3": [
+        14,
+        13,
+        9
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 15,
+      "top3": [
+        15,
+        1,
+        8
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 16,
+      "top3": [
+        0,
+        16,
+        6
+      ],
+      "correct_at_1": false,
+      "correct_at_3": true
+    },
+    {
+      "id": 17,
+      "top3": [
+        17,
+        9,
+        5
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 18,
+      "top3": [
+        18,
+        5,
+        0
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    },
+    {
+      "id": 19,
+      "top3": [
+        19,
+        13,
+        16
+      ],
+      "correct_at_1": true,
+      "correct_at_3": true
+    }
+  ],
+  "scope": "Same prespecified development corpus; second candidate after MiniLM missed recall target. Independent held-out release gate still required."
+}

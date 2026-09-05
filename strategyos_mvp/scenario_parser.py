@@ -722,6 +722,8 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
             "ebitda_bu_bridge": ebitda_bu_bridge,
             "cost_component_rows": cost_component_rows,
             "cost_component_source": cost_component_source,
+            "cost_component_hash": cost_components.get("source_hash"),
+            "cost_component_sheet": cost_components.get("sheet"),
             "inferred_components": inferred_components,
             "citations": citations,
         }
@@ -1600,7 +1602,7 @@ def _finance_bu_cost_ranking(normalized_prompt: str, baseline: Mapping[str, Any]
         lines.append(f"{row['component']}: {_sar_executive_decimal(amount)} actual; " + (f"{_sar_executive_decimal(plan)} fixed budget; " if plan is not None else "") + f"{comparison}.")
     return ScenarioResult(scenario_id="governed_bu_cost_ranking", scenario_label="Business-unit cost components", matched=True,
         answer=f"For {baseline['period']}, the largest supplied cost components in {unit} are: " + " ".join(lines),
-        calculations=[], kg_context=[], citations=[{"source_path":baseline.get("cost_component_source"),"locator":f"Cost components / {unit}","excerpt":"Actual and fixed-budget component values."}],
+        calculations=[], kg_context=[], citations=[{"source_path": baseline.get("cost_component_source"), "source_hash": baseline.get("cost_component_hash"), "locator": row.get("locator") or f"Cost components / {unit}", "excerpt": f"{row['component']}: actual SAR {row['actual_sar']}; fixed budget SAR {row.get('budget_sar')}"} for row in rows[:count]],
         assumptions=["Ranked by absolute actual cost. Source commentary may refer to a different flexible budget."],
         basis="Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.")
 

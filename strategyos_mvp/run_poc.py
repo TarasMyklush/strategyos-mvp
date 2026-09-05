@@ -465,6 +465,8 @@ def _execute_strategyos_workflow(
         findings=result.get("findings", []),
         knowledge_graph_path=result.get("artifacts", {}).get("knowledge_graph"),
     )
+    from .source_search import sync_sources
+    summary["source_search"] = sync_sources(run_id=str(persisted_run_id), tenant_slug=CONFIG.tenant_slug, evidence=getattr(result.get("bundle"), "evidence", None))
     attach_local_review_checkpoint(summary, result)
     summary["pointer_metadata"] = update_run_pointers(summary, summary_path)
     summary["latest_pointer"] = summary["pointer_metadata"]["latest"]

@@ -1,0 +1,25 @@
+
+  - article "Ask Hermes":
+    - heading "Ask Hermes" [level=3]
+    - paragraph: Hermes answers from your current executive data and cited business records.
+    - button "Start a new conversation": New
+    - button "Toggle thread history": History ▸
+    - button "Close assistant": ✕
+    - strong: What are the three largest cost components…
+    - generic: For H1 2026, the largest supplied cost components in Mizan Digital Health are:…
+    - generic: You
+    - paragraph: What are the three largest cost components in Mizan Digital Health this half, with actual and budget?
+    - text: Hermes
+    - emphasis: Verified fact
+    - paragraph: "For H1 2026, the largest supplied cost components in Mizan Digital Health are: Payroll: SAR 74.1M actual; SAR 72.5M fixed budget; SAR 1.6M above fixed budget."
+    - generic: SAR 74.1M
+    - generic: SAR 72.5M
+    - generic: SAR 1.6M
+    - generic: SAR 27.5M
+    - generic "More context"
+    - generic "Evidence · 1 source"
+    - generic "Evidence · 1 source checked · Traced to source"
+    - generic: Ask your executive assistant
+    - textbox "Ask Hermes" [active]:
+      - /placeholder: Ask Hermes…
+    - button "Send" [disabled]

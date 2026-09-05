@@ -591,10 +591,34 @@
   function activateBoardState(nextState) {
     nextState = String(nextState || '').trim().toLowerCase();
     if (!nextState) return false;
+    if (nextState === 'closed' && state.session && state.session.authenticated && !(state.latestPacket.board_snapshot_digest && state.latestPacket.board_meeting_id === state.boardMeetingId)) {
+      if (state._boardClosePending) return false;
+      state._boardClosePending = true;
+      var runId = activeRunId();
+      var meetingId = state.boardMeetingId || ('board-' + runId);
+      (async function () {
+        try {
+          var headers = authHeaders(); headers['Content-Type'] = 'application/json';
+          var response = state.boardMeetingId ? null : await fetch('/api/board/meetings/' + encodeURIComponent(meetingId) + '/close', {
+            method: 'POST', headers: headers, body: JSON.stringify({run_id: runId})});
+          var payload = response ? await response.json() : {};
+          if (response && !response.ok) throw new Error(payload.detail || 'The board meeting could not be closed.');
+          state.boardMeetingId = meetingId;
+          var frozen = await fetchJson('/runs/latest' + buildQuery({persona:'board',board:'closed',meeting:meetingId}));
+          if (!frozen) throw new Error('The closed snapshot could not be loaded.');
+          state.latestPacket = frozen;
+          activateBoardState('closed');
+        } catch (error) { state.boardMeetingId = ''; showToast(error.message || 'Board closure failed.'); }
+        finally { state._boardClosePending = false; }
+      })();
+      return false;
+    }
     // Always proceed — even if state.activeBoard matches, the DOM may not
     // reflect it due to a concurrent refresh or incomplete render cycle.
     state._boardStateTransition = nextState;
+    var leavingSnapshot = nextState !== 'closed' && Boolean(state.latestPacket.board_snapshot_digest);
     state.activeBoard = nextState;
+    if (leavingSnapshot) refresh();
     // Sync existing buttons immediately so there is no visual lag between
     // the click and the full render cycle completing.
     // renderBoardStateTabs now has a fast path that avoids innerHTML
@@ -1256,6 +1280,7 @@
     var query = buildQuery({
       persona: state.activePersona,
       board: state.activeBoard,
+      meeting: state.activePersona === "board" && state.activeBoard === "closed" ? state.boardMeetingId : "",
       driver: state.activeDriverKey,
       company: state.activeCompany,
       portfolio: state.activePortfolio,
@@ -1268,6 +1293,7 @@
     return {
       persona: state.activePersona,
       board: state.activeBoard,
+      meeting: state.activePersona === "board" && state.activeBoard === "closed" ? state.boardMeetingId : "",
       driver: state.activeDriverKey,
       company: state.activeCompany,
       portfolio: state.activePortfolio,
@@ -2446,13 +2472,18 @@
     Object.keys(threadStore()).forEach(function (key) {
       if (key.indexOf(state.activePersona + ':') === 0 && !threadStore()[key].readOnly) snapshot[key] = threadStore()[key];
     });
-    snapshot = JSON.parse(JSON.stringify(snapshot));
+    var encodedSnapshot = JSON.stringify(snapshot);
+    if (scope.queuedSnapshot === encodedSnapshot) return;
+    scope.queuedSnapshot = encodedSnapshot;
+    snapshot = JSON.parse(encodedSnapshot);
     threadSaveChain = threadSaveChain.then(async function () {
       if (scope !== state.durableThreadScope || state.threadConflict) return;
       try {
         var result = await putJson('/api/conversation-state', {run_id: scope.runId, persona: scope.persona, version: state.threadVersion || 0, threads: snapshot});
         state.threadVersion = result.version;
+        scope.savedSnapshot = encodedSnapshot;
       } catch (error) {
+        scope.queuedSnapshot = scope.savedSnapshot;
         if (error.status === 409) state.threadConflict = true;
         showToast(error.message || 'Conversation could not be saved.');
       }
@@ -2469,7 +2500,7 @@
     Object.keys(threadStore()).forEach(function (key) { if (key.indexOf(persona + ':') === 0 && !threadStore()[key].readOnly) delete threadStore()[key]; });
     Object.assign(threadStore(), payload.threads || {});
     state.threadVersion = payload.version; state.threadConflict = false;
-    state.durableThreadScope = {runId: runId, persona: persona};
+    state.durableThreadScope = {runId: runId, persona: persona, queuedSnapshot: JSON.stringify(payload.threads || {}), savedSnapshot: JSON.stringify(payload.threads || {})};
   }
 
   function personaThreadRecords() {
@@ -3170,6 +3201,7 @@
       entry_label: element ? String(element.textContent || "").trim().slice(0, 120) : "drawer_input",
       persona: state.activePersona || "ceo",
       board_state: state.activeBoard || "pre",
+      meeting_id: state.activePersona === "board" ? state.boardMeetingId : undefined,
       // Board portal prompts must NOT carry stale hero/revenue driver_key — use
       // "board_packet" so the backend routes the question against board-relevant
       // answer chains (e.g. hedge downside, JV funding) instead of revenue context.
@@ -5717,7 +5749,7 @@
         return '<div class="board-deck"><div><strong>' + escapeHtml(firstDefined(item.q, 'Question')) + '</strong><p class="list-copy">to ' + escapeHtml(firstDefined(item.to, 'board lane')) + '</p></div><span class="pill-inline ' + toneClass(item.status) + '">' + escapeHtml(firstDefined(item.status, 'board')) + '</span></div>';
       }).join('') : '<div class="discovery-empty">No supplementary questions are attached to this meeting stage.</div>') + '</div></section></div>';
     } else if (boardState === 'live') {
-      stateSpecific = '<div class="board-live-card"><div class="board-live-card__head"><strong>Live session · Q&amp;A on approved material</strong><span>' + escapeHtml(assistantNameForState()) + ' answers only from the CEO-approved material</span></div><div class="board-live-card__status"><span class="live-pulse"></span><strong>In session</strong><span>' + escapeHtml(firstDefined((board.meeting || {}).title, 'Board meeting')) + '</span></div><div class="pill-row">' + (livePrompts.length ? livePrompts : ['Why is EBITDA 20 bps under plan?', 'Show the hedge downside', 'Is the JV funded from cash?']).map(function (prompt) { return '<button class="prompt-chip" type="button" data-board-prompt="' + escapeHtml(prompt) + '">' + escapeHtml(prompt) + '</button>'; }).join('') + '</div></div>';
+      stateSpecific = '<div class="board-live-card"><div class="board-live-card__head"><strong>Live session · Q&amp;A on approved material</strong><span>' + escapeHtml(assistantNameForState()) + ' answers only from the CEO-approved material</span></div><div class="board-live-card__status"><span class="live-pulse"></span><strong>In session</strong><span>' + escapeHtml(firstDefined((board.meeting || {}).title, 'Board meeting')) + '</span></div><div class="pill-row">' + (livePrompts.length ? livePrompts : ['How does EBITDA compare with plan?', 'Show the approved hedge exposure', 'What funding evidence supports the JV?']).map(function (prompt) { return '<button class="prompt-chip" type="button" data-board-prompt="' + escapeHtml(prompt) + '">' + escapeHtml(prompt) + '</button>'; }).join('') + '</div></div>';
     } else {
       stateSpecific = '<div class="board-mode-grid"><section class="board-panel"><p class="detail-eyebrow">Meeting summary &amp; action plan</p><p class="board-copy">' + escapeHtml(firstDefined(board.summary, snapshot.summary, 'Closed meetings retain a bounded frozen snapshot.')) + '</p><div class="mini-list">' + (actions.length ? actions.map(function (item) {
         return '<div class="board-action"><div><strong>' + escapeHtml(firstDefined(item.item, 'Action')) + '</strong><small>' + escapeHtml(firstDefined(item.owner, 'Owner')) + '</small></div><span class="pill-inline warn">' + escapeHtml(firstDefined(item.due, 'next')) + '</span></div>';
@@ -7303,11 +7335,12 @@
       }
       var params = currentViewParams();
       var session = await fetchJson("/ui/session") || {};
+      var frozenBoard = params.persona === "board" && params.board === "closed";
       var packetAndNetwork = await Promise.all([
         fetchJson(latestRunRouteForSession(session) + buildQuery(params)),
-        session.authenticated ? fetchJson("/api/v1/agent-network") : Promise.resolve(null),
-        session.authenticated ? fetchJson("/executive/files") : Promise.resolve(null),
-        session.authenticated ? fetchJson("/executive/decisions") : Promise.resolve(null),
+        session.authenticated && !frozenBoard ? fetchJson("/api/v1/agent-network") : Promise.resolve(null),
+        session.authenticated && !frozenBoard ? fetchJson("/executive/files") : Promise.resolve(null),
+        session.authenticated && !frozenBoard ? fetchJson("/executive/decisions") : Promise.resolve(null),
         fetchJson("/authority-matrix")
       ]);
       var latestPacket = packetAndNetwork[0];
@@ -7317,6 +7350,7 @@
       var authorityPolicy = packetAndNetwork[4];
 
       state.latestPacket = latestPacket || {};
+      if (state.latestPacket.board_meeting_id) state.boardMeetingId = state.latestPacket.board_meeting_id;
       state.agentNetwork = agentNetwork && agentNetwork.status === "ok" ? agentNetwork : null;
       state.reviewFiles = reviewFiles && reviewFiles.status === "ok" ? reviewFiles : null;
       state.decisionRecords = decisionRecords && decisionRecords.status === "ok"
@@ -7327,7 +7361,7 @@
         : state.authorityMatrix;
       state.authorityEditable = Boolean(authorityPolicy && authorityPolicy.editable);
       state.session = session;
-      if (session.authenticated && session.role === 'executive') {
+      if (session.authenticated && session.role === 'executive' && !frozenBoard) {
         try {
           var lifecycleResponse = await fetch('/api/decision-lifecycle/observe', {method: 'POST', headers: authHeaders()});
           if (lifecycleResponse.ok) {
@@ -7473,6 +7507,8 @@
       authorityEditable: false,
       authorityMatrix: defaultAuthorityMatrix()
     };
+
+  state.boardMeetingId = new URLSearchParams(window.location.search || "").get("meeting") || "";
 
   applyExecutiveTheme(state.theme);
 

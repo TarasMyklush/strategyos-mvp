@@ -48,3 +48,18 @@ Consolidation removals and moves are listed in [cleanup-manifest.json](maintenan
 ## Remaining operational acceptance
 
 Validate SSO and tenant/BU/data-source authorization, logout revocation, immutable board publication, ingress/TLS/private service boundaries, provider egress and inference audit. Define owner-approved retention, RPO/RTO and SLOs. Exercise restore of database, uploaded source files, object storage and selected run before claiming recoverability. A script that rolls back an application image does not establish a compatible data restore.
+
+### Local semantic search
+
+The release image includes the pinned FastEmbed search extra. Provision the pinned
+E5 small model with `python scripts/provision_embeddings.py --destination PATH`,
+then set `STRATEGYOS_EMBEDDING_MODEL_PATH` to that readable runtime directory.
+Runtime validates the model identity and every file hash and performs no downloads.
+An unset path retains the explicitly labelled legacy lexical mode. A configured
+but missing or changed model fails; it never substitutes another model.
+
+Reprocess the approved source pack to populate the separate 384-dimensional
+collection with exact workbook-row and PDF-page citations. Run and tenant filters
+apply before search. Source indexing rejects changed files and oversized packs;
+its readiness is recorded in the run. The English/Arabic synthetic retrieval gate
+is separate from factual answer quality and business approval.

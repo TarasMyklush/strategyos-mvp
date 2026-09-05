@@ -34,3 +34,33 @@ def test_ranked_cost_question_is_not_replaced_with_a_bu_commentary():
     assert result.answer.index('COGS:') < result.answer.index('Payroll:') < result.answer.index('Cloud:')
     assert 'Facilities:' not in result.answer
     assert 'SAR 85 fixed budget' in result.answer
+
+
+def test_closed_board_view_never_reads_current_run(monkeypatch):
+    from strategyos_mvp import api, board_memory
+    monkeypatch.setattr(api,'_latest_summary',lambda: (_ for _ in ()).throw(AssertionError('live source accessed')))
+    snapshot={'digest':'frozen-digest','packet':{'context':{'executive_packet':{'run_id':'original-run','board_meeting_id':'meeting-a','run_source':'immutable_board_snapshot'}}}}
+    monkeypatch.setattr(board_memory,'read_meeting',lambda tenant,meeting:snapshot if tenant=='tenant-a' and meeting=='meeting-a' else None)
+    principal={'tenant_id':'tenant-a','role':'executive','authenticated':True}
+    result=api.latest_run(persona='board',board='closed',meeting='meeting-a',principal=principal)
+    assert result['run_id']=='original-run' and result['board_snapshot_digest']=='frozen-digest'
+    import pytest
+    with pytest.raises(api.HTTPException) as exc:
+        api.latest_run(persona='board',board='closed',meeting='missing',principal=principal)
+    assert exc.value.status_code==404
+
+
+def test_generic_workbook_citation_resolves_exact_sheet_row_and_detects_changes(tmp_path):
+    from types import SimpleNamespace
+    import hashlib
+    from openpyxl import Workbook
+    from strategyos_mvp.citation_resolver import resolve_manifest_workbook_row
+    book=Workbook();book.active.title='Costs';book.active.append(['Component','Actual']);book.active.append(['Payroll',74.1]);path=tmp_path/'costs.xlsx';book.save(path)
+    evidence=SimpleNamespace(dataset_root=tmp_path,manifest={'costs.xlsx':{'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}})
+    bundle=SimpleNamespace(evidence=evidence)
+    assert resolve_manifest_workbook_row(bundle,'costs.xlsx','Costs!Excel row 2')['row']['Actual']==74.1
+    assert resolve_manifest_workbook_row(bundle,'costs.xlsx','Wrong!Excel row 2') is None
+    assert resolve_manifest_workbook_row(bundle,'costs.xlsx','Costs!Excel row 999') is None
+    assert resolve_manifest_workbook_row(bundle,'../costs.xlsx','Costs!Excel row 2') is None
+    book.active['B2']=100;book.save(path)
+    assert resolve_manifest_workbook_row(bundle,'costs.xlsx','Costs!Excel row 2') is None

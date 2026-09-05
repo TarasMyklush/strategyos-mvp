@@ -447,7 +447,7 @@ def _group_cost_component_drivers(root: Path) -> dict[str, Any] | None:
             if not required.issubset(headers):
                 continue
             rows: list[dict[str, Any]] = []
-            for values in iterator:
+            for excel_row, values in enumerate(iterator, start=2):
                 bu = str(_cell(values, headers, "bu") or "").strip()
                 component = str(_cell(values, headers, "costcomponent") or "").strip()
                 budget = _decimal(_cell(values, headers, "h1budgetsarm"))
@@ -467,6 +467,7 @@ def _group_cost_component_drivers(root: Path) -> dict[str, Any] | None:
                 rows.append(
                     {
                         "business_unit": bu,
+                        "locator": f"{sheet.title}!Excel row {excel_row}",
                         "component": component,
                         "budget_sar": _number(budget * Decimal("1000000")),
                         "actual_sar": _number(actual * Decimal("1000000")),
@@ -495,6 +496,7 @@ def _group_cost_component_drivers(root: Path) -> dict[str, Any] | None:
                     "rows": rows,
                     "source_file": _relative(path, root),
                     "sheet": sheet.title,
+                    "source_hash": _sha256(path),
                 }
     return None
 
