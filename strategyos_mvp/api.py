@@ -14186,7 +14186,7 @@ def _kpi_mover_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _question_requires_analytical_result(question: str) -> bool:
-    return bool(re.search(r"\b(top (?:\d+|three|five|ten)|break(?:down| down)|rank(?:ed|ing)?|compar(?:e|ison)|against (?:budget|plan)|versus (?:budget|plan)|performing against|which .*drivers|aging|ageing|sensitivity|per employee)\b", str(question).casefold()))
+    return bool(re.search(r"\b(largest|biggest|smallest|highest|lowest|top (?:\d+|three|five|ten)|break(?:down| down)|rank(?:ed|ing)?|compar(?:e|ison)|against (?:budget|plan)|versus (?:budget|plan)|performing against|which .*drivers|aging|ageing|sensitivity|per employee)\b", str(question).casefold()))
 
 
 def _governed_subject_result(

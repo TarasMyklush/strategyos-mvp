@@ -1,0 +1,29 @@
+- banner:
+  - link "StrategyOS home":
+    - generic: StrategyOS
+  - tablist "Executive views":
+    - tab "Diagnostics" [selected]
+    - tab "AI Assistants"
+    - tab "Agents"
+    - tab "Knowledge"
+    - tab "Authority Matrix"
+  - button "Group CEO":
+    - generic: Group CEO
+    - generic: ▾
+  - button "Switch to dark theme": ◐
+  - button "BT"
+- main:
+  - text: Coming soon
+  - heading "This persona workspace" [level=1]
+  - paragraph: This workspace is not yet differentiated enough to show safely. StrategyOS will not substitute the Group CEO briefing.
+  - button "Return to Group CEO"
+- contentinfo:
+  - generic: Prepared by StrategyOS from the approved strategy and verified company data.
+  - link "How it works":
+    - /url: /guide
+  - link "Architecture":
+    - /url: /architecture
+  - generic: refreshed today · 06:14 · Riyadh
+- button "◆ Ask Hermes":
+  - generic: ◆
+  - text: Ask Hermes

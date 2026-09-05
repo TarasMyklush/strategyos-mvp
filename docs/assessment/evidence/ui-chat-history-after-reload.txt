@@ -1,0 +1,132 @@
+your data":
+      - heading "Think and model on your data" [level=2]
+      - paragraph: the gravity layer — think, don’t act
+      - article:
+        - generic: ◇ Thinking mode
+        - heading "Model a what-if on your own data" [level=3]
+        - paragraph:
+          - text: A sovereign sandbox that runs in your chat — on the current verified figures, with
+          - strong: no side effects
+          - text: .
+        - generic: ◇ Type a what-if and play — nothing here acts
+        - generic: Model a scenario on your data
+        - textbox "Model a scenario on your data":
+          - /placeholder: e.g. what if the largest revenue driver changes by 5%?
+        - button "Run scenario": ↑
+        - generic: or start from one of these
+        - button "Does the cost position require intervention, and which owner has the largest controllable gap?"
+        - button "What are the three decisions I need to make before the next commitment, with one owner and deadline for each?"
+        - button "What changed since the last executive review, and which item now crosses the CEO materiality threshold?"
+      - region "Leaders’ Corner":
+        - heading "Leaders’ Corner" [level=2]
+        - paragraph: short counsel, senior practitioners
+        - article:
+          - generic: ✦ Leaders’ Corner · video
+          - generic: Short counsel, senior practitioners
+          - iframe:
+            - generic "YouTube Video Player"
+            - button "Play video":
+            - button "Hide player controls"
+            - 'link "Enterprise AI Strategy and CEO Leadership, with McKinsey & Company | CXOTalk #851"':
+              - /url: https://www.youtube.com/watch?v=uTRKdCY4HdE
+            - link "CXOTalk":
+              - /url: /channel/UCGeqHuR3eUU5tnmgjkqZazw
+              - generic: CXOTalk
+            - button "thumbnail-image":
+              - img "thumbnail-image"
+            - generic: CXOTalk
+            - generic: 267k subscribers
+            - button "Copy link":
+            - link "Watch on YouTube":
+              - /url: https://www.youtube.com/watch?v=uTRKdCY4HdE
+              - text: Watch on
+          - strong: Enterprise AI Strategy and CEO Leadership
+          - text: McKinsey & Company
+          - emphasis: · CEO leadership · enterprise AI strategy
+          - paragraph: How CEOs can move from AI experiments to enterprise adoption while aligning governance, organisation and strategy.
+          - button "Ask Hermes about this topic"
+          - link "Open on YouTube ↗":
+            - /url: https://www.youtube.com/watch?v=uTRKdCY4HdE
+          - generic "Leaders’ Corner videos":
+            - button "Play Enterprise AI Strategy and CEO Leadership":
+              - generic: ▶
+              - generic: ~45 min
+              - strong: Enterprise AI Strategy and CEO Leadership
+              - emphasis: McKinsey & Company
+            - button "Play Aligning AI with Enterprise Strategy":
+              - generic: ▶
+              - generic: ~40 min
+              - strong: Aligning AI with Enterprise Strategy
+              - emphasis: Leon Gordon, CEO at Onyx Data
+            - button "Play Agentic AI Governance and Enterprise-Scale Execution":
+              - generic: ▶
+              - generic: ~50 min
+              - strong: Agentic AI Governance and Enterprise-Scale Execution
+              - emphasis: SiliconANGLE theCUBE
+            - button "Play Bridge Strategy and Execution with Decision-Ready Views":
+              - generic: ▶
+              - generic: ~35 min
+              - strong: Bridge Strategy and Execution with Decision-Ready Views
+              - emphasis: Tempo
+- contentinfo:
+  - generic: Prepared by StrategyOS from the approved strategy and verified company data.
+  - link "How it works":
+    - /url: /guide
+  - link "Architecture":
+    - /url: /architecture
+  - generic: Demo clock · Mon, 1 Jun 2026 · last verified refresh 06:14 Riyadh
+  - generic "Demo day":
+    - button "1 Jun" [pressed]
+    - button "2 Jun"
+    - button "3 Jun"
+    - button "4 Jun"
+    - button "5 Jun"
+    - button "6 Jun"
+    - button "7 Jun"
+- button "◆ Ask Hermes":
+  - generic: ◆
+  - text: Ask Hermes
+- dialog "Ask Hermes":
+  - article "Ask Hermes":
+    - heading "Ask Hermes" [level=3]
+    - paragraph: Hermes answers from your current executive data and cited business records.
+    - button "Start a new conversation": New
+    - button "Toggle thread history" [expanded] [active]: History ▾
+    - button "Close assistant": ✕
+    - complementary:
+      - button "＋ New conversation Start a new conversation":
+        - strong: ＋ New conversation
+        - generic: Start a new conversation
+      - 'button "Morning note · 2026-06-01 12:39 E-Rx share of retail Rx volume · 1.8 pts behind path · Next: Monday Brief · group KPI review · 08:00 2 message(s)"':
+        - strong: Morning note · 2026-06-01
+        - generic: 12:39
+        - generic: "E-Rx share of retail Rx volume · 1.8 pts behind path · Next: Monday Brief · group KPI review · 08:00"
+        - generic: 2 message(s)
+      - 'button "What are the three largest cost components… 12:39 Meaning: Mizan Digital Health is reported as business-unit commentary attached to… 2 message(s)"':
+        - strong: What are the three largest cost components…
+        - generic: 12:39
+        - generic: "Meaning: Mizan Digital Health is reported as business-unit commentary attached to…"
+        - generic: 2 message(s)
+      - button "Auto-renewal escalation at Gulf Cold-Chain Logistics Co 12:34 What is driving “Auto-renewal escalation at Gulf Cold-Chain Logistics Co” and what should we do next? 1 message(s)":
+        - strong: Auto-renewal escalation at Gulf Cold-Chain Logistics Co
+        - generic: 12:34
+        - generic: What is driving “Auto-renewal escalation at Gulf Cold-Chain Logistics Co” and what should we do next?
+        - generic: 1 message(s)
+      - 'button "Dormant supplier credit not offset: CR-2024-091 12:34 What is driving “Dormant supplier credit not offset: CR-2024-091” and what should we do next? 1 message(s)"':
+        - strong: "Dormant supplier credit not offset: CR-2024-091"
+        - generic: 12:34
+        - generic: "What is driving “Dormant supplier credit not offset: CR-2024-091” and what should we do next?"
+        - generic: 1 message(s)
+      - button "Duplicate payment for invoice INV-2026-0341 12:34 What is driving “Duplicate payment for invoice INV-2026-0341” and what should we do next? 1 message(s)":
+        - strong: Duplicate payment for invoice INV-2026-0341
+        - generic: 12:34
+        - generic: What is driving “Duplicate payment for invoice INV-2026-0341” and what should we do next?
+        - generic: 1 message(s)
+    - strong: Board status
+    - generic: Board context is complete and ready for review.
+    - generic: Hermes
+    - paragraph: Board context is complete and ready for review.
+    - generic: Ask your executive assistant
+    - textbox "Ask Hermes":
+      - /placeholder: Ask Hermes…
+    - button "Send" [disabled]

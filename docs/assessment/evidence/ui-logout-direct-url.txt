@@ -1,0 +1,14 @@
+- main:
+  - generic: Customer sign-in
+  - heading "Sign in to StrategyOS" [level=1]
+  - paragraph: Use your authorized StrategyOS account to continue.
+  - text: Preview user
+  - combobox "Preview user":
+    - option "Choose an authorized preview user" [disabled] [selected]
+    - option "BU Leader — inspect business-unit cases · bu.tester"
+    - option "Executive — view the executive surface · executive.tester"
+  - text: Password
+  - textbox "Password" [active]
+  - button "Sign in"
+  - alert
+  - generic: Use Sign out from your profile menu when you need to switch accounts.

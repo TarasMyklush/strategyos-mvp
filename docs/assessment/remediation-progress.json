@@ -209,9 +209,9 @@
   ],
   "ui_constraint": "User requires preserving the existing UI. Removed new pages, navigation and language controls on 2026-09-05. Keep existing layouts, CSS, branding and controls; integrate functional corrections through existing surfaces.",
   "validation": {
-    "service_suite": "1720 passed, zero skips before final UI preservation changes; final rerun in progress",
-    "deployment": "pending",
-    "browser_qa": "baseline captured; release QA pending",
+    "service_suite": "1721 passed, zero skips on bc360a3",
+    "deployment": "bc360a3 deployed to preview; enriched run ea9377df-6e7d-4ef4-b452-4682262668ea completed and approved for synthetic preview",
+    "browser_qa": "In progress. Login, logout/direct URL, BU denial, persisted conversation history and saved Hold decision verified. Drill formula, range tokens and largest-cost routing defects found; corrections under test.",
     "restore_evidence": "evidence/preview-restore-proof.json"
   }
 }

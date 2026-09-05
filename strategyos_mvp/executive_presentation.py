@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import hashlib
 import re
 from datetime import date
@@ -191,7 +193,11 @@ def _source_title(path: Any) -> str:
         return "Chart of accounts"
     if "cash_forecast" in lowered or "cash_position" in lowered:
         return "Treasury cash position"
-    return "Finance source"
+    if "bu_group_budget" in lowered:
+        return "Group and business-unit budget"
+    if "bu_cost_variance" in lowered:
+        return "Business-unit cost variance"
+    return Path(value).stem.replace("_", " ") or "Finance source"
 
 
 def _governed_strategic_reference(payload: Mapping[str, Any], key: str) -> dict[str, str] | None:
@@ -742,6 +748,8 @@ def _executive_kpi_brief(
     evidence_details = evidence.get("details") if isinstance(evidence.get("details"), Mapping) else {}
     source_files = list(evidence.get("files") or [])
     source_titles = list(dict.fromkeys(_source_title(item) for item in source_files))
+    group_budget_basis = any("bu_group_budget" in str(item).lower() for item in source_files)
+    formula = str(spec["formula"])
     comparison_name = "Current-period comparison"
     comparison_value = comparison if comparison_available else "Not yet aligned"
     comparison_note = (
@@ -797,6 +805,20 @@ def _executive_kpi_brief(
         ]
         decision_question = "Is liquidity headroom sufficient for the next commitments, and what needs protecting?"
 
+    if group_budget_basis and key in {"operating_cost", "ebitda_margin"}:
+        revenue = _number_or_none(components.get("revenue_actual"))
+        ebitda = _number_or_none(components.get("ebitda_actual"))
+        cost = _number_or_none(components.get("operating_cost_actual"))
+        formula = ("Total cost to EBITDA = consolidated group revenue minus consolidated group EBITDA; includes cost of goods sold."
+                   if key == "operating_cost" else "Group EBITDA = consolidated group revenue × the reported group EBITDA margin; margin = EBITDA ÷ revenue × 100.")
+        calculation_steps = [
+            {"label": "Consolidated group revenue", "value": _format_sar(revenue)},
+            {"label": "Consolidated group EBITDA", "value": _format_sar(ebitda)},
+            {"label": "Total cost to EBITDA (including COGS)", "value": _format_sar(cost)},
+        ]
+        if key == "ebitda_margin":
+            driver_rows = [{"label": item["label"], "value": item["value"], "share_pct": None} for item in calculation_steps]
+
     return {
         "period_label": f"{period} actual",
         "metric": metric,
@@ -815,7 +837,7 @@ def _executive_kpi_brief(
         "strategic_reference": dict(strategic_reference) if strategic_reference else None,
         "calculation": {
             "label": "How this figure is built",
-            "formula": str(spec["formula"]),
+            "formula": formula,
             "steps": calculation_steps,
         },
         "coverage": {

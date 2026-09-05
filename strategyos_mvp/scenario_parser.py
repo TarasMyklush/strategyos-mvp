@@ -1597,7 +1597,7 @@ def _finance_bu_cost_ranking(normalized_prompt: str, baseline: Mapping[str, Any]
         amount, plan = _decimal_or_none(row["actual_sar"]), _decimal_or_none(row.get("budget_sar"))
         delta = amount - plan if plan is not None else None
         comparison = "plan unavailable" if delta is None else (_sar_executive_decimal(abs(delta)) + (" above fixed budget" if delta > 0 else " below fixed budget" if delta < 0 else " variance to fixed budget"))
-        lines.append(f"{row['component']}: {_sar_executive_decimal(amount)} actual; {comparison}.")
+        lines.append(f"{row['component']}: {_sar_executive_decimal(amount)} actual; " + (f"{_sar_executive_decimal(plan)} fixed budget; " if plan is not None else "") + f"{comparison}.")
     return ScenarioResult(scenario_id="governed_bu_cost_ranking", scenario_label="Business-unit cost components", matched=True,
         answer=f"For {baseline['period']}, the largest supplied cost components in {unit} are: " + " ".join(lines),
         calculations=[], kg_context=[], citations=[{"source_path":baseline.get("cost_component_source"),"locator":f"Cost components / {unit}","excerpt":"Actual and fixed-budget component values."}],

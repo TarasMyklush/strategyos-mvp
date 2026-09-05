@@ -4564,7 +4564,7 @@
   }
 
   function executiveMetricTokens(value, limit) {
-    var matches = String(value || "").match(/(?:\bSAR\s*~?\s*[\d,.]+\s*[KMB]?\b|[+\-−]?\d+(?:\.\d+)?\s*%|[+\-−]\d+(?:\.\d+)?\s*(?:pts?|days?|weeks?))/gi) || [];
+    var matches = String(value || "").match(/(?:\bSAR\s*~?\s*[\d,.]+(?:\s*[-–—]\s*[\d,.]+)?\s*(?:billion|million|thousand|[KMB])?\b|[+\-−]?\d+(?:\.\d+)?(?:\s*[-–—]\s*\d+(?:\.\d+)?)?\s*%|[+\-−]\d+(?:\.\d+)?\s*(?:pts?|days?|weeks?))/gi) || [];
     var seen = {};
     return matches.map(function (token) { return token.replace(/\s+/g, " ").trim(); }).filter(function (token) {
       var key = token.toLowerCase();
