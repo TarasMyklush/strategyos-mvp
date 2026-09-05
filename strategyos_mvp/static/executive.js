@@ -2923,7 +2923,8 @@
       var text = String(firstDefined(message.text, "")).trim();
       if (!text) continue;
       if (message.role === "assistant" && message.status === "failed") {
-        thread.preview = buildRetryPreview(firstDefined(message.retryPrompt, inferRetryPrompt(messages, index), ""));
+        thread.preview = message.retryable === false ? wordSlice(text, 84)
+          : buildRetryPreview(firstDefined(message.retryPrompt, inferRetryPrompt(messages, index), ""));
         return;
       }
       thread.preview = wordSlice(text, 84);
@@ -2954,8 +2955,10 @@
           message.text = "Hermes could not reach the shared assistant service. Retry now once the service is reachable.";
           changed = true;
         }
-        message.retryable = true;
-        message.needsRetry = true;
+        var canRetry = message.retryable !== false && assistantFailureCopy(message.errorType, message.statusCode).retryable;
+        if (message.retryable !== canRetry || message.needsRetry !== canRetry) changed = true;
+        message.retryable = canRetry;
+        message.needsRetry = canRetry;
         message.autoRetryEligible = false;
         return message;
       }
@@ -7100,7 +7103,7 @@
           failureMeta = '<details class="assistant-message__evidence"><summary>' + escapeHtml(assistantEvidenceSummary(message.meta)) + '</summary><div>' + escapeHtml(firstDefined(message.meta, '')) + '</div></details>';
         }
         var retryButton = '';
-        if (role === 'assistant' && message.status === 'failed' && message.retryPrompt) {
+        if (role === 'assistant' && message.status === 'failed' && message.retryable !== false && message.retryPrompt) {
           retryButton = '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-retry-index="' + escapeHtml(String(entry.index)) + '">Retry now</button></div>';
         } else if (role === 'assistant' && message.status === 'pending') {
           retryButton = '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-cancel="true">Cancel request</button></div>';

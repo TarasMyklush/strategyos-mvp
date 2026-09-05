@@ -135,3 +135,34 @@ def test_invalid_assistant_input_has_actionable_copy_and_cannot_retry_forever():
     assert '16,000' in too_long['answer'] and too_long['retryable'] is False
     assert 'revise' in invalid['answer'] and invalid['retryable'] is False
     assert outage['retryable'] is True
+
+
+def test_thread_reload_preserves_nonretryable_validation_and_auth_failures():
+    source=Path('strategyos_mvp/static/executive.js').read_text()
+    def function(name, following):
+        start=source.index('  function '+name+'(')
+        return source[start:source.index('  function '+following+'(',start)]
+    code="""
+    const safeArray = value => Array.isArray(value) ? value : [];
+    const firstDefined = (...values) => values.find(value => value !== undefined && value !== null);
+    const wordSlice = (value, length) => value.slice(0, length);
+    const isLegacyAssistantTransportFallback = () => false;
+    """
+    code+=function('inferRetryPrompt','summarizeAssistantFailure')
+    code+=function('buildRetryPreview','logAssistantTransportFailure')
+    code+=function('assistantFailureCopy','makeAssistantFailureResult')
+    code+="""
+    const results = ['question_too_long','validation_error','auth_error','forbidden','server_error'].map(errorType => {
+      const thread = {messages: [{role:'user',text:'Question'}, {role:'assistant',status:'failed',errorType,text:'Please edit or sign in.'}]};
+      markThreadTransportFailuresRetryable(thread);
+      recalcThreadPreview(thread);
+      return {retryable:thread.messages[1].retryable, needsRetry:thread.messages[1].needsRetry,
+        retryAction:!!latestRetryableAssistantFailure(thread), preview:thread.preview};
+    });
+    console.log(JSON.stringify(results));
+    """
+    results=json.loads(subprocess.check_output(['node','-e',code],text=True))
+    for result in results[:4]:
+        assert result['retryable'] is False and result['needsRetry'] is False
+        assert result['retryAction'] is False and 'Retry needed' not in result['preview']
+    assert results[4]['retryable'] is True and results[4]['retryAction'] is True

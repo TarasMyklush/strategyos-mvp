@@ -56,3 +56,19 @@ def test_delta_inherits_only_unambiguous_same_row_money_unit():
     row = 'Budget (SAR M): 758; RF1 (SAR M): 782; Delta vs budget: +24.0; Basis: demand'
     assert claims_supported('SAR 24M', approved_evidence_text(row))
     assert not claims_supported('SAR 24M', approved_evidence_text(row.replace('RF1 (SAR M)', 'RF1 (USD M)')))
+
+
+def test_workbook_percentage_and_basis_point_headers_type_only_their_cell():
+    row = 'BU: Sample; 2025 EBITDA %: 27.4; EBITDA % 2025A: 39; Headroom (bps): 300; Peer median: 42'
+    assert claims_supported('27.4%; 39%; 300 basis points', row)
+    assert not claims_supported('42%', row)
+    assert not claims_supported('300%', row)
+    assert not claims_supported('3 percentage points', row)
+    assert not claims_supported('SAR 27.4', row)
+    assert not claims_supported('27.4%', 'EBITDA %: unavailable; Revenue: 27.4')
+    assert not claims_supported('27.4%', 'EBITDA %: unavailable\nRevenue: 27.4')
+
+
+def test_question_percentage_is_not_promoted_to_evidence():
+    from strategyos_mvp.claim_contracts import approved_evidence_text
+    assert not claims_supported('35%', approved_evidence_text({'question': 'Premium %: 35', 'facts': 'No site benchmark supplied'}))
