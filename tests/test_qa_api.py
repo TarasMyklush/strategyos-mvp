@@ -5855,3 +5855,21 @@ def test_record_executive_decision_requires_idempotency_and_a_real_due_date(monk
         assert "Choose a due date" in no_date.json()["detail"]
     finally:
         _restore_env(original)
+
+
+def test_document_retrieval_does_not_replace_analytical_contract_answer(monkeypatch):
+    monkeypatch.setattr(api_module, 'CONFIG', SimpleNamespace(vector_routing_enabled=True))
+    monkeypatch.setattr(api_module, 'check_qdrant_ready', lambda: (_ for _ in ()).throw(AssertionError('Analytical question reached lookup')))
+    for question in ('Which contracts auto-renew in the next six months, and with what escalators?',
+                     'What price variances exist against contracted prices, same SKU same period?',
+                     'What does the evidence say about our margin?'):
+        assert api_module._route_keyword_retrieval('run', question)['matched'] is False
+
+
+def test_explicit_document_lookup_preserves_hash_and_actual_backend(monkeypatch):
+    monkeypatch.setattr(api_module, 'CONFIG', SimpleNamespace(vector_routing_enabled=True))
+    monkeypatch.setattr(api_module, 'check_qdrant_ready', lambda: {'status':'ok','hybrid_mode':'dense_semantic'})
+    monkeypatch.setattr(api_module, 'search_run_vectors', lambda *a,**k: {'status':'ready','results':[{'title':'Contract','source_path':'contract.pdf','source_hash':'sha256','locator':'Page 2','excerpt':'Renewal terms'}]})
+    result=api_module._route_keyword_retrieval('run','Find supporting documents for the renewal')
+    assert result['matched'] and result['citations'][0]['source_hash']=='sha256'
+    assert 'semantic' in result['basis'] and 'hash_fallback' not in result['basis']

@@ -11973,7 +11973,9 @@ def _route_keyword_retrieval(run_id: str | None, question: str) -> dict[str, Any
     if not CONFIG.vector_routing_enabled:
         return {"matched": False, "answered_by": "", "reason": "vector_routing_disabled"}
     lower_question = str(question or "").lower()
-    if not any(term in lower_question for term in ("evidence", "document", "documents", "invoice", "contract", "source", "support", "proof", "finding")):
+    # A retrieval list answers an explicit document lookup, not an analytical
+    # question that happens to mention invoices, contracts or evidence.
+    if not re.search(r"\b(?:find|locate|search(?: for)?|show(?: me)?)\s+(?:the\s+)?(?:supporting\s+)?(?:evidence|documents?|sources?|proof|files?)\b", lower_question):
         return {"matched": False, "answered_by": "", "reason": "question_not_routed"}
     qdrant_status = check_qdrant_ready()
     if qdrant_status.get("status") != "ok":
@@ -11987,19 +11989,21 @@ def _route_keyword_retrieval(run_id: str | None, question: str) -> dict[str, Any
         citations.append(
             {
                 "source_path": item.get("source_path") or item.get("source") or "qdrant://strategyos_search_chunks",
+                "source_hash": item.get("source_hash"),
                 "locator": locator,
                 "excerpt": item.get("excerpt") or item.get("summary") or item.get("text") or "",
             }
         )
     top = result["results"][0]
     answer = (
-        f"Keyword retrieval found {len(result['results'])} supporting record(s). "
+        f"Found {len(result['results'])} supporting record(s). "
         f"Top match: {top.get('title') or top.get('summary') or top.get('finding_id') or 'supporting evidence'}"
     )
     return {
         "matched": True,
         "answer": answer,
-        "basis": "Keyword/lexical overlap over run-scoped Qdrant payloads while the embedding backend is hash_fallback.",
+        "basis": ("Run-scoped multilingual semantic retrieval." if qdrant_status.get("hybrid_mode") == "dense_semantic"
+                  else "Run-scoped lexical retrieval."),
         "citations": citations,
         "suggestions": [],
         "assistant_mode": "vector",
