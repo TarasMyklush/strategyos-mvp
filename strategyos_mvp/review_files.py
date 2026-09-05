@@ -35,6 +35,8 @@ REVIEW_FILE_MIME_TYPES = {
 }
 OOXML_ROOTS = {".xlsx": "xl/", ".docx": "word/", ".pptx": "ppt/"}
 MAX_REVIEW_FILE_BYTES = 25 * 1024 * 1024
+MAX_REVIEW_EXPANDED_BYTES = 100 * 1024 * 1024
+MAX_REVIEW_ARCHIVE_ENTRIES = 10000
 REVIEW_FILE_CAP = 8
 _VAULT_LOCK = threading.Lock()
 
@@ -334,7 +336,18 @@ def resolve_source_review_file(source_pack_id: str, source_id: str) -> Path:
 def _validate_ooxml(path: Path, extension: str) -> None:
     try:
         with zipfile.ZipFile(path) as archive:
-            names = archive.namelist()
+            entries = archive.infolist()
+            names = [entry.filename for entry in entries]
+            if len(entries) > MAX_REVIEW_ARCHIVE_ENTRIES or len(set(names)) != len(names):
+                raise ValueError("excessive or duplicate archive entries")
+            if sum(entry.file_size for entry in entries) > MAX_REVIEW_EXPANDED_BYTES:
+                raise ValueError("expanded Office document exceeds the safety limit")
+            for entry in entries:
+                normalized = entry.filename.replace("\\", "/")
+                if normalized.startswith("/") or ".." in normalized.split("/") or re.match(r"^[A-Za-z]:", normalized):
+                    raise ValueError("unsafe archive path")
+                if entry.flag_bits & 1 or (entry.external_attr >> 16) & 0o170000 == 0o120000:
+                    raise ValueError("encrypted or symbolic-link archive entry")
             if "[Content_Types].xml" not in names or not any(
                 name.startswith(OOXML_ROOTS[extension]) for name in names
             ):

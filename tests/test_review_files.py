@@ -150,3 +150,20 @@ def test_upload_rejects_non_office_extension(
             tenant_id="tenant-a",
             uploaded_by="CEO",
         )
+
+
+def test_office_archive_rejects_expansion_traversal_and_duplicate_names(tmp_path,monkeypatch):
+    from strategyos_mvp import review_files
+    from fastapi import HTTPException
+    import pytest
+    monkeypatch.setattr(review_files,'MAX_REVIEW_EXPANDED_BYTES',1000)
+    for name,entries in [('expanded',[('xl/worksheets/a.xml','x'*2000)]),
+                         ('traversal',[('xl/../outside.xml','x')]),
+                         ('windows',[('C:\\outside.xml','x'),('xl/a.xml','x')]),
+                         ('duplicate',[('xl/a.xml','a'),('xl/a.xml','b')])]:
+        path=tmp_path/(name+'.xlsx')
+        with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('[Content_Types].xml','<Types/>')
+            for filename,content in entries:archive.writestr(filename,content)
+        with pytest.raises(HTTPException) as error:review_files._validate_ooxml(path,'.xlsx')
+        assert error.value.status_code==400
