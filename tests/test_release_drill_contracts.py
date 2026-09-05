@@ -124,3 +124,14 @@ def test_json_citation_requires_unique_record_id_and_unchanged_source(tmp_path):
     ambiguous = bundle([{'thread_id': 'A2A-01'}, {'thread_id': 'A2A-01'}])
     assert verify_source_citations(ambiguous, [item])[1]
     assert verify_source_citations(ambiguous, [{**item, 'source_path': '../threads.json'}])[1]
+
+
+def test_invalid_assistant_input_has_actionable_copy_and_cannot_retry_forever():
+    source=Path('strategyos_mvp/static/executive.js').read_text()
+    start=source.index('  function assistantFailureCopy(')
+    function=source[start:source.index('  function makeAssistantFailureResult(',start)]
+    code=function+";console.log(JSON.stringify([assistantFailureCopy('question_too_long',413),assistantFailureCopy('validation_error',422),assistantFailureCopy('server_error',503)]));"
+    too_long, invalid, outage=json.loads(subprocess.check_output(['node','-e',code],text=True))
+    assert '16,000' in too_long['answer'] and too_long['retryable'] is False
+    assert 'revise' in invalid['answer'] and invalid['retryable'] is False
+    assert outage['retryable'] is True

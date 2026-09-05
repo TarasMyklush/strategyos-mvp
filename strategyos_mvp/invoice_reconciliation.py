@@ -50,7 +50,7 @@ def answer(question, bundle):
     except (ValueError, KeyError) as exc:
         return {'matched': False, 'answer': 'Invoice reconciliation is blocked: ' + str(exc), 'citations': [], 'available': False}
     count = len(result['mismatches'])
-    text = f"The current AR extract covers {result['covered_invoice_count']} of {result['header_count']} invoice headers. {count} invoice exceptions were found that differ from their summed line amounts by more than SAR 0.01."
+    text = f"The current AR extract covers {result['covered_invoice_count']} of {result['header_count']} invoice headers. Invoice exceptions exceeding SAR 0.01 between headers and summed lines: {count}."
     if count:
         text += '\nLargest exceptions (up to 10):\n' + '\n'.join(
             f"{row['invoice_id']}: header SAR {Decimal(row['header_sar']):,.2f}; lines SAR {Decimal(row['lines_sar']):,.2f}; lines minus header SAR {Decimal(row['difference_sar']):,.2f}."

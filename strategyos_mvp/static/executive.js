@@ -908,6 +908,7 @@
           error.requestId = responseRequestId;
           error.errorType = response.status === 401 ? "auth_error"
             : response.status === 403 ? "forbidden"
+            : [400, 413, 422].indexOf(response.status) !== -1 ? "validation_error"
             : response.status >= 500 ? "server_error"
             : "http_error";
           throw error;
@@ -2889,6 +2890,9 @@
   }
 
   function summarizeAssistantFailure(message) {
+    if (message && (message.errorType === "validation_error" || message.errorType === "question_too_long")) {
+      return "Edit your question and send it again.";
+    }
     return message && message.retryable === false
       ? "Hermes is unavailable for this request."
       : "Hermes is temporarily unavailable. Your question is preserved and can be retried.";
@@ -2985,6 +2989,12 @@
   // one thing that could not work.
   function assistantFailureCopy(errorType, statusCode) {
     var status = Number(statusCode) || 0;
+    if (errorType === "question_too_long") {
+      return { answer: "Please shorten your question to 16,000 characters or fewer.", retryable: false };
+    }
+    if (errorType === "validation_error" || [400, 413, 422].indexOf(status) !== -1) {
+      return { answer: "This request could not be accepted. Please shorten or revise your question and send it again.", retryable: false };
+    }
     if (errorType === "auth_error" || status === 401) {
       return {
         answer: "Your sign-in has expired. Sign in again to carry on the conversation.",
@@ -3244,6 +3254,9 @@
     var cleanMessage = String(message || "").trim();
     if (!cleanMessage) {
       return { ok: false, answer: "Please ask a question for the assistant.", retryable: false, needsRetry: false, errorType: "empty_prompt", endpoint: "/assistant/chat" };
+    }
+    if (Array.from(cleanMessage).length > 16000) {
+      return makeAssistantFailureResult(cleanMessage, {errorType: "question_too_long", statusCode: 413});
     }
 
     // Typo normalization for common misspellings before API call
