@@ -2838,6 +2838,7 @@
   }
 
   function inferRetryPrompt(messages, index) {
+    messages = safeArray(messages);
     for (var cursor = index - 1; cursor >= 0; cursor -= 1) {
       var candidate = messages[cursor] || {};
       if (candidate.role === "user") {
@@ -3332,6 +3333,9 @@
       }
       threadStore()[key] = persisted[key];
       markThreadTransportFailuresRetryable(threadStore()[key]);
+    });
+    Object.keys(threadStore()).forEach(function (key) {
+      if (key.indexOf(state.activePersona + ":") === 0) markThreadTransportFailuresRetryable(threadStore()[key]);
     });
     var seededThreads = safeArray(chat.threads);
     seededThreads.forEach(function (thread, index) {

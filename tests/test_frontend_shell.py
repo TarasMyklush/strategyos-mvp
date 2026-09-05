@@ -3552,6 +3552,10 @@ async function main() {{
   }};
   harness.state.activePersona = 'ceo';
   harness.state.activeThreadKey = persistedThreadKey;
+  // Legacy browser storage is unowned; only explicitly rehydrated workspace state is used.
+  harness.ensureThreads();
+  if (harness.threadStore()[persistedThreadKey]) throw new Error('Unowned legacy conversation was loaded');
+  Object.assign(harness.threadStore(), persistedThreads);
   harness.ensureThreads();
 
   const thread = harness.threadStore()[persistedThreadKey];
@@ -3764,6 +3768,10 @@ async function main() {{
   }};
   harness.state.activePersona = 'ceo';
   harness.state.activeThreadKey = persistedThreadKey;
+  // Legacy browser storage is unowned; only explicitly rehydrated workspace state is used.
+  harness.ensureThreads();
+  if (harness.threadStore()[persistedThreadKey]) throw new Error('Unowned legacy conversation was loaded');
+  Object.assign(harness.threadStore(), persistedThreads);
   harness.state.drawerOpen = true;
 
   harness.ensureThreads();
