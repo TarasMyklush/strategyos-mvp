@@ -34,3 +34,25 @@ def test_invented_values_currency_and_units_fail_closed(candidate):
 
 def test_equivalent_financial_units_are_accepted():
     assert claims_supported('SAR 2,400,000','SAR 2.4M')
+
+
+def test_workbook_headers_supply_explicit_currency_and_scale():
+    assert claims_supported('SAR 758M', 'FY2026 Budget (SAR M): 758; RF1 (SAR M): 782')
+    assert not claims_supported('USD 758M', 'FY2026 Budget (SAR M): 758')
+    assert not claims_supported('SAR 24M', 'FY2026 Budget (SAR M): 758; RF1 (SAR M): 782')
+
+
+def test_display_rounding_is_bounded_and_currency_specific():
+    assert claims_supported('SAR 794K', 'SAR 794108')
+    assert claims_supported('SAR 385.1M', 'SAR 385079908.90')
+    assert not claims_supported('SAR 795K', 'SAR 794108')
+    assert not claims_supported('USD 794K', 'SAR 794108')
+    assert not claims_supported('SAR 1M', 'SAR 794108')
+    assert not claims_supported('794000%', '794108%')
+
+
+def test_delta_inherits_only_unambiguous_same_row_money_unit():
+    from strategyos_mvp.claim_contracts import approved_evidence_text
+    row = 'Budget (SAR M): 758; RF1 (SAR M): 782; Delta vs budget: +24.0; Basis: demand'
+    assert claims_supported('SAR 24M', approved_evidence_text(row))
+    assert not claims_supported('SAR 24M', approved_evidence_text(row.replace('RF1 (SAR M)', 'RF1 (USD M)')))

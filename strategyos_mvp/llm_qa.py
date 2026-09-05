@@ -141,6 +141,13 @@ Report money the way an executive reads it: round to millions or thousands
 with the unit (SAR 385.1M, SAR 794K), matching the figures on their dashboard.
 Do not quote balances to the halala (never "SAR 385,079,908.90") unless the
 executive explicitly asks for the exact figure.
+Use only amounts, deltas and ratios explicitly supplied by the evidence or
+the governed calculation. Do not perform new arithmetic in prose: do not add
+line items, calculate percentages, or infer currency for an unlabelled amount.
+Workbook column headings supply units; a delta inherits them only when the
+same row's monetary headings agree. Cite one exact supplied locator per citation,
+never invent a worksheet row range. If a calculation is missing, explain the
+available line items and the calculation needed without guessing its result.
 When the executive asks more than one thing in a single message, answer every
 part, or say which part you are setting aside and why. Never silently drop a
 question.
@@ -381,6 +388,26 @@ def answer_question(
     if domain_repair is not None:
         parsed = {**parsed, **domain_repair}
 
+    from .claim_contracts import approved_evidence_text, claims_supported, unsupported_quantities
+    approved_claims = approved_evidence_text(evidence)
+    visible_claims = {key: parsed.get(key) for key in ("answer", "basis", "suggestions")}
+    if not claims_supported(visible_claims, approved_claims):
+        rejected = sorted((str(item.value), item.unit) for item in unsupported_quantities(visible_claims, approved_claims))
+        repair_messages = json_messages + [
+            {"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)},
+            {"role": "user", "content": "Numerical validation rejected these value/unit pairs: " + json.dumps(rejected)
+             + ". Rewrite the JSON answer using only explicitly supplied evidence figures. Remove unsupported totals, ratios and inferred units; explain missing calculations in words. Do not use these rejected values as evidence. Preserve exact source locators. Return matched=false when the evidence cannot answer the question."},
+        ]
+        try:
+            repaired = _parse_json_answer(_call_openai_compatible_chat(
+                config=config, messages=repair_messages,
+                response_format={"type": "json_object"}, transport_trace=transport_trace))
+            repaired_claims = {key: repaired.get(key) for key in ("answer", "basis", "suggestions")}
+            if claims_supported(repaired_claims, approved_claims):
+                parsed = repaired
+        except (RuntimeError, _EmptyProviderResponseError, _MalformedProviderResponseError):
+            pass  # The original answer remains rejected; never bypass the guard.
+
     citations = _normalize_citations(parsed.get("citations"))
     if public_mode:
         citations = _normalize_public_packet_citations(citations, packet=public_packet, question=question)
@@ -394,9 +421,8 @@ def answer_question(
             evidence=evidence,
         )
     status_payload = _status_with_transport(status, transport_trace)
-    from .claim_contracts import approved_evidence_text, claims_supported
     visible_claims = {key: parsed.get(key) for key in ("answer", "basis", "suggestions")}
-    if not claims_supported(visible_claims, approved_evidence_text(evidence)):
+    if not claims_supported(visible_claims, approved_claims):
         return {"matched": False,
                 "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
                 "basis": "Numerical claim validation rejected the provider response.",

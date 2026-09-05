@@ -15,6 +15,15 @@ from . import board_memory
 router = APIRouter()
 
 
+def _primary_report_route(files: dict[str, bytes], routes: dict[str, str]) -> str | None:
+    """An optional empty Q&A artifact must not hide a usable approved report."""
+    readable = [name for name, content in files.items()
+                if content.strip() and name.endswith(('.pdf', '.md'))]
+    nonempty = [name for name, content in files.items() if content.strip()]
+    names = readable or nonempty
+    return routes[names[0]] if names else None
+
+
 class CloseRequest(BaseModel):
     run_id: str = Field(min_length=1, max_length=160)
 
@@ -96,7 +105,7 @@ def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = re
         files[str(report["artifact_key"]) + path.suffix] = path.read_bytes()
     # Every report link in the frozen contract resolves to captured bytes.
     immutable_routes = {name: f"/api/board/meetings/{quote(meeting_id, safe='')}/files/{quote(name, safe='')}" for name in files}
-    primary = next((route for name, route in immutable_routes.items() if name.endswith(('.pdf', '.md'))), next(iter(immutable_routes.values()), None))
+    primary = _primary_report_route(files, immutable_routes)
     def freeze_links(value):
         if isinstance(value, dict):
             return {key: freeze_links(item) for key, item in value.items()}

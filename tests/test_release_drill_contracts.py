@@ -4,6 +4,14 @@ import subprocess
 from strategyos_mvp.executive_presentation import _executive_kpi_brief
 
 
+def test_frozen_report_preview_skips_empty_optional_artifacts():
+    from strategyos_mvp.board_api import _primary_report_route
+    files = {'qa.md': b'', 'manifest.json': b'{}', 'working_capital.md': b'# Approved cash analysis'}
+    routes = {name: '/frozen/' + name for name in files}
+    assert _primary_report_route(files, routes) == '/frozen/working_capital.md'
+    assert _primary_report_route({'qa.md': b'  '}, routes) is None
+
+
 def test_group_cost_and_margin_drill_use_consolidated_budget_basis():
     for key in ('operating_cost','ebitda_margin'):
         brief=_executive_kpi_brief({'key':key,'formula':'Legacy expense-ledger formula','inputs':[]},period='H1 2026',actual=84 if key=='operating_cost' else 16,metric='84' if key=='operating_cost' else '16%',components={'revenue_actual':100,'ebitda_actual':16,'operating_cost_actual':84},evidence={'files':['15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx']},missing_inputs=[],comparison_available=True,actual_complete=True,comparison='Aligned plan',strategic_reference=None,executive_signal={})

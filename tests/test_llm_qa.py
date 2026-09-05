@@ -70,6 +70,21 @@ def _bundle() -> DataBundle:
     )
 
 
+@pytest.mark.parametrize('repaired,expected', [('SAR 120', True), ('SAR 999M', False)])
+def test_numerical_repair_is_bounded_and_revalidated(monkeypatch, repaired, expected):
+    calls = []
+    def provider(**kwargs):
+        calls.append(kwargs['messages'])
+        answer = 'SAR 999M' if len(calls) == 1 else repaired
+        return json.dumps({'matched': True, 'answer': answer, 'basis': 'Approved evidence', 'citations': [], 'suggestions': []})
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
+    result = llm_qa.answer_question('What is recoverable?', bundle=_bundle(), findings=[_finding()], summary={}, config=_config())
+    assert len(calls) == 2
+    assert result['matched'] is expected
+    if not expected:
+        assert result['claim_validation'] == 'rejected'
+
+
 def _finding() -> Finding:
     return Finding(
         finding_id="F-001",
