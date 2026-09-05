@@ -1,0 +1,120 @@
+{
+  "scope": "Persisted local twin state; snapshot taken during the final isolated run",
+  "files": [
+    {
+      "path": "twins/governance/.routing.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/governance/decisions.json",
+      "sha256": "8c95cef0c3c492cc1ce44eee322551259e1c6a20e657c2a51aa625d645562206",
+      "size": 864
+    },
+    {
+      "path": "twins/governance/routing.json",
+      "sha256": "7a60bde733eaf6c8381bbd249a5d5dd8f8cff4d39b2acc23136b40899d59f96e",
+      "size": 8886678
+    },
+    {
+      "path": "twins/inbox/.messages.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/inbox/messages.json",
+      "sha256": "baa14d8b116e1a7e3ce1cd6b1875e9a2830257fe7695c8c83405955aa4febde2",
+      "size": 9743598
+    },
+    {
+      "path": "twins/investigations/.ceo.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/investigations/.cfo.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/investigations/ceo.json",
+      "sha256": "8491344c20eb99302c184d3b0bd682992073a80cdd2b4479cf0834f6d0f74cf9",
+      "size": 83567485
+    },
+    {
+      "path": "twins/investigations/cfo.json",
+      "sha256": "35448c88cd9feebf2bb82acad58e0816f52ec969b61df0bcf90c3cdfc5ac6829",
+      "size": 16847120
+    },
+    {
+      "path": "twins/kpis/.tree.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/kpis/tree.json",
+      "sha256": "fa2980169543e05b264db892de72aa0d7056ee373b5f53b7afbed197628c1e7a",
+      "size": 3388
+    },
+    {
+      "path": "twins/reasoning/.traces.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/reasoning/traces.json",
+      "sha256": "45127400e703b0d9923c38360614ce8b032421b258a01bcb3e538390ecba09a2",
+      "size": 203971195
+    },
+    {
+      "path": "twins/requests/.ceo.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/requests/.cfo.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/requests/ceo.json",
+      "sha256": "96c4ed6b348374d149b6386032b202e5d0a194b2f571280aaac4437831446925",
+      "size": 23208
+    },
+    {
+      "path": "twins/requests/cfo.json",
+      "sha256": "e79d00bbe0a0e58d72ffd3b26f5285ddc352a33650dc5f02f00ffe34135d565c",
+      "size": 12810
+    },
+    {
+      "path": "twins/state/.ceo.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/state/.cfo.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "twins/state/ceo.json",
+      "sha256": "250d5e8c12b46fc71808ea0256606c071c4789e2c94da9356714c03649232520",
+      "size": 16176426
+    },
+    {
+      "path": "twins/state/cfo.json",
+      "sha256": "e63e7efe0468867e474acac827d98feb106e7e4879758dff6d0328965a63d181",
+      "size": 17339261
+    },
+    {
+      "path": "twins/state/gm.json",
+      "sha256": "53f1bc2b27ec336ca03e2217b5cef938901bc59583faaa702c1a4f876d4cbe35",
+      "size": 219
+    },
+    {
+      "path": "twins/state/group_manager.json",
+      "sha256": "5a88e0f52d7d92e93dc4833556c42c4e71579c4cddffa1a04fc695bb35f0405e",
+      "size": 241
+    }
+  ]
+}

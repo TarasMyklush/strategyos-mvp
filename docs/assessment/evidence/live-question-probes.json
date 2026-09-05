@@ -1,0 +1,35 @@
+[
+  {
+    "question": "Which of my ten board commitments is most at risk?",
+    "http_status": 200,
+    "seconds": 18.81,
+    "answer": "I can't rank your ten board commitments by risk because this review does not include the governed strategy surface where those commitments live. The evidence here covers finance KPIs, AP/AR ledgers, GL, and eight locked findings, but the strategy block is marked unavailable with no glidepath, initiative, milestone, or commitment data.",
+    "matched": true,
+    "response_mode": null,
+    "determinism_tier": "advisory",
+    "citation_count": 0,
+    "llm_fallback_attempted": true
+  },
+  {
+    "question": "What is the biggest contributor to revenue?",
+    "http_status": 200,
+    "seconds": 5.02,
+    "answer": "The biggest contributor to revenue is Revenue \u2013 Catering at SAR 123.0M, representing 31.9% of total revenue.",
+    "matched": true,
+    "response_mode": null,
+    "determinism_tier": "derived_insight",
+    "citation_count": 1,
+    "llm_fallback_attempted": true
+  },
+  {
+    "question": "What do I need to prepare for my next meeting?",
+    "http_status": 200,
+    "seconds": 0.49,
+    "answer": "The governed calendar is not available for this run. No governed calendar workbook was supplied for this run.",
+    "matched": true,
+    "response_mode": null,
+    "determinism_tier": "governed_fact",
+    "citation_count": 0,
+    "llm_fallback_attempted": false
+  }
+]

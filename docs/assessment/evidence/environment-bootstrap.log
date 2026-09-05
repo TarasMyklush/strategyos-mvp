@@ -1,0 +1,5 @@
+Looking in links: /var/folders/8f/rp5hxmyj20sdp65xcj1rvh6h0000gp/T/tmpc3nvih7f
+Requirement already satisfied: setuptools in ./.venv/lib/python3.11/site-packages (83.0.0)
+Processing /var/folders/8f/rp5hxmyj20sdp65xcj1rvh6h0000gp/T/tmpc3nvih7f/pip-24.0-py3-none-any.whl
+Installing collected packages: pip
+Successfully installed pip-24.0

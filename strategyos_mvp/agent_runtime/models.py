@@ -1,6 +1,6 @@
 """Domain contracts for the agents layer.
 
-Immutable dataclasses and enums matching docs/agent-layer/agents-layer-design.md
+Immutable dataclasses and enums matching docs/architecture.md
 section 5 (core domain model) and section 6 (event envelope). These types are
 the shared vocabulary between registry.py, repository.py, and events.py; they
 carry no persistence or execution behavior of their own.

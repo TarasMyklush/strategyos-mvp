@@ -1,0 +1,48 @@
+{
+  "date": "2026-09-05",
+  "runs": [
+    {
+      "label": "Candidate c03e958 \u2014 complete attempt",
+      "tests": 1647,
+      "passed": 1569,
+      "failed": 1,
+      "skipped": 77,
+      "errors": 0,
+      "seconds": "444.273",
+      "file": "latest-pytest-results.xml"
+    },
+    {
+      "label": "Main 9fa5316 \u2014 interrupted attempt",
+      "tests": 1382,
+      "passed": 1304,
+      "failed": 1,
+      "skipped": 77,
+      "errors": 0,
+      "seconds": "978.557",
+      "file": "pytest-results.xml"
+    },
+    {
+      "label": "Candidate configuration rerun",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "errors": 0,
+      "seconds": "0.050",
+      "file": "candidate-config-rerun.xml"
+    },
+    {
+      "label": "Main configuration rerun",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "errors": 0,
+      "seconds": "0.040",
+      "file": "main-config-rerun.xml"
+    }
+  ],
+  "candidate_failure_classification": "audit-harness missing workspace directory; focused configuration rerun passed",
+  "main_status": "interrupted; console reported 1304 passed",
+  "candidate_second_full_run": false
+}

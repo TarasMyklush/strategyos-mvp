@@ -7,3 +7,17 @@ dist/
 build/
 *.egg-info/
 deploy/.env
+deploy/.env.*
+.env
+.env.*
+.venv*/
+.*-venv/
+.strategyos_mvp_data/
+artifacts/
+outputs/
+tmp/
+private/
+data/
+tests/
+docs/
+.playwright-mcp/

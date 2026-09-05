@@ -1,0 +1,850 @@
+{
+  "dataset": "Mizan enriched executive demo",
+  "files": [
+    {
+      "path": "demo/01_Synthetic_Dataset/01_Bank_Statements/ANB_Payroll_SAR_Jan-Jun_2026.pdf",
+      "bytes": 3952,
+      "sha256": "18a9554963f53351a7840d41358f9ae2e8b4adcff1c2b6381a410061326150cf"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf",
+      "bytes": 1684478,
+      "sha256": "900063aee244bc41d107381e509507d7f9a099373d47be0f072487ad0e6cc6ec"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/01_Bank_Statements/RiyadBank_FX_USD_Jan-Jun_2026.pdf",
+      "bytes": 10306,
+      "sha256": "2db14bcb78cf3eaf85bf4ecae7ae00c6bb9387a43b1078ad1fe1b240ac22f6e5"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/01_Bank_Statements/SNB_Operating_SAR_Apr-Jun_2026.pdf",
+      "bytes": 125278,
+      "sha256": "89eddad1699f65051ef6feecc3c90c91683ca49c8e4c2f74246085c10de02479"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/01_Bank_Statements/SNB_Operating_SAR_Jan-Mar_2026.pdf",
+      "bytes": 109541,
+      "sha256": "d49622f095dc435ccf116b071ae131b9f01154e215e96b61df41ae51b36cd658"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
+      "bytes": 101650,
+      "sha256": "eaa7410a8041c7b9160d9db0f84498d50bcfb57950b88a722c10e12bfd1c3e05"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/AP_Payments_FY2025_H1-2026.xlsx",
+      "bytes": 165607,
+      "sha256": "7e78ce4bd677ee83d893726970f1ba4a753a803d414ad76a7619199c31ae5313"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/AR_Credit_Memos_H1_2026.xlsx",
+      "bytes": 6016,
+      "sha256": "2e6b12898cf8ec023832eae3deb995ef5ca56ed04a81ee085e2724c1ecfd0276"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/AR_Invoice_Lines_H1_2026.xlsx",
+      "bytes": 141550,
+      "sha256": "19af48332a331c5b7efc4ce0bcdee0af151af356263d2b1e404939d0bc72f46f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/AR_Invoices_H1_2026.xlsx",
+      "bytes": 48728,
+      "sha256": "981e2d9ef12025aa83263e8b299a7271133d4f5eadd39592ee5c3185f845ee0b"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/AR_Receipts_H1_2026.xlsx",
+      "bytes": 33692,
+      "sha256": "5271d7b4793d461d5a0384f8f45a9df35148ccba20f39b533adaa6a85e0db999"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/GL_CostCenter_Balances_FY2025_H1-2026.csv",
+      "bytes": 81871,
+      "sha256": "efd31f8e8ec45fe4d70a00f89a15ccd03675730922a0b6cc2b2caa013e8a358d"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/GL_Extract_H1_2026.csv",
+      "bytes": 570525,
+      "sha256": "0de113f04066fc23a033d321df730ea2d27fb23223013065f78e6c9ed09a7ad5"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/GRN_Log_H1_2026.csv",
+      "bytes": 52491,
+      "sha256": "2ef9b94b42fedb72cc61a4aaad82e465f9e4ca1281d1644805791a7bfc9a7b4e"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/02_ERP_Extracts/Trial_Balance_June_2026.xlsx",
+      "bytes": 11353,
+      "sha256": "a2e3bb17b5b007f6bcd13f71908675b47c42f7bca0e38e51812ab3ce51f0e630"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/03_Master_Data/Chart_of_Accounts.xlsx",
+      "bytes": 9639,
+      "sha256": "e46ae9e2ba93106138f3d300c5aabd6626b1dcd68cd2e92f84c1394ed5573679"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/03_Master_Data/CoA_Hierarchy.xlsx",
+      "bytes": 10846,
+      "sha256": "be96640d495c696d860dc3573ee83f8f4d4604b3d6a1f5abbe561cf448e38113"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/03_Master_Data/Cost_Center_Master.xlsx",
+      "bytes": 5303,
+      "sha256": "9b76c002dcf9d3d79df4c91aaeeba5908a7296079dad50a51b2147e900560272"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/03_Master_Data/Customer_Master.xlsx",
+      "bytes": 10054,
+      "sha256": "e8fdd7ccd58ebc87fc866dca39d4dd503a5e089c502673e17ee45b8df4987fc9"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/03_Master_Data/Item_Master.xlsx",
+      "bytes": 7660,
+      "sha256": "2a90ae8aa64c8d477bbd12c3c1ccf0dac6fcd8640d8192ff27298d8953d822c3"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/03_Master_Data/Vendor_Master.xlsx",
+      "bytes": 24399,
+      "sha256": "14103c6bddf64b274694c82f11385eb6922e309d527b67901970912dba33502f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/04_Contracts/Al_Rashid_Pharma_Supply_Agreement_2024.pdf",
+      "bytes": 3258,
+      "sha256": "b816121c2529d5aef7822d8d08bf929233eade77fb4edf077c7eaa1510023799"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/04_Contracts/Gulf_BioPharma_Master_Agreement_2024.pdf",
+      "bytes": 4496,
+      "sha256": "afabb74db5f15125c45d00dfde5802609b996144ae5299091e5b84cb1b79f727"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/04_Contracts/Gulf_ColdChain_Logistics_Services_Agreement_2023.pdf",
+      "bytes": 4733,
+      "sha256": "d1f0af29fbc4374f2144d8cc837b01d8aaad2b610d5f87bd6cfbd88d04531abe"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/04_Contracts/KAUST_Health_Centre_Supply_Agreement_2024.pdf",
+      "bytes": 2935,
+      "sha256": "0c11b48edf6cde0310b986e387b88446269293ad5bf1852668be275ac9fd7586"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/04_Contracts/NUPCO_Framework_Award_Letter_2024.pdf",
+      "bytes": 2853,
+      "sha256": "37810b4a815a5cc05b51f2773da7f8d0f1de4792d57c26d315f32115e121335c"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/04_Contracts/Premier_Pharma_Packaging_Master_Agreement_2024.pdf",
+      "bytes": 4226,
+      "sha256": "d5a00d57cc36dbb59148f16ff889bc95053819effa8cdc828fb223c88789e76c"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/04_Contracts/Saudi_Pharma_Suppliers_Distribution_Agreement_2025.pdf",
+      "bytes": 4146,
+      "sha256": "ed0b469a992e4758647952288e69d168b26bf19f1292205db865a19053e96c65"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/04_Contracts/Servier_Pharmaceuticals_Import_Agreement_2025.pdf",
+      "bytes": 4234,
+      "sha256": "c5151e367972011ed6be670958ba84085c092c4acf677c761285e147b5fd4b5f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/05_Purchase_Orders/PO_Log_H1_2026.csv",
+      "bytes": 77502,
+      "sha256": "a8d1e35a415674799460264f4558bc12fb515e18f31ef2069935ab8df1824174"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/06_Email_Correspondence/Email_1_QuickPrint_Approval_Feb_2026.txt",
+      "bytes": 1630,
+      "sha256": "00bf11e9658ec2a6e19f982e34abe1b16fe845cab60fe740b720b8f4ebc4653f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/06_Email_Correspondence/Email_2_BordeauxWines_Payment_May_2026.txt",
+      "bytes": 1091,
+      "sha256": "73688f7dcdd8b6da33579ea7dd35f7a9fb7910b3bacb7cd790dcee50ec1e3b83"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/06_Email_Correspondence/Email_3_Vendor_Dispute_Mar_2026.txt",
+      "bytes": 1688,
+      "sha256": "0ffdf26eba98ded568d7a583dd900a706bc0834e3cea5d9f7543458990caa49f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx",
+      "bytes": 14462,
+      "sha256": "9bfb2da21cb1d7bf553f18c94a5a3d4ff97cf521861c3d54501819f233bce376"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/CreditNote_MediterraneanPharma_CR-2024-091.pdf",
+      "bytes": 3548,
+      "sha256": "1ad5044eaf7db936c6e6242567d9e3d598b06c7f2c6baec998ec5a1e87a1f6fe"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_AlRashidPharmaCo_V1187_INV-2026-1404.pdf",
+      "bytes": 311108,
+      "sha256": "43fe480f8f1fc5c137e3436bb206b69f7e144e0ff57d3731e24512d0526f315f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_AlRashidPharma_V1142_INV-2026-1401.pdf",
+      "bytes": 3506,
+      "sha256": "1a39c4f1d919ff3f2a6532213ffd2778209dafd6e086260fe31e399eddc36372"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_ArabianDiagnostics_INV-AD-2026-0445.pdf",
+      "bytes": 3501,
+      "sha256": "a4e16f3cbbd023469f86442d76aa6540a1b074e2be3bfd09a98d6d7cde0f3cd4"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_BahrFreight_INV-BF-2024-0311.pdf",
+      "bytes": 2350,
+      "sha256": "d9e08a65dd985173d864eca8e906f7a8cfe9c85335cc9b791aafdbc98871972d"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_BahrFreight_INV-BF-2024-0347.pdf",
+      "bytes": 2376,
+      "sha256": "787d356193c3c3c469eb271f124a19fd136b50ad67451d2d21e720a5e8328f35"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_FalconVitamins_INV-FV-2026-0112.pdf",
+      "bytes": 3092,
+      "sha256": "7f05c93e42df0e9dc0a16f2837b3559cad785fc5c94673cf7658db92bb9f3d27"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_GulfBioPharma_INV-2026-1424_PO-0218.pdf",
+      "bytes": 3531,
+      "sha256": "3992e2b27d8ee6e91398a3bb6766af7d723e0cdd9b6ef7f77411c05cff125d06"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_GulfBioPharma_INV-2026-1425_PO-0247.pdf",
+      "bytes": 3537,
+      "sha256": "49a7e401d3d7e86666d17ff731048778cbeb800a5bbec3812ce2c05c21c75b99"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_GulfColdChain_INV-2026-1421.pdf",
+      "bytes": 4304,
+      "sha256": "6386f164e802e2e679027c0ad2ab8a5451f21ea86c4052671af9fa181535fa9f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_HijazPharmaPkg_INV-HP-2026-0234.pdf",
+      "bytes": 3018,
+      "sha256": "dd0c5fc5aff8f2f7e5064674718af948c9a0802322dc94755b495613ae4a46b5"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_MediterraneanPharma_INV-2026-1426.pdf",
+      "bytes": 3299,
+      "sha256": "3ce5f46f2a7b6695841657002b30b2bb48bc67dddb12a3acc3e3afe13ad88786"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_NajdPharma_INV-NP-2026-0824.pdf",
+      "bytes": 3474,
+      "sha256": "ded10da97ac72e52112eb5f232f77862c54a867b75fa3dafbd0aeb35127eb2fb"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_OasisMedDevices_INV-OM-2026-0091.pdf",
+      "bytes": 3500,
+      "sha256": "4e4fcfb0f5967e9090b1d7b52c2138a0dafdd90a907cffc99ca4541a2d25eb35"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_PremierPharma_INV-2025-2841.pdf",
+      "bytes": 2481,
+      "sha256": "b0979f71fae956707a06bb363b8132f3ef77d0eecff8f5d9e0b836efb8f00392"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_PremierPharma_INV-2026-0341.pdf",
+      "bytes": 4139,
+      "sha256": "62f1ad96af261f64def6befd0ad8ffb7e87b8e1b3d743ad47db43b9e79290e74"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_QuickPrint_INV-2026-1408.pdf",
+      "bytes": 3493,
+      "sha256": "c15944339bb03345b5e5fcf2d259de9f57ab3d7c81402640cd2b210ad1a97aea"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_QuickPrint_INV-2026-1413.pdf",
+      "bytes": 3385,
+      "sha256": "262492d7ac565e6fc74910a7ba8830f979dffe190a025e9b1944914371a88fe3"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_SaudiPharma_INV-2026-0488.pdf",
+      "bytes": 3721,
+      "sha256": "23f663740bf71cd4718de5cedc39dd5ced48b6e74d17c2c26805861ef456f803"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_SaudiPharma_INV-2026-0631.pdf",
+      "bytes": 3694,
+      "sha256": "c4fde592edb99ac695148aa181c1c0c481e9e3292635fec9050219f45cfe221d"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/08_Invoices/Invoice_Servier_INV-2026-0577.pdf",
+      "bytes": 4522,
+      "sha256": "c4458437181d64af98ace7ec0de80a823f183ffa66f91d20238c89ed6022a2a7"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/AP_Invoices_FY2023.xlsx",
+      "bytes": 82719,
+      "sha256": "b335c20c74bc4f0f195a3d70cf2331e15ce7610acfc22dbe1789256fed918f5b"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/AP_Invoices_FY2024.xlsx",
+      "bytes": 98393,
+      "sha256": "064d1494135534c0fb6413a88e16d0ffaa607747b5490e6f190eba5222cae4f9"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/AP_Invoices_FY2025.xlsx",
+      "bytes": 115785,
+      "sha256": "b66c28517de93f427db5397f8fc6877065cf1bb091b7379830fd8754e2a0b5a1"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/AR_Invoice_Lines_FY2023.xlsx",
+      "bytes": 215084,
+      "sha256": "5dd8cffe79d0244c90edfbf31ec9ae91e30d4a4fbf7dfa4816cade6cdd790012"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/AR_Invoice_Lines_FY2024.xlsx",
+      "bytes": 235860,
+      "sha256": "4225da91bba00a5343b1714de47b2838a531fb8ecd25a3ab33442e1a3d4ef24e"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/AR_Invoice_Lines_FY2025.xlsx",
+      "bytes": 258968,
+      "sha256": "3ec977e853f0cb975b644a565f5ff9128db48acd99d8edcdee3dd99511dd6113"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/AR_Invoices_FY2023.xlsx",
+      "bytes": 73416,
+      "sha256": "90000d98c36fe440f1fb017c25dd554acb2f31321de1f08084f73d7055ded019"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/AR_Invoices_FY2024.xlsx",
+      "bytes": 79321,
+      "sha256": "5d872129219ff399931215809f7bfe9efaff4e6333759290df5dbdb9ca79f8b3"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/AR_Invoices_FY2025.xlsx",
+      "bytes": 86737,
+      "sha256": "cefbb40f23cb67a5bb64eccff75a908e53805326d131e66516366cfb2483a585"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/GL_Extract_FY2023.csv",
+      "bytes": 697220,
+      "sha256": "98cca2327f5a3491714e35798552b17314d413d2abb57d62083a4205c0a88c0f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/GL_Extract_FY2024.csv",
+      "bytes": 795794,
+      "sha256": "bfc59aee43246138d960b4726d7f833fb65768cb3b8c5696e4162392fc868177"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/GL_Extract_FY2025.csv",
+      "bytes": 892186,
+      "sha256": "64f88451da93b74017f9e2a6ae09b35d7ebeb82adfd6fe5abd19500009f8bfd3"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/Inventory_Movements_FY2025_H1-2026.xlsx",
+      "bytes": 187611,
+      "sha256": "d17a662201f3bc6eeae95e46f35e193c41be02458ed7b8211038f6d8d249f807"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/Trial_Balance_Dec_2023.xlsx",
+      "bytes": 7128,
+      "sha256": "9d0a5446b928814870d3c0c13895d3c382457a075e4f3c6384f41831b9659881"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/Trial_Balance_Dec_2024.xlsx",
+      "bytes": 7220,
+      "sha256": "eb9e4097568d06cd6d7df1f1852f9f0fedb26bf29e4c49c82a2f4b2bdfa50acd"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/09_Historic_ERP/Trial_Balance_Dec_2025.xlsx",
+      "bytes": 7261,
+      "sha256": "5b0012ac75607ace24183f8ddec6ba83acd07e18bf4da579d0a87a4d35afa7ee"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/10_Historic_POs/PO_Log_FY2025.csv",
+      "bytes": 137123,
+      "sha256": "bea1f575820a9a5b75c37963065cf8e66e100e4c6f314905235b56be7658e10c"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/10_Historic_POs/PO_Log_H2_2024.csv",
+      "bytes": 54984,
+      "sha256": "54ebbc0955580b9c244fcee49532d5d99b484723588b92d3c5c5f262a77f006a"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/11_Strategic_Analytics/Data_Dictionary.xlsx",
+      "bytes": 8089,
+      "sha256": "ae6f3ae5d6a5e55204b5697c864b2b22e0cda7abf88f1ff11d52bc76671f698b"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/11_Strategic_Analytics/Division_to_Group_Reconciliation.xlsx",
+      "bytes": 5576,
+      "sha256": "e969b521905e9b5b8d0f2012d2ea4eed9a9a112578b18cec92ea2da57b0dcb0b"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/11_Strategic_Analytics/Headcount_Payroll_2023-2026.xlsx",
+      "bytes": 6131,
+      "sha256": "b4569c1ea81f4d3ace321cbe974399fc9cb7eea9bd0b4d61e7f7ed6cc9968d53"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/11_Strategic_Analytics/Price_Volume_Mix_Reference.xlsx",
+      "bytes": 5609,
+      "sha256": "3cbeaf5a83eaf902b6cabe6f9b885aea5872b0ddfabdb2bd742b642e8fa25e72"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/11_Strategic_Analytics/Revenue_Analytics_2023-2026.xlsx",
+      "bytes": 14525,
+      "sha256": "3d67a114e034b841188ae8cbd07d38c4c306d86263e1b163b0b74ffcbba2b2e1"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/11_Strategic_Analytics/SKU_Price_History_2023-2026.xlsx",
+      "bytes": 5620,
+      "sha256": "e7edcbc146e88cc1ed6dd4548f2af4c0fbdba01e2307297da075f2532fe78026"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/11_Strategic_Analytics/Supplier_Spend_2023-2026.xlsx",
+      "bytes": 19449,
+      "sha256": "4004559c57ec550dcb018d10208cfccfe0596d5a8e6c63ae66b82c069a5cb45e"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+      "bytes": 12420,
+      "sha256": "b3991edca75b7c0ec14359f5c8e181ceeda1a5725f8391717dabf27e9de7032b"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/12_Group_Financials/Group_BU_Cost_Structure_2024-2026.xlsx",
+      "bytes": 20449,
+      "sha256": "1df3fd96c2f3c4044abfb5e8dffa29379ea8b19202c4fbec10d1bd7541d93879"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/12_Group_Financials/Mizan_Group_BU_PnL_2023-2026.xlsx",
+      "bytes": 6883,
+      "sha256": "4d15d391aa9d0f77d3e61a3acb69bebb45fe1e47224533a8651635b80702c93b"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Board_Pack_Excerpt_FY2024_Review.txt",
+      "bytes": 1793,
+      "sha256": "24bab910cda24fc2f85b301828239d8632c02addf2cb0083edc929d0af86bc3a"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Board_Pack_Excerpt_FY2025_Review.txt",
+      "bytes": 2104,
+      "sha256": "65b5106dd8d816b66e4dc8271291972266ade840d28a8a22536e49023ca92205"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Email_10_Premier_Statement_Query_Dec_2025.txt",
+      "bytes": 865,
+      "sha256": "c36fca2b8cae9f56a6d605dd176f6f9a00c7a64518c7f1d3adbabea8461891f1"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Email_4_BahrFreight_Invoice_Query_May_2024.txt",
+      "bytes": 1086,
+      "sha256": "2589df7f8e3d4351932ae5eea5f45201f49ead3dafa5acc30a65f6d361d306c2"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Email_5_NUPCO_Framework_Award_Oct_2024.txt",
+      "bytes": 1064,
+      "sha256": "653f605c0038758c3a8e74aaccaae9b10d8885c6503c3d21c1c253f5b5b8baa7"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Email_6_Mediterranean_Credit_Note_Nov_2024.txt",
+      "bytes": 894,
+      "sha256": "d95a09e7db7c1d5f9cf0ae0bd087b0cf8aed42471269e51d6ad1d54603a11dfe"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Email_7_RedSea_Chain_Churn_Jun_2025.txt",
+      "bytes": 979,
+      "sha256": "4a2ea5d6c583c2dfd4f3ef6e5df0a410ecf3d93f9550d044d766192404ba2acc"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Email_8_AP_Clerk_Departure_Sep_2025.txt",
+      "bytes": 887,
+      "sha256": "6cbad58ca8155e8d62be9380c3d7394d91557bae659e31579075bf3d1807b004"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Email_9_GulfColdChain_Renewal_Notice_Oct_2025.txt",
+      "bytes": 1124,
+      "sha256": "ad1495288300feff82f7dd9493aa16b0961611bd8eba47f74935874622915b55"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Memo_1_Acquisition_Integration_Jan_2024.txt",
+      "bytes": 1693,
+      "sha256": "5db74fd4b8f62688dc0cf3bbffb0bbc0d0809010851c1beae50fb6bc6a61ea6d"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/13_Historic_Correspondence/Memo_2_Qassim_Colocation_Feb_2024.txt",
+      "bytes": 1214,
+      "sha256": "47aa6a57973c44575661524e8f62388c478f123e76e7c98722a1b9236a4124f2"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/14_CEO_Office/CEO_Calendar_Mizan_Apr-Jul_2026.xlsx",
+      "bytes": 15653,
+      "sha256": "420738bb9f3e98bf34a23be19a9505aa604aedf2aa0b263930f12742afed3952"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx",
+      "bytes": 8021,
+      "sha256": "ea979a664ef9959bfe430780b695186293497b46f5a9c35acd4dbef0848eb0a0"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/15_Budgets_Forecasts/Division_Budget_2025.xlsx",
+      "bytes": 5666,
+      "sha256": "8e75fa3f5246f4693b025483cee1925c17941345deaa4afbb8d21599d8ca8029"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/15_Budgets_Forecasts/Division_Budget_2026.xlsx",
+      "bytes": 13390,
+      "sha256": "b023140d564367ccf8fa2598967de35f875deff3859b9f4c6a75a05744b7ed13"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/15_Budgets_Forecasts/Division_Reforecast_RF1_May2026.xlsx",
+      "bytes": 5816,
+      "sha256": "4c22d07b2237580c3dc18bcd7441e622b055cf1be7193ecdf87696b5f5683f67"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/16_Business_Events/Business_Events_Register_Q4-2025_H1-2026.xlsx",
+      "bytes": 11343,
+      "sha256": "99e4b30155e6c37941e807745c2e51b372e95014e599c8b310faa2a2da7e8d4f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/17_Signals/Signals_Register_Jun2026.xlsx",
+      "bytes": 9436,
+      "sha256": "5bfb1e275b6282aad4b99bd1fa3f55e05fd33e59278cba121b6c5f332164c743"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/18_CEO_Question_Bank/CEO_500_Questions_StrategyOS.xlsx",
+      "bytes": 35081,
+      "sha256": "8af5855468d19a71298ea9d197693f02a59baacb4a9cf92f1054c810d24c1eb0"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/AP_Controls_SOP_v3_Jun2026.pdf",
+      "bytes": 2841,
+      "sha256": "4233addfb33f31c2c0a8d6495a4571c1545b78173052e529a243b539ab0e3f94"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Capital_Committee_Minutes_Q2_2026.pdf",
+      "bytes": 2829,
+      "sha256": "6fc347c0c6f0b1e0cd8894f090acb60e1ed05059af7328b1d601b90fb70dadf4"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Cash_Leakage_Audit_Final_Report_May2026.docx",
+      "bytes": 10519,
+      "sha256": "a3087ec0a02eaa15a4a22fb95d4a36cc29e2a85c942e9cc5b6876b087c374c3a"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Dammam_Hub_Commissioning_Jun2026.pptx",
+      "bytes": 84296,
+      "sha256": "19c0277f5dae9cead6d6dbd93afa0b2fece5655e0b2b6fe21a14ea17f87b284f"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Document_Manifest.xlsx",
+      "bytes": 8070,
+      "sha256": "5f23e7b17d3218c9706447321be6e96d26081cf7354f9d6ab76c83d4c1035344"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/EPharmacy_PriceWar_Response_Jun2026.pptx",
+      "bytes": 76708,
+      "sha256": "42ca9a492ba6e8358ef47ac2c0820532b9adef246fce1ab5781e92756cec5f2d"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/FX_Hedging_Policy_v2_Jan2026.docx",
+      "bytes": 9581,
+      "sha256": "b7b31f43072599dcf695311e683b10fca60838cd286bb0ecc2508e2ec3f2bcf6"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Group_Risk_Register_Q2_2026.xlsx",
+      "bytes": 6141,
+      "sha256": "c20d2451f5c4379b31ecf28b70e631fae2cbf7d35f1df44b00965323723d1461"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/GulfColdChain_Renegotiation_Approval_Memo_Jun2026.pdf",
+      "bytes": 2790,
+      "sha256": "4cecd5eb7e512949af232f9c8e7bf8c0f3201ec88904835e77057896e2aa9882"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Hijaz_ReTender_Bid_Comparison_Jun2026.xlsx",
+      "bytes": 5640,
+      "sha256": "0ff61cd1ed5b9d846188d37167c3d4d83365f7b5a3ecc4b01f82ca73bc330b42"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/KAUST_Repricing_Board_Mandate_Jun2026.pdf",
+      "bytes": 2695,
+      "sha256": "bb74fe64e1be218defdbb18a8d292e850dad14276eaca233adc6d0baef8b9e46"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/NUPCO_Bid_Committee_Minutes_30Jun2026.docx",
+      "bytes": 9849,
+      "sha256": "c62f3be8dfcc0a39e33c86caea63215bc2c8255e892f6b546d70da32cba992a6"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Q2_2026_Group_Flash_Results.xlsx",
+      "bytes": 5956,
+      "sha256": "74e9f2f05f95fcd528c3f9173b970dc49b030de50950e50a3babbf57da382831"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Remediation_Decision_Log_Jun2026.xlsx",
+      "bytes": 7207,
+      "sha256": "1bf425ceb480c882fd4ac91bab154b154977a40c354005d939e9b425c271e456"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/StrategyOS_Steering_Minutes_14Jun2026.docx",
+      "bytes": 9481,
+      "sha256": "eb12d57c291584b5820bed1d386872ba0c51a253401b727a358ce87f6f9599d1"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Synergy_Programme_Charter_Jun2026.docx",
+      "bytes": 9903,
+      "sha256": "5465d3f35fe0b04f75c51a08bfe8d130e90a1c0e7b5ad8187d6c04a3adaea26d"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Tamween_Interim_Board_Review_H1_2026.pptx",
+      "bytes": 106047,
+      "sha256": "d194af0080fdea32366bd524db5c602a1c377bfeedcea509bf8bb9af3cab9793"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/19_Document_Vault/Tatmeen_Readiness_Status_Jun2026.pdf",
+      "bytes": 2484,
+      "sha256": "e8b7bd0fa81321baca59c05dd0be4877c693ea4ee382e5eecf95f0353e692b84"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+      "bytes": 6558,
+      "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/20_Board_KPIs/KPI_Operational_Actuals_Monthly.xlsx",
+      "bytes": 16689,
+      "sha256": "40625ed13320c642083b0559431666cee2cb80a5b849891b13dc8ae430b97411"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/21_Initiatives/Initiative_Register.xlsx",
+      "bytes": 9095,
+      "sha256": "ddb68deee3d4ee8d0aea33f1e6d9820210c97ef1e18f727074a130c3e4baee75"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/22_Daily_Pulse/Daily_Flash_May-Jun_2026.xlsx",
+      "bytes": 7535,
+      "sha256": "3d3c43db681807910c1473b02fa52233fec37c0a10defc629fda2ace5b2c4c71"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/23_Assistants/A2A_Seed_Threads.json",
+      "bytes": 7343,
+      "sha256": "64467b6b181c7b7b4a2fd883e9a67af2158383f7399b1a486e30e15976ec92d2"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/23_Assistants/Assistant_Profiles.xlsx",
+      "bytes": 6143,
+      "sha256": "79c73232ecb0f5211877474264369ff0260959d75045c98094fa41506696c3cb"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/24_Executive_Policy/KPI_Value_Conversions.xlsx",
+      "bytes": 4909,
+      "sha256": "4e027fb6750da03082e40e706f4c1675803e09e628994f56cb5de40e9959926c"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/24_Executive_Policy/Materiality_Thresholds.xlsx",
+      "bytes": 4867,
+      "sha256": "f28f5dbf018f6435703ecd5fb8db05fee3eff1e8e57f80f069831ed297e26521"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/24_Executive_Policy/Organisation_Escalation_Map.xlsx",
+      "bytes": 4841,
+      "sha256": "26d7094e4eb63a4172d002ad6091f0f17108e13bdd7fe85e3e89c4aadbbd6e1e"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/README.md",
+      "bytes": 31050,
+      "sha256": "94b4199333d203aca3f368897d1372b71498385a4c85bb6f3575de4b8212101d"
+    },
+    {
+      "path": "demo/04_Strategic_Context/01_Group_Strategy/Mizan_Group_Strategy_2026-2028.pdf",
+      "bytes": 47905,
+      "sha256": "456480c2bc8cd33e20461ba91f2a959ce9587ad091bc18f2e05cbc0583f05b15"
+    },
+    {
+      "path": "demo/04_Strategic_Context/02_BU_Strategies/BU01_Manufacturing_Strategy.pdf",
+      "bytes": 13458,
+      "sha256": "91edc1839f6465cfdec7c9a8a1c2d4a5db9880972aac6d479afa71fec7f0778a"
+    },
+    {
+      "path": "demo/04_Strategic_Context/02_BU_Strategies/BU02_Distribution_Strategy.pdf",
+      "bytes": 14536,
+      "sha256": "f2e237ab3fc90808704ca4e78e62e986ab6cb4ed54c8e85d0a03346e45a1c131"
+    },
+    {
+      "path": "demo/04_Strategic_Context/02_BU_Strategies/BU03_PharmaLogistics_Strategy.pdf",
+      "bytes": 14782,
+      "sha256": "4e384b9fbd57faac057b3847270ec9176c7d9ab2b476bcd007588263afcfb42c"
+    },
+    {
+      "path": "demo/04_Strategic_Context/02_BU_Strategies/BU04_PharmacyRetail_Strategy.pdf",
+      "bytes": 14612,
+      "sha256": "fd8774b1dc24b3ff7b777ec10c6e40b3f6de8b4c4c53d7fb731990cd8513a2f5"
+    },
+    {
+      "path": "demo/04_Strategic_Context/02_BU_Strategies/BU05_E-Pharmacy_Strategy.pdf",
+      "bytes": 13952,
+      "sha256": "7fe3525ccf81cfef10cc800c3c7c22063cf12314f888cdef648d464282fc294f"
+    },
+    {
+      "path": "demo/04_Strategic_Context/02_BU_Strategies/BU06_DigitalHealth_Strategy.pdf",
+      "bytes": 12594,
+      "sha256": "b80d2540ddcf2c6fb8a842522aac8ca4e5f5921d300c1946d0821f4bb6f2f8db"
+    },
+    {
+      "path": "demo/04_Strategic_Context/02_BU_Strategies/BU07_HealthcareServices_Strategy.pdf",
+      "bytes": 12900,
+      "sha256": "f3f636f624f268504078870bf457539ba5c07a4feed01908f72f0cef4d6cfe88"
+    },
+    {
+      "path": "demo/04_Strategic_Context/02_BU_Strategies/BU08_Capital_Strategy.pdf",
+      "bytes": 14983,
+      "sha256": "f80e5a6742ff76a672338bc42d07f81b194cc447bcc9cd70048433e053d8d465"
+    },
+    {
+      "path": "demo/04_Strategic_Context/03_Market_Reports/GCC_Healthcare_Services_Market_2026.pdf",
+      "bytes": 11273,
+      "sha256": "6b1b27367950b0aa496c423191cefa900ac8cc659f99d9eaf71bbd6e4690b297"
+    },
+    {
+      "path": "demo/04_Strategic_Context/03_Market_Reports/GCC_Pharma_Cold_Chain_Logistics_2026.pdf",
+      "bytes": 12423,
+      "sha256": "85a8462ff246e38717bab515f22d7a8c5e0041098d90af38bb973c3c779b0d49"
+    },
+    {
+      "path": "demo/04_Strategic_Context/03_Market_Reports/KSA_Capital_Markets_Outlook_2026.pdf",
+      "bytes": 11395,
+      "sha256": "864ce04c6e2a885cefdbf091fe5923f6121ba6ec869e90cf6c2f2e764a884e56"
+    },
+    {
+      "path": "demo/04_Strategic_Context/03_Market_Reports/KSA_Digital_Health_Market_2026.pdf",
+      "bytes": 11861,
+      "sha256": "276bb35c8741188700371cf55f0d36191b40b8f503fe8fac2c84d26c389b6bef"
+    },
+    {
+      "path": "demo/04_Strategic_Context/03_Market_Reports/KSA_E_Pharmacy_Market_2026.pdf",
+      "bytes": 11864,
+      "sha256": "2f0bd298033d6f2fca4748282c5979233c39e9c4add9e733c31701b2638328d6"
+    },
+    {
+      "path": "demo/04_Strategic_Context/03_Market_Reports/KSA_Pharma_Distribution_Market_2026.pdf",
+      "bytes": 12343,
+      "sha256": "1e45cc814db871c930b08d4cab7fa123a538fa981c76b7c940ae97e6f473ec35"
+    },
+    {
+      "path": "demo/04_Strategic_Context/03_Market_Reports/KSA_Pharma_Macro_Outlook_H1_2026.pdf",
+      "bytes": 6666,
+      "sha256": "934d8b532bc92525e93dfd8b86f6e3da40dae9560715749b2f5425cd7a668d44"
+    },
+    {
+      "path": "demo/04_Strategic_Context/03_Market_Reports/KSA_Pharma_Manufacturing_Market_2026.pdf",
+      "bytes": 12702,
+      "sha256": "63a8cbca3252b31dcc124df8de304ea270d512480fee77115bc48a9d60a7e7a2"
+    },
+    {
+      "path": "demo/04_Strategic_Context/03_Market_Reports/KSA_Pharmacy_Retail_Market_2026.pdf",
+      "bytes": 12039,
+      "sha256": "8ee3437d3240514181a4b9dbec97d796bbad3170adad21e9bea516fa19d30594"
+    },
+    {
+      "path": "demo/04_Strategic_Context/04_Time_Series/KSA_Macro_Indicators_2023-2026.xlsx",
+      "bytes": 7987,
+      "sha256": "066e5a99ae086c41d0fe8fea88bd96658eb6b484f6186e320806b03feecf872a"
+    },
+    {
+      "path": "demo/04_Strategic_Context/04_Time_Series/Pharma_Commodity_Indices_2023-2026.xlsx",
+      "bytes": 9236,
+      "sha256": "859df1fee933d26e3f91cf88770d41bd2c1dd9e37d1d4b76839bc1beeb2afad1"
+    },
+    {
+      "path": "demo/04_Strategic_Context/04_Time_Series/Pharma_Competitor_Financials_2023-2025.xlsx",
+      "bytes": 16066,
+      "sha256": "587301c889bd82a27e1ae4a767c0f62f026f7004bd99ec91614e64362894010c"
+    },
+    {
+      "path": "demo/04_Strategic_Context/04_Time_Series/Pharma_Sectoral_Indices_2023-2026.xlsx",
+      "bytes": 6123,
+      "sha256": "02b2e2eca8dec86b66008f51fb95c06729f79741e487354053782738292ae936"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-03-30_MondayBrief_Pharma_Macro.txt",
+      "bytes": 1739,
+      "sha256": "ded9dffd82d6b55c40d0e81669ce14d18ca441948562f6716d5247ef33677871"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-04-06_MondayBrief_Pharma_Macro.txt",
+      "bytes": 1745,
+      "sha256": "9439a13dda214697a9ac76bd198c54b2aeabf9fe6c880f332220dff878ef7613"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-04-09_AdHoc_API_Supply_India_China.txt",
+      "bytes": 2082,
+      "sha256": "381af89541c976f53fe1c6997a280779040cc491ca38785720770cae64bfa3b2"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-04-13_MondayBrief_Pharma_Macro.txt",
+      "bytes": 1774,
+      "sha256": "ddc42b0d11c3ebc754f69c62a5ecfd823f7165fb7dc5d9e3aa443e3191c94288"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-04-20_MondayBrief_Pharma_Macro.txt",
+      "bytes": 1651,
+      "sha256": "0c22717edde0c6a6fd0c663d6e5407f0d23898620d983195bcba53ae5697e8a7"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-04-27_MondayBrief_Pharma_Macro.txt",
+      "bytes": 1853,
+      "sha256": "3171aa30675f77642ba912b33bd9e078fce0e43e0904984e865d8a132aed301b"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-05-04_AdHoc_NUPCO_RFP_H2_2026.txt",
+      "bytes": 2792,
+      "sha256": "884f124ea30ad772bbe82abc2a58827aa7f7246412f2f5d9e02f97150a00b439"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-05-04_MondayBrief_Pharma_Macro.txt",
+      "bytes": 1660,
+      "sha256": "a0368e3a72462a5d955544c2619efe6b3d0efd6b531f7827eaffd13d9669c7c9"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-05-11_MondayBrief_Pharma_Macro.txt",
+      "bytes": 1543,
+      "sha256": "a8081edcd1e20ea41ac58acc7baebd53c9a3a12912d1464ff9e300ff8f137d22"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-05-12_AdHoc_GLP1_demand_surge.txt",
+      "bytes": 2352,
+      "sha256": "e2357582f7ec4663fe4f25e1e0426c495976468d2f0a3c5f36fc6f87f0c41620"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-05-18_MondayBrief_Pharma_Macro.txt",
+      "bytes": 1628,
+      "sha256": "aaaa5bd96ffba52d45ce360f9f9167c2c2d61ca81582babeaaad95b819e2b763"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-05-19_AdHoc_CardiologyConsultantGap.txt",
+      "bytes": 2159,
+      "sha256": "e600aeedeee7fe269b2fda681d36dad3d4e46b50942571388d85431f2b5c29b3"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-05-25_MondayBrief_Pharma_Macro.txt",
+      "bytes": 1455,
+      "sha256": "e8f01a91500bb6c380b73f841ecd80f143f5ca8e7b98d4a6d61d548f958284dd"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-05-27_AdHoc_EUR_CHF_FX_drift.txt",
+      "bytes": 2386,
+      "sha256": "0487d96c7294aef51646c842696b024c2dcc1ded6026c63807a969919486db28"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-05-30_AdHoc_PIF_AUM_Q1_disclosure.txt",
+      "bytes": 2140,
+      "sha256": "928257ce83404c5f2e7c89b227491e6664f261e89cb9972a93b31b75116a5394"
+    },
+    {
+      "path": "demo/04_Strategic_Context/05_Briefings/2026-06-01_MondayBrief_Pharma_Macro.txt",
+      "bytes": 2245,
+      "sha256": "82458d782dcbccc759e678e50e5dbcfaab6f7d0490bf5b61134c313f3b795997"
+    },
+    {
+      "path": "demo/04_Strategic_Context/README.md",
+      "bytes": 916,
+      "sha256": "867755f7401fa7c4cfdfe597fb2f73fc82f3207446824dc326a2936739ac5d2a"
+    }
+  ]
+}

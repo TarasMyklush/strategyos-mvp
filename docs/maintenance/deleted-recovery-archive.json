@@ -1,0 +1,14 @@
+{
+  "action": "permanently_deleted",
+  "path": "/Users/taras/Desktop/Taras/SPsoft/Enterprise OS/outputs/server-cleanup-20260902.Wytkm9/old-images.tar.gz",
+  "bytes": 7980339221,
+  "authorized_by": "User explicitly requested deletion on 2026-09-05",
+  "deleted_at": "2026-09-05T05:07:52.812952+00:00",
+  "previous_verification": {
+    "verified": true,
+    "images": 50,
+    "tags": 50,
+    "verified_blobs": 589,
+    "sha256": "08744b4d7507ae759852d4eaec9934dd38902e2c993d40191babb0e19f1026fb"
+  }
+}

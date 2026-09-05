@@ -1,0 +1,16 @@
+FROM: Faisal Al-Dossary, Head of Property & Facilities, Tamween Pharma Distribution
+TO: Finance Shared Services
+CC: Mizan Pharmacy Retail — Regional Operations
+DATE: 12 February 2024
+SUBJECT: Qassim WH — co-location of Mizan Pharmacy Retail regional storage unit
+
+As part of the group integration, Mizan Pharmacy Retail will occupy approximately 35% of the Qassim warehouse floor area from 1 February 2024 (regional replenishment storage plus a returns processing cell).
+
+Facilities implications:
+- Qassim WH utilities (electricity, water, cooling) remain contracted and paid by Tamween (Saudi Electricity Company / National Water Company accounts unchanged).
+- An intercompany utilities recharge to Mizan Pharmacy Retail is TO BE SET UP by Finance Shared Services — suggest pro-rata to occupied area (35%) effective 1 February 2024.
+- Metering split was quoted at SAR 180K one-off; deferred for now, recharge to be computed on the pro-rata basis instead.
+
+ACTION: Finance Shared Services to establish the monthly recharge journal. Please confirm.
+
+[No reply on file. Recharge never established as of June 2026 — utilities at Qassim run ~35% above comparable sites with no offsetting intercompany income.]

@@ -339,7 +339,7 @@ def _approved_external_modes() -> tuple[str, ...]:
 def load_config() -> StrategyOSConfig:
     workspace_root = env_path("STRATEGYOS_WORKSPACE_ROOT", DEFAULT_WORKSPACE_ROOT)
     poc_root = env_path(
-        "STRATEGYOS_POC_ROOT", workspace_root / "strategy os" / "StrategyOS POC"
+        "STRATEGYOS_POC_ROOT", PACKAGE_ROOT / "data" / "demo"
     )
     output_root = env_path("STRATEGYOS_OUTPUT_ROOT", workspace_root / "outputs")
     default_sensitive_key_id = "local-v1"

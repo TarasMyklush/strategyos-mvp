@@ -1,0 +1,12 @@
+{
+  "wheel": "strategyos_mvp-0.1.0-py3-none-any.whl",
+  "required_assets": {
+    "strategyos_mvp/static/newsreader-latin.woff2": true,
+    "strategyos_mvp/static/newsreader-italic-latin.woff2": true,
+    "strategyos_mvp/static/favicon.svg": true,
+    "strategyos_mvp/twins/static/ceo.html": true,
+    "strategyos_mvp/twins/static/cfo.html": true,
+    "strategyos_mvp/twins/static/gm.html": true
+  },
+  "forbidden_paths": []
+}

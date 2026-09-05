@@ -4,14 +4,10 @@ from strategyos_mvp.source_finance_kpis import derive_source_finance_kpis
 from strategyos_mvp.source_strategy_enrichment import derive_strategy_enrichment
 
 
-DATASET = Path(
-    "/Users/taras/Desktop/Taras/SPsoft/Enterprise OS/28.07.2026/01_Synthetic_Dataset-3"
-)
+DATASET = Path(__file__).resolve().parents[1] / "data" / "demo" / "01_Synthetic_Dataset"
 
 
 def test_legion_enrichment_contract_is_data_derived() -> None:
-    if not DATASET.exists():
-        return
     payload = derive_strategy_enrichment(DATASET)
     assert payload["status"] == "ready"
     plan = payload["plan_health"]
@@ -62,8 +58,6 @@ def test_legion_enrichment_contract_is_data_derived() -> None:
 
 
 def test_revenue_plan_health_uses_the_reconciled_h1_budget_comparator() -> None:
-    if not DATASET.exists():
-        return
     finance = derive_source_finance_kpis(DATASET)
     payload = derive_strategy_enrichment(DATASET, finance_kpi=finance)
     revenue = next(
@@ -81,8 +75,6 @@ def test_revenue_plan_health_uses_the_reconciled_h1_budget_comparator() -> None:
 
 
 def test_three_planted_drifts_surface_without_answer_key_labels() -> None:
-    if not DATASET.exists():
-        return
     payload = derive_strategy_enrichment(DATASET)
     plan_drifts = [
         item for item in payload["plan_health"]["commitments"]
@@ -103,8 +95,6 @@ def test_three_planted_drifts_surface_without_answer_key_labels() -> None:
 
 
 def test_legion_decisions_carry_visible_session_statuses() -> None:
-    if not DATASET.exists():
-        return
     payload = derive_strategy_enrichment(DATASET)
     decisions = {item["key"]: item for item in payload["decision_seeds"]}
     assert decisions["apply-june-eur-hedge"]["status_labels"] == {

@@ -6,6 +6,16 @@ from strategyos_mvp.config import default_source_dataset_path, load_config
 from strategyos_mvp.storage import object_store_status, sync_artifacts
 
 
+def test_default_demo_source_is_repository_owned(monkeypatch):
+    monkeypatch.delenv("STRATEGYOS_POC_ROOT", raising=False)
+    monkeypatch.delenv("STRATEGYOS_SOURCE_DATASET", raising=False)
+    config = load_config()
+    demo_root = Path(__file__).resolve().parents[1] / "data" / "demo"
+    assert config.poc_root == demo_root
+    assert config.source_dataset == demo_root / "01_Synthetic_Dataset"
+    assert (config.source_dataset / "20_Board_KPIs").is_dir()
+
+
 def test_default_config_has_local_paths():
     config = load_config()
     assert config.workspace_root.exists()

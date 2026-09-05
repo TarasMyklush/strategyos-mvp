@@ -1,0 +1,23 @@
+FROM: Sara Al-Mahmoud, Group CFO, Mizan Holding
+TO: Tamween Pharma Distribution — Finance & Operations leadership
+CC: Khalid Al-Rashed (Group CEO); Integration Management Office
+DATE: 15 January 2024
+SUBJECT: Acquisition close — 100-day integration plan (Finance workstream)
+
+Team,
+
+The acquisition of Tamween Pharma Distribution closed on 8 January 2024. Welcome to Mizan Group.
+
+Finance workstream priorities for the first 100 days:
+
+1. ERP migration. Tamween's legacy TTS system will be migrated onto the Mizan group ERP template. Target go-live July 2024. Note: the group template's account descriptions date from Mizan's FMCG-distribution era (e.g. "Revenue - Catering", "COGS - Food"). To avoid remapping three years of comparatives, we will retain the legacy descriptions and publish a mapping guide. Descriptions are cosmetic; postings are pharma.
+
+2. Purchase order discipline. Tamween currently operates without a formal PO system. The group PO module goes live with the ERP migration (July 2024). Until then, spend is approved by email — Finance must retain approval trails.
+
+3. Cash pooling. From February 2024, Tamween's excess operating cash sweeps monthly to Mizan Group treasury (previously swept to Tamween Holdco). Booked to account 2900.
+
+4. Controls review. Internal Audit will baseline Tamween's payables controls in H2 2024. Early observations suggest gaps in duplicate-payment prevention and vendor master hygiene (several suppliers appear to trade under multiple registered entities).
+
+The Central Region (Riyadh) division — 4 of the 12 warehouses, roughly 30% of BU revenue — will serve as the pilot ledger for the integration before national rollout.
+
+Sara

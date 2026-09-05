@@ -1,0 +1,50 @@
+AD-HOC BRIEFING — EUR + CHF/SAR drift and pharma import implications
+Date: 27 May 2026
+Compiler: Mizan Group Research — Treasury team
+Distribution: Group CFO, BU CFOs, Procurement CoE
+
+═══════════════════════════════════════════════════════════════════════
+
+ONE-LINE
+Both EUR and CHF are structurally higher than at any point since 2014.
+Mizan's European + Swiss pharma import lines (Sanofi, Servier, Roche,
+Novartis) are leaking margin where hedge programmes are not actively
+applied. Tamween Pharma Distribution's Q1-2026 leakage event is the
+case study.
+
+WHAT THE NUMBERS LOOK LIKE
+  Year       EUR/SAR avg     CHF/SAR avg
+  2023        4.06             4.18
+  2024        4.05             4.32
+  2025        4.18             4.47
+  H1 2026     4.21             4.51
+
+  ECB / Fed differential: ECB held; Fed cuts pushed to late-September.
+  EUR + CHF strength likely persists through Q4-2026.
+
+WHO IS EXPOSED (group-wide)
+  BU                     Annual import EUR+CHF (SAR M)
+  Manufacturing               140  (specialty raw materials)
+  Pharma Distribution         180  (parallel imports + Bordeaux pharma)
+  Pharma Logistics             18  (parts, equipment)
+  Pharmacy Retail              28  (OTC + beauty)
+  Healthcare Services          82  (medical equipment + diagnostics)
+                              ---
+  Total                       ~448
+
+HEDGE PROGRAMME STATUS
+  • Treasury runs 60% rolling 3-month hedge coverage on EUR + CHF.
+  • Hedge application discipline: Tamween Q1-2026 settlement is the
+    case study. Hedge HD-2026-019 was open for May exposure but was
+    not applied to the EUR pharma supplier invoice on settlement;
+    SAR ~43k leakage versus hedged counterfactual.
+
+ACTIONS COMMITTED
+  • Hedge coverage uplift to 80% by end-Q3-2026 across all EUR + CHF
+    pharma import lines.
+  • AP–Treasury integration: every EUR/CHF-denominated AP item over
+    EUR/CHF 50k requires Treasury sign-off before payment. Effective
+    1 July 2026.
+  • Quarterly FX review at ExCom from Q3-2026.
+
+═══════════════════════════════════════════════════════════════════════

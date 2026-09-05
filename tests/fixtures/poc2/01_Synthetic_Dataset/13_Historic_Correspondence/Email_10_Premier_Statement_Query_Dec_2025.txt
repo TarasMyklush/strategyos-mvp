@@ -1,0 +1,18 @@
+From: accounts@premierpharmapkg.sa
+To: ap@tamween.sa
+Date: Tuesday 9 December 2025, 13:37
+Subject: Statement of account — November anomaly (INV-2025-2841)
+
+Dear Tamween AP team,
+
+During our November statement preparation we note invoice INV-2025-2841 (SAR 96,600, PO-2025-0611) appears settled twice on our remittance records: bank wire dated 18 November and cheque no. 004417 dated 21 November.
+
+Could you confirm whether a refund or offset against December invoicing is preferred?
+
+Best regards,
+Premier Pharma Packaging LLC — Receivables
+
+-----Internal note appended by ap@tamween.sa, 11 December 2025-----
+Logged as query #Q-2025-1188. Assigned: backfill pending. Carried into 2026 queue.
+
+[Unresolved as of June 2026. The identical failure mode (wire + cheque, same invoice) recurred with the same vendor in March 2026 — see INV-2026-0341, SAR 177,188.]

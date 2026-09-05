@@ -1,0 +1,341 @@
+{
+  "date": "2026-09-05",
+  "sources": [
+    {
+      "original_path": "08.08.2026/StrategyOS_R4_Protect_Iterate_Feature_2026-07-28.md",
+      "sha256": "7268fdc31c8de8f40592b1a31428d5b5ab75bdceac1c700dd1d44457994400cb",
+      "bytes": 8401,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "01.08.2026/StrategyOS_Review_Round2_2026-07-28.md",
+      "sha256": "1f6fe40fc109bedc850385919219f483f3df4378ace91d185c5d4ea78da497ce",
+      "bytes": 14495,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "23.07.2026/Meeting Transcription 22-07-2026.pdf",
+      "sha256": "384c7f0178d4a073d444a128037e4650640bc5c424719f0539fdbb78cc00f8d1",
+      "bytes": 28696,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "23.07.2026/StrategyOS_UI_UX_Product_Backlog.md",
+      "sha256": "91f1423cf8dd5f076c4dfe8be83ceb495b21a8a795e103aa16e842d4f8b3df4f",
+      "bytes": 22335,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "28.07.2026/QUESTION-for-Menelaos-cost-of-drift.md",
+      "sha256": "7817e34b9df68e53658732e34c40399bf48f6be3a356215ab0e46c1175b9c68c",
+      "bytes": 4067,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "28.07.2026/StrategyOS_Legion_Build_Spec_v3_20260728.md.pdf",
+      "sha256": "e6046f40904cbb5c7afdc5172e0387cbd0be3c9bf9faac0a512a57e5e2067a75",
+      "bytes": 201006,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "28.07.2026/TEST-REPORT-legion-spec-v3.md",
+      "sha256": "de9d65cd403506ea48fbedf233d3aeb15178afe7db5a2a1e2e741882eba0b387",
+      "bytes": 24153,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "16.07.2026/StrategyOS POC-2/02_Agent_JDs/Finance_Analyst_JD.md",
+      "sha256": "ea86dfe6697918c1eb9f9cb62eacb97aa9a73c1ce7f5591cf3f90b4670b777bd",
+      "bytes": 6486,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "16.07.2026/StrategyOS POC-2/02_Agent_JDs/Finance_Auditor_JD.md",
+      "sha256": "d68655ed21488729617031897057be775c527b1738898e4577e633227b6508ef",
+      "bytes": 5378,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "16.07.2026/StrategyOS POC-2/03_Sample_Tasks/POC_Task_Brief.md",
+      "sha256": "8d92ceecae5fb69b6c527d79313c7d52a2cfe306b3a2b7a84406e6381f4ab5c1",
+      "bytes": 6442,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "28.06.2026/StrategyOS_Data_Sourcing_Map_CEO_CFO.docx",
+      "sha256": "48624110269dfc103ce4c7ba2c5b2d4d9a421cf35696da84150b202510d8cf8a",
+      "bytes": 28319,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "28.06.2026/StrategyOS_KPI_Calculation_Spec.docx",
+      "sha256": "2e27b9126ba2b24de6381195c44d7ba89e03b2253254c7fe858ce066cb83f6fb",
+      "bytes": 25125,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "requirements/StrategyOS_Technical_Spec.pdf",
+      "sha256": "8d91debd532c76664c55c36c66bb8e4f583830bc73dc8bcc0d607de93649bbf9",
+      "bytes": 168772,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "13.07.2026/Call_Summary_13-07-2026.md",
+      "sha256": "20e2a97590db5ea1bce749e0ccd39b74d4eaf3a525b863a73f43aeb92650732e",
+      "bytes": 5422,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "13.07.2026/Data_Gaps_13-07-2026.md",
+      "sha256": "19860819ee2d830c654af493e383dc0378a90b9bb02fdeb25637444db51273f8",
+      "bytes": 2673,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "13.07.2026/Implementation_Plan_13-07-2026.md",
+      "sha256": "b51a2c7e5c9064d8d6697466901f9988336c5a79710a6b6d3a2c5c33fbb2e60b",
+      "bytes": 24283,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "13.07.2026/StrategyOS Call 13-07-2026.pdf",
+      "sha256": "37078c67f4febe9b9dc651782166a02a6a482a4ab84b314c6ff052e3d56629b0",
+      "bytes": 27206,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "02.07.2026/Fin Consolidation Solution for Baker Tilly ver.2.pdf",
+      "sha256": "0819b6192734de19c4a37b0c91425cd54ab6adb9b78776355f27f55903cb7691",
+      "bytes": 6357341,
+      "active_authority": "Supporting reference; not a StrategyOS requirement",
+      "disposition": "Retained as supporting-materials/Financial Consolidation - Baker Tilly.pdf"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_ClaudeDesign_Brief.md",
+      "sha256": "6490813aed1489344062a045032425996e30ddcc26ceab1240c57f855a82bc79",
+      "bytes": 6717,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_ClaudeDesign_Prompt.md",
+      "sha256": "6490813aed1489344062a045032425996e30ddcc26ceab1240c57f855a82bc79",
+      "bytes": 6717,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_Data_Sourcing_Map_CEO_CFO.docx",
+      "sha256": "48624110269dfc103ce4c7ba2c5b2d4d9a421cf35696da84150b202510d8cf8a",
+      "bytes": 28319,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_Data_Sourcing_Map_CEO_CFO.pdf",
+      "sha256": "bc719e7eb84694baa37415815eafad6cd83dbc30769694a0523a7f33cd181c75",
+      "bytes": 148334,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_Design_Brief.docx",
+      "sha256": "bde8d3433a2a38caeddeb8d6d18caf1c48e16a8c718d6a34c8de96f5a67c0299",
+      "bytes": 51288,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_Design_Brief.pdf",
+      "sha256": "2d30f49f30fe9e6d28c02dbdb2572dd75dcb5d6f4bb941aa0d27e41031a2b6fa",
+      "bytes": 426989,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_Design_Description.md",
+      "sha256": "7478880783750e314c452e697b47e5fb94d36b8c5f5eb6080c9ed8ee0847548a",
+      "bytes": 19990,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_Design_Spec.docx",
+      "sha256": "8986d43ceb30c62c65e525b011835db569093dde89ecc3178af139d516d048ef",
+      "bytes": 25563,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_Design_Spec.pdf",
+      "sha256": "f9da933996e436298c9219b756d8aeba25fd7f3b722afaaf2eb788fc35ce0a80",
+      "bytes": 192794,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_KPI_Calculation_Spec.docx",
+      "sha256": "2e27b9126ba2b24de6381195c44d7ba89e03b2253254c7fe858ce066cb83f6fb",
+      "bytes": 25125,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_KPI_Calculation_Spec.pdf",
+      "sha256": "16ed172d99a0a5f3ed515d4c58713139fd7e40cc4a0667b72e5e33125fb0c7fd",
+      "bytes": 117314,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_Technical_Spec.docx",
+      "sha256": "19dfeeab8efad63e2760036500ebe644507bfe1c73ae1cee1287816144677900",
+      "bytes": 24839,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "12.07.2026/Product & Design/StrategyOS_Technical_Spec.pdf",
+      "sha256": "0402fec4d9a3eba89c8aadff23f962c67584f54f14ba8490f6a04eff86467007",
+      "bytes": 175449,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "27.07.2026/EXECUTION-PLAN-27-07-2026.md",
+      "sha256": "9f4882a4eb9ebb2672084848b5c60d4653850925e47b62484c713248e648cf4e",
+      "bytes": 20958,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "27.07.2026/StrategyOS 27-07-2026.pdf",
+      "sha256": "d7979a3e18cb709919dc4a5bb967b4c4b857f0c40ca1fcc86ebafc7bd784e919",
+      "bytes": 33523,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/agent-layer/README.md",
+      "sha256": "73f1e50146aefe9772386e20c2c6e8bcf4f72bb729a6df189f84813e60c0728d",
+      "bytes": 1146,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/agent-layer/agents-layer-design.md",
+      "sha256": "903fb2bdf27a5989bcde36048c0bd8d1911c625f4bb611da6c40cb018fefcad0",
+      "bytes": 39033,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/agent-layer/hermes-and-agent-collaboration-explained.md",
+      "sha256": "c6574aa47460c8676377e2f99385c6b20f13d705e8d5045f668f7bde33df2374",
+      "bytes": 10704,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/authority-matrix-mvp.md",
+      "sha256": "6e60f6e9500a540f2a380601c28c9fd47f48fb7cfe38bbe075732aef8ac625cd",
+      "bytes": 3672,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/business-user-ui-fix-list.md",
+      "sha256": "fe0d0cdb93647181957d5e917e25f960a22b4c77b7c83c4b9e6c05cf0fe1ebda",
+      "bytes": 12344,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/ceo-view-blocks-explained.md",
+      "sha256": "f10cb15f57a3dc721878eb99145aeec720f4dc47480ee6f4a9b3d2cf87213810",
+      "bytes": 11443,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/chat-dashboard-ui-plan.md",
+      "sha256": "98fe9f532802d314e5d4a8aa53c0c9cda690696bc914508500fe48a23d1a2d7f",
+      "bytes": 13652,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/flexible-invoice-architecture-plan.md",
+      "sha256": "ab51b5b47fb8da6a3e8cb580f8410cc7b5bb5bf73ffcf32719d4480506a1c05d",
+      "bytes": 26684,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/hermes-governed-scenario-engine-plan-2026-07-10.md",
+      "sha256": "dbb36ebaccda88c365351f152ebccdb04a49ae063b8b21aed30077fc5141ed64",
+      "bytes": 16259,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/knowledge-graph-viz-research.md",
+      "sha256": "d60e672e600e7fdf0ab206607f308e170f26db28e1a6bc8797588541dfc72ebd",
+      "bytes": 8847,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/neo4j-graph-detectors-plan.md",
+      "sha256": "6d77c25ab6d9e4a17695703c94a663ac897f1ecc3b2ed1c6a035b763435a1d26",
+      "bytes": 12815,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/neo4j-utilization-plan.md",
+      "sha256": "a1c9ea9db5bda2dbd45d65eb9c0382928136267354343c205103ec2dba99f335",
+      "bytes": 10936,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/production-deployment-plan.md",
+      "sha256": "c3a7dd2a26072e89e20bab5105729e59759936fdd2476a1b7f250e50be66b0cf",
+      "bytes": 6200,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/qdrant-search-upgrade-plan.md",
+      "sha256": "c7a53d23c773978b5f0d9fe0bb8059eb88fe1d8502bc5a667b33731be989c0ce",
+      "bytes": 17269,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    },
+    {
+      "original_path": "strategyos_mvp/docs/role-matrix-as-of-2026-07-02.md",
+      "sha256": "d842169c633e096be2f5b0954d1b0abe835610d919fd273672704543da609577",
+      "bytes": 6795,
+      "active_authority": "docs/requirements.md",
+      "disposition": "superseded source; recoverable in cleanup Trash or Git history"
+    }
+  ]
+}

@@ -1,0 +1,136 @@
+{
+  "threads": [
+    {
+      "thread_id": "A2A-2026-0601-01",
+      "topic": "Tamween cost-remediation status vs plan",
+      "participants": [
+        "Hermes (Group CEO assistant)",
+        "Iris (Tamween GM assistant)"
+      ],
+      "turns": [
+        {
+          "from": "Hermes",
+          "to": "Iris",
+          "ts": "2026-06-01T07:05:00+03:00",
+          "text": "Khalid reviews Tamween at ExCo Wednesday. Where does Faisal's cost-remediation plan stand against the decision log?",
+          "evidence_ref": "19_Document_Vault/Remediation_Decision_Log_Jun2026.xlsx"
+        },
+        {
+          "from": "Iris",
+          "to": "Hermes",
+          "ts": "2026-06-01T07:06:10+03:00",
+          "text": "13 logged decisions RD-01..RD-13. Closed or settled: RD-04 (FG-2241 price variance, SAR 30,600 recovered), RD-08 (Mediterranean credit SAR 128,000 offset), RD-11 (Qassim recharge SAR 4,429,534 settled intercompany). In progress: RD-01 Premier duplicate — SAR 88,594 of 177,188 offset so far.",
+          "evidence_ref": "Remediation_Decision_Log_Jun2026.xlsx rows RD-01/04/08/11"
+        },
+        {
+          "from": "Hermes",
+          "to": "Iris",
+          "ts": "2026-06-01T07:06:45+03:00",
+          "text": "And the cost variance itself — is the overrun contained ex-volume?",
+          "evidence_ref": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx"
+        },
+        {
+          "from": "Iris",
+          "to": "Hermes",
+          "ts": "2026-06-01T07:08:02+03:00",
+          "text": "Tamween non-volume overrun H1 is SAR 7.7M: logistics +2.9 (cold-chain escalation EV-2026-15 + NUPCO line-haul EV-2026-16 + fuel EV-2026-17), utilities +2.4 (tariff EV-2026-13 + Qassim EV-2026-12, now recharged), payroll +2.1 (Saudisation EV-2026-10 + overtime EV-2026-11), other +0.3. COGS +63.5 is volume/mix-linked, not a control issue.",
+          "evidence_ref": "BU_Cost_Variance_H1_2026.xlsx Tamween rows; 16_Business_Events EV-2026-10..17"
+        },
+        {
+          "from": "Hermes",
+          "to": "Iris",
+          "ts": "2026-06-01T07:08:40+03:00",
+          "text": "Two of those three are group problems, not Tamween problems — energy and Saudisation appear in five BUs. What is Tamween-specific?",
+          "evidence_ref": "BU_Cost_Variance_H1_2026.xlsx Cross_BU_Themes"
+        },
+        {
+          "from": "Iris",
+          "to": "Hermes",
+          "ts": "2026-06-01T07:09:30+03:00",
+          "text": "Correct. Tamween-specific and actionable: the cold-chain contract (renegotiation session 3-Jun, CEO-approved memo, target SAR 250K+/yr, insourcing BATNA per the Dammam hub) and the residual controls tail (RD-05 discount diary, RD-02 vendor merge). Both on the Q3 milestone list under INIT-09.",
+          "evidence_ref": "GulfColdChain_Renegotiation_Approval_Memo_Jun2026.pdf; 21_Initiatives INIT-09 milestones"
+        },
+        {
+          "from": "Hermes",
+          "to": "Iris",
+          "ts": "2026-06-01T07:10:00+03:00",
+          "text": "Summary for the brief: remediation 5/13 closed, SAR 4.65M banked, overrun ex-volume SAR 7.7M of which ~SAR 4.5M is group-theme, Tamween-specific fixes on track for Q3. Agreed?",
+          "evidence_ref": "Remediation_Decision_Log; BU_Cost_Variance_H1_2026"
+        },
+        {
+          "from": "Iris",
+          "to": "Hermes",
+          "ts": "2026-06-01T07:10:20+03:00",
+          "text": "Agreed, with one caveat for Faisal's talking points: the duplicate-payment failure mode repeated (Nov-2025 then Mar-2026, same vendor) — the SOP v3 system block from 1-Jul is the real fix, not the recovery.",
+          "evidence_ref": "16_Business_Events EV-2025-43/EV-2026-08; AP_Controls_SOP_v3_Jun2026.pdf"
+        }
+      ]
+    },
+    {
+      "thread_id": "A2A-2026-0601-02",
+      "topic": "Servier EUR payment paid at spot while hedge sat unapplied",
+      "participants": [
+        "Hermes (Group CEO assistant)",
+        "Atlas (Group CFO assistant)"
+      ],
+      "turns": [
+        {
+          "from": "Hermes",
+          "to": "Atlas",
+          "ts": "2026-06-01T07:20:00+03:00",
+          "text": "Why was Servier invoice INV-2026-0577, EUR 89,400, paid on 6 May at spot 4.21 when hedge HD-2026-019 had 60% May EUR coverage locked at 3.73?",
+          "evidence_ref": "08_Invoices/Invoice_Servier_INV-2026-0577.pdf; 07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx Hedges sheet"
+        },
+        {
+          "from": "Atlas",
+          "to": "Hermes",
+          "ts": "2026-06-01T07:21:15+03:00",
+          "text": "Confirmed from the Emirates NBD EUR account: payment executed 6-May at spot. The hedge row HD-2026-019 is flagged as the open exception in the CFO cash forecast. Counterfactual cost: (4.21 - 3.73) x 89,400 = SAR 42,912.",
+          "evidence_ref": "01_Bank_Statements/EmiratesNBD_EUR_Jan-Jun_2026.pdf; EV-2026-06"
+        },
+        {
+          "from": "Hermes",
+          "to": "Atlas",
+          "ts": "2026-06-01T07:21:50+03:00",
+          "text": "Was this discretion or process failure?",
+          "evidence_ref": "—"
+        },
+        {
+          "from": "Atlas",
+          "to": "Hermes",
+          "ts": "2026-06-01T07:23:05+03:00",
+          "text": "Process failure. The AP confirmation email (Email_2, 2-May) confirms the spot rate and never mentions the hedge — AP had no checkpoint requiring treasury confirmation before releasing EUR runs. Policy v2 assumed coordination; it wasn't system-enforced. Same root-cause family as the discount-diary lapse: single-threaded handoffs.",
+          "evidence_ref": "06_Email_Correspondence/Email_2_BordeauxWines_Payment_May_2026.txt; FX_Hedging_Policy_v2_Jan2026.docx §3.3; 16_Business_Events EV-2025-42"
+        },
+        {
+          "from": "Hermes",
+          "to": "Atlas",
+          "ts": "2026-06-01T07:23:40+03:00",
+          "text": "Remediation status and June exposure?",
+          "evidence_ref": "Remediation_Decision_Log_Jun2026.xlsx RD-07"
+        },
+        {
+          "from": "Atlas",
+          "to": "Hermes",
+          "ts": "2026-06-01T07:25:00+03:00",
+          "text": "RD-07 approved 22-May: treasury/AP integration with hedge checkpoint, system-enforced in AP SOP v3 from 1-Jul. June exposure: the next Servier cycle is due mid-June with EUR still at 4.21 and HD-2026-019 coverage unused.",
+          "evidence_ref": "AP_Controls_SOP_v3_Jun2026.pdf control 6; 17_Signals SIG-2026-04"
+        },
+        {
+          "from": "Atlas",
+          "to": "Hermes",
+          "ts": "2026-06-01T07:25:30+03:00",
+          "text": "PROPOSED DECISION for Khalid's queue: apply HD-2026-019 remaining coverage to the June EUR payment run (manual treasury confirmation until SOP v3 goes live), and lift coverage toward the 80% Q4 target on the next hedge tranche. Estimated June saving if EUR holds at 4.21: ~SAR 26K on the expected EUR 55-90K cycle; the discipline precedent is worth more than the riyals.",
+          "evidence_ref": "FX_Hedging_Policy_v2 addendum; Board_KPI_Glidepaths KPI-02 rationale"
+        },
+        {
+          "from": "Hermes",
+          "to": "Atlas",
+          "ts": "2026-06-01T07:26:00+03:00",
+          "text": "Queued for the CEO with your framing. Tagging Sara as decision owner, evidence pack attached.",
+          "evidence_ref": "14_CEO_Office/CEO_Calendar (Monday Brief 1-Jun)"
+        }
+      ]
+    }
+  ]
+}

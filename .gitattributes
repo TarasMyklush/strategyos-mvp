@@ -1,0 +1,13 @@
+# Preserve source-document bytes and avoid text diffs of binary containers.
+*.pdf binary
+*.xlsx binary
+*.docx binary
+*.pptx binary
+*.png binary
+*.jpg binary
+*.woff2 binary
+
+# Evidence/fixtures are imported records; do not normalize their line endings.
+data/demo/** -text -whitespace
+tests/fixtures/** -text -whitespace
+docs/assessment/evidence/** -text -whitespace

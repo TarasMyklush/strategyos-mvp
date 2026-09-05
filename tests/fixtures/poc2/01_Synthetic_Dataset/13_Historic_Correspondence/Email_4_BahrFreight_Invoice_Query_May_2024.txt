@@ -1,0 +1,20 @@
+From: Maha Al-Juhani <maha.aljuhani@tamween.sa> (AP Clerk, Finance Shared Services)
+To: Ibrahim Qadi <ibrahim.qadi@tamween.sa> (AP Supervisor)
+Date: Wednesday 22 May 2024, 11:42
+Subject: Bahr Freight — possible double booking March + April?
+
+Ibrahim,
+
+While reconciling the 6300 logistics line I noticed Bahr Freight & Clearing Co (V-2415) has TWO invoices booked for March services and two again for April — similar amounts, different invoice numbers, both marked "Customs clearance & port handling" for the same month. Combined it's roughly SAR 270K across the two months. May looks like it may repeat.
+
+Should I hold the second April payment until we get a statement from the vendor?
+
+Maha
+
+-----Original Message Reply-----
+From: Ibrahim Qadi
+Date: Wednesday 22 May 2024, 15:03
+
+Maha — the port congestion surcharges this spring mean some months genuinely have two billing runs. Bahr's account manager confirmed the invoices are "sequential billing cycles". Both are approved and within budget. Book as-is and close the query, we are behind on the month-end calendar.
+
+Ibrahim

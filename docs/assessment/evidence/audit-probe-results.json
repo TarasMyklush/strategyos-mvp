@@ -1,0 +1,100 @@
+[
+  {
+    "id": "zero_actual_excluded",
+    "expected": "A valid zero actual scores 0 and remains measured",
+    "observed": {
+      "score": null,
+      "live_count": 0,
+      "missing_count": 1
+    },
+    "measurement_status": "missing"
+  },
+  {
+    "id": "status_not_recomputed",
+    "expected": "80 vs 100 higher-is-better is behind even if a source label is stale",
+    "observed": {
+      "score": 80.0,
+      "behind_count": 0,
+      "holding_count": 1
+    }
+  },
+  {
+    "id": "client_direction_ignored",
+    "expected_score": 83.3,
+    "observed_score": 120.0,
+    "observed_direction": "higher_is_better"
+  },
+  {
+    "id": "additional_fabricated_numbers_accepted",
+    "expected": "Reject unsupported new numeric claims",
+    "observed": {
+      "item_id": "revenue",
+      "what": "Revenue reached 84% versus 100%; recovery is SAR 999M.",
+      "why": "INIT-42 caused a SAR 999M loss.",
+      "evidence_refs": [
+        "INIT-42"
+      ],
+      "rich_briefing": "Guaranteed SAR 999M recovery.",
+      "synthesized_by": "llm-batch-grounded"
+    }
+  },
+  {
+    "id": "thread_fabrication_accepted",
+    "expected": "Reject numbers absent from thread evidence",
+    "observed": {
+      "thread_id": "test-thread",
+      "turns": [
+        {
+          "text": "Verified cost SAR 10K"
+        }
+      ],
+      "executive_summary": "Guaranteed SAR 999M recovery",
+      "key_figures": [
+        "SAR 999M"
+      ],
+      "summary_status": "recorded",
+      "synthesized_by": "llm-batch-grounded"
+    }
+  },
+  {
+    "id": "authority_domain_classification",
+    "question": "Show employee compensation",
+    "domain": "hr",
+    "allowed": false,
+    "required_right": "view"
+  },
+  {
+    "id": "authority_domain_classification",
+    "question": "Show salaries and bonuses",
+    "domain": "finance",
+    "allowed": true,
+    "required_right": "view"
+  },
+  {
+    "id": "board_policy_identity",
+    "expected": "Independent Minerva policy identity",
+    "observed": "assistant:hermes"
+  },
+  {
+    "id": "qa_scoring_does_not_check_correctness",
+    "observed": {
+      "question_count": 1,
+      "answered_count": 1,
+      "tiered_count": 1,
+      "derivability_violation_count": 0,
+      "items": [
+        {
+          "id": "q1",
+          "question": "What is revenue?",
+          "answer": "Revenue is SAR 999 trillion",
+          "matched": true,
+          "determinism_tier": "governed_fact",
+          "answered": true,
+          "tier_visible": true,
+          "derivability_violation": false,
+          "missing_layer": null
+        }
+      ]
+    }
+  }
+]

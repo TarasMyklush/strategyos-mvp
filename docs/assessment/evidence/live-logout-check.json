@@ -1,0 +1,5 @@
+{
+  "logout_http_status": 404,
+  "protected_read_after_logout_status": 200,
+  "credentials_persisted": false
+}

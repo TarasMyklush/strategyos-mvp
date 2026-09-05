@@ -1,7 +1,7 @@
 [project]
 name = "strategyos-mvp"
 version = "0.1.0"
-description = "StrategyOS production-ready MVP scaffold for finance leakage discovery."
+description = "StrategyOS governed finance analysis and executive strategy workspace."
 requires-python = ">=3.11"
 dependencies = [
   "boto3",
@@ -29,7 +29,7 @@ build-backend = "setuptools.build_meta"
 include = ["strategyos_mvp*"]
 
 [tool.setuptools.package-data]
-strategyos_mvp = ["tools/*.swift", "static/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/vendor/*.js"]
+strategyos_mvp = ["tools/*.swift", "static/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/*.woff2", "static/vendor/*.js", "twins/static/*.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

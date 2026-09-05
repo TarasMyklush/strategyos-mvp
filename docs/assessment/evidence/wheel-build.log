@@ -1,0 +1,12 @@
+Processing /Users/taras/Desktop/Taras/SPsoft/Enterprise OS/strategyos_mvp
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: strategyos-mvp
+  Building wheel for strategyos-mvp (pyproject.toml): started
+  Building wheel for strategyos-mvp (pyproject.toml): finished with status 'done'
+  Created wheel for strategyos-mvp: filename=strategyos_mvp-0.1.0-py3-none-any.whl size=1289309 sha256=172fa49c1d59e42077af36420f76eefbd1ecfaadaaa7fa0d08ca4ad50c1573b8
+  Stored in directory: /private/var/folders/8f/rp5hxmyj20sdp65xcj1rvh6h0000gp/T/pip-ephem-wheel-cache-7zt01wvg/wheels/f0/da/a4/4c688adf94ae92c9d7081eee87da744b74584fab9cefe0f2c9
+Successfully built strategyos-mvp
+
+[notice] A new release of pip is available: 24.0 -> 26.2.1
+[notice] To update, run: /Users/taras/Desktop/Taras/SPsoft/Enterprise OS/strategyos_mvp/.venv/bin/python -m pip install --upgrade pip

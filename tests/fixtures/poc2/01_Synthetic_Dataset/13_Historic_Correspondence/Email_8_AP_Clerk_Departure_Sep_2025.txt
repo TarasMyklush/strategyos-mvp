@@ -1,0 +1,18 @@
+From: Ibrahim Qadi <ibrahim.qadi@tamween.sa> (AP Supervisor)
+To: Finance Shared Services — All
+Date: Sunday 7 September 2025, 08:30
+Subject: Maha's departure — AP task handover
+
+Team,
+
+As you know, Maha Al-Juhani's last day was Thursday. Until we backfill, her portfolio is split as follows:
+
+- Vendor statements + reconciliations: Yusuf (temporarily)
+- Early-payment discount diary (Saudi Pharma Suppliers 2/10 net 30 and two smaller contracts): UNASSIGNED for now — pay on standard net-30 run until backfill
+- EUR payment scheduling (Emirates NBD): Treasury directly
+
+Priority is the month-end calendar. The discount diary is a nice-to-have; standard terms keep us compliant.
+
+Ibrahim
+
+[Note: from September 2025 Saudi Pharma invoices were paid day 24-29 — the 2% early-pay discount lapsed and was never reinstated. Cost of the lapse: ~SAR 33K in 2025, ~SAR 56.5K in H1 2026.]

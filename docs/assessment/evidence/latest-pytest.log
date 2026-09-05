@@ -1,0 +1,136 @@
+..................ssssssssss.............ssssssssssssss.........ssssss.. [  4%]
+.....sssss....................ssssssss.............sssss.........sssssss [  8%]
+sssssssss....................ssssssss................................... [ 13%]
+........................................................................ [ 17%]
+........................................................................ [ 21%]
+................F....................................................... [ 26%]
+........................................................................ [ 30%]
+........................................................................ [ 34%]
+........................................................................ [ 39%]
+............................................................s........... [ 43%]
+s....s.................................................................. [ 48%]
+........................................................................ [ 52%]
+.......................s................................................ [ 56%]
+........................................................................ [ 61%]
+........................................................................ [ 65%]
+........................................................................ [ 69%]
+........................................................................ [ 74%]
+.s...................................................................... [ 78%]
+........................................................................ [ 83%]
+........................................................................ [ 87%]
+........................................................................ [ 91%]
+........................................................................ [ 96%]
+...............................................................          [100%]
+=================================== FAILURES ===================================
+_____________________ test_default_config_has_local_paths ______________________
+
+    def test_default_config_has_local_paths():
+        config = load_config()
+>       assert config.workspace_root.exists()
+E       AssertionError: assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/Users/taras/Desktop/Taras/SPsoft/Enterprise OS/outputs/StrategyOS Gap Analysis 2026-09-05/latest-test-workspace').exists
+E        +      where PosixPath('/Users/taras/Desktop/Taras/SPsoft/Enterprise OS/outputs/StrategyOS Gap Analysis 2026-09-05/latest-test-workspace') = StrategyOSConfig(tenant_slug='local-poc', tenant_name='StrategyOS Local POC', company_slug='local-poc', company_name='..._concentration=0.65, finance_working_capital_min_consecutive_drift_weeks=2, finance_working_capital_min_drift_days=3.0).workspace_root
+
+tests/test_cloud_config.py:11: AssertionError
+=============================== warnings summary ===============================
+../../../strategyos_mvp/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /Users/taras/Desktop/Taras/SPsoft/Enterprise OS/strategyos_mvp/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_frontend_shell.py:2256
+  /Users/taras/Desktop/Taras/SPsoft/Enterprise OS/outputs/StrategyOS Gap Analysis 2026-09-05/latest-source/tests/test_frontend_shell.py:2256: DeprecationWarning: invalid escape sequence '\['
+    node_script = f"""
+
+tests/test_frontend_shell.py:5241
+  /Users/taras/Desktop/Taras/SPsoft/Enterprise OS/outputs/StrategyOS Gap Analysis 2026-09-05/latest-source/tests/test_frontend_shell.py:5241: DeprecationWarning: invalid escape sequence '\['
+    node_script = """const fs = require('fs');
+
+tests/test_frontend_shell.py:5860
+  /Users/taras/Desktop/Taras/SPsoft/Enterprise OS/outputs/StrategyOS Gap Analysis 2026-09-05/latest-source/tests/test_frontend_shell.py:5860: DeprecationWarning: invalid escape sequence '\['
+    const source = """ + json.dumps(harness_js) + """;
+
+tests/test_oracle_phase11.py::test_oracle_ingestion_endpoint_rejects_oversized_manual_inputs
+  /Users/taras/Desktop/Taras/SPsoft/Enterprise OS/outputs/StrategyOS Gap Analysis 2026-09-05/latest-source/strategyos_mvp/api.py:9854: StarletteDeprecationWarning: 'HTTP_413_REQUEST_ENTITY_TOO_LARGE' is deprecated. Use 'HTTP_413_CONTENT_TOO_LARGE' instead.
+    _enforce_oracle_ingest_limits(request)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_agent_runtime_api_postgres_e2e.py:101: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime api e2e proof.
+SKIPPED [1] tests/test_agent_runtime_api_postgres_e2e.py:122: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime api e2e proof.
+SKIPPED [1] tests/test_agent_runtime_api_postgres_e2e.py:129: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime api e2e proof.
+SKIPPED [1] tests/test_agent_runtime_api_postgres_e2e.py:211: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime api e2e proof.
+SKIPPED [1] tests/test_agent_runtime_api_postgres_e2e.py:219: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime api e2e proof.
+SKIPPED [1] tests/test_agent_runtime_api_postgres_e2e.py:231: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime api e2e proof.
+SKIPPED [1] tests/test_agent_runtime_authority_postgres_e2e.py:100: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime authority e2e proof.
+SKIPPED [1] tests/test_agent_runtime_authority_postgres_e2e.py:119: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime authority e2e proof.
+SKIPPED [1] tests/test_agent_runtime_authority_postgres_e2e.py:153: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime authority e2e proof.
+SKIPPED [1] tests/test_agent_runtime_authority_postgres_e2e.py:193: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime authority e2e proof.
+SKIPPED [1] tests/test_agent_runtime_concurrency_postgres_e2e.py:123: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime concurrency e2e proof.
+SKIPPED [1] tests/test_agent_runtime_concurrency_postgres_e2e.py:185: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime concurrency e2e proof.
+SKIPPED [1] tests/test_agent_runtime_concurrency_postgres_e2e.py:241: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime concurrency e2e proof.
+SKIPPED [1] tests/test_agent_runtime_concurrency_postgres_e2e.py:311: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime concurrency e2e proof.
+SKIPPED [1] tests/test_agent_runtime_concurrency_postgres_e2e.py:350: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime concurrency e2e proof.
+SKIPPED [1] tests/test_agent_runtime_effect_key_postgres_e2e.py:111: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.
+SKIPPED [1] tests/test_agent_runtime_effect_key_postgres_e2e.py:123: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.
+SKIPPED [1] tests/test_agent_runtime_effect_key_postgres_e2e.py:138: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.
+SKIPPED [1] tests/test_agent_runtime_effect_key_postgres_e2e.py:157: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.
+SKIPPED [1] tests/test_agent_runtime_effect_key_postgres_e2e.py:185: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.
+SKIPPED [1] tests/test_agent_runtime_effect_key_postgres_e2e.py:200: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.
+SKIPPED [1] tests/test_agent_runtime_effect_key_postgres_e2e.py:211: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.
+SKIPPED [1] tests/test_agent_runtime_effect_key_postgres_e2e.py:229: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.
+SKIPPED [1] tests/test_agent_runtime_effect_key_postgres_e2e.py:271: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.
+SKIPPED [1] tests/test_agent_runtime_evidence_read_postgres_e2e.py:120: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime evidence-read e2e proof.
+SKIPPED [1] tests/test_agent_runtime_evidence_read_postgres_e2e.py:134: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime evidence-read e2e proof.
+SKIPPED [1] tests/test_agent_runtime_evidence_read_postgres_e2e.py:152: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime evidence-read e2e proof.
+SKIPPED [1] tests/test_agent_runtime_evidence_read_postgres_e2e.py:161: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime evidence-read e2e proof.
+SKIPPED [1] tests/test_agent_runtime_evidence_read_postgres_e2e.py:178: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime evidence-read e2e proof.
+SKIPPED [1] tests/test_agent_runtime_evidence_read_postgres_e2e.py:190: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime evidence-read e2e proof.
+SKIPPED [1] tests/test_agent_runtime_handoffs_postgres_e2e.py:135: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime handoffs e2e proof.
+SKIPPED [1] tests/test_agent_runtime_handoffs_postgres_e2e.py:153: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime handoffs e2e proof.
+SKIPPED [1] tests/test_agent_runtime_handoffs_postgres_e2e.py:167: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime handoffs e2e proof.
+SKIPPED [1] tests/test_agent_runtime_handoffs_postgres_e2e.py:190: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime handoffs e2e proof.
+SKIPPED [1] tests/test_agent_runtime_handoffs_postgres_e2e.py:203: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime handoffs e2e proof.
+SKIPPED [1] tests/test_agent_runtime_network_postgres_e2e.py:98: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime network e2e proof.
+SKIPPED [1] tests/test_agent_runtime_network_postgres_e2e.py:117: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime network e2e proof.
+SKIPPED [1] tests/test_agent_runtime_network_postgres_e2e.py:127: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime network e2e proof.
+SKIPPED [1] tests/test_agent_runtime_network_postgres_e2e.py:154: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime network e2e proof.
+SKIPPED [1] tests/test_agent_runtime_network_postgres_e2e.py:196: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime network e2e proof.
+SKIPPED [1] tests/test_agent_runtime_network_postgres_e2e.py:204: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime network e2e proof.
+SKIPPED [1] tests/test_agent_runtime_network_postgres_e2e.py:227: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime network e2e proof.
+SKIPPED [1] tests/test_agent_runtime_network_postgres_e2e.py:249: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime network e2e proof.
+SKIPPED [1] tests/test_agent_runtime_pr6_postgres_e2e.py:92: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime PR6 e2e proof.
+SKIPPED [1] tests/test_agent_runtime_pr6_postgres_e2e.py:111: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime PR6 e2e proof.
+SKIPPED [1] tests/test_agent_runtime_pr6_postgres_e2e.py:133: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime PR6 e2e proof.
+SKIPPED [1] tests/test_agent_runtime_pr6_postgres_e2e.py:163: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime PR6 e2e proof.
+SKIPPED [1] tests/test_agent_runtime_pr6_postgres_e2e.py:204: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime PR6 e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:94: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:102: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:110: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:137: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:167: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:211: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:251: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:280: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:301: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:362: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:391: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_repository_postgres_e2e.py:429: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.
+SKIPPED [1] tests/test_agent_runtime_streaming_postgres_e2e.py:86: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime streaming e2e proof.
+SKIPPED [1] tests/test_agent_runtime_streaming_postgres_e2e.py:104: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime streaming e2e proof.
+SKIPPED [1] tests/test_agent_runtime_streaming_postgres_e2e.py:133: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime streaming e2e proof.
+SKIPPED [1] tests/test_agent_runtime_streaming_postgres_e2e.py:164: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime streaming e2e proof.
+SKIPPED [1] tests/test_agent_runtime_workflows_postgres_e2e.py:121: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime workflows e2e proof.
+SKIPPED [1] tests/test_agent_runtime_workflows_postgres_e2e.py:134: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime workflows e2e proof.
+SKIPPED [1] tests/test_agent_runtime_workflows_postgres_e2e.py:153: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime workflows e2e proof.
+SKIPPED [1] tests/test_agent_runtime_workflows_postgres_e2e.py:187: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime workflows e2e proof.
+SKIPPED [1] tests/test_agent_runtime_workflows_postgres_e2e.py:206: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime workflows e2e proof.
+SKIPPED [1] tests/test_agent_runtime_workflows_postgres_e2e.py:226: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime workflows e2e proof.
+SKIPPED [1] tests/test_agent_runtime_workflows_postgres_e2e.py:257: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime workflows e2e proof.
+SKIPPED [1] tests/test_agent_runtime_workflows_postgres_e2e.py:277: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime workflows e2e proof.
+SKIPPED [1] tests/test_governed_review_flow_postgres_e2e.py:79: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the local Postgres e2e proof.
+SKIPPED [1] tests/test_graph_queries_neo4j_e2e.py:25: Set STRATEGYOS_NEO4J_E2E_URI to run Neo4j graph query e2e tests.
+SKIPPED [1] tests/test_graph_retrieval_neo4j_e2e.py:19: Set STRATEGYOS_NEO4J_E2E_URI to run Neo4j graph retrieval e2e tests.
+SKIPPED [1] tests/test_poc2_governed_acceptance.py:26: Exact POC-2 source pack is not available locally.
+SKIPPED [1] tests/test_state_store_pool.py:239: Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the connection-pool proof.
+1 failed, 1569 passed, 77 skipped, 5 warnings in 444.31s (0:07:24)

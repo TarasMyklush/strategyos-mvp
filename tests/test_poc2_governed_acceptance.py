@@ -14,9 +14,7 @@ from strategyos_mvp.source_governance import (
 )
 
 
-DEFAULT_POC2_ROOT = Path(
-    "/Users/taras/Desktop/Taras/Sp soft/Enterprise OS/16.07.2026/StrategyOS POC-2"
-)
+DEFAULT_POC2_ROOT = Path(__file__).resolve().parent / "fixtures" / "poc2"
 
 
 def _poc2_root() -> Path:

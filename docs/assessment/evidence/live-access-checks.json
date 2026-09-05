@@ -1,0 +1,32 @@
+[
+  {
+    "path": "/executive",
+    "status": 200,
+    "resolved_url": "https://new.strategyos.live/executive",
+    "bytes": 19545,
+    "sha256": "266c0f6ce27a406cf866d6bd507e295032f17d8e45f7fc310f68e86113f781ea"
+  },
+  {
+    "path": "/static/executive.js",
+    "status": 200,
+    "resolved_url": "https://new.strategyos.live/static/executive.js",
+    "bytes": 422988,
+    "sha256": "afb0915afcc9ba4ba7fd4fc5d00f0703a0f08dbbf363de777513f835d6e1e58d",
+    "matches_main": false,
+    "matches_latest": true
+  },
+  {
+    "path": "/runs/latest",
+    "status": 200,
+    "resolved_url": "https://new.strategyos.live/runs/latest",
+    "bytes": 279756,
+    "sha256": "ab9d9c21d9b77d32d3bb7dd8797b4699c8901f79e5aa8f70c403a4930297c4c2"
+  },
+  {
+    "path": "/authority-matrix",
+    "status": 200,
+    "resolved_url": "https://new.strategyos.live/authority-matrix",
+    "bytes": 2620,
+    "sha256": "cca942cbc45618f51d80b860cc8f7a25b7aa40da2ad8d3418c6730d39e3ac90b"
+  }
+]

@@ -56,7 +56,7 @@ jobs:
           python -m pip install -e . pytest
 
       - name: Run tests
-        run: python -m pytest -q ${CI_TEST_TARGETS}
+        run: python scripts/test.py -q ${CI_TEST_TARGETS}
 
   image:
     name: Build and publish image

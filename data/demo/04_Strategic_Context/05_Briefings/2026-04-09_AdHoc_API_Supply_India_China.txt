@@ -1,0 +1,40 @@
+AD-HOC BRIEFING — API supply concentration risk
+Date: 9 April 2026
+Compiler: Mizan Group Research — Manufacturing team
+Distribution: Manufacturing CEO, Group COO, Procurement CoE
+
+═══════════════════════════════════════════════════════════════════════
+
+CONTEXT
+74% of Mizan Pharma Manufacturing's top-50 APIs are sourced from
+India or China. Recent INR weakness and CNY tightening allocation,
+plus G7 trade-flow noise around generic pharma supply, makes the
+concentration topic urgent.
+
+WHAT'S HAPPENING
+  • India regulatory tightening: WHO-GMP renewals required at 3-yr
+    cycle; 8% of Indian generic exporters delayed in Q1 2026.
+  • China: Active Pharmaceutical Ingredient export licensing slowed
+    over 2025 — some 12% of categories experiencing 30-60 day delays.
+  • Generic API blend price +6-9% YoY across our basket.
+  • Semaglutide API specifically: +18% YoY on global GLP-1 supply
+    tightness; Korean and Chinese capacity ramping.
+
+OPERATIONAL POSTURE
+  • 90-day strategic safety stock policy: in place for top-30 APIs;
+    extending to top-50 by Q4-2026.
+  • Dual-sourcing programme: 38% of top-50 APIs dual-sourced today
+    (target 100% by 2028). Q2 2026 dual-source qualification programme
+    on schedule.
+  • Lifera partnership for biosimilars: signed March 2026; first GLP-1
+    biosimilar end-2027.
+
+WATCHPOINTS
+  • Continued INR weakness: directionally a tailwind to Mizan but only
+    if Indian regulators don't tighten on lower-margin exports.
+  • CNY policy: tightening continues; may extend to mAb cell-culture
+    media and biotech-grade inputs in 2027.
+  • G7 trade-flow signals: limited direct impact on KSA imports today;
+    secondary impact through global pricing.
+
+═══════════════════════════════════════════════════════════════════════

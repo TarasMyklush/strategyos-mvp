@@ -1,0 +1,159 @@
+{
+  "retired": [
+    {
+      "branch": "ceo-ui-ux-revision",
+      "sha": "bf339998f93d79209cc25871e639d96387be5e44",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/actual-vs-plan",
+      "sha": "9272b7d3e8331bdac9f988f729d4f6cd529dce55",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/agent-execution-log",
+      "sha": "a656b384745cbade60bc7b203ac31eb08c9bdd57",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/agent-runtime-domain-foundation",
+      "sha": "8959adc3d8fb2697b91ea48c5298e5fa4ab7be4f",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/executive-assistant-grounding",
+      "sha": "f1f8ff4be25b40f5b612dc3d628cff819ac90e5c",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/finding-actions",
+      "sha": "e9a8fa87528585d1580ff8afbd3bdc65393c68d3",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/governed-cost-levers",
+      "sha": "0258235ef40a642eafc6c3a96dd352890789d1bf",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/governed-financial-plan-approval",
+      "sha": "014a85f373f82eb31110c729034646f3ca3bf28d",
+      "commits_not_in_main": 4,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/hermes-decision-grade-executive-polish",
+      "sha": "392e72ccc7954cce6b924eb801a9d56586b7bb1f",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/historic-context-retrieval",
+      "sha": "e5f48febfd5c38550d02fda39df627c9ad68faf1",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/integrated-executive-release",
+      "sha": "ed7b518ee4ee06b7a5383ba0ddb62e9ec46e3514",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/kpi-inline-freetext-ask",
+      "sha": "db1b736553303b9a22a9cffdf90e98d4fc39a307",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/load-full-context",
+      "sha": "a41f952edb76747d8fd3bab833d4d178d326f9cd",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "feature/plan-role",
+      "sha": "106752c8d719971041058fa928aba884d2f37516",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "fix/assistant-claim-integrity",
+      "sha": "74aab8acab89aaabbbc72c7bbba11bedd95e5822",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "fix/ceo-chat-voice",
+      "sha": "95df9b91f6fa90276ed6c47c372e2b5c4b97d38c",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "fix/ceo-first-run-clarity",
+      "sha": "db2f1bfba7e5b275ad66315ad3e7b48c42da9e9f",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "fix/exec-copy-leakage-pass",
+      "sha": "dd8a8bb94180d6d6d01bf61c12f435356b091168",
+      "commits_not_in_main": 6,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "fix/hermes-cross-surface-intent-contract",
+      "sha": "c03e95816dedf6dedf05778cb725d42a84c29de2",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "fix/hermes-governed-scope-leak",
+      "sha": "29a421b502e9885fd8315640833216f724c006af",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "fix/hero-ring-text-inset",
+      "sha": "680b489d6cf3ccd1ba325ca9af38acb319630b4c",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "fix/one-assistant-always-grounded",
+      "sha": "7a145a244d564843c21b8f4e5497c1c548a3dd9f",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "poc2-governed-intake",
+      "sha": "0daae582a81c33d65542bb7a1af6f867c1676a63",
+      "commits_not_in_main": 3,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "preserve-source-context-on-resume",
+      "sha": "b5e23fe5b192b05a312177bbea779aefa2e1b604",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    },
+    {
+      "branch": "use-approved-summary-on-resume",
+      "sha": "1855e41ca830ccffbdc666ed145876c0ae89de12",
+      "commits_not_in_main": 0,
+      "recovery": "pre-cleanup.bundle in cleanup Trash"
+    }
+  ],
+  "retained_external_worktree": {
+    "branch": "feat/agent-studio-api",
+    "reason": "Unique API work actively checked out by a separate project; outside this cleanup scope"
+  },
+  "remote_branches": "Not modified"
+}

@@ -1,0 +1,33 @@
+{
+  "final_suite": {
+    "tests": 1648,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 76,
+    "passed": 1572
+  },
+  "seconds": 196.283,
+  "skip_reasons": {
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime api e2e proof.": 6,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime authority e2e proof.": 4,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime concurrency e2e proof.": 5,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime effect-key e2e proof.": 9,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime evidence-read e2e proof.": 6,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime handoffs e2e proof.": 5,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime network e2e proof.": 8,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime PR6 e2e proof.": 5,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime repository e2e proof.": 12,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime streaming e2e proof.": 4,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the agent-runtime workflows e2e proof.": 8,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the local Postgres e2e proof.": 1,
+    "Set STRATEGYOS_NEO4J_E2E_URI to run Neo4j graph query e2e tests.": 1,
+    "Set STRATEGYOS_NEO4J_E2E_URI to run Neo4j graph retrieval e2e tests.": 1,
+    "Set STRATEGYOS_POSTGRES_E2E_DATABASE_URL to run the connection-pool proof.": 1
+  },
+  "data_files_verified": 169,
+  "data_hash_failures": [],
+  "persisted_runtime_files_compared": 23,
+  "persisted_runtime_files_changed_after_snapshot": [],
+  "excluded_concurrent_test_file": "tests/test_codex_gateway.py",
+  "scope": "Consolidation-owned code and fixtures; concurrent gateway/deployment work not validated as a release"
+}
