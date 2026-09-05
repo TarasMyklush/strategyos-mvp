@@ -1,0 +1,36 @@
+{
+  "target": "strategyos-branch",
+  "revision": "44c9c31",
+  "scope": "Private current application/configuration and complete workspace including source packs and pinned embedding model. PostgreSQL is separately restored. Qdrant can be rebuilt from the sealed inputs; this does not establish an agreed RTO.",
+  "workspace": {
+    "file": "final-44c9c31-workspace.tar.gz",
+    "bytes": 167174734,
+    "sha256": "e1450afc09b11cedc79b57444e3df02f3542ccd9f6f97e96b3d537f4442ce7cb",
+    "files": 2337,
+    "content_manifest_sha256": "6faa9ad1970b885f070fba73e7fa404c2e069129f166c701d55648d43360c6ee",
+    "all_file_hashes_match": true
+  },
+  "application": {
+    "file": "final-44c9c31-application.tar.gz",
+    "bytes": 13324929,
+    "sha256": "56e8c0d7d1f013733e60d1886267034ca268f17b2f559059c44b9f030d402076",
+    "files": 726,
+    "content_manifest_sha256": "be78b81aa4de9ae607bb9e6dfaa4bf6143107d1d8a2ab3dab201fc65f6c97fed",
+    "all_file_hashes_match": true
+  },
+  "provider_configuration": {
+    "file": "final-44c9c31-provider-config.tar.gz",
+    "bytes": 245118,
+    "sha256": "72f74aa08bc2d26384f313695651f3a0cc18e25745b9fcff253dcbf68e6631e6",
+    "files": 82,
+    "content_manifest_sha256": "aa9ec2e705ea102ffd0562c45bedca49ea2c6db28e341ff406652b8646fc4dac",
+    "all_file_hashes_match": true
+  },
+  "seconds": 13.164,
+  "runtime_overrides": {
+    "file": "final-44c9c31-runtime-overrides.tar.gz",
+    "bytes": 465,
+    "sha256": "dd128925ef16cc80d8c9aa3bceb459d01b52e72181e7f1df81764180246941ff",
+    "all_file_hashes_match": true
+  }
+}

@@ -1,0 +1,278 @@
+[
+  {
+    "matched": true,
+    "available": true,
+    "answer": "Q2 2026 revenue by business unit, compared with Q1 2026 (derived as H1 minus Q2). Group revenue: SAR 2,037.00M; prior quarter: SAR 1,969.00M; movement: SAR +68.00M.\nTamween Pharma Distribution: Q2 SAR 645.00M; Q1 SAR 623.00M; growing, SAR +22.00M (+3.53%).\nMizan Pharma Manufacturing: Q2 SAR 381.00M; Q1 SAR 367.00M; growing, SAR +14.00M (+3.81%).\nMizan E-Pharmacy: Q2 SAR 158.00M; Q1 SAR 146.00M; growing, SAR +12.00M (+8.22%).\nMizan Digital Health: Q2 SAR 91.00M; Q1 SAR 85.00M; growing, SAR +6.00M (+7.06%).\nMizan Pharma Logistics: Q2 SAR 134.00M; Q1 SAR 128.00M; growing, SAR +6.00M (+4.69%).\nMizan Healthcare Services: Q2 SAR 168.00M; Q1 SAR 163.00M; growing, SAR +5.00M (+3.07%).\nMizan Capital: Q2 SAR 62.00M; Q1 SAR 59.00M; growing, SAR +3.00M (+5.08%).\nMizan Pharmacy Retail: Q2 SAR 419.00M; Q1 SAR 419.00M; flat, SAR +0.00M (+0.00%).\nConsolidation eliminations: Q2 SAR -21.00M; Q1 SAR -21.00M. All BU rows plus eliminations reconcile to the reported group totals. Segments here mean business units; this is a quarter-on-quarter comparison, not year-on-year.",
+    "basis": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions.",
+    "value": {
+      "units": [
+        {
+          "Q2 Revenue (SAR M)": "381",
+          "Q2 Budget": "373",
+          "H1 Revenue": "748",
+          "H1 Budget": "733",
+          "name": "Mizan Pharma Manufacturing",
+          "commentary": "Specialty mix ahead; Line 8 on track Q4",
+          "q1": "367",
+          "quarter_change": "14",
+          "quarter_growth_pct": "3.814713896457765667574931880",
+          "budget_change": "15"
+        },
+        {
+          "Q2 Revenue (SAR M)": "645",
+          "Q2 Budget": "607",
+          "H1 Revenue": "1268",
+          "H1 Budget": "1194",
+          "name": "Tamween Pharma Distribution",
+          "commentary": "NUPCO surge; margin behind on cost events \u2014 remediation underway",
+          "q1": "623",
+          "quarter_change": "22",
+          "quarter_growth_pct": "3.531300160513643659711075441",
+          "budget_change": "74"
+        },
+        {
+          "Q2 Revenue (SAR M)": "134",
+          "Q2 Budget": "130",
+          "H1 Revenue": "262",
+          "H1 Budget": "256",
+          "name": "Mizan Pharma Logistics",
+          "commentary": "Dammam hub commissioned 28-Jun",
+          "q1": "128",
+          "quarter_change": "6",
+          "quarter_growth_pct": "4.687500",
+          "budget_change": "6"
+        },
+        {
+          "Q2 Revenue (SAR M)": "419",
+          "Q2 Budget": "430",
+          "H1 Revenue": "838",
+          "H1 Budget": "846",
+          "name": "Mizan Pharmacy Retail",
+          "commentary": "Eid footfall soft; clinical counters rolling out",
+          "q1": "419",
+          "quarter_change": "0",
+          "quarter_growth_pct": "0",
+          "budget_change": "-8"
+        },
+        {
+          "Q2 Revenue (SAR M)": "158",
+          "Q2 Budget": "148",
+          "H1 Revenue": "304",
+          "H1 Budget": "290",
+          "name": "Mizan E-Pharmacy",
+          "commentary": "Volume ahead; delivery price war compressing margin",
+          "q1": "146",
+          "quarter_change": "12",
+          "quarter_growth_pct": "8.219178082191780821917808219",
+          "budget_change": "14"
+        },
+        {
+          "Q2 Revenue (SAR M)": "91",
+          "Q2 Budget": "87",
+          "H1 Revenue": "176",
+          "H1 Budget": "171",
+          "name": "Mizan Digital Health",
+          "commentary": "MAU 920k; hiring lag flatters margin",
+          "q1": "85",
+          "quarter_change": "6",
+          "quarter_growth_pct": "7.058823529411764705882352941",
+          "budget_change": "5"
+        },
+        {
+          "Q2 Revenue (SAR M)": "168",
+          "Q2 Budget": "171",
+          "H1 Revenue": "331",
+          "H1 Budget": "336",
+          "name": "Mizan Healthcare Services",
+          "commentary": "Cardiology consultant gap persists",
+          "q1": "163",
+          "quarter_change": "5",
+          "quarter_growth_pct": "3.067484662576687116564417178",
+          "budget_change": "-5"
+        },
+        {
+          "Q2 Revenue (SAR M)": "62",
+          "Q2 Budget": "60",
+          "H1 Revenue": "121",
+          "H1 Budget": "118",
+          "name": "Mizan Capital",
+          "commentary": "MTM gains",
+          "q1": "59",
+          "quarter_change": "3",
+          "quarter_growth_pct": "5.084745762711864406779661017",
+          "budget_change": "3"
+        }
+      ],
+      "eliminations": {
+        "Q2 Revenue (SAR M)": "-21",
+        "Q2 Budget": "-20",
+        "H1 Revenue": "-42",
+        "H1 Budget": "-40",
+        "name": "Eliminations",
+        "commentary": "",
+        "q1": "-21",
+        "quarter_change": "0",
+        "quarter_growth_pct": null,
+        "budget_change": "-2"
+      },
+      "group": {
+        "Q2 Revenue (SAR M)": "2037",
+        "Q2 Budget": "1986",
+        "H1 Revenue": "4006",
+        "H1 Budget": "3904",
+        "name": "GROUP (bottom-up)",
+        "commentary": "See Reconciliation sheet in BU_Group_Budget for bridge to strategy headline margin",
+        "q1": "1969",
+        "quarter_change": "68",
+        "quarter_growth_pct": "3.453529710512950736414423565",
+        "budget_change": "102"
+      }
+    },
+    "citations": [
+      {
+        "source_path": "19_Document_Vault/Q2_2026_Group_Flash_Results.xlsx",
+        "source_hash": "74e9f2f05f95fcd528c3f9173b970dc49b030de50950e50a3babbf57da382831",
+        "locator": "Q2_Flash!Excel rows 2-11",
+        "excerpt": "Complete BU revenue, budget, eliminations and group reconciliation inputs."
+      }
+    ]
+  },
+  {
+    "matched": true,
+    "available": true,
+    "answer": "H1 2026 group revenue: SAR 4,006.00M actual versus SAR 3,904.00M budget, a SAR +102.00M movement. Business-unit movements ranked by absolute impact:\nTamween Pharma Distribution: SAR +74.00M (actual 1,268.00M; budget 1,194.00M). Source commentary: NUPCO surge; margin behind on cost events \u2014 remediation underway.\nMizan Pharma Manufacturing: SAR +15.00M (actual 748.00M; budget 733.00M). Source commentary: Specialty mix ahead; Line 8 on track Q4.\nMizan E-Pharmacy: SAR +14.00M (actual 304.00M; budget 290.00M). Source commentary: Volume ahead; delivery price war compressing margin.\nMizan Pharmacy Retail: SAR -8.00M (actual 838.00M; budget 846.00M). Source commentary: Eid footfall soft; clinical counters rolling out.\nMizan Pharma Logistics: SAR +6.00M (actual 262.00M; budget 256.00M). Source commentary: Dammam hub commissioned 28-Jun.\nMizan Digital Health: SAR +5.00M (actual 176.00M; budget 171.00M). Source commentary: MAU 920k; hiring lag flatters margin.\nMizan Healthcare Services: SAR -5.00M (actual 331.00M; budget 336.00M). Source commentary: Cardiology consultant gap persists.\nMizan Capital: SAR +3.00M (actual 121.00M; budget 118.00M). Source commentary: MTM gains.\nConsolidation eliminations contribute SAR -2.00M. The complete BU bridge plus eliminations reconciles to the group movement. Source commentary is qualitative context, not a quantified causal allocation.",
+    "basis": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions.",
+    "value": {
+      "units": [
+        {
+          "Q2 Revenue (SAR M)": "381",
+          "Q2 Budget": "373",
+          "H1 Revenue": "748",
+          "H1 Budget": "733",
+          "name": "Mizan Pharma Manufacturing",
+          "commentary": "Specialty mix ahead; Line 8 on track Q4",
+          "q1": "367",
+          "quarter_change": "14",
+          "quarter_growth_pct": "3.814713896457765667574931880",
+          "budget_change": "15"
+        },
+        {
+          "Q2 Revenue (SAR M)": "645",
+          "Q2 Budget": "607",
+          "H1 Revenue": "1268",
+          "H1 Budget": "1194",
+          "name": "Tamween Pharma Distribution",
+          "commentary": "NUPCO surge; margin behind on cost events \u2014 remediation underway",
+          "q1": "623",
+          "quarter_change": "22",
+          "quarter_growth_pct": "3.531300160513643659711075441",
+          "budget_change": "74"
+        },
+        {
+          "Q2 Revenue (SAR M)": "134",
+          "Q2 Budget": "130",
+          "H1 Revenue": "262",
+          "H1 Budget": "256",
+          "name": "Mizan Pharma Logistics",
+          "commentary": "Dammam hub commissioned 28-Jun",
+          "q1": "128",
+          "quarter_change": "6",
+          "quarter_growth_pct": "4.687500",
+          "budget_change": "6"
+        },
+        {
+          "Q2 Revenue (SAR M)": "419",
+          "Q2 Budget": "430",
+          "H1 Revenue": "838",
+          "H1 Budget": "846",
+          "name": "Mizan Pharmacy Retail",
+          "commentary": "Eid footfall soft; clinical counters rolling out",
+          "q1": "419",
+          "quarter_change": "0",
+          "quarter_growth_pct": "0",
+          "budget_change": "-8"
+        },
+        {
+          "Q2 Revenue (SAR M)": "158",
+          "Q2 Budget": "148",
+          "H1 Revenue": "304",
+          "H1 Budget": "290",
+          "name": "Mizan E-Pharmacy",
+          "commentary": "Volume ahead; delivery price war compressing margin",
+          "q1": "146",
+          "quarter_change": "12",
+          "quarter_growth_pct": "8.219178082191780821917808219",
+          "budget_change": "14"
+        },
+        {
+          "Q2 Revenue (SAR M)": "91",
+          "Q2 Budget": "87",
+          "H1 Revenue": "176",
+          "H1 Budget": "171",
+          "name": "Mizan Digital Health",
+          "commentary": "MAU 920k; hiring lag flatters margin",
+          "q1": "85",
+          "quarter_change": "6",
+          "quarter_growth_pct": "7.058823529411764705882352941",
+          "budget_change": "5"
+        },
+        {
+          "Q2 Revenue (SAR M)": "168",
+          "Q2 Budget": "171",
+          "H1 Revenue": "331",
+          "H1 Budget": "336",
+          "name": "Mizan Healthcare Services",
+          "commentary": "Cardiology consultant gap persists",
+          "q1": "163",
+          "quarter_change": "5",
+          "quarter_growth_pct": "3.067484662576687116564417178",
+          "budget_change": "-5"
+        },
+        {
+          "Q2 Revenue (SAR M)": "62",
+          "Q2 Budget": "60",
+          "H1 Revenue": "121",
+          "H1 Budget": "118",
+          "name": "Mizan Capital",
+          "commentary": "MTM gains",
+          "q1": "59",
+          "quarter_change": "3",
+          "quarter_growth_pct": "5.084745762711864406779661017",
+          "budget_change": "3"
+        }
+      ],
+      "eliminations": {
+        "Q2 Revenue (SAR M)": "-21",
+        "Q2 Budget": "-20",
+        "H1 Revenue": "-42",
+        "H1 Budget": "-40",
+        "name": "Eliminations",
+        "commentary": "",
+        "q1": "-21",
+        "quarter_change": "0",
+        "quarter_growth_pct": null,
+        "budget_change": "-2"
+      },
+      "group": {
+        "Q2 Revenue (SAR M)": "2037",
+        "Q2 Budget": "1986",
+        "H1 Revenue": "4006",
+        "H1 Budget": "3904",
+        "name": "GROUP (bottom-up)",
+        "commentary": "See Reconciliation sheet in BU_Group_Budget for bridge to strategy headline margin",
+        "q1": "1969",
+        "quarter_change": "68",
+        "quarter_growth_pct": "3.453529710512950736414423565",
+        "budget_change": "102"
+      }
+    },
+    "citations": [
+      {
+        "source_path": "19_Document_Vault/Q2_2026_Group_Flash_Results.xlsx",
+        "source_hash": "74e9f2f05f95fcd528c3f9173b970dc49b030de50950e50a3babbf57da382831",
+        "locator": "Q2_Flash!Excel rows 2-11",
+        "excerpt": "Complete BU revenue, budget, eliminations and group reconciliation inputs."
+      }
+    ]
+  }
+]

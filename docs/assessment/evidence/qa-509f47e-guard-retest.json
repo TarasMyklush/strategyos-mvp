@@ -1,0 +1,770 @@
+{
+  "deployment": {
+    "environment": "branch-preview",
+    "application_revision": "509f47e",
+    "manifest_application_matches": true,
+    "image_digest": "sha256:c96b84242e80c5ec8ce7e8f1b572bf4c940b61dcaf5e64be1a224184b20a919f",
+    "schema_sha256": "f93974ba304b6a490ff6794f165df85c93b1c65d4ec8d313fff743f8f36aa343",
+    "selected_run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+    "manifest_run_matches": true,
+    "source_digest": "f0f632cde1a8f980d2000c54c2d65dd929019b0d5b463dc48c8a53a8ec88f2e3",
+    "source_classification": "synthetic_demo",
+    "source_period": "2026-06",
+    "source_search": {
+      "status": "ready",
+      "collection": "strategyos_multilingual_e5_761b726d_384_v1",
+      "point_count": 37537,
+      "reused_points": 18880,
+      "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
+    },
+    "data_region": "Not attested",
+    "model_provider": "codex_cli",
+    "model": "codex-subscription",
+    "model_processing": "External provider; residency not attested",
+    "run_policy": "external-approved",
+    "approved_external_modes": [
+      "object_storage_sync",
+      "model_provider_use"
+    ],
+    "external_business_connections": "deferred",
+    "fallback_provider": "none"
+  },
+  "scope": "Live authenticated API complement to separate human-style UI QA. Matched is routing status, not factual correctness.",
+  "rows": [
+    {
+      "id": "374",
+      "theme": "Market, Competition & External",
+      "question": "How do our payment terms compare to industry norms?",
+      "http": 200,
+      "duration_seconds": 53.782,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "How do our payment terms compare to industry norms?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": false,
+        "answer": "A numerical comparison with industry norms is not supported by the supplied evidence. Internally, one supplier contract provides 2/10 net 30 terms, while the current risk register reports that collection periods are lengthening because of government accounts and KAUST. The missing input is a retrieved KSA healthcare-sector benchmark, segmented by customer channel, together with a comparable supplier-terms benchmark.",
+        "basis": "Company-specific terms and a collection-risk signal are supplied, but no retrieved industry benchmark establishes whether those terms are better or worse than sector norms. Relevant market reports are inventoried, but their benchmark details were not retrieved.",
+        "why": "Company-specific terms and a collection-risk signal are supplied, but no retrieved industry benchmark establishes whether those terms are better or worse than sector norms. Relevant market reports are inventoried, but their benchmark details were not retrieved.",
+        "citations": [
+          {
+            "source_path": "04_Contracts/Saudi_Pharma_Suppliers_Distribution_Agreement_2025.pdf",
+            "locator": "contract payment terms page 1",
+            "excerpt": "Terms: 2/10 net 30.",
+            "source_hash": "ed0b469a992e4758647952288e69d168b26bf19f1292205db865a19053e96c65",
+            "finding_id": "F-005",
+            "resolved": true,
+            "source_label": "Saudi Pharma Suppliers Distribution Agreement 2025"
+          },
+          {
+            "source_path": "17_Signals/Signals_Register_Jun2026.xlsx",
+            "locator": "Signals_Register!Excel row 17",
+            "excerpt": "DSO creep: division avg collections lengthening (Government terms + KAUST). Cash conversion at risk while revenue grows.",
+            "source_hash": "5bfb1e275b6282aad4b99bd1fa3f55e05fd33e59278cba121b6c5f332164c743",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Signals Register · Business signals"
+          }
+        ],
+        "suggestions": [
+          "Retrieve payment-term and DSO benchmarks from the KSA pharma distribution and healthcare market reports, segmented by government, hospital, pharmacy and workforce-health channels.",
+          "Benchmark supplier payment terms separately from customer collection terms."
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "How do our payment terms compare to industry norms?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 2 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Company-specific terms and a collection-risk signal are supplied, but no retrieved industry benchmark establishes whether those terms are better or worse than sector norms. Relevant market reports are inventoried, but their benchmark details were not retrieved."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "f15f5a4a-53eb-4d0a-92f0-7523cd03eaec",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "f15f5a4a-53eb-4d0a-92f0-7523cd03eaec",
+        "hallucination_risk": {
+          "level": "low",
+          "score": 0.18,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 2 citation(s)."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "Company-specific terms and a collection-risk signal are supplied, but no retrieved industry benchmark establishes whether those terms are better or worse than sector norms. Relevant market reports are inventoried, but their benchmark details were not retrieved."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 2 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "Company-specific terms and a collection-risk signal are supplied, but no retrieved industry benchmark establishes whether those terms are better or worse than sector norms. Relevant market reports are inventoried, but their benchmark details were not retrieved."
+          },
+          "traceable": true
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": false,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "answer_status": "insufficient_evidence",
+        "determinism_tier": "derived_insight",
+        "response_sections": {
+          "from_your_data": "A numerical comparison with industry norms is not supported by the supplied evidence. Internally, one supplier contract provides 2/10 net 30 terms, while the current risk register reports that collection periods are lengthening because of government accounts and KAUST. The missing input is a retrieved KSA healthcare-sector benchmark, segmented by customer channel, together with a comparable supplier-terms benchmark.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "f15f5a4a-53eb-4d0a-92f0-7523cd03eaec"
+        },
+        "executive_blocks": {
+          "verdict": "A numerical comparison with industry norms is not supported by the supplied evidence.",
+          "figures": [],
+          "recommendation": null,
+          "detail": "Internally, one supplier contract provides 2/10 net 30 terms, while the current risk register reports that collection periods are lengthening because of government accounts and KAUST. The missing input is a retrieved KSA healthcare-sector benchmark, segmented by customer channel, together with a comparable supplier-terms benchmark.",
+          "evidence_count": 2,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "70",
+      "theme": "Operating Costs & Efficiency",
+      "question": "Why is Qassim warehouse 35% more expensive to run than comparable sites?",
+      "http": 200,
+      "duration_seconds": 36.113,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "Why is Qassim warehouse 35% more expensive to run than comparable sites?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "Qassim’s higher reported cost appears to be driven mainly by cost allocation and utilities, with a possible labor-efficiency component. Pharmacy Retail’s co-location utilities remained in Tamween’s cost base until a SAR 4.43M intercompany recharge was settled. Tamween also recorded utilities pressure from the broader tariff step and payroll pressure from warehouse overtime and Saudisation. The evidence does not include a site-by-site peer cost bridge, so it cannot quantify how much of the reported gap remains after correcting the recharge or attribute the gap among energy, labor, throughput and facility utilization.",
+        "basis": "The remediation record directly identifies unrecharged Qassim co-location utilities. The H1 cost-variance records identify tariff and co-location effects in utilities and warehouse overtime plus Saudisation in payroll. Independent confirmation requires comparable-site operating costs and normalized activity measures such as throughput, storage requirements, occupied space and labor hours.",
+        "why": "The remediation record directly identifies unrecharged Qassim co-location utilities. The H1 cost-variance records identify tariff and co-location effects in utilities and warehouse overtime plus Saudisation in payroll. Independent confirmation requires comparable-site operating costs and normalized activity measures such as throughput, storage requirements, occupied space and labor hours.",
+        "citations": [
+          {
+            "source_path": "19_Document_Vault/Remediation_Decision_Log_Jun2026.xlsx",
+            "locator": "Decision_Log!Excel row 12",
+            "excerpt": "Historic: Qassim co-location utilities unrecharged; backdated intercompany recharge to Mizan Pharmacy Retail; SAR 4,429,534 settled intercompany.",
+            "source_hash": "1bf425ceb480c882fd4ac91bab154b154977a40c354005d939e9b425c271e456",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Remediation Decision Log · Decision documents"
+          },
+          {
+            "source_path": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+            "locator": "BU_Cost_Variance_H1_2026!Excel row 17",
+            "excerpt": "Utilities & Energy: Tariff step BU-wide + Qassim unrecharged co-location (division 1.7 of this).",
+            "source_hash": "b3991edca75b7c0ec14359f5c8e181ceeda1a5725f8391717dabf27e9de7032b",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "BU Cost Variance · Group financials"
+          },
+          {
+            "source_path": "12_Group_Financials/BU_Cost_Variance_H1_2026.xlsx",
+            "locator": "BU_Cost_Variance_H1_2026!Excel row 14",
+            "excerpt": "Payroll: Saudisation Apr step + warehouse overtime (division 1.1, other regions 1.0).",
+            "source_hash": "b3991edca75b7c0ec14359f5c8e181ceeda1a5725f8391717dabf27e9de7032b",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "BU Cost Variance · Group financials"
+          }
+        ],
+        "suggestions": [
+          "Restate Qassim’s site costs after the intercompany recharge and compare them with peer warehouses using consistent throughput, storage, occupancy and labor measures.",
+          "Review overtime by shift and activity level to determine whether a residual operating-efficiency issue remains.",
+          "Implement a monthly co-location recharge control to keep Retail utilities out of Tamween’s warehouse cost base."
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "Why is Qassim warehouse 35% more expensive to run than comparable sites?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 3 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The remediation record directly identifies unrecharged Qassim co-location utilities. The H1 cost-variance records identify tariff and co-location effects in utilities and warehouse overtime plus Saudisation in payroll. Independent confirmation requires comparable-site operating costs and normalized activity measures such as throughput, storage requirements, occupied space and labor hours."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "cdac15c9-2d4a-48a2-a2ab-d6b319bc1d1f",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "cdac15c9-2d4a-48a2-a2ab-d6b319bc1d1f",
+        "hallucination_risk": {
+          "level": "low",
+          "score": 0.18,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 3 citation(s)."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "The remediation record directly identifies unrecharged Qassim co-location utilities. The H1 cost-variance records identify tariff and co-location effects in utilities and warehouse overtime plus Saudisation in payroll. Independent confirmation requires comparable-site operating costs and normalized activity measures such as throughput, storage requirements, occupied space and labor hours."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 3 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The remediation record directly identifies unrecharged Qassim co-location utilities. The H1 cost-variance records identify tariff and co-location effects in utilities and warehouse overtime plus Saudisation in payroll. Independent confirmation requires comparable-site operating costs and normalized activity measures such as throughput, storage requirements, occupied space and labor hours."
+          },
+          "traceable": true
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": true,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "answer_status": "answered",
+        "determinism_tier": "derived_insight",
+        "response_sections": {
+          "from_your_data": "Qassim’s higher reported cost appears to be driven mainly by cost allocation and utilities, with a possible labor-efficiency component. Pharmacy Retail’s co-location utilities remained in Tamween’s cost base until a SAR 4.43M intercompany recharge was settled. Tamween also recorded utilities pressure from the broader tariff step and payroll pressure from warehouse overtime and Saudisation. The evidence does not include a site-by-site peer cost bridge, so it cannot quantify how much of the reported gap remains after correcting the recharge or attribute the gap among energy, labor, throughput and facility utilization.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "cdac15c9-2d4a-48a2-a2ab-d6b319bc1d1f"
+        },
+        "executive_blocks": {
+          "verdict": "Qassim’s higher reported cost appears to be driven mainly by cost allocation and utilities, with a possible labor-efficiency component.",
+          "figures": [
+            "SAR 4.43M"
+          ],
+          "recommendation": null,
+          "detail": "Pharmacy Retail’s co-location utilities remained in Tamween’s cost base until a SAR 4.43M intercompany recharge was settled. Tamween also recorded utilities pressure from the broader tariff step and payroll pressure from warehouse overtime and Saudisation. The evidence does not include a site-by-site peer cost bridge, so it cannot quantify how much of the reported gap remains after correcting the recharge or attribute the gap among energy, labor, throughput and facility utilization.",
+          "evidence_count": 3,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "37",
+      "theme": "Profitability & EBITDA",
+      "question": "How does each BU's margin compare to its listed peers?",
+      "http": 200,
+      "duration_seconds": 162.784,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "How does each BU's margin compare to its listed peers?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "On the 2025 EBITDA-margin peer tables: • Mizan Pharma Manufacturing: 27.4%. Below SPIMACO (30.5%), Jamjoom (29.5%), Tabuk (28.0%), Hikma (31.0%), Sanofi (35.0%) and Pfizer Saudi (36.0%); above Julphar (24.0%). • Tamween Pharma Distribution: 6.8%. Equal to Banaja (6.8%); above Tamer (6.5%), Boots Saudi Arabia (5.5%) and NUPCO (4.0%); below Al-Olayan Sapaco (7.2%). • Mizan Pharma Logistics: 17.4%. Above Aramex (12.6%), Mohebi (14.0%), DHL Supply Chain Pharma (13.0%), Movianto (15.5%) and GAC Logistics KSA (12.0%); below SAL Saudi Logistics (29.8%). • Mizan Pharmacy Retail: 11.6%. Above United Pharmacies (10.6%), Aman (11.0%) and Innova (10.4%); below Al-Nahdi (13.8%), Whites (12.4%) and Dr Habib Pharmacies (15.5%). • Mizan E-Pharmacy: 6.8%. Below every listed comparator: Al-Nahdi Online (11.4%), Whites Pharmacy Online (9.5%), Aman Pharmacies Online (7.8%) and Care'n Cure UAE (8.5%). • Mizan Digital Health: 19.2%. Above Aster Telehealth (17.2%), Altibbi (15.5%), Cura (18.0%) and Sehhaty (0%); below Whites Connect (22.0%). • Mizan Healthcare Services: 14.6%. Below every listed comparator: Dr Sulaiman Al-Habib (31.0%), Mouwasat (29.5%), Saudi German Hospital (17.0%), Almoosa Specialist (21.0%) and Aster DM Healthcare KSA (15.5%). • Mizan Capital: 40.8%. Above GIB Capital (40.0%) and EFG-Hermes KSA (36.0%); below Jadwa (42.0%), Al Rajhi Capital (48.0%) and SNB Capital (52.0%). The strongest relative position is Pharma Logistics, which exceeds five of six comparators. The clearest gaps are E-Pharmacy and Healthcare Services, both below every supplied comparator. “Listed peers” here means the comparators listed in the workbook; several are private or subsidiaries rather than publicly traded companies.",
+        "basis": "The comparison uses the supplied 2025 EBITDA percentages from the competitor-financials workbook. No margin gaps or peer medians were newly calculated. The peer table contains some differences from the group BU P&L, so this answer consistently uses the competitor workbook for both Mizan and peers.",
+        "why": "The comparison uses the supplied 2025 EBITDA percentages from the competitor-financials workbook. No margin gaps or peer medians were newly calculated. The peer table contains some differences from the group BU P&L, so this answer consistently uses the competitor workbook for both Mizan and peers.",
+        "citations": [
+          {
+            "source_path": "25_Strategic_Context/04_Time_Series/Pharma_Competitor_Financials_2023-2025.xlsx",
+            "locator": "Manufacturing!Excel row 9",
+            "excerpt": "Mizan Pharma Manufacturing (us); 2025 EBITDA %: 27.4",
+            "source_hash": "587301c889bd82a27e1ae4a767c0f62f026f7004bd99ec91614e64362894010c",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Pharma Competitor Financials 2023 2025"
+          },
+          {
+            "source_path": "25_Strategic_Context/04_Time_Series/Pharma_Competitor_Financials_2023-2025.xlsx",
+            "locator": "Manufacturing!Excel row 2",
+            "excerpt": "SPIMACO Addwaeih; 2025 EBITDA %: 30.5",
+            "source_hash": "587301c889bd82a27e1ae4a767c0f62f026f7004bd99ec91614e64362894010c",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Pharma Competitor Financials 2023 2025"
+          },
+          {
+            "source_path": "25_Strategic_Context/04_Time_Series/Pharma_Competitor_Financials_2023-2025.xlsx",
+            "locator": "Distribution!Excel row 7",
+            "excerpt": "Tamween Pharma Distribution (us); 2025 EBITDA %: 6.8",
+            "source_hash": "587301c889bd82a27e1ae4a767c0f62f026f7004bd99ec91614e64362894010c",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Pharma Competitor Financials 2023 2025"
+          },
+          {
+            "source_path": "25_Strategic_Context/04_Time_Series/Pharma_Competitor_Financials_2023-2025.xlsx",
+            "locator": "Distribution!Excel row 6",
+            "excerpt": "Al-Olayan Sapaco; 2025 EBITDA %: 7.2",
+            "source_hash": "587301c889bd82a27e1ae4a767c0f62f026f7004bd99ec91614e64362894010c",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Pharma Competitor Financials 2023 2025"
+          },
+          {
+            "source_path": "25_Strategic_Context/04_Time_Series/Pharma_Competitor_Financials_2023-2025.xlsx",
+            "locator": "Logistics!Excel row 8",
+            "excerpt": "Mizan Pharma Logistics (us); 2025 EBITDA %: 17.4",
+            "source_hash": "587301c889bd82a27e1ae4a767c0f62f026f7004bd99ec91614e64362894010c",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Pharma Competitor Financials 2023 2025"
+          },
+          {
+            "source_path": "25_Strategic_Context/04_Time_Series/Pharma_Competitor_Financials_2023-2025.xlsx",
+            "locator": "Logistics!Excel row 4",
+            "excerpt": "SAL Saudi Logistics; 2025 EBITDA %: 29.8",
+            "source_hash": "587301c889bd82a27e1ae4a767c0f62f026f7004bd99ec91614e64362894010c",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Pharma Competitor Financials 2023 2025"
+          },
+          {
+            "source_path": "25_Strategic_Context/04_Time_Series/Pharma_Competitor_Financials_2023-2025.xlsx",
+            "locator": "PharmacyRetail!Excel row 8",
+            "excerpt": "Mizan Pharmacy Retail (us); 2025 EBITDA %: 11.6",
+            "source_hash": "587301c889bd82a27e1ae4a767c0f62f026f7004bd99ec91614e64362894010c",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Pharma Competitor Financials 2023 2025"
+          },
+          {
+            "source_path": "25_Strategic_Context/04_Time_Series/Pharma_Competitor_Financials_2023-2025.xlsx",
+            "locator": "PharmacyRetail!Excel row 2",
+            "excerpt": "Al-Nahdi Medical Co; 2025 EBITDA %: 13.8",
+            "source_hash": "587301c889bd82a27e1ae4a767c0f62f026f7004bd99ec91614e64362894010c",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Pharma Competitor Financials 2023 2025"
+          }
+        ],
+        "suggestions": [
+          "Prioritize peer-gap plans for E-Pharmacy and Healthcare Services.",
+          "Validate comparator relevance for Pharma Logistics because SAL's cargo ground-handling model differs from pharma-focused 3PL operations.",
+          "Reconcile the few Mizan margin differences between the competitor workbook and the group BU P&L before board use."
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "How does each BU's margin compare to its listed peers?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 8 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The comparison uses the supplied 2025 EBITDA percentages from the competitor-financials workbook. No margin gaps or peer medians were newly calculated. The peer table contains some differences from the group BU P&L, so this answer consistently uses the competitor workbook for both Mizan and peers."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "6d116f64-00b8-4831-a029-97acf73b45b4",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "6d116f64-00b8-4831-a029-97acf73b45b4",
+        "hallucination_risk": {
+          "level": "low",
+          "score": 0.18,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 8 citation(s)."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "The comparison uses the supplied 2025 EBITDA percentages from the competitor-financials workbook. No margin gaps or peer medians were newly calculated. The peer table contains some differences from the group BU P&L, so this answer consistently uses the competitor workbook for both Mizan and peers."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 8 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The comparison uses the supplied 2025 EBITDA percentages from the competitor-financials workbook. No margin gaps or peer medians were newly calculated. The peer table contains some differences from the group BU P&L, so this answer consistently uses the competitor workbook for both Mizan and peers."
+          },
+          "traceable": true
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": true,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "answer_status": "answered",
+        "determinism_tier": "derived_insight",
+        "response_sections": {
+          "from_your_data": "On the 2025 EBITDA-margin peer tables: • Mizan Pharma Manufacturing: 27.4%. Below SPIMACO (30.5%), Jamjoom (29.5%), Tabuk (28.0%), Hikma (31.0%), Sanofi (35.0%) and Pfizer Saudi (36.0%); above Julphar (24.0%). • Tamween Pharma Distribution: 6.8%. Equal to Banaja (6.8%); above Tamer (6.5%), Boots Saudi Arabia (5.5%) and NUPCO (4.0%); below Al-Olayan Sapaco (7.2%). • Mizan Pharma Logistics: 17.4%. Above Aramex (12.6%), Mohebi (14.0%), DHL Supply Chain Pharma (13.0%), Movianto (15.5%) and GAC Logistics KSA (12.0%); below SAL Saudi Logistics (29.8%). • Mizan Pharmacy Retail: 11.6%. Above United Pharmacies (10.6%), Aman (11.0%) and Innova (10.4%); below Al-Nahdi (13.8%), Whites (12.4%) and Dr Habib Pharmacies (15.5%). • Mizan E-Pharmacy: 6.8%. Below every listed comparator: Al-Nahdi Online (11.4%), Whites Pharmacy Online (9.5%), Aman Pharmacies Online (7.8%) and Care'n Cure UAE (8.5%). • Mizan Digital Health: 19.2%. Above Aster Telehealth (17.2%), Altibbi (15.5%), Cura (18.0%) and Sehhaty (0%); below Whites Connect (22.0%). • Mizan Healthcare Services: 14.6%. Below every listed comparator: Dr Sulaiman Al-Habib (31.0%), Mouwasat (29.5%), Saudi German Hospital (17.0%), Almoosa Specialist (21.0%) and Aster DM Healthcare KSA (15.5%). • Mizan Capital: 40.8%. Above GIB Capital (40.0%) and EFG-Hermes KSA (36.0%); below Jadwa (42.0%), Al Rajhi Capital (48.0%) and SNB Capital (52.0%). The strongest relative position is Pharma Logistics, which exceeds five of six comparators. The clearest gaps are E-Pharmacy and Healthcare Services, both below every supplied comparator. “Listed peers” here means the comparators listed in the workbook; several are private or subsidiaries rather than publicly traded companies.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "6d116f64-00b8-4831-a029-97acf73b45b4"
+        },
+        "executive_blocks": {
+          "verdict": "On the 2025 EBITDA-margin peer tables: • Mizan Pharma Manufacturing: 27.4%.",
+          "figures": [
+            "27.4%",
+            "30.5%",
+            "29.5%",
+            "28.0%"
+          ],
+          "recommendation": null,
+          "detail": "Below SPIMACO (30.5%), Jamjoom (29.5%), Tabuk (28.0%), Hikma (31.0%), Sanofi (35.0%) and Pfizer Saudi (36.0%); above Julphar (24.0%). • Tamween Pharma Distribution: 6.8%. Equal to Banaja (6.8%); above Tamer (6.5%), Boots Saudi Arabia (5.5%) and NUPCO (4.0%); below Al-Olayan Sapaco (7.2%). • Mizan Pharma Logistics: 17.4%. Above Aramex (12.6%), Mohebi (14.0%), DHL Supply Chain Pharma (13.0%), Movianto (15.5%) and GAC Logistics KSA (12.0%); below SAL Saudi Logistics (29.8%). • Mizan Pharmacy Retail: 11.6%. Above United Pharmacies (10.6%), Aman (11.0%) and Innova (10.4%); below Al-Nahdi (13.8%), Whites (12.4%) and Dr Habib Pharmacies (15.5%). • Mizan E-Pharmacy: 6.8%. Below every listed comparator: Al-Nahdi Online (11.4%), Whites Pharmacy Online (9.5%), Aman Pharmacies Online (7.8%) and Care'n Cure UAE (8.5%). • Mizan Digital Health: 19.2%. Above Aster Telehealth (17.2%), Altibbi (15.5%), Cura (18.0%) and Sehhaty (0%); below Whites Connect (22.0%). • Mizan Healthcare Services: 14.6%. Below every listed comparator: Dr Sulaiman Al-Habib (31.0%), Mouwasat (29.5%), Saudi German Hospital (17.0%), Almoosa Specialist (21.0%) and Aster DM Healthcare KSA (15.5%). • Mizan Capital: 40.8%. Above GIB Capital (40.0%) and EFG-Hermes KSA (36.0%); below Jadwa (42.0%), Al Rajhi Capital (48.0%) and SNB Capital (52.0%). The strongest relative position is Pharma Logistics, which exceeds five of six comparators. The clearest gaps are E-Pharmacy and Healthcare Services, both below every supplied comparator. “Listed peers” here means the comparators listed in the workbook; several are private or subsidiaries rather than publicly traded companies.",
+          "evidence_count": 8,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    }
+  ]
+}

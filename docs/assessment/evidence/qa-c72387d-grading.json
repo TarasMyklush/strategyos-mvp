@@ -1,0 +1,320 @@
+{
+  "application_revision": "c72387d",
+  "status": "completed",
+  "rule": "Pass requires a substantively correct answer to all material parts and resolving source citations. Safe refusals, insufficient evidence, partial answers and guard rejections do not count toward 45/50. HTTP/matched flags are not a correctness metric.",
+  "independent_reference": "Workbook values independently extracted in the QA workspace; exact input proof artifacts are retained for deterministic aging and line reconciliation.",
+  "rows": [
+    {
+      "id": "486",
+      "question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?",
+      "status": "pass",
+      "review_note": "Independently compared all BU cost component rows: COGS 182.9M, logistics 42.2M, payroll 26.2M; fixed-budget deltas 8.7M, 2.9M, 0.9M. All three cited rows resolve."
+    },
+    {
+      "id": "474",
+      "question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?",
+      "status": "pass",
+      "review_note": "Independently compared all Tamween component rows: COGS 996.8M, payroll 68.7M, logistics 40.9M; deltas 63.5M, 2.1M, 2.9M. All three cited rows resolve."
+    },
+    {
+      "id": "489",
+      "question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?",
+      "status": "pass",
+      "review_note": "Budget revenue 176M versus 171M and EBITDA 37.8M versus 35.9M reconcile. Cost rows use fixed-budget comparison; revenue-linked commentary is explicitly a different, unquantified comparator."
+    },
+    {
+      "id": "127",
+      "question": "Whose forecasts are consistently best and worst in the group?",
+      "status": "insufficient_evidence",
+      "review_note": "A consistent forecaster ranking needs repeated forecast snapshots, later actuals and accountable forecasters. The pack has budgets and one RF1, not this performance history; a correct refusal is not counted as an answered factual case."
+    },
+    {
+      "id": "114",
+      "question": "What should next year's budget assume about tariffs, wages and FX?",
+      "status": "pass",
+      "review_note": "Planning recommendation separates confirmed 8% tariff increase from wage/FX estimates, citing signal rows. SAR7–9M, SAR30–45M, EUR/SAR4.05→4.21, and60→80% hedge coverage match the supplied records; no precise unsupported wage rate is invented."
+    },
+    {
+      "id": "102",
+      "question": "What changed between budget and the RF1 reforecast, and why?",
+      "status": "pass",
+      "review_note": "Compared RF1 workbook budget/reforecast rows: revenue758→782M, contribution428.1→437.3M, and stated cost changes and closing cash43.5→44.1M reconcile. Explanations and approval date match RF1 notes."
+    },
+    {
+      "id": "154",
+      "question": "What would insourcing logistics do to working capital, not just cost?",
+      "status": "insufficient_evidence",
+      "review_note": "Directional working-capital tradeoffs are appropriately conditional, but no net working-capital bridge or amount is established. The22M cost synergy on177M spend is not counted as a working-capital answer."
+    },
+    {
+      "id": "152",
+      "question": "What is the cash impact of the inventory build for NUPCO call-offs?",
+      "status": "insufficient_evidence",
+      "review_note": "Inventory file presence is now correctly acknowledged. NUPCO-specific inventory cash investment, supplier payment timing and quantities remain uncalculated;8.9M is revenue, not cash investment."
+    },
+    {
+      "id": "149",
+      "question": "Show me the aging of receivables by segment — where is risk building?",
+      "status": "pass",
+      "review_note": "Independent full invoice/receipt/customer reconciliation:109,539,119.43SAR,235open invoices, all four segment/bucket totals; three exact source ranges resolve. A dated snapshot is not presented as a trend."
+    },
+    {
+      "id": "311",
+      "question": "What price variances exist against contracted prices, same SKU same period?",
+      "status": "pass",
+      "review_note": "Contract32 versus order41 SAR for3400units gives30,600SAR; source remediation log reports credit-note recovery. The answer explicitly limits coverage to confirmed retrieved findings."
+    },
+    {
+      "id": "305",
+      "question": "Have we had duplicate payments before, and is the failure mode fixed?",
+      "status": "pass",
+      "review_note": "Source events and decision log confirm Nov2025 and Mar2026 duplicate failures.177,188SAR principal and88,594SAR recovered match bounded rounded display. July system block is correctly described as planned; operating effectiveness is not fabricated."
+    },
+    {
+      "id": "313",
+      "question": "What did the historic review find that the H1 audit missed?",
+      "status": "pass",
+      "review_note": "Compared historical audit and remediation rows:96,600;198,000;4,429,534;340,000;8,240,000SAR. The separate5.2M source narrative is explicitly not asserted as the sum, avoiding an unsupported reconciliation."
+    },
+    {
+      "id": "188",
+      "question": "If we fired the bottom decile of customers, what would we lose and save?",
+      "status": "insufficient_evidence",
+      "review_note": "Customer profitability sample and KAUST case do not supply a complete bottom-decile ranking with avoidable costs. No quantified exit case is delivered."
+    },
+    {
+      "id": "165",
+      "question": "Which prices could we raise with least volume risk?",
+      "status": "pass",
+      "review_note": "Conditional category prioritisation matches price-volume mix evidence and competitor signal. It explicitly withholds SKU-specific prices without elasticity, volume and contract inputs."
+    },
+    {
+      "id": "163",
+      "question": "Which customers' terms are out of line with policy?",
+      "status": "insufficient_evidence",
+      "review_note": "KAUST terms and approved renegotiation are sourced, but the approved portfolio credit-term policy is missing. A full policy-breach list cannot be certified."
+    },
+    {
+      "id": "434",
+      "question": "How reliable is the data behind this report — what quality issues exist?",
+      "status": "partial",
+      "review_note": "Sourced quality/control issues are identified, but source-register estimate labels are not clearly reconciled with the approved finance projection. A complete data-quality assessment and coherent measurement provenance remain unestablished."
+    },
+    {
+      "id": "443",
+      "question": "Which numbers stored as text or wrong signs could distort calculations?",
+      "status": "insufficient_evidence",
+      "review_note": "The prior false Digital Health sign contradiction is corrected. No complete cell-type/sign-convention inspection is delivered; this is an explicit diagnostic limit rather than a verified list."
+    },
+    {
+      "id": "437",
+      "question": "Which invoices don't reconcile between lines and headers?",
+      "status": "pass",
+      "review_note": "Independently reconciled 800 current AR headers and 2,830 signed lines. AR-2026-0202 differs by SAR 7,767.28; the answer has resolving input citations and explicitly excludes AP-line coverage."
+    },
+    {
+      "id": "335",
+      "question": "What did unhedged EUR payments cost us this year?",
+      "status": "pass",
+      "review_note": "H1 business-event FX driver500KSAR and specific Servier hedge nonapplication42912SAR are explicitly separated from full-year claims, matching source records."
+    },
+    {
+      "id": "334",
+      "question": "What is our FX exposure by currency, and how much is hedged?",
+      "status": "pass",
+      "review_note": "FX policy states annual EUR/CHF exposure in SAR equivalents280M/140M and60%rolling-six-month coverage versus80%target. The answer does not invent per-currency hedge amounts or assert that nominal coverage means applied hedges."
+    },
+    {
+      "id": "340",
+      "question": "Should we hedge fuel or electricity exposure, given the tariff steps?",
+      "status": "pass",
+      "review_note": "Recommendation is conditional on evidenced tariff and fuel exposures: PPA/solar mitigation for confirmed8%tariff and7–9Mannualimpact; no fuel hedge is invented without a size/tenor/index."
+    },
+    {
+      "id": "432",
+      "question": "Who owns synergy delivery for each announced deal?",
+      "status": "retrieval_gap",
+      "review_note": "The full synergy charter lists roles for SYN-01..07, but only the first programme was retrieved. A targeted charter retrieval correction is queued for affected-case retest."
+    },
+    {
+      "id": "433",
+      "question": "What is our acquisition track record — announced versus delivered value?",
+      "status": "insufficient_evidence",
+      "review_note": "No original purchase-price/announced-return case and aligned delivered returns are supplied. The inherited leakage record does not establish acquisition value delivery."
+    },
+    {
+      "id": "419",
+      "question": "What is our walk-away price discipline, and who enforces it?",
+      "status": "partial",
+      "review_note": "The answer correctly cites the KAUST commercial mandate, but the selected theme is M&A and no acquisition walk-away discipline is supplied. The prompt itself is ambiguous; a complete group discipline is not established."
+    },
+    {
+      "id": "379",
+      "question": "What are the top three external opportunities the data says we're not pursuing?",
+      "status": "partial",
+      "review_note": "The answer distinguishes one unpursued opportunity from pursuit gaps. Absence of an initiative row alone does not establish that a company is not pursuing an opportunity; the requested three unpursued opportunities remain unproven."
+    },
+    {
+      "id": "360",
+      "question": "What did this week's market briefings say that changes any decision?",
+      "status": "pass",
+      "review_note": "Briefing-linked decision implications use supplied FX, e-pharmacy, NUPCO, energy and PIF risks with probabilities/conditional actions and resolving citations; no external action is claimed."
+    },
+    {
+      "id": "374",
+      "question": "How do our payment terms compare to industry norms?",
+      "status": "guard_rejection",
+      "review_note": "Provider numerical validation rejected the answer. No reliable industry payment-term comparison was delivered."
+    },
+    {
+      "id": "459",
+      "question": "Which commitments did I make last quarter that are unmet?",
+      "status": "insufficient_evidence",
+      "review_note": "The June E-Rx exception is sourced but cannot establish commitments personally made last quarter. The answer acknowledges missing commitment inception/approval history."
+    },
+    {
+      "id": "467",
+      "question": "Give me the elevator version: how is the company doing this week, in four sentences?",
+      "status": "pass",
+      "review_note": "Four-sentence executive summary matches governed revenue position,36.2vs38%E-Rx gap and71.2MTamween cost variance. It does not fabricate a weekly P&L and cites resolving source rows."
+    },
+    {
+      "id": "450",
+      "question": "What should I read before the cold-chain renegotiation session?",
+      "status": "pass",
+      "review_note": "Reading list matches the approved memo, contract escalation, remediation mandate, business-event rows, initiative and renewal email. Calendar logistics and supplied values are cited; no authority to execute is inferred."
+    },
+    {
+      "id": "70",
+      "question": "Why is Qassim warehouse 35% more expensive to run than comparable sites?",
+      "status": "guard_rejection",
+      "review_note": "Numerical validation rejected the response; no supported explanation was delivered."
+    },
+    {
+      "id": "89",
+      "question": "What is the cost of quality — write-offs, returns, rejected batches — across BUs?",
+      "status": "insufficient_evidence",
+      "review_note": "No reconciled quality-loss calculation by BU; reason codes, mappings and double-counting reconciliation are absent from the answer."
+    },
+    {
+      "id": "67",
+      "question": "Which cost elements are above plan in more than two BUs and could be consolidated at group level?",
+      "status": "pass",
+      "review_note": "Independently counted positive fixed-budget variances: utilities 5 BUs, payroll 7, logistics 3, COGS 4 and marketing 3. Recommendations distinguish supported group levers from heterogeneous volume effects."
+    },
+    {
+      "id": "272",
+      "question": "What training investment would reduce our error and rework rates?",
+      "status": "partial",
+      "review_note": "Supported control-training topics are given, but the investment amount and expected effect need costs, baseline errors and effectiveness assumptions."
+    },
+    {
+      "id": "270",
+      "question": "What would a 3% wage settlement do to each BU's margin?",
+      "status": "insufficient_evidence",
+      "review_note": "All-BU wage-eligible salary bases and settlement scope are not established; payroll includes GOSI. Quantification requires explicit eligible-base and effective-date assumptions."
+    },
+    {
+      "id": "258",
+      "question": "What is revenue and EBITDA per employee by BU, trending?",
+      "status": "insufficient_evidence",
+      "review_note": "Only Tamween workforce detail is supplied; no complete eight-BU average FTE series supports comparable productivity trends."
+    },
+    {
+      "id": "37",
+      "question": "How does each BU's margin compare to its listed peers?",
+      "status": "guard_rejection",
+      "review_note": "Peer and BU tables were retrieved, but numerical validation rejected the generated comparison."
+    },
+    {
+      "id": "47",
+      "question": "How sensitive is group EBITDA to a 1% change in COGS?",
+      "status": "calculation_gap",
+      "review_note": "No governed consolidated COGS reconciliation and sensitivity calculation. Individual BU rows alone do not establish consolidation eliminations."
+    },
+    {
+      "id": "52",
+      "question": "What is the fully-loaded profitability of our top 10 customers?",
+      "status": "insufficient_evidence",
+      "review_note": "Customer gross-margin estimates and rebates do not establish fully-loaded profitability; service, logistics, finance and overhead allocations are missing."
+    },
+    {
+      "id": "2",
+      "question": "Break down this quarter's revenue by segment — which segments are growing and which are shrinking?",
+      "status": "retrieval_gap",
+      "review_note": "The Q2 flash workbook contains all BU rows, but only isolated rows reached the answer. No complete quarterly segment breakdown or growth comparison was delivered."
+    },
+    {
+      "id": "3",
+      "question": "What were the key movers of revenue vs budget this half — up and down, ranked by impact?",
+      "status": "partial",
+      "review_note": "Seven BU movements are reported, but reconciliation entries are explicitly omitted; this is not a complete ranked group bridge."
+    },
+    {
+      "id": "4",
+      "question": "What contributed most to revenue growth over the last three years?",
+      "status": "partial",
+      "review_note": "The NUPCO 52M driver is supported by a narrower revenue bridge; it cannot establish the largest group-wide three-year contributor."
+    },
+    {
+      "id": "290",
+      "question": "What geopolitical or trade-flow changes would hurt our API supply?",
+      "status": "pass",
+      "review_note": "The source briefing and signal support concentration, price ranges, financial exposure, stock coverage and dual-sourcing status. Recommendations are prospective."
+    },
+    {
+      "id": "286",
+      "question": "What regulatory deadlines in the next 12 months carry P&L consequences?",
+      "status": "pass",
+      "review_note": "SEC September 2026 tariff timing and 8% / 7–9M impact agree with the signal. Tatmeen Q4 deadline is sourced; missing financial conversion is clear."
+    },
+    {
+      "id": "387",
+      "question": "What progress has the Tamween integration made against the acquisition case?",
+      "status": "partial",
+      "review_note": "Sourced operating integration progress is assessed, but no reconciliation to the original purchase-price model, synergy schedule or investment returns is possible."
+    },
+    {
+      "id": "407",
+      "question": "What did we learn from the Red Sea churn that changes strategy, not just pricing?",
+      "status": "pass",
+      "review_note": "Cited correspondence, revenue bridge and milestones support pricing architecture, concentration and delayed remediation; strategic recommendations are distinct from recorded events."
+    },
+    {
+      "id": "190",
+      "question": "Which supplier prices crept above inflation, and what is the re-tender value?",
+      "status": "pass",
+      "review_note": "Hijaz price creep and 340K annual savings agree with the remediation record. Gulf Cold-Chain 22.2% escalation and 250K target are correctly distinguished from completed re-tender savings."
+    },
+    {
+      "id": "194",
+      "question": "Which contracts auto-renew in the next six months, and with what escalators?",
+      "status": "partial",
+      "review_note": "No complete six-month contract reconciliation; Gulf Cold-Chain renewal falls outside the window and ELA terms are missing."
+    },
+    {
+      "id": "235",
+      "question": "What is the utilisation of the Dammam hub since commissioning?",
+      "status": "insufficient_evidence",
+      "review_note": "Commissioning and facility size are documented, but no post-commissioning throughput or occupied-capacity series supports utilisation."
+    },
+    {
+      "id": "225",
+      "question": "How well do goods receipts match POs and invoices — where are the exceptions?",
+      "status": "calculation_gap",
+      "review_note": "GRN, PO and AP sources exist, but no complete three-way reconciliation was performed. The answer provides selected control exceptions, not receipt-match coverage."
+    }
+  ],
+  "counts": {
+    "pass": 22,
+    "insufficient_evidence": 13,
+    "partial": 8,
+    "retrieval_gap": 2,
+    "guard_rejection": 3,
+    "calculation_gap": 2
+  },
+  "passed": 22,
+  "total": 50,
+  "threshold": 45,
+  "acceptance": "failed"
+}

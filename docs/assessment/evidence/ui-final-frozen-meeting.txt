@@ -1,0 +1,121 @@
+- banner:
+  - link "StrategyOS home":
+    - generic: StrategyOS
+  - button "Board room":
+    - generic: Board room
+    - generic: ▾
+  - button "Switch to dark theme": ◐
+  - button "ET"
+- main:
+  - tabpanel:
+    - region "Board portal":
+      - heading "Board portal" [level=2]
+      - paragraph: Nothing reaches the board until someone has signed it off.
+      - tablist "Board meeting stages":
+        - tab "Pre-board Get the board pack ready":
+          - strong: Pre-board
+          - generic: Get the board pack ready
+        - tab "Live Run the meeting on approved material only":
+          - strong: Live
+          - generic: Run the meeting on approved material only
+        - tab "Closed Keep the record as it was" [selected]:
+          - strong: Closed
+          - generic: Keep the record as it was
+      - paragraph: The room is closed now; preserve the frozen record and work follow-ups outside the board surface.
+      - article:
+        - paragraph: Reports
+        - heading "Closed / frozen snapshot" [level=3]
+        - paragraph: Keep the board memory frozen and bounded to approved outputs after the session closes.
+        - generic: Closed
+        - generic: Reconciled ✓
+        - generic: Recoverable value
+        - strong: SAR 794K
+        - generic: Latest verified review
+        - generic "Traced to governed findings reconciliation": Evidence verified
+        - generic: Open challenged cases
+        - strong: "0"
+        - generic: current audit state
+        - generic "Traced to governed audit log": Evidence verified
+        - generic: Evidence resolution
+        - strong: 40 of 40 citations resolved
+        - generic: current audit totals
+        - generic "Traced to governed citation audit": Evidence verified
+        - generic: Board packet reports
+        - strong: "8"
+        - generic: surfaced artifacts
+        - generic "Traced to governed artifact registry": Evidence verified
+        - strong: Pre-board
+        - paragraph: Get the board pack ready
+        - strong: Live
+        - paragraph: Run the meeting on approved material only
+        - strong: Closed
+        - paragraph: Keep the record as it was
+        - generic: actual
+        - generic: presented
+        - 'button "Ask Minerva what to do next: Inspect frozen snapshot"': "Next: Inspect frozen snapshot"
+        - generic "Click for details":
+          - strong: Deck release
+          - generic: Published
+          - generic: 8 reports in the board pack
+        - generic "Click for details":
+          - strong: Frozen snapshot
+          - generic: Frozen
+          - generic: This meeting reads only its immutable approved snapshot.
+        - button "Ask Minerva to review Inspect Frozen Snapshot": Inspect Frozen Snapshot
+        - button "Ask Minerva to review Review Board Memory": Review Board Memory
+        - button "Ask Minerva to review Compare Packet Release": Compare Packet Release
+        - button "Ask Minerva to review Check Follow Up Obligations": Check Follow Up Obligations
+        - paragraph: Meeting posture
+        - strong: Board pack
+        - paragraph: Board timing pending
+        - generic: board-safe
+        - paragraph: Lifecycle actions
+        - generic: No lifecycle actions are attached to this state.
+        - paragraph: Meeting summary & action plan
+        - paragraph: This meeting reads only its immutable approved snapshot.
+        - generic: No closed-state actions are attached yet.
+        - paragraph: Frozen snapshot
+        - strong: Frozen
+        - paragraph: This meeting reads only its immutable approved snapshot.
+        - button "◇ What-if on the snapshot No live org data reaches the board":
+          - strong: ◇ What-if on the snapshot
+          - generic: No live org data reaches the board
+      - article:
+        - paragraph: Report surface
+        - heading "Previewable report routes" [level=3]
+        - generic: Published
+        - paragraph: Overview, cases, evidence, and reports now sit as one workspace. This rail keeps the board-safe output explicit.
+        - strong: Drill-down Q&A
+        - paragraph: Report
+        - generic: board-safe
+        - strong: Manifest
+        - paragraph: Supporting material
+        - generic: board-safe
+        - strong: Audit log
+        - paragraph: Review trail
+        - generic: board-safe
+        - strong: Case file
+        - paragraph: Report
+        - generic: restricted
+        - strong: Case file PDF
+        - paragraph: Report
+        - generic: restricted
+        - link "Open report preview":
+          - /url: /api/board/meetings/qa-final-509f47e-ab0bdd6d-a52e-468a-be85-59021fc38559/files/qa.md
+    - region "Available files for review":
+      - heading "Available files for review" [level=2]
+      - paragraph: documents relevant to the current briefing — latest version only
+      - article:
+        - strong: No relevant Office files
+        - paragraph: No reviewed XLSX, DOCX or PPTX file is linked to the current briefing.
+        - paragraph: Latest file with the same name is shown. Version history is not yet available.
+        - generic "Upload an Office file"
+- contentinfo:
+  - generic: Prepared by StrategyOS from the approved strategy and verified company data.
+  - link "How it works":
+    - /url: /guide
+  - link "Architecture":
+    - /url: /architecture
+  - generic: refreshed today · 06:14 · Riyadh
+- button "Ask Minerva":
+  - generic: Ask Minerva

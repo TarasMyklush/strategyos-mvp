@@ -1,7 +1,7 @@
 {
   "target": "https://new.strategyos.live",
-  "application_revision": "c72387d",
-  "image_digest": "sha256:2ff3bffe389461f681dffa66ab581e39856aa5da96d112e2927d5b10fe37759d",
+  "application_revision": "44c9c31",
+  "image_digest": "sha256:bae952707af81fa56c1581b5740b3f3454d191fbea9880d2bcfdc13f132a4f0e",
   "schema_components": {
     "deploy/postgres/schema.sql": "337f16604880c9c5ccccff3e6712be9019961f34ad54af00d2d4768ba618e234",
     "strategyos_mvp/board_memory.py": "884bc0369feae30cb2b75d8f0e5bb42f8a46b4f5ead0d78204842ea95c6bc990",
@@ -34,5 +34,5 @@
     "finance_sha256": "dfdf9e9882d9eebd41fa6afd473b1162989a315b1affa129a80d2f8f435927ec",
     "approval_status": "pending"
   },
-  "recorded_at": "2026-09-05T11:25:31.412851+00:00"
+  "recorded_at": "2026-09-05T12:25:17.495096+00:00"
 }

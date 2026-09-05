@@ -1,0 +1,65 @@
+{
+  "at": "2026-09-05T12:40:08.509965+00:00",
+  "target": "https://new.strategyos.live",
+  "checks": {
+    "/health/live anonymous": {
+      "status": 401
+    },
+    "/health/ready anonymous": {
+      "status": 401
+    },
+    "/health/live authenticated": {
+      "status": 200,
+      "health": "ok"
+    },
+    "/health/ready authenticated": {
+      "status": 200,
+      "health": "ok"
+    }
+  },
+  "containers": [
+    {
+      "name": "strategyos-branch-strategyos-api-1",
+      "image": "strategyos-preview:44c9c31",
+      "image_digest": "sha256:bae952707af81fa56c1581b5740b3f3454d191fbea9880d2bcfdc13f132a4f0e",
+      "health": "healthy",
+      "running": true
+    },
+    {
+      "name": "strategyos-branch-strategyos-worker-1",
+      "image": "strategyos-preview:44c9c31",
+      "image_digest": "sha256:bae952707af81fa56c1581b5740b3f3454d191fbea9880d2bcfdc13f132a4f0e",
+      "health": null,
+      "running": true,
+      "health_check_scope": "Process running; no Docker healthcheck is configured for this worker."
+    },
+    {
+      "name": "strategyos-branch-strategyos-idp-1",
+      "image": "strategyos-preview:44c9c31",
+      "image_digest": "sha256:bae952707af81fa56c1581b5740b3f3454d191fbea9880d2bcfdc13f132a4f0e",
+      "health": "healthy",
+      "running": true
+    },
+    {
+      "name": "strategyos-strategyos-api-1",
+      "image": "sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+      "image_digest": "sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+      "health": "healthy",
+      "running": true
+    },
+    {
+      "name": "strategyos-strategyos-worker-1",
+      "image": "sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+      "image_digest": "sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+      "health": null,
+      "running": true
+    },
+    {
+      "name": "strategyos-strategyos-idp-1",
+      "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+      "image_digest": "sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+      "health": "healthy",
+      "running": true
+    }
+  ]
+}

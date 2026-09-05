@@ -1,0 +1,556 @@
+{
+  "deployment": {
+    "environment": "branch-preview",
+    "application_revision": "ff3f9c0",
+    "manifest_application_matches": true,
+    "image_digest": "sha256:f0025db1926a50fcea80aa8d538e92c0a0d70baf5208de40d0618fce29717332",
+    "schema_sha256": "f93974ba304b6a490ff6794f165df85c93b1c65d4ec8d313fff743f8f36aa343",
+    "selected_run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+    "manifest_run_matches": true,
+    "source_digest": "f0f632cde1a8f980d2000c54c2d65dd929019b0d5b463dc48c8a53a8ec88f2e3",
+    "source_classification": "synthetic_demo",
+    "source_period": "2026-06",
+    "source_search": {
+      "status": "ready",
+      "collection": "strategyos_multilingual_e5_761b726d_384_v1",
+      "point_count": 37537,
+      "reused_points": 18880,
+      "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
+    },
+    "data_region": "Not attested",
+    "model_provider": "codex_cli",
+    "model": "codex-subscription",
+    "model_processing": "External provider; residency not attested",
+    "run_policy": "external-approved",
+    "approved_external_modes": [
+      "object_storage_sync",
+      "model_provider_use"
+    ],
+    "external_business_connections": "deferred",
+    "fallback_provider": "none"
+  },
+  "scope": "Live authenticated API complement to separate human-style UI QA. Matched is routing status, not factual correctness.",
+  "rows": [
+    {
+      "id": "154",
+      "theme": "Cash, Liquidity & Working Capital",
+      "question": "What would insourcing logistics do to working capital, not just cost?",
+      "http": 200,
+      "duration_seconds": 44.531,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "What would insourcing logistics do to working capital, not just cost?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "Insourcing is likely to absorb working capital during transition unless tightly designed—it is not automatically a cash release. The group’s case quantifies SAR 22M/year of savings against SAR 177M of addressable logistics spend, but it does not provide a working-capital bridge. The main effects would be: (1) lower external trade payables, potentially shortening the effective payment cycle as vendor invoices are replaced by faster payroll, fuel and operating payments; (2) possible additional inventory or safety-stock requirements during migration and capacity ramp; and (3) temporary cash absorption from dual-running the 3PL and internal operation. Any internal logistics receivable/payable created between business units would eliminate on consolidation, so it would not improve group working capital. Capital spending is a separate cash-flow consideration, not working capital. The Dammam hub is already commissioned and supplies the operating platform, but the evidence does not quantify incremental fleet, inventory, payment terms or transition cash needs. Separately, DSO creep could absorb SAR 25–35M if collections extend by six days, so receivables discipline may matter more to near-term liquidity than the logistics saving itself. Recommendation: approve insourcing only with a month-by-month cash bridge covering supplier DPO lost, payroll/fuel terms, inventory days, transition overlap and capex payments, alongside the SAR 22M cost case.",
+        "basis": "SYN-01 identifies logistics insourcing as a high-confidence synergy with SAR 177M of 2025 addressable spend and SAR 22M estimated annual savings. INIT-05 confirms the programme is on track, while the available records do not supply a quantified working-capital model. SIG-2026-16 separately quantifies the current receivables-related cash-conversion risk.",
+        "why": "SYN-01 identifies logistics insourcing as a high-confidence synergy with SAR 177M of 2025 addressable spend and SAR 22M estimated annual savings. INIT-05 confirms the programme is on track, while the available records do not supply a quantified working-capital model. SIG-2026-16 separately quantifies the current receivables-related cash-conversion risk.",
+        "citations": [
+          {
+            "source_path": "12_Group_Financials/Group_BU_Cost_Structure_2024-2026.xlsx",
+            "locator": "Synergies!Excel row 2",
+            "excerpt": "SYN-01; Logistics & last-mile; Combined 2025A spend: SAR 177M; Insource to Mizan Pharma Logistics; estimated annual saving: SAR 22M; Confidence: High.",
+            "source_hash": "1df3fd96c2f3c4044abfb5e8dffa29379ea8b19202c4fbec10d1bd7541d93879",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Group BU Cost Structure 2024 2026 · Group financials"
+          },
+          {
+            "source_path": "21_Initiatives/Initiative_Register.xlsx",
+            "locator": "Initiative_Register!Excel row 6",
+            "excerpt": "INIT-05: Cold-chain 3PL insourcing (SYN-01); status on-track; Gulf Cold-Chain renegotiation launched with insourcing BATNA.",
+            "source_hash": "ddb68deee3d4ee8d0aea33f1e6d9820210c97ef1e18f727074a130c3e4baee75",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Initiative Register"
+          },
+          {
+            "source_path": "21_Initiatives/Initiative_Register.xlsx",
+            "locator": "Initiative_Register!Excel row 5",
+            "excerpt": "Dammam cold-chain hub commissioned 28-Jun-2026; SAR 96M within envelope; enables SYN-01.",
+            "source_hash": "ddb68deee3d4ee8d0aea33f1e6d9820210c97ef1e18f727074a130c3e4baee75",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Initiative Register"
+          },
+          {
+            "source_path": "17_Signals/Signals_Register_Jun2026.xlsx",
+            "locator": "Signals_Register!Excel row 17",
+            "excerpt": "DSO creep: working capital SAR 25–35M absorbed if DSO increases six days at current run-rate.",
+            "source_hash": "5bfb1e275b6282aad4b99bd1fa3f55e05fd33e59278cba121b6c5f332164c743",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Signals Register · Business signals"
+          }
+        ],
+        "suggestions": [
+          "Require Finance and the COO to add a monthly working-capital bridge to the SYN-01 business case.",
+          "Set explicit limits for transition overlap, inventory days and external-payable terms before full migration.",
+          "Track consolidated cash impact separately from internal Mizan Pharma Logistics revenue and receivables."
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "What would insourcing logistics do to working capital, not just cost?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 4 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "SYN-01 identifies logistics insourcing as a high-confidence synergy with SAR 177M of 2025 addressable spend and SAR 22M estimated annual savings. INIT-05 confirms the programme is on track, while the available records do not supply a quantified working-capital model. SIG-2026-16 separately quantifies the current receivables-related cash-conversion risk."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "7ccffe79-af1b-4078-b274-eed37e0dbb19",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "7ccffe79-af1b-4078-b274-eed37e0dbb19",
+        "hallucination_risk": {
+          "level": "low",
+          "score": 0.18,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 4 citation(s)."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "SYN-01 identifies logistics insourcing as a high-confidence synergy with SAR 177M of 2025 addressable spend and SAR 22M estimated annual savings. INIT-05 confirms the programme is on track, while the available records do not supply a quantified working-capital model. SIG-2026-16 separately quantifies the current receivables-related cash-conversion risk."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 4 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "SYN-01 identifies logistics insourcing as a high-confidence synergy with SAR 177M of 2025 addressable spend and SAR 22M estimated annual savings. INIT-05 confirms the programme is on track, while the available records do not supply a quantified working-capital model. SIG-2026-16 separately quantifies the current receivables-related cash-conversion risk."
+          },
+          "traceable": true
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": true,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "answer_status": "answered",
+        "determinism_tier": "derived_insight",
+        "response_sections": {
+          "from_your_data": "Insourcing is likely to absorb working capital during transition unless tightly designed—it is not automatically a cash release. The group’s case quantifies SAR 22M/year of savings against SAR 177M of addressable logistics spend, but it does not provide a working-capital bridge. The main effects would be: (1) lower external trade payables, potentially shortening the effective payment cycle as vendor invoices are replaced by faster payroll, fuel and operating payments; (2) possible additional inventory or safety-stock requirements during migration and capacity ramp; and (3) temporary cash absorption from dual-running the 3PL and internal operation. Any internal logistics receivable/payable created between business units would eliminate on consolidation, so it would not improve group working capital. Capital spending is a separate cash-flow consideration, not working capital. The Dammam hub is already commissioned and supplies the operating platform, but the evidence does not quantify incremental fleet, inventory, payment terms or transition cash needs. Separately, DSO creep could absorb SAR 25–35M if collections extend by six days, so receivables discipline may matter more to near-term liquidity than the logistics saving itself. Recommendation: approve insourcing only with a month-by-month cash bridge covering supplier DPO lost, payroll/fuel terms, inventory days, transition overlap and capex payments, alongside the SAR 22M cost case.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "7ccffe79-af1b-4078-b274-eed37e0dbb19"
+        },
+        "executive_blocks": {
+          "verdict": "Insourcing is likely to absorb working capital during transition unless tightly designed—it is not automatically a cash release.",
+          "figures": [
+            "SAR 22M",
+            "SAR 177M",
+            "SAR 25"
+          ],
+          "recommendation": "Recommendation: approve insourcing only with a month-by-month cash bridge covering supplier DPO lost, payroll/fuel terms, inventory days, transition overlap and capex payments, alongside the SAR 22M cost case.",
+          "detail": "The group’s case quantifies SAR 22M/year of savings against SAR 177M of addressable logistics spend, but it does not provide a working-capital bridge. The main effects would be: (1) lower external trade payables, potentially shortening the effective payment cycle as vendor invoices are replaced by faster payroll, fuel and operating payments; (2) possible additional inventory or safety-stock requirements during migration and capacity ramp; and (3) temporary cash absorption from dual-running the 3PL and internal operation. Any internal logistics receivable/payable created between business units would eliminate on consolidation, so it would not improve group working capital. Capital spending is a separate cash-flow consideration, not working capital. The Dammam hub is already commissioned and supplies the operating platform, but the evidence does not quantify incremental fleet, inventory, payment terms or transition cash needs. Separately, DSO creep could absorb SAR 25–35M if collections extend by six days, so receivables discipline may matter more to near-term liquidity than the logistics saving itself.",
+          "evidence_count": 4,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    },
+    {
+      "id": "432",
+      "theme": "M&A & Portfolio",
+      "question": "Who owns synergy delivery for each announced deal?",
+      "http": 200,
+      "duration_seconds": 24.123,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "llm",
+        "assistant_mode": "llm",
+        "requested_mode": "auto",
+        "question": "Who owns synergy delivery for each announced deal?",
+        "persona": "ceo",
+        "answered_by": "llm",
+        "matched": true,
+        "answer": "The approved synergy charter assigns delivery as follows: • SYN-01 — Logistics insourcing: Group COO. The initiative register names Waleed Al-Faraj with Nasser Al-Dossary. • SYN-02 — IT licences and cloud consolidation: Group CIO. • SYN-03 — Facilities co-location and recharge policy: Group Property. • SYN-04 — Group energy, including PPA and solar: Group COO. • SYN-05 — Packaging category tower: Group Procurement. • SYN-06 — Group insurance programme: Group CFO. • SYN-07 — Finance shared services and AI agents: Group CFO. Overall programme accountability sits with Group COO Waleed Al-Faraj. The charter was approved by ExCo on 24 June 2026 and targets approximately SAR 86M in annual run-rate savings by 2028. These records describe the announced group synergy workstreams; they do not provide deal-by-deal ownership for separate acquisitions.",
+        "basis": "The approved Group Synergy Programme charter provides the owner for each SYN-01..07 workstream, while INIT-11 identifies Waleed Al-Faraj as the overall programme owner and INIT-05 gives the named co-owners for SYN-01.",
+        "why": "The approved Group Synergy Programme charter provides the owner for each SYN-01..07 workstream, while INIT-11 identifies Waleed Al-Faraj as the overall programme owner and INIT-05 gives the named co-owners for SYN-01.",
+        "citations": [
+          {
+            "source_path": "19_Document_Vault/Synergy_Programme_Charter_Jun2026.docx",
+            "locator": "Document paragraph 14",
+            "excerpt": "COO",
+            "source_hash": "5465d3f35fe0b04f75c51a08bfe8d130e90a1c0e7b5ad8187d6c04a3adaea26d",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Synergy Programme Charter · Decision documents"
+          },
+          {
+            "source_path": "21_Initiatives/Initiative_Register.xlsx",
+            "locator": "Initiative_Register!Excel row 6",
+            "excerpt": "Cold-chain 3PL insourcing (SYN-01); Owner: Waleed Al-Faraj (Group COO) + Nasser Al-Dossary",
+            "source_hash": "ddb68deee3d4ee8d0aea33f1e6d9820210c97ef1e18f727074a130c3e4baee75",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Initiative Register"
+          },
+          {
+            "source_path": "19_Document_Vault/Synergy_Programme_Charter_Jun2026.docx",
+            "locator": "Document paragraph 20",
+            "excerpt": "Group CIO",
+            "source_hash": "5465d3f35fe0b04f75c51a08bfe8d130e90a1c0e7b5ad8187d6c04a3adaea26d",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Synergy Programme Charter · Decision documents"
+          },
+          {
+            "source_path": "19_Document_Vault/Synergy_Programme_Charter_Jun2026.docx",
+            "locator": "Document paragraph 26",
+            "excerpt": "Group Property",
+            "source_hash": "5465d3f35fe0b04f75c51a08bfe8d130e90a1c0e7b5ad8187d6c04a3adaea26d",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Synergy Programme Charter · Decision documents"
+          },
+          {
+            "source_path": "19_Document_Vault/Synergy_Programme_Charter_Jun2026.docx",
+            "locator": "Document paragraph 32",
+            "excerpt": "Group COO",
+            "source_hash": "5465d3f35fe0b04f75c51a08bfe8d130e90a1c0e7b5ad8187d6c04a3adaea26d",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Synergy Programme Charter · Decision documents"
+          },
+          {
+            "source_path": "19_Document_Vault/Synergy_Programme_Charter_Jun2026.docx",
+            "locator": "Document paragraph 38",
+            "excerpt": "Group Procurement",
+            "source_hash": "5465d3f35fe0b04f75c51a08bfe8d130e90a1c0e7b5ad8187d6c04a3adaea26d",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Synergy Programme Charter · Decision documents"
+          },
+          {
+            "source_path": "19_Document_Vault/Synergy_Programme_Charter_Jun2026.docx",
+            "locator": "Document paragraph 44",
+            "excerpt": "Group CFO",
+            "source_hash": "5465d3f35fe0b04f75c51a08bfe8d130e90a1c0e7b5ad8187d6c04a3adaea26d",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Synergy Programme Charter · Decision documents"
+          },
+          {
+            "source_path": "19_Document_Vault/Synergy_Programme_Charter_Jun2026.docx",
+            "locator": "Document paragraph 50",
+            "excerpt": "Group CFO",
+            "source_hash": "5465d3f35fe0b04f75c51a08bfe8d130e90a1c0e7b5ad8187d6c04a3adaea26d",
+            "finding_id": null,
+            "resolved": true,
+            "source_label": "Synergy Programme Charter · Decision documents"
+          }
+        ],
+        "suggestions": [
+          "Review the monthly synergy tracker by owner, with savings counted only when banked in BU budgets.",
+          "For acquisition-specific accountability, retrieve the announced-deal integration plans or transaction records; those details are not supplied here."
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "Who owns synergy delivery for each announced deal?",
+          "mode": "llm",
+          "matched": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "llm"
+          },
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 8 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The approved Group Synergy Programme charter provides the owner for each SYN-01..07 workstream, while INIT-11 identifies Waleed Al-Faraj as the overall programme owner and INIT-05 gives the named co-owners for SYN-01."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "32fafe00-5d06-4e2a-b856-a20f99eadfc0",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "32fafe00-5d06-4e2a-b856-a20f99eadfc0",
+        "hallucination_risk": {
+          "level": "low",
+          "score": 0.18,
+          "factors": [
+            {
+              "name": "llm_generation",
+              "detail": "Answer was generated through the gated model-provider path."
+            },
+            {
+              "name": "evidence_citations",
+              "detail": "Returned with 8 citation(s)."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Verify against cited evidence before operational use.",
+            "Prefer deterministic routes when they cover the question."
+          ],
+          "verification_path": "The approved Group Synergy Programme charter provides the owner for each SYN-01..07 workstream, while INIT-11 identifies Waleed Al-Faraj as the overall programme owner and INIT-05 gives the named co-owners for SYN-01."
+        },
+        "risk_metadata": {
+          "decision_mode": "llm",
+          "hallucination_risk": {
+            "level": "low",
+            "score": 0.18,
+            "factors": [
+              {
+                "name": "llm_generation",
+                "detail": "Answer was generated through the gated model-provider path."
+              },
+              {
+                "name": "evidence_citations",
+                "detail": "Returned with 8 citation(s)."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Verify against cited evidence before operational use.",
+              "Prefer deterministic routes when they cover the question."
+            ],
+            "verification_path": "The approved Group Synergy Programme charter provides the owner for each SYN-01..07 workstream, while INIT-11 identifies Waleed Al-Faraj as the overall programme owner and INIT-05 gives the named co-owners for SYN-01."
+          },
+          "traceable": true
+        },
+        "assistant_route": "llm",
+        "orchestration_mode": "llm",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "model": "codex-subscription",
+        "provider": "codex_cli",
+        "public_safe": false,
+        "llm_matched": true,
+        "_orchestrator_force_answer": true,
+        "answer_origin": "llm",
+        "calculation_status": "not_calculated",
+        "review_status": "required",
+        "human_review_required": true,
+        "model_answer_disclosure": "LLM-provided answer; not a governed calculation; human review required.",
+        "answer_status": "answered",
+        "determinism_tier": "derived_insight",
+        "response_sections": {
+          "from_your_data": "The approved synergy charter assigns delivery as follows: • SYN-01 — Logistics insourcing: Group COO. The initiative register names Waleed Al-Faraj with Nasser Al-Dossary. • SYN-02 — IT licences and cloud consolidation: Group CIO. • SYN-03 — Facilities co-location and recharge policy: Group Property. • SYN-04 — Group energy, including PPA and solar: Group COO. • SYN-05 — Packaging category tower: Group Procurement. • SYN-06 — Group insurance programme: Group CFO. • SYN-07 — Finance shared services and AI agents: Group CFO. Overall programme accountability sits with Group COO Waleed Al-Faraj. The charter was approved by ExCo on 24 June 2026 and targets approximately SAR 86M in annual run-rate savings by 2028. These records describe the announced group synergy workstreams; they do not provide deal-by-deal ownership for separate acquisitions.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "32fafe00-5d06-4e2a-b856-a20f99eadfc0"
+        },
+        "executive_blocks": {
+          "verdict": "The approved synergy charter assigns delivery as follows: • SYN-01 — Logistics insourcing: Group COO.",
+          "figures": [
+            "SAR 86M"
+          ],
+          "recommendation": null,
+          "detail": "The initiative register names Waleed Al-Faraj with Nasser Al-Dossary. • SYN-02 — IT licences and cloud consolidation: Group CIO. • SYN-03 — Facilities co-location and recharge policy: Group Property. • SYN-04 — Group energy, including PPA and solar: Group COO. • SYN-05 — Packaging category tower: Group Procurement. • SYN-06 — Group insurance programme: Group CFO. • SYN-07 — Finance shared services and AI agents: Group CFO. Overall programme accountability sits with Group COO Waleed Al-Faraj. The charter was approved by ExCo on 24 June 2026 and targets approximately SAR 86M in annual run-rate savings by 2028. These records describe the announced group synergy workstreams; they do not provide deal-by-deal ownership for separate acquisitions.",
+          "evidence_count": 8,
+          "chart": null
+        },
+        "llm_fallback_attempted": true
+      }
+    }
+  ]
+}

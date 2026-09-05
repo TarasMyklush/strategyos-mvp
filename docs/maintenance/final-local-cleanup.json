@@ -1,0 +1,23 @@
+{
+  "at": "2026-09-05T12:35:51.418851+00:00",
+  "canonical_source_files_verified": 169,
+  "source_digest": "f0f632cde1a8f980d2000c54c2d65dd929019b0d5b463dc48c8a53a8ec88f2e3",
+  "removed": [
+    {
+      "path": "/private/tmp/strategyos-multilingual-model",
+      "bytes": 266907910
+    },
+    {
+      "path": "/private/tmp/strategyos-e5-model",
+      "bytes": 135399430
+    },
+    {
+      "path": "/private/tmp/strategyos-semantic-proof",
+      "bytes": 151067050
+    },
+    {
+      "path": "/private/tmp/strategyos-release-validation",
+      "bytes": 11891013
+    }
+  ]
+}

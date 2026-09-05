@@ -1,0 +1,5 @@
+- heading "new.strategyos.live is blocked" [level=1]:
+  - generic: new.strategyos.live is blocked
+- paragraph: This page has been blocked by Chrome
+- generic: ERR_BLOCKED_BY_CLIENT
+- button "Reload"

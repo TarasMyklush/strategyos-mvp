@@ -1,0 +1,28 @@
+{
+  "meeting_id": "board-ea9377df-6e7d-4ef4-b452-4682262668ea",
+  "snapshot_digest": "8c72e160f8ceec32a3cc583aebd9fe774dd697e1537587b789a922ba356f6aaa",
+  "run_id": "ea9377df-6e7d-4ef4-b452-4682262668ea",
+  "files": {
+    "qa.md": "e3cba32c6131515058ebc0c290004e36589769e0a65f7883b3374b963fc55c21",
+    "manifest.json": "4c699555b09ba96b58b787660a6335378d982ec697990ca1ba9434211f2f8951",
+    "audit_log.json": "e17f9f7c59bd65d9b793d4809e5b4e0c6b0a756ec69bdf12a5eb515408e7d300",
+    "working_capital.md": "f0e929f637d3e2a006b855cc12bf68c8701c216ef8152c937adb0e75eadd663c",
+    "knowledge_graph.json": "6f29cbda14b687032e46406cb91832ef65f845fb0e54a378fad6a76dcc1a135b",
+    "approved-board-context.json": "5846204efcd710c5e4c77ec58a7a0be8a522c9147de41f93205c6381984a6fdc",
+    "governed_release_receipt.json": "cf01aa0855d71ad1fdcbde82d2f2ad37afe4906bdfbf312e738310ef47c2b8ae"
+  },
+  "revenue_answer": {
+    "status": "ok",
+    "matched": true,
+    "answer": "The approved snapshot records Group revenue at 4006.0 SAR M, against checkpoint 3904.0 SAR M. Measurement status: live.",
+    "response_mode": "frozen_board_snapshot",
+    "snapshot_digest": "8c72e160f8ceec32a3cc583aebd9fe774dd697e1537587b789a922ba356f6aaa",
+    "citations": [
+      {
+        "source_path": "board-snapshot://board-ea9377df-6e7d-4ef4-b452-4682262668ea",
+        "locator": "8c72e160f8ceec32a3cc583aebd9fe774dd697e1537587b789a922ba356f6aaa"
+      }
+    ]
+  },
+  "unsupported_question_refused": true
+}

@@ -4,7 +4,7 @@ Assessment date: 2026-09-05. Reviewed baseline: `c03e95816dedf6dedf05778cb725d42
 
 The preview now runs the enriched approved synthetic dataset with durable review state, scoped local semantic retrieval, immutable board records and encrypted inference audit. The register below separates verified corrections from incomplete acceptance. It does not claim a complete enterprise product or a passed factual assistant gate.
 
-The register contains **33 gaps: 8 P0, 21 P1 and 4 P2**. 22 have partial remediation and 6 are closed. These are risk priorities, not a completion percentage.
+The register contains **33 gaps: 8 P0, 21 P1 and 4 P2**. 21 have partial remediation and 7 are closed. These are risk priorities, not a completion percentage.
 
 ## Current scope
 
@@ -27,7 +27,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 | ID | Priority | Area | Gap | Closure |
 |---|---|---|---|---|
 | [G01](#g01) | P0 | Release and data | Live preview lacks the strategy dataset | closed |
-| [G02](#g02) | P0 | Release and data | Local release aligned; remote and hosted release identity remain open | partial |
+| [G02](#g02) | P0 | Release and data | Canonical release and hosted preview identity reconciled | closed |
 | [G03](#g03) | P0 | Quantitative correctness | Zero values disappear from Plan Health | closed |
 | [G04](#g04) | P1 | Quantitative correctness | Drift and direction depend on dataset labels and IDs | partial |
 | [G05](#g05) | P0 | AI assurance | Grounded synthesis accepts fabricated additional numbers | partial |
@@ -78,9 +78,9 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 **Evidence:** [Live run snapshot](<evidence/live-run.json>); [Live question probes](<evidence/live-question-probes.json>).
 
 <a id="g02"></a>
-## G02 · P0 · Local release aligned; remote and hosted release identity remain open
+## G02 · P0 · Canonical release and hosted preview identity reconciled
 
-**Current position:** Preview has an attested code/image/schema/source/run receipt. Canonical main and remote reconciliation remain in progress; production is intentionally unchanged.
+**Current position:** Canonical main and origin contain release 44c9c31, with a passing full CI workflow. The preview receipt binds that revision to its immutable image, schema, approved run and 169-file source digest. Current and pre-change recovery sets are verified; one compatible preview rollback image is retained. Production remains unchanged.
 
 **Impact:** An ordinary main-based deployment can replace newer product behavior with an older build. Review reports, release code, and data are not one reproducible baseline.
 
@@ -92,7 +92,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
-**Evidence:** [Live asset comparison](<evidence/live-access-checks.json>); [Branch deployment workflow](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/.github/workflows/strategyos-branch-deploy.yml#L1>).
+**Evidence:** [Live asset comparison](<evidence/live-access-checks.json>); [Branch deployment workflow](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/.github/workflows/strategyos-branch-deploy.yml#L1>); [Final release and health](<evidence/final-deployment-health.json>); [Release CI](<evidence/ci-release.json>).
 
 <a id="g03"></a>
 ## G03 · P0 · Zero values disappear from Plan Health
@@ -131,7 +131,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g05"></a>
 ## G05 · P0 · Grounded synthesis accepts fabricated additional numbers
 
-**Current position:** Provider quantities and exact source citations are checked against approved evidence with at most one repair. Workbook units, bounded rounding, ambiguous record locations and missing-source wording were corrected after live QA. Rejected answers remain unmatched. Full factual acceptance is not yet established.
+**Current position:** Provider quantities and exact source citations are checked against approved evidence. Explicit workbook currency, percentage and basis-point headings are recognized without cross-column unit inference. Deterministic revenue bridges reconcile all BU and elimination rows. Model output remains review-required; complete semantic claim binding and causal validation are not claimed.
 
 **Impact:** An evidence badge can accompany an unsupported quantitative claim, violating the defining deterministic-number contract.
 
@@ -216,7 +216,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g10"></a>
 ## G10 · P0 · Question-bank reporting does not measure the required answer quality
 
-**Current position:** The fixed stratified 50-question sample completed on revision 4efaf51. It did not pass factual acceptance: source/citation/retrieval and calculation gaps remain explicit. Earlier audit-context and quota-limited attempts are retained separately. Corrected source retrieval and deterministic reconciliation are being retested; no routing-based pass rate is claimed.
+**Current position:** The fixed 50-question c72387d run scored 22/50. Targeted source, guard and deterministic-revenue retests bring the current assessment to 24/50, below 45/50: 14 insufficient-evidence, 10 partial and 2 calculation gaps remain. The current grading names each source response; safe refusals and routing matches are not correctness passes.
 
 **Impact:** A high answered count can be mistaken for the specified 45/50 correct, resolving-citation and zero-fabrication gate.
 
@@ -233,7 +233,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g11"></a>
 ## G11 · P1 · Portable datasets fixed; external-service acceptance remains open
 
-**Current position:** The full suite runs against real PostgreSQL and Neo4j with zero skips. The latest completed service suite passed 1,771 tests. Actual CEO/board UI checks cover login/logout, uploads, durable conversations, source details and immutable reports; factual acceptance remains open.
+**Current position:** The full service suite passed 1,781 tests with zero skips against real PostgreSQL and Neo4j. Actual CEO/board UI checks cover invalid input and recovery, login/logout, uploads, durable conversations, source details and immutable records. Factual acceptance remains open. The report endpoint returns hash-correct text, but navigation is blocked with ERR_BLOCKED_BY_CLIENT in both tested browsers; full UI acceptance is not declared.
 
 **Impact:** A green suite is not evidence that persistence, concurrent approval, current enriched data, browser interactions or frozen-board behavior works.
 
@@ -539,7 +539,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g29"></a>
 ## G29 · P1 · Application rollback is not a tested data recovery plan
 
-**Current position:** An isolated PostgreSQL restore reconciled all recorded run, artifact, decision, conversation and board row digests. Workspace backup integrity was checked. Recovery times are measured observations, not agreed RPO/RTO commitments.
+**Current position:** The final isolated PostgreSQL restore reconciled 123 runs, 726 artifacts, 4 board snapshots, 5 executive thread records and 5 decision events. All 2,337 workspace file hashes and current application/provider configuration archives were verified. Database restore took 116.719 seconds; this is not an agreed RPO/RTO or complete infrastructure recovery certification.
 
 **Impact:** A bad migration, deleted evidence file or host loss can break provenance and recovery even if the container image rolls back.
 

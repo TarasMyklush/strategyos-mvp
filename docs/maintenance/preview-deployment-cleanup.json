@@ -71,9 +71,74 @@
   ],
   "removed_completed_container": "strategyos-remediation-index",
   "kept_revisions": [
-    "7e3d8c1",
-    "86475f8",
-    "b77a10b"
+    "44c9c31",
+    "c72387d"
   ],
-  "backup_directory_preserved": "/opt/strategyos-branch/backups/remediation-20260905"
+  "backup_directory_preserved": "/opt/strategyos-branch/backups/remediation-20260905",
+  "additional_cleanup": {
+    "at": "2026-09-05T12:00:17.718270+00:00",
+    "scope": "Owned intermediate preview builds only",
+    "removed": [
+      "7e3d8c1",
+      "86475f8",
+      "b77a10b",
+      "4efaf51",
+      "68b7516",
+      "f831e72"
+    ],
+    "retained": [
+      "c72387d",
+      "ff3f9c0",
+      "509f47e"
+    ]
+  },
+  "final_cleanup": {
+    "at": "2026-09-05T12:33:54.589786+00:00",
+    "target": "strategyos-branch",
+    "removed_releases": [
+      "ff3f9c0",
+      "509f47e",
+      "7a3ffa8",
+      "76cc372"
+    ],
+    "kept_releases": [
+      "44c9c31",
+      "c72387d"
+    ],
+    "removed_proof_containers": [
+      "strategyos-remediation-restore",
+      "strategyos-remediation-neo4j"
+    ],
+    "removed_intermediate_backup_bytes": 551318625,
+    "preserved_backups": "Original pre-change and final verified recovery sets; intermediate proof metadata remains as audit evidence.",
+    "removed_temporary_helpers": [
+      "record-receipt.py",
+      "postchange-restore.py",
+      "strategyos-preview-incremental.Dockerfile",
+      "release-receipt.py",
+      "deploy-preview.py",
+      "inspect-inference.py",
+      "strategyos-deploy-preview.py",
+      "review-release.py",
+      "semantic-scope.py",
+      "reindex.py",
+      "index-receipt.py",
+      "reload-preview-proxy.py",
+      "final-files-backup.py",
+      "final-restore.py",
+      "clean-intermediate.py",
+      "deploy-remediation.py",
+      "incremental.Dockerfile",
+      "release-review.py",
+      "record_release.py",
+      "qdrant-limit.py",
+      "start-index-worker.py",
+      "runtime-overrides-backup.py",
+      "final-cleanup.py"
+    ],
+    "retained_runtime_overrides": [
+      "remediation-images.json",
+      "qdrant-limits.json"
+    ]
+  }
 }

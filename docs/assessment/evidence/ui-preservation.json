@@ -1,0 +1,68 @@
+{
+  "baseline_revision": "d63fe5b",
+  "release_revision": "44c9c31",
+  "unchanged_html_css_files": 15,
+  "files": [
+    {
+      "path": "strategyos_mvp/static/app.css",
+      "sha256": "8fb8cdf5ddfa3ebf018e3ca1bb2d6e41a703816d6bf627b983b869e0884e6a03"
+    },
+    {
+      "path": "strategyos_mvp/static/architecture-business.html",
+      "sha256": "f135399efe08b92980a68643d2de3f9f398d69f853281a365bec6790adf21dde"
+    },
+    {
+      "path": "strategyos_mvp/static/architecture-technical.html",
+      "sha256": "36fd6e4caca9f2e007dba4aafdf0d93ee4c60ac49f9ff7a84894142e4576069c"
+    },
+    {
+      "path": "strategyos_mvp/static/architecture.css",
+      "sha256": "55580bd3d4a5c12c62d76fc7576ba8d43794a7b3dfb1a9dfda5519d372ebd33b"
+    },
+    {
+      "path": "strategyos_mvp/static/architecture.html",
+      "sha256": "5316a689f5ce5def0a3624e7c1e264ffde9fd1fea4b74aed28831ac3ba0e9e95"
+    },
+    {
+      "path": "strategyos_mvp/static/executive.css",
+      "sha256": "3e9533ca1664fd3e96f3057d6c16738026524c1e9dc72c23d0514f9696d20d74"
+    },
+    {
+      "path": "strategyos_mvp/static/executive.html",
+      "sha256": "5505c9897028bdd99c8f4737cb2fd2a66262ad81f4d9eff451fb780fb2cbb161"
+    },
+    {
+      "path": "strategyos_mvp/static/guide.html",
+      "sha256": "bd4c71e5d6ce7e5e5fd99f5a729a441d9be556675cced6a1322a8c9e0a00584e"
+    },
+    {
+      "path": "strategyos_mvp/static/home.html",
+      "sha256": "e0dc016e231209b4fe0a50ac71c0ee4e47858a774d5be2286a1bf5e8e86dc37b"
+    },
+    {
+      "path": "strategyos_mvp/static/index.html",
+      "sha256": "2afbbb8b8cb325fa7828bc301a8dc1a091a150f2be68bcd9354093e8354fa3bc"
+    },
+    {
+      "path": "strategyos_mvp/static/plan.html",
+      "sha256": "82b4f359785d5ef5d35d52766065b2503960a968057e758796a77d27997834d8"
+    },
+    {
+      "path": "strategyos_mvp/static/styles.css",
+      "sha256": "4b4f9b9d3238a68f3e0ff78bcf23fad2c7bc7c4aa59ff43d4a8b631dfb482c1b"
+    },
+    {
+      "path": "strategyos_mvp/twins/static/ceo.html",
+      "sha256": "6c9c3092262a1ee882a578ce3870753902c1e890f65d758026e66ba82eab135a"
+    },
+    {
+      "path": "strategyos_mvp/twins/static/cfo.html",
+      "sha256": "7f194d8b1d98511b32175e306cdc5cf978c942d1b9215fad13eded2c7a18d864"
+    },
+    {
+      "path": "strategyos_mvp/twins/static/gm.html",
+      "sha256": "79b7bb3c686c2863b4fb55e1617b896bc5d1e717549933e4cab4d3cb362c0dbc"
+    }
+  ],
+  "scope": "HTML and CSS are byte-identical. Functional JavaScript changes cover validation, session handling, evidence labels and corrected data; this is not a pixel-diff assertion over changing business content."
+}

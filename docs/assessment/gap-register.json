@@ -37,9 +37,9 @@
       "id": "G02",
       "priority": "P0",
       "domain": "Release and data",
-      "title": "Local release aligned; remote and hosted release identity remain open",
+      "title": "Canonical release and hosted preview identity reconciled",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
-      "observation": "Preview has an attested code/image/schema/source/run receipt. Canonical main and remote reconciliation remain in progress; production is intentionally unchanged.",
+      "observation": "Canonical main and origin contain release 44c9c31, with a passing full CI workflow. The preview receipt binds that revision to its immutable image, schema, approved run and 169-file source digest. Current and pre-change recovery sets are verified; one compatible preview rollback image is retained. Production remains unchanged.",
       "impact": "An ordinary main-based deployment can replace newer product behavior with an older build. Review reports, release code, and data are not one reproducible baseline.",
       "action": "Choose one release branch, reconcile the candidate through review, and record commit SHA, immutable image digest, schema version, source-pack hash, run ID and provider configuration together. Expose this manifest to operators.",
       "acceptance": "A clean checkout of the designated release recreates the approved application and selected data contract; rollback explicitly covers code, schema compatibility and selected run.",
@@ -54,9 +54,19 @@
           "label": "Branch deployment workflow",
           "path": "https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/.github/workflows/strategyos-branch-deploy.yml#L1",
           "line": 1
+        },
+        {
+          "label": "Final release and health",
+          "path": "docs/assessment/evidence/final-deployment-health.json",
+          "line": null
+        },
+        {
+          "label": "Release CI",
+          "path": "docs/assessment/evidence/ci-release.json",
+          "line": null
         }
       ],
-      "closure_status": "partial",
+      "closure_status": "closed",
       "baseline_observation": "Remote main and local main both resolve to 9fa5316 (July 22). The newer fix/hermes-cross-surface-intent-contract branch resolves to c03e958 (August 25), 121 commits ahead and changing 90 files. The live executive.js is byte-for-byte identical to the newer branch, and differs from main. This verifies the frontend asset, not the entire deployed image or backend revision."
     },
     {
@@ -117,7 +127,7 @@
       "domain": "AI assurance",
       "title": "Grounded synthesis accepts fabricated additional numbers",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
-      "observation": "Provider quantities and exact source citations are checked against approved evidence with at most one repair. Workbook units, bounded rounding, ambiguous record locations and missing-source wording were corrected after live QA. Rejected answers remain unmatched. Full factual acceptance is not yet established.",
+      "observation": "Provider quantities and exact source citations are checked against approved evidence. Explicit workbook currency, percentage and basis-point headings are recognized without cross-column unit inference. Deterministic revenue bridges reconcile all BU and elimination rows. Model output remains review-required; complete semantic claim binding and causal validation are not claimed.",
       "impact": "An evidence badge can accompany an unsupported quantitative claim, violating the defining deterministic-number contract.",
       "action": "Represent each quantitative claim as a typed reference to an approved fact or calculation. Reject unbound numbers in every model-generated field, including summaries, charts and captions; validate causal claims separately.",
       "acceptance": "Adversarial provider responses retaining valid numbers while adding, changing or attaching false units, amounts or causes are rejected. All displayed numerical cells resolve to an approved calculation.",
@@ -267,7 +277,7 @@
       "domain": "Validation",
       "title": "Question-bank reporting does not measure the required answer quality",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
-      "observation": "The fixed stratified 50-question sample completed on revision 4efaf51. It did not pass factual acceptance: source/citation/retrieval and calculation gaps remain explicit. Earlier audit-context and quota-limited attempts are retained separately. Corrected source retrieval and deterministic reconciliation are being retested; no routing-based pass rate is claimed.",
+      "observation": "The fixed 50-question c72387d run scored 22/50. Targeted source, guard and deterministic-revenue retests bring the current assessment to 24/50, below 45/50: 14 insufficient-evidence, 10 partial and 2 calculation gaps remain. The current grading names each source response; safe refusals and routing matches are not correctness passes.",
       "impact": "A high answered count can be mistaken for the specified 45/50 correct, resolving-citation and zero-fabrication gate.",
       "action": "Add held-out reference answers, calculation tolerances, actual citation resolution, relevance grading, theme-stratified sampling and per-question adjudication. Bind reports to build, source pack and model versions.",
       "acceptance": "The latest approved release answers at least 45 of 50 questions sampled across all 18 themes correctly with resolving citations and no fabricated numbers; publish the failed and refused questions separately.",
@@ -293,7 +303,7 @@
       "domain": "Validation",
       "title": "Portable datasets fixed; external-service acceptance remains open",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
-      "observation": "The full suite runs against real PostgreSQL and Neo4j with zero skips. The latest completed service suite passed 1,771 tests. Actual CEO/board UI checks cover login/logout, uploads, durable conversations, source details and immutable reports; factual acceptance remains open.",
+      "observation": "The full service suite passed 1,781 tests with zero skips against real PostgreSQL and Neo4j. Actual CEO/board UI checks cover invalid input and recovery, login/logout, uploads, durable conversations, source details and immutable records. Factual acceptance remains open. The report endpoint returns hash-correct text, but navigation is blocked with ERR_BLOCKED_BY_CLIENT in both tested browsers; full UI acceptance is not declared.",
       "impact": "A green suite is not evidence that persistence, concurrent approval, current enriched data, browser interactions or frozen-board behavior works.",
       "action": "Vendor portable sanitized enrichment fixtures, use explicit skips for genuinely optional checks, and add mandatory isolated integration and browser acceptance jobs for the release.",
       "acceptance": "Clean CI executes the enrichment assertions, service-dependent security/transaction tests, and required CEO/board journeys; unexpected skips fail the release gate.",
@@ -769,7 +779,7 @@
       "domain": "Operations",
       "title": "Application rollback is not a tested data recovery plan",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
-      "observation": "An isolated PostgreSQL restore reconciled all recorded run, artifact, decision, conversation and board row digests. Workspace backup integrity was checked. Recovery times are measured observations, not agreed RPO/RTO commitments.",
+      "observation": "The final isolated PostgreSQL restore reconciled 123 runs, 726 artifacts, 4 board snapshots, 5 executive thread records and 5 decision events. All 2,337 workspace file hashes and current application/provider configuration archives were verified. Database restore took 116.719 seconds; this is not an agreed RPO/RTO or complete infrastructure recovery certification.",
       "impact": "A bad migration, deleted evidence file or host loss can break provenance and recovery even if the container image rolls back.",
       "action": "Define the authoritative recovery set, encrypted scheduled backups, retention, restore procedures and forward/backward schema compatibility; treat Neo4j/Qdrant as rebuildable projections where appropriate.",
       "acceptance": "Restore into a clean environment and reconcile approved runs, evidence hashes, decisions and board snapshots within agreed recovery objectives.",

@@ -1,0 +1,9 @@
+{
+  "meeting_id": "qa-final-509f47e-ab0bdd6d-a52e-468a-be85-59021fc38559",
+  "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+  "snapshot_digest": "71c09cd8a7dfd290a93dcc19f8b984bd53ba845dcdfe82f352ef6960ddd183da",
+  "route": "/api/board/meetings/qa-final-509f47e-ab0bdd6d-a52e-468a-be85-59021fc38559/files/qa.md",
+  "bytes": 5735,
+  "sha256": "e3cba32c6131515058ebc0c290004e36589769e0a65f7883b3374b963fc55c21",
+  "purpose": "Owned synthetic QA meeting verifies future closures expose read-only frozen next actions and skip empty optional Q&A reports; older immutable meetings are unchanged."
+}

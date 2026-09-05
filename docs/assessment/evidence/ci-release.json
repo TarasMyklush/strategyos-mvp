@@ -1,0 +1,257 @@
+{
+  "conclusion": "success",
+  "jobs": [
+    {
+      "completedAt": "2026-09-05T12:26:32Z",
+      "conclusion": "success",
+      "databaseId": 101305496123,
+      "name": "Python tests",
+      "startedAt": "2026-09-05T12:20:36Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-09-05T12:20:37Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-09-05T12:20:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:21:04Z",
+          "conclusion": "success",
+          "name": "Initialize containers",
+          "number": 2,
+          "startedAt": "2026-09-05T12:20:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:21:05Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 3,
+          "startedAt": "2026-09-05T12:21:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:21:08Z",
+          "conclusion": "success",
+          "name": "Set up Python",
+          "number": 4,
+          "startedAt": "2026-09-05T12:21:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:21:19Z",
+          "conclusion": "success",
+          "name": "Install OCR runtime",
+          "number": 5,
+          "startedAt": "2026-09-05T12:21:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:21:43Z",
+          "conclusion": "success",
+          "name": "Install package and test runner",
+          "number": 6,
+          "startedAt": "2026-09-05T12:21:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:26:30Z",
+          "conclusion": "success",
+          "name": "Run tests",
+          "number": 7,
+          "startedAt": "2026-09-05T12:21:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:26:30Z",
+          "conclusion": "success",
+          "name": "Reject skipped or empty service proofs",
+          "number": 8,
+          "startedAt": "2026-09-05T12:26:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:26:30Z",
+          "conclusion": "success",
+          "name": "Post Set up Python",
+          "number": 14,
+          "startedAt": "2026-09-05T12:26:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:26:30Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 15,
+          "startedAt": "2026-09-05T12:26:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:26:31Z",
+          "conclusion": "success",
+          "name": "Stop containers",
+          "number": 16,
+          "startedAt": "2026-09-05T12:26:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:26:31Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 17,
+          "startedAt": "2026-09-05T12:26:31Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/33965750451/job/101305496123"
+    },
+    {
+      "completedAt": "2026-09-05T12:20:40Z",
+      "conclusion": "success",
+      "databaseId": 101305496244,
+      "name": "Compose contract",
+      "startedAt": "2026-09-05T12:20:36Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-09-05T12:20:37Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-09-05T12:20:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:20:38Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-09-05T12:20:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:20:38Z",
+          "conclusion": "success",
+          "name": "Generate disposable compose env",
+          "number": 3,
+          "startedAt": "2026-09-05T12:20:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:20:39Z",
+          "conclusion": "success",
+          "name": "Validate source-build compose",
+          "number": 4,
+          "startedAt": "2026-09-05T12:20:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:20:39Z",
+          "conclusion": "success",
+          "name": "Validate release-image compose",
+          "number": 5,
+          "startedAt": "2026-09-05T12:20:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:20:39Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 10,
+          "startedAt": "2026-09-05T12:20:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:20:39Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-09-05T12:20:39Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/33965750451/job/101305496244"
+    },
+    {
+      "completedAt": "2026-09-05T12:27:49Z",
+      "conclusion": "success",
+      "databaseId": 101306240245,
+      "name": "Docker build",
+      "startedAt": "2026-09-05T12:26:34Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-09-05T12:26:36Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-09-05T12:26:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:26:37Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-09-05T12:26:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:26:43Z",
+          "conclusion": "success",
+          "name": "Set up Buildx",
+          "number": 3,
+          "startedAt": "2026-09-05T12:26:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:27:45Z",
+          "conclusion": "success",
+          "name": "Build image",
+          "number": 4,
+          "startedAt": "2026-09-05T12:26:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:27:46Z",
+          "conclusion": "success",
+          "name": "Post Build image",
+          "number": 6,
+          "startedAt": "2026-09-05T12:27:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:27:47Z",
+          "conclusion": "success",
+          "name": "Post Set up Buildx",
+          "number": 7,
+          "startedAt": "2026-09-05T12:27:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:27:48Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 8,
+          "startedAt": "2026-09-05T12:27:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-05T12:27:48Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 9,
+          "startedAt": "2026-09-05T12:27:48Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/33965750451/job/101306240245"
+    }
+  ],
+  "status": "completed",
+  "revision": "44c9c3113dd8690e92cc004181de09d86900f0d7",
+  "url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/33965750451"
+}

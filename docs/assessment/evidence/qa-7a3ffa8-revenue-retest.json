@@ -1,0 +1,671 @@
+{
+  "deployment": {
+    "environment": "branch-preview",
+    "application_revision": "7a3ffa8",
+    "manifest_application_matches": true,
+    "image_digest": "sha256:a3f10d4fd6ae4ed7c4b0ee864b301d9d4001e66518187e235e8d64166dcb3b6d",
+    "schema_sha256": "f93974ba304b6a490ff6794f165df85c93b1c65d4ec8d313fff743f8f36aa343",
+    "selected_run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+    "manifest_run_matches": true,
+    "source_digest": "f0f632cde1a8f980d2000c54c2d65dd929019b0d5b463dc48c8a53a8ec88f2e3",
+    "source_classification": "synthetic_demo",
+    "source_period": "2026-06",
+    "source_search": {
+      "status": "ready",
+      "collection": "strategyos_multilingual_e5_761b726d_384_v1",
+      "point_count": 37537,
+      "reused_points": 18880,
+      "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
+    },
+    "data_region": "Not attested",
+    "model_provider": "codex_cli",
+    "model": "codex-subscription",
+    "model_processing": "External provider; residency not attested",
+    "run_policy": "external-approved",
+    "approved_external_modes": [
+      "object_storage_sync",
+      "model_provider_use"
+    ],
+    "external_business_connections": "deferred",
+    "fallback_provider": "none"
+  },
+  "scope": "Live authenticated API complement to separate human-style UI QA. Matched is routing status, not factual correctness.",
+  "rows": [
+    {
+      "id": "2",
+      "theme": "Revenue & Growth",
+      "question": "Break down this quarter's revenue by segment — which segments are growing and which are shrinking?",
+      "http": 200,
+      "duration_seconds": 15.307,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "qa_engine",
+        "requested_mode": "auto",
+        "question": "Break down this quarter's revenue by segment — which segments are growing and which are shrinking?",
+        "persona": "ceo",
+        "answered_by": "tabular",
+        "matched": true,
+        "answer": "Q2 2026 revenue by business unit, compared with Q1 2026 (derived as H1 minus Q2). Group revenue: SAR 2,037.00M; prior quarter: SAR 1,969.00M; movement: SAR +68.00M. Tamween Pharma Distribution: Q2 SAR 645.00M; Q1 SAR 623.00M; growing, SAR +22.00M (+3.53%). Mizan Pharma Manufacturing: Q2 SAR 381.00M; Q1 SAR 367.00M; growing, SAR +14.00M (+3.81%). Mizan E-Pharmacy: Q2 SAR 158.00M; Q1 SAR 146.00M; growing, SAR +12.00M (+8.22%). Mizan Digital Health: Q2 SAR 91.00M; Q1 SAR 85.00M; growing, SAR +6.00M (+7.06%). Mizan Pharma Logistics: Q2 SAR 134.00M; Q1 SAR 128.00M; growing, SAR +6.00M (+4.69%). Mizan Healthcare Services: Q2 SAR 168.00M; Q1 SAR 163.00M; growing, SAR +5.00M (+3.07%). Mizan Capital: Q2 SAR 62.00M; Q1 SAR 59.00M; growing, SAR +3.00M (+5.08%). Mizan Pharmacy Retail: Q2 SAR 419.00M; Q1 SAR 419.00M; flat, SAR +0.00M (+0.00%). Consolidation eliminations: Q2 SAR -21.00M; Q1 SAR -21.00M. All BU rows plus eliminations reconcile to the reported group totals. Segments here mean business units; this is a quarter-on-quarter comparison, not year-on-year.",
+        "basis": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions.",
+        "why": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions.",
+        "citations": [
+          {
+            "source_path": "19_Document_Vault/Q2_2026_Group_Flash_Results.xlsx",
+            "source_hash": "74e9f2f05f95fcd528c3f9173b970dc49b030de50950e50a3babbf57da382831",
+            "locator": "Q2_Flash!Excel rows 2-11",
+            "excerpt": "Complete BU revenue, budget, eliminations and group reconciliation inputs.",
+            "resolved": true,
+            "source_label": "Group Flash Results · Decision documents"
+          }
+        ],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "Break down this quarter's revenue by segment — which segments are growing and which are shrinking?",
+          "mode": "qa_engine",
+          "matched": true,
+          "forced_answer": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "qa_engine"
+          },
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "ace898b0-ffe3-4bce-9acd-92d3efe32510",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "ace898b0-ffe3-4bce-9acd-92d3efe32510",
+        "hallucination_risk": {
+          "level": "none",
+          "score": 0.0,
+          "factors": [
+            {
+              "name": "deterministic_path",
+              "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Replay the cited basis and calculations to verify the answer."
+          ],
+          "verification_path": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions."
+        },
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions."
+          },
+          "traceable": true
+        },
+        "assistant_route": "qa_engine",
+        "orchestration_mode": "qa_engine",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "available": true,
+        "value": {
+          "units": [
+            {
+              "Q2 Revenue (SAR M)": "381",
+              "Q2 Budget": "373",
+              "H1 Revenue": "748",
+              "H1 Budget": "733",
+              "name": "Mizan Pharma Manufacturing",
+              "commentary": "Specialty mix ahead; Line 8 on track Q4",
+              "q1": "367",
+              "quarter_change": "14",
+              "quarter_growth_pct": "3.814713896457765667574931880",
+              "budget_change": "15"
+            },
+            {
+              "Q2 Revenue (SAR M)": "645",
+              "Q2 Budget": "607",
+              "H1 Revenue": "1268",
+              "H1 Budget": "1194",
+              "name": "Tamween Pharma Distribution",
+              "commentary": "NUPCO surge; margin behind on cost events — remediation underway",
+              "q1": "623",
+              "quarter_change": "22",
+              "quarter_growth_pct": "3.531300160513643659711075441",
+              "budget_change": "74"
+            },
+            {
+              "Q2 Revenue (SAR M)": "134",
+              "Q2 Budget": "130",
+              "H1 Revenue": "262",
+              "H1 Budget": "256",
+              "name": "Mizan Pharma Logistics",
+              "commentary": "Dammam hub commissioned 28-Jun",
+              "q1": "128",
+              "quarter_change": "6",
+              "quarter_growth_pct": "4.687500",
+              "budget_change": "6"
+            },
+            {
+              "Q2 Revenue (SAR M)": "419",
+              "Q2 Budget": "430",
+              "H1 Revenue": "838",
+              "H1 Budget": "846",
+              "name": "Mizan Pharmacy Retail",
+              "commentary": "Eid footfall soft; clinical counters rolling out",
+              "q1": "419",
+              "quarter_change": "0",
+              "quarter_growth_pct": "0",
+              "budget_change": "-8"
+            },
+            {
+              "Q2 Revenue (SAR M)": "158",
+              "Q2 Budget": "148",
+              "H1 Revenue": "304",
+              "H1 Budget": "290",
+              "name": "Mizan E-Pharmacy",
+              "commentary": "Volume ahead; delivery price war compressing margin",
+              "q1": "146",
+              "quarter_change": "12",
+              "quarter_growth_pct": "8.219178082191780821917808219",
+              "budget_change": "14"
+            },
+            {
+              "Q2 Revenue (SAR M)": "91",
+              "Q2 Budget": "87",
+              "H1 Revenue": "176",
+              "H1 Budget": "171",
+              "name": "Mizan Digital Health",
+              "commentary": "MAU 920k; hiring lag flatters margin",
+              "q1": "85",
+              "quarter_change": "6",
+              "quarter_growth_pct": "7.058823529411764705882352941",
+              "budget_change": "5"
+            },
+            {
+              "Q2 Revenue (SAR M)": "168",
+              "Q2 Budget": "171",
+              "H1 Revenue": "331",
+              "H1 Budget": "336",
+              "name": "Mizan Healthcare Services",
+              "commentary": "Cardiology consultant gap persists",
+              "q1": "163",
+              "quarter_change": "5",
+              "quarter_growth_pct": "3.067484662576687116564417178",
+              "budget_change": "-5"
+            },
+            {
+              "Q2 Revenue (SAR M)": "62",
+              "Q2 Budget": "60",
+              "H1 Revenue": "121",
+              "H1 Budget": "118",
+              "name": "Mizan Capital",
+              "commentary": "MTM gains",
+              "q1": "59",
+              "quarter_change": "3",
+              "quarter_growth_pct": "5.084745762711864406779661017",
+              "budget_change": "3"
+            }
+          ],
+          "eliminations": {
+            "Q2 Revenue (SAR M)": "-21",
+            "Q2 Budget": "-20",
+            "H1 Revenue": "-42",
+            "H1 Budget": "-40",
+            "name": "Eliminations",
+            "commentary": "",
+            "q1": "-21",
+            "quarter_change": "0",
+            "quarter_growth_pct": null,
+            "budget_change": "-2"
+          },
+          "group": {
+            "Q2 Revenue (SAR M)": "2037",
+            "Q2 Budget": "1986",
+            "H1 Revenue": "4006",
+            "H1 Budget": "3904",
+            "name": "GROUP (bottom-up)",
+            "commentary": "See Reconciliation sheet in BU_Group_Budget for bridge to strategy headline margin",
+            "q1": "1969",
+            "quarter_change": "68",
+            "quarter_growth_pct": "3.453529710512950736414423565",
+            "budget_change": "102"
+          }
+        },
+        "intent": "quarterly_revenue",
+        "answer_origin": "governed",
+        "human_review_required": false,
+        "determinism_tier": "governed_fact",
+        "response_sections": {
+          "from_your_data": "Q2 2026 revenue by business unit, compared with Q1 2026 (derived as H1 minus Q2). Group revenue: SAR 2,037.00M; prior quarter: SAR 1,969.00M; movement: SAR +68.00M. Tamween Pharma Distribution: Q2 SAR 645.00M; Q1 SAR 623.00M; growing, SAR +22.00M (+3.53%). Mizan Pharma Manufacturing: Q2 SAR 381.00M; Q1 SAR 367.00M; growing, SAR +14.00M (+3.81%). Mizan E-Pharmacy: Q2 SAR 158.00M; Q1 SAR 146.00M; growing, SAR +12.00M (+8.22%). Mizan Digital Health: Q2 SAR 91.00M; Q1 SAR 85.00M; growing, SAR +6.00M (+7.06%). Mizan Pharma Logistics: Q2 SAR 134.00M; Q1 SAR 128.00M; growing, SAR +6.00M (+4.69%). Mizan Healthcare Services: Q2 SAR 168.00M; Q1 SAR 163.00M; growing, SAR +5.00M (+3.07%). Mizan Capital: Q2 SAR 62.00M; Q1 SAR 59.00M; growing, SAR +3.00M (+5.08%). Mizan Pharmacy Retail: Q2 SAR 419.00M; Q1 SAR 419.00M; flat, SAR +0.00M (+0.00%). Consolidation eliminations: Q2 SAR -21.00M; Q1 SAR -21.00M. All BU rows plus eliminations reconcile to the reported group totals. Segments here mean business units; this is a quarter-on-quarter comparison, not year-on-year.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "ace898b0-ffe3-4bce-9acd-92d3efe32510"
+        },
+        "executive_blocks": {
+          "verdict": "Q2 2026 revenue by business unit, compared with Q1 2026 (derived as H1 minus Q2).",
+          "figures": [
+            "SAR 2,037.00M",
+            "SAR 1,969.00M",
+            "SAR 645.00M",
+            "SAR 623.00M"
+          ],
+          "recommendation": null,
+          "detail": "Group revenue: SAR 2,037.00M; prior quarter: SAR 1,969.00M; movement: SAR +68.00M. Tamween Pharma Distribution: Q2 SAR 645.00M; Q1 SAR 623.00M; growing, SAR +22.00M (+3.53%). Mizan Pharma Manufacturing: Q2 SAR 381.00M; Q1 SAR 367.00M; growing, SAR +14.00M (+3.81%). Mizan E-Pharmacy: Q2 SAR 158.00M; Q1 SAR 146.00M; growing, SAR +12.00M (+8.22%). Mizan Digital Health: Q2 SAR 91.00M; Q1 SAR 85.00M; growing, SAR +6.00M (+7.06%). Mizan Pharma Logistics: Q2 SAR 134.00M; Q1 SAR 128.00M; growing, SAR +6.00M (+4.69%). Mizan Healthcare Services: Q2 SAR 168.00M; Q1 SAR 163.00M; growing, SAR +5.00M (+3.07%). Mizan Capital: Q2 SAR 62.00M; Q1 SAR 59.00M; growing, SAR +3.00M (+5.08%). Mizan Pharmacy Retail: Q2 SAR 419.00M; Q1 SAR 419.00M; flat, SAR +0.00M (+0.00%). Consolidation eliminations: Q2 SAR -21.00M; Q1 SAR -21.00M. All BU rows plus eliminations reconcile to the reported group totals. Segments here mean business units; this is a quarter-on-quarter comparison, not year-on-year.",
+          "evidence_count": 1,
+          "chart": null
+        }
+      }
+    },
+    {
+      "id": "3",
+      "theme": "Revenue & Growth",
+      "question": "What were the key movers of revenue vs budget this half — up and down, ranked by impact?",
+      "http": 200,
+      "duration_seconds": 0.406,
+      "payload": {
+        "status": "ok",
+        "run_id": "ab0bdd6d-a52e-468a-be85-59021fc38559",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "qa_engine",
+        "requested_mode": "auto",
+        "question": "What were the key movers of revenue vs budget this half — up and down, ranked by impact?",
+        "persona": "ceo",
+        "answered_by": "tabular",
+        "matched": true,
+        "answer": "H1 2026 group revenue: SAR 4,006.00M actual versus SAR 3,904.00M budget, a SAR +102.00M movement. Business-unit movements ranked by absolute impact: Tamween Pharma Distribution: SAR +74.00M (actual 1,268.00M; budget 1,194.00M). Source commentary: NUPCO surge; margin behind on cost events — remediation underway. Mizan Pharma Manufacturing: SAR +15.00M (actual 748.00M; budget 733.00M). Source commentary: Specialty mix ahead; Line 8 on track Q4. Mizan E-Pharmacy: SAR +14.00M (actual 304.00M; budget 290.00M). Source commentary: Volume ahead; delivery price war compressing margin. Mizan Pharmacy Retail: SAR -8.00M (actual 838.00M; budget 846.00M). Source commentary: Eid footfall soft; clinical counters rolling out. Mizan Pharma Logistics: SAR +6.00M (actual 262.00M; budget 256.00M). Source commentary: Dammam hub commissioned 28-Jun. Mizan Digital Health: SAR +5.00M (actual 176.00M; budget 171.00M). Source commentary: MAU 920k; hiring lag flatters margin. Mizan Healthcare Services: SAR -5.00M (actual 331.00M; budget 336.00M). Source commentary: Cardiology consultant gap persists. Mizan Capital: SAR +3.00M (actual 121.00M; budget 118.00M). Source commentary: MTM gains. Consolidation eliminations contribute SAR -2.00M. The complete BU bridge plus eliminations reconciles to the group movement. Source commentary is qualitative context, not a quantified causal allocation.",
+        "basis": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions.",
+        "why": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions.",
+        "citations": [
+          {
+            "source_path": "19_Document_Vault/Q2_2026_Group_Flash_Results.xlsx",
+            "source_hash": "74e9f2f05f95fcd528c3f9173b970dc49b030de50950e50a3babbf57da382831",
+            "locator": "Q2_Flash!Excel rows 2-11",
+            "excerpt": "Complete BU revenue, budget, eliminations and group reconciliation inputs.",
+            "resolved": true,
+            "source_label": "Group Flash Results · Decision documents"
+          }
+        ],
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "trace": {
+          "persona": "ceo",
+          "question": "What were the key movers of revenue vs budget this half — up and down, ranked by impact?",
+          "mode": "qa_engine",
+          "matched": true,
+          "forced_answer": true,
+          "prompts": {
+            "role": {
+              "prompt_id": "role:ceo:v1",
+              "persona": "ceo",
+              "display_name": "CEO Assistant",
+              "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+              "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+              "goals": [
+                "Maintain strategic plan health",
+                "Deliver accurate board narrative",
+                "Ensure cross-functional alignment",
+                "Identify and escalate strategic risks"
+              ],
+              "kpis_owned": [
+                "strategic_objectives",
+                "plan_health",
+                "board_narrative"
+              ]
+            },
+            "scenario": null
+          },
+          "deterministic_boundary": {
+            "deterministic_routes": [
+              "persona_deterministic",
+              "scenario",
+              "qa_engine"
+            ],
+            "llm_route": "llm",
+            "selected_mode": "qa_engine"
+          },
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions."
+          },
+          "audit_store": {
+            "kind": "process_local_deque",
+            "durable": false,
+            "max_entries": 1000
+          },
+          "audit_trail_id": "22a7b29e-f6fe-41ad-9d2e-d16943d82e13",
+          "entrypoint_context": {
+            "active_persona": "ceo"
+          }
+        },
+        "prompt_contracts": {
+          "role": {
+            "prompt_id": "role:ceo:v1",
+            "persona": "ceo",
+            "display_name": "CEO Assistant",
+            "communication_style": "Strategic, big-picture focus. Concise executive summaries. Prioritizes board narrative, plan health, and long-term objectives.",
+            "authority": "Request any data from any twin. Escalate to human executive for strategic decisions, major investments, and board-level approvals.",
+            "goals": [
+              "Maintain strategic plan health",
+              "Deliver accurate board narrative",
+              "Ensure cross-functional alignment",
+              "Identify and escalate strategic risks"
+            ],
+            "kpis_owned": [
+              "strategic_objectives",
+              "plan_health",
+              "board_narrative"
+            ]
+          },
+          "scenario": null
+        },
+        "audit_trail_id": "22a7b29e-f6fe-41ad-9d2e-d16943d82e13",
+        "hallucination_risk": {
+          "level": "none",
+          "score": 0.0,
+          "factors": [
+            {
+              "name": "deterministic_path",
+              "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Replay the cited basis and calculations to verify the answer."
+          ],
+          "verification_path": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions."
+        },
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Decimal arithmetic on all source rows. H1 = Q1 + Q2; movements are actual minus comparator. Every source column reconciles across BUs and eliminations before an answer is produced. Amounts are SAR millions."
+          },
+          "traceable": true
+        },
+        "assistant_route": "qa_engine",
+        "orchestration_mode": "qa_engine",
+        "llm_status": {
+          "enabled": true,
+          "provider": "codex_cli",
+          "model": "codex-subscription"
+        },
+        "assistant_context": {
+          "active_persona": "ceo"
+        },
+        "available": true,
+        "value": {
+          "units": [
+            {
+              "Q2 Revenue (SAR M)": "381",
+              "Q2 Budget": "373",
+              "H1 Revenue": "748",
+              "H1 Budget": "733",
+              "name": "Mizan Pharma Manufacturing",
+              "commentary": "Specialty mix ahead; Line 8 on track Q4",
+              "q1": "367",
+              "quarter_change": "14",
+              "quarter_growth_pct": "3.814713896457765667574931880",
+              "budget_change": "15"
+            },
+            {
+              "Q2 Revenue (SAR M)": "645",
+              "Q2 Budget": "607",
+              "H1 Revenue": "1268",
+              "H1 Budget": "1194",
+              "name": "Tamween Pharma Distribution",
+              "commentary": "NUPCO surge; margin behind on cost events — remediation underway",
+              "q1": "623",
+              "quarter_change": "22",
+              "quarter_growth_pct": "3.531300160513643659711075441",
+              "budget_change": "74"
+            },
+            {
+              "Q2 Revenue (SAR M)": "134",
+              "Q2 Budget": "130",
+              "H1 Revenue": "262",
+              "H1 Budget": "256",
+              "name": "Mizan Pharma Logistics",
+              "commentary": "Dammam hub commissioned 28-Jun",
+              "q1": "128",
+              "quarter_change": "6",
+              "quarter_growth_pct": "4.687500",
+              "budget_change": "6"
+            },
+            {
+              "Q2 Revenue (SAR M)": "419",
+              "Q2 Budget": "430",
+              "H1 Revenue": "838",
+              "H1 Budget": "846",
+              "name": "Mizan Pharmacy Retail",
+              "commentary": "Eid footfall soft; clinical counters rolling out",
+              "q1": "419",
+              "quarter_change": "0",
+              "quarter_growth_pct": "0",
+              "budget_change": "-8"
+            },
+            {
+              "Q2 Revenue (SAR M)": "158",
+              "Q2 Budget": "148",
+              "H1 Revenue": "304",
+              "H1 Budget": "290",
+              "name": "Mizan E-Pharmacy",
+              "commentary": "Volume ahead; delivery price war compressing margin",
+              "q1": "146",
+              "quarter_change": "12",
+              "quarter_growth_pct": "8.219178082191780821917808219",
+              "budget_change": "14"
+            },
+            {
+              "Q2 Revenue (SAR M)": "91",
+              "Q2 Budget": "87",
+              "H1 Revenue": "176",
+              "H1 Budget": "171",
+              "name": "Mizan Digital Health",
+              "commentary": "MAU 920k; hiring lag flatters margin",
+              "q1": "85",
+              "quarter_change": "6",
+              "quarter_growth_pct": "7.058823529411764705882352941",
+              "budget_change": "5"
+            },
+            {
+              "Q2 Revenue (SAR M)": "168",
+              "Q2 Budget": "171",
+              "H1 Revenue": "331",
+              "H1 Budget": "336",
+              "name": "Mizan Healthcare Services",
+              "commentary": "Cardiology consultant gap persists",
+              "q1": "163",
+              "quarter_change": "5",
+              "quarter_growth_pct": "3.067484662576687116564417178",
+              "budget_change": "-5"
+            },
+            {
+              "Q2 Revenue (SAR M)": "62",
+              "Q2 Budget": "60",
+              "H1 Revenue": "121",
+              "H1 Budget": "118",
+              "name": "Mizan Capital",
+              "commentary": "MTM gains",
+              "q1": "59",
+              "quarter_change": "3",
+              "quarter_growth_pct": "5.084745762711864406779661017",
+              "budget_change": "3"
+            }
+          ],
+          "eliminations": {
+            "Q2 Revenue (SAR M)": "-21",
+            "Q2 Budget": "-20",
+            "H1 Revenue": "-42",
+            "H1 Budget": "-40",
+            "name": "Eliminations",
+            "commentary": "",
+            "q1": "-21",
+            "quarter_change": "0",
+            "quarter_growth_pct": null,
+            "budget_change": "-2"
+          },
+          "group": {
+            "Q2 Revenue (SAR M)": "2037",
+            "Q2 Budget": "1986",
+            "H1 Revenue": "4006",
+            "H1 Budget": "3904",
+            "name": "GROUP (bottom-up)",
+            "commentary": "See Reconciliation sheet in BU_Group_Budget for bridge to strategy headline margin",
+            "q1": "1969",
+            "quarter_change": "68",
+            "quarter_growth_pct": "3.453529710512950736414423565",
+            "budget_change": "102"
+          }
+        },
+        "intent": "quarterly_revenue",
+        "answer_origin": "governed",
+        "human_review_required": false,
+        "determinism_tier": "governed_fact",
+        "response_sections": {
+          "from_your_data": "H1 2026 group revenue: SAR 4,006.00M actual versus SAR 3,904.00M budget, a SAR +102.00M movement. Business-unit movements ranked by absolute impact: Tamween Pharma Distribution: SAR +74.00M (actual 1,268.00M; budget 1,194.00M). Source commentary: NUPCO surge; margin behind on cost events — remediation underway. Mizan Pharma Manufacturing: SAR +15.00M (actual 748.00M; budget 733.00M). Source commentary: Specialty mix ahead; Line 8 on track Q4. Mizan E-Pharmacy: SAR +14.00M (actual 304.00M; budget 290.00M). Source commentary: Volume ahead; delivery price war compressing margin. Mizan Pharmacy Retail: SAR -8.00M (actual 838.00M; budget 846.00M). Source commentary: Eid footfall soft; clinical counters rolling out. Mizan Pharma Logistics: SAR +6.00M (actual 262.00M; budget 256.00M). Source commentary: Dammam hub commissioned 28-Jun. Mizan Digital Health: SAR +5.00M (actual 176.00M; budget 171.00M). Source commentary: MAU 920k; hiring lag flatters margin. Mizan Healthcare Services: SAR -5.00M (actual 331.00M; budget 336.00M). Source commentary: Cardiology consultant gap persists. Mizan Capital: SAR +3.00M (actual 121.00M; budget 118.00M). Source commentary: MTM gains. Consolidation eliminations contribute SAR -2.00M. The complete BU bridge plus eliminations reconciles to the group movement. Source commentary is qualitative context, not a quantified causal allocation.",
+          "not_in_your_data": null,
+          "general_practice_suggests": null
+        },
+        "external_consultation": {
+          "requested": false,
+          "used": false,
+          "audit_trail_id": "22a7b29e-f6fe-41ad-9d2e-d16943d82e13"
+        },
+        "executive_blocks": {
+          "verdict": "H1 2026 group revenue: SAR 4,006.00M actual versus SAR 3,904.00M budget, a SAR +102.00M movement.",
+          "figures": [
+            "SAR 4,006.00M",
+            "SAR 3,904.00M"
+          ],
+          "recommendation": null,
+          "detail": "Business-unit movements ranked by absolute impact: Tamween Pharma Distribution: SAR +74.00M (actual 1,268.00M; budget 1,194.00M). Source commentary: NUPCO surge; margin behind on cost events — remediation underway. Mizan Pharma Manufacturing: SAR +15.00M (actual 748.00M; budget 733.00M). Source commentary: Specialty mix ahead; Line 8 on track Q4. Mizan E-Pharmacy: SAR +14.00M (actual 304.00M; budget 290.00M). Source commentary: Volume ahead; delivery price war compressing margin. Mizan Pharmacy Retail: SAR -8.00M (actual 838.00M; budget 846.00M). Source commentary: Eid footfall soft; clinical counters rolling out. Mizan Pharma Logistics: SAR +6.00M (actual 262.00M; budget 256.00M). Source commentary: Dammam hub commissioned 28-Jun. Mizan Digital Health: SAR +5.00M (actual 176.00M; budget 171.00M). Source commentary: MAU 920k; hiring lag flatters margin. Mizan Healthcare Services: SAR -5.00M (actual 331.00M; budget 336.00M). Source commentary: Cardiology consultant gap persists. Mizan Capital: SAR +3.00M (actual 121.00M; budget 118.00M). Source commentary: MTM gains. Consolidation eliminations contribute SAR -2.00M. The complete BU bridge plus eliminations reconciles to the group movement. Source commentary is qualitative context, not a quantified causal allocation.",
+          "evidence_count": 1,
+          "chart": null
+        }
+      }
+    }
+  ]
+}
