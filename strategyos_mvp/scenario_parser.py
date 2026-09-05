@@ -257,6 +257,11 @@ def has_scenario_intent(prompt: str) -> bool:
 
 
 def _has_scenario_intent(prompt: str) -> bool:
+    # Choosing planning assumptions is an evidence/advice question. A bare
+    # "assume" or "hedge" must not replace it with a missing FX calculation.
+    if not re.search(r'\d', prompt or '') and re.search(r'\b(?:should|assumptions)\b', prompt or '', re.I):
+        if not re.search(r'\b(?:if|model|simulate|scenario|project)\b', prompt or '', re.I):
+            return False
     return bool(_SCENARIO_INTENT_RE.search(prompt or ""))
 
 

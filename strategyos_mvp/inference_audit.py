@@ -50,6 +50,8 @@ def reveal(cipher: bytes, *, key: bytes, tenant: str, identity: str, field: str)
 def record(config, messages, max_output):
     principal=access_scope.principal_scope.get()
     if not principal or principal.get('auth_disabled'):
+        if required():
+            raise RuntimeError('An authenticated inference scope is required. Provider call blocked.')
         yield {}
         return
     key=_key()

@@ -806,3 +806,10 @@ def test_authenticated_digital_health_without_actual_data_does_not_use_synthetic
     assert result.scenario_id == "digital_health_eoy_flat"
     assert result.scenario_type == "missing_data"
     assert "Illustrative external benchmarks are disabled" in result.answer
+
+
+def test_planning_assumptions_do_not_become_a_hedge_calculation():
+    for question in ("What should next year's budget assume about tariffs, wages and FX?", "Should we hedge fuel or electricity exposure, given the tariff steps?"):
+        result=parse_scenario(question,{})
+        assert result.scenario_id!='fx_hedge'
+        assert not result.matched

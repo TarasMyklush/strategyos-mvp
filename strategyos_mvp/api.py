@@ -11,6 +11,7 @@ import re
 import socket
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from contextlib import asynccontextmanager, closing
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -12734,10 +12735,11 @@ def _supplemental_grounding_payload(
 
 async def _llm_answer_question_async(*args: Any, **kwargs: Any) -> dict[str, Any]:
     loop = asyncio.get_running_loop()
+    authorized_context = copy_context()
     async with _LLM_PROVIDER_SEMAPHORE:
         return await loop.run_in_executor(
             _LLM_PROVIDER_EXECUTOR,
-            lambda: llm_qa.answer_question(*args, **kwargs),
+            lambda: authorized_context.run(llm_qa.answer_question, *args, **kwargs),
         )
 
 
@@ -15525,9 +15527,10 @@ async def _assistant_chat_response(
     ):
         general_status = llm_qa.chat_status(CONFIG)
         if general_status.get("enabled"):
+            authorized_context = copy_context()
             general_result = await asyncio.get_running_loop().run_in_executor(
                 _LLM_PROVIDER_EXECUTOR,
-                lambda: llm_qa.answer_general_question(
+                lambda: authorized_context.run(llm_qa.answer_general_question,
                     question,
                     config=CONFIG,
                     persona=persona,

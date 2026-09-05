@@ -5873,3 +5873,18 @@ def test_explicit_document_lookup_preserves_hash_and_actual_backend(monkeypatch)
     result=api_module._route_keyword_retrieval('run','Find supporting documents for the renewal')
     assert result['matched'] and result['citations'][0]['source_hash']=='sha256'
     assert 'semantic' in result['basis'] and 'hash_fallback' not in result['basis']
+
+
+def test_provider_thread_pool_preserves_each_requests_authorized_scope(monkeypatch):
+    import asyncio
+    from strategyos_mvp.access_scope import principal_scope
+    monkeypatch.setattr(api_module.llm_qa,'answer_question',lambda question,**kwargs:dict(principal_scope.get() or {}))
+    async def request(tenant):
+        token=principal_scope.set({'tenant_id':tenant,'subject':tenant+'-user'})
+        try:return await api_module._llm_answer_question_async('Question')
+        finally:principal_scope.reset(token)
+    async def check():
+        result=await asyncio.gather(request('tenant-a'),request('tenant-b'))
+        assert result==[{'tenant_id':'tenant-a','subject':'tenant-a-user'},{'tenant_id':'tenant-b','subject':'tenant-b-user'}]
+        assert principal_scope.get() is None
+    asyncio.run(check())

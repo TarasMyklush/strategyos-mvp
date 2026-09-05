@@ -37,3 +37,12 @@ def test_encrypted_retention_budget_and_failure_records(monkeypatch):
         assert 'protected business question' in audit.reveal(cipher,key=key,tenant=tenant,identity=identity,field='prompt')
         with pytest.raises(InvalidTag):audit.reveal(cipher,key=key,tenant='other',identity=identity,field='prompt')
     finally:access_scope.principal_scope.reset(token)
+
+
+def test_required_audit_blocks_unscoped_provider_execution(monkeypatch):
+    monkeypatch.setenv('STRATEGYOS_INFERENCE_AUDIT_REQUIRED','true')
+    token=access_scope.principal_scope.set(None)
+    try:
+        with pytest.raises(RuntimeError,match='authenticated inference scope'):
+            with audit.record(SimpleNamespace(),[],10):pytest.fail('Unscoped provider executed')
+    finally:access_scope.principal_scope.reset(token)
