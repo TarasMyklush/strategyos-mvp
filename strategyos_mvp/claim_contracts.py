@@ -17,6 +17,10 @@ SCALES = {"k": Decimal(1000), "thousand": Decimal(1000), "m": Decimal(1000000),
           "trillion": Decimal(1000000000000)}
 TABLE_AMOUNT = re.compile(r"\((SAR|USD|EUR|GBP|AED|CHF|JPY|CNY|INR|KWD|QAR|BHD|OMR|CAD|AUD|SGD|HKD)\s*(K|M|B|million|thousand|billion)?\)\s*:\s*([-+]?\d[\d,]*(?:\.\d+)?)", re.I)
 TABLE_DELTA = re.compile(r"(?:^|;)\s*Delta vs budget\s*:\s*([-+]?\d[\d,]*(?:\.\d+)?)(?=\s*(?:;|\n|$))", re.I)
+TABLE_UNIT_HEADING = re.compile(
+    r"(?:^|[;\n])\s*(SAR|USD|EUR|GBP|AED|CHF|JPY|CNY|INR|KWD|QAR|BHD|OMR|CAD|AUD|SGD|HKD)"
+    r"\s+(K|M|B|million|thousand|billion)(?: impact)?\s*:\s*([-+]?\d[\d,]*(?:\.\d+)?)(?=\s*(?:;|\n|$))", re.I,
+)
 TABLE_RATIO = re.compile(
     r"(?:^|[;\n])[^;:\n]*?(%|\bbps\b|\bbasis points?\b)[^;:\n]*:\s*"
     r"([-+]?\d[\d,]*(?:\.\d+)?)(?=\s*(?:;|\n|$))", re.I,
@@ -57,7 +61,7 @@ def quantities(text: str) -> set[QuantityClaim]:
         claims.add(QuantityClaim(number, unit))
     # Indexed workbook rows retain their column headings. A header such as
     # 'Budget (SAR M): 758' explicitly supplies both currency and scale.
-    for currency, scale, amount in TABLE_AMOUNT.findall(text):
+    for currency, scale, amount in TABLE_AMOUNT.findall(text) + TABLE_UNIT_HEADING.findall(text):
         claims.add(QuantityClaim(Decimal(amount.replace(',', '')) * SCALES.get(scale.lower(), 1), currency.upper()))
     # Percentage and basis-point headings type only their own numeric cell.
     # Never promote an adjacent untyped value or infer a percent/bps conversion.

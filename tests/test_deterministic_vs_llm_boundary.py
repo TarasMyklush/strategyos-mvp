@@ -184,6 +184,7 @@ def test_suggestions_are_static():
 def test_intents_registry_is_complete_and_ordered():
     """All intents must be defined statically with names matching handlers."""
     expected_intents = [
+        "listed_peer_comparison",
         "quarterly_revenue",
         "invoice_line_reconciliation",
         "receivables_aging",

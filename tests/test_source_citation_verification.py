@@ -73,3 +73,18 @@ def test_targeted_synergy_charter_retains_every_role_in_source_order(tmp_path):
     text='\n'.join(row['text'] for row in result['records'])
     assert result['coverage_complete'] and text.index('Group COO') < text.index('Group CIO') < text.index('Group Property')
     assert all(row['locator'].startswith('Document paragraph ') for row in result['records'])
+
+
+def test_group_revenue_bridge_precedes_a_long_division_series(tmp_path):
+    from strategyos_mvp.source_search import targeted_financial_records
+    group=tmp_path/'Z_Group_BU_PnL.xlsx';book=Workbook();book.active.title='Group_Revenue_Drivers'
+    book.active.append(['Year','Driver','SAR M impact']);book.active.append([2024,'Acquisition',2120]);book.save(group)
+    detail=tmp_path/'A_Revenue_Analytics.xlsx';book=Workbook();book.active.title='Monthly_by_Segment';book.active.append(['Month','Revenue'])
+    for i in range(120):book.active.append([str(i),i])
+    book.save(detail)
+    evidence=SimpleNamespace(dataset_root=tmp_path,manifest={p.name:{'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in [detail,group]})
+    result=targeted_financial_records(evidence,'What contributed most to revenue growth?')
+    assert result['status']=='bounded' and result['coverage_complete'] is False
+    assert result['records'][0]['source_path']==group.name
+    assert 'SAR M impact: 2120' in result['records'][0]['text']
+    assert len(result['records'])==96

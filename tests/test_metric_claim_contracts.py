@@ -72,3 +72,11 @@ def test_workbook_percentage_and_basis_point_headers_type_only_their_cell():
 def test_question_percentage_is_not_promoted_to_evidence():
     from strategyos_mvp.claim_contracts import approved_evidence_text
     assert not claims_supported('35%', approved_evidence_text({'question': 'Premium %: 35', 'facts': 'No site benchmark supplied'}))
+
+
+def test_explicit_unit_only_and_impact_headers_do_not_type_exchange_rates():
+    assert claims_supported('SAR 2120M','Year: 2024; SAR M impact: 2120; Source: Group strategy')
+    assert claims_supported('USD 25K','USD K: 25')
+    assert not claims_supported('SAR 2120M','Year: 2024; impact: 2120')
+    assert not claims_supported('USD 2120M','SAR M impact: 2120')
+    assert not claims_supported('SAR 4.2M','SAR M per EUR: 4.2')

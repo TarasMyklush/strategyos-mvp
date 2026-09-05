@@ -686,7 +686,18 @@ def _asks_quarterly_revenue(question):
     return intent(question) is not None
 
 
+def _asks_listed_peer_comparison(question):
+    from .peer_comparison import matches
+    return matches(question)
+
+
+def _handle_listed_peer_comparison(question, bundle, findings):
+    from .peer_comparison import answer
+    return answer(question, bundle) or {'matched': False, 'available': False, 'answer': 'Listed-peer comparison requires a unique complete comparative workbook.', 'citations': []}
+
+
 INTENTS: tuple[_Intent, ...] = (
+    _Intent('listed_peer_comparison', _asks_listed_peer_comparison, _handle_listed_peer_comparison),
     _Intent('quarterly_revenue', _asks_quarterly_revenue, _handle_quarterly_revenue),
     _Intent('invoice_line_reconciliation',
             lambda q: bool(re.fullmatch(r"which invoices (?:don't|do not) reconcile between lines and headers[?.!]?", q)),

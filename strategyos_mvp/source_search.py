@@ -138,14 +138,21 @@ def targeted_financial_records(evidence, question):
     revenue_question = bool(re.search(r'\b(?:revenue|growth|segment|segments)\b', text))
     if customer_question or revenue_question:
         patterns += ['revenue_analytics']
+    if revenue_question:
+        patterns += ['group_bu_pnl']
     manifest = {path: entry for path, entry in evidence.manifest.items()
                 if path.lower().endswith(('.xlsx', '.docx')) and any(token in Path(path).stem.casefold() for token in patterns)}
     if not manifest:
         return {'status': 'not_applicable', 'records': []}
-    scoped = SimpleNamespace(dataset_root=evidence.dataset_root, manifest=manifest, pdf_text={})
     records = []; characters = 0
+    # Group bridges must not disappear behind a long division-level series.
+    paths = sorted(manifest, key=lambda path: ('group_bu_pnl' not in Path(path).stem.casefold(), path))
+    def selected_records():
+        for path in paths:
+            scoped = SimpleNamespace(dataset_root=evidence.dataset_root, manifest={path: manifest[path]}, pdf_text={})
+            yield from source_records(scoped)
     try:
-        for path, digest, locator, content in source_records(scoped):
+        for path, digest, locator, content in selected_records():
             if 'revenue_analytics' in Path(path).stem.casefold():
                 customer_sheet = locator.startswith(('Customer_Profitability', 'Top_Customers'))
                 if customer_sheet != customer_question:

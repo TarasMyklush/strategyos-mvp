@@ -5637,6 +5637,7 @@ def test_calendar_agenda_recognizes_plural_weekly_ceo_judgment_question():
 
 
 @pytest.mark.parametrize("question", [
+    "How does each BU's margin compare to its listed peers?",
     "Show me the aging of receivables by segment — where is risk building?",
     "Break down this quarter's revenue by segment — which segments are growing and which are shrinking?",
     "What were the key movers of revenue vs budget this half — up and down, ranked by impact?",
