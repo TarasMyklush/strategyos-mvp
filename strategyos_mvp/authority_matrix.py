@@ -34,6 +34,8 @@ def default_authority_matrix() -> dict[str, Any]:
             {"id": "persona:gm", "label": "BU General Manager", "type": "persona", "rights": {"finance": "view", "hr": "view", "contracts": "none", "board_materials": "none", "assistant_team": "none"}},
             {"id": "assistant:hermes", "label": "Hermes", "type": "assistant", "rights": {"finance": "recommend", "hr": "view", "contracts": "recommend", "board_materials": "recommend", "assistant_team": "analyse"}},
             {"id": "assistant:atlas", "label": "Atlas", "type": "assistant", "rights": {"finance": "recommend", "hr": "none", "contracts": "analyse", "board_materials": "view", "assistant_team": "none"}},
+            {"id": "assistant:minerva", "label": "Minerva", "type": "assistant", "rights": {"finance": "none", "hr": "none", "contracts": "none", "board_materials": "analyse", "assistant_team": "none"}},
+            {"id": "assistant:argus", "label": "Argus", "type": "assistant", "rights": {"finance": "analyse", "hr": "none", "contracts": "view", "board_materials": "none", "assistant_team": "none"}},
             {"id": "assistant:iris", "label": "Iris", "type": "assistant", "rights": {"finance": "view", "hr": "view", "contracts": "none", "board_materials": "none", "assistant_team": "none"}},
             {"id": "agent:finance-analyst", "label": "Finance Analyst", "type": "agent", "rights": {"finance": "analyse", "hr": "none", "contracts": "view", "board_materials": "none", "assistant_team": "none"}},
             {"id": "agent:finance-auditor", "label": "Finance Auditor", "type": "agent", "rights": {"finance": "recommend", "hr": "none", "contracts": "analyse", "board_materials": "none", "assistant_team": "none"}},
@@ -226,7 +228,28 @@ def authority_decision(matrix: Mapping[str, Any], *, subject_id: str, domain: st
 
 def assistant_subject(persona: str | None) -> str:
     key = str(persona or "ceo").strip().lower()
-    return {"ceo": "assistant:hermes", "board": "assistant:hermes", "cfo": "assistant:atlas", "bucfo": "assistant:atlas", "gm": "assistant:iris", "bu": "assistant:iris"}.get(key, f"assistant:{key}")
+    return {"ceo": "assistant:hermes", "board": "assistant:minerva", "cfo": "assistant:atlas", "bucfo": "assistant:argus", "gm": "assistant:iris", "bu": "assistant:iris"}.get(key, f"assistant:{key}")
+
+
+def classify_requests(question: str, context: Mapping[str, Any] | None = None) -> list[tuple[str, str]]:
+    """Collect every requested domain. Context may add restrictions, never remove them.
+
+    This is an intent gate; source access must independently enforce data scope.
+    """
+    _, required = classify_request(question, context)
+    text = f"{question} {json.dumps(dict(context or {}), ensure_ascii=False, default=str)}".casefold()
+    aliases = {
+        "finance": ("revenue", "cash", "invoice", "profit", "margin", "payment", "إيراد", "نقد"),
+        "hr": ("headcount", "employee", "workforce", "hiring", "salary", "salaries", "payroll", "compensation", "bonus", "bonuses", "remuneration", "hr", "رواتب", "موظف"),
+        "contracts": ("contract", "supplier agreement", "renewal", "legal term", "عقد", "عقود"),
+        "board_materials": ("board", "director", "مجلس"),
+        "assistant_team": ("assistant readiness", "assistant team", "atlas", "iris", "hermes", "minerva"),
+    }
+    domains = [domain for domain, words in aliases.items() if any(
+        re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", text) if word.isascii() else word in text
+        for word in words
+    )]
+    return [(domain, required) for domain in domains or [classify_request(question, context)[0]]]
 
 
 def classify_request(question: str, context: Mapping[str, Any] | None = None) -> tuple[str, str]:

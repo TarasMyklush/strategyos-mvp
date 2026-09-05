@@ -1,0 +1,54 @@
+# Optional provider overlay. Does not enable external access/run policy itself.
+# Auth and the private gateway token are provisioned outside the app release tree.
+services:
+  strategyos-api:
+    environment: &codex-client
+      STRATEGYOS_LLM_PROVIDER: codex_cli
+      STRATEGYOS_LLM_BASE_URL: http://codex-gateway:8091/v1
+      STRATEGYOS_LLM_MODEL: ${STRATEGYOS_CODEX_MODEL:-codex-subscription}
+      STRATEGYOS_LLM_API_KEY: ${STRATEGYOS_CODEX_GATEWAY_TOKEN:?Set private gateway token}
+      STRATEGYOS_LLM_TIMEOUT_SECONDS: 135
+    networks: [default, codex-private]
+
+  strategyos-worker:
+    environment: *codex-client
+    networks: [default, codex-private]
+
+  codex-gateway:
+    image: ${STRATEGYOS_CODEX_IMAGE:-strategyos-codex-gateway:0.149.0}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.codex-gateway
+    init: true
+    environment:
+      STRATEGYOS_CODEX_HOME: /var/lib/strategyos-codex
+      STRATEGYOS_CODEX_TOKEN_FILE: /run/secrets/codex_gateway_token
+      STRATEGYOS_CODEX_MODEL: ${STRATEGYOS_CODEX_MODEL:-}
+      STRATEGYOS_CODEX_TIMEOUT: 120
+      STRATEGYOS_CODEX_CONCURRENCY: 1
+    volumes:
+      - ${STRATEGYOS_CODEX_AUTH_DIR:?Set dedicated Codex auth directory}:/var/lib/strategyos-codex
+    secrets: [codex_gateway_token]
+    networks: [codex-private, codex-egress]
+    read_only: true
+    tmpfs: ["/tmp:size=128m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 96
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+networks:
+  codex-private:
+    internal: true
+  codex-egress: {}
+
+secrets:
+  codex_gateway_token:
+    file: ${STRATEGYOS_CODEX_TOKEN_PATH:?Set private gateway token file}

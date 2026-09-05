@@ -20,6 +20,7 @@ from typing import Any
 
 from .config import CONFIG
 from . import llm_qa
+from .claim_contracts import claims_supported, quantities
 
 
 REFERENCE_RE = re.compile(r"\b(?:EV|SIG|INIT)-[A-Za-z0-9-]+\b", re.IGNORECASE)
@@ -47,6 +48,7 @@ def _jsonable(value: Any) -> Any:
 
 def _fingerprint(payload: dict[str, Any]) -> str:
     relevant = {
+        "claim_contract_version": 3,
         "plan_health": payload.get("plan_health"),
         "initiative_drifts": payload.get("initiative_drifts"),
         "milestone_drifts": payload.get("milestone_drifts"),
@@ -213,8 +215,20 @@ def _accept_provider_development(candidate: dict[str, Any], fallback: dict[str, 
     why = str(candidate.get("why") or "").strip()
     if not what or not why or what == why:
         return fallback
-    fallback_numbers = re.findall(r"[-+]?\d+(?:\.\d+)?", fallback["what"])
-    if fallback_numbers and not all(number in what for number in fallback_numbers[:2]):
+    if quantities(what) != quantities(fallback["what"]):
+        return fallback
+    fields = {key: candidate.get(key) for key in ("what", "why", "rich_briefing", "title")}
+    if not claims_supported(fields, {key: fallback.get(key) for key in fields}):
+        return fallback
+    # Matching numbers alone cannot bind a value to its metric, nor prove a
+    # new cause. Until structured reviewed claims are supplied, prose fields
+    # may only reproduce their corresponding governed statement.
+    for field in ("what", "why", "rich_briefing", "title"):
+        if candidate.get(field) is not None and " ".join(str(candidate[field]).split()).casefold() != " ".join(str(fallback.get(field) or "").split()).casefold():
+            return fallback
+    # Numeric support does not establish causality. Keep the evidenced causal
+    # statement until a structured, reviewed causal claim is available.
+    if why.casefold() != str(fallback["why"]).strip().casefold():
         return fallback
     refs = list(fallback.get("evidence_refs") or [])
     if refs and not any(ref.lower() in why.lower() for ref in refs):
@@ -256,6 +270,11 @@ def synthesize_strategy_enrichment(payload: dict[str, Any]) -> dict[str, Any]:
     for fallback in thread_fallbacks:
         candidate = provider_threads.get(fallback["thread_id"], {})
         summary = str(candidate.get("executive_summary") or "").strip()
+        proposed = {"executive_summary": summary, "key_figures": candidate.get("key_figures") or fallback["key_figures"]}
+        if not claims_supported(proposed, fallback) or (
+            summary and " ".join(summary.split()).casefold() != " ".join(fallback["executive_summary"].split()).casefold()
+        ):
+            candidate, summary = {}, ""
         summaries.append({
             **fallback,
             "executive_summary": summary[:520] if summary else fallback["executive_summary"],
@@ -271,7 +290,7 @@ def synthesize_strategy_enrichment(payload: dict[str, Any]) -> dict[str, Any]:
         "development_briefs": briefs,
         "assistant_threads": {**dict(payload.get("assistant_threads") or {}), "threads": enriched_threads},
         "synthesis_generated_at": datetime.now(UTC).isoformat(),
-        "synthesis_provider": "llm-batch-grounded" if provider else "deterministic-correlation",
+        "synthesis_provider": "llm-batch-grounded" if any(item.get("synthesized_by") == "llm-batch-grounded" for item in briefs + summaries) else "deterministic-correlation",
     }
     _write_cache(key, synthesized)
     return {**payload, **synthesized, "synthesis_cache": {"status": "miss", "key": key}}

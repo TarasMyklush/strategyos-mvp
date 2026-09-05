@@ -1,0 +1,230 @@
+Browser tab: 2, Title: "StrategyOS — Group CEO Diagnostics", URL: "https://new.strategyos.live/executive?persona=ceo&board=pre&driver=revenue&company=strategyos-branch&portfolio=finance-diagnostics".
+1 AXWebArea StrategyOS — Group CEO Diagnostics, URL: new.strategyos.live/executive?persona=ceo&board=pre&driver=revenue&company=strategyos-branch&portfolio=finance-diagnostics
+	2 container topbar
+		3 link StrategyOS home
+			4 text StrategyOS
+		5 tab group Description: Executive views, ID: view-nav
+			6 tab (selected, settable, boolean) Diagnostics, Value: 1
+			7 tab (selectable, settable, boolean) AI Assistants, Value: 0
+			8 tab (selectable, settable, boolean) Agents, Value: 0
+			9 tab (selectable, settable, boolean) Knowledge, Help: Evidence, Value: 0
+			10 tab (selectable, settable, boolean) Authority Matrix, Value: 0
+		11 pop up button (collapsed) Group CEO, ID: persona-btn, Secondary Actions: Expand
+			227 text Group CEO
+		13 button Description: Switch to dark theme, Help: Toggle colour theme, ID: topbar-theme-toggle
+		14 button ET, Help: Group CEO · Hermes, ID: topbar-avatar
+	15 container view-home
+		16 container Comparison pending, ID: hero
+			228 text GOOD MORNING, EXECUTIVE
+			18 heading Comparison pending, Value: 1, ID: hero-head
+				229 text Comparison pending
+			230 text The current actual is available, but a CEO performance conclusion is not yet safe.
+			21 button Description: Open Hermes morning briefing. No exception identified. Calendar: No governed commitment recorded., ID: hero-morning-briefing
+				22 container
+					231 text HERMES · 
+					232 text CURRENT POSITION
+				233 text No exception identified
+				234 text CALENDAR
+				235 text No governed commitment recorded
+				28 text Open brief
+			29 container Executive status
+				236 text Your decision
+				237 text Review required
+				238 text An item is waiting for executive sign-off.
+		33 container The group index, ID: kpi-index-section
+			34 heading The group index, Value: 2, ID: driver-heading
+				239 text The group index
+			240 text Percent of plan is the headline. Tap a KPI for its trend and drivers.
+			37 container driver-row
+				241 checkbox SAR 385.1 M Revenue SAR 385.1M Plan Comparison Unavailable Evidence verified, Value: 1
+					242 container
+						243 text SAR 385.1 M
+					244 text Revenue
+					245 text SAR 385.1M
+					246 text Plan Comparison Unavailable
+					247 text Evidence verified
+				248 checkbox 56.0 MARGIN EBITDA margin 56.0% Plan Comparison Unavailable Evidence verified, Value: 0
+					249 container
+						250 text 56.0 MARGIN
+					251 text EBITDA margin
+					252 text 56.0%
+					253 text Plan Comparison Unavailable
+					254 text Evidence verified
+				255 checkbox SAR 93.8 M Operating cost SAR 93.8M Plan Comparison Unavailable Evidence verified, Value: 0
+					256 container
+						257 text SAR 93.8 M
+					258 text Operating cost
+					259 text SAR 93.8M
+					260 text Plan Comparison Unavailable
+					261 text Evidence verified
+				262 checkbox SAR 42.3 M Cash vs floor SAR 42.3M Board Floor Comparison Unavailable Evidence gap, Value: 0
+					263 container
+						264 text SAR 42.3 M
+					265 text Cash vs floor
+					266 text SAR 42.3M
+					267 text Board Floor Comparison Unavailable
+					268 text Evidence gap
+		66 container Executive readout, ID: kpi-detail-section
+			67 container driver-drill
+				269 heading Revenue, Value: 3
+					270 text Revenue
+				271 text No like-for-like comparator
+				272 text SAR 385.1M
+				273 button Show the work
+				274 text Evidence verified
+				275 container
+					276 text Reporting trajectory Actual series only — plan is not inferred Actual
+					277 container Revenue actual trend across 2026-01, 2026-02, 2026-03, 2026-04, 2026-05, 2026-06
+					278 text Latest SAR 63.4M Jun 2026 Change +SAR 6.7M versus May 2026
+				279 container
+					280 text What moved it Verified movement behind the selected KPI ↗ Revenue – Hospitality +SAR 5.6M ↗ Revenue – Catering +SAR 1.3M ↘ Revenue – Government -SAR 152.0K ↘ Revenue – Modern Trade -SAR 109.9K
+				281 container Ask Hermes about Revenue
+					282 button Do I need to intervene?
+					283 button Who owns it—and why?
+					284 button What changes the outlook?
+					285 button Consult general practice
+					286 container
+						287 text Ask Hermes about Revenue
+						288 text field (settable) Ask Hermes about Revenue, ID: kpi-inline-ask-input
+						289 button Ask
+		89 container Developments & concerns, ID: priority-section
+			90 heading Developments & concerns, Value: 2, ID: lower-rail-heading
+				290 text Developments & concerns
+			92 text business movements and signals to keep in view — no action implied
+			93 container findings-panel
+				291 button (collapsed) Green positive development No material headline variance requires CEO intervention Group KPI, Secondary Actions: Expand
+					292 image Green positive development
+					293 text No material headline variance requires CEO intervention
+					294 text Group KPI
+				295 button (collapsed) Secondary Actions: Expand, Green positive development Auto-renewal escalation at Gulf Logistics Services Co SAR 250K Auto Renewal Escalation
+					296 image Green positive development
+					297 text Auto-renewal escalation at Gulf Logistics Services Co
+					298 text SAR 250K
+					299 text Auto Renewal Escalation
+				300 button (collapsed) Green positive development Duplicate payment for invoice INV-2026-0341 SAR 177K Duplicate Payment, Secondary Actions: Expand
+					301 image Green positive development
+					302 text Duplicate payment for invoice INV-2026-0341
+					303 text SAR 177K
+					304 text Duplicate Payment
+				305 button (collapsed) Secondary Actions: Expand, Green positive development Dormant supplier credit not offset: CR-2024-091 SAR 128K Dormant Credit Balance
+					306 image Green positive development
+					307 text Dormant supplier credit not offset: CR-2024-091
+					308 text SAR 128K
+					309 text Dormant Credit Balance
+				310 button (collapsed) Green positive development Operational controls remain delegated SAR 1.9M Group CFO, Secondary Actions: Expand
+					311 image Green positive development
+					312 text Operational controls remain delegated
+					313 text SAR 1.9M
+					314 text Group CFO
+		118 container Decisions for you, ID: developments-section
+			119 heading Decisions for you, Value: 2, ID: developments-heading
+				315 text Decisions for you
+			121 text approvals, interventions and direction that need your call
+			122 container developments-panel
+				316 text Pending CEO decisions
+				317 button (collapsed) watch priority Hold the board pack for final sign-off R Pending CEO decision, Secondary Actions: Expand
+					318 image watch priority
+					319 text Hold the board pack for final sign-off
+					320 text R
+					321 text Pending CEO decision
+		129 container Available files for review, ID: review-files-section
+			130 heading Available files for review, Value: 2, ID: review-files-heading
+				131 text Available files for review
+			132 text documents relevant to the current briefing — latest version only
+			133 container review-files-panel
+				322 text No relevant Office files
+				323 text No Office file is relevant to the current governed developments or decisions.
+				324 text Showing up to 8 relevance-selected files. Latest file with the same name is shown. Version history is not yet available.
+				325 button (collapsed) Upload an Office file, Secondary Actions: Expand
+					326 text Upload an Office file
+		139 container Week ahead, ID: week-ahead-section
+			140 heading Week ahead, Value: 2, ID: week-ahead-heading
+				141 text Week ahead
+			142 text your calendar, AI-triaged — a launchpad, not a list
+			143 container week-panel
+				327 text No executive calendar connected
+				328 text No calendar is available for this reporting period. No meetings or deadlines have been inferred.
+		146 container Think and model on your data, ID: decision-questions-section
+			147 heading Think and model on your data, Value: 2, ID: gravity-heading
+				329 text Think and model on your data
+			149 text the gravity layer — think, don’t act
+			150 container gravity-panel
+				330 text ◇ Thinking mode
+				331 heading Model a what-if on your own data, Value: 3
+					332 text Model a what-if on your own data
+				333 container
+					334 text A sovereign sandbox that runs in your chat — on the current verified figures, with  no side effects .
+				335 text ◇ Type a what-if and play — nothing here acts
+				336 container thinking-composer
+					337 text Model a scenario on your data
+					338 text field (settable) Model a scenario on your data, ID: thinking-input
+					339 button Run scenario
+				340 text or start from one of these
+				341 button Does the current revenue position require intervention, and which business line should own it?
+				342 button What are the three decisions I need to make before the next commitment, with one owner and deadline for each?
+				343 button What changed since the last executive review, and which item now crosses the CEO materiality threshold?
+			165 container Leaders’ Corner, ID: leaders-corner-section
+				166 heading Leaders’ Corner, Value: 2, ID: leaders-heading
+					167 text Leaders’ Corner
+				168 text short counsel, senior practitioners
+				169 container leaders-corner-panel
+					344 text ✦ LEADERS’ CORNER · VIDEO
+					345 text Short counsel, senior practitioners
+					346 container Enterprise AI Strategy and CEO Leadership
+						347 AXWebArea Enterprise AI Strategy and CEO Leadership, with McKinsey & Company | CXOTalk #851 - YouTube, URL: youtube-nocookie.com/embed/uTRKdCY4HdE?rel=0&modestbranding=1
+							348 container
+								349 container Description: YouTube Video Player, ID: movie_player
+								350 container
+									351 button Play video
+									352 button Description: Hide player controls, ID: player-controls-a11y-toggle
+									353 container player-control-overlay
+										354 container
+											355 link Description: Enterprise AI Strategy and CEO Leadership, with McKinsey & Company | CXOTalk #851, Value: youtube.com/watch?v=uTRKdCY4HdE
+											356 link Description: CXOTalk, Value: youtube-nocookie.com/channel/UCGeqHuR3eUU5tnmgjkqZazw
+											357 button
+											358 container
+												359 text CXOTalk 267k subscribers
+										360 container
+											361 button Copy link
+											362 link Description: Watch on YouTube, Value: youtube.com/watch?v=uTRKdCY4HdE
+					363 text Enterprise AI Strategy and CEO Leadership
+					364 text McKinsey & Company 
+					365 text · CEO leadership · enterprise AI strategy
+					366 text How CEOs can move from AI experiments to enterprise adoption while aligning governance, organisation and strategy.
+					367 button Ask Hermes about this topic
+					368 link Description: Open on YouTube ↗, Value: youtube.com/watch?v=uTRKdCY4HdE
+					369 container Leaders’ Corner videos
+						370 button Play Enterprise AI Strategy and CEO Leadership
+							371 text ~45 min
+							372 text Enterprise AI Strategy and CEO Leadership
+							373 text McKinsey & Company
+						374 button Play Aligning AI with Enterprise Strategy
+							375 text ~40 min
+							376 text Aligning AI with Enterprise Strategy
+							377 text Leon Gordon, CEO at Onyx Data
+						378 button Play Agentic AI Governance and Enterprise-Scale Execution
+							379 text ~50 min
+							380 text Agentic AI Governance and Enterprise-Scale Execution
+							381 text SiliconANGLE theCUBE
+						382 button Play Bridge Strategy and Execution with Decision-Ready Views
+							383 text ~35 min
+							384 text Bridge Strategy and Execution with Decision-Ready Views
+							385 text Tempo
+	212 container composed-footer
+		213 text Prepared by StrategyOS from the approved strategy and verified company data.
+		214 link Description: How it works, Value: new.strategyos.live/guide
+		215 link Description: Architecture, Value: new.strategyos.live/architecture
+		386 text Demo clock · Mon, 1 Jun 2026 · last verified refresh 06:14 Riyadh
+		387 container Demo day
+			388 checkbox 1 Jun, Value: 1
+			389 checkbox 2 Jun, Value: 0
+			390 checkbox 3 Jun, Value: 0
+			391 checkbox 4 Jun, Value: 0
+			392 checkbox 5 Jun, Value: 0
+			393 checkbox 6 Jun, Value: 0
+			394 checkbox 7 Jun, Value: 0
+	225 button ◆ Ask Hermes, ID: chat-launcher
+		226 container chat-launcher-cta
+			395 text ◆ Ask Hermes
+
+The focused UI element is 1 AXWebArea StrategyOS — Group CEO Diagnostics, URL: new.strategyos.live/executive?persona=ceo&board=pre&driver=revenue&company=strategyos-branch&portfolio=finance-diagnostics

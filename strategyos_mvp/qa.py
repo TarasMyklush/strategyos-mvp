@@ -558,7 +558,7 @@ def _handle_working_capital(question: str, bundle: _DataBundle, findings: list[_
     if not signals:
         return {
             "matched": True,
-            "answer": "No significant DSO/DPO drift signals were detected in this run.",
+            "answer": "No significant settlement-day proxy drift signals were detected. Balance-based DSO/DPO require period-end AR/AP and approved revenue/COGS denominators.",
             "value": [], "unit": None,
             "basis": "compute_working_capital_drifts returned no qualifying signals.",
             "citations": [
@@ -569,7 +569,7 @@ def _handle_working_capital(question: str, bundle: _DataBundle, findings: list[_
         }
     rows = [
         {
-            "metric": s.get("metric"),
+            "metric": s.get("display_label") or s.get("metric"),
             "drift_days": s.get("drift_days"),
             "cash_impact_sar": round(float(s.get("cash_impact_sar", 0.0)), 2),
             "cash_effect": s.get("cash_effect"),
@@ -623,7 +623,7 @@ def _handle_working_capital(question: str, bundle: _DataBundle, findings: list[_
     listing = "; ".join(f"{r['metric']} drift {r['drift_days']}d, cash impact {_sar(r['cash_impact_sar'])}" for r in rows)
     return {
         "matched": True,
-        "answer": f"Top working-capital drift signals: {listing}.",
+        "answer": f"Top working-capital drift signals: {listing}. These are settlement-day proxies excluding unpaid balances; cash effects are timing estimates, not verified cash releases or balance-based DSO/DPO.",
         "value": rows, "unit": "SAR",
         "basis": "compute_working_capital_drifts (DSO/DPO drift vs trailing baseline).",
         "citations": [

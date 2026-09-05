@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 
 from ..auth import require_role
 from ..config import CONFIG
@@ -47,7 +47,8 @@ class CreateConversationRequest(BaseModel):
 
 
 class PostMessageRequest(BaseModel):
-    body: str
+    model_config = ConfigDict(extra="forbid")
+    body: str = Field(min_length=1, max_length=12000)
     scope: dict[str, Any] | None = None
     persona: str | None = None
 
@@ -87,6 +88,28 @@ def _require_record(record: dict[str, Any] | None, *, missing_detail: str) -> di
     return record
 
 
+def _owned_conversation(tenant_id, conversation_id, principal):
+    record = _require_record(repository.get_conversation(tenant_id, conversation_id), missing_detail="Conversation not found.")
+    if record.get("created_by_subject") != principal.get("subject"):
+        raise HTTPException(404, "Conversation not found.")
+    from ..access_scope import guard_run
+    if record.get("run_id"):
+        guard_run(str(record["run_id"]), require_store=True)
+    return record
+
+
+def _check_request_scope(principal, *, persona=None, run_id=None, question=""):
+    from .. import api
+    from ..access_scope import guard_run
+    if run_id:
+        guard_run(str(run_id), require_store=True)
+    elif principal.get("role") == "bu":
+        raise HTTPException(409, "A run scoped to your business unit is required.")
+    denied = api._assistant_authority_refusal(api.AssistantChatRequest(question=question or "View finance", persona=persona or "ceo"), principal)
+    if denied:
+        raise HTTPException(403, denied.get("answer") or "This request is outside the assistant's authority.")
+
+
 @router.post("/agent-conversations")
 def create_conversation(
     body: CreateConversationRequest,
@@ -94,6 +117,7 @@ def create_conversation(
 ) -> dict[str, Any]:
     _require_feature_enabled()
     tenant_id = _resolve_tenant_id(principal)
+    _check_request_scope(principal, persona=body.persona, run_id=body.run_id)
     conversation = repository.create_conversation(
         tenant_id,
         created_by_subject=str(principal.get("subject") or "unknown"),
@@ -112,7 +136,7 @@ def get_conversation(
 ) -> dict[str, Any]:
     _require_feature_enabled()
     tenant_id = _resolve_tenant_id(principal)
-    conversation = repository.get_conversation(tenant_id, conversation_id)
+    conversation = _owned_conversation(tenant_id, conversation_id, principal)
     return _require_record(conversation, missing_detail="Conversation not found.")
 
 
@@ -127,7 +151,7 @@ def list_conversation_messages(
     # 404 on a missing conversation rather than silently returning [] --
     # list_messages() returns [] both when the conversation doesn't exist
     # and when it's merely empty, so check existence explicitly first.
-    conversation = repository.get_conversation(tenant_id, conversation_id)
+    conversation = _owned_conversation(tenant_id, conversation_id, principal)
     _require_record(conversation, missing_detail="Conversation not found.")
     messages = repository.list_messages(tenant_id, conversation_id, after_sequence=after_sequence)
     return {"conversation_id": conversation_id, "messages": messages}
@@ -152,9 +176,11 @@ def post_conversation_message(
             detail="Idempotency-Key header is required.",
         )
     tenant_id = _resolve_tenant_id(principal)
-    conversation = repository.get_conversation(tenant_id, conversation_id)
+    conversation = _owned_conversation(tenant_id, conversation_id, principal)
     _require_record(conversation, missing_detail="Conversation not found.")
 
+    _check_request_scope(principal, persona=body.persona or conversation.get("persona"),
+                         run_id=(body.scope or {}).get("run_id") or conversation.get("run_id"), question=body.body)
     try:
         result = process_conversation_message(
             tenant_id=tenant_id,
@@ -178,7 +204,7 @@ def archive_conversation(
 ) -> dict[str, Any]:
     _require_feature_enabled()
     tenant_id = _resolve_tenant_id(principal)
-    conversation = repository.get_conversation(tenant_id, conversation_id)
+    conversation = _owned_conversation(tenant_id, conversation_id, principal)
     _require_record(conversation, missing_detail="Conversation not found.")
     updated = repository.archive_conversation(tenant_id, conversation_id)
     return _require_record(updated, missing_detail="Conversation not found.")
@@ -195,7 +221,12 @@ def get_task(
     _require_feature_enabled()
     tenant_id = _resolve_tenant_id(principal)
     task = repository.get_task(tenant_id, task_id)
-    return _require_record(task, missing_detail="Task not found.")
+    task = _require_record(task, missing_detail="Task not found.")
+    if task.get("conversation_id"):
+        _owned_conversation(tenant_id, task["conversation_id"], principal)
+    elif principal.get("role") == "bu":
+        raise HTTPException(404, "Task not found.")
+    return task
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +265,8 @@ def agent_network(
     with GET /api/v1/agent-network"). Also the polling fallback for
     clients that can't hold an SSE connection."""
     _require_live_ui_enabled()
+    if principal.get("role") == "bu":
+        raise HTTPException(403, "The group agent stream is outside this business-unit scope.")
     tenant_id = _resolve_tenant_id(principal)
     payload = projections.agent_network_payload(tenant_id)
     if payload.get("status") == "skipped":
@@ -298,6 +331,8 @@ def agent_events_stream(
     GET /api/v1/agent-network for clients that cannot hold a streaming
     connection (e.g. behind a buffering proxy)."""
     _require_live_ui_enabled()
+    if principal.get("role") == "bu":
+        raise HTTPException(403, "The group agent stream is outside this business-unit scope.")
     tenant_id = _resolve_tenant_id(principal)
     return StreamingResponse(
         streaming.sse_event_stream(tenant_id, last_event_id=last_event_id),

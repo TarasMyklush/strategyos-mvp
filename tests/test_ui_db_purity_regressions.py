@@ -383,7 +383,7 @@ def test_plan_api_reports_unavailable_when_database_is_not_configured(monkeypatc
 
 
 def test_authenticated_latest_run_uses_actual_current_run_payload_without_demo_markers(monkeypatch):
-    original = _apply_env({"STRATEGYOS_API_AUTH_ENABLED": "true", "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true"})
+    original = _apply_env({"STRATEGYOS_TENANT_SLUG": "tenant-live", "STRATEGYOS_API_AUTH_ENABLED": "true", "STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED": "true"})
     try:
         monkeypatch.setattr(
             api_module,

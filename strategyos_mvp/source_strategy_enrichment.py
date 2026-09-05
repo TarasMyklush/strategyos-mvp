@@ -16,6 +16,7 @@ from typing import Any, Iterable
 from openpyxl import load_workbook
 
 from .executive_synthesis import synthesize_strategy_enrichment
+from .metric_contracts import MetricDefinition, finite_number, measurement_status
 
 
 def _find(root: Path, name: str) -> Path | None:
@@ -149,15 +150,7 @@ def _executive_policy_contract(
 
 
 def _number(value: Any) -> float | None:
-    if isinstance(value, (int, float)):
-        return float(value)
-    match = re.search(r"-?\d[\d,]*(?:\.\d+)?", str(value or ""))
-    if not match:
-        return None
-    try:
-        return float(match.group(0).replace(",", ""))
-    except ValueError:
-        return None
+    return finite_number(value)
 
 
 def _iso(value: Any) -> str | None:
@@ -188,19 +181,12 @@ def _display_headline(row: dict[str, Any], *fallback_keys: str) -> str | None:
 
 
 def _measurement_status(row: dict[str, Any]) -> str:
-    actual = str(row.get("Jun-2026 actual") or "").casefold()
-    if not actual.strip():
-        return "missing"
-    if "est" in actual or row.get("KPI_ID") in {"KPI-03", "KPI-04"}:
-        return "estimated"
-    return "live"
+    key = next((key for key in row if str(key).casefold().endswith("actual")), "actual")
+    return measurement_status(row.get(key), row.get("measurement_status"))
 
 
 def _score(actual: float | None, checkpoint: float | None, lower_is_better: bool) -> float | None:
-    if actual is None or checkpoint in {None, 0} or actual == 0:
-        return None
-    raw = checkpoint / actual if lower_is_better else actual / checkpoint
-    return max(0.0, min(1.2, raw))
+    return MetricDefinition(direction="lower_is_better" if lower_is_better else "higher_is_better").attainment(actual, checkpoint)
 
 
 def _cost_of_drift(
@@ -209,6 +195,7 @@ def _cost_of_drift(
     checkpoint: float | None,
     unit: Any,
     evidence: dict[str, Any],
+    conversion: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Return a source-safe drift statement without inventing a SAR conversion.
 
@@ -223,11 +210,25 @@ def _cost_of_drift(
     gap = round(abs(checkpoint - actual), 2)
     raw_unit = str(unit or "").strip()
     gap_unit = "percentage points" if raw_unit == "%" else raw_unit or "units"
+    conversion = conversion or {}
+    factor = finite_number(conversion.get("SAR_per_unit_per_week"))
+    approved = str(conversion.get("Status") or "").casefold() == "approved"
+    unit_matches = str(conversion.get("Unit") or "").casefold().rstrip("s") == gap_unit.casefold().rstrip("s")
+    if approved and factor is not None and factor >= 0 and unit_matches and conversion.get("Approved_by") and conversion.get("Source"):
+        value = round(gap * factor, 2)
+        return {"gap": gap, "gap_unit": gap_unit,
+                "financial_effect_sar_per_week": value, "financial_effect_status": "approved_conversion",
+                "statement": f"{gap:g} {gap_unit} to checkpoint × SAR {factor:,.2f} per {gap_unit} per week = SAR {value:,.2f} per week.",
+                "evidence": evidence, "conversion_evidence": {
+                    "source": conversion["Source"], "approved_by": conversion["Approved_by"],
+                    "factor": factor, "unit": conversion["Unit"], "version": conversion.get("Version")}}
     return {
         "gap": gap,
         "gap_unit": gap_unit,
         "financial_effect_sar_per_week": None,
         "financial_effect_status": "not_supplied",
+        "missing_inputs": ["Approved SAR_per_unit_per_week factor", "Matching operating unit", "Approval identity", "Resolving source reference"],
+        "input_owner": conversion.get("Owner"),
         "statement": (
             f"{gap:g} {gap_unit} to the approved checkpoint; "
             "a SAR-per-week conversion is not available because the required "
@@ -241,6 +242,7 @@ def _plan_health(
     glidepaths: list[dict[str, Any]],
     source_file: str | None,
     finance_kpi: dict[str, Any] | None = None,
+    metric_registry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     finance_components = (
         finance_kpi.get("components")
@@ -255,26 +257,31 @@ def _plan_health(
     commitments: list[dict[str, Any]] = []
     for row in glidepaths:
         kpi_id = str(row.get("KPI_ID") or "")
-        actual = _number(row.get("Jun-2026 actual"))
-        checkpoint = _number(row.get("Jun-2026 checkpoint"))
+        metadata = dict((metric_registry or {}).get("metrics", {}).get(kpi_id, {}))
+        for key in ("direction", "weight", "tolerance", "measurement_status", "actual_field", "checkpoint_field"):
+            if key in row:
+                metadata[key] = row[key]
+        metadata.setdefault("actual_field", next((key for key in row if str(key).lower().endswith("actual")), "actual"))
+        metadata.setdefault("checkpoint_field", next((key for key in row if str(key).lower().endswith("checkpoint")), "checkpoint"))
+        if "direction" not in metadata:
+            baseline, target = _number(row.get("FY2025A")), _number(row.get("FY2028T"))
+            metadata["direction"] = "lower_is_better" if baseline is not None and target is not None and target < baseline else "higher_is_better"
+        definition = MetricDefinition.from_mapping(metadata)
+        raw_actual = row.get(definition.actual_field)
+        actual = _number(raw_actual)
+        checkpoint = _number(row.get(definition.checkpoint_field))
         comparator_evidence: dict[str, Any] | None = None
-        # The supplied KPI-01 glidepath row labels revenue as 2.6% ahead but
-        # repeats the H1 actual in its checkpoint cell. The approved group
-        # budget is the authoritative H1 comparator already reconciled by the
-        # finance engine, so use that actual/plan pair instead of presenting a
-        # self-contradictory 100% score.
-        if kpi_id == "KPI-01" and isinstance(finance_components, dict):
-            revenue_actual = _number(finance_components.get("revenue_actual"))
-            revenue_plan = _number(finance_components.get("revenue_plan"))
-            if revenue_actual is not None and revenue_plan not in {None, 0}:
-                actual = revenue_actual / 1_000_000
-                checkpoint = revenue_plan / 1_000_000
-                comparator_evidence = dict(
-                    finance_evidence.get("revenue") or {}
-                ) if isinstance(finance_evidence, dict) else None
-        lower_is_better = kpi_id in {"KPI-04", "KPI-10"}
-        status = _measurement_status(row)
-        score = _score(actual, checkpoint, lower_is_better)
+        binding = definition.finance_binding
+        if binding and isinstance(finance_components, dict):
+            bound_actual = _number(finance_components.get(f"{binding}_actual"))
+            bound_plan = _number(finance_components.get(f"{binding}_plan"))
+            if bound_actual is not None and bound_plan is not None:
+                actual, checkpoint = bound_actual / definition.finance_scale, bound_plan / definition.finance_scale
+                comparator_evidence = dict(finance_evidence.get(binding) or {})
+        lower_is_better = definition.direction == "lower_is_better"
+        status = measurement_status(raw_actual, definition.quality)
+        score = definition.attainment(actual, checkpoint)
+        computed_status = definition.status(actual, checkpoint)
         evidence = {"file": source_file, "sheet": "Glidepaths", "kpi_id": kpi_id}
         commitment = {
             "kpi_id": kpi_id,
@@ -283,22 +290,26 @@ def _plan_health(
             "actual": actual,
             "checkpoint": checkpoint,
             "target_2028": _number(row.get("FY2028T")),
-            "status_vs_path": row.get("Status vs path"),
+            "status_vs_path": computed_status,
+            "source_status_vs_path": row.get("Status vs path"),
+            "metric_definition_version": definition.version,
+            "intent_route": f"/api/intent/commitments/{kpi_id}/source",
             "measurement_status": status,
             "direction": "lower_is_better" if lower_is_better else "higher_is_better",
-            "weight": 1.0,
+            "weight": definition.weight,
             "score": round(score * 100, 1) if score is not None else None,
             "rationale": row.get("Rationale"),
             "evidence": evidence,
         }
         if comparator_evidence:
             commitment["comparator_evidence"] = comparator_evidence
-        if str(row.get("Status vs path") or "").casefold().startswith("behind"):
+        if computed_status == "BEHIND":
             commitment["cost_of_drift"] = _cost_of_drift(
                 actual=actual,
                 checkpoint=checkpoint,
                 unit=row.get("Unit"),
                 evidence=evidence,
+                conversion=(metric_registry or {}).get("conversions", {}).get(kpi_id),
             )
         commitments.append(commitment)
     live = [item for item in commitments if item["measurement_status"] == "live" and item["score"] is not None]
@@ -308,7 +319,7 @@ def _plan_health(
         for item in live
         if str(item.get("status_vs_path") or "").casefold().startswith("behind")
     ]
-    score = round(sum(float(item["score"]) for item in live) / len(live), 1) if live else None
+    score = round(sum(float(item["score"]) * item["weight"] for item in live) / sum(item["weight"] for item in live), 1) if live else None
     return {
         "score": score,
         "display_score": round(score) if score is not None else None,
@@ -325,7 +336,7 @@ def _plan_health(
             f"Computed on {len(live)} of {len(commitments)} live board commitments"
             + (f" · {len(estimated)} estimates shown separately" if estimated else "")
         ),
-        "weighting": "equal_weight_default",
+        "weighting": "versioned_metric_weights",
         "commitments": commitments,
     }
 
@@ -559,6 +570,10 @@ def derive_strategy_enrichment(
     decisions_path = _find(root, "Remediation_Decision_Log_Jun2026.xlsx")
     question_bank_path = _find(root, "CEO_500_Questions_StrategyOS.xlsx")
 
+    registry_path = _find(root, "Metric_Definitions.json")
+    metric_registry = json.loads(registry_path.read_text()) if registry_path else {}
+    metric_registry["conversions"] = {str(row.get("KPI_ID")): row for row in
+        _first_sheet_records(_find(root, "KPI_Value_Conversions.xlsx")) if row.get("KPI_ID")}
     glidepaths = _records(glidepath_path, "Glidepaths")
     actuals = _records(actuals_path, "KPI_Actuals_Monthly")
     initiatives = _records(initiatives_path, "Initiative_Register")
@@ -647,8 +662,15 @@ def derive_strategy_enrichment(
         }
         for row in profiles
     ]
-    current_audit_rows = remediation_rows[:8]
+    # Scope by the source audit, never by worksheet position. Totals and
+    # historical/intercompany decisions are separate populations.
+    current_audit_rows = [
+        row for row in remediation_rows
+        if row.get("ID") and re.fullmatch(r"H1 audit P\d+", str(row.get("Source") or ""), re.IGNORECASE)
+    ]
     recovery_meter = {
+        "scope": "H1 audit",
+        "receipt_verification": "source_reported",
         "identified_sar": round(
             sum(float(row.get("Value (SAR)") or 0) for row in current_audit_rows),
             2,
@@ -686,6 +708,18 @@ def derive_strategy_enrichment(
         ],
         "evidence": {"file": _relative(decisions_path, root), "sheet": "Decision_Log"},
     }
+    receipt_path = _find(root, "Recovery_Receipt_Ledger.json")
+    if receipt_path:
+        from .recovery_ledger import reconcile
+        ledger = reconcile(json.loads(receipt_path.read_text()).get("events", []),
+                           eligible_cases={str(row["ID"]) for row in current_audit_rows}, root=root)
+        recovery_meter["receipt_ledger"] = ledger
+        recovery_meter["source_reported_sar"] = recovery_meter["recovered_sar"]
+        recovery_meter["recovered_sar"] = ledger["recovered_sar"]
+        recovery_meter["receipt_verification"] = "reviewed_receipt_ledger" if ledger["status"] == "reconciled" else "needs_review"
+        for item in recovery_meter["items"]:
+            item["source_reported_sar"] = item["recovered_sar"]
+            item["recovered_sar"] = (ledger.get("by_case") or {}).get(str(item["id"]))
     question_themes = sorted(
         {str(row.get("Theme") or "").strip() for row in question_rows if row.get("Theme")}
     )
@@ -698,6 +732,7 @@ def derive_strategy_enrichment(
             glidepaths,
             _relative(glidepath_path, root),
             finance_kpi,
+            metric_registry,
         ),
         "operational_actuals": {
             "row_count": len(actuals),

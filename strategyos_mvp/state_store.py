@@ -21,6 +21,8 @@ from .oracle_finance import OracleCanonicalSnapshot
 def create_run(
     summary_seed: dict[str, Any], *, requires_human_review: bool
 ) -> dict[str, Any]:
+    summary_seed = {**summary_seed, "tenant_context": {
+        **dict(summary_seed.get("tenant_context") or {}), "tenant_id": CONFIG.tenant_slug}}
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -33,8 +35,8 @@ def create_run(
                 """
                 insert into strategyos_runs
                     (run_dir, dataset_root, finding_count, locked_finding_count, total_recoverable_sar,
-                     status, current_stage, requires_human_review, summary_json)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                     status, current_stage, requires_human_review, summary_json, tenant_key, business_unit_scope)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb)
                 returning id, created_at, status, current_stage, requires_human_review, approved_at, approved_by, summary_json
                 """,
                 (
@@ -61,6 +63,8 @@ def create_run(
                     text_value(summary_seed.get("current_stage")),
                     requires_human_review,
                     json_blob(summary_seed),
+                    CONFIG.tenant_slug,
+                    json_blob(summary_seed.get("business_units") or []),
                 ),
             )
             record = fetchone_dict(cur)
@@ -76,7 +80,7 @@ def create_run(
 
 def run_job_request_hash(request_payload: dict[str, Any]) -> str:
     canonical = json.dumps(
-        request_payload,
+        {"tenant_id": CONFIG.tenant_slug, "request": request_payload},
         default=json_value,
         sort_keys=True,
         separators=(",", ":"),
@@ -91,6 +95,7 @@ def create_run_job(
     execution_mode: str = "hatchet",
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    metadata = {**dict(metadata or {}), "tenant_context": {"tenant_id": CONFIG.tenant_slug}}
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -153,6 +158,8 @@ def update_run_job(
     metadata: dict[str, Any] | None = None,
     increment_retry: bool = False,
 ) -> dict[str, Any]:
+    from .access_scope import guard_reference
+    guard_reference("job", job_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -207,6 +214,8 @@ def update_run_job(
 
 
 def get_run_job(job_id: str) -> dict[str, Any]:
+    from .access_scope import guard_reference
+    guard_reference("job", job_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -238,6 +247,8 @@ def update_run_status(
     current_stage: str | None = None,
     approved_by: str | None = None,
 ) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -277,6 +288,8 @@ def persist_checkpoint(
     state: dict[str, Any],
     summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return {
@@ -318,6 +331,8 @@ def persist_checkpoint(
 
 
 def latest_checkpoint(run_id: str) -> dict[str, Any] | None:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -345,6 +360,8 @@ def latest_checkpoint(run_id: str) -> dict[str, Any] | None:
 
 
 def get_checkpoint_detail(checkpoint_id: str) -> dict[str, Any]:
+    from .access_scope import guard_reference
+    guard_reference("checkpoint", checkpoint_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -370,6 +387,8 @@ def get_checkpoint_detail(checkpoint_id: str) -> dict[str, Any]:
 
 
 def get_run_detail(run_id: str) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -406,6 +425,8 @@ def get_run_detail(run_id: str) -> dict[str, Any]:
 
 
 def executive_snapshot_for_run(run_id: str) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     """Load the executive truth surface from persisted relational records.
 
     This deliberately does not fall back to run artifacts. Callers can choose an
@@ -602,6 +623,8 @@ def executive_snapshot_for_run(run_id: str) -> dict[str, Any]:
 
 
 def list_pending_reviews() -> list[dict[str, Any]] | dict[str, Any]:
+    from .access_scope import run_predicate
+    scope_where, scope_params = run_predicate()
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -611,7 +634,7 @@ def list_pending_reviews() -> list[dict[str, Any]] | dict[str, Any]:
         ensure_data_schema(conn)
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 select
                     r.id,
                     r.created_at,
@@ -647,8 +670,10 @@ def list_pending_reviews() -> list[dict[str, Any]] | dict[str, Any]:
                 where r.requires_human_review = true
                   and r.status = 'awaiting_review'
                   and coalesce(a.decision, 'pending') not in ('approved', 'rejected')
+                  and ({scope_where})
                 order by coalesce(rc.created_at, r.created_at) desc
-                """
+                """,
+                scope_params,
             )
             items = []
             for normalized in (normalize_record(record) for record in fetchall_dicts(cur)):
@@ -664,6 +689,8 @@ def list_pending_reviews() -> list[dict[str, Any]] | dict[str, Any]:
 
 
 def list_recent_runs(limit: int = 12) -> list[dict[str, Any]] | dict[str, Any]:
+    from .access_scope import run_predicate
+    scope_where, scope_params = run_predicate()
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -673,7 +700,7 @@ def list_recent_runs(limit: int = 12) -> list[dict[str, Any]] | dict[str, Any]:
         ensure_data_schema(conn)
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 select
                     r.id,
                     r.created_at,
@@ -716,10 +743,11 @@ def list_recent_runs(limit: int = 12) -> list[dict[str, Any]] | dict[str, Any]:
                     order by created_at desc
                     limit 1
                 ) a on true
+                where ({scope_where})
                 order by coalesce(rc.created_at, r.created_at) desc
                 limit %s
                 """,
-                (max(1, min(int(limit), 50)),),
+                (*scope_params, max(1, min(int(limit), 50))),
             )
             items = []
             for normalized in (normalize_record(record) for record in fetchall_dicts(cur)):
@@ -744,6 +772,8 @@ def claim_pending_review(
     run_id: str,
     reviewer_subject: str,
 ) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -813,6 +843,8 @@ def unclaim_pending_review(
     run_id: str,
     reviewer_subject: str,
 ) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -885,6 +917,8 @@ def record_approval(
     comment: str | None,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -978,6 +1012,8 @@ def record_approval(
 
 
 def approval_status_for_run(run_id: str) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -1046,6 +1082,8 @@ def review_assignment_payload(record: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def update_run_summary(run_id: str, summary: dict[str, Any]) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -1363,8 +1401,8 @@ def insert_run_summary(cur: Any, summary: dict[str, Any]) -> str:
         """
         insert into strategyos_runs
             (run_dir, dataset_root, finding_count, locked_finding_count, total_recoverable_sar,
-             status, current_stage, requires_human_review, approved_at, approved_by, summary_json)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+             status, current_stage, requires_human_review, approved_at, approved_by, summary_json, tenant_key, business_unit_scope)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb)
         returning id
         """,
         (
@@ -1379,6 +1417,8 @@ def insert_run_summary(cur: Any, summary: dict[str, Any]) -> str:
             summary.get("approved_at"),
             summary.get("approved_by"),
             json_blob(summary),
+            CONFIG.tenant_slug,
+            json_blob(summary.get("business_units") or []),
         ),
     )
     return cur.fetchone()[0]
@@ -2045,6 +2085,8 @@ def record_executive_directive(
     toast. The finding's status is not written here; the governed review flow
     still owns that transition.
     """
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return skipped
@@ -2105,6 +2147,8 @@ def record_executive_decision(
     the same effect key idempotent even though the legacy audit table predates a
     dedicated effect-key column.
     """
+    from .access_scope import guard_run
+    guard_run(run_id)
 
     connection, skipped = database_connection()
     if skipped is not None:
@@ -2193,6 +2237,8 @@ def record_executive_decision(
 
 def executive_decisions_for_run(run_id: str) -> dict[str, Any]:
     """Return recorded Stage 1 decisions; never imply delivery or closure."""
+    from .access_scope import guard_run
+    guard_run(run_id)
 
     connection, skipped = database_connection()
     if skipped is not None:
@@ -2322,6 +2368,8 @@ def count_profile_versions_for_tenant(cur: Any, tenant_id: str) -> int:
 
 
 def artifact_paths_for_run(cur: Any, run_id: str) -> dict[str, str]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     cur.execute(
         """
         select artifact_name, local_path
@@ -2338,6 +2386,8 @@ def artifact_paths_for_run(cur: Any, run_id: str) -> dict[str, str]:
 
 
 def search_citations_for_run(run_id: str) -> list[dict[str, Any]]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     connection, skipped = database_connection()
     if skipped is not None:
         return []
@@ -2390,6 +2440,8 @@ def evidence_preview_for_run(
     source_hash: str | None = None,
     locator: str | None = None,
 ) -> dict[str, Any]:
+    from .access_scope import guard_run
+    guard_run(run_id)
     if not any([citation_id, finding_id, source_hash, locator]):
         return {
             "status": "missing",

@@ -452,7 +452,8 @@ def _group_cost_component_drivers(root: Path) -> dict[str, Any] | None:
                 component = str(_cell(values, headers, "costcomponent") or "").strip()
                 budget = _decimal(_cell(values, headers, "h1budgetsarm"))
                 actual = _decimal(_cell(values, headers, "h1actualsarm"))
-                variance = _decimal(_cell(values, headers, "varianceaboveplan"))
+                source_variance = _decimal(_cell(values, headers, "varianceaboveplan"))
+                variance = actual - budget if actual is not None and budget is not None else None
                 # Aggregate rows repeat the BU total already exposed in
                 # contributors; the component block must contain the lines
                 # beneath that total, not duplicate it.
@@ -470,6 +471,7 @@ def _group_cost_component_drivers(root: Path) -> dict[str, Any] | None:
                         "budget_sar": _number(budget * Decimal("1000000")),
                         "actual_sar": _number(actual * Decimal("1000000")),
                         "variance_sar": _number(variance * Decimal("1000000")),
+                        "source_variance_sar": _number(source_variance * Decimal("1000000")) if source_variance is not None else None,
                         "direction": (
                             "above_plan"
                             if variance > 0
@@ -488,9 +490,9 @@ def _group_cost_component_drivers(root: Path) -> dict[str, Any] | None:
                 )
                 return {
                     "available": True,
-                    "cap": 12,
+                    "display_cap": 12,
                     "ranked_by": "absolute governed H1 variance",
-                    "rows": rows[:12],
+                    "rows": rows,
                     "source_file": _relative(path, root),
                     "sheet": sheet.title,
                 }

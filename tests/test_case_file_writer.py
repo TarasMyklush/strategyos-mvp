@@ -37,7 +37,9 @@ def test_case_file_writer_emits_phase5_deliverables(tmp_path: Path):
     )
     assert artifacts["case_file_pdf"].read_bytes().startswith(b"%PDF")
     working_capital = artifacts["working_capital"].read_text(encoding="utf-8")
-    assert working_capital.startswith("# 13-week trailing DSO/DPO drift analysis")
+    assert working_capital.startswith("# 13-week settlement-day proxy drift analysis")
+    assert "exclude unpaid balances" in working_capital
+    assert "not balance-based DSO/DPO" in working_capital
     assert "Formula 1" in working_capital
     assert "Task 1 leakage overlap" in working_capital
     assert "Driver citations" in working_capital

@@ -607,9 +607,19 @@
       "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
     },
     {
+      "path": "demo/01_Synthetic_Dataset/20_Board_KPIs/Intent_Plan.json",
+      "bytes": 6802,
+      "sha256": "bc41abae4d322f7e6211f4b6fd282a3d4b15f6c1423b1aab95e8bbe811f24842"
+    },
+    {
       "path": "demo/01_Synthetic_Dataset/20_Board_KPIs/KPI_Operational_Actuals_Monthly.xlsx",
       "bytes": 16689,
       "sha256": "40625ed13320c642083b0559431666cee2cb80a5b849891b13dc8ae430b97411"
+    },
+    {
+      "path": "demo/01_Synthetic_Dataset/20_Board_KPIs/Metric_Definitions.json",
+      "bytes": 4372,
+      "sha256": "7baa51453ab1652f1cc0e5fd9e73c5ea94f424ef14170ed8b43cb91a3bd757a3"
     },
     {
       "path": "demo/01_Synthetic_Dataset/21_Initiatives/Initiative_Register.xlsx",

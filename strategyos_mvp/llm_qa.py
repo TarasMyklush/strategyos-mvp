@@ -387,6 +387,15 @@ def answer_question(
             evidence=evidence,
         )
     status_payload = _status_with_transport(status, transport_trace)
+    from .claim_contracts import approved_evidence_text, claims_supported
+    visible_claims = {key: parsed.get(key) for key in ("answer", "basis", "suggestions")}
+    if not claims_supported(visible_claims, approved_evidence_text(evidence)):
+        return {"matched": False,
+                "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
+                "basis": "Numerical claim validation rejected the provider response.",
+                "citations": [], "suggestions": [], "claim_validation": "rejected",
+                "llm_status": status_payload, "model": status.get("model"),
+                "provider": status.get("provider"), "public_safe": public_mode}
     return {
         "matched": _normalize_bool(parsed.get("matched", True)),
         "answer": _clean_visible_answer(parsed.get("answer")) or "No answer returned.",
@@ -1130,7 +1139,19 @@ def provider_retry_config(config: Any) -> dict[str, float | int]:
     }
 
 
-def _call_openai_compatible_chat(
+def _call_openai_compatible_chat(*, config: Any, messages: list[dict[str, str]], temperature: float = 0.1,
+    max_tokens: int = 900, response_format: dict[str, str] | None = None,
+    transport_trace: list[dict[str, Any]] | None = None) -> str:
+    from .inference_audit import record
+    with record(config, messages, max_tokens) as audit:
+        result = _call_openai_compatible_chat_transport(config=config, messages=messages,
+            temperature=temperature, max_tokens=max_tokens, response_format=response_format,
+            transport_trace=transport_trace)
+        audit["response"] = result
+        return result
+
+
+def _call_openai_compatible_chat_transport(
     *,
     config: Any,
     messages: list[dict[str, str]],
@@ -1185,10 +1206,8 @@ def _call_openai_compatible_chat(
     if not content:
         choice0 = choices[0] if isinstance(choices[0], dict) else {}
         logger.warning(
-            "LLM provider returned empty assistant text; payload_shape=%s message=%s choice0=%s",
+            "LLM provider returned empty assistant text; payload_shape=%s",
             _provider_payload_shape(parsed),
-            json.dumps((choice0.get("message") or {}), ensure_ascii=False, default=str)[:1200],
-            json.dumps(choice0, ensure_ascii=False, default=str)[:1200],
         )
         raise _EmptyProviderResponseError("LLM provider returned an empty answer.")
     return content

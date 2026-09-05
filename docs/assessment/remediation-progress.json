@@ -1,0 +1,217 @@
+{
+  "target": "https://new.strategyos.live",
+  "baseline": "d63fe5b",
+  "scope": "All P0/P1 application work and UI QA; actual external ERP/treasury/calendar connections deferred by user. No real-world dispatch is simulated as completed.",
+  "gaps": [
+    {
+      "id": "G01",
+      "priority": "P0",
+      "title": "Live preview lacks the strategy dataset",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "The selected release has the intended 10 commitments with honest live/estimated coverage, source-backed plan comparators, calendar and executive policy inputs; the run completes and all visible values trace to that exact pack."
+    },
+    {
+      "id": "G02",
+      "priority": "P0",
+      "title": "Local release aligned; remote and hosted release identity remain open",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "A clean checkout of the designated release recreates the approved application and selected data contract; rollback explicitly covers code, schema compatibility and selected run."
+    },
+    {
+      "id": "G03",
+      "priority": "P0",
+      "title": "Zero values disappear from Plan Health",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "A higher-is-better 0/100 contributes 0%; a lower-is-better zero uses the approved bounded rule; missing input remains visibly missing."
+    },
+    {
+      "id": "G04",
+      "priority": "P1",
+      "title": "Drift and direction depend on dataset labels and IDs",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Rename/reorder KPI IDs and change periods without changing results; mutate actuals without editing labels and verify the correct exception; validate weights against the ratified plan."
+    },
+    {
+      "id": "G05",
+      "priority": "P0",
+      "title": "Grounded synthesis accepts fabricated additional numbers",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Adversarial provider responses retaining valid numbers while adding, changing or attaching false units, amounts or causes are rejected. All displayed numerical cells resolve to an approved calculation."
+    },
+    {
+      "id": "G06",
+      "priority": "P0",
+      "title": "Authority enforcement is weaker than its published contract",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Negative tests across users, personas, aliases, mixed-domain questions and /qa versus /assistant/chat demonstrate identical denials before restricted data is loaded."
+    },
+    {
+      "id": "G07",
+      "priority": "P0",
+      "title": "Shared multi-tenant run isolation is incomplete",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Two tenants and two BUs sharing infrastructure cannot list, resolve, retrieve, search, export or ask about each other\u2019s records, including guessed IDs and latest aliases."
+    },
+    {
+      "id": "G08",
+      "priority": "P0",
+      "title": "Frozen board memory is not demonstrated as an immutable snapshot",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Close a meeting, change/reprocess current company data and restart services; the meeting\u2019s figures, files and answers remain identical and inaccessible data stays unavailable."
+    },
+    {
+      "id": "G09",
+      "priority": "P1",
+      "title": "Live sign-out does not invalidate the session",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "After sign-out the same cookie cannot access a protected route; the response and browser navigation agree, including proxy and branch deployments."
+    },
+    {
+      "id": "G10",
+      "priority": "P0",
+      "title": "Question-bank reporting does not measure the required answer quality",
+      "state": "queued",
+      "acceptance": "The latest approved release answers at least 45 of 50 questions sampled across all 18 themes correctly with resolving citations and no fabricated numbers; publish the failed and refused questions separately."
+    },
+    {
+      "id": "G11",
+      "priority": "P1",
+      "title": "Portable datasets fixed; external-service acceptance remains open",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Clean CI executes the enrichment assertions, service-dependent security/transaction tests, and required CEO/board journeys; unexpected skips fail the release gate."
+    },
+    {
+      "id": "G12",
+      "priority": "P1",
+      "title": "A reusable strategy-to-KPI compiler is missing",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Onboard a second anonymized company without code changes; prove target extraction, owner review, formula binding, recompile diffs and unsupported-input handling."
+    },
+    {
+      "id": "G13",
+      "priority": "P1",
+      "title": "Intent Vault and governed amendments are missing",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Intent is reachable from navigation; every commitment exposes approval and last amendment; at least three real amendments resolve; every diagnostics KPI links to its plan version."
+    },
+    {
+      "id": "G14",
+      "priority": "P1",
+      "title": "Production connectors and incremental ingestion are missing",
+      "state": "deferred_external_connection",
+      "acceptance": "Repeated and out-of-order source deliveries are idempotent; transactions, nightly bank balances and calendar updates arrive at their declared cadence with visible freshness and failure state."
+    },
+    {
+      "id": "G15",
+      "priority": "P1",
+      "title": "Continuous drift and historical Plan Health remain partial",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "New measurements automatically change drift state, historical trajectory and alerts; stale connectors and stopped workers visibly degrade readiness; slow KPIs do not fake daily movement."
+    },
+    {
+      "id": "G16",
+      "priority": "P1",
+      "title": "Cross-system entity resolution and consolidation need broader proof",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "A multi-system corpus covers aliases, shared bank accounts, disputed matches, intercompany sweeps and FX-rate dates; every aggregate reconciles without double counting."
+    },
+    {
+      "id": "G17",
+      "priority": "P1",
+      "title": "Recovery meter is limited to the first eight decision rows",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Adding a ninth eligible recovery changes the meter correctly; shuffling rows does not; partial receipts and reversals reconcile to payment evidence."
+    },
+    {
+      "id": "G18",
+      "priority": "P1",
+      "title": "Working-capital drift uses settlement-day proxies",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Compare both metrics with a finance-reviewed example containing large unpaid balances; disclose formulas, weighting and windows and prove cash-impact reconciliation."
+    },
+    {
+      "id": "G19",
+      "priority": "P1",
+      "title": "Cost-of-drift conversion is a limit, not a completed feature",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Financial drift reconciles to the variance bridge; nonfinancial conversions cite approved factors; missing factors produce a precise missing-input request, never an invented number."
+    },
+    {
+      "id": "G20",
+      "priority": "P1",
+      "title": "Decision Velocity is not implemented",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "A recorded decision and subsequent verified first action update the correct metric; overdue open items remain visible; source events drill through from the card."
+    },
+    {
+      "id": "G21",
+      "priority": "P1",
+      "title": "Recording a decision is not closed-loop execution",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Retries cannot duplicate delivery; failures remain pending with a clear owner; a task closes only when authoritative completion evidence arrives."
+    },
+    {
+      "id": "G22",
+      "priority": "P1",
+      "title": "Agent experiences are not one continuous state model",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "One real request traces through delegation, evidence, approval and result; refresh/restart/another authorized device preserves the same task and conversation state."
+    },
+    {
+      "id": "G23",
+      "priority": "P1",
+      "title": "Configured vector search is still a lexical/hash fallback",
+      "state": "queued",
+      "acceptance": "A held-out corpus with paraphrases, entity aliases and Arabic/English queries meets agreed recall@k and citation precision targets without cross-scope leakage."
+    },
+    {
+      "id": "G25",
+      "priority": "P1",
+      "title": "CFO and BU experiences are not a complete four-persona product",
+      "state": "queued",
+      "acceptance": "Persona changes alter data scope, responsibilities and workflow, not just labels; direct URLs cannot substitute another persona\u2019s header or access rights."
+    },
+    {
+      "id": "G26",
+      "priority": "P1",
+      "title": "Deployment policy exists; tier proof and visible residency do not",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "The screen matches actual deployment configuration; blocked egress cannot trigger an unapproved fallback; each supported local model passes the answer-quality gate."
+    },
+    {
+      "id": "G27",
+      "priority": "P1",
+      "title": "Arabic/RTL support and complete accessibility acceptance are absent",
+      "state": "queued",
+      "acceptance": "Core intake, diagnostics, drill, chat, decision and board journeys work in Arabic and English with keyboard and screen reader; exported figures preserve units and meaning."
+    },
+    {
+      "id": "G29",
+      "priority": "P1",
+      "title": "Application rollback is not a tested data recovery plan",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Restore into a clean environment and reconcile approved runs, evidence hashes, decisions and board snapshots within agreed recovery objectives."
+    },
+    {
+      "id": "G30",
+      "priority": "P1",
+      "title": "SLOs, capacity, inference audit and cost controls are not demonstrated",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Publish agreed SLOs and load results at target volume; alerts fire on seeded failures; inference records identify tenant/user, model/version, time, evidence and protected prompt/response references under a retention policy."
+    },
+    {
+      "id": "G32",
+      "priority": "P1",
+      "title": "Test isolation and stale local pointers remediated; broader integration controls remain open",
+      "state": "implementation_in_progress_acceptance_pending",
+      "acceptance": "Running the complete suite leaves production/local-business pointers unchanged; interrupted writes cannot corrupt pointers; a clean test harness creates its required directories before importing application configuration."
+    }
+  ],
+  "ui_constraint": "User requires preserving the existing UI. Removed new pages, navigation and language controls on 2026-09-05. Keep existing layouts, CSS, branding and controls; integrate functional corrections through existing surfaces.",
+  "validation": {
+    "service_suite": "1720 passed, zero skips before final UI preservation changes; final rerun in progress",
+    "deployment": "pending",
+    "browser_qa": "baseline captured; release QA pending",
+    "restore_evidence": "evidence/preview-restore-proof.json"
+  }
+}

@@ -278,6 +278,22 @@ from .agent_runtime.api import router as agent_runtime_router
 @asynccontextmanager
 async def _app_lifespan(_: FastAPI):
     """Reconcile durable Twin audit indexes before serving executive reads."""
+    if CONFIG.database_url:
+        def migrate():
+            handle, failure = state_store.database_connection()
+            if failure or handle is None:
+                raise RuntimeError("Database schema could not be verified before startup.")
+            with handle as conn:
+                state_store.ensure_data_schema(conn)
+                from . import board_memory, decision_lifecycle, inference_audit, conversation_state
+                board_memory.initialize(conn)
+                with conn.cursor() as cur:
+                    cur.execute(decision_lifecycle.SCHEMA)
+                    cur.execute(inference_audit.SCHEMA)
+                    cur.execute(conversation_state.SCHEMA)
+                conn.commit()
+        await asyncio.to_thread(migrate)
+
     try:
         result = reconcile_message_routing_audit()
         if result["created"]:
@@ -317,6 +333,40 @@ async def prevent_assistant_response_caching(request: Request, call_next: Any) -
 STATIC_DIR = Path(__file__).with_name("static")
 TWINS_STATIC_DIR = Path(__file__).parent / "twins" / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.middleware("http")
+async def bind_authorized_data_scope(request: Request, call_next: Any) -> Any:
+    from .access_scope import principal_scope
+    from . import auth as identity_boundary
+    headers = request.headers
+    if request.url.path.startswith("/static/"):
+        return await call_next(request)
+    try:
+        principal = await asyncio.to_thread(identity_boundary.authenticate_optional_request,
+            x_api_key=headers.get("x-api-key"), authorization=headers.get("authorization"),
+            x_auth_request_email=headers.get("x-auth-request-email"),
+            x_auth_request_user=headers.get("x-auth-request-user"),
+            x_auth_request_preferred_username=headers.get("x-auth-request-preferred-username"),
+            x_forwarded_email=headers.get("x-forwarded-email"),
+            x_forwarded_user=headers.get("x-forwarded-user"),
+            x_strategyos_proxy_auth=headers.get("x-strategyos-proxy-auth"),
+            strategyos_session=request.cookies.get("strategyos_session"))
+    except HTTPException as exc:
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    token = principal_scope.set({**principal, "_verified_for_request": True})
+    try:
+        response = await call_next(request)
+        if principal.get("authenticated"):
+            response.headers["Cache-Control"] = "private, no-store"
+        return response
+    finally:
+        principal_scope.reset(token)
+
+
+@app.exception_handler(PermissionError)
+async def scope_denied(request: Request, exc: PermissionError):
+    return JSONResponse({"detail": str(exc)}, status_code=404)
 
 _EXECUTIVE_ASSET_REV_FILES = (
     "executive.css",
@@ -3900,7 +3950,9 @@ def _board_portal_payload(
     plan_health = _bounded_plan_health_payload(summary, rows, audit_summary)
     state = "pre"
     if publication.get("status") == "published":
-        state = "closed"
+        # Publishing a report does not close a board meeting. Closure is an
+        # explicit immutable operation in the board memory store.
+        state = "live"
     elif publication.get("status") == "approved_for_release":
         state = "live"
     presentation_state = (
@@ -4015,10 +4067,10 @@ def _board_portal_payload(
             ),
         },
         "frozen_snapshot": {
-            "status": "frozen" if state == "closed" else "live_packet",
-            "what_if_ready": state == "closed",
+            "status": "live_packet",
+            "what_if_ready": False,
             "board_safe": bool(public_safe or principal_has_any_role(role, "executive")),
-            "summary": "Closed meetings retain a bounded frozen snapshot; live organisation data stays outside the board lane.",
+            "summary": "A meeting is frozen only after its immutable snapshot has been recorded.",
         },
         "session_chips": [
             state_label,
@@ -14133,6 +14185,10 @@ def _kpi_mover_reference_answer(entity: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _question_requires_analytical_result(question: str) -> bool:
+    return bool(re.search(r"\b(top (?:\d+|three|five|ten)|break(?:down| down)|rank(?:ed|ing)?|compar(?:e|ison)|against (?:budget|plan)|versus (?:budget|plan)|performing against|which .*drivers|aging|ageing|sensitivity|per employee)\b", str(question).casefold()))
+
+
 def _governed_subject_result(
     context: Mapping[str, Any],
     *,
@@ -14149,6 +14205,7 @@ def _governed_subject_result(
     """
     if (
         public_safe
+        or _question_requires_analytical_result(question)
         or _assistant_question_requests_modelling(question)
         or _question_is_general_knowledge(question)
         or _question_asks_what_to_do_about_cost(question)
@@ -14256,7 +14313,7 @@ def _governed_reference_result(
     them. An earlier version indexed KPI cards only, which left "F-006" and
     "INV-2026-0577" to the model and produced fabricated finance facts.
     """
-    if public_safe:
+    if public_safe or _question_requires_analytical_result(question):
         return None
     # A what-if that happens to quote an on-screen amount ("If we recover
     # SAR 103.2M, what remains?") must reach the scenario engine, not be
@@ -15317,6 +15374,7 @@ async def _assistant_chat_response(
     if (
         contextual_kpi_key
         and not explicit_modelling_request
+        and not _question_requires_analytical_result(question)
         and str(assistant_context.get("entrypoint") or "") in {"ceo_kpi_inline", "knowledge_graph"}
     ):
         kpi_result = _ceo_kpi_inline_result(
@@ -15969,6 +16027,9 @@ def data_qa(
     request: QaRequest,
     _: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
+    denied = _assistant_authority_refusal(request, _)
+    if denied is not None:
+        return denied
     question = (request.question or "").strip()
     if not question:
         raise HTTPException(
@@ -16614,19 +16675,42 @@ def _assistant_authority_refusal(
     request: AssistantChatRequest,
     principal: Mapping[str, Any],
 ) -> dict[str, Any] | None:
+    from .authority_matrix import classify_requests
+
+    context = getattr(request, "assistant_context", None) or request.context or {}
+    persona = str(request.persona or context.get("active_persona") or context.get("persona") or "ceo").lower()
+    role = str(principal.get("role") or "anonymous")
+    allowed_personas = principal.get("personas")
+    if (allowed_personas is not None and persona not in allowed_personas) or (
+        role == "bu" and persona not in {"gm", "bu", "bucfo"}
+    ):
+        raise HTTPException(status_code=403, detail="This identity is not entitled to the requested persona.")
     tenant_id = _principal_tenant_id(principal)
     matrix = get_authority_matrix(tenant_id)
-    domain, required_right = classify_request(
-        request.question,
-        request.assistant_context or request.context,
-    )
-    decision = authority_decision(
-        matrix,
-        subject_id=assistant_subject(request.persona),
-        domain=domain,
-        required_right=required_right,
-    )
-    return None if decision["allowed"] else refusal_payload(decision)
+    requests = [("board_materials", "view")] if persona == "board" else classify_requests(request.question, context)
+    for domain, required_right in requests:
+        decision = authority_decision(
+            matrix, subject_id=assistant_subject(persona),
+            domain=domain, required_right=required_right,
+        )
+        if not decision["allowed"]:
+            return refusal_payload(decision)
+    if persona == "board":
+        from . import board_memory
+        if not principal.get("auth_disabled") and not principal_has_any_role(role, "executive"):
+            raise HTTPException(403, "Board access requires an authorized executive identity.")
+        meeting_id = str(context.get("meeting_id") or "")
+        if not meeting_id:
+            return {"status": "ok", "matched": False, "response_mode": "frozen_board_snapshot",
+                    "answer": "Select a closed board meeting to ask about its approved snapshot.", "citations": []}
+        try:
+            snapshot = board_memory.read_meeting(tenant_id, meeting_id)
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc)) from exc
+        if snapshot is None:
+            raise HTTPException(404, "Board meeting not found.")
+        return board_memory.answer_from_snapshot(snapshot, request.question)
+    return None
 
 
 @app.post("/assistant/chat")
@@ -16677,3 +16761,16 @@ def prepare_inputs(
 ) -> dict[str, str]:
     agent_input, evaluation = prepare_agent_input()
     return {"agent_input": str(agent_input), "evaluation": str(evaluation)}
+
+
+from .board_api import router as board_router
+app.include_router(board_router)
+from .intent_api import router as intent_router
+app.include_router(intent_router)
+from .decision_api import router as decision_router
+app.include_router(decision_router)
+
+from .operations_api import router as operations_router
+app.include_router(operations_router)
+from .conversation_state import router as conversation_state_router
+app.include_router(conversation_state_router)

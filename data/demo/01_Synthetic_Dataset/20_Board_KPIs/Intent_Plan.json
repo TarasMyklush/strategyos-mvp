@@ -1,0 +1,230 @@
+{
+  "plan_id": "mizan-2026-2028",
+  "company_id": "mizan",
+  "version": 1,
+  "title": "Mizan strategy 2026–2028 — proposed KPI mapping",
+  "status": "proposed",
+  "commitments": [
+    {
+      "id": "KPI-01",
+      "title": "Group revenue",
+      "driver": "Growth",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "SAR M",
+      "cadence": "monthly",
+      "direction": "higher_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 10790,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-01.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-01",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    },
+    {
+      "id": "KPI-02",
+      "title": "Group EBITDA margin (headline)",
+      "driver": "Margin",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "%",
+      "cadence": "monthly",
+      "direction": "higher_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 23,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-02.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-02",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    },
+    {
+      "id": "KPI-03",
+      "title": "ROCE",
+      "driver": "Growth",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "%",
+      "cadence": "monthly",
+      "direction": "higher_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 17.5,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-03.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-03",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    },
+    {
+      "id": "KPI-04",
+      "title": "Net debt / EBITDA",
+      "driver": "Capital",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "x",
+      "cadence": "monthly",
+      "direction": "lower_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 1.5,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-04.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-04",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    },
+    {
+      "id": "KPI-05",
+      "title": "Cash, year-end",
+      "driver": "Capital",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "SAR B",
+      "cadence": "monthly",
+      "direction": "higher_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 1.92,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-05.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-05",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    },
+    {
+      "id": "KPI-06",
+      "title": "Local mfg share of own portfolio",
+      "driver": "Growth",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "%",
+      "cadence": "monthly",
+      "direction": "higher_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 48,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-06.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-06",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    },
+    {
+      "id": "KPI-07",
+      "title": "Pharmacist Saudisation",
+      "driver": "Growth",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "%",
+      "cadence": "monthly",
+      "direction": "higher_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 65,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-07.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-07",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    },
+    {
+      "id": "KPI-08",
+      "title": "Cold-chain integrity rate",
+      "driver": "Growth",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "%",
+      "cadence": "monthly",
+      "direction": "higher_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 99.6,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-08.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-08",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    },
+    {
+      "id": "KPI-09",
+      "title": "E-Rx share of retail Rx volume",
+      "driver": "Growth",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "%",
+      "cadence": "monthly",
+      "direction": "higher_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 75,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-09.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-09",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    },
+    {
+      "id": "KPI-10",
+      "title": "LTIFR",
+      "driver": "Growth",
+      "owner": "Owner assignment required",
+      "approver": "Mizan Board — mapping review required",
+      "unit": "per 200k hrs",
+      "cadence": "monthly",
+      "direction": "lower_is_better",
+      "weight": 1,
+      "tolerance": 0,
+      "target": 0.15,
+      "formula": "source_actual",
+      "bindings": [
+        "KPI-10.actual"
+      ],
+      "source": {
+        "path": "20_Board_KPIs/Board_KPI_Glidepaths.xlsx",
+        "locator": "Glidepaths; KPI_ID=KPI-10",
+        "sha256": "e9dd0eca548145eafded836436ba58a03d3880f1e4d7c4f10c10ed0f4c0a3ac2"
+      }
+    }
+  ],
+  "amendments": []
+}

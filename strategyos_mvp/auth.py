@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import hashlib
 import json
 from urllib import error, parse, request
 from typing import Any
@@ -129,6 +130,8 @@ def _introspect_identity_token(token: str) -> dict[str, Any] | None:
         "role": str(role),
         "subject": f"{issuer}:{subject}",
         "tenant_id": str(tenant_id),
+        **({"personas": list(result["personas"])} if isinstance(result.get("personas"), list) else {}),
+        **({"business_units": list(result["business_units"])} if isinstance(result.get("business_units"), list) else {}),
     }
 
 
@@ -203,6 +206,10 @@ def authenticate_request(
     x_strategyos_proxy_auth: str | None = Header(default=None, alias=TRUSTED_PROXY_HEADER_NAME),
     strategyos_session: str | None = Cookie(default=None, alias="strategyos_session"),
 ) -> dict[str, Any]:
+    from .access_scope import principal_scope
+    cached = principal_scope.get()
+    if cached and cached.get("_verified_for_request") and cached.get("authenticated"):
+        return dict(cached)
     if not CONFIG.api_auth_enabled:
         return {
             "role": "anonymous",
@@ -247,6 +254,12 @@ def authenticate_request(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="A valid identity token is required.",
             )
+        # This deployment owns one tenant's source mounts and legacy run
+        # registry. Never accept a valid identity for another tenant into it.
+        principal = {**principal, "tenant_id": principal.get("tenant_id") or CONFIG.tenant_slug}
+        if principal["tenant_id"] != CONFIG.tenant_slug:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="This identity belongs to a different tenant deployment.")
         return principal
     api_key = extract_api_key(x_api_key=x_api_key, authorization=authorization)
     role = role_for_api_key(api_key)
@@ -262,7 +275,7 @@ def authenticate_request(
             "tenant_id": CONFIG.tenant_slug,
             "demo_role_login": True,
         }
-    suffix = api_key[-4:] if api_key and len(api_key) >= 4 else api_key or "unknown"
+    suffix = hashlib.sha256(str(api_key or "").encode()).hexdigest()[:20]
     return {
         "role": role,
         "subject": f"api-key:{role}:{suffix}",

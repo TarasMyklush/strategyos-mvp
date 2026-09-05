@@ -82,6 +82,7 @@ def _write_local_review_summary(
     run_id = "local-review-run"
     state_json = {
         "run_id": run_id,
+        "tenant_context": {"tenant_id": api_module.CONFIG.tenant_slug},
         "dataset_root": str(dataset_root),
         "source_pack_id": None,
         "run_dir": str(run_dir),
@@ -96,6 +97,7 @@ def _write_local_review_summary(
     summary = api_module.annotate_governance_state(
         {
             "run_id": run_id,
+            "tenant_context": {"tenant_id": api_module.CONFIG.tenant_slug},
             "dataset": str(dataset_root),
             "run_dir": str(run_dir),
             "findings": 1,
@@ -155,7 +157,7 @@ def test_pending_reviews_returns_items_for_reviewer(monkeypatch):
                 "checkpoint_id": "cp-1",
                 "review_assignment": {
                     "claimed": True,
-                    "claimed_by": "api-key:reviewer:a111",
+                    "claimed_by": "api-key:reviewer:ab3f4305385155fa3f71",
                     "claimed_at": "2026-06-05T10:00:00Z",
                 },
             }],
@@ -184,7 +186,7 @@ def test_bu_pending_reviews_returns_items_read_only(monkeypatch):
                 "checkpoint_id": "cp-1",
                 "review_assignment": {
                     "claimed": True,
-                    "claimed_by": "api-key:reviewer:a111",
+                    "claimed_by": "api-key:reviewer:ab3f4305385155fa3f71",
                     "claimed_at": "2026-06-05T10:00:00Z",
                 },
             }],
@@ -306,7 +308,7 @@ def test_claim_run_records_reviewer_assignment(monkeypatch):
 
         assert response.status_code == 200
         assert response.json()["review_assignment"]["claimed"] is True
-        assert captured["args"] == ("run-1", "api-key:reviewer:a111")
+        assert captured["args"] == ("run-1", "api-key:reviewer:ab3f4305385155fa3f71")
     finally:
         _restore_env(original)
 
@@ -728,7 +730,7 @@ def test_claimed_reviewer_can_access_restricted_data_quality_json_and_audits(mon
                 "run_id": run_id,
                 "review_assignment": {
                     "claimed": True,
-                    "claimed_by": "api-key:reviewer:a111",
+                    "claimed_by": "api-key:reviewer:ab3f4305385155fa3f71",
                     "claimed_at": "2026-06-05T10:00:00Z",
                 },
                 "summary_json": {"artifacts": {"data_quality_json": str(artifact)}},
@@ -904,7 +906,7 @@ def test_approve_run_records_reviewer_decision(monkeypatch):
         assert response.status_code == 200
         assert response.json()["decision"] == "approved"
         assert captured["args"][0] == "run-1"
-        assert captured["args"][2] == "api-key:reviewer:a111"
+        assert captured["args"][2] == "api-key:reviewer:ab3f4305385155fa3f71"
         assert captured["args"][4] == "reviewer"
     finally:
         _restore_env(original)
@@ -957,7 +959,7 @@ def test_approve_run_updates_latest_local_summary_when_store_skipped(tmp_path):
     client = TestClient(api_module.app)
     try:
         local = _write_local_review_summary(
-            tmp_path, claimed_by="api-key:reviewer:a111"
+            tmp_path, claimed_by="api-key:reviewer:ab3f4305385155fa3f71"
         )
 
         response = client.post(
@@ -1029,7 +1031,7 @@ def test_claim_run_updates_latest_local_summary_when_store_skipped(tmp_path):
         assert response.status_code == 200
         summary = json.loads(local["summary_path"].read_text(encoding="utf-8"))
         assert summary["review_assignment"]["claimed"] is True
-        assert summary["review_assignment"]["claimed_by"] == "api-key:reviewer:a111"
+        assert summary["review_assignment"]["claimed_by"] == "api-key:reviewer:ab3f4305385155fa3f71"
     finally:
         _restore_env(original)
 
@@ -1187,7 +1189,7 @@ def test_unclaim_run_returns_conflict_when_claimed_by_another_reviewer(monkeypat
             "unclaim_pending_review",
             lambda run_id, reviewer_subject: {
                 "status": "conflict",
-                "reason": "Run 'run-1' is claimed by api-key:reviewer:a111; only the current reviewer can unclaim it.",
+                "reason": "Run 'run-1' is claimed by api-key:reviewer:ab3f4305385155fa3f71; only the current reviewer can unclaim it.",
             },
         )
 
@@ -1426,8 +1428,8 @@ def test_approve_run_updates_run_summary_pointer_metadata(monkeypatch, tmp_path:
             lambda *args, **kwargs: {
                 "decision": "approved",
                 "comment": "go",
-                "reviewer": "api-key:reviewer:a111",
-                "reviewer_subject": "api-key:reviewer:a111",
+                "reviewer": "api-key:reviewer:ab3f4305385155fa3f71",
+                "reviewer_subject": "api-key:reviewer:ab3f4305385155fa3f71",
                 "created_at": "2026-06-08T12:05:00Z",
             },
         )

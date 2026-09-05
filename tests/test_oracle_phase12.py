@@ -166,10 +166,10 @@ def test_phase12_core_profit_liquidity_working_capital_and_leverage_formulas_are
     assert computation.metrics["operating_cost_pct_of_plan"] == Decimal("120")
     assert computation.metrics["cash_vs_board_floor_pct"] == Decimal("120")
     assert computation.metrics["cash_floor_headroom"] == Decimal("20")
-    assert computation.metrics["dso_days"] == Decimal("4.50")
-    assert computation.metrics["dpo_days"] == Decimal("4.50")
-    assert computation.metrics["dio_days"] == Decimal("3.75")
-    assert computation.metrics["ccc_days"] == Decimal("3.75")
+    assert computation.metrics["dso_days"] is None  # Explicit working-capital denominator is absent.
+    assert computation.metrics["dpo_days"] is None  # Explicit working-capital denominator is absent.
+    assert computation.metrics["dio_days"] is None  # Explicit working-capital denominator is absent.
+    assert computation.metrics["ccc_days"] is None  # Explicit working-capital denominator is absent.
     assert computation.components["net_debt"] == Decimal("380")
     assert computation.metrics["net_debt_to_ebitda"] == Decimal("1.52")
     assert computation.metrics["covenant_headroom"] == Decimal("1.48")
@@ -240,10 +240,10 @@ def test_phase12_working_capital_respects_weekly_cadence_and_period_days():
     )
 
     assert computation.period_days == 7
-    assert computation.metrics["dso_days"] == Decimal("2.1")
-    assert computation.metrics["dpo_days"] == Decimal("2.8")
-    assert computation.metrics["dio_days"] == Decimal("1.4")
-    assert computation.metrics["ccc_days"] == Decimal("0.7")
+    assert computation.metrics["dso_days"] is None  # Explicit working-capital denominator is absent.
+    assert computation.metrics["dpo_days"] is None  # Explicit working-capital denominator is absent.
+    assert computation.metrics["dio_days"] is None  # Explicit working-capital denominator is absent.
+    assert computation.metrics["ccc_days"] is None  # Explicit working-capital denominator is absent.
 
 
 def test_phase12_oracle_month_names_resolve_full_month_and_match_iso_reporting_period():
@@ -282,10 +282,10 @@ def test_phase12_oracle_month_names_resolve_full_month_and_match_iso_reporting_p
     assert computation.period_days == 30
     assert computation.components["revenue_actual"] == Decimal("3000")
     assert computation.components["ebitda_actual"] == Decimal("600")
-    assert computation.metrics["dso_days"] == Decimal("3.0")
-    assert computation.metrics["dpo_days"] == Decimal("9.0")
-    assert computation.metrics["dio_days"] == Decimal("3.0")
-    assert computation.metrics["ccc_days"] == Decimal("-3.0")
+    assert computation.metrics["dso_days"] is None  # Explicit working-capital denominator is absent.
+    assert computation.metrics["dpo_days"] is None  # Explicit working-capital denominator is absent.
+    assert computation.metrics["dio_days"] is None  # Explicit working-capital denominator is absent.
+    assert computation.metrics["ccc_days"] is None  # Explicit working-capital denominator is absent.
 
 
 def test_phase12_negative_or_near_zero_ebitda_does_not_emit_leverage_or_covenant_headroom():
@@ -432,3 +432,25 @@ def test_phase12_plan_data_keeps_completed_oracle_phases_truthful_during_hosted_
     assert "window.STRATEGYOS_PLAN" not in text
     assert "window payload as execution truth" in text
     assert "Hosted /public/runs/latest/audit-summary" not in text
+
+
+def test_working_capital_uses_explicit_credit_flows_and_large_unpaid_balances():
+    def calculate(unpaid):
+        batch = {'GL': [
+            {'natural_key': 'credit-sales', 'fact_type':'credit_sales', 'amount':'3000', 'period_name':'2026-06'},
+            {'natural_key': 'credit-purchases', 'fact_type':'credit_purchases', 'amount':'1500', 'period_name':'2026-06'},
+            {'natural_key': 'cogs', 'fact_type':'cost_of_sales', 'amount':'1200', 'period_name':'2026-06'},
+            {'natural_key': 'other-opex', 'fact_type':'operating_cost', 'amount':'9999', 'period_name':'2026-06'}],
+            'AR':[{'natural_key':'open-ar', 'fact_type':'accounts_receivable_balance','amount':str(unpaid),'event_date':'2026-06-30'}],
+            'AP':[{'natural_key':'open-ap', 'fact_type':'accounts_payable_balance','amount':'450','event_date':'2026-06-30'}],
+            'INV':[{'natural_key':'inventory', 'fact_type':'inventory_balance','amount':'300','event_date':'2026-06-30','cadence':'daily'}]}
+        return compute_oracle_pilot_kpis(ingest_oracle_pilot_extracts(load_pilot_extract_batch(batch),bu_mapping=_mapping()),reporting_period_key='2026-06')
+    baseline=calculate(900)
+    assert baseline.metrics['dso_days']==Decimal('9')
+    assert baseline.metrics['dpo_days']==Decimal('9')
+    assert baseline.metrics['dio_days']==Decimal('7.5')
+    assert baseline.metrics['ccc_days']==Decimal('7.5')
+    larger=calculate(3900)
+    assert larger.metrics['dso_days']==Decimal('39')
+    assert larger.metrics['dpo_days']==baseline.metrics['dpo_days']
+    assert larger.components['accounts_receivable_balance']-baseline.components['accounts_receivable_balance']==Decimal('3000')

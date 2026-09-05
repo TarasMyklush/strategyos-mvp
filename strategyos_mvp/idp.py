@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import html
+import json
+import os
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
@@ -140,7 +142,19 @@ def _issue_password_token(username: str | None, password: str | None) -> dict[st
         "scope": "openid profile roles",
         "iss": CONFIG.idp_issuer,
         "expires_at": expires_at.isoformat(),
+        "tenant_id": CONFIG.tenant_slug,
     }
+    try:
+        scopes = json.loads(os.getenv("STRATEGYOS_IDP_USER_SCOPES_JSON") or "{}")
+        assigned = scopes.get(username, {})
+        for field in ("business_units", "personas"):
+            if field in assigned:
+                values = assigned[field]
+                if not isinstance(values, list) or any(not isinstance(value, str) or not value.strip() for value in values):
+                    raise ValueError("Invalid identity scope")
+                payload[field] = values
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(503, "Identity scopes are misconfigured.") from exc
     _token_store()[token] = payload
     return _token_response(token, payload)
 

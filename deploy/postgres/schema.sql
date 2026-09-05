@@ -42,6 +42,13 @@ alter table if exists strategyos_runs add column if not exists review_claimed_by
 alter table if exists strategyos_runs add column if not exists review_claimed_at timestamptz;
 alter table if exists strategyos_runs add column if not exists approved_at timestamptz;
 alter table if exists strategyos_runs add column if not exists approved_by text;
+alter table if exists strategyos_runs add column if not exists tenant_key text;
+alter table if exists strategyos_runs add column if not exists business_unit_scope jsonb not null default '[]'::jsonb;
+update strategyos_runs set tenant_key = summary_json #>> '{tenant_context,tenant_id}',
+    business_unit_scope = case when jsonb_typeof(summary_json->'business_units') = 'array'
+        then summary_json->'business_units' else '[]'::jsonb end
+    where tenant_key is null and summary_json #>> '{tenant_context,tenant_id}' is not null;
+create index if not exists idx_strategyos_runs_tenant on strategyos_runs(tenant_key, created_at desc);
 
 create table if not exists strategyos_run_jobs (
     id uuid primary key default gen_random_uuid(),

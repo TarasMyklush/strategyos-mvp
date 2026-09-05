@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -74,7 +76,20 @@ def _write_run_pointer(
         "deliverables_status": summary.get("deliverables_status"),
         "summary_path": str(summary_path),
     }
-    pointer_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{pointer_path.name}.", dir=pointer_path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, pointer_path)
+        directory = os.open(pointer_path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
     return payload
 
 
@@ -83,16 +98,21 @@ def load_latest_run_summary() -> dict[str, Any] | None:
     if not pointer_path.exists():
         return None
 
-    pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
-    summary_path = Path(str(pointer.get("summary_path") or "")).expanduser().resolve()
-    if not summary_path.exists():
-        return {
-            "status": "missing",
-            "reason": "Latest run pointer exists but summary file is unavailable.",
-            "latest_pointer": pointer,
-        }
-
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    try:
+        pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+        summary_path = Path(str(pointer.get("summary_path") or "")).expanduser().resolve()
+        if not summary_path.is_relative_to(CONFIG.output_root.expanduser().resolve()) or not summary_path.is_file():
+            return None
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        if not isinstance(summary, dict):
+            return None
+    except (OSError, ValueError, AttributeError):
+        return None
+    from .access_scope import guard_summary
+    try:
+        guard_summary(summary)
+    except PermissionError:
+        return None  # A deployment-wide pointer is not a scoped latest run.
     summary["latest_pointer"] = pointer
     return summary
 
@@ -129,6 +149,11 @@ def discover_run_history(limit: int = 12) -> list[dict[str, Any]]:
         except (OSError, ValueError):
             continue
         if not isinstance(summary, dict):
+            continue
+        from .access_scope import guard_summary
+        try:
+            guard_summary(summary)
+        except PermissionError:
             continue
         timestamp = _run_timestamp(run_dir.name)
         acceptance = summary.get("acceptance") if isinstance(summary.get("acceptance"), dict) else {}

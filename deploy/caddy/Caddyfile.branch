@@ -15,7 +15,7 @@
     @static_html path /static/*.html
     redir @static_html /login 307
 
-    @idp path /.well-known/openid-configuration /oauth/* /login* /auth/login*
+    @idp path /.well-known/openid-configuration /oauth/* /login* /auth/login* /auth/logout
     reverse_proxy @idp strategyos-idp:9000 {
         header_down -Server
     }

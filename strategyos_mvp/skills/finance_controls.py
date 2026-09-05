@@ -1118,6 +1118,10 @@ def compute_working_capital_drifts(bundle: DataBundle, findings: list[Finding] |
             candidates.append(
                 {
                     "metric": label,
+                    "measurement_type": "settlement_day_proxy",
+                    "display_label": "Collection settlement proxy" if label == "DSO" else "Payment settlement proxy",
+                    "excludes_unsettled_balances": True,
+                    "cash_impact_status": "timing_estimate_not_verified_cash",
                     "week_end": row["week_end"].date().isoformat(),
                     "baseline_days": round(baseline, 2),
                     "current_days": round(float(row["days"]), 2),

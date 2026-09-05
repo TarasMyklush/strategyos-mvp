@@ -5,6 +5,7 @@ description = "StrategyOS governed finance analysis and executive strategy works
 requires-python = ">=3.11"
 dependencies = [
   "boto3",
+  "cryptography>=46,<50",
   "fastapi",
   "python-multipart",
   "neo4j",

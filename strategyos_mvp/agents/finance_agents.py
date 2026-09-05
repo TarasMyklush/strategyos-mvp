@@ -479,7 +479,9 @@ def render_case_file(findings: list[Finding], bundle: DataBundle) -> str:
 def render_working_capital(bundle: DataBundle, findings: list[Finding]) -> str:
     signals = compute_working_capital_drifts(bundle, findings)
     lines = [
-        "# 13-week trailing DSO/DPO drift analysis",
+        "# 13-week settlement-day proxy drift analysis",
+        "",
+        "These collection/payment timing proxies exclude unpaid balances. They are not balance-based DSO/DPO, and the estimated cash effects are not verified receipts.",
         "",
         "## Method",
         "",
@@ -504,7 +506,7 @@ def render_working_capital(bundle: DataBundle, findings: list[Finding]) -> str:
             )
         lines.extend(
             [
-                f"## Signal {i}: {signal['metric']} week ending {signal['week_end']}",
+                f"## Signal {i}: {signal.get('display_label', signal['metric'])} week ending {signal['week_end']}",
                 "",
                 f"- 13-week baseline days: {signal['baseline_days']}",
                 f"- Current week days: {signal['current_days']}",

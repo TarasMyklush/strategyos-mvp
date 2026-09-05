@@ -73,7 +73,7 @@ def test_login_required_mode_exposes_only_login_until_a_session_exists(monkeypat
             lambda token: {
                 "role": "executive",
                 "subject": "idp:executive.tester",
-                "tenant_id": "strategyos-test",
+                "tenant_id": auth_module.CONFIG.tenant_slug,
             }
             if token == "valid-session"
             else None,

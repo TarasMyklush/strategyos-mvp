@@ -537,6 +537,18 @@ def compute_oracle_pilot_kpis(
         period_end=period_end,
         fact_types=("operating_cost", "opex", "operating_expense"),
     )
+    # Working-capital denominators are explicit source facts. Operating
+    # expenses are not purchases or cost of goods sold; total sales need not
+    # be credit sales. Missing classifications remain unavailable.
+    credit_sales = _sum_metric_facts(snapshot, reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence, period_start=period_start, period_end=period_end,
+        fact_types=("credit_sales",))
+    credit_purchases = _sum_metric_facts(snapshot, reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence, period_start=period_start, period_end=period_end,
+        fact_types=("credit_purchases",))
+    cost_of_sales = _sum_metric_facts(snapshot, reporting_period_key=reporting_period_key,
+        reporting_cadence=resolved_cadence, period_start=period_start, period_end=period_end,
+        fact_types=("cost_of_goods_sold", "cost_of_sales", "cogs"))
     cash_balance = _latest_metric_fact(
         snapshot,
         reporting_period_key=reporting_period_key,
@@ -653,13 +665,13 @@ def compute_oracle_pilot_kpis(
             "operating_cost_pct_of_plan": _safe_percent(operating_cost, operating_cost_plan),
             "cash_vs_board_floor_pct": _safe_percent(cash_balance, board_floor),
             "cash_floor_headroom": _safe_difference(cash_balance, board_floor),
-            "dso_days": _days_metric(receivables, revenue, period_days),
-            "dpo_days": _days_metric(payables, operating_cost, period_days),
-            "dio_days": _days_metric(inventory, operating_cost, period_days),
+            "dso_days": _days_metric(receivables, credit_sales, period_days),
+            "dpo_days": _days_metric(payables, credit_purchases, period_days),
+            "dio_days": _days_metric(inventory, cost_of_sales, period_days),
             "ccc_days": _cash_conversion_cycle(
-                _days_metric(receivables, revenue, period_days),
-                _days_metric(inventory, operating_cost, period_days),
-                _days_metric(payables, operating_cost, period_days),
+                _days_metric(receivables, credit_sales, period_days),
+                _days_metric(inventory, cost_of_sales, period_days),
+                _days_metric(payables, credit_purchases, period_days),
             ),
             "net_debt_to_ebitda": leverage_ratio,
             "covenant_headroom": _safe_difference(covenant_limit, leverage_ratio),
@@ -673,6 +685,9 @@ def compute_oracle_pilot_kpis(
             "operating_cost_plan": operating_cost_plan,
             "cash_balance": cash_balance,
             "board_floor": board_floor,
+            "credit_sales": credit_sales,
+            "credit_purchases": credit_purchases,
+            "cost_of_sales": cost_of_sales,
             "accounts_receivable_balance": receivables,
             "accounts_payable_balance": payables,
             "inventory_balance": inventory,
@@ -685,6 +700,9 @@ def compute_oracle_pilot_kpis(
             "ebitda": ("ebitda",),
             "operating_cost": ("operating_cost", "opex", "operating_expense"),
             "cash_balance": ("cash_balance",),
+            "credit_sales": ("credit_sales",),
+            "credit_purchases": ("credit_purchases",),
+            "cost_of_sales": ("cost_of_goods_sold", "cost_of_sales", "cogs"),
             "accounts_receivable": ("accounts_receivable_balance", "ar_open_balance", "receivables_balance"),
             "accounts_payable": ("accounts_payable_balance", "ap_open_balance", "payables_balance"),
             "inventory": ("inventory_balance", "working_capital_inventory", "inventory_on_hand"),
@@ -869,6 +887,15 @@ def build_oracle_pilot_kpi_payload(computation: OracleKpiComputation) -> dict[st
         "period_start": computation.period_start.isoformat(),
         "period_end": computation.period_end.isoformat(),
         "period_days": computation.period_days,
+        "working_capital_method": {
+            "balance_basis": "Latest reported open balance per account / entity / BU within the reporting window, including unpaid items; not settlement-time averages.",
+            "fx_policy": "Exact effective-date source-to-reporting-currency rate; ambiguous or missing rates make the metric unavailable.",
+            "dso": "Trade receivables / credit sales * period days",
+            "dpo": "Trade payables / credit purchases * period days",
+            "dio": "Inventory / cost of sales * period days",
+            "missing_denominators": [key for key in ("credit_sales", "credit_purchases", "cost_of_sales") if computation.components.get(key) is None],
+            "cash_effect": "Timing exposure only; cash release requires reconciled bank evidence."
+        },
         "metrics": {
             key: _stringify_decimal(value) for key, value in computation.metrics.items()
         },
@@ -2059,6 +2086,33 @@ def _text(value: Any) -> str | None:
     return text or None
 
 
+def _reporting_amount(snapshot: OracleCanonicalSnapshot, fact: CanonicalFinanceFact) -> Decimal | None:
+    if fact.amount_value is None or not fact.amount_value.is_finite():
+        return None
+    if fact.attributes.get("intercompany") is True:
+        # Elimination requires both sides to carry the same reviewed reference.
+        reference = fact.attributes.get("elimination_reference")
+        peers = [row for row in snapshot.facts if reference and row.attributes.get("elimination_reference") == reference]
+        if len(peers) != 2 or any(row.currency != fact.currency or row.amount_value is None for row in peers) or sum((row.amount_value for row in peers), Decimal("0")) != 0:
+            return None
+        if len({_fact_window(snapshot, row) for row in peers}) != 1:
+            return None
+        return Decimal("0")
+    if fact.currency == fact.reporting_currency:
+        return fact.amount_value
+    raw_date = fact.attributes.get("fx_rate_date") or fact.attributes.get("event_date") or fact.attributes.get("as_of_date")
+    try:
+        effective_date = date.fromisoformat(str(raw_date)[:10]) if raw_date else _fact_window(snapshot, fact)[1]
+    except ValueError:
+        return None
+    rates = [rate for rate in snapshot.fx_rates if rate.source_currency == fact.currency
+        and rate.reporting_currency == fact.reporting_currency and rate.rate_date == effective_date
+        and rate.rate_value.is_finite() and rate.rate_value > 0]
+    if len(rates) != 1:
+        return None  # No guessed future, inverse or stale rate; no mixed-currency sum.
+    return fact.amount_value * rates[0].rate_value
+
+
 def _sum_metric_facts(
     snapshot: OracleCanonicalSnapshot,
     *,
@@ -2077,8 +2131,8 @@ def _sum_metric_facts(
         fact_types=fact_types,
         prefer_exact_cadence=True,
     )
-    amounts = [fact.amount_value for fact in facts if fact.amount_value is not None]
-    if not amounts:
+    amounts = [_reporting_amount(snapshot, fact) for fact in facts]
+    if not amounts or any(amount is None for amount in amounts):
         return None
     return sum(amounts, Decimal("0"))
 
@@ -2103,11 +2157,24 @@ def _latest_metric_fact(
     )
     if not facts:
         return None
-    latest = max(
-        facts,
-        key=lambda fact: _fact_window(snapshot, fact)[1],
-    )
-    return latest.amount_value
+    # Latest per account / entity / BU, then consolidate. A single latest
+    # row across the whole group loses every other business unit's balance.
+    groups = {}
+    for fact in facts:
+        attrs = fact.attributes
+        key = (fact.bu_code, fact.cost_centre, fact.account_code,
+               attrs.get("legal_entity_id"), attrs.get("bank_account_id") or attrs.get("balance_account_id"))
+        groups.setdefault(key, []).append(fact)
+    selected = []
+    for rows in groups.values():
+        latest_date = max(_fact_window(snapshot, row)[1] for row in rows)
+        candidates = [row for row in rows if _fact_window(snapshot, row)[1] == latest_date]
+        if len(candidates) != 1:
+            return None  # Ambiguous balance grain requires a reviewed mapping.
+        selected.append(_reporting_amount(snapshot, candidates[0]))
+    if any(value is None for value in selected):
+        return None
+    return sum(selected, Decimal("0"))
 
 
 def _matching_facts(
@@ -2461,15 +2528,16 @@ def _metric_component_aliases(metric_key: str) -> tuple[str, ...]:
         "operating_cost_pct_of_plan": ("operating_cost_actual", "operating_cost_plan"),
         "cash_vs_board_floor_pct": ("cash_balance", "board_floor"),
         "cash_floor_headroom": ("cash_balance", "board_floor"),
-        "dso_days": ("accounts_receivable_balance", "revenue_actual"),
-        "dpo_days": ("accounts_payable_balance", "operating_cost_actual"),
-        "dio_days": ("inventory_balance", "operating_cost_actual"),
+        "dso_days": ("accounts_receivable_balance", "credit_sales"),
+        "dpo_days": ("accounts_payable_balance", "credit_purchases"),
+        "dio_days": ("inventory_balance", "cost_of_sales"),
         "ccc_days": (
             "accounts_receivable_balance",
             "inventory_balance",
             "accounts_payable_balance",
-            "revenue_actual",
-            "operating_cost_actual",
+            "credit_sales",
+            "credit_purchases",
+            "cost_of_sales",
         ),
         "net_debt_to_ebitda": ("debt_balance", "cash_balance", "net_debt", "ebitda_actual"),
         "covenant_headroom": (
@@ -2488,6 +2556,9 @@ def _metric_source_facts(
     metric_key: str,
 ) -> list[CanonicalFinanceFact]:
     aliases_by_component = {
+        "credit_sales": computation.source_fact_types.get("credit_sales", tuple()),
+        "credit_purchases": computation.source_fact_types.get("credit_purchases", tuple()),
+        "cost_of_sales": computation.source_fact_types.get("cost_of_sales", tuple()),
         "revenue_actual": computation.source_fact_types.get("revenue", tuple()),
         "ebitda_actual": computation.source_fact_types.get("ebitda", tuple()),
         "operating_cost_actual": computation.source_fact_types.get("operating_cost", tuple()),
@@ -2557,6 +2628,9 @@ def _metric_assumptions(
     ]
     if metric_key in {"dso_days", "dpo_days", "dio_days", "ccc_days"}:
         assumptions.append(f"period_days={computation.period_days}")
+        assumptions.append("Balance basis: latest reported open balance; includes unpaid balances, not average settlement days.")
+        assumptions.append("DSO uses explicit credit sales; DPO explicit credit purchases; DIO explicit cost of sales. Missing inputs are unavailable.")
+        assumptions.append("A timing difference is not verified cash release.")
     if metric_key == "net_debt_to_ebitda":
         assumptions.append("net_debt = debt_balance - cash_balance")
     if metric_key == "covenant_headroom":

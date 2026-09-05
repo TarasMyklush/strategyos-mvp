@@ -1577,6 +1577,34 @@ def _governed_bu_budget_row(
     return exact[0] if len(exact) == 1 else None
 
 
+def _finance_bu_cost_ranking(normalized_prompt: str, baseline: Mapping[str, Any]) -> ScenarioResult | None:
+    if not re.search(r"\b(?:top|largest|biggest)\b", normalized_prompt) or not re.search(r"\bcost(?:s)?\b", normalized_prompt):
+        return None
+    all_rows = baseline.get("cost_component_rows") or []
+    units = {str(row.get("business_unit") or "") for row in all_rows}
+    matches = [unit for unit in units if unit and _normalize(unit) in normalized_prompt]
+    if len(matches) != 1:
+        return None
+    unit = matches[0]
+    rows = [row for row in all_rows if row.get("business_unit") == unit and _decimal_or_none(row.get("actual_sar")) is not None]
+    rows.sort(key=lambda row: abs(_decimal_or_none(row["actual_sar"])), reverse=True)
+    count_match = re.search(r"top (\d+|three|five|ten)", normalized_prompt)
+    words = {"three": 3, "five": 5, "ten": 10}
+    raw_count = count_match.group(1) if count_match else "3"
+    count = min(20, words.get(raw_count) or int(raw_count))
+    lines = []
+    for row in rows[:count]:
+        amount, plan = _decimal_or_none(row["actual_sar"]), _decimal_or_none(row.get("budget_sar"))
+        delta = amount - plan if plan is not None else None
+        comparison = "plan unavailable" if delta is None else (_sar_executive_decimal(abs(delta)) + (" above fixed budget" if delta > 0 else " below fixed budget" if delta < 0 else " variance to fixed budget"))
+        lines.append(f"{row['component']}: {_sar_executive_decimal(amount)} actual; {comparison}.")
+    return ScenarioResult(scenario_id="governed_bu_cost_ranking", scenario_label="Business-unit cost components", matched=True,
+        answer=f"For {baseline['period']}, the largest supplied cost components in {unit} are: " + " ".join(lines),
+        calculations=[], kg_context=[], citations=[{"source_path":baseline.get("cost_component_source"),"locator":f"Cost components / {unit}","excerpt":"Actual and fixed-budget component values."}],
+        assumptions=["Ranked by absolute actual cost. Source commentary may refer to a different flexible budget."],
+        basis="Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.")
+
+
 def _finance_bu_budget_result(
     baseline: Mapping[str, Any],
     row: Mapping[str, Any],
@@ -3399,6 +3427,9 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
                 return _hydrate_scenario_result(_finance_scorecard_result(baseline))
         baseline = _governed_finance_baseline(context)
         if baseline is not None:
+            cost_ranking = _finance_bu_cost_ranking(norm, baseline)
+            if cost_ranking is not None:
+                return _hydrate_scenario_result(cost_ranking)
             bu_budget_row = _governed_bu_budget_row(norm, baseline)
             if bu_budget_row is not None:
                 return _hydrate_scenario_result(

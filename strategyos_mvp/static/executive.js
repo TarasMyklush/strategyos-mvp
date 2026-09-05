@@ -2435,18 +2435,41 @@
   }
 
   function loadStoredThreads() {
-    try {
-      var raw = storageArea().getItem(threadStorageKey());
-      return raw ? JSON.parse(raw) : {};
-    } catch (error) {
-      return {};
-    }
+    return {}; // Durable state is loaded after the server establishes identity and run scope.
   }
 
+  var threadSaveChain = Promise.resolve();
   function saveStoredThreads() {
-    try {
-      storageArea().setItem(threadStorageKey(), JSON.stringify(threadStore()));
-    } catch (error) {}
+    if (!state.session || !state.session.authenticated || !state.durableThreadScope) return;
+    var scope = state.durableThreadScope;
+    var snapshot = {};
+    Object.keys(threadStore()).forEach(function (key) {
+      if (key.indexOf(state.activePersona + ':') === 0 && !threadStore()[key].readOnly) snapshot[key] = threadStore()[key];
+    });
+    snapshot = JSON.parse(JSON.stringify(snapshot));
+    threadSaveChain = threadSaveChain.then(async function () {
+      if (scope !== state.durableThreadScope || state.threadConflict) return;
+      try {
+        var result = await putJson('/api/conversation-state', {run_id: scope.runId, persona: scope.persona, version: state.threadVersion || 0, threads: snapshot});
+        state.threadVersion = result.version;
+      } catch (error) {
+        if (error.status === 409) state.threadConflict = true;
+        showToast(error.message || 'Conversation could not be saved.');
+      }
+    });
+  }
+
+  async function loadDurableThreads() {
+    if (!state.session || !state.session.authenticated) return;
+    var runId = activeRunId(), persona = state.activePersona || 'ceo';
+    if (!runId || runId === 'latest-public') return;
+    if (state.durableThreadScope && state.durableThreadScope.runId === runId && state.durableThreadScope.persona === persona) return;
+    var payload = await fetchJson('/api/conversation-state' + buildQuery({run_id: runId, persona: persona}));
+    if (!payload) return;
+    Object.keys(threadStore()).forEach(function (key) { if (key.indexOf(persona + ':') === 0 && !threadStore()[key].readOnly) delete threadStore()[key]; });
+    Object.assign(threadStore(), payload.threads || {});
+    state.threadVersion = payload.version; state.threadConflict = false;
+    state.durableThreadScope = {runId: runId, persona: persona};
   }
 
   function personaThreadRecords() {
@@ -2992,6 +3015,9 @@
     var context = assistantContext && typeof assistantContext === "object" ? assistantContext : {};
     var subject = context.subject && typeof context.subject === "object" ? context.subject : {};
     return [
+      String((state.session || {}).subject || "anonymous"),
+      String((((state.session || {}).tenant_context || {}).tenant_id) || ""),
+      String(activeRunId() || ""),
       String(state.activePersona || "ceo"),
       String(firstDefined(context.entrypoint, "drawer_input")),
       String(firstDefined(context.kpi_key, context.driver_key, "none")),
@@ -3004,7 +3030,7 @@
 
   function loadAssistantAnswerCache() {
     try {
-      var raw = window.localStorage.getItem("strategyos.hermes.answer-cache.v1");
+      var raw = window.sessionStorage.getItem("strategyos.hermes.answer-cache.v2");
       var parsed = raw ? JSON.parse(raw) : {};
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch (_error) {
@@ -3026,11 +3052,12 @@
         return String((cache[right] || {}).savedAt || "").localeCompare(String((cache[left] || {}).savedAt || ""));
       });
       keys.slice(25).forEach(function (key) { delete cache[key]; });
-      window.localStorage.setItem("strategyos.hermes.answer-cache.v1", JSON.stringify(cache));
+      window.sessionStorage.setItem("strategyos.hermes.answer-cache.v2", JSON.stringify(cache));
     } catch (_error) {}
   }
 
   function cachedAssistantFallback(question, failure, assistantContext) {
+    if (failure && (failure.statusCode === 401 || failure.statusCode === 403 || failure.statusCode === 404)) return failure;
     var cached = loadAssistantAnswerCache()[assistantAnswerCacheKey(question, assistantContext)];
     if (!cached || !String(cached.answer || "").trim()) return failure;
     var savedAt = new Date(cached.savedAt || "");
@@ -3809,10 +3836,17 @@
           signoutAction.onclick = async function () {
             signoutAction.disabled = true;
             try {
-              await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
-            } finally {
+              var logoutResponse = await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+              if (!logoutResponse.ok) throw new Error('Sign-out failed. Retry before leaving this device.');
+              window.sessionStorage.removeItem('strategyos.hermes.answer-cache.v2');
+              window.localStorage.removeItem('strategyos.hermes.answer-cache.v1');
+              window.STRATEGYOS_X = {threads: {}, assistants: {}};
+              clearStoredToken();
               try { sessionStorage.clear(); } catch (_error) {}
               window.location.assign('/login');
+            } catch (error) {
+              signoutAction.disabled = false;
+              showToast(error.message || 'Sign-out failed. Please retry.');
             }
           };
         }
@@ -6223,8 +6257,8 @@
         : "Pending CEO decision";
       var choicesMarkup = safeArray(item.choices).length
         ? '<div class="decision-choice-row">' + safeArray(item.choices).map(function (choice) {
-            return '<button type="button" data-enrichment-decision="' + escapeHtml(key) + '" data-enrichment-choice="' + escapeHtml(choice) + '" class="' + (localChoice === choice ? 'is-selected' : '') + '">' + escapeHtml(choice) + '</button>';
-          }).join('') + '<span>' + (localChoice ? 'Decision recorded for this demo session · no message sent' : 'Records your choice for this demo session · no message sent') + '</span></div>'
+            return '<button type="button" ' + (localChoice ? 'disabled ' : '') + 'data-enrichment-decision="' + escapeHtml(key) + '" data-enrichment-choice="' + escapeHtml(choice) + '" class="' + (localChoice === choice ? 'is-selected' : '') + '">' + escapeHtml(choice) + '</button>';
+          }).join('') + '<span>' + (localChoice ? 'Decision saved · delivery not connected' : 'Saves your choice · delivery not connected') + '</span></div>'
         : '';
       var resolutionLabels = {
         unambiguous: 'Single eligible owner matched',
@@ -6297,8 +6331,8 @@
       findingsPanel.hidden = false;
       var recovery = enrichment.recovery_meter || {};
       var lockedSar = Number(firstDefined((state.latestPacket || {}).total_recoverable_sar, recovery.locked_sar_fallback, 0)) || 0;
-      var recoveryMarkup = recovery.identified_sar
-        ? '<div class="found-money-strip" aria-label="Found money"><button type="button" data-found-money="identified"><span>Identified</span><strong>' + escapeHtml(formatSarCompact(recovery.identified_sar)) + '</strong></button><span aria-hidden="true">→</span><button type="button" data-found-money="locked"><span>Locked</span><strong>' + escapeHtml(formatSarCompact(lockedSar)) + '</strong></button><span aria-hidden="true">→</span><button type="button" data-found-money="recovered"><span>Recovered to date</span><strong>' + escapeHtml(formatSarCompact(recovery.recovered_sar)) + '</strong></button></div>'
+      var recoveryMarkup = recovery.identified_sar !== null && recovery.identified_sar !== undefined
+        ? '<div class="found-money-strip" aria-label="Found money"><button type="button" data-found-money="identified"><span>Identified</span><strong>' + escapeHtml(formatSarCompact(recovery.identified_sar)) + '</strong></button><span aria-hidden="true">→</span><button type="button" data-found-money="locked"><span>Locked</span><strong>' + escapeHtml(formatSarCompact(lockedSar)) + '</strong></button><span aria-hidden="true">→</span><button type="button" data-found-money="recovered"><span>' + (recovery.receipt_verification === 'reviewed_receipt_ledger' ? 'Receipt-backed recovery' : 'Source-reported recovery') + '</span><strong>' + escapeHtml(recovery.recovered_sar === null || recovery.recovered_sar === undefined ? 'Needs receipt review' : formatSarCompact(recovery.recovered_sar)) + '</strong></button></div>'
         : '';
       findingsPanel.innerHTML = recoveryMarkup + '<div class="executive-signal-list">' + signalMarkup + '</div>';
       safeArray(findingsPanel.querySelectorAll('[data-found-money]')).forEach(function (button) {
@@ -6322,9 +6356,7 @@
 
     if (developmentsPanel) {
       developmentsPanel.hidden = false;
-      var hasSessionDecisions = Object.keys(state.enrichmentDecisionChoices || {}).length > 0;
-      developmentsPanel.innerHTML = '<span class="sr-only">Pending CEO decisions</span><div class="executive-decision-list">' + decisionMarkup + '</div>'
-        + (hasSessionDecisions ? '<button type="button" class="decision-demo-reset" data-decision-demo-reset>Reset demo decisions</button>' : '');
+      developmentsPanel.innerHTML = '<span class="sr-only">Pending CEO decisions</span><div class="executive-decision-list">' + decisionMarkup + '</div>';
     }
 
     safeArray([findingsPanel, developmentsPanel]).forEach(function (panel) {
@@ -6357,24 +6389,29 @@
         button.onclick = function () { recordExecutiveDecision(button); };
       });
       safeArray(panel && panel.querySelectorAll('[data-enrichment-decision]')).forEach(function (button) {
-        button.onclick = function () {
+        button.onclick = async function () {
           var key = button.getAttribute('data-enrichment-decision') || '';
           var choice = button.getAttribute('data-enrichment-choice') || '';
-          var decisionTitle = firstDefined(button.closest('.executive-decision') && button.closest('.executive-decision').querySelector('.target-feed-title') && button.closest('.executive-decision').querySelector('.target-feed-title').textContent, key);
-          state.enrichmentDecisionChoices = state.enrichmentDecisionChoices || {};
-          state.enrichmentDecisionChoices[key] = choice;
-          recordSessionDecisionInChat(key, choice, decisionTitle);
-          renderLowerRailFidelity();
-          renderAssistantStudio();
-          showToast('Decision recorded for this demo session. No message was sent.');
+          button.disabled = true;
+          try {
+            var headers = authHeaders();
+            headers['Content-Type'] = 'application/json';
+            headers['Idempotency-Key'] = crypto.randomUUID();
+            var response = await fetch('/api/decision-lifecycle/choice', {method: 'POST', headers: headers,
+              body: JSON.stringify({run_id: state.decisionLifecycleRunId, decision_key: key, choice: choice})});
+            var result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Could not save the decision.');
+            state.enrichmentDecisionChoices = state.enrichmentDecisionChoices || {};
+            state.enrichmentDecisionChoices[key] = choice;
+            renderLowerRailFidelity();
+            showToast('Decision saved. Delivery is not connected; the issue remains open.');
+          } catch (error) {
+            button.disabled = false;
+            showToast(error.message || 'Could not save the decision.');
+          }
         };
       });
-      var resetButton = panel && panel.querySelector('[data-decision-demo-reset]');
-      if (resetButton) resetButton.onclick = function () {
-        state.enrichmentDecisionChoices = {};
-        renderLowerRailFidelity();
-        showToast("Demo decisions reset.");
-      };
+
     });
     renderReviewFiles();
 
@@ -7286,12 +7323,26 @@
         : state.authorityMatrix;
       state.authorityEditable = Boolean(authorityPolicy && authorityPolicy.editable);
       state.session = session;
+      if (session.authenticated && session.role === 'executive') {
+        try {
+          var lifecycleResponse = await fetch('/api/decision-lifecycle/observe', {method: 'POST', headers: authHeaders()});
+          if (lifecycleResponse.ok) {
+            var lifecycle = await lifecycleResponse.json();
+            state.decisionLifecycleRunId = lifecycle.run_id;
+            state.enrichmentDecisionChoices = {};
+            safeArray(lifecycle.records).forEach(function (record) {
+              if (record.choice) state.enrichmentDecisionChoices[record.decision_key] = record.choice;
+            });
+          }
+        } catch (_error) { /* Choices remain pending until durable storage responds. */ }
+      }
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
       // The persona selected in the current browser is authoritative. The
       // packet value initializes old clients, but must never snap a user back
       // to a stale server-side persona after a deliberate switch.
       state.activePersona = firstDefined(state.activePersona, (state.latestPacket.executive_modes || {}).active_persona_id, "ceo");
+      await loadDurableThreads();
       if (state.activePersona === "board") state.activeView = "home";
       // During an active board-state transition, the packet's presentation_state
       // must not override the user's in-flight selection. _boardStateTransition
@@ -7437,6 +7488,8 @@
     });
     state._kgDragBindingsAttached = true;
   }
+
+  window.addEventListener("pageshow", function (event) { if (event.persisted) window.location.reload(); });
 
   bindAssistantForm();
   bindViewNav();

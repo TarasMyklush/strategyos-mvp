@@ -137,8 +137,8 @@ def test_create_conversation_and_full_answer_delegate_flow(api_env):
         with conn.cursor() as cur:
             cur.execute(
                 "insert into strategyos_runs (run_dir, dataset_root, finding_count, locked_finding_count, "
-                "total_recoverable_sar, status, summary_json) values ('run1','ds1',1,1,10000,'completed','{}'::jsonb) "
-                "returning id"
+                "total_recoverable_sar, status, summary_json, tenant_key) values ('run1','ds1',1,1,10000,'completed','{}'::jsonb,%s) "
+                "returning id", (state_store.CONFIG.tenant_slug,)
             )
             run_id = str(cur.fetchone()[0])
         conn.commit()

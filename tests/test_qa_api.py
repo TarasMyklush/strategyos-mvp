@@ -2419,7 +2419,7 @@ def test_assistant_chat_authenticated_executive_token_uses_private_run_context(m
         monkeypatch.setattr(
             auth_module,
             "_introspect_identity_token",
-            lambda token: {"role": "executive", "subject": "idp:test-user", "tenant_id": "strategyos"},
+            lambda token: {"role": "executive", "subject": "idp:test-user", "tenant_id": auth_module.CONFIG.tenant_slug},
         )
         monkeypatch.setattr(
             api_module,
@@ -2457,7 +2457,7 @@ def test_assistant_chat_authenticated_identity_token_uses_private_run_context(mo
         monkeypatch.setattr(
             auth_module,
             "_introspect_identity_token",
-            lambda token: {"role": "executive", "subject": "idp:test-user", "tenant_id": "strategyos"},
+            lambda token: {"role": "executive", "subject": "idp:test-user", "tenant_id": auth_module.CONFIG.tenant_slug},
         )
         monkeypatch.setattr(
             api_module,
@@ -5688,7 +5688,7 @@ def test_request_recovery_records_a_directive_for_a_known_finding(monkeypatch):
     try:
         monkeypatch.setattr(
             auth_module, "_introspect_identity_token",
-            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": "strategyos"},
+            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": auth_module.CONFIG.tenant_slug},
         )
         monkeypatch.setattr(api_module, "load_latest_run_summary", lambda: {"run_id": "run-x"})
         monkeypatch.setattr(
@@ -5722,7 +5722,7 @@ def test_request_recovery_rejects_a_finding_not_in_the_run(monkeypatch):
     try:
         monkeypatch.setattr(
             auth_module, "_introspect_identity_token",
-            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": "strategyos"},
+            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": auth_module.CONFIG.tenant_slug},
         )
         monkeypatch.setattr(api_module, "load_latest_run_summary", lambda: {"run_id": "run-x"})
         monkeypatch.setattr(
@@ -5751,7 +5751,7 @@ def test_record_executive_decision_is_confirmation_gated_and_never_sends(monkeyp
         monkeypatch.setattr(
             auth_module,
             "_introspect_identity_token",
-            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": "strategyos"},
+            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": auth_module.CONFIG.tenant_slug},
         )
         recommendation = {
             "recommendation_id": "rec-1",
@@ -5814,7 +5814,7 @@ def test_record_executive_decision_requires_idempotency_and_a_real_due_date(monk
         monkeypatch.setattr(
             auth_module,
             "_introspect_identity_token",
-            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": "strategyos"},
+            lambda token: {"role": "executive", "subject": "idp:ceo", "tenant_id": auth_module.CONFIG.tenant_slug},
         )
         recommendation = {
             "recommendation_id": "rec-1",

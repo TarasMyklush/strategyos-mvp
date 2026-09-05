@@ -1,0 +1,81 @@
+name: StrategyOS Codex Provider Preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: strategyos-branch-deploy-hetzner-branch
+  cancel-in-progress: false
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: '3.12'
+      - name: Test provider contract and isolation
+        run: |
+          python -m pip install fastapi==0.116.1 uvicorn==0.35.0 httpx pytest
+          python -m pytest -q tests/test_codex_gateway.py
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
+      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}-codex-provider" >> "$GITHUB_OUTPUT"
+      - id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf
+        with:
+          context: .
+          file: deploy/Dockerfile.codex-gateway
+          push: true
+          tags: ${{ steps.name.outputs.image }}:${{ github.sha }}
+      - id: ref
+        run: echo "image=${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+  preview:
+    needs: test-and-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: hetzner-branch
+    env:
+      TARGET_HOST: ${{ vars.HETZNER_USER }}@${{ vars.HETZNER_HOST }}
+      IMAGE: ${{ needs.test-and-build.outputs.image }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+      - name: Stage isolated provider without changing app routing
+        run: |
+          ssh "$TARGET_HOST" 'install -d -m 750 /opt/strategyos-branch/provider-codex'
+          scp deploy/scripts/manage_codex_provider.py deploy/scripts/probe_codex_provider.py deploy/scripts/verify_codex_app.py deploy/docker-compose.codex.yml "$TARGET_HOST:/opt/strategyos-branch/provider-codex/"
+          ssh "$TARGET_HOST" "docker pull '$IMAGE' && python3 /opt/strategyos-branch/provider-codex/manage_codex_provider.py prepare --image '$IMAGE' --overlay /opt/strategyos-branch/provider-codex/docker-compose.codex.yml"
+      - name: Live subscription and grounding probes
+        run: ssh "$TARGET_HOST" 'docker exec -i strategyos-branch-codex-gateway-1 python - < /opt/strategyos-branch/provider-codex/probe_codex_provider.py'
+      - name: Switch only preview API and worker provider
+        run: ssh "$TARGET_HOST" 'python3 /opt/strategyos-branch/provider-codex/manage_codex_provider.py activate'
+      - name: Verify authenticated Hermes and both provider clients; rollback on failure
+        run: |
+          if ! ssh "$TARGET_HOST" 'docker exec -i strategyos-branch-strategyos-api-1 python - --http < /opt/strategyos-branch/provider-codex/verify_codex_app.py && docker exec -i strategyos-branch-strategyos-worker-1 python - < /opt/strategyos-branch/provider-codex/verify_codex_app.py'; then
+            ssh "$TARGET_HOST" 'python3 /opt/strategyos-branch/provider-codex/manage_codex_provider.py rollback'
+            exit 1
+          fi
+          curl --fail --silent --show-error --retry 5 https://new.strategyos.live/ -o /dev/null

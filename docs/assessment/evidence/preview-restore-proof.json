@@ -1,0 +1,25 @@
+{
+  "stack": "strategyos-branch",
+  "isolated_restore_container": "strategyos-remediation-restore",
+  "original": {
+    "runs": 121,
+    "approved_runs": 19,
+    "artifacts": 714,
+    "decisions": 1,
+    "artifact_digest": "0541cf6fae4a9aef009bd714527947dc",
+    "run_digest": "cd0c1abf8a1d1e7e8bdb4e325d77033c"
+  },
+  "restored": {
+    "runs": 121,
+    "approved_runs": 19,
+    "artifacts": 714,
+    "decisions": 1,
+    "artifact_digest": "0541cf6fae4a9aef009bd714527947dc",
+    "run_digest": "cd0c1abf8a1d1e7e8bdb4e325d77033c"
+  },
+  "core_counts_and_hashes_match": true,
+  "workspace_tar_byte_comparison": "passed",
+  "actual_external_connections": false,
+  "restore_duration_seconds": null,
+  "note": "Restore completed; the first comparison query used a non-existent legacy column and was corrected without rerunning the restore."
+}

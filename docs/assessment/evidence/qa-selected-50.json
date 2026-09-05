@@ -1,0 +1,455 @@
+{
+  "selection": "Fixed seed 20260905, stratified across all 18 source themes before release answers are observed.",
+  "questions": [
+    {
+      "#": 486,
+      "Theme": "BU Deep-Dives (all 8 BUs)",
+      "Question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?",
+      "Where StrategyOS finds the answer": "BU_Group_Budget; BU_Cost_Variance; Group_BU_Cost_Structure; BU strategy PDF",
+      "Answer type": "Driver analysis",
+      "id": "486",
+      "question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?"
+    },
+    {
+      "#": 474,
+      "Theme": "BU Deep-Dives (all 8 BUs)",
+      "Question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?",
+      "Where StrategyOS finds the answer": "BU_Group_Budget; BU_Cost_Variance; Group_BU_Cost_Structure; BU strategy PDF",
+      "Answer type": "Driver analysis",
+      "id": "474",
+      "question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?"
+    },
+    {
+      "#": 489,
+      "Theme": "BU Deep-Dives (all 8 BUs)",
+      "Question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?",
+      "Where StrategyOS finds the answer": "BU_Group_Budget; BU_Cost_Variance; Group_BU_Cost_Structure; BU strategy PDF",
+      "Answer type": "Driver analysis",
+      "id": "489",
+      "question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?"
+    },
+    {
+      "#": 127,
+      "Theme": "Budget, Forecast & Variance",
+      "Question": "Whose forecasts are consistently best and worst in the group?",
+      "Where StrategyOS finds the answer": "Division_Budget_2026; BU_Group_Budget_2026; RF1; Events register",
+      "Answer type": "Driver analysis",
+      "id": "127",
+      "question": "Whose forecasts are consistently best and worst in the group?"
+    },
+    {
+      "#": 114,
+      "Theme": "Budget, Forecast & Variance",
+      "Question": "What should next year's budget assume about tariffs, wages and FX?",
+      "Where StrategyOS finds the answer": "Division_Budget_2026; BU_Group_Budget_2026; RF1; Events register",
+      "Answer type": "Driver analysis",
+      "id": "114",
+      "question": "What should next year's budget assume about tariffs, wages and FX?"
+    },
+    {
+      "#": 102,
+      "Theme": "Budget, Forecast & Variance",
+      "Question": "What changed between budget and the RF1 reforecast, and why?",
+      "Where StrategyOS finds the answer": "Division_Budget_2026; BU_Group_Budget_2026; RF1; Events register",
+      "Answer type": "Driver analysis",
+      "id": "102",
+      "question": "What changed between budget and the RF1 reforecast, and why?"
+    },
+    {
+      "#": 154,
+      "Theme": "Cash, Liquidity & Working Capital",
+      "Question": "What would insourcing logistics do to working capital, not just cost?",
+      "Where StrategyOS finds the answer": "Cash_Budget_Monthly; Group_Cash_Floor; bank statements; AR/AP files",
+      "Answer type": "Driver analysis",
+      "id": "154",
+      "question": "What would insourcing logistics do to working capital, not just cost?"
+    },
+    {
+      "#": 152,
+      "Theme": "Cash, Liquidity & Working Capital",
+      "Question": "What is the cash impact of the inventory build for NUPCO call-offs?",
+      "Where StrategyOS finds the answer": "Cash_Budget_Monthly; Group_Cash_Floor; bank statements; AR/AP files",
+      "Answer type": "Driver analysis",
+      "id": "152",
+      "question": "What is the cash impact of the inventory build for NUPCO call-offs?"
+    },
+    {
+      "#": 149,
+      "Theme": "Cash, Liquidity & Working Capital",
+      "Question": "Show me the aging of receivables by segment — where is risk building?",
+      "Where StrategyOS finds the answer": "Cash_Budget_Monthly; Group_Cash_Floor; bank statements; AR/AP files",
+      "Answer type": "Driver analysis",
+      "id": "149",
+      "question": "Show me the aging of receivables by segment — where is risk building?"
+    },
+    {
+      "#": 311,
+      "Theme": "Controls, Leakage & Audit",
+      "Question": "What price variances exist against contracted prices, same SKU same period?",
+      "Where StrategyOS finds the answer": "Answer keys; AP/AR files; Payments; Events register; audit docs",
+      "Answer type": "Driver analysis",
+      "id": "311",
+      "question": "What price variances exist against contracted prices, same SKU same period?"
+    },
+    {
+      "#": 305,
+      "Theme": "Controls, Leakage & Audit",
+      "Question": "Have we had duplicate payments before, and is the failure mode fixed?",
+      "Where StrategyOS finds the answer": "Answer keys; AP/AR files; Payments; Events register; audit docs",
+      "Answer type": "Driver analysis",
+      "id": "305",
+      "question": "Have we had duplicate payments before, and is the failure mode fixed?"
+    },
+    {
+      "#": 313,
+      "Theme": "Controls, Leakage & Audit",
+      "Question": "What did the historic review find that the H1 audit missed?",
+      "Where StrategyOS finds the answer": "Answer keys; AP/AR files; Payments; Events register; audit docs",
+      "Answer type": "Driver analysis",
+      "id": "313",
+      "question": "What did the historic review find that the H1 audit missed?"
+    },
+    {
+      "#": 188,
+      "Theme": "Customers, Pricing & Contribution",
+      "Question": "If we fired the bottom decile of customers, what would we lose and save?",
+      "Where StrategyOS finds the answer": "Customer_Profitability; AR files; Customer contracts; Revenue_Analytics",
+      "Answer type": "Judgment",
+      "id": "188",
+      "question": "If we fired the bottom decile of customers, what would we lose and save?"
+    },
+    {
+      "#": 165,
+      "Theme": "Customers, Pricing & Contribution",
+      "Question": "Which prices could we raise with least volume risk?",
+      "Where StrategyOS finds the answer": "Customer_Profitability; AR files; Customer contracts; Revenue_Analytics",
+      "Answer type": "Judgment",
+      "id": "165",
+      "question": "Which prices could we raise with least volume risk?"
+    },
+    {
+      "#": 163,
+      "Theme": "Customers, Pricing & Contribution",
+      "Question": "Which customers' terms are out of line with policy?",
+      "Where StrategyOS finds the answer": "Customer_Profitability; AR files; Customer contracts; Revenue_Analytics",
+      "Answer type": "Judgment",
+      "id": "163",
+      "question": "Which customers' terms are out of line with policy?"
+    },
+    {
+      "#": 434,
+      "Theme": "Data Quality & Governance",
+      "Question": "How reliable is the data behind this report — what quality issues exist?",
+      "Where StrategyOS finds the answer": "Data_Dictionary; DQ answer key; masters; extracts",
+      "Answer type": "Lookup",
+      "id": "434",
+      "question": "How reliable is the data behind this report — what quality issues exist?"
+    },
+    {
+      "#": 443,
+      "Theme": "Data Quality & Governance",
+      "Question": "Which numbers stored as text or wrong signs could distort calculations?",
+      "Where StrategyOS finds the answer": "Data_Dictionary; DQ answer key; masters; extracts",
+      "Answer type": "Lookup",
+      "id": "443",
+      "question": "Which numbers stored as text or wrong signs could distort calculations?"
+    },
+    {
+      "#": 437,
+      "Theme": "Data Quality & Governance",
+      "Question": "Which invoices don't reconcile between lines and headers?",
+      "Where StrategyOS finds the answer": "Data_Dictionary; DQ answer key; masters; extracts",
+      "Answer type": "Lookup",
+      "id": "437",
+      "question": "Which invoices don't reconcile between lines and headers?"
+    },
+    {
+      "#": 335,
+      "Theme": "FX & Treasury",
+      "Question": "What did unhedged EUR payments cost us this year?",
+      "Where StrategyOS finds the answer": "CFO_Cash_Forecast Hedges; EUR briefs; Servier invoices; ENBD statement",
+      "Answer type": "Driver analysis",
+      "id": "335",
+      "question": "What did unhedged EUR payments cost us this year?"
+    },
+    {
+      "#": 334,
+      "Theme": "FX & Treasury",
+      "Question": "What is our FX exposure by currency, and how much is hedged?",
+      "Where StrategyOS finds the answer": "CFO_Cash_Forecast Hedges; EUR briefs; Servier invoices; ENBD statement",
+      "Answer type": "Driver analysis",
+      "id": "334",
+      "question": "What is our FX exposure by currency, and how much is hedged?"
+    },
+    {
+      "#": 340,
+      "Theme": "FX & Treasury",
+      "Question": "Should we hedge fuel or electricity exposure, given the tariff steps?",
+      "Where StrategyOS finds the answer": "CFO_Cash_Forecast Hedges; EUR briefs; Servier invoices; ENBD statement",
+      "Answer type": "Driver analysis",
+      "id": "340",
+      "question": "Should we hedge fuel or electricity exposure, given the tariff steps?"
+    },
+    {
+      "#": 432,
+      "Theme": "M&A & Portfolio",
+      "Question": "Who owns synergy delivery for each announced deal?",
+      "Where StrategyOS finds the answer": "Capital envelope; Capital Cttee docs; Competitor financials",
+      "Answer type": "Judgment",
+      "id": "432",
+      "question": "Who owns synergy delivery for each announced deal?"
+    },
+    {
+      "#": 433,
+      "Theme": "M&A & Portfolio",
+      "Question": "What is our acquisition track record — announced versus delivered value?",
+      "Where StrategyOS finds the answer": "Capital envelope; Capital Cttee docs; Competitor financials",
+      "Answer type": "Judgment",
+      "id": "433",
+      "question": "What is our acquisition track record — announced versus delivered value?"
+    },
+    {
+      "#": 419,
+      "Theme": "M&A & Portfolio",
+      "Question": "What is our walk-away price discipline, and who enforces it?",
+      "Where StrategyOS finds the answer": "Capital envelope; Capital Cttee docs; Competitor financials",
+      "Answer type": "Judgment",
+      "id": "419",
+      "question": "What is our walk-away price discipline, and who enforces it?"
+    },
+    {
+      "#": 379,
+      "Theme": "Market, Competition & External",
+      "Question": "What are the top three external opportunities the data says we're not pursuing?",
+      "Where StrategyOS finds the answer": "Market reports; Briefings; Competitor financials; Macro workbooks",
+      "Answer type": "Judgment",
+      "id": "379",
+      "question": "What are the top three external opportunities the data says we're not pursuing?"
+    },
+    {
+      "#": 360,
+      "Theme": "Market, Competition & External",
+      "Question": "What did this week's market briefings say that changes any decision?",
+      "Where StrategyOS finds the answer": "Market reports; Briefings; Competitor financials; Macro workbooks",
+      "Answer type": "Judgment",
+      "id": "360",
+      "question": "What did this week's market briefings say that changes any decision?"
+    },
+    {
+      "#": 374,
+      "Theme": "Market, Competition & External",
+      "Question": "How do our payment terms compare to industry norms?",
+      "Where StrategyOS finds the answer": "Market reports; Briefings; Competitor financials; Macro workbooks",
+      "Answer type": "Judgment",
+      "id": "374",
+      "question": "How do our payment terms compare to industry norms?"
+    },
+    {
+      "#": 459,
+      "Theme": "Meetings, Decisions & Personal Effectiveness",
+      "Question": "Which commitments did I make last quarter that are unmet?",
+      "Where StrategyOS finds the answer": "CEO calendar; Document vault; Events register",
+      "Answer type": "Judgment",
+      "id": "459",
+      "question": "Which commitments did I make last quarter that are unmet?"
+    },
+    {
+      "#": 467,
+      "Theme": "Meetings, Decisions & Personal Effectiveness",
+      "Question": "Give me the elevator version: how is the company doing this week, in four sentences?",
+      "Where StrategyOS finds the answer": "CEO calendar; Document vault; Events register",
+      "Answer type": "Judgment",
+      "id": "467",
+      "question": "Give me the elevator version: how is the company doing this week, in four sentences?"
+    },
+    {
+      "#": 450,
+      "Theme": "Meetings, Decisions & Personal Effectiveness",
+      "Question": "What should I read before the cold-chain renegotiation session?",
+      "Where StrategyOS finds the answer": "CEO calendar; Document vault; Events register",
+      "Answer type": "Judgment",
+      "id": "450",
+      "question": "What should I read before the cold-chain renegotiation session?"
+    },
+    {
+      "#": 70,
+      "Theme": "Operating Costs & Efficiency",
+      "Question": "Why is Qassim warehouse 35% more expensive to run than comparable sites?",
+      "Where StrategyOS finds the answer": "Memo_2; GL 6110 memos; CC-230",
+      "Answer type": "Driver analysis",
+      "id": "70",
+      "question": "Why is Qassim warehouse 35% more expensive to run than comparable sites?"
+    },
+    {
+      "#": 89,
+      "Theme": "Operating Costs & Efficiency",
+      "Question": "What is the cost of quality — write-offs, returns, rejected batches — across BUs?",
+      "Where StrategyOS finds the answer": "BU_Cost_Variance_H1_2026; Group_BU_Cost_Structure; GL_CostCenter_Balances",
+      "Answer type": "Driver analysis",
+      "id": "89",
+      "question": "What is the cost of quality — write-offs, returns, rejected batches — across BUs?"
+    },
+    {
+      "#": 67,
+      "Theme": "Operating Costs & Efficiency",
+      "Question": "Which cost elements are above plan in more than two BUs and could be consolidated at group level?",
+      "Where StrategyOS finds the answer": "BU_Cost_Variance_H1_2026; Group_BU_Cost_Structure; GL_CostCenter_Balances",
+      "Answer type": "Driver analysis",
+      "id": "67",
+      "question": "Which cost elements are above plan in more than two BUs and could be consolidated at group level?"
+    },
+    {
+      "#": 272,
+      "Theme": "People & Organisation",
+      "Question": "What training investment would reduce our error and rework rates?",
+      "Where StrategyOS finds the answer": "Headcount_Payroll; PAY batches; CC allocations",
+      "Answer type": "Judgment",
+      "id": "272",
+      "question": "What training investment would reduce our error and rework rates?"
+    },
+    {
+      "#": 270,
+      "Theme": "People & Organisation",
+      "Question": "What would a 3% wage settlement do to each BU's margin?",
+      "Where StrategyOS finds the answer": "Headcount_Payroll; PAY batches; CC allocations",
+      "Answer type": "Judgment",
+      "id": "270",
+      "question": "What would a 3% wage settlement do to each BU's margin?"
+    },
+    {
+      "#": 258,
+      "Theme": "People & Organisation",
+      "Question": "What is revenue and EBITDA per employee by BU, trending?",
+      "Where StrategyOS finds the answer": "Headcount_Payroll; PAY batches; CC allocations",
+      "Answer type": "Judgment",
+      "id": "258",
+      "question": "What is revenue and EBITDA per employee by BU, trending?"
+    },
+    {
+      "#": 37,
+      "Theme": "Profitability & EBITDA",
+      "Question": "How does each BU's margin compare to its listed peers?",
+      "Where StrategyOS finds the answer": "EBITDA_Potential sheet; Pharma_Competitor_Financials",
+      "Answer type": "Driver analysis",
+      "id": "37",
+      "question": "How does each BU's margin compare to its listed peers?"
+    },
+    {
+      "#": 47,
+      "Theme": "Profitability & EBITDA",
+      "Question": "How sensitive is group EBITDA to a 1% change in COGS?",
+      "Where StrategyOS finds the answer": "BU_Group_Budget_2026; Group_BU_Cost_Structure; EBITDA bridges",
+      "Answer type": "Driver analysis",
+      "id": "47",
+      "question": "How sensitive is group EBITDA to a 1% change in COGS?"
+    },
+    {
+      "#": 52,
+      "Theme": "Profitability & EBITDA",
+      "Question": "What is the fully-loaded profitability of our top 10 customers?",
+      "Where StrategyOS finds the answer": "BU_Group_Budget_2026; Group_BU_Cost_Structure; EBITDA bridges",
+      "Answer type": "Driver analysis",
+      "id": "52",
+      "question": "What is the fully-loaded profitability of our top 10 customers?"
+    },
+    {
+      "#": 2,
+      "Theme": "Revenue & Growth",
+      "Question": "Break down this quarter's revenue by segment — which segments are growing and which are shrinking?",
+      "Where StrategyOS finds the answer": "GL revenue accounts; Revenue_Analytics; AR files; Variance_Bridge_H1",
+      "Answer type": "Driver analysis",
+      "id": "2",
+      "question": "Break down this quarter's revenue by segment — which segments are growing and which are shrinking?"
+    },
+    {
+      "#": 3,
+      "Theme": "Revenue & Growth",
+      "Question": "What were the key movers of revenue vs budget this half — up and down, ranked by impact?",
+      "Where StrategyOS finds the answer": "GL revenue accounts; Revenue_Analytics; AR files; Variance_Bridge_H1",
+      "Answer type": "Driver analysis",
+      "id": "3",
+      "question": "What were the key movers of revenue vs budget this half — up and down, ranked by impact?"
+    },
+    {
+      "#": 4,
+      "Theme": "Revenue & Growth",
+      "Question": "What contributed most to revenue growth over the last three years?",
+      "Where StrategyOS finds the answer": "GL revenue accounts; Revenue_Analytics; AR files; Variance_Bridge_H1",
+      "Answer type": "Driver analysis",
+      "id": "4",
+      "question": "What contributed most to revenue growth over the last three years?"
+    },
+    {
+      "#": 290,
+      "Theme": "Risk & Early-Warning Signals",
+      "Question": "What geopolitical or trade-flow changes would hurt our API supply?",
+      "Where StrategyOS finds the answer": "Signals_Register; Group Strategy §12; Briefings",
+      "Answer type": "Judgment",
+      "id": "290",
+      "question": "What geopolitical or trade-flow changes would hurt our API supply?"
+    },
+    {
+      "#": 286,
+      "Theme": "Risk & Early-Warning Signals",
+      "Question": "What regulatory deadlines in the next 12 months carry P&L consequences?",
+      "Where StrategyOS finds the answer": "Signals_Register; Group Strategy §12; Briefings",
+      "Answer type": "Judgment",
+      "id": "286",
+      "question": "What regulatory deadlines in the next 12 months carry P&L consequences?"
+    },
+    {
+      "#": 387,
+      "Theme": "Strategy & Capital Allocation",
+      "Question": "What progress has the Tamween integration made against the acquisition case?",
+      "Where StrategyOS finds the answer": "Group Strategy; BU strategies; Capital envelope §11; Group P&L",
+      "Answer type": "Judgment",
+      "id": "387",
+      "question": "What progress has the Tamween integration made against the acquisition case?"
+    },
+    {
+      "#": 407,
+      "Theme": "Strategy & Capital Allocation",
+      "Question": "What did we learn from the Red Sea churn that changes strategy, not just pricing?",
+      "Where StrategyOS finds the answer": "Group Strategy; BU strategies; Capital envelope §11; Group P&L",
+      "Answer type": "Judgment",
+      "id": "407",
+      "question": "What did we learn from the Red Sea churn that changes strategy, not just pricing?"
+    },
+    {
+      "#": 190,
+      "Theme": "Suppliers, Procurement & Contracts",
+      "Question": "Which supplier prices crept above inflation, and what is the re-tender value?",
+      "Where StrategyOS finds the answer": "Vendor_Master; Supplier_Spend; PO logs; Contracts folder",
+      "Answer type": "Driver analysis",
+      "id": "190",
+      "question": "Which supplier prices crept above inflation, and what is the re-tender value?"
+    },
+    {
+      "#": 194,
+      "Theme": "Suppliers, Procurement & Contracts",
+      "Question": "Which contracts auto-renew in the next six months, and with what escalators?",
+      "Where StrategyOS finds the answer": "Vendor_Master; Supplier_Spend; PO logs; Contracts folder",
+      "Answer type": "Driver analysis",
+      "id": "194",
+      "question": "Which contracts auto-renew in the next six months, and with what escalators?"
+    },
+    {
+      "#": 235,
+      "Theme": "Supply Chain, Inventory & Operations",
+      "Question": "What is the utilisation of the Dammam hub since commissioning?",
+      "Where StrategyOS finds the answer": "Inventory_Movements; Item_Master; GRN_Log; PO logs",
+      "Answer type": "Driver analysis",
+      "id": "235",
+      "question": "What is the utilisation of the Dammam hub since commissioning?"
+    },
+    {
+      "#": 225,
+      "Theme": "Supply Chain, Inventory & Operations",
+      "Question": "How well do goods receipts match POs and invoices — where are the exceptions?",
+      "Where StrategyOS finds the answer": "Inventory_Movements; Item_Master; GRN_Log; PO logs",
+      "Answer type": "Driver analysis",
+      "id": "225",
+      "question": "How well do goods receipts match POs and invoices — where are the exceptions?"
+    }
+  ]
+}

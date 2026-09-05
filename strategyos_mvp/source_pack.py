@@ -130,7 +130,13 @@ def _source_packs_root() -> Path:
 
 
 def _source_pack_dir(source_pack_id: str) -> Path:
-    return (_source_packs_root() / source_pack_id).resolve()
+    root = _source_packs_root().resolve()
+    if not source_pack_id or Path(source_pack_id).name != source_pack_id or source_pack_id in {".", ".."}:
+        raise HTTPException(400, "Invalid source-pack identifier.")
+    result = (root / source_pack_id).resolve()
+    if not result.is_relative_to(root) or result == root:
+        raise HTTPException(400, "Invalid source-pack identifier.")
+    return result
 
 
 def _raw_dir(source_pack_id: str) -> Path:
@@ -239,6 +245,11 @@ def _source_id(source_pack_id: str, relative_path: str, sha256_value: str) -> st
 
 def _deterministic_source_pack_id(entries: list[dict[str, Any]]) -> str:
     hasher = sha256()
+    # Identical deliveries from separate tenants must never share a directory.
+    from .access_scope import principal_scope
+    principal = principal_scope.get()
+    if principal and not principal.get("auth_disabled"):
+        hasher.update(str(principal.get("tenant_id") or "").encode("utf-8") + b"\0")
     for entry in sorted(entries, key=lambda item: str(item["relative_path"])):
         hasher.update(str(entry["relative_path"]).encode("utf-8"))
         hasher.update(b"\0")
@@ -1712,6 +1723,10 @@ def stage_source_pack_uploads(files: list[UploadFile]) -> dict[str, Any]:
 
 
 def validate_source_pack(source_pack_id: str) -> dict[str, Any]:
+    from .access_scope import guard_summary, principal_scope
+    if principal_scope.get() and not principal_scope.get().get("auth_disabled"):
+        summary_path = _summary_path(source_pack_id)
+        guard_summary(json.loads(summary_path.read_text()) if summary_path.is_file() else None)
     if not source_pack_id.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -311,7 +311,7 @@ def test_phase13_leakage_engine_does_not_regress_kpi_computation_boundary():
     computation = compute_oracle_pilot_kpis(snapshot, reporting_period_key="2026-06")
 
     assert computation.metrics["revenue_attainment_pct"] is None
-    assert computation.metrics["dpo_days"] == Decimal("37.2")
+    assert computation.metrics["dpo_days"] is None  # Explicit working-capital denominator is absent.
     assert computation.computation_boundary.startswith("Deterministic Oracle KPI computation only")
 
 
