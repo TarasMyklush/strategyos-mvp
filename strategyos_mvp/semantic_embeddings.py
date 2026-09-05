@@ -37,8 +37,11 @@ def model():
     TextEmbedding.add_custom_model(model=MODEL_NAME, pooling=PoolingType.MEAN, normalization=True,
         sources=ModelSource(hf=MODEL_REPOSITORY), dim=DIMENSIONS, model_file=MODEL_FILE,
         license="MIT", description="Pinned multilingual E5 small quantized retrieval model")
+    threads = int(os.getenv('STRATEGYOS_EMBEDDING_THREADS', '1'))
+    if not 1 <= threads <= 4:
+        raise ValueError('Embedding CPU threads must be between one and four.')
     return TextEmbedding(model_name=MODEL_NAME,specific_model_path=str(root),local_files_only=True,
-                         threads=1,providers=['CPUExecutionProvider'])
+                         threads=threads,providers=['CPUExecutionProvider'])
 
 
 @lru_cache(maxsize=2048)
