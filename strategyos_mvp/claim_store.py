@@ -1494,7 +1494,7 @@ class ClaimRepository:
                 join strategyos_claim_revisions r on r.id = i.id
                 join strategyos_claim_families f on f.id = r.claim_family_id
                 where r.tenant_id::text <> %s or r.recorded_at > %s
-                  or r.as_of_at > %s or r.valid_until < %s
+                  or r.as_of_at > %s or r.valid_until <= %s
                   or r.traceability_state <> 'present'
                   or (%s::text[] <> '{}'::text[] and
                       (f.business_unit is null or not f.business_unit = any(%s::text[])))

@@ -245,6 +245,14 @@ def test_stale_future_and_untraceable_claims_are_ineligible():
     assert {"stale", "not_known_at_query_time", "traceability_incomplete"}.issubset(result.reasons)
 
 
+def test_claim_expiry_is_exclusive_at_the_exact_deadline():
+    for delta, expected in [(-1, False), (0, False), (1, True)]:
+        result = claim_is_eligible(
+            revision(actual_draft(valid_until=NOW + timedelta(microseconds=delta))),
+            query=query(as_of_at=NOW), context=context(), source_policies=[policy()])
+        assert result.eligible is expected
+
+
 def test_retracted_claim_is_ineligible_and_assessment_is_not_self_reported_confidence():
     assessment = ClaimAssessment(
         claim_revision_id="revision-1",

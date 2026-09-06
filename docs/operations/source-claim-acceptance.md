@@ -366,3 +366,21 @@ counts alone do not close these boundaries.
   disagreement. Current source revocation still removes inaccessible evidence.
 - Twenty focused service-backed tests passed with no skips, plus 28 focused
   unit/API/UI tests. This snapshot addition still requires its frozen full gate.
+
+### Expiry and metadata boundary follow-through
+
+- Explicit source-priority commit `49ec82b` passed 2,072 tests with zero skips
+  (`/tmp/strategyos-priority-full.xml`, 312.90 seconds). A local 390 px browser
+  check showed the preference rationale and the independent-verification
+  disclaimer without horizontal overflow; the viewport was restored.
+- On the restored preview database, the combined snapshot implementation returned
+  ten governed headline records in 1.799 seconds, with no denied or unresolved
+  selections. This is an observation, not a contractual latency SLO.
+- Claim expiry now uses an exclusive deadline in both direct eligibility and
+  recursive input SQL. Boundary tests cover the microsecond before and the exact
+  deadline. Twenty-three targeted tests passed, including real PostgreSQL lineage.
+- Public snapshot pages require source-scope authorization before exposing page
+  metadata. Partial denial returns no hidden counts. Reconciliation totals use
+  the same source boundary. A revised-history exception does not admit withdrawal,
+  role or purpose denial. Thirty-five targeted API/semantic tests passed.
+- These latest expiry and metadata changes are not yet full-gated or deployed.

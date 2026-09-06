@@ -546,7 +546,7 @@ def claim_is_eligible(
         reasons.append("not_known_at_query_time")
     if claim.draft.as_of_at and claim.draft.as_of_at > query.as_of_at:
         reasons.append("future_as_of")
-    if claim.draft.valid_until and claim.draft.valid_until < query.as_of_at:
+    if claim.draft.valid_until and claim.draft.valid_until <= query.as_of_at:
         reasons.append("stale")
     if query.require_traceability and claim.traceability != TraceabilityState.PRESENT:
         reasons.append("traceability_incomplete")

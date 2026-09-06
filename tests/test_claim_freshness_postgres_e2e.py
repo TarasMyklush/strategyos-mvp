@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -9,6 +9,27 @@ from tests.test_cross_source_postgres_e2e import ledger
 from tests.test_tabular_claims_postgres_e2e import setup_intake
 
 pytestmark = pytest.mark.integration
+
+
+def test_exact_expiry_applies_to_inputs_and_calculated_descendants(ledger):
+    repo, context, occurrence, _, _ = setup_intake(ledger)
+    deadline = datetime.now(UTC) + timedelta(days=1)
+    raw = ClaimDraft(tenant_id=context.tenant_id, assertion_namespace='expiry-proof',
+        subject_type='enterprise', subject_key='group', metric_key='expiry.raw',
+        claim_kind='actual', production_method='imported', value_numeric=10,
+        unit='SAR', currency='SAR', valid_until=deadline,
+        source_occurrence_keys=(occurrence,))
+    first = repo.record_claim(raw, traceability='present')
+    repo.record_claim(replace(raw, metric_key='expiry.derived', valid_until=None,
+        production_method='calculated', source_occurrence_keys=(),
+        input_revision_ids=(first['claim_revision_id'],), formula_key='identity',
+        formula_version='1'), traceability='present')
+    for metric in ('expiry.raw', 'expiry.derived'):
+        query = ClaimQuery(tenant_id=context.tenant_id, metric_key=metric,
+            purpose=context.purpose, allowed_claim_kinds=frozenset({'actual'}),
+            as_of_at=deadline-timedelta(microseconds=1))
+        assert len(repo.query(query, context=context)) == 1
+        assert repo.query(replace(query, as_of_at=deadline), context=context) == []
 
 
 def test_revised_recursive_inputs_hide_current_calculation_but_preserve_history(ledger):

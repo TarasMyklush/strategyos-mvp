@@ -338,16 +338,22 @@ def query_run_snapshot(
 ) -> dict[str, Any]:
     context = _policy_context(principal, purpose)
     try:
-        return {
-            "status": "ok",
-            **ClaimRepository().snapshot(
+        repository = ClaimRepository()
+        access = repository.run_source_access(run_id, context=context)
+        # Historical revisions remain inspectable after a newer revision, but
+        # source revocation and scope restrictions still protect page metadata.
+        if not access.get('allowed') and set(access.get('reasons') or ()) != {'bulk_revised_inputs_require_recompute'}:
+            raise HTTPException(403, 'This snapshot is unavailable for this source scope and purpose. Use the claim query for authorized individual evidence.')
+        snapshot = repository.snapshot(
                 f"run:{run_id}",
                 context=context,
                 metric_keys=[metric_key] if metric_key else None,
                 limit=limit,
                 offset=offset,
-            ),
-        }
+            )
+        if snapshot.get('denied_count'):
+            raise HTTPException(403, 'This snapshot page is not available in full. Use the claim query for authorized individual evidence.')
+        return {'status': 'ok', **snapshot}
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     except KeyError as exc:
@@ -365,10 +371,13 @@ def query_run_reconciliation(
 ) -> dict[str, Any]:
     context = _policy_context(principal, UsePurpose.ANALYSIS)
     try:
+        repository = ClaimRepository()
+        if not repository.run_source_access(run_id, context=context).get('allowed'):
+            raise HTTPException(403, 'Reconciliation is unavailable for this source scope.')
         return {
             "status": "ok",
             "run_id": run_id,
-            "reconciliation": ClaimRepository().reconciliation(
+            "reconciliation": repository.reconciliation(
                 run_id, tenant_id=context.tenant_id
             ),
         }
