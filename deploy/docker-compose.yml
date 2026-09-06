@@ -184,6 +184,7 @@ services:
 
   strategyos-claim-projector:
     profiles: ["governed-claims"]
+    scale: ${STRATEGYOS_CLAIM_PROJECTOR_REPLICAS:-1}
     build:
       context: ..
       dockerfile: deploy/Dockerfile

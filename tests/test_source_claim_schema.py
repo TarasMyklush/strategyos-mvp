@@ -78,6 +78,7 @@ def test_claim_projector_is_an_explicit_rollout_profile():
     )[0]
     assert 'profiles: ["governed-claims"]' in projector
     assert "STRATEGYOS_EMBEDDING_MODEL_PATH" in projector
+    assert "STRATEGYOS_CLAIM_PROJECTOR_REPLICAS" in projector
 
 
 class MigrationCursor:
