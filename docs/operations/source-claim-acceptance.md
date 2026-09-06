@@ -326,3 +326,24 @@ counts alone do not close these boundaries.
 - This candidate does not yet implement versioned source-priority decisions or
   complete conflict handling across every snapshot/projection consumer. Existing
   finance headline composition independently refuses competing components.
+
+### Explicit source-priority candidate
+
+- Conflict disclosure commit `f7ba6b6` passed 2,064 tests with zero skips in an
+  isolated frozen checkout (`/tmp/strategyos-conflict-full.xml`). Queue/period
+  commit `c95d01a` independently passed 2,059 tests with zero skips.
+- The priority configuration API accepts an explicit tenant-admin decision for
+  one comparison scope, with ranked source identities, an explicit review
+  requirement (or null), rationale and expected policy version. Actor and tenant
+  come from authentication. System identities cannot self-authorize this action.
+- Policies are versioned and time-bounded; stale updates fail, exact retries do
+  not duplicate versions, and prior-time reads retain the prior policy state.
+  Missing source coverage, missing/expired reviews and conflicting top-ranked
+  values remain unresolved. A derived claim uses its weakest contributing
+  source, not its strongest. No policy is installed by default.
+- Priority is not independent corroboration, verification, approval or a change
+  to the underlying evidence. All authorized alternatives remain visible. This
+  candidate still needs a full gate and downstream snapshot/consumer integration.
+- Genuine 390 px local browser checks subsequently passed for conflict warnings
+  and recalculation controls, with document width also 390 px. The viewport was
+  reset afterwards. This supersedes only the earlier failed viewport attempt.

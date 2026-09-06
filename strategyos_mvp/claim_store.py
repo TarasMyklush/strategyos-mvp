@@ -887,11 +887,13 @@ class ClaimRepository:
                             and policy_allows(context=replace(context,purpose=UsePurpose.OPERATIONS),
                                 claim=claim,source_policies=policies).eligible)
                         results.append(record)
+                from .claim_priority import policies_at
+                priority_policies=policies_at(cur,tenant_id=tenant_id,metric_key=query.metric_key,at=query.as_of_at)
             conn.commit()
         # Compare the full authorized metric scope before candidate filtering.
         # A vector shortlist must not hide a competing source from disclosure.
         from .claim_conflicts import annotate_conflicts
-        results = annotate_conflicts(results)
+        results = annotate_conflicts(results,policies=priority_policies,at=query.as_of_at)
         return results if candidates is None else [row for row in results if row['claim_revision_id'] in candidates]
 
     def recalculation_queue(self, *, context: PolicyContext, after: str | None = None,

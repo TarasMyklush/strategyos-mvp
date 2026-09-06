@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, status, File, Form, UploadF
 from pydantic import BaseModel, ConfigDict, Field
 
 from .auth import require_role
+from .claim_priority import PriorityDecision
 from .claim_store import ClaimRepository
 from .source_claims import ClaimAssessment, ClaimDraft, ClaimKind, ClaimQuery, PolicyContext, UsePurpose
 
@@ -34,6 +35,22 @@ class RecalculationRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     rationale: str = Field(min_length=1,max_length=2000)
     expected_preview: str | None = Field(default=None,min_length=1,max_length=240)
+
+
+@router.post('/priority-policies')
+def record_source_priority(request: PriorityDecision,
+        principal: dict[str,Any] = require_role('tenant_admin')) -> dict[str,Any]:
+    from .claim_priority import record_priority,PriorityConflict
+    try:
+        return record_priority(ClaimRepository(),request,context=_policy_context(principal,UsePurpose.OPERATIONS))
+    except PermissionError as exc:
+        raise HTTPException(403,str(exc)) from None
+    except PriorityConflict as exc:
+        raise HTTPException(409,str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(422,str(exc)) from None
+    except RuntimeError:
+        raise HTTPException(503,'Source-priority configuration is temporarily unavailable.') from None
 
 
 @router.get('/recalculation-queue')

@@ -12,6 +12,10 @@
     var article = node('article','','card claim-record');
     article.append(node('h2', record.metric_key));
     article.append(node('p', record.label || record.claim_kind, 'claim-kind--' + record.claim_kind));
+    if(record.comparison && record.comparison.priority_policy_id){
+      article.append(node('p',record.comparison.selected_by_priority?'Preferred by the configured source policy. This is not independent verification.':'Not selected by the configured source policy; retained for evidence review.'));
+      article.append(fields({'Priority policy version':record.comparison.priority_policy_version,'Selection basis':record.comparison.selection_basis}));
+    }
     if(record.comparison && record.comparison.requires_resolution){
       article.append(node('p','Conflicting authorized claims exist for this same scope. No definitive value has been selected; review the competing evidence.','claim-stale'));
       if(form.elements.namedItem('text').value.trim()){
