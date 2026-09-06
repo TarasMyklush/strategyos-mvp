@@ -27,7 +27,6 @@ def submit_scheduled_cycle(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
-    repo_set = repositories or build_app_repositories()
     normalized_cycle = _normalize_cycle_type(cycle_type)
     if not active_config.twins_enabled:
         return _disabled_execution_response(
@@ -41,6 +40,7 @@ def submit_scheduled_cycle(
             reason="Twin scheduler is disabled.",
             cycle_type=normalized_cycle,
         )
+    repo_set = repositories or build_app_repositories()
     if active_config.run_execution_mode == "hatchet":
         from strategyos_mvp.hatchet_runtime import enqueue_twin_cycle
 
@@ -80,7 +80,6 @@ def submit_event_execution(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
-    repo_set = repositories or build_app_repositories()
     if not active_config.twins_enabled:
         return _disabled_execution_response(
             execution_type="event_execution",
@@ -91,6 +90,7 @@ def submit_event_execution(
             execution_type="event_execution",
             reason="Twin scheduler is disabled.",
         )
+    repo_set = repositories or build_app_repositories()
     if active_config.run_execution_mode == "hatchet":
         from strategyos_mvp.hatchet_runtime import enqueue_twin_events
 
@@ -129,6 +129,9 @@ def execute_scheduled_cycle_job(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
+    if not active_config.twins_enabled or not active_config.twins_scheduler_enabled:
+        return _disabled_execution_response(execution_type='scheduled_cycle',
+            reason='Twin scheduled execution is disabled.',cycle_type=_normalize_cycle_type(cycle_type))
     repo_set = repositories or build_app_repositories()
     if idempotency_key:
         existing = repo_set.execution.find_by_idempotency_key("scheduled_cycle", idempotency_key)
@@ -182,6 +185,9 @@ def execute_event_execution_job(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     active_config = config or load_config()
+    if not active_config.twins_enabled or not active_config.twins_scheduler_enabled:
+        return _disabled_execution_response(execution_type='event_execution',
+            reason='Twin scheduled execution is disabled.')
     repo_set = repositories or build_app_repositories()
     if idempotency_key:
         existing = repo_set.execution.find_by_idempotency_key("event_execution", idempotency_key)

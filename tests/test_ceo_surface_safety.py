@@ -2251,11 +2251,9 @@ def test_kpi_mover_note_is_a_shared_server_resolved_assistant_subject():
     assert 'subject: entrypoint === "board_portal" ? undefined : kpiAssistantSubject(activeDriver)' in js
     assert js.count("subject: kpiAssistantSubject(driver)") >= 2
 
-    cache_start = js.index("function assistantAnswerCacheKey")
-    cache_end = js.index("function loadAssistantAnswerCache", cache_start)
-    cache_body = js[cache_start:cache_end]
-    assert "subject.kind" in cache_body
-    assert "subject.key" in cache_body
+    # An offline answer cache cannot reauthorize the selected mover's source.
+    assert "function assistantAnswerCacheKey" not in js
+    assert "function cachedAssistantFallback" not in js
 
 
 def test_ai_team_card_renders_leadership_status_not_raw_execution_log():

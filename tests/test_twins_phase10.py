@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from tests.twin_source_fixtures import authorized_source_fixture
 
 from fastapi.testclient import TestClient
 
@@ -70,7 +71,7 @@ def test_authenticated_dashboard_and_investigate_flow_is_stable_and_idempotent(t
         )
 
         assert dashboard.status_code == 200
-        assert first.status_code == 200
+        assert first.status_code == 200, first.text
         assert second.status_code == 200
         assert second.json()["idempotent_replay"] is True
         assert second.json()["summary"]["cycle_id"] == first.json()["summary"]["cycle_id"]
@@ -99,9 +100,9 @@ def test_governance_path_is_idempotent_and_redacts_sensitive_subjects_for_non_ad
         assert second.json()["idempotent_replay"] is True
         assert second.json()["record"]["actor_subject"] == "demo-role:executive"
         exec_item = history_exec.json()["governance"]["approval_trail"][0]
-        admin_item = history_admin.json()["governance"]["approval_trail"][0]
         assert "actor_subject" not in exec_item
-        assert admin_item["actor_subject"] == "demo-role:executive"
+        # Administration alone does not release another person's saved work.
+        assert history_admin.json()["governance"]["approval_trail"] == []
     finally:
         _restore_env(original)
 

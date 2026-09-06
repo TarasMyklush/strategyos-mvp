@@ -381,6 +381,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 @app.middleware("http")
 async def bind_authorized_data_scope(request: Request, call_next: Any) -> Any:
     from .access_scope import principal_scope
+    from .twins.source_scope import bound_surface
     from . import auth as identity_boundary
     headers = request.headers
     if request.url.path.startswith("/static/"):
@@ -399,12 +400,14 @@ async def bind_authorized_data_scope(request: Request, call_next: Any) -> Any:
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
     token = principal_scope.set({**principal, "_verified_for_request": True,
                                  "_source_read_request": request.method in {"GET", "HEAD"}})
+    twin_token = bound_surface.set(None)
     try:
         response = await call_next(request)
         if principal.get("authenticated"):
             response.headers["Cache-Control"] = "private, no-store"
         return response
     finally:
+        bound_surface.reset(twin_token)
         principal_scope.reset(token)
 
 
@@ -5361,7 +5364,27 @@ def _agents_surface_payload(
     )
     configured_role_set = set(configured_roles)
     principal_role = str(principal.get("role") or "anonymous")
-    repositories = build_app_repositories()
+    try:
+        repositories = build_app_repositories()
+    except (PermissionError, HTTPException) as exc:
+        if isinstance(exc, HTTPException) and exc.status_code not in {403, 404, 409, 503}:
+            raise
+        # Optional saved activity must not break session metadata or imply a
+        # healthy, empty queue when its source authority cannot be established.
+        message = "Saved assistant activity is unavailable for this source scope. Business priorities remain in Decisions for you."
+        return {
+            "contract_version": "digital_twin_network.v1",
+            "status": "unavailable",
+            "reason": message,
+            "digital_twins": [],
+            "summary": {},
+            "collaboration": {"status": "unavailable", "summary": message, "recent_events": []},
+            "runtime": {"status": "unavailable", "enabled": bool(CONFIG.twins_enabled)},
+            "running": [],
+            "discover": {"native": [], "marketplace": []},
+            "activity": {"line": message, "metrics": [], "log": []},
+            "authenticated": bool(principal.get("authenticated")),
+        }
     states = {str(item.get("role") or ""): item for item in repositories.states.list()}
     inboxes = repositories.inboxes.list()
     all_investigations = repositories.investigations.list()
@@ -5436,7 +5459,7 @@ def _agents_surface_payload(
             runtime_status = "monitoring"
         else:
             runtime_status = "ready"
-        current_activity = "Ready to support the next leadership review."
+        current_activity = "No execution is recorded for this actor and analysis yet."
         if active_investigations:
             latest = active_investigations[-1]
             current_activity = str(
@@ -5530,7 +5553,7 @@ def _agents_surface_payload(
             "None is flagged for executive attention."
         )
     else:
-        collaboration_summary = "Nothing in the leadership-team workflow requires your attention."
+        collaboration_summary = "No open handoffs are recorded for this actor and analysis. Business priorities remain in Decisions for you."
     payload = {
         "contract_version": "digital_twin_network.v1",
         "status": "ok" if CONFIG.twins_enabled else "disabled",
@@ -5570,6 +5593,8 @@ def _agents_surface_payload(
         "runtime": {
             "enabled": bool(CONFIG.twins_enabled),
             "mutations_enabled": bool(CONFIG.twins_mutations_enabled),
+            "scheduler_enabled": bool(CONFIG.twins_scheduler_enabled),
+            "saved_state_scope": "authenticated_actor_and_analysis" if not principal.get('auth_disabled') else "isolated_offline",
             "cycle_count": len(cycle_history),
             "completed_cycle_count": completed_cycle_count,
             "failed_cycle_count": failed_cycle_count,
@@ -5668,6 +5693,17 @@ def _resolve_digital_twin_status(
 
     principal = {"role": role, "authenticated": True}
     network = _agents_surface_payload(summary, principal)
+    if network.get("status") == "unavailable":
+        return {
+            "matched": True,
+            "answer": network["reason"],
+            "basis": "Current source permissions could not authorize saved assistant activity.",
+            "citations": [],
+            "suggestions": [],
+            "assistant_mode": "digital_twin_runtime",
+            "answered_by": "digital_twin_runtime",
+            "digital_twin_network": network,
+        }
     twins = [
         item
         for item in list(network.get("digital_twins") or [])

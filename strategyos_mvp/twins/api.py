@@ -250,8 +250,10 @@ def twin_operational_health_payload(
     repositories: TwinRepositories | None = None,
     principal: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    repo_set = repositories or _get_repositories()
-    payload = check_twin_health(repositories=repo_set, config=load_config())
+    # Readiness is infrastructure-only. Saved execution contents require an
+    # authenticated source scope and are inspected only by the diagnostic route.
+    payload = check_twin_health(repositories=repositories, config=load_config(),
+        include_diagnostics=principal is not None or repositories is not None)
     if principal is None or _can_view_sensitive_twin_diagnostics(principal):
         return payload
     diagnostics = dict(payload.get("diagnostics") or {})

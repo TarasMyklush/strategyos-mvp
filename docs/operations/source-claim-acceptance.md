@@ -466,3 +466,25 @@ counts alone do not close these boundaries.
   PostgreSQL read/revoke/export/revision scenarios and meeting-list isolation.
   Frozen bytes and answers were unchanged. Full and online verification of this
   candidate remain pending; no real meeting was closed during QA.
+
+## Saved-work source scope follow-up
+
+- Frozen `64a7bd0` passed 2,107 tests with zero skips in 676.54 seconds;
+  `/tmp/strategyos-board-full.xml` passed the service-report gate. This covers
+  migration 0011 and board reauthorization, not the subsequent twin changes.
+- Twin saved state is now namespaced by authenticated tenant, actor, role, BU
+  scope and authorized analysis. Old unclassified root files are preserved but
+  not inherited. Current source permission is rechecked at every request.
+- The real PostgreSQL twin test verifies actor isolation and read revocation.
+  Controller fixtures are explicitly synthetic and are not ACL evidence.
+- Legacy background twin jobs lack a durable initiating-authority envelope.
+  The preview scheduler is therefore disabled, including already-queued entry
+  points. Implement that envelope before re-enabling it; production is unchanged.
+- Missing saved-work authority returns an unavailable optional surface without
+  counts or history. It does not break session metadata or claim no business
+  attention is needed. Hermes uses the same unavailable response without sources.
+- Browser generated-answer fallback caches are retired: network failure cannot
+  replay an old answer as a currently authorized success. Durable conversation
+  history is preserved and is being audited separately.
+- The frontend/CEO regression subset passed 321 tests. Combined full-service and
+  preview browser acceptance for these subsequent changes are still pending.

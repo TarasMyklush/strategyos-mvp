@@ -668,7 +668,9 @@ def test_ui_session_reports_bu_role_with_read_only_review_capabilities():
         assert contract_payload["drilldown"]["lower_rail"]["week_ahead"][0]["event_id"] == "prep"
         assert contract_payload["interaction_contracts"]["pending_reviews"]["route"] == "/bu/pending-reviews"
         assert contract_payload["agents"]["discover"]["native"] == []
-        assert contract_payload["agents"]["discover"]["marketplace"]
+        assert contract_payload["agents"]["status"] == "unavailable"
+        assert contract_payload["agents"]["summary"] == {}
+        assert contract_payload["agents"]["discover"]["marketplace"] == []
         assert contract_payload["agent_modules"]["summary"]["running_count"] >= 4
         assert contract_payload["tenant_admin_system"]["connector_posture"]["count"] >= 3
         assert contract_payload["tenant_admin_system"]["workflow_posture"]["review_queue_route"] == "/reviewer/pending-reviews"
@@ -794,7 +796,9 @@ def test_ui_session_and_workspace_contract_use_governed_routes_for_authenticated
         assert payload["chat"]["store"]["mode"] == "client_session"
         assert payload["chat"]["threads"][0]["thread_id"] == "system:run-42"
         assert payload["agents"]["running"] == []
-        assert payload["agents"]["discover"]["marketplace"]
+        assert payload["agents"]["status"] == "unavailable"
+        assert payload["agents"]["summary"] == {}
+        assert payload["agents"]["discover"]["marketplace"] == []
         assert payload["agent_modules"]["summary"]["discoverable_count"] >= 4
         assert payload["tenant_admin_system"]["managed_data"]["reports"]["report_count"] == 2
         assert payload["tenant_admin_system"]["trend"]["truth_basis"] == "reconciled_governed_metrics"
@@ -1252,8 +1256,8 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     assert 'briefing: "Which executive owns the current " + label + " outcome' in js
     assert 'outlook: "What would materially change the current " + label + " outlook' in js
     assert "kpi_question_intent: questionType" in js
-    assert "function assistantAnswerCacheKey(question, assistantContext)" in js
-    assert 'String(firstDefined(context.kpi_question_intent, "free_text"))' in js
+    assert "function assistantAnswerCacheKey" not in js
+    assert "function cachedAssistantFallback" not in js
     assert "kpiCompositionMarkup(key, brief, drivers)" in js
     assert "Share of the current reported figure" in js
     assert 'class="kpi-composition__bar"' in js
@@ -3860,12 +3864,13 @@ def test_assistant_css_styles_retryable_failure_state():
     assert '.assistant-tool-chip--action' in executive_css
 
 
-def test_assistant_transport_has_cached_fallback_without_automatic_retry_loop():
+def test_assistant_transport_never_uses_cached_evidence_when_authority_is_unavailable():
     executive_js = _static_executive_js()
 
     assert "strategyos.hermes.answer-cache.v1" in executive_js
-    assert "Showing the last known answer from" in executive_js
-    assert "cachedAssistantFallback" in executive_js
+    assert "Showing the last known answer from" not in executive_js
+    assert "cachedAssistantFallback" not in executive_js
+    assert "rememberAssistantAnswer" not in executive_js
     assert "message.autoRetryEligible = false" in executive_js
 
 

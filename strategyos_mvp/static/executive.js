@@ -1,6 +1,13 @@
 (function () {
   "use strict";
 
+  // Cached answers cannot establish current source authority during an outage.
+  // Retire only these obsolete generated-response caches, not conversation history.
+  try {
+    window.sessionStorage.removeItem('strategyos.hermes.answer-cache.v2');
+    window.localStorage.removeItem('strategyos.hermes.answer-cache.v1');
+  } catch (_error) {}
+
   var $ = function (id) { return document.getElementById(id); };
   var bootstrapScript = $("strategyos-executive-bootstrap");
   var bootstrap = bootstrapScript ? JSON.parse(bootstrapScript.textContent) : {};
@@ -1498,6 +1505,11 @@
     return safeArray(agents.digital_twins).filter(isExecutiveLeadershipTwin);
   }
 
+  function assistantActivityUnavailable() {
+    var agents = (state.latestPacket && state.latestPacket.agents) || bootstrap.agents || {};
+    return agents.status === 'unavailable';
+  }
+
   function leadershipStatusLabel(status) {
     var labels = {
       attention: "Needs your review",
@@ -1557,6 +1569,11 @@
   }
 
   function getAssistantNetworkMeta() {
+    if (assistantActivityUnavailable()) return {
+      label: "Hermes' AI leadership team",
+      hint: "Saved assistant activity is unavailable for this source scope.",
+      active_count: null, attention_count: null, configured_count: null
+    };
     var team = getLeadershipTeam();
     var snapshot = getExecutiveStateSnapshot();
     var activeCount = team.filter(function (item) {
@@ -3077,72 +3094,6 @@
     return result;
   }
 
-  function assistantAnswerCacheKey(question, assistantContext) {
-    var context = assistantContext && typeof assistantContext === "object" ? assistantContext : {};
-    var subject = context.subject && typeof context.subject === "object" ? context.subject : {};
-    return [
-      String((state.session || {}).subject || "anonymous"),
-      String((((state.session || {}).tenant_context || {}).tenant_id) || ""),
-      String(activeRunId() || ""),
-      String(state.activePersona || "ceo"),
-      String(state.activeBoard || "pre"),
-      String(state.boardMeetingId || ""),
-      String(firstDefined(context.entrypoint, "drawer_input")),
-      String(firstDefined(context.kpi_key, context.driver_key, "none")),
-      String(firstDefined(context.kpi_question_intent, "free_text")),
-      String(firstDefined(subject.kind, "no_subject")),
-      String(firstDefined(subject.key, subject.id, "no_subject_key")),
-      String(question || "").trim().toLowerCase().replace(/\s+/g, " ")
-    ].join("::");
-  }
-
-  function loadAssistantAnswerCache() {
-    try {
-      var raw = window.sessionStorage.getItem("strategyos.hermes.answer-cache.v2");
-      var parsed = raw ? JSON.parse(raw) : {};
-      return parsed && typeof parsed === "object" ? parsed : {};
-    } catch (_error) {
-      return {};
-    }
-  }
-
-  function rememberAssistantAnswer(question, result, assistantContext) {
-    if (!result || !result.ok || !String(result.answer || "").trim()) return;
-    try {
-      var cache = loadAssistantAnswerCache();
-      cache[assistantAnswerCacheKey(question, assistantContext)] = {
-        answer: result.answer,
-        metadata: result.metadata || "",
-        responsePayload: result.responsePayload || null,
-        savedAt: new Date().toISOString()
-      };
-      var keys = Object.keys(cache).sort(function (left, right) {
-        return String((cache[right] || {}).savedAt || "").localeCompare(String((cache[left] || {}).savedAt || ""));
-      });
-      keys.slice(25).forEach(function (key) { delete cache[key]; });
-      window.sessionStorage.setItem("strategyos.hermes.answer-cache.v2", JSON.stringify(cache));
-    } catch (_error) {}
-  }
-
-  function cachedAssistantFallback(question, failure, assistantContext) {
-    if (failure && (failure.statusCode === 401 || failure.statusCode === 403 || failure.statusCode === 404)) return failure;
-    var cached = loadAssistantAnswerCache()[assistantAnswerCacheKey(question, assistantContext)];
-    if (!cached || !String(cached.answer || "").trim()) return failure;
-    var savedAt = new Date(cached.savedAt || "");
-    var displayTime = Number.isNaN(savedAt.getTime())
-      ? "an earlier session"
-      : savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    return {
-      ok: true,
-      answer: "Live assistant is temporarily unavailable. Showing the last known answer from " + displayTime + ".\n\n" + cached.answer,
-      metadata: [cached.metadata, "Cached fallback · live transport unavailable"].filter(Boolean).join(" · "),
-      responsePayload: cached.responsePayload || null,
-      requestId: failure && failure.requestId,
-      endpoint: failure && failure.endpoint,
-      cachedFallback: true
-    };
-  }
-
   function applyAssistantResultToMessage(thread, message, result) {
     if (!thread || !message || !result) return;
     if (result.ok) {
@@ -3344,25 +3295,24 @@
           requestId: requestId,
           endpoint: endpoint
         };
-        if (!payload.policy_denied) rememberAssistantAnswer(cleanMessage, successfulResult, entrypointCtx);
         return successfulResult;
       }
-      return cachedAssistantFallback(cleanMessage, makeAssistantFailureResult(cleanMessage, {
+      return makeAssistantFailureResult(cleanMessage, {
         endpoint: endpoint,
         statusCode: response.status,
         requestId: requestId,
         errorType: "invalid_payload",
         details: "Response was reachable but did not return status=ok.",
         responseBody: payload
-      }), entrypointCtx);
+      });
     } catch (error) {
-      return cachedAssistantFallback(cleanMessage, makeAssistantFailureResult(cleanMessage, {
+      return makeAssistantFailureResult(cleanMessage, {
         endpoint: firstDefined(error && error.endpoint, "/assistant/chat"),
         statusCode: firstDefined(error && error.status, ""),
         requestId: firstDefined(error && error.requestId, ""),
         errorType: firstDefined(error && error.errorType, "network_error"),
         details: error && error.message ? error.message : String(error || "unknown network error")
-      }), entrypointCtx);
+      });
     }
   }
 
@@ -4046,6 +3996,10 @@
   function renderAssistantNetwork() {
     var card = $("assistant-network-card");
     var meta = getAssistantNetworkMeta();
+    if (assistantActivityUnavailable()) {
+      if (card) card.innerHTML = '<div class="network-empty" role="status">' + escapeHtml(meta.hint) + '</div>';
+      return;
+    }
     // Order by live assistant state; ranks are presentational only.
     var network = getAssistantNetwork().slice().sort(function (left, right) {
       return Number(left.statusRank || 0) - Number(right.statusRank || 0);
@@ -4144,6 +4098,15 @@
     var liveCount = exchanges.filter(function (item) {
       return ["active", "monitoring", "attention"].indexOf(String(firstDefined(item.status, "ready")).toLowerCase()) >= 0;
     }).length;
+
+    if (assistantActivityUnavailable()) {
+      if (fab) fab.hidden = true;
+      if (panel) panel.hidden = true;
+      if (tabs) tabs.innerHTML = '';
+      if (scroll) scroll.innerHTML = '';
+      return;
+    }
+    if (fab) fab.hidden = false;
 
     if (fabText) fabText.textContent = assistantName + " team · " + liveCount + " active";
     if (title) title.textContent = assistantName + " and your AI leadership team";
@@ -6611,6 +6574,16 @@
     var collaborationCard = $("discovery-panel");
     var automationCard = $("subtools-panel");
     var agents = (state.latestPacket && state.latestPacket.agents) || {};
+    if (assistantActivityUnavailable()) {
+      [activityCard, networkCard, collaborationCard].forEach(function (card, index) {
+        if (!card) return;
+        card.hidden = index !== 0;
+        card.innerHTML = index === 0 ? '<div class="network-empty" role="status">Saved assistant activity is unavailable for this source scope. Business priorities remain in Decisions for you.</div>' : '';
+      });
+      if (automationCard) { automationCard.hidden = true; automationCard.innerHTML = ''; }
+      return;
+    }
+    [activityCard, networkCard, collaborationCard].forEach(function (card) { if (card) card.hidden = false; });
     var collaboration = agents.collaboration || {};
     var runtime = agents.runtime || {};
     var query = String(state.discoveryQuery || "").trim().toLowerCase();

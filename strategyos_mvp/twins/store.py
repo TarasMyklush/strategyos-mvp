@@ -896,7 +896,8 @@ def build_repositories(base_path: Path | str) -> TwinRepositories:
 
 
 def build_app_repositories() -> TwinRepositories:
-    return build_repositories(get_app_data_dir())
+    from .source_scope import scoped_directory
+    return build_repositories(scoped_directory(get_app_data_dir()))
 
 
 def build_runtime_repositories() -> TwinRepositories:

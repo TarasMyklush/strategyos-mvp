@@ -110,7 +110,9 @@ def _status_from_metric(card_id: str, value: Any) -> tuple[str, str, list[dict[s
 
 def load_role_surface(role: str) -> dict[str, Any] | None:
     strategyos_api = _strategyos_api()
-    summary = strategyos_api._latest_summary()
+    from .source_scope import authorized_surface
+    scope = authorized_surface()
+    summary = scope['summary'] if scope is not None else strategyos_api._latest_summary()
     if not isinstance(summary, dict):
         return None
 

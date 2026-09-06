@@ -10,6 +10,7 @@ import strategyos_mvp.api as api_module
 import strategyos_mvp.auth as auth_module
 from strategyos_mvp.config import load_config
 from strategyos_mvp.twins.store import build_repositories
+from tests.twin_source_fixtures import authorized_source_fixture, one_scoped_repository
 
 
 client = TestClient(api_module.app)
@@ -98,7 +99,7 @@ def test_approval_persistence(tmp_path):
             },
         )
         assert response.status_code == 200
-        repositories = build_repositories(tmp_path / "app-data")
+        repositories = one_scoped_repository(tmp_path / "app-data")
         decisions = repositories.governance.list_decisions("cfo")
         saved = next(item for item in decisions if item["item_id"] == "bud-900")
         assert saved["status"] == "approved"
@@ -122,7 +123,7 @@ def test_reject_persistence_with_rationale(tmp_path):
             },
         )
         assert response.status_code == 200
-        repositories = build_repositories(tmp_path / "app-data")
+        repositories = one_scoped_repository(tmp_path / "app-data")
         decisions = repositories.governance.list_decisions("ceo")
         saved = next(item for item in decisions if item["item_id"] == "dec-404")
         assert saved["status"] == "rejected"
@@ -157,7 +158,7 @@ def test_redirect_and_escalation_audit_persistence(tmp_path):
         assert redirect_response.status_code == 200
         assert escalate_response.status_code == 200
 
-        repositories = build_repositories(tmp_path / "app-data")
+        repositories = one_scoped_repository(tmp_path / "app-data")
         routing = repositories.governance.list_routing_events("group_manager")
         assert len([item for item in routing if item["item_id"] == "inv-77"]) == 2
         redirect_saved = next(item for item in routing if item["event_type"] == "redirect" and item["item_id"] == "inv-77")

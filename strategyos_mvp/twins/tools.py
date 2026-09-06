@@ -394,6 +394,7 @@ def check_health(
     *,
     repositories: TwinRepositories | None = None,
     config: Any | None = None,
+    include_diagnostics: bool = True,
 ) -> dict[str, Any]:
     """Check system readiness for twin operations.
 
@@ -429,8 +430,18 @@ def check_health(
         health["subsystems"]["twin_catalog"] = "unavailable"
         health["status"] = "degraded"
 
-    repo_set = repositories or build_app_repositories()
+    health['feature_flags'] = {
+        'twins_enabled':active_config.twins_enabled,
+        'twins_mutations_enabled':active_config.twins_mutations_enabled,
+        'twins_scheduler_enabled':active_config.twins_scheduler_enabled,
+        'twins_expose_reasoning_diagnostics':active_config.twins_expose_reasoning_diagnostics,
+    }
+    if not include_diagnostics:
+        health['diagnostics'] = {}
+        health['diagnostics_status'] = 'not_inspected_without_source_scope'
+        return health
     try:
+        repo_set = repositories or build_app_repositories()
         recent_executions = repo_set.execution.list(limit=10)
         recent_reasoning = repo_set.reasoning.list(limit=200)
         recent_decisions = repo_set.governance.list_decisions(limit=50)
