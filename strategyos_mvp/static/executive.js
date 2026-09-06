@@ -5571,7 +5571,7 @@
       gravityPanel.innerHTML = [
         '<div class="fidelity-thinking-badge">◇ Thinking mode</div>',
         '<h3 class="fidelity-thinking-title">Model a what-if on your own data</h3>',
-        '<p class="fidelity-thinking-copy">A sovereign sandbox that runs in your chat — on the current verified figures, with <strong>no side effects</strong>.</p>',
+        '<p class="fidelity-thinking-copy">A sovereign sandbox that runs in your chat — on the current source-backed figures, with <strong>no side effects</strong>.</p>',
         '<div class="fidelity-thinking-own"><span class="fidelity-thinking-own__label">◇ Type a what-if and play — nothing here acts</span><form class="fidelity-thinking-composer" id="thinking-composer"><label class="sr-only" for="thinking-input">Model a scenario on your data</label><input id="thinking-input" type="text" autocomplete="off" placeholder="e.g. what if the largest revenue driver changes by 5%?" /><button type="submit" aria-label="Run scenario">↑</button></form></div>',
         '<span class="fidelity-thinking-starter">or start from one of these</span>',
         '<div class="fidelity-thinking-prompts">' + governedPrompts.map(function (prompt, index) {
@@ -7191,7 +7191,7 @@
         if (payload.policy_denied) failureMeta = '';
         var tier = payload.policy_denied ? 'policy' : String(firstDefined(payload.determinism_tier, '')).trim();
         var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
-        var tierLabel = { policy: 'Permission required', governed_fact: 'Verified fact', derived_insight: 'Derived insight', advisory: 'Advisory' }[tier] || '';
+        var tierLabel = { policy: 'Permission required', governed_fact: 'Source-backed fact', derived_insight: 'Derived insight', advisory: 'Advisory' }[tier] || '';
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));

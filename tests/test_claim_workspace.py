@@ -20,3 +20,12 @@ def test_claim_workspace_never_renders_untrusted_source_markup_or_cached_evidenc
     assert 'Public web · untrusted' in script
     assert 'Licensed external source' in script
     assert 'This is not an actual' in script
+
+
+def test_executive_source_traceability_does_not_imply_independent_verification():
+    script = (ROOT / 'executive.js').read_text()
+    assert "governed_fact: 'Source-backed fact'" in script
+    assert "governed_fact: 'Verified fact'" not in script
+    assert 'current verified figures' not in script
+    for page in ('executive.html', 'guide.html'):
+        assert 'verified company data' not in (ROOT / page).read_text()
