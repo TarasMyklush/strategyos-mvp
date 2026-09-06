@@ -172,8 +172,10 @@ class ClaimRepository:
                         from strategyos_source_access_policies where source_system_id=%s and effective_to is null""", (source_id,))
                     roles, purposes, units = cur.fetchone()
                     if (context.purpose != UsePurpose.OPERATIONS or not context.roles.intersection(roles)
-                            or str(context.purpose) not in purposes or context.business_units or units):
-                        raise ValueError("Source policy does not permit group artifact registration for this principal.")
+                            or str(context.purpose) not in purposes
+                            or (context.business_units and
+                                (not units or not set(units).issubset(context.business_units)))):
+                        raise ValueError("Source policy does not permit artifact registration within this principal's scope.")
                     if not artifact.get("source_path") or not artifact.get("file_name") or int(artifact.get("size_bytes", -1)) < 0:
                         raise ValueError("A validated artifact manifest is required.")
                     cur.execute("""insert into strategyos_evidence_documents
@@ -710,6 +712,8 @@ class ClaimRepository:
                         join strategyos_evidence_occurrences eo on eo.ingestion_batch_id = b.id
                         join strategyos_claim_evidence_links cel on cel.evidence_occurrence_id = eo.id
                         where b.tenant_id = %s and b.run_id::text = %s
+                          and not exists (select 1 from strategyos_analysis_snapshots frozen
+                              where frozen.tenant_id=%s and frozen.snapshot_key='run:' || %s)
                     ), run_lineage(id) as (
                         select id from run_roots
                         union
@@ -757,7 +761,7 @@ class ClaimRepository:
                     left join strategyos_source_access_policies p
                       on p.source_system_id = ss.id and p.effective_to is null
                     """,
-                    (tenant_id, run_id, tenant_id, run_id, tenant_id, run_id,
+                    (tenant_id, run_id, tenant_id, run_id, tenant_id, run_id, tenant_id, run_id,
                      tenant_id, run_id, tenant_id, run_id),
                 )
                 sources = [_record(cur, row) for row in cur.fetchall()]
@@ -1365,8 +1369,7 @@ class ClaimRepository:
         )
         return [row[0] for row in cur.fetchall()]
 
-    @staticmethod
-    def _lineage_eligible(cur: Any, claim: ClaimRevision, query: ClaimQuery, context: PolicyContext) -> bool:
+    def _lineage_eligible(self, cur: Any, claim: ClaimRevision, query: ClaimQuery, context: PolicyContext) -> bool:
         """Exact input revisions retain their own lifecycle, time and BU scope.
 
         A permitted derived label must not launder a withdrawn, expired,
@@ -1375,7 +1378,7 @@ class ClaimRepository:
         """
         if not claim.draft.input_revision_ids:
             return True
-        if not ClaimRepository._revision_is_current(cur, claim.revision_id, query.as_of_at):
+        if not self._revision_is_current(cur, claim.revision_id, query.as_of_at):
             return False
         from .claim_calculations import validate_persisted_calculation
         try:

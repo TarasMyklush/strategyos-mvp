@@ -51,7 +51,7 @@ def test_staged_handoff_records_only_hash_verified_evidence(staged):
     assert repo.calls[1][2]['artifact']['size_bytes'] == len((root/'raw/note.txt').read_bytes())
 
 
-@pytest.mark.parametrize('case',['foreign_tenant','changed_hash','unknown_origin','no_storage','path_traversal','symlink'])
+@pytest.mark.parametrize('case',['foreign_tenant','changed_hash','unknown_origin','no_storage','path_traversal','symlink','group_scope','other_bu'])
 def test_invalid_handoff_never_reaches_repository(staged, case):
     root, payload, context = staged
     selected = 'note.txt'
@@ -59,6 +59,9 @@ def test_invalid_handoff_never_reaches_repository(staged, case):
     if case == 'changed_hash': (root/'raw/note.txt').write_bytes(b'Changed bytes')
     if case == 'unknown_origin': payload['source_contract']['origin_category'] = 'unknown'
     if case == 'no_storage': payload['source_contract']['access_policy']['storage_allowed'] = False
+    if case in {'group_scope', 'other_bu'}:
+        context = replace(context,business_units=frozenset({'retail'}))
+        payload['source_contract']['access_policy']['allowed_business_units'] = [] if case == 'group_scope' else ['distribution']
     if case == 'path_traversal':
         selected = '../summary.json'
         payload['manifest'][0]['relative_path'] = selected

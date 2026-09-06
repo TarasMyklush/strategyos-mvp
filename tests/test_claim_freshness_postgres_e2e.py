@@ -63,9 +63,19 @@ def test_revised_recursive_inputs_hide_current_calculation_but_preserve_history(
         assert cur.fetchone()[0] == 9  # raw and both recursive dependents, three stores
     recomputed_input = repo.record_claim(replace(derived,value_numeric=Decimal(12),
         input_revision_ids=(replacement['claim_revision_id'],)),traceability='present')
-    repo.record_claim(replace(recursive,value_numeric=Decimal(12),
+    new_headline = repo.record_claim(replace(recursive,value_numeric=Decimal(12),
         input_revision_ids=(recomputed_input['claim_revision_id'],)),traceability='present')
     current = repo.query(replace(query,as_of_at=datetime.now(UTC)),context=context)
     assert len(current) == 1 and current[0]['value'] == '12'
     # Recomputing creates new revisions; it never edits the published selection.
     assert repo.snapshot('run:freshness-proof',context=context)['records'][0]['value'] == '10'
+    with psycopg.connect(ledger[1]) as conn, conn.cursor() as cur:
+        cur.execute("""insert into strategyos_analysis_snapshots
+            (tenant_id,snapshot_key,as_of_at,policy_version,created_by)
+            values (%s,'run:recomputed-proof',clock_timestamp(),'test','test') returning id""", (context.tenant_id,))
+        new_snapshot = cur.fetchone()[0]
+        cur.execute("""insert into strategyos_analysis_snapshot_claims
+            (snapshot_id,claim_family_id,claim_revision_id,selection_reason)
+            select %s,claim_family_id,id,'Explicit new selection' from strategyos_claim_revisions where id=%s""",
+            (new_snapshot,new_headline['claim_revision_id']))
+    assert repo.run_source_access('recomputed-proof',context=context)['allowed']

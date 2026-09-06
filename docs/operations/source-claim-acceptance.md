@@ -226,3 +226,19 @@ counts alone do not close these boundaries.
 - This detects the need for recomputation; it does not yet provide an operator
   queue or automatically publish/reapprove a replacement analysis. Those remain
   separate closure work. Full frozen service verification is still required.
+
+### Follow-up gate findings
+
+- Handoff commit `1369e9d`: 2,036 tests passed, zero skips, receipt
+  `/tmp/strategyos-handoff-full.xml` (517.40 seconds).
+- The first frozen freshness gate stopped on an injected repository-factory
+  test: lineage validation referenced a replaceable module-level factory instead
+  of its repository instance. The implementation now uses the instance method;
+  the failed gate is not counted as acceptance.
+- Scoped evidence registration now permits a source wholly inside an operator's
+  BU authority. Group-wide, foreign-BU and partially overlapping sources remain
+  denied. Current policy is rechecked in the artifact/occurrence transaction;
+  claim-level row scope validation remains a separate mandatory check.
+- A fresh preview-browser tab also timed out without being created. No browser
+  security settings were changed or warnings bypassed. Online visual acceptance
+  remains open despite passing authenticated HTTP checks.

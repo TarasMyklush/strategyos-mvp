@@ -35,3 +35,23 @@ def test_atomic_artifact_occurrence_replay_and_conflict_rollback(ledger):
     repo.register_source(source,policy=replace(policy,storage_allowed=False),recorded_by='steward',rationale='Revocation')
     with pytest.raises(ValueError,match='does not permit storage'):
         repo.record_occurrence(evidence,context=context,artifact=artifact)
+
+
+def test_scoped_operator_can_register_only_wholly_scoped_source(ledger):
+    repo, context, _, source, policy = setup_intake(ledger)
+    scoped = replace(context,business_units=frozenset({'retail'}))
+    evidence = EvidenceOccurrence(tenant_id=context.tenant_id,source_key=source.source_key,
+        artifact_hash='f'*64,source_native_id='retail.txt')
+    artifact = {'source_path':'retail.txt','file_name':'retail.txt','size_bytes':1}
+    with pytest.raises(ValueError,match='principal.s scope'):
+        repo.record_occurrence(evidence,context=scoped,artifact=artifact)
+    repo.register_source(source,policy=replace(policy,allowed_business_units=frozenset({'retail'})),
+        recorded_by='steward',rationale='Explicit source scope')
+    assert repo.record_occurrence(evidence,context=scoped,artifact=artifact)['occurrence_key']
+    other = replace(scoped,business_units=frozenset({'distribution'}))
+    with pytest.raises(ValueError,match='principal.s scope'):
+        repo.record_occurrence(evidence,context=other,artifact=artifact)
+    repo.register_source(source,policy=replace(policy,allowed_business_units=frozenset({'retail','distribution'})),
+        recorded_by='steward',rationale='Broader source scope requires broader operator')
+    with pytest.raises(ValueError,match='principal.s scope'):
+        repo.record_occurrence(evidence,context=scoped,artifact=artifact)

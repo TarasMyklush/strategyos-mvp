@@ -34,6 +34,8 @@ def register_staged_evidence(source_pack_id: str, relative_path: str, *,
         **{key: rights.get(key, False) for key in ('storage_allowed', 'index_allowed', 'export_allowed', 'quote_allowed', 'external_model_allowed')})
     if not policy.storage_allowed or not context.roles.intersection(policy.allowed_roles) or context.purpose not in policy.allowed_purposes:
         raise PermissionError('Source rights do not permit evidence registration for this principal.')
+    if context.business_units and (not policy.allowed_business_units or not policy.allowed_business_units.issubset(context.business_units)):
+        raise PermissionError('The source scope exceeds this principal\'s business-unit authority.')
     matches = [item for item in payload.get('manifest', []) if item.get('relative_path') == relative_path]
     if len(matches) != 1:
         raise ValueError('Choose one file from the staged manifest.')

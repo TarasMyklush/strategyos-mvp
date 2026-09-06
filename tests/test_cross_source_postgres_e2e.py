@@ -206,7 +206,11 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
         formula_version="1", input_revision_ids=(latest["claim_revision_id"],)), traceability="present")
     derived_query = replace(now_query, metric_key="test.derived", as_of_at=datetime.now(UTC))
     assert repo.query(derived_query, context=auditor)[0]["claim_revision_id"] == derived["claim_revision_id"]
-    assert repo.run_source_access(run_id, context=auditor)["allowed"]
+    # The new individual calculation is usable; the original bulk run still
+    # contains the older source claim and must not be reused as current prose.
+    original_run = repo.run_source_access(run_id, context=auditor)
+    assert not original_run["allowed"]
+    assert original_run['reasons'] == ['bulk_revised_inputs_require_recompute']
     revoked = repo.register_source(source, policy=replace(access, storage_allowed=False),
         recorded_by="fixture:operator", rationale="Revoke storage")
     with pytest.raises(ValueError, match="storage"):
