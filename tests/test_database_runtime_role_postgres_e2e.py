@@ -61,8 +61,9 @@ def test_nonowner_runtime_reads_and_appends_but_cannot_rewrite_schema(ledger,mon
                 database_schema.verify_runtime_schema(owner)
     finally:
         with psycopg.connect(ledger[1]) as owner:
-            owner.execute(sql.SQL('DROP OWNED BY {}').format(sql.Identifier(role)))
-            owner.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(role)))
+            if owner.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone():
+                owner.execute(sql.SQL('DROP OWNED BY {}').format(sql.Identifier(role)))
+                owner.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(role)))
 
 
 def test_preview_role_provisioning_preserves_secret_on_retry(ledger,monkeypatch,tmp_path):
@@ -86,5 +87,35 @@ def test_preview_role_provisioning_preserves_secret_on_retry(ledger,monkeypatch,
                 database_schema.provision_preview_runtime(owner,path,role=role)
     finally:
         with psycopg.connect(ledger[1]) as owner:
-            owner.execute(sql.SQL('DROP OWNED BY {}').format(sql.Identifier(role)))
-            owner.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(role)))
+            if owner.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone():
+                owner.execute(sql.SQL('DROP OWNED BY {}').format(sql.Identifier(role)))
+                owner.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(role)))
+
+
+@pytest.mark.parametrize('module_name',[
+    'test_governed_review_flow_postgres_e2e',
+    'test_agent_runtime_repository_postgres_e2e',
+    'test_agent_runtime_evidence_read_postgres_e2e',
+    'test_agent_runtime_pr6_postgres_e2e',
+    'test_agent_runtime_streaming_postgres_e2e',
+    'test_agent_runtime_effect_key_postgres_e2e',
+    'test_agent_runtime_handoffs_postgres_e2e',
+    'test_agent_runtime_workflows_postgres_e2e',
+    'test_agent_runtime_authority_postgres_e2e',
+    'test_agent_runtime_api_postgres_e2e',
+    'test_agent_runtime_network_postgres_e2e',
+    'test_agent_runtime_concurrency_postgres_e2e',
+])
+def test_fixture_reset_preserves_deployment_history(ledger,module_name):
+    """Data cleanup must never leave applied DDL without its checksum ledger."""
+    import importlib
+    import psycopg
+    with psycopg.connect(ledger[1]) as conn:
+        database_schema.prepare_schema(conn)
+        before=conn.execute('SELECT version,checksum_sha256 FROM strategyos_schema_migrations ORDER BY version').fetchall()
+        contract=conn.execute('SELECT fingerprint FROM strategyos_runtime_schema_contract').fetchone()
+    importlib.import_module('tests.'+module_name)._truncate_strategyos_tables(ledger[1])
+    with psycopg.connect(ledger[1]) as conn:
+        assert conn.execute('SELECT version,checksum_sha256 FROM strategyos_schema_migrations ORDER BY version').fetchall()==before
+        assert conn.execute('SELECT fingerprint FROM strategyos_runtime_schema_contract').fetchone()==contract
+        database_schema.prepare_schema(conn)

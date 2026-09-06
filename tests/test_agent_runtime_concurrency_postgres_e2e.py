@@ -60,6 +60,7 @@ def _truncate_strategyos_tables(database_url: str) -> None:
                 """
                 select tablename from pg_tables
                 where schemaname = 'public' and tablename like 'strategyos_%'
+                  and tablename not in ('strategyos_schema_migrations', 'strategyos_runtime_schema_contract')
                 order by tablename
                 """
             )
