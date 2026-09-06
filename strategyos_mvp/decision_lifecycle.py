@@ -35,8 +35,8 @@ def append(run_id: str, decision_key: str, kind: str, *, actor: str, payload: di
     encoded = json.dumps(payload, sort_keys=True, allow_nan=False)
     tenant = _tenant()
     with _connect(run_id) as conn:
+        state_store.ensure_auxiliary_schema(conn, SCHEMA)
         with conn.cursor() as cur:
-            cur.execute(SCHEMA)
             cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (tenant + run_id + decision_key,))
             cur.execute("SELECT kind, payload FROM strategyos_decision_events WHERE tenant_key=%s AND run_id=%s AND decision_key=%s", (tenant, run_id, decision_key))
             existing = dict(cur.fetchall())
@@ -61,8 +61,8 @@ def append(run_id: str, decision_key: str, kind: str, *, actor: str, payload: di
 
 def read(run_id: str) -> dict[str, Any]:
     with _connect(run_id) as conn:
+        state_store.ensure_auxiliary_schema(conn, SCHEMA)
         with conn.cursor() as cur:
-            cur.execute(SCHEMA)
             cur.execute("""SELECT id, decision_key, kind, actor, occurred_at, payload FROM strategyos_decision_events
                 WHERE tenant_key=%s AND run_id=%s ORDER BY occurred_at, id""", (_tenant(), run_id))
             events = state_store.fetchall_dicts(cur)

@@ -66,9 +66,9 @@ def record(config, messages, max_output):
     quota=max(1,int(os.getenv('STRATEGYOS_INFERENCE_DAILY_UNITS','12000000')))
     request_limit=max(1,int(os.getenv('STRATEGYOS_INFERENCE_DAILY_REQUESTS','500')))
     with handle as conn:
+        state_store.ensure_auxiliary_schema(conn, SCHEMA)
         with conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_xact_lock(71380914)")
-            cur.execute(SCHEMA)
             cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))',(tenant+'inference-budget',))
             cur.execute("DELETE FROM strategyos_inference_audit WHERE created_at < now()-interval '30 days'")
             cur.execute('UPDATE strategyos_inference_audit SET prompt_cipher=NULL,response_cipher=NULL WHERE payload_expires_at<now() AND (prompt_cipher IS NOT NULL OR response_cipher IS NOT NULL)')

@@ -38,6 +38,9 @@ def packet_digest(packet: Mapping[str, Any]) -> str:
 
 
 def initialize(conn: Any) -> None:
+    if str(getattr(state_store.CONFIG, 'database_schema_mode', 'auto')).lower() == 'verify':
+        state_store.ensure_data_schema(conn)
+        return
     with conn.cursor() as cur:
         # A transaction lock prevents concurrent first-use schema changes.
         cur.execute("SELECT pg_advisory_xact_lock(71380912)")

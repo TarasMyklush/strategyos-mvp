@@ -170,6 +170,7 @@ class StrategyOSConfig:
     evaluation_dir: Path
     object_store: ObjectStoreConfig
     database_url: str | None
+    database_schema_mode: str
     pg_pool_min_size: int
     pg_pool_max_size: int
     pg_pool_timeout_seconds: float
@@ -452,6 +453,7 @@ def load_config() -> StrategyOSConfig:
             force_path_style=env_bool("STRATEGYOS_OBJECT_FORCE_PATH_STYLE", True),
         ),
         database_url=env("DATABASE_URL") or env("STRATEGYOS_DATABASE_URL"),
+        database_schema_mode=env("STRATEGYOS_DATABASE_SCHEMA_MODE", "auto"),
         pg_pool_min_size=env_int("STRATEGYOS_PG_POOL_MIN_SIZE", 1),
         pg_pool_max_size=env_int("STRATEGYOS_PG_POOL_MAX_SIZE", 10),
         pg_pool_timeout_seconds=env_float("STRATEGYOS_PG_POOL_TIMEOUT_SECONDS", 30.0),

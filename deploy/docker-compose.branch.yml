@@ -3,6 +3,38 @@
 # prefixes all volume/network names, avoiding collisions with the production stack.
 # Used together with hetzner-qa.yml for host-port isolation on the shared Hetzner host.
 services:
+  strategyos-api:
+    environment:
+      DATABASE_URL: ${STRATEGYOS_RUNTIME_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
+      STRATEGYOS_DATABASE_SCHEMA_MODE: verify
+
+  strategyos-worker:
+    environment:
+      DATABASE_URL: ${STRATEGYOS_RUNTIME_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
+      STRATEGYOS_DATABASE_SCHEMA_MODE: verify
+
+  strategyos-claim-projector:
+    environment:
+      DATABASE_URL: ${STRATEGYOS_RUNTIME_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
+      STRATEGYOS_DATABASE_SCHEMA_MODE: verify
+
+  strategyos-migrate:
+    profiles: [schema-migration]
+    image: ${STRATEGYOS_API_IMAGE:-strategyos-preview-migration:unconfigured}
+    # Deployment-only container; no Docker socket or application data mounts.
+    user: '0:0'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-strategyos}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-strategyos}
+      STRATEGYOS_DATABASE_SCHEMA_MODE: auto
+      STRATEGYOS_DEPLOYMENT_BOUNDARY: preview
+    volumes:
+      - /opt/strategyos-branch/runtime-database:/runtime-database
+    command: [python, -m, strategyos_mvp.database_schema, --apply, --preview-runtime-env, /runtime-database/runtime.env]
+
   caddy:
     ports: !override
       - "${STRATEGYOS_HTTP_PORT:-8080}:80"

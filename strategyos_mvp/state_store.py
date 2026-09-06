@@ -29,7 +29,7 @@ from .source_claims import (
 )
 
 
-_SCHEMA_READY_DATABASES: set[tuple[str, str, str, str]] = set()
+_SCHEMA_READY_DATABASES: set[tuple[str, str, str, str, str]] = set()
 _SCHEMA_READY_LOCK = threading.RLock()
 
 
@@ -1348,16 +1348,35 @@ def ensure_data_schema(conn: Any) -> None:
     with _SCHEMA_READY_LOCK:
         if cache_key is not None and cache_key in _SCHEMA_READY_DATABASES:
             return
-        sql = schema_path().read_text(encoding="utf-8")
-        with conn.cursor() as cur:
-            _execute_sql_statements(cur, sql)
-            apply_schema_migrations(cur)
+        mode = str(getattr(CONFIG, 'database_schema_mode', 'auto')).lower()
+        if mode == 'verify':
+            from .database_schema import verify_runtime_schema
+            verify_runtime_schema(conn)
+        elif mode == 'auto':
+            sql = schema_path().read_text(encoding="utf-8")
+            with conn.cursor() as cur:
+                _execute_sql_statements(cur, sql)
+                apply_schema_migrations(cur)
+        else:
+            raise RuntimeError('Unknown database schema mode; expected auto or verify.')
         conn.commit()
         if cache_key is not None:
             _SCHEMA_READY_DATABASES.add(cache_key)
 
 
-def _schema_database_key(conn: Any) -> tuple[str, str, str, str] | None:
+def ensure_auxiliary_schema(conn: Any, script: str) -> None:
+    """Runtime verification never executes DDL using the application's account."""
+    mode = str(getattr(CONFIG, 'database_schema_mode', 'auto')).lower()
+    if mode == 'verify':
+        ensure_data_schema(conn)
+    elif mode == 'auto':
+        with conn.cursor() as cur:
+            _execute_sql_statements(cur, script)
+    else:
+        raise RuntimeError('Unknown database schema mode; expected auto or verify.')
+
+
+def _schema_database_key(conn: Any) -> tuple[str, str, str, str, str] | None:
     """Identify a real PostgreSQL database without caching test doubles.
 
     The application applies the additive schema during startup. Re-running the
@@ -1377,6 +1396,7 @@ def _schema_database_key(conn: Any) -> tuple[str, str, str, str] | None:
         str(getattr(info, "port", "") or ""),
         database,
         str(getattr(info, "user", "") or ""),
+        str(getattr(CONFIG, 'database_schema_mode', 'auto')).lower(),
     )
 
 

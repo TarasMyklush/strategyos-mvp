@@ -330,10 +330,8 @@ async def _app_lifespan(_: FastAPI):
                 state_store.ensure_data_schema(conn)
                 from . import board_memory, decision_lifecycle, inference_audit, conversation_state
                 board_memory.initialize(conn)
-                with conn.cursor() as cur:
-                    cur.execute(decision_lifecycle.SCHEMA)
-                    cur.execute(inference_audit.SCHEMA)
-                    cur.execute(conversation_state.SCHEMA)
+                for script in (decision_lifecycle.SCHEMA, inference_audit.SCHEMA, conversation_state.SCHEMA):
+                    state_store.ensure_auxiliary_schema(conn, script)
                 conn.commit()
         await asyncio.to_thread(migrate)
 
