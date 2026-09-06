@@ -4,11 +4,15 @@
   const status = document.getElementById('source-status');
   const result = document.getElementById('source-result');
   const start = document.getElementById('source-start');
+  const register = document.getElementById('source-register');
+  const sourceFile = document.getElementById('source-file');
+  const evidenceStatus = document.getElementById('evidence-status');
+  const mapLink = document.getElementById('evidence-map');
   let staged = null, busy = false, generation = 0;
   const value = name => form.elements.namedItem(name).value.trim();
   const checked = name => form.elements.namedItem(name).checked;
   const list = name => value(name).split(',').map(item => item.trim()).filter(Boolean);
-  function invalidate() { generation += 1; staged = null; start.disabled = true; result.hidden = true; }
+  function invalidate() { generation += 1; staged = null; start.disabled = true; register.disabled = true; result.hidden = true; mapLink.hidden = true; evidenceStatus.textContent = ''; }
   form.addEventListener('input', invalidate);
   form.addEventListener('change', invalidate);
   async function request(url, options) {
@@ -30,6 +34,12 @@
       files:(payload.manifest || []).map(item => ({file:item.relative_path, status:item.processing_status, hash:item.sha256})),
       readiness:payload.task_readiness, permissions:contract.access_policy}, null, 2);
     result.hidden = false;
+    sourceFile.replaceChildren();
+    for (const file of payload.manifest || []) {
+      const option = document.createElement('option'); option.value = file.relative_path;
+      option.textContent = file.relative_path; sourceFile.append(option);
+    }
+    register.disabled = contract.classification_status !== 'confirmed' || !sourceFile.options.length;
     start.disabled = contract.classification_status !== 'confirmed' || !payload.task_readiness?.ready_for_run;
     status.textContent = contract.classification_status === 'confirmed'
       ? 'Source staged. Review the file accounting before starting analysis.'
@@ -76,6 +86,22 @@
       status.textContent = 'Analysis requested: ' + (run.run_id || run.job_id || run.status || 'pending') + '. No approval or publication was performed.';
       staged = null;
     } catch (error) { status.textContent = 'Analysis not confirmed: ' + error.message + ' Check run history before retrying.'; }
-    finally { busy = false; }
+    finally { busy = false; register.disabled = !staged; }
+  });
+  sourceFile.addEventListener('change', () => { mapLink.hidden = true; evidenceStatus.textContent = ''; });
+  register.addEventListener('click', async () => {
+    if (busy || register.disabled || !staged || !sourceFile.value) return;
+    const ticket = generation, selected = sourceFile.value;
+    busy = true; register.disabled = true; mapLink.hidden = true;
+    evidenceStatus.textContent = 'Checking the staged hash and current source contract…';
+    try {
+      const receipt = await request('/api/claims/intake/staged-evidence', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify({source_pack_id:staged.source_pack_id, relative_path:selected})});
+      if (ticket !== generation || selected !== sourceFile.value) return;
+      evidenceStatus.textContent = 'Evidence registered. No claims were created and no analysis was started.';
+      mapLink.href = '/claims/intake?occurrence=' + encodeURIComponent(receipt.occurrence_key);
+      mapLink.hidden = !selected.toLowerCase().endsWith('.xlsx');
+    } catch (error) { evidenceStatus.textContent = 'Registration not confirmed: ' + error.message; }
+    finally { busy = false; register.disabled = !staged || staged.source_contract?.classification_status !== 'confirmed'; }
   });
 }());

@@ -2,3 +2,4 @@
 .claim-record pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5}
 .claim-query label.claim-check{display:flex;align-items:flex-start;gap:10px}.claim-query .claim-check input{width:auto;flex:0 0 auto;margin:4px 0 0}.claim-query details>summary{cursor:pointer}.claim-query details .claim-query{padding:20px 0 0}.claim-record button{font:inherit;border:0;border-radius:24px;padding:12px 22px;background:#283660;color:white}.claim-record button:disabled{opacity:.5}
 .claim-query textarea{width:100%;min-width:0;box-sizing:border-box;padding:12px;border:1px solid var(--line,#e5e1d8);border-radius:12px;font:14px/1.5 monospace;resize:vertical;background:white;color:#222}
+.claim-record>.claim-query{padding:20px 0 0}

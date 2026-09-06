@@ -33,6 +33,12 @@
 <p id="source-status" role="status" aria-live="polite">No files have been staged.</p>
 <section id="source-result" class="card claim-record" hidden><h2>Staged source</h2><dl id="source-summary"></dl>
 <details><summary>File accounting and mapping readiness</summary><pre id="source-detail"></pre></details>
+<div class="claim-query">
+<label class="claim-query-wide">File to register as claim evidence<select id="source-file"></select></label>
+<button id="source-register" type="button" disabled>Register selected file as evidence</button>
+</div>
+<p id="evidence-status" role="status" aria-live="polite"></p>
+<p><a id="evidence-map" href="/claims/intake" hidden>Preview a cell mapping for this evidence →</a></p>
 <button id="source-start" type="button" disabled>Start analysis from this source</button>
 <p>Analysis creates a separate run. Reviewer approval and publication remain separate actions.</p></section>
 <p><a href="/claims/intake">Interpret an already registered workbook →</a></p>

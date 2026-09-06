@@ -5,6 +5,8 @@
   var status = document.getElementById('intake-status');
   var result = document.getElementById('intake-result');
   var preview = null, generation = 0, busy = false;
+  var stagedOccurrence = new URLSearchParams(window.location.search).get('occurrence');
+  if (stagedOccurrence) form.elements.namedItem('occurrence_key').value = stagedOccurrence;
   document.getElementById('mapping-example').textContent = JSON.stringify({
     mapping_key:'monthly-finance', mapping_version:'1', rationale:'Approved source definitions',
     sheet:'Finance', subject_type:'business_unit', subject_key_column:'BU',

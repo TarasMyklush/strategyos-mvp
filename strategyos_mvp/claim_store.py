@@ -58,6 +58,7 @@ class ClaimRepository:
         policy: SourceAccessPolicy,
         recorded_by: str,
         rationale: str,
+        create_only: bool = False,
     ) -> dict[str, Any]:
         if policy.source_key != source.source_key:
             raise ValueError("Source policy and registration keys must match.")
@@ -82,6 +83,7 @@ class ClaimRepository:
                         license_policy_ref = excluded.license_policy_ref,
                         metadata = excluded.metadata,
                         status = 'active'
+                    where not %s
                     returning id
                     """,
                     (
@@ -96,9 +98,26 @@ class ClaimRepository:
                         source.authorization_basis,
                         source.license_policy_ref,
                         _json(dict(source.metadata)),
+                        create_only,
                     ),
                 )
-                source_id = cur.fetchone()[0]
+                inserted = cur.fetchone()
+                if inserted is None:
+                    cur.execute("""select ss.id,p.id,p.policy_version,v.registration_version
+                        from strategyos_source_systems ss
+                        join strategyos_source_access_policies p on p.source_system_id=ss.id and p.effective_to is null
+                        join strategyos_source_registration_versions v on v.source_system_id=ss.id and v.effective_to is null
+                        where ss.tenant_id=%s and ss.source_key=%s and ss.status='active'
+                          and p.policy_fingerprint=%s and v.registration_fingerprint=%s""",
+                        (tenant_id, source.source_key, policy.fingerprint, source.fingerprint))
+                    current = cur.fetchone()
+                    if current is None:
+                        raise ValueError("The source key is already registered with a different contract. Intake cannot change its authority.")
+                    conn.commit()
+                    return {"source_system_id":str(current[0]), "policy_id":str(current[1]),
+                        "policy_version":int(current[2]), "registration_version":int(current[3]),
+                        "registration_created":False, "policy_created":False}
+                source_id = inserted[0]
                 registration_version, registration_created = self._record_source_registration_version(
                     cur,
                     tenant_id=tenant_id,
@@ -125,8 +144,10 @@ class ClaimRepository:
         self,
         occurrence: EvidenceOccurrence,
         *,
-        evidence_document_id: str,
+        evidence_document_id: str | None = None,
         ingestion_batch_id: str | None = None,
+        artifact: Mapping[str, Any] | None = None,
+        context: PolicyContext | None = None,
     ) -> dict[str, Any]:
         connection = self._require_connection()
         with connection as conn:
@@ -135,10 +156,41 @@ class ClaimRepository:
                 tenant_id = self._tenant_uuid(cur, occurrence.tenant_id)
                 occurrence = replace(occurrence, tenant_id=str(tenant_id))
                 source_id = self._source_uuid(cur, tenant_id, occurrence.source_key)
+                cur.execute("select id from strategyos_source_systems where id=%s and status='active' for update", (source_id,))
+                if cur.fetchone() is None:
+                    raise ValueError("Evidence source is not active.")
                 cur.execute("select storage_allowed from strategyos_source_access_policies where source_system_id=%s and effective_to is null", (source_id,))
                 storage = cur.fetchone()
                 if storage is None or storage[0] is not True:
                     raise ValueError("Source policy does not permit storage of evidence occurrences.")
+                if artifact is not None:
+                    if evidence_document_id is not None or context is None:
+                        raise ValueError("Artifact registration requires authenticated context and no supplied document ID.")
+                    if str(self._tenant_uuid(cur, context.tenant_id)) != str(tenant_id):
+                        raise ValueError("Artifact tenant must match authenticated authority.")
+                    cur.execute("""select allowed_roles,allowed_purposes,allowed_business_units
+                        from strategyos_source_access_policies where source_system_id=%s and effective_to is null""", (source_id,))
+                    roles, purposes, units = cur.fetchone()
+                    if (context.purpose != UsePurpose.OPERATIONS or not context.roles.intersection(roles)
+                            or str(context.purpose) not in purposes or context.business_units or units):
+                        raise ValueError("Source policy does not permit group artifact registration for this principal.")
+                    if not artifact.get("source_path") or not artifact.get("file_name") or int(artifact.get("size_bytes", -1)) < 0:
+                        raise ValueError("A validated artifact manifest is required.")
+                    cur.execute("""insert into strategyos_evidence_documents
+                        (tenant_id,source_system_id,source_path,source_group,file_name,media_type,size_bytes,
+                         source_hash,source_uri,manifest_json)
+                        values (%s,%s,%s,'governed-intake',%s,%s,%s,%s,%s,%s::jsonb)
+                        on conflict(tenant_id,source_hash) do nothing returning id""",
+                        (tenant_id,source_id,artifact["source_path"],artifact["file_name"],
+                         artifact.get("media_type") or "application/octet-stream",artifact["size_bytes"],
+                         occurrence.artifact_hash,occurrence.original_uri,
+                         _json({"recorded_by":context.principal_id,"source_pack_id":artifact.get("source_pack_id")})))
+                    document = cur.fetchone()
+                    if document is None:
+                        cur.execute("select id from strategyos_evidence_documents where tenant_id=%s and source_hash=%s",
+                                    (tenant_id,occurrence.artifact_hash))
+                        document = cur.fetchone()
+                    evidence_document_id = str(document[0])
                 cur.execute(
                     "select source_hash from strategyos_evidence_documents where id = %s and tenant_id = %s",
                     (evidence_document_id, tenant_id),

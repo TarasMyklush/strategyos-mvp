@@ -24,6 +24,27 @@ class ForecastReviewRequest(BaseModel):
     effect_key: str = Field(min_length=1, max_length=160)
 
 
+class StagedEvidenceRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    source_pack_id: str = Field(min_length=1, max_length=160)
+    relative_path: str = Field(min_length=1, max_length=1000)
+
+
+@router.post('/intake/staged-evidence')
+def register_evidence_from_stage(request: StagedEvidenceRequest,
+        principal: dict[str, Any] = require_role('operator', 'tenant_admin', 'system')) -> dict[str, Any]:
+    from .staged_evidence import register_staged_evidence
+    try:
+        return register_staged_evidence(request.source_pack_id, request.relative_path,
+            context=_policy_context(principal, UsePurpose.OPERATIONS))
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    except (RuntimeError, KeyError):
+        raise HTTPException(503, 'Evidence registration is temporarily unavailable.') from None
+
+
 @router.post("/{revision_id}/forecast-review")
 def review_forecast(revision_id: str, request: ForecastReviewRequest,
                     principal: dict[str, Any] = require_role("executive", "reviewer", "tenant_admin")) -> dict[str, Any]:

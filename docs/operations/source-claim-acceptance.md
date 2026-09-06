@@ -179,3 +179,26 @@ counts alone do not close these boundaries.
 - Historical provenance uses registration versions as of the analysis timestamp.
   Current policy remains authoritative. Missing historical registration is
   explicitly unknown, not reconstructed from a later classification.
+
+### Frozen temporal candidate and staged-evidence handoff
+
+- Frozen commit `0d03331`: 2,025 service tests passed, zero skips, receipt
+  `/tmp/strategyos-frozen-temporal.xml` (345.17 seconds). Preview workflow
+  `34055434827` was dispatched; this entry does not assert deployment completion.
+- The operator handoff registers a hash-verified staged file as an evidence
+  occurrence, then opens explicit workbook mapping. Existing source contracts
+  cannot be changed or re-granted by replaying a stale intake contract.
+- Local browser proof against isolated PostgreSQL completed staging, registration,
+  actual/forecast mapping preview, recording and separate retrieval. Preview
+  created no claims; recording created two unreviewed synthetic claims: SAR 120
+  actual and SAR 130 forecast attributed to Synthetic CFO for June 2026. No
+  analysis, approval, publication or outbound delivery occurred.
+- Re-registering the workbook returned the same occurrence. Narrow-screen visual
+  inspection at 390 px showed readable receipt controls and document width 390 px;
+  the viewport override was reset afterwards.
+- Artifact and occurrence writes are atomic. Hash conflicts roll back new
+  artifact metadata; current storage revocation denies registration. This intake
+  handoff currently requires group-wide source and operator scope; BU-restricted
+  artifact registration is denied, not silently broadened.
+- The handoff changes still require their own frozen full-suite and preview
+  deployment gate; the earlier 2,025-test result does not cover them.
