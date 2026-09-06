@@ -9,10 +9,12 @@ PostgreSQL is the source/claim authority. Neo4j, Qdrant, caches, agent context a
 UI payloads are projections. They may not broaden access, choose a different
 revision or silently change a claim's meaning.
 
-The current finance read paths remain active while the new tables are populated
-as shadow records. A read-path cutover requires reconciliation and cross-surface
-parity evidence; adding these tables alone is not authorization to change the CEO
-surface or deploy.
+The current finance calculation remains the ingestion projection, while its
+headline components are materialized into an immutable run snapshot. Authenticated
+CEO and Hermes reads remove the legacy headline values and repopulate them only
+from policy-eligible snapshot claims. A missing snapshot, policy or reconciliation
+fails closed to the pre-cutover surface and is reported as not materialized; a
+denied claim is never borrowed back from the legacy summary.
 
 ## Independent dimensions
 
@@ -67,9 +69,36 @@ Licensed sources require provider and license-policy references. Source identity
 participates in deterministic pack identity so identical content from different
 origins can coexist.
 
-Existing trial-balance actuals and CFO cash-forecast rows shadow-write claims with
-their source occurrence links. The old finance projections continue to support
-existing consumers during reconciliation.
+Trial-balance actuals, CFO cash forecasts, amount-bearing finance transactions and
+CEO KPI actual/plan components write claims with source occurrence links. EBITDA
+margin is a calculated claim whose exact EBITDA and revenue revision IDs are
+recorded. Each run creates an immutable analysis snapshot and a persisted
+record-count/amount reconciliation. Invalid or unresolved rows are quarantined as
+backfill exceptions; they are not silently coerced.
+
+Historical materialization is preview-first through `python -m
+strategyos_mvp.claim_backfill --run-id <uuid>`. The command writes only when
+`--apply` is provided, takes a run-specific advisory lock, creates conservative
+legacy finance-source policy only for the known finance-dataset intake, and is
+idempotent on replay.
+
+## Projection delivery
+
+The claim transaction writes graph, vector and cache work to an outbox. The
+`strategyos-claim-projector` service leases rows with `FOR UPDATE SKIP LOCKED`,
+commits the lease before external I/O, and acknowledges only its own lease. Failed
+delivery uses bounded exponential retry and becomes a visible dead letter after
+the attempt ceiling.
+
+- PostgreSQL's projection cache stores the provenance envelope for fast internal
+  reads; it is not a second authority.
+- Neo4j receives claim, subject, metric, source and calculated-from relationships.
+- Qdrant receives a policy-tagged semantic projection only when the pinned local
+  embedding model is configured.
+
+Projection health fails on dead letters or stale leases. Authorization and
+revision selection always occur in PostgreSQL before any projection is returned
+to a user or model.
 
 ## Operational migration
 
@@ -77,6 +106,10 @@ Migrations are ordered, checksummed and serialized with a PostgreSQL advisory
 transaction lock. A changed already-applied migration fails startup rather than
 silently drifting the schema. Production rollout must be additive, preview-first,
 and backed by a restore rehearsal and data reconciliation report.
+
+The runtime image copies both `schema.sql` and the immutable migration directory.
+The API, workers and projector therefore converge on the same checksummed schema
+at startup rather than depending on an out-of-band migration image.
 
 The legacy source policy preserves current authenticated read/export roles but
 explicitly denies external-model use until a data owner authorizes that purpose.

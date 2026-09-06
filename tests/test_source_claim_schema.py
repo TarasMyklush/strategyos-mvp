@@ -46,6 +46,38 @@ def test_claim_schema_keeps_financial_values_decimal_and_requires_numeric_units(
     assert "claim_kind <> 'forecast' or nullif(btrim(author_identity), '') is not null" in migration
 
 
+def test_backfill_migration_persists_reconciliation_and_exceptions():
+    migration = (migration_path() / "0002_claim_backfill_reconciliation.sql").read_text(
+        encoding="utf-8"
+    )
+    assert "create table if not exists strategyos_claim_backfill_exceptions" in migration
+    assert "create table if not exists strategyos_claim_reconciliations" in migration
+    assert "source_record_count" in migration
+    assert "claim_record_count" in migration
+    assert "difference_sar" in migration
+
+
+def test_projection_delivery_migration_adds_leases_and_cache_projection():
+    migration = (migration_path() / "0003_claim_projection_delivery.sql").read_text(
+        encoding="utf-8"
+    ).lower()
+    assert "available_at timestamptz" in migration
+    assert "locked_by text" in migration
+    assert "dead_lettered_at timestamptz" in migration
+    assert "create table if not exists strategyos_claim_projection_cache" in migration
+
+
+def test_claim_projector_is_an_explicit_rollout_profile():
+    compose = (schema_path().parents[1] / "docker-compose.yml").read_text(
+        encoding="utf-8"
+    )
+    projector = compose.split("  strategyos-claim-projector:", 1)[1].split(
+        "\n  strategyos-idp:", 1
+    )[0]
+    assert 'profiles: ["governed-claims"]' in projector
+    assert "STRATEGYOS_EMBEDDING_MODEL_PATH" in projector
+
+
 class MigrationCursor:
     def __init__(self):
         self.applied = {}

@@ -33,6 +33,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY pyproject.toml README.md langgraph.json ./
 COPY deploy/postgres/schema.sql ./deploy/postgres/schema.sql
+COPY deploy/postgres/migrations ./deploy/postgres/migrations
 COPY strategyos_mvp ./strategyos_mvp
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir ".[search]"

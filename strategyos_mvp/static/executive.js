@@ -4900,6 +4900,43 @@
     return '<span class="grounding-badge grounding-badge--' + (grounded ? 'grounded' : 'needs-evidence') + '" title="' + escapeHtml(title) + '">' + label + '</span>';
   }
 
+  function governedClaimAuditMarkup(provenance) {
+    var item = provenance && typeof provenance === 'object' ? provenance : {};
+    var actual = item.actual_claim && typeof item.actual_claim === 'object' ? item.actual_claim : null;
+    var comparison = item.comparison_claim && typeof item.comparison_claim === 'object' ? item.comparison_claim : null;
+    if (!actual && !item.snapshot_id) return '';
+
+    function claimRow(label, claim) {
+      if (!claim) return '';
+      var period = claim.period && typeof claim.period === 'object' ? claim.period : {};
+      var sources = safeArray(claim.sources).map(function (source) {
+        if (!source || typeof source !== 'object') return '';
+        var origin = firstDefined(source.origin_category, 'unknown source');
+        var name = firstDefined(source.display_name, source.source_key, 'source');
+        var locator = firstDefined(source.locator, '');
+        return String(name) + ' · ' + String(origin).replace(/_/g, ' ') + (locator ? ' · ' + String(locator) : '');
+      }).filter(Boolean);
+      var periodLabel = period.start || period.end
+        ? String(firstDefined(period.start, '—')) + ' to ' + String(firstDefined(period.end, '—'))
+        : 'Period not supplied';
+      return '<div><span>' + escapeHtml(label) + '</span><strong>'
+        + escapeHtml(firstDefined(claim.label, claim.claim_kind, 'Claim'))
+        + ' · ' + escapeHtml(firstDefined(claim.claim_revision_id, 'revision unavailable'))
+        + '<small>' + escapeHtml(periodLabel) + (sources.length ? ' · ' + escapeHtml(sources.join(' | ')) : '') + '</small>'
+        + '</strong></div>';
+    }
+
+    return [
+      '<div><span>Analysis snapshot</span><strong>',
+      escapeHtml(firstDefined(item.snapshot_id, 'Unavailable')),
+      item.analysis_as_of ? '<small>As of ' + escapeHtml(item.analysis_as_of) + ' · policy ' + escapeHtml(firstDefined(item.policy_version, 'not recorded')) + '</small>' : '',
+      '</strong></div>',
+      '<div><span>Reconciliation</span><strong>' + escapeHtml(firstDefined(item.reconciliation_status, 'Not recorded')) + '</strong></div>',
+      claimRow('Actual claim', actual),
+      claimRow('Comparison claim', comparison)
+    ].join('');
+  }
+
   function syncDriverSelectionUI(grid, activeKey) {
     if (!grid) return;
     Array.prototype.forEach.call(grid.querySelectorAll("[data-driver-key]"), function (tile) {
@@ -5324,7 +5361,7 @@
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       (compositionMarkup ? '<details class="kpi-supporting-analysis"><summary>Supporting analysis</summary>' + compositionMarkup + '</details>' : ''),
       '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Decision support</span><strong>Pressure-test the executive position with ' + escapeHtml(assistantName) + '</strong><p>The selected result, business context and supporting sources are already attached.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">Do I need to intervene?</button><button type="button" data-kpi-question="briefing">Who owns it—and why?</button><button type="button" data-kpi-question="outlook">What changes the outlook?</button><button type="button" data-kpi-question="advisory">Consult general practice</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask a decision question about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
-      '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
+      '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + governedClaimAuditMarkup(driver.provenance) + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
       '</div>'
     ].join("");
     var showWork = drillCard.querySelector('[data-kpi-show-work]');

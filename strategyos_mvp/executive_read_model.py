@@ -397,6 +397,22 @@ def build_executive_read_model(
             if isinstance((summary or {}).get("finance_kpi"), Mapping)
             else {}
         ),
+        # Carry the immutable evidence boundary with the read model.  Cards,
+        # Hermes and exports can then disclose the same claim set and control
+        # result without re-reading mutable source tables independently.
+        "claim_snapshot": (
+            dict((summary or {}).get("claim_snapshot") or {})
+            if isinstance((summary or {}).get("claim_snapshot"), Mapping)
+            else {}
+        ),
+        "claim_reconciliation": (
+            dict((summary or {}).get("claim_reconciliation") or {})
+            if isinstance((summary or {}).get("claim_reconciliation"), Mapping)
+            else {}
+        ),
+        "canonical_claim_status": str(
+            (summary or {}).get("canonical_claim_status") or "not_materialized"
+        ),
         "governed_signals": (
             dict((summary or {}).get("governed_signals") or {})
             if isinstance((summary or {}).get("governed_signals"), Mapping)

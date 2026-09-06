@@ -4,7 +4,14 @@ This is the operational command reference for the current repository. Product re
 
 ## Runtime contract
 
-The Compose stack includes the API, identity boundary, Postgres, Redis, Neo4j, Qdrant, MinIO and Caddy, with optional Hatchet services. Postgres stores business/workflow state; Neo4j/Qdrant are projections. OCR runs locally in the container. Source data and output state live in the configured workspace volume. Production images do not include demo datasets, test fixtures, documentation or local environments. Supply data explicitly.
+The Compose stack includes the API, identity boundary, governed-claim projector,
+Postgres, Redis, Neo4j, Qdrant, MinIO and Caddy, with optional Hatchet services.
+Postgres stores business/workflow and source/claim authority; Neo4j/Qdrant are
+projections. The projector uses a leased transactional outbox and reports unhealthy
+on stale leases or dead letters. OCR runs locally in the container. Source data and
+output state live in the configured workspace volume. Production images do not
+include demo datasets, test fixtures, documentation or local environments. Supply
+data explicitly.
 
 Keep private services on the container network; any maintenance port must bind only to loopback. TLS ingress, identity, secret management, egress policy and tier residency must match the deployed environment. A working health endpoint does not establish business acceptance.
 
@@ -27,6 +34,16 @@ Expected hosted controls include `STRATEGYOS_API_AUTH_ENABLED=true`, `STRATEGYOS
 Model-provider use requires `STRATEGYOS_RUN_POLICY=external-approved`, `model_provider_use` in `STRATEGYOS_APPROVED_EXTERNAL_MODES`, explicit model/chat enablement and the selected provider/model/base URL. Store `STRATEGYOS_LLM_API_KEY` only in the secret configuration. Object-storage sync, hosted OCR and batch APIs have separate policy permissions. Sovereign deployments must not silently enable external fallbacks.
 
 For Hatchet, select `STRATEGYOS_RUN_EXECUTION_MODE=hatchet`, configure the service address/TLS strategy, enable the Compose `hatchet` profile and provision a valid tenant token. `bootstrap_hatchet_token.sh` requires explicit bootstrap opt-in. Keep the token in the secret manager and preserve Hatchet state/config volumes; ordinary deployments must not regenerate identity or tokens. Check the worker with `deploy/scripts/check_hatchet_worker.sh`.
+
+The governed-claim projector is enabled explicitly with the `governed-claims`
+Compose profile. Its Qdrant lane requires the pinned local embedding model configured
+by `STRATEGYOS_EMBEDDING_MODEL_PATH`; it does not download a model or fall back to an
+external embedding API, and fails before leasing work if that configuration is
+absent. Check the queue inside the container with
+`python -m strategyos_mvp.claim_projection --health`. Historical claim
+materialization is preview-first; follow
+[`governed-claims-rollout.md`](../docs/operations/governed-claims-rollout.md) and
+apply one verified run before any broad backfill.
 
 ## Remote deployment and dataset sync
 

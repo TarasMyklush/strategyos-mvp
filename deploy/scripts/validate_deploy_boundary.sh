@@ -39,6 +39,11 @@ secrets_file = Path(os.environ["SECRETS_FILE"])
 target_environment = os.environ.get("TARGET_ENVIRONMENT", "").strip().lower()
 target_public_url = os.environ.get("TARGET_PUBLIC_URL", "").strip()
 target_deploy_user = os.environ.get("TARGET_DEPLOY_USER", "").strip()
+compose_profiles = {
+    item.strip()
+    for item in os.environ.get("STRATEGYOS_COMPOSE_PROFILES", "").split()
+    if item.strip()
+}
 
 config = load_env(env_file)
 secrets = load_env(secrets_file)
@@ -134,6 +139,11 @@ if target_public_url and not looks_local(target_public_url):
     )
 
 run_execution_mode = str(merged.get("STRATEGYOS_RUN_EXECUTION_MODE", "sync") or "sync").strip().lower()
+if "governed-claims" in compose_profiles:
+    require(
+        bool(str(merged.get("STRATEGYOS_EMBEDDING_MODEL_PATH", "")).strip()),
+        "The governed-claims profile requires STRATEGYOS_EMBEDDING_MODEL_PATH.",
+    )
 if run_execution_mode == "hatchet":
     hatchet_password = secrets.get("HATCHET_POSTGRES_PASSWORD", "")
     require(bool(hatchet_password), "HATCHET_POSTGRES_PASSWORD must be populated in hatchet execution mode.")

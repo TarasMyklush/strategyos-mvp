@@ -861,6 +861,7 @@ def _executive_kpi_brief(
 def _finance_kpi_payload(read_model: Mapping[str, Any]) -> dict[str, Any]:
     """Accept only a named deterministic calculation, never a prose value."""
     for field, engine in (
+        ("finance_kpi", "governed_claim_snapshot"),
         ("finance_kpi", "deterministic_source_finance_kpi_engine"),
         ("oracle_kpi", "deterministic_oracle_kpi_engine"),
     ):
@@ -868,6 +869,32 @@ def _finance_kpi_payload(read_model: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(payload, Mapping) and payload.get("derived_from") == engine and payload.get("authoritative") is True:
             return dict(payload)
     return {}
+
+
+def _claim_reference(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    return {
+        key: value.get(key)
+        for key in (
+            "claim_revision_id",
+            "family_key",
+            "label",
+            "claim_kind",
+            "metric_key",
+            "unit",
+            "currency",
+            "period",
+            "period_start",
+            "period_end",
+            "as_of",
+            "traceability",
+            "sources",
+            "formula",
+            "assessments",
+        )
+        if value.get(key) is not None
+    }
 
 
 def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, Any]:
@@ -940,16 +967,25 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
     evidence = finance_payload.get("evidence") if isinstance(finance_payload.get("evidence"), Mapping) else {}
     dynamics = finance_payload.get("dynamics") if isinstance(finance_payload.get("dynamics"), Mapping) else {}
     actual_complete = finance_payload.get("actual_complete") if isinstance(finance_payload.get("actual_complete"), Mapping) else {}
+    component_claims = finance_payload.get("component_claims") if isinstance(finance_payload.get("component_claims"), Mapping) else {}
+    derived_claims = finance_payload.get("derived_claims") if isinstance(finance_payload.get("derived_claims"), Mapping) else {}
+    claim_snapshot = finance_payload.get("claim_snapshot") if isinstance(finance_payload.get("claim_snapshot"), Mapping) else {}
+    claim_reconciliation = finance_payload.get("claim_reconciliation") if isinstance(finance_payload.get("claim_reconciliation"), Mapping) else {}
     calendar = read_model.get("week_ahead") if isinstance(read_model.get("week_ahead"), Mapping) else {}
     calendar_items = [
         item for item in list(calendar.get("items") or []) if isinstance(item, Mapping)
     ]
     period = str(finance_payload.get("reporting_period_key") or "the selected period")
+    governed_claims = finance_payload.get("derived_from") == "governed_claim_snapshot"
     provenance = {
-        "source": "current finance records",
+        "source": "governed claim ledger" if governed_claims else "current finance records",
         "complete": bool(finance_payload),
         "reporting_period_key": finance_payload.get("reporting_period_key"),
         "computation_boundary": finance_payload.get("computation_boundary"),
+        "snapshot_id": claim_snapshot.get("snapshot_id"),
+        "analysis_as_of": claim_snapshot.get("analysis_as_of"),
+        "policy_version": claim_snapshot.get("policy_version"),
+        "reconciliation_status": claim_reconciliation.get("status"),
     }
     cards: list[dict[str, Any]] = []
 
@@ -1030,8 +1066,16 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 ring_label = "of plan"
 
         kpi_evidence = evidence.get(spec["key"]) if isinstance(evidence.get(spec["key"]), Mapping) else {}
-        actual_is_complete = bool(actual_complete.get(spec["key"], True))
-        actual_missing = [] if actual_is_complete else ["Complete latest cash-position balances"]
+        source_actual_complete = bool(actual_complete.get(spec["key"], True))
+        reconciliation_passed = (
+            not governed_claims or claim_reconciliation.get("status") == "passed"
+        )
+        actual_is_complete = source_actual_complete and reconciliation_passed
+        actual_missing = []
+        if not source_actual_complete:
+            actual_missing.append("Complete latest cash-position balances")
+        if not reconciliation_passed:
+            actual_missing.append("Passed canonical claim reconciliation")
         missing_inputs = list(dict.fromkeys([*missing_inputs, *actual_missing]))
         availability = "verified" if not missing_inputs else "partial"
         if availability == "verified":
@@ -1049,12 +1093,43 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
         evidence_summary = str(kpi_evidence.get("summary") or "")
         if evidence_summary:
             detail += " " + evidence_summary
-        if not actual_is_complete:
+        if not source_actual_complete:
             detail += " The current cash figure is partial; no missing balance has been estimated."
+        if not reconciliation_passed:
+            detail += " The canonical claim ledger has not passed reconciliation, so this figure is not marked verified."
         card_provenance = {
             **provenance,
             "complete": actual_is_complete,
             "source_files": list(kpi_evidence.get("files") or []),
+            "actual_claim": _claim_reference(
+                derived_claims.get("ebitda_margin_actual")
+                if spec["key"] == "ebitda_margin"
+                else component_claims.get(spec["actual"])
+            ),
+            "comparison_claim": (
+                _claim_reference(
+                    derived_claims.get("ebitda_margin_plan")
+                    if spec["key"] == "ebitda_margin"
+                    else component_claims.get(spec.get("comparator"))
+                )
+                if spec.get("comparator") or spec["key"] == "ebitda_margin"
+                else None
+            ),
+            "input_claims": [
+                reference
+                for reference in (
+                    _claim_reference(component_claims.get(component_key))
+                    for component_key in (
+                        spec["actual"],
+                        spec.get("denominator"),
+                        spec.get("comparator"),
+                        spec.get("plan_numerator"),
+                        spec.get("plan_denominator"),
+                    )
+                    if component_key
+                )
+                if reference is not None
+            ],
         }
         strategic_reference = _governed_strategic_reference(finance_payload, str(spec["key"]))
         executive_signal = _executive_kpi_signal(

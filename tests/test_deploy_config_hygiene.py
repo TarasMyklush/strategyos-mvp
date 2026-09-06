@@ -978,6 +978,44 @@ def test_validate_deploy_boundary_rejects_hatchet_mode_without_runtime_secrets(
     assert "HATCHET_SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET" in result.stderr
 
 
+def test_validate_deploy_boundary_rejects_claim_profile_without_pinned_model(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / "deploy.env"
+    secrets_file = tmp_path / "deploy.secrets"
+    env_file.write_text(
+        (REPO_ROOT / "deploy" / ".env.example").read_text(encoding="utf-8")
+        + "\nSTRATEGYOS_LOGIN_REQUIRED=true\n",
+        encoding="utf-8",
+    )
+    secrets_file.write_text(
+        (REPO_ROOT / "deploy" / ".env.secrets.example")
+        .read_text(encoding="utf-8")
+        .replace("__CHANGE_ME_", "configured-"),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", "deploy/scripts/validate_deploy_boundary.sh"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "ENV_FILE": str(env_file),
+            "SECRETS_FILE": str(secrets_file),
+            "TARGET_ENVIRONMENT": "hetzner-qa",
+            "TARGET_PUBLIC_URL": "https://new.strategyos.live",
+            "TARGET_DEPLOY_USER": "deploy",
+            "STRATEGYOS_COMPOSE_PROFILES": "governed-claims",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "governed-claims profile requires STRATEGYOS_EMBEDDING_MODEL_PATH" in result.stderr
+
+
 def test_validate_deploy_boundary_rejects_llm_chat_without_external_approval(
     tmp_path: Path,
 ) -> None:

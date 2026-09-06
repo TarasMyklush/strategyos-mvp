@@ -7,7 +7,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 from urllib import error, parse, request
 
 from .config import CONFIG
@@ -17,6 +17,7 @@ from .models import Citation, Finding
 
 COLLECTION_NAME = semantic_embeddings.COLLECTION if semantic_embeddings.configured() else "strategyos_search_chunks"
 LEGACY_COLLECTION_NAME = "strategyos_findings"
+CLAIM_PROJECTION_COLLECTION = "strategyos_governed_claims_v1"
 VECTOR_SIZE = semantic_embeddings.DIMENSIONS if semantic_embeddings.configured() else 256
 TOKEN_RE = re.compile(r"[^\W_][\w:\-/.]*", re.UNICODE)
 CHUNK_SIZE = 900
@@ -39,6 +40,92 @@ INDEXED_FILTER_FIELDS = (
     "source_path",
     "source_hash",
 )
+
+
+def project_claim_record(record: Mapping[str, Any], operation: str) -> None:
+    """Project an immutable claim for retrieval without making it authoritative."""
+    if not CONFIG.qdrant_url:
+        raise RuntimeError("QDRANT_URL is not configured.")
+    if not semantic_embeddings.configured():
+        raise RuntimeError("The pinned semantic embedding model is not configured.")
+    tenant_id = str(record.get("tenant_id") or "")
+    revision_id = str(record.get("claim_revision_id") or "")
+    if not tenant_id or not revision_id:
+        raise ValueError("Claim vector projection requires tenant and revision IDs.")
+    point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"strategyos-claim:{tenant_id}:{revision_id}"))
+    _ensure_claim_projection_collection()
+    if operation in {"delete", "revoke"}:
+        _qdrant_request(
+            "POST",
+            f"/collections/{CLAIM_PROJECTION_COLLECTION}/points/delete?wait=true",
+            {"points": [point_id]},
+        )
+        return
+    if operation != "upsert":
+        raise ValueError(f"Unsupported claim vector operation: {operation!r}")
+    subject = record.get("subject") if isinstance(record.get("subject"), dict) else {}
+    period = record.get("period") if isinstance(record.get("period"), dict) else {}
+    sources = [item for item in list(record.get("sources") or []) if isinstance(item, dict)]
+    text = ". ".join(
+        part
+        for part in (
+            str(record.get("label") or ""),
+            f"Metric {record.get('metric_key')}",
+            f"Subject {subject.get('type')} {subject.get('key')}",
+            f"Value {record.get('value')} {record.get('unit') or ''}",
+            f"Claim kind {record.get('claim_kind')}",
+            f"Period {period.get('start') or ''} to {period.get('end') or ''}",
+            f"Business unit {record.get('business_unit') or 'group'}",
+        )
+        if part.strip()
+    )
+    payload = {
+        "tenant_id": tenant_id,
+        "claim_revision_id": revision_id,
+        "family_key": record.get("family_key"),
+        "point_type": "governed_claim",
+        "metric_key": record.get("metric_key"),
+        "claim_kind": str(record.get("claim_kind") or ""),
+        "business_unit": record.get("business_unit"),
+        "period_start": period.get("start"),
+        "period_end": period.get("end"),
+        "source_keys": sorted({str(item.get("source_key")) for item in sources if item.get("source_key")}),
+        "origin_categories": sorted({str(item.get("origin_category")) for item in sources if item.get("origin_category")}),
+        "text": text,
+        "projection_only": True,
+        "authorization_required": True,
+    }
+    vector = semantic_embeddings.embed(text)
+    _qdrant_request(
+        "PUT",
+        f"/collections/{CLAIM_PROJECTION_COLLECTION}/points?wait=true",
+        {"points": [{"id": point_id, "vector": vector, "payload": payload}]},
+    )
+
+
+def _ensure_claim_projection_collection() -> None:
+    _ensure_collection(CLAIM_PROJECTION_COLLECTION)
+    for field_name in (
+        "tenant_id",
+        "claim_revision_id",
+        "family_key",
+        "point_type",
+        "metric_key",
+        "claim_kind",
+        "business_unit",
+        "source_keys",
+        "origin_categories",
+    ):
+        try:
+            _qdrant_request(
+                "PUT",
+                f"/collections/{CLAIM_PROJECTION_COLLECTION}/index",
+                {"field_name": field_name, "field_schema": "keyword"},
+            )
+        except Exception:
+            # Index creation is idempotent and older Qdrant editions can report
+            # an already-present index differently. Point upsert remains safe.
+            continue
 
 
 @dataclass(frozen=True)

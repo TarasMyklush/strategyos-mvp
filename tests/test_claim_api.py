@@ -45,3 +45,53 @@ def test_claim_router_is_registered_on_application():
     from strategyos_mvp.api import app
 
     assert "/api/claims" in app.openapi()["paths"]
+    assert "/api/claims/snapshots/{run_id}" in app.openapi()["paths"]
+    assert "/api/claims/runs/{run_id}/reconciliation" in app.openapi()["paths"]
+
+
+def test_snapshot_endpoint_uses_same_authenticated_policy_context(monkeypatch):
+    captured = {}
+
+    class FakeRepository:
+        def snapshot(self, snapshot_key, *, context):
+            captured["snapshot_key"] = snapshot_key
+            captured["context"] = context
+            return {"snapshot_id": "snapshot-1", "records": []}
+
+    monkeypatch.setattr(claim_api, "ClaimRepository", FakeRepository)
+    result = claim_api.query_run_snapshot(
+        "run-1",
+        purpose=UsePurpose.EXECUTIVE_BRIEFING,
+        principal={
+            "tenant_id": "tenant-1",
+            "subject": "ceo-1",
+            "role": "executive",
+            "business_units": ["tamween"],
+        },
+    )
+    assert result["snapshot_id"] == "snapshot-1"
+    assert captured["snapshot_key"] == "run:run-1"
+    assert captured["context"].purpose == UsePurpose.EXECUTIVE_BRIEFING
+
+
+def test_reconciliation_endpoint_is_tenant_scoped(monkeypatch):
+    captured = {}
+
+    class FakeRepository:
+        def reconciliation(self, run_id, *, tenant_id):
+            captured["run_id"] = run_id
+            captured["tenant_id"] = tenant_id
+            return {"status": "passed"}
+
+    monkeypatch.setattr(claim_api, "ClaimRepository", FakeRepository)
+    result = claim_api.query_run_reconciliation(
+        "run-1",
+        principal={
+            "tenant_id": "tenant-1",
+            "subject": "auditor-1",
+            "role": "auditor",
+            "business_units": [],
+        },
+    )
+    assert result["reconciliation"]["status"] == "passed"
+    assert captured == {"run_id": "run-1", "tenant_id": "tenant-1"}

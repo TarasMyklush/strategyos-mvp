@@ -3,9 +3,12 @@ from __future__ import annotations
 import atexit
 import hashlib
 import json
+import math
+import re
 import threading
 from dataclasses import asdict
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -1171,7 +1174,13 @@ def persist_run_summary(
                 )
                 counts.update(
                     persist_finance_records(
-                        cur, tenant_id, batch_id, evidence_ids, bundle
+                        cur,
+                        tenant_id,
+                        batch_id,
+                        evidence_ids,
+                        bundle,
+                        run_id=persisted_run_id,
+                        summary=summary,
                     )
                 )
                 counts["evidence_documents"] = len(evidence_ids)
@@ -1900,12 +1909,18 @@ def persist_finance_records(
     batch_id: str,
     evidence_ids: dict[str, str],
     bundle: DataBundle,
+    *,
+    run_id: str,
+    summary: dict[str, Any],
 ) -> dict[str, int]:
     counts = {
         "finance_entities": 0,
         "finance_transactions": 0,
         "finance_balances": 0,
         "canonical_claim_revisions": 0,
+        "canonical_claim_exceptions": 0,
+        "canonical_analysis_snapshots": 0,
+        "canonical_reconciliations": 0,
     }
     counts["finance_entities"] += persist_entities(
         cur,
@@ -2005,6 +2020,39 @@ def persist_finance_records(
     )
     counts["finance_balances"] += cash_forecast_counts["records"]
     counts["canonical_claim_revisions"] += cash_forecast_counts["claims"]
+    transaction_claims = persist_transaction_claims(
+        cur,
+        tenant_id=tenant_id,
+        batch_id=batch_id,
+        run_id=run_id,
+    )
+    counts["canonical_claim_revisions"] += transaction_claims["claims"]
+    counts["canonical_claim_exceptions"] += transaction_claims["exceptions"]
+    kpi_claims = persist_finance_kpi_claims(
+        cur,
+        tenant_id=tenant_id,
+        batch_id=batch_id,
+        run_id=run_id,
+        evidence_ids=evidence_ids,
+        finance_payload=dict(summary.get("finance_kpi") or {}),
+        recorded_at=summary.get("created_at"),
+    )
+    counts["canonical_claim_revisions"] += kpi_claims["claims"]
+    counts["canonical_claim_exceptions"] += kpi_claims["exceptions"]
+    snapshot_count = persist_run_claim_snapshot(
+        cur,
+        tenant_id=tenant_id,
+        batch_id=batch_id,
+        run_id=run_id,
+        as_of_at=summary.get("created_at"),
+    )
+    counts["canonical_analysis_snapshots"] += snapshot_count
+    counts["canonical_reconciliations"] += persist_claim_reconciliation(
+        cur,
+        tenant_id=tenant_id,
+        batch_id=batch_id,
+        run_id=run_id,
+    )
     return counts
 
 
@@ -2331,8 +2379,7 @@ def persist_trial_balance(
         )
         amount = money_value(row.get("Net"))
         if amount is not None:
-            claim_count += int(
-                persist_shadow_claim(
+            _claim_revision_id, created = persist_shadow_claim(
                     cur,
                     tenant_id=tenant_id,
                     batch_id=batch_id,
@@ -2348,7 +2395,7 @@ def persist_trial_balance(
                     dimensions={"account": account},
                     metadata={"legacy_projection": "strategyos_finance_balances"},
                 )
-            )
+            claim_count += int(created)
         count += 1
     return {"records": count, "claims": claim_count}
 
@@ -2369,9 +2416,9 @@ def persist_cash_forecast(
         for idx, row in df.iterrows():
             payload = row_to_dict(row) | {"sheet_name": sheet_name}
             natural_key = f"{sheet_name}:{idx}"
-            amount = money_value(row.get("Balance (SAR)")) or money_value(
-                row.get("H2_Total_LC")
-            )
+            amount = money_value(row.get("Balance (SAR)"))
+            if amount is None:
+                amount = money_value(row.get("H2_Total_LC"))
             cur.execute(
                 """
                 insert into strategyos_finance_balances
@@ -2394,8 +2441,7 @@ def persist_cash_forecast(
                 ),
             )
             if amount is not None:
-                claim_count += int(
-                    persist_shadow_claim(
+                _claim_revision_id, created = persist_shadow_claim(
                         cur,
                         tenant_id=tenant_id,
                         batch_id=batch_id,
@@ -2412,7 +2458,7 @@ def persist_cash_forecast(
                         dimensions={"sheet_name": sheet_name},
                         metadata={"legacy_projection": "strategyos_finance_balances"},
                     )
-                )
+                claim_count += int(created)
             count += 1
     return {"records": count, "claims": claim_count}
 
@@ -2435,7 +2481,14 @@ def persist_shadow_claim(
     business_unit: str | None = None,
     dimensions: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
-) -> bool:
+    period_start: date | None = None,
+    period_end: date | None = None,
+    as_of_at: datetime | None = None,
+    production_method: ProductionMethod = ProductionMethod.IMPORTED,
+    formula_key: str | None = None,
+    formula_version: str | None = None,
+    input_revision_ids: tuple[str, ...] = (),
+) -> tuple[str, bool]:
     """Shadow-write one immutable claim without changing existing read paths."""
     occurrence_key: str | None = None
     occurrence_id: str | None = None
@@ -2452,6 +2505,24 @@ def persist_shadow_claim(
             (tenant_id, source_document_id, batch_id),
         )
         occurrence = cur.fetchone()
+        # An identical artifact received through the same governed source is a
+        # single evidence occurrence by contract.  A later ingestion batch may
+        # therefore reference an occurrence first recorded by an earlier batch.
+        if occurrence is None:
+            cur.execute(
+                """
+                select eo.id, eo.occurrence_key, ss.source_key
+                from strategyos_evidence_occurrences eo
+                join strategyos_source_systems ss on ss.id = eo.source_system_id
+                join strategyos_ingestion_batches b on b.source_system_id = ss.id
+                where eo.tenant_id = %s and eo.evidence_document_id = %s
+                  and b.id = %s
+                order by eo.created_at desc
+                limit 1
+                """,
+                (tenant_id, source_document_id, batch_id),
+            )
+            occurrence = cur.fetchone()
         if occurrence is not None:
             occurrence_id, occurrence_key, assertion_namespace = occurrence
         else:
@@ -2465,22 +2536,29 @@ def persist_shadow_claim(
         subject_key=subject_key,
         metric_key=metric_key,
         claim_kind=claim_kind,
-        production_method=ProductionMethod.IMPORTED,
+        production_method=production_method,
         value_numeric=str(value_numeric),
         unit=unit,
         currency=currency,
         business_unit=business_unit,
         dimensions=dimensions or {},
+        period_start=period_start,
+        period_end=period_end,
+        as_of_at=as_of_at,
         author_identity=author_identity,
         source_occurrence_keys=(str(occurrence_key),) if occurrence_key else (),
-        metadata=metadata or {},
+        formula_key=formula_key,
+        formula_version=formula_version,
+        input_revision_ids=input_revision_ids,
+        metadata=(metadata or {}) | {"batch_id": str(batch_id)},
     )
     cur.execute(
         """
         insert into strategyos_claim_families
             (tenant_id, family_key, assertion_namespace, claim_kind_lane,
-             subject_type, subject_key, metric_key, business_unit, dimensions)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+             subject_type, subject_key, metric_key, business_unit, dimensions,
+             period_start, period_end)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
         on conflict (tenant_id, family_key) do nothing
         """,
         (
@@ -2493,6 +2571,8 @@ def persist_shadow_claim(
             metric_key,
             business_unit,
             json_blob(dimensions or {}),
+            period_start,
+            period_end,
         ),
     )
     cur.execute(
@@ -2504,8 +2584,9 @@ def persist_shadow_claim(
         "select id from strategyos_claim_revisions where claim_family_id = %s and fingerprint = %s",
         (family_id, draft.fingerprint),
     )
-    if cur.fetchone() is not None:
-        return False
+    existing_revision = cur.fetchone()
+    if existing_revision is not None:
+        return str(existing_revision[0]), False
     cur.execute(
         "select id, revision_number from strategyos_claim_revisions where claim_family_id = %s order by revision_number desc limit 1",
         (family_id,),
@@ -2516,9 +2597,9 @@ def persist_shadow_claim(
         """
         insert into strategyos_claim_revisions
             (tenant_id, claim_family_id, revision_number, fingerprint, claim_kind,
-             production_method, value_numeric, unit, scale, currency, author_identity,
-             traceability_state, supersedes_revision_id, metadata)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, %s::jsonb)
+             production_method, value_numeric, unit, scale, currency, as_of_at, author_identity,
+             formula_key, formula_version, traceability_state, supersedes_revision_id, metadata)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
         returning id
         """,
         (
@@ -2531,8 +2612,11 @@ def persist_shadow_claim(
             draft.value_numeric,
             draft.unit,
             draft.currency,
+            draft.as_of_at,
             draft.author_identity,
-            "present" if occurrence_id else "incomplete",
+            draft.formula_key,
+            draft.formula_version,
+            "present" if occurrence_id or draft.input_revision_ids else "incomplete",
             previous[0] if previous else None,
             json_blob(dict(draft.metadata) | {"source_locator": source_locator}),
         ),
@@ -2546,6 +2630,22 @@ def persist_shadow_claim(
             values (%s, %s, 'supports', %s)
             """,
             (revision_id, occurrence_id, source_locator),
+        )
+    for input_revision_id in draft.input_revision_ids:
+        cur.execute(
+            "select 1 from strategyos_claim_revisions where id = %s and tenant_id = %s",
+            (input_revision_id, tenant_id),
+        )
+        if cur.fetchone() is None:
+            raise ValueError("Calculated claim input must exist in the same tenant.")
+        cur.execute(
+            """
+            insert into strategyos_claim_dependencies
+                (derived_claim_revision_id, input_claim_revision_id, input_role)
+            values (%s, %s, 'input')
+            on conflict do nothing
+            """,
+            (revision_id, input_revision_id),
         )
     for projection in ("graph", "vector", "cache"):
         cur.execute(
@@ -2563,7 +2663,616 @@ def persist_shadow_claim(
                 f"claim:{revision_id}:upsert",
             ),
         )
-    return True
+    return str(revision_id), True
+
+
+def _record_claim_backfill_exception(
+    cur: Any,
+    *,
+    tenant_id: str,
+    run_id: str,
+    batch_id: str,
+    record_type: str,
+    record_key: str,
+    reason_code: str,
+    detail: str,
+    evidence_document_id: str | None = None,
+    source_locator: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    cur.execute(
+        """
+        insert into strategyos_claim_backfill_exceptions
+            (tenant_id, run_id, ingestion_batch_id, evidence_document_id,
+             record_type, record_key, source_locator, reason_code, detail, metadata)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        on conflict (ingestion_batch_id, record_type, record_key, reason_code)
+        do update set detail = excluded.detail, metadata = excluded.metadata
+        """,
+        (
+            tenant_id,
+            run_id,
+            batch_id,
+            evidence_document_id,
+            record_type,
+            record_key,
+            source_locator,
+            reason_code,
+            detail,
+            json_blob(metadata or {}),
+        ),
+    )
+
+
+def persist_transaction_claims(
+    cur: Any,
+    *,
+    tenant_id: str,
+    batch_id: str,
+    run_id: str,
+) -> dict[str, int]:
+    """Materialize amount-bearing finance rows as governed actual claims.
+
+    The existing transaction table remains the high-volume operational store.
+    One claim per transaction gives retrieval and lineage a stable semantic
+    handle without turning every spreadsheet cell into an independent claim.
+    """
+    cur.execute(
+        """
+        select transaction_type, natural_key, counterparty_key, event_date,
+               amount_sar, currency, source_document_id, source_locator, attributes
+        from strategyos_finance_transactions
+        where tenant_id = %s and batch_id = %s
+        order by transaction_type, natural_key
+        """,
+        (tenant_id, batch_id),
+    )
+    rows = fetchall_dicts(cur)
+    claims = 0
+    exceptions = 0
+    for row in rows:
+        transaction_type = str(row.get("transaction_type") or "finance_transaction")
+        natural_key = str(row.get("natural_key") or "")
+        record_key = f"{transaction_type}:{natural_key}"
+        amount = money_value(row.get("amount_sar"))
+        source_document_id = row.get("source_document_id")
+        source_locator = text_value(row.get("source_locator"))
+        if amount is None:
+            exceptions += 1
+            _record_claim_backfill_exception(
+                cur,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                batch_id=batch_id,
+                record_type="finance_transaction",
+                record_key=record_key,
+                reason_code="amount_missing",
+                detail="The transaction has no usable monetary amount; no numeric claim was created.",
+                evidence_document_id=source_document_id,
+                source_locator=source_locator,
+            )
+            continue
+        source_currency = text_value(row.get("currency")) or "SAR"
+        if len(source_currency) != 3 or not source_currency.isalpha():
+            exceptions += 1
+            _record_claim_backfill_exception(
+                cur,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                batch_id=batch_id,
+                record_type="finance_transaction",
+                record_key=record_key,
+                reason_code="currency_invalid",
+                detail="The transaction currency is missing or invalid; the claim is quarantined.",
+                evidence_document_id=source_document_id,
+                source_locator=source_locator,
+                metadata={"currency": source_currency},
+            )
+            continue
+        attributes = row.get("attributes") if isinstance(row.get("attributes"), dict) else {}
+        business_unit = text_value(
+            attributes.get("Business_Unit")
+            or attributes.get("BusinessUnit")
+            or attributes.get("BU")
+        )
+        event_date = date_value(row.get("event_date"))
+        _revision_id, created = persist_shadow_claim(
+            cur,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            subject_type=transaction_type,
+            subject_key=natural_key,
+            metric_key="finance.transaction.amount",
+            claim_kind=ClaimKind.ACTUAL,
+            value_numeric=amount,
+            # The persisted field is amount_sar.  Keep its claim unit SAR even
+            # when the originating transaction currency was different.
+            unit="SAR",
+            currency="SAR",
+            source_document_id=source_document_id,
+            source_locator=source_locator,
+            business_unit=business_unit,
+            dimensions={
+                "transaction_type": transaction_type,
+                "counterparty_key": text_value(row.get("counterparty_key")),
+                "source_currency": source_currency.upper(),
+            },
+            period_start=event_date,
+            period_end=event_date,
+            metadata={
+                "legacy_projection": "strategyos_finance_transactions",
+                "run_id": str(run_id),
+                "record_key": record_key,
+            },
+        )
+        claims += int(created)
+    return {"claims": claims, "exceptions": exceptions}
+
+
+def persist_balance_claims(
+    cur: Any,
+    *,
+    tenant_id: str,
+    batch_id: str,
+    run_id: str,
+) -> dict[str, int]:
+    """Backfill governed claims from already-persisted finance balances."""
+    cur.execute(
+        """
+        select balance_type, natural_key, account, amount_sar,
+               source_document_id, source_locator, attributes
+        from strategyos_finance_balances
+        where tenant_id = %s and batch_id = %s and amount_sar is not null
+        order by balance_type, natural_key
+        """,
+        (tenant_id, batch_id),
+    )
+    claims = 0
+    exceptions = 0
+    for row in fetchall_dicts(cur):
+        balance_type = str(row.get("balance_type") or "")
+        natural_key = str(row.get("natural_key") or "")
+        amount = money_value(row.get("amount_sar"))
+        if balance_type == "trial_balance":
+            claim_kind = ClaimKind.ACTUAL
+            subject_type = "finance_account"
+            metric_key = "finance.trial_balance.net"
+            author_identity = None
+            dimensions = {"account": text_value(row.get("account")) or natural_key}
+        elif balance_type == "cash_forecast":
+            claim_kind = ClaimKind.FORECAST
+            subject_type = "cash_forecast_line"
+            metric_key = "finance.cash_forecast.balance"
+            author_identity = "source-role:cfo"
+            attributes = row.get("attributes") if isinstance(row.get("attributes"), dict) else {}
+            dimensions = {"sheet_name": text_value(attributes.get("sheet_name")) or "forecast"}
+        else:
+            exceptions += 1
+            _record_claim_backfill_exception(
+                cur,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                batch_id=batch_id,
+                record_type="finance_balance",
+                record_key=f"{balance_type}:{natural_key}",
+                reason_code="balance_type_unknown",
+                detail="The balance type has no governed claim mapping and was quarantined.",
+                evidence_document_id=row.get("source_document_id"),
+                source_locator=text_value(row.get("source_locator")),
+            )
+            continue
+        if amount is None:
+            exceptions += 1
+            continue
+        _revision_id, created = persist_shadow_claim(
+            cur,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            subject_type=subject_type,
+            subject_key=natural_key,
+            metric_key=metric_key,
+            claim_kind=claim_kind,
+            value_numeric=amount,
+            unit="SAR",
+            currency="SAR",
+            source_document_id=row.get("source_document_id"),
+            source_locator=text_value(row.get("source_locator")),
+            author_identity=author_identity,
+            dimensions=dimensions,
+            metadata={"legacy_projection": "strategyos_finance_balances"},
+        )
+        claims += int(created)
+    return {"claims": claims, "exceptions": exceptions}
+
+
+_FINANCE_KPI_COMPONENTS: dict[str, tuple[str, ClaimKind, str]] = {
+    "revenue_actual": ("ceo.revenue", ClaimKind.ACTUAL, "revenue"),
+    "revenue_plan": ("ceo.revenue", ClaimKind.PLAN, "revenue"),
+    "cogs_actual": ("ceo.cogs", ClaimKind.ACTUAL, "ebitda_margin"),
+    "ebitda_actual": ("ceo.ebitda", ClaimKind.ACTUAL, "ebitda_margin"),
+    "ebitda_plan": ("ceo.ebitda", ClaimKind.PLAN, "ebitda_margin"),
+    "operating_cost_actual": ("ceo.operating_cost", ClaimKind.ACTUAL, "operating_cost"),
+    "operating_cost_plan": ("ceo.operating_cost", ClaimKind.PLAN, "operating_cost"),
+    "cash_balance": ("ceo.cash_balance", ClaimKind.ACTUAL, "cash_vs_floor"),
+    "board_floor": ("ceo.cash_floor", ClaimKind.PLAN, "cash_vs_floor"),
+}
+
+
+def _finance_period(value: Any) -> tuple[date | None, date | None]:
+    text = str(value or "").strip()
+    iso_dates = [date.fromisoformat(item) for item in re.findall(r"\d{4}-\d{2}-\d{2}", text)]
+    if len(iso_dates) >= 2:
+        return iso_dates[0], iso_dates[1]
+    if len(iso_dates) == 1:
+        return iso_dates[0], iso_dates[0]
+    year_match = re.search(r"\b(20\d{2})\b", text)
+    year = int(year_match.group(1)) if year_match else None
+    normalized = text.casefold().replace("-", " ")
+    if year and "h1" in normalized:
+        return date(year, 1, 1), date(year, 6, 30)
+    if year and "h2" in normalized:
+        return date(year, 7, 1), date(year, 12, 31)
+    if year and ("fy" in normalized or normalized == str(year)):
+        return date(year, 1, 1), date(year, 12, 31)
+    return None, None
+
+
+def _aware_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _kpi_source_document(
+    evidence_ids: dict[str, str],
+    evidence_payload: dict[str, Any],
+) -> tuple[str | None, str | None]:
+    for source_path in list(evidence_payload.get("files") or []):
+        normalized = str(source_path).replace("\\", "/")
+        if normalized in evidence_ids:
+            return evidence_ids[normalized], normalized
+        matches = [
+            (path, document_id)
+            for path, document_id in evidence_ids.items()
+            if path.replace("\\", "/").endswith(normalized)
+            or normalized.endswith(path.replace("\\", "/"))
+        ]
+        if len(matches) == 1:
+            return matches[0][1], matches[0][0]
+    return None, None
+
+
+def persist_finance_kpi_claims(
+    cur: Any,
+    *,
+    tenant_id: str,
+    batch_id: str,
+    run_id: str,
+    evidence_ids: dict[str, str],
+    finance_payload: dict[str, Any],
+    recorded_at: Any,
+) -> dict[str, int]:
+    """Persist every supplied headline component with actual/plan semantics."""
+    if not finance_payload.get("authoritative"):
+        return {"claims": 0, "exceptions": 0}
+    components = finance_payload.get("components")
+    if not isinstance(components, dict):
+        return {"claims": 0, "exceptions": 0}
+    evidence = finance_payload.get("evidence") if isinstance(finance_payload.get("evidence"), dict) else {}
+    period_start, period_end = _finance_period(finance_payload.get("reporting_period_key"))
+    as_of_at = _aware_datetime(recorded_at)
+    claims = 0
+    exceptions = 0
+    component_revisions: dict[str, str] = {}
+    for component_key, (metric_key, claim_kind, evidence_key) in _FINANCE_KPI_COMPONENTS.items():
+        value = components.get(component_key)
+        if value in (None, ""):
+            continue
+        amount = money_value(value)
+        evidence_payload = evidence.get(evidence_key) if isinstance(evidence.get(evidence_key), dict) else {}
+        source_document_id, source_path = _kpi_source_document(evidence_ids, evidence_payload)
+        if amount is None:
+            exceptions += 1
+            _record_claim_backfill_exception(
+                cur,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                batch_id=batch_id,
+                record_type="finance_kpi_component",
+                record_key=component_key,
+                reason_code="value_invalid",
+                detail="The supplied KPI component is not a finite decimal and was not materialized.",
+                evidence_document_id=source_document_id,
+                metadata={"value": str(value)},
+            )
+            continue
+        if source_document_id is None:
+            exceptions += 1
+            _record_claim_backfill_exception(
+                cur,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                batch_id=batch_id,
+                record_type="finance_kpi_component",
+                record_key=component_key,
+                reason_code="evidence_unresolved",
+                detail="The KPI component was retained with incomplete traceability because its source file could not be matched.",
+                metadata={"evidence_key": evidence_key},
+            )
+        revision_id, created = persist_shadow_claim(
+            cur,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            subject_type="enterprise",
+            subject_key="group",
+            metric_key=metric_key,
+            claim_kind=claim_kind,
+            value_numeric=amount,
+            unit="SAR",
+            currency="SAR",
+            source_document_id=source_document_id,
+            source_locator=(f"{evidence_key} component: {component_key}" if source_path else None),
+            period_start=period_start,
+            period_end=period_end,
+            as_of_at=as_of_at,
+            dimensions={"component_key": component_key},
+            metadata={
+                "legacy_projection": "run_summary.finance_kpi.components",
+                "run_id": str(run_id),
+                "component_key": component_key,
+                "reporting_period_key": finance_payload.get("reporting_period_key"),
+                "source_path": source_path,
+            },
+        )
+        component_revisions[component_key] = revision_id
+        claims += int(created)
+
+    ebitda_revision = component_revisions.get("ebitda_actual")
+    revenue_revision = component_revisions.get("revenue_actual")
+    ebitda = money_value(components.get("ebitda_actual"))
+    revenue = money_value(components.get("revenue_actual"))
+    if ebitda_revision and revenue_revision and ebitda is not None and revenue not in (None, 0):
+        margin = (ebitda / revenue) * 100
+        _revision_id, created = persist_shadow_claim(
+            cur,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            subject_type="enterprise",
+            subject_key="group",
+            metric_key="ceo.ebitda_margin",
+            claim_kind=ClaimKind.ACTUAL,
+            value_numeric=margin,
+            unit="percent",
+            currency=None,
+            source_document_id=None,
+            source_locator=None,
+            period_start=period_start,
+            period_end=period_end,
+            as_of_at=as_of_at,
+            production_method=ProductionMethod.CALCULATED,
+            formula_key="ebitda-divided-by-revenue",
+            formula_version="1",
+            input_revision_ids=(ebitda_revision, revenue_revision),
+            dimensions={"component_key": "ebitda_margin_actual"},
+            metadata={
+                "legacy_projection": "run_summary.finance_kpi.derived",
+                "run_id": str(run_id),
+                "component_key": "ebitda_margin_actual",
+            },
+        )
+        claims += int(created)
+    plan_ebitda_revision = component_revisions.get("ebitda_plan")
+    plan_revenue_revision = component_revisions.get("revenue_plan")
+    plan_ebitda = money_value(components.get("ebitda_plan"))
+    plan_revenue = money_value(components.get("revenue_plan"))
+    if (
+        plan_ebitda_revision
+        and plan_revenue_revision
+        and plan_ebitda is not None
+        and plan_revenue not in (None, 0)
+    ):
+        plan_margin = (plan_ebitda / plan_revenue) * 100
+        _revision_id, created = persist_shadow_claim(
+            cur,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            subject_type="enterprise",
+            subject_key="group",
+            metric_key="ceo.ebitda_margin",
+            claim_kind=ClaimKind.PLAN,
+            value_numeric=plan_margin,
+            unit="percent",
+            currency=None,
+            source_document_id=None,
+            source_locator=None,
+            period_start=period_start,
+            period_end=period_end,
+            as_of_at=as_of_at,
+            production_method=ProductionMethod.CALCULATED,
+            formula_key="ebitda-divided-by-revenue",
+            formula_version="1",
+            input_revision_ids=(plan_ebitda_revision, plan_revenue_revision),
+            dimensions={"component_key": "ebitda_margin_plan"},
+            metadata={
+                "legacy_projection": "run_summary.finance_kpi.derived",
+                "run_id": str(run_id),
+                "component_key": "ebitda_margin_plan",
+            },
+        )
+        claims += int(created)
+    return {"claims": claims, "exceptions": exceptions}
+
+
+def persist_run_claim_snapshot(
+    cur: Any,
+    *,
+    tenant_id: str,
+    batch_id: str,
+    run_id: str,
+    as_of_at: Any,
+) -> int:
+    snapshot_key = f"run:{run_id}"
+    cur.execute(
+        """
+        insert into strategyos_analysis_snapshots
+            (tenant_id, snapshot_key, as_of_at, policy_version, created_by, metadata)
+        values (%s, %s, %s, 'source-claim-v1', 'system:run-persistence', %s::jsonb)
+        on conflict (tenant_id, snapshot_key) do nothing
+        returning id
+        """,
+        (
+            tenant_id,
+            snapshot_key,
+            datetime.now(UTC),
+            json_blob(
+                {
+                    "run_id": str(run_id),
+                    "batch_id": str(batch_id),
+                    "data_as_of": (
+                        _aware_datetime(as_of_at).isoformat()
+                        if _aware_datetime(as_of_at)
+                        else None
+                    ),
+                }
+            ),
+        ),
+    )
+    row = cur.fetchone()
+    created = row is not None
+    if row is None:
+        cur.execute(
+            "select id from strategyos_analysis_snapshots where tenant_id = %s and snapshot_key = %s",
+            (tenant_id, snapshot_key),
+        )
+        row = cur.fetchone()
+    snapshot_id = row[0]
+    cur.execute(
+        """
+        with batch_claims as (
+            select distinct cr.id, cr.claim_family_id, cr.revision_number
+            from strategyos_claim_revisions cr
+            left join strategyos_claim_evidence_links cel on cel.claim_revision_id = cr.id
+            left join strategyos_evidence_occurrences eo on eo.id = cel.evidence_occurrence_id
+            left join strategyos_ingestion_batch_documents ibd
+              on ibd.evidence_document_id = eo.evidence_document_id and ibd.batch_id = %s
+            where cr.tenant_id = %s
+              and (ibd.batch_id is not null or cr.metadata->>'batch_id' = %s)
+        )
+        select distinct on (claim_family_id) claim_family_id, id
+        from batch_claims
+        order by claim_family_id, revision_number desc
+        """,
+        (batch_id, tenant_id, str(batch_id)),
+    )
+    for claim_family_id, claim_revision_id in cur.fetchall():
+        cur.execute(
+            """
+            insert into strategyos_analysis_snapshot_claims
+                (snapshot_id, claim_family_id, claim_revision_id, selection_reason)
+            values (%s, %s, %s, 'latest immutable revision materialized by this run')
+            on conflict (snapshot_id, claim_family_id) do nothing
+            """,
+            (snapshot_id, claim_family_id, claim_revision_id),
+        )
+    return int(created)
+
+
+def persist_claim_reconciliation(
+    cur: Any,
+    *,
+    tenant_id: str,
+    batch_id: str,
+    run_id: str,
+) -> int:
+    cur.execute(
+        """
+        select
+            (select count(*) from strategyos_finance_transactions
+             where tenant_id = %s and batch_id = %s and amount_sar is not null)
+          + (select count(*) from strategyos_finance_balances
+             where tenant_id = %s and batch_id = %s and amount_sar is not null),
+            (select coalesce(sum(amount_sar), 0) from strategyos_finance_transactions
+             where tenant_id = %s and batch_id = %s and amount_sar is not null)
+          + (select coalesce(sum(amount_sar), 0) from strategyos_finance_balances
+             where tenant_id = %s and batch_id = %s and amount_sar is not null)
+        """,
+        (tenant_id, batch_id, tenant_id, batch_id, tenant_id, batch_id, tenant_id, batch_id),
+    )
+    source_record_count, source_amount = cur.fetchone()
+    cur.execute(
+        """
+        select count(*), coalesce(sum(value_numeric), 0)
+        from (
+            select distinct cr.id, cr.value_numeric
+            from strategyos_claim_revisions cr
+            join strategyos_claim_evidence_links cel on cel.claim_revision_id = cr.id
+            join strategyos_evidence_occurrences eo on eo.id = cel.evidence_occurrence_id
+            join strategyos_ingestion_batch_documents ibd
+              on ibd.evidence_document_id = eo.evidence_document_id and ibd.batch_id = %s
+            where cr.tenant_id = %s
+              and cr.metadata->>'legacy_projection' in
+                  ('strategyos_finance_transactions', 'strategyos_finance_balances')
+        ) linked_claims
+        """,
+        (batch_id, tenant_id),
+    )
+    claim_record_count, claim_amount = cur.fetchone()
+    cur.execute(
+        "select count(*) from strategyos_claim_backfill_exceptions where ingestion_batch_id = %s",
+        (batch_id,),
+    )
+    exception_count = int(cur.fetchone()[0])
+    difference = Decimal(str(claim_amount)) - Decimal(str(source_amount))
+    counts_match = int(source_record_count) == int(claim_record_count)
+    amounts_match = difference == Decimal("0")
+    status = "passed" if counts_match and amounts_match and exception_count == 0 else "partial" if claim_record_count else "failed"
+    checks = {
+        "record_counts_match": counts_match,
+        "amounts_match": amounts_match,
+        "all_claims_have_source_or_lineage": exception_count == 0,
+    }
+    cur.execute(
+        """
+        insert into strategyos_claim_reconciliations
+            (tenant_id, run_id, ingestion_batch_id, status, source_record_count,
+             claim_record_count, exception_count, source_amount_sar, claim_amount_sar,
+             difference_sar, checks)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        on conflict (run_id, ingestion_batch_id) do update set
+            status = excluded.status,
+            source_record_count = excluded.source_record_count,
+            claim_record_count = excluded.claim_record_count,
+            exception_count = excluded.exception_count,
+            source_amount_sar = excluded.source_amount_sar,
+            claim_amount_sar = excluded.claim_amount_sar,
+            difference_sar = excluded.difference_sar,
+            checks = excluded.checks,
+            created_at = now()
+        returning id
+        """,
+        (
+            tenant_id,
+            run_id,
+            batch_id,
+            status,
+            int(source_record_count),
+            int(claim_record_count),
+            exception_count,
+            source_amount,
+            claim_amount,
+            difference,
+            json_blob(checks),
+        ),
+    )
+    cur.fetchone()
+    return 1
 
 
 def persist_findings(cur: Any, run_id: str, findings: list[Finding]) -> int:
@@ -3363,16 +4072,21 @@ def money_value(value: Any) -> float | None:
     if normalized is None:
         return None
     try:
-        return round(float(normalized), 2)
+        number = float(normalized)
+        return round(number, 2) if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
 
 def gl_amount(row: Any) -> float | None:
-    debit = money_value(row.get("Debit")) or 0.0
-    credit = money_value(row.get("Credit")) or 0.0
+    debit_value = money_value(row.get("Debit"))
+    credit_value = money_value(row.get("Credit"))
+    if debit_value is None and credit_value is None:
+        return None
+    debit = debit_value or 0.0
+    credit = credit_value or 0.0
     amount = debit - credit
-    return round(amount, 2) if amount else None
+    return round(amount, 2)
 
 
 def media_type_for(rel_path: str) -> str:

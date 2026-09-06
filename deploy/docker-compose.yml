@@ -182,6 +182,54 @@ services:
       - strategyos-workspace:/app/workspace
     restart: unless-stopped
 
+  strategyos-claim-projector:
+    profiles: ["governed-claims"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        CA_CERTIFICATES_VERSION: ${STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION:-20250419}
+        CURL_VERSION: ${STRATEGYOS_RUNTIME_DEP_CURL_VERSION:-8.14.1-2+deb13u4}
+        POPPLER_UTILS_VERSION: ${STRATEGYOS_RUNTIME_DEP_POPPLER_UTILS_VERSION:-25.03.0-5+deb13u4}
+        TESSERACT_OCR_VERSION: ${STRATEGYOS_RUNTIME_DEP_TESSERACT_VERSION:-5.5.0-1+b1}
+        TESSERACT_OCR_ENG_VERSION: ${STRATEGYOS_RUNTIME_DEP_TESSERACT_ENG_VERSION:-1:4.1.0-2}
+    command:
+      [
+        "python",
+        "-m",
+        "strategyos_mvp.claim_projection",
+        "--continuous",
+        "--poll-seconds",
+        "5",
+      ]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-strategyos}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.secrets}@postgres:5432/${POSTGRES_DB:-strategyos}
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in deploy/.env.secrets}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      STRATEGYOS_EMBEDDING_MODEL_PATH: ${STRATEGYOS_EMBEDDING_MODEL_PATH:-}
+      STRATEGYOS_TENANT_SLUG: ${STRATEGYOS_TENANT_SLUG:-local-poc}
+      STRATEGYOS_TENANT_NAME: ${STRATEGYOS_TENANT_NAME:-StrategyOS Local POC}
+      STRATEGYOS_SOURCE_SYSTEM_NAME: ${STRATEGYOS_SOURCE_SYSTEM_NAME:-Synthetic Finance Dataset}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+      qdrant:
+        condition: service_started
+    volumes:
+      - strategyos-workspace:/app/workspace
+    healthcheck:
+      test:
+        ["CMD", "python", "-m", "strategyos_mvp.claim_projection", "--health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
   strategyos-idp:
     build:
       context: ..

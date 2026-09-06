@@ -534,6 +534,9 @@ def provenance_view(
         "claim_revision_id": claim.revision_id,
         "family_key": draft.family_key,
         "revision": claim.revision_number,
+        "subject": {"type": draft.subject_type, "key": draft.subject_key},
+        "metric_key": draft.metric_key,
+        "dimensions": dict(draft.dimensions),
         "label": display_label(claim),
         "claim_kind": draft.claim_kind,
         "production_method": draft.production_method,
@@ -555,7 +558,11 @@ def provenance_view(
         "traceability": claim.traceability,
         "sources": [
             {"occurrence_key": key, **dict(source_details.get(key) or {})}
-            for key in draft.source_occurrence_keys
+            for key in (
+                draft.source_occurrence_keys
+                if draft.source_occurrence_keys
+                else tuple(sorted(source_details))
+            )
         ],
         "assumptions": list(draft.assumptions),
         "formula": (

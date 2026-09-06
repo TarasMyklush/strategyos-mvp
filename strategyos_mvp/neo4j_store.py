@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from .config import CONFIG
 from .state_store import data_management_status
@@ -66,6 +66,122 @@ def check_neo4j_ready() -> dict[str, Any]:
         return _status("ok", uri=CONFIG.neo4j_uri, probe="RETURN 1 AS ok")
     except Exception as exc:
         return _status("failed", reason=str(exc))
+
+
+def project_claim_record(record: Mapping[str, Any], operation: str) -> None:
+    """Idempotently project one immutable claim; PostgreSQL remains authority."""
+    revision_id = str(record.get("claim_revision_id") or "")
+    tenant_id = str(record.get("tenant_id") or "")
+    if not revision_id or not tenant_id:
+        raise ValueError("Claim graph projection requires tenant and revision IDs.")
+    with _graph_driver() as driver:
+        with driver.session() as session:
+            session.run(
+                "CREATE CONSTRAINT strategyos_claim_revision IF NOT EXISTS "
+                "FOR (n:StrategyOSClaim) REQUIRE (n.tenant_id, n.claim_revision_id) IS UNIQUE"
+            )
+            session.run(
+                "CREATE CONSTRAINT strategyos_claim_subject IF NOT EXISTS "
+                "FOR (n:StrategyOSClaimSubject) REQUIRE (n.tenant_id, n.subject_identity) IS UNIQUE"
+            )
+            session.run(
+                "CREATE CONSTRAINT strategyos_claim_metric IF NOT EXISTS "
+                "FOR (n:StrategyOSClaimMetric) REQUIRE (n.tenant_id, n.metric_key) IS UNIQUE"
+            )
+            session.run(
+                "CREATE CONSTRAINT strategyos_claim_source IF NOT EXISTS "
+                "FOR (n:StrategyOSClaimSource) REQUIRE (n.tenant_id, n.source_key) IS UNIQUE"
+            )
+            if operation in {"delete", "revoke"}:
+                session.run(
+                    "MATCH (c:StrategyOSClaim {tenant_id: $tenant_id, claim_revision_id: $revision_id}) "
+                    "DETACH DELETE c",
+                    tenant_id=tenant_id,
+                    revision_id=revision_id,
+                )
+                return
+            if operation != "upsert":
+                raise ValueError(f"Unsupported claim graph operation: {operation!r}")
+            subject = record.get("subject") if isinstance(record.get("subject"), dict) else {}
+            period = record.get("period") if isinstance(record.get("period"), dict) else {}
+            subject_identity = f"{subject.get('type') or 'unknown'}:{subject.get('key') or 'unknown'}"
+            properties = {
+                "tenant_id": tenant_id,
+                "claim_revision_id": revision_id,
+                "family_key": str(record.get("family_key") or ""),
+                "revision": int(record.get("revision") or 0),
+                "label": str(record.get("label") or ""),
+                "metric_key": str(record.get("metric_key") or ""),
+                "claim_kind": str(record.get("claim_kind") or ""),
+                "production_method": str(record.get("production_method") or ""),
+                "value": str(record.get("value") or ""),
+                "unit": str(record.get("unit") or ""),
+                "scale": str(record.get("scale") or "1"),
+                "currency": str(record.get("currency") or ""),
+                "business_unit": str(record.get("business_unit") or ""),
+                "period_start": str(period.get("start") or ""),
+                "period_end": str(period.get("end") or ""),
+                "as_of": str(period.get("as_of") or ""),
+                "scenario": str(record.get("scenario") or ""),
+                "traceability": str(record.get("traceability") or ""),
+                "projection_only": True,
+                "projection_placeholder": False,
+            }
+            session.run(
+                """
+                MERGE (c:StrategyOSClaim {tenant_id: $tenant_id, claim_revision_id: $revision_id})
+                SET c += $properties
+                MERGE (s:StrategyOSClaimSubject {tenant_id: $tenant_id, subject_identity: $subject_identity})
+                SET s.subject_type = $subject_type, s.subject_key = $subject_key
+                MERGE (m:StrategyOSClaimMetric {tenant_id: $tenant_id, metric_key: $metric_key})
+                MERGE (c)-[:ASSERTS_ABOUT]->(s)
+                MERGE (c)-[:MEASURES]->(m)
+                """,
+                tenant_id=tenant_id,
+                revision_id=revision_id,
+                properties=properties,
+                subject_identity=subject_identity,
+                subject_type=str(subject.get("type") or "unknown"),
+                subject_key=str(subject.get("key") or "unknown"),
+                metric_key=str(record.get("metric_key") or "unknown"),
+            )
+            for source in list(record.get("sources") or []):
+                if not isinstance(source, dict) or not source.get("source_key"):
+                    continue
+                session.run(
+                    """
+                    MATCH (c:StrategyOSClaim {tenant_id: $tenant_id, claim_revision_id: $revision_id})
+                    MERGE (s:StrategyOSClaimSource {tenant_id: $tenant_id, source_key: $source_key})
+                    SET s.display_name = $display_name,
+                        s.origin_category = $origin_category,
+                        s.capture_method = $capture_method,
+                        s.provider_name = $provider_name
+                    MERGE (c)-[r:SUPPORTED_BY {occurrence_key: $occurrence_key}]->(s)
+                    SET r.locator = $locator
+                    """,
+                    tenant_id=tenant_id,
+                    revision_id=revision_id,
+                    source_key=str(source["source_key"]),
+                    display_name=str(source.get("display_name") or ""),
+                    origin_category=str(source.get("origin_category") or "unknown"),
+                    capture_method=str(source.get("capture_method") or "unknown"),
+                    provider_name=str(source.get("provider_name") or ""),
+                    occurrence_key=str(source.get("occurrence_key") or "inherited"),
+                    locator=str(source.get("locator") or ""),
+                )
+            formula = record.get("formula") if isinstance(record.get("formula"), dict) else {}
+            for input_revision_id in list(formula.get("inputs") or []):
+                session.run(
+                    """
+                    MATCH (c:StrategyOSClaim {tenant_id: $tenant_id, claim_revision_id: $revision_id})
+                    MERGE (i:StrategyOSClaim {tenant_id: $tenant_id, claim_revision_id: $input_revision_id})
+                    ON CREATE SET i.projection_placeholder = true, i.projection_only = true
+                    MERGE (c)-[:CALCULATED_FROM]->(i)
+                    """,
+                    tenant_id=tenant_id,
+                    revision_id=revision_id,
+                    input_revision_id=str(input_revision_id),
+                )
 
 
 def sync_knowledge_graph(

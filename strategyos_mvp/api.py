@@ -51,6 +51,9 @@ from .executive_design import (
 from .agent_execution_log import build_execution_log
 from .executive_presentation import build_executive_presentation
 from .executive_read_model import build_executive_read_model
+from .claim_store import ClaimRepository
+from .governed_finance import finance_payload_from_claim_snapshot
+from .source_claims import PolicyContext, UsePurpose
 from .executive_display import (
     executive_display_text,
     executive_text_has_internal_leak,
@@ -4722,6 +4725,7 @@ def _executive_read_model_from_available_truth(
     agent_modules: dict[str, Any] | None,
     *,
     public_safe: bool,
+    principal: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     backing_run_id = str(
         (summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or ""
@@ -4750,12 +4754,31 @@ def _executive_read_model_from_available_truth(
         database_publication = {
             "report_count": len(report_contracts.reports),
         }
+        supplied_summary = summary if isinstance(summary, Mapping) else {}
+        if (
+            supplied_summary.get("canonical_claim_status") == "ready"
+            and str(supplied_summary.get("_backing_run_id") or supplied_summary.get("run_id") or "")
+            == str(database_summary.get("_backing_run_id") or database_summary.get("run_id") or "")
+        ):
+            for key in (
+                "finance_kpi",
+                "claim_snapshot",
+                "claim_reconciliation",
+                "canonical_claim_status",
+            ):
+                if key in supplied_summary:
+                    database_summary[key] = supplied_summary[key]
         if public_safe:
             database_summary = _anonymous_public_summary(database_summary) or database_summary
             database_rows = _anonymous_public_finding_payloads(database_rows)
             # Resolution state is intentionally not disclosed on the anonymous
             # executive surface. Preserve the unknown instead of rendering zero.
             database_audit = _public_latest_run_audit_summary_payload(database_summary)
+        elif principal:
+            database_summary = _summary_with_governed_claim_snapshot(
+                database_summary,
+                principal=principal,
+            )
         return build_executive_read_model(
             database_summary,
             database_rows,
@@ -4782,6 +4805,54 @@ def _executive_read_model_from_available_truth(
             else fallback_reason
         ),
     )
+
+
+def _summary_with_governed_claim_snapshot(
+    summary: Mapping[str, Any],
+    *,
+    principal: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Apply the policy-filtered canonical snapshot to one persisted run."""
+    result = dict(summary)
+    run_id = str(result.get("_backing_run_id") or result.get("run_id") or "").strip()
+    tenant_payload = result.get("tenant_context") if isinstance(result.get("tenant_context"), Mapping) else {}
+    tenant_id = str(principal.get("tenant_id") or tenant_payload.get("tenant_id") or "").strip()
+    role = str(principal.get("role") or "").strip()
+    if not run_id or run_id == ANONYMOUS_PUBLIC_RUN_ID or not tenant_id or not role:
+        result["canonical_claim_status"] = "not_applicable"
+        return result
+    context = PolicyContext(
+        tenant_id=tenant_id,
+        principal_id=str(principal.get("subject") or "unknown"),
+        roles=frozenset({role}),
+        purpose=UsePurpose.EXECUTIVE_BRIEFING,
+        business_units=frozenset(
+            str(item)
+            for item in (principal.get("business_units") or [])
+            if str(item).strip()
+        ),
+    )
+    repository = ClaimRepository()
+    try:
+        snapshot = repository.snapshot(f"run:{run_id}", context=context)
+        reconciliation = repository.reconciliation(run_id, tenant_id=tenant_id)
+    except KeyError:
+        result["canonical_claim_status"] = "not_materialized"
+        return result
+    except RuntimeError:
+        result["canonical_claim_status"] = "temporarily_unavailable"
+        return result
+    result["finance_kpi"] = finance_payload_from_claim_snapshot(
+        result.get("finance_kpi") if isinstance(result.get("finance_kpi"), Mapping) else {},
+        snapshot,
+        reconciliation=reconciliation,
+    )
+    result["claim_snapshot"] = {
+        key: value for key, value in snapshot.items() if key != "records"
+    }
+    result["claim_reconciliation"] = reconciliation
+    result["canonical_claim_status"] = "ready"
+    return result
 
 
 def _executive_diagnostics_payload(
@@ -4826,6 +4897,7 @@ def _executive_diagnostics_payload(
         publication,
         agent_modules,
         public_safe=_principal_prefers_public_safe_surface(principal),
+        principal=principal,
     )
     executive_presentation_payload = build_executive_presentation(executive_read_model)
     public_packet = _build_public_safe_assistant_packet(
@@ -15067,6 +15139,7 @@ async def _assistant_chat_response(
     *,
     public_safe: bool = False,
     authenticated_role: str | None = None,
+    authenticated_principal: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     question = (request.question or "").strip()
     if not question:
@@ -15193,6 +15266,16 @@ async def _assistant_chat_response(
             ]
     if conversation_history:
         context["assistant_history"] = conversation_history
+    if not public_safe and isinstance(context.get("summary"), Mapping):
+        principal_context = dict(authenticated_principal or {})
+        principal_context.setdefault("role", authenticated_role or "")
+        tenant_payload = context["summary"].get("tenant_context") if isinstance(context["summary"].get("tenant_context"), Mapping) else {}
+        principal_context.setdefault("tenant_id", tenant_payload.get("tenant_id"))
+        context["summary"] = _summary_with_governed_claim_snapshot(
+            context["summary"],
+            principal=principal_context,
+        )
+        context["authenticated_role"] = str(principal_context.get("role") or "")
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if _question_has_semantic_kpi_mismatch(question) or _question_has_semantic_self_reference(question):
@@ -16871,6 +16954,7 @@ async def assistant_chat(
             request,
             public_safe=False,
             authenticated_role=role,
+            authenticated_principal=principal,
         )
     persona = (request.persona or "ceo").strip().lower() or "ceo"
     if not authenticated:
@@ -16894,7 +16978,12 @@ async def assistant_chat(
     if denied is not None:
         return denied
 
-    return await _assistant_chat_response(request, public_safe=False, authenticated_role=role)
+    return await _assistant_chat_response(
+        request,
+        public_safe=False,
+        authenticated_role=role,
+        authenticated_principal=principal,
+    )
 
 
 @app.post("/inputs/prepare")

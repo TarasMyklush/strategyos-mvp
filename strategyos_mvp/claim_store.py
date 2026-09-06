@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Mapping
 
 from .source_claims import (
     ClaimAssessment,
@@ -47,6 +47,7 @@ class ClaimRepository:
 
             connection_factory = database_connection
         self._connection_factory = connection_factory
+        self._schema_ready = False
 
     def register_source(
         self,
@@ -533,7 +534,9 @@ class ClaimRepository:
                     row["source_occurrence_keys"] = self._occurrence_keys(cur, row["id"])
                     row["input_revision_ids"] = self._input_revision_ids(cur, row["id"])
                     claim = self._hydrate_claim(row)
-                    assessments = self._assessments(cur, claim.revision_id)
+                    assessments = self._assessments(
+                        cur, claim.revision_id, as_of_at=query.as_of_at
+                    )
                     source_details = self._source_details(cur, claim.revision_id)
                     policies, missing_policy_sources = self._policies_for_revision(
                         cur, tenant_id, claim.revision_id
@@ -558,6 +561,386 @@ class ClaimRepository:
             conn.commit()
         return results
 
+    def snapshot(self, snapshot_key: str, *, context: PolicyContext) -> dict[str, Any]:
+        """Return one immutable analysis snapshot after current policy checks."""
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                tenant_id = self._tenant_uuid(cur, context.tenant_id)
+                context = replace(context, tenant_id=str(tenant_id))
+                cur.execute(
+                    """
+                    select id, snapshot_key, as_of_at, policy_version, metadata
+                    from strategyos_analysis_snapshots
+                    where tenant_id = %s and snapshot_key = %s
+                    """,
+                    (tenant_id, snapshot_key),
+                )
+                snapshot_row = cur.fetchone()
+                if snapshot_row is None:
+                    raise KeyError("Analysis snapshot not found.")
+                snapshot = _record(cur, snapshot_row)
+                cur.execute(
+                    """
+                    select r.*, f.family_key, f.assertion_namespace, f.subject_type,
+                           f.subject_key, f.metric_key, f.business_unit, f.dimensions,
+                           f.period_start, f.period_end, f.scenario_key,
+                           sc.selection_reason
+                    from strategyos_analysis_snapshot_claims sc
+                    join strategyos_claim_revisions r on r.id = sc.claim_revision_id
+                    join strategyos_claim_families f on f.id = sc.claim_family_id
+                    where sc.snapshot_id = %s
+                    order by f.metric_key, f.claim_kind_lane, f.subject_key
+                    """,
+                    (snapshot["id"],),
+                )
+                rows = [_record(cur, row) for row in cur.fetchall()]
+                records: list[dict[str, Any]] = []
+                denied_count = 0
+                for row in rows:
+                    row["source_occurrence_keys"] = self._occurrence_keys(cur, row["id"])
+                    row["input_revision_ids"] = self._input_revision_ids(cur, row["id"])
+                    claim = self._hydrate_claim(row)
+                    assessments = self._assessments(
+                        cur, claim.revision_id, as_of_at=snapshot["as_of_at"]
+                    )
+                    source_details = self._source_details(cur, claim.revision_id)
+                    policies, missing_policy_sources = self._policies_for_revision(
+                        cur, tenant_id, claim.revision_id
+                    )
+                    query = ClaimQuery(
+                        tenant_id=str(tenant_id),
+                        metric_key=claim.draft.metric_key,
+                        purpose=context.purpose,
+                        as_of_at=snapshot["as_of_at"],
+                        allowed_claim_kinds=frozenset({claim.draft.claim_kind}),
+                        business_unit=claim.draft.business_unit,
+                        scenario_key=claim.draft.scenario_key,
+                    )
+                    eligibility = claim_is_eligible(
+                        claim,
+                        query=query,
+                        context=context,
+                        source_policies=policies,
+                        assessments=assessments,
+                    )
+                    if missing_policy_sources or not eligibility.eligible:
+                        denied_count += 1
+                        continue
+                    record = provenance_view(
+                        claim,
+                        source_details=source_details,
+                        assessments=assessments,
+                    )
+                    record["selection_reason"] = row["selection_reason"]
+                    records.append(record)
+            conn.commit()
+        return {
+            "snapshot_id": str(snapshot["id"]),
+            "snapshot_key": snapshot["snapshot_key"],
+            "analysis_as_of": snapshot["as_of_at"].isoformat(),
+            "policy_version": snapshot["policy_version"],
+            "metadata": snapshot.get("metadata") or {},
+            "records": records,
+            "denied_count": denied_count,
+        }
+
+    def reconciliation(self, run_id: str, *, tenant_id: str) -> dict[str, Any]:
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                resolved_tenant_id = self._tenant_uuid(cur, tenant_id)
+                cur.execute(
+                    """
+                    select r.status, r.source_record_count, r.claim_record_count,
+                           r.exception_count, r.source_amount_sar, r.claim_amount_sar,
+                           r.difference_sar, r.checks, r.created_at,
+                           b.id as batch_id
+                    from strategyos_claim_reconciliations r
+                    join strategyos_ingestion_batches b on b.id = r.ingestion_batch_id
+                    where r.tenant_id = %s and r.run_id::text = %s
+                    order by r.created_at desc
+                    limit 1
+                    """,
+                    (resolved_tenant_id, run_id),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise KeyError("Claim reconciliation not found.")
+                result = _record(cur, row)
+                cur.execute(
+                    """
+                    select record_type, record_key, source_locator, reason_code, detail, metadata
+                    from strategyos_claim_backfill_exceptions
+                    where tenant_id = %s and run_id::text = %s
+                    order by record_type, record_key, reason_code
+                    """,
+                    (resolved_tenant_id, run_id),
+                )
+                exceptions = [_record(cur, item) for item in cur.fetchall()]
+            conn.commit()
+        return {
+            **{
+                key: (str(value) if key in {"source_amount_sar", "claim_amount_sar", "difference_sar"} else value)
+                for key, value in result.items()
+                if key != "created_at"
+            },
+            "created_at": result["created_at"].isoformat(),
+            "batch_id": str(result["batch_id"]),
+            "exceptions": exceptions,
+        }
+
+    def lease_projection_batch(
+        self,
+        *,
+        worker_id: str,
+        limit: int = 50,
+        lease_seconds: int = 120,
+    ) -> list[dict[str, Any]]:
+        """Lease projection work without holding a database lock during I/O."""
+        worker_id = worker_id.strip()
+        if not worker_id:
+            raise ValueError("worker_id is required.")
+        limit = max(1, min(int(limit), 500))
+        lease_seconds = max(30, min(int(lease_seconds), 3600))
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    with candidates as (
+                        select id
+                        from strategyos_claim_projection_outbox
+                        where published_at is null
+                          and dead_lettered_at is null
+                          and available_at <= now()
+                          and (
+                              locked_at is null
+                              or locked_at < now() - (%s * interval '1 second')
+                          )
+                        order by available_at, created_at, id
+                        for update skip locked
+                        limit %s
+                    )
+                    update strategyos_claim_projection_outbox o
+                    set locked_at = now(), locked_by = %s,
+                        publish_attempts = publish_attempts + 1,
+                        last_error = null
+                    from candidates c
+                    where o.id = c.id
+                    returning o.id, o.tenant_id, o.claim_revision_id,
+                              o.projection_type, o.operation, o.payload,
+                              o.idempotency_key, o.publish_attempts, o.locked_at
+                    """,
+                    (lease_seconds, limit, worker_id),
+                )
+                rows = [_record(cur, row) for row in cur.fetchall()]
+            conn.commit()
+        return [
+            {
+                **row,
+                "id": str(row["id"]),
+                "tenant_id": str(row["tenant_id"]),
+                "claim_revision_id": (
+                    str(row["claim_revision_id"])
+                    if row.get("claim_revision_id")
+                    else None
+                ),
+                "locked_at": row["locked_at"].isoformat(),
+            }
+            for row in rows
+        ]
+
+    def mark_projection_published(self, event_id: str, *, worker_id: str) -> None:
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    update strategyos_claim_projection_outbox
+                    set published_at = now(), locked_at = null, locked_by = null,
+                        last_error = null
+                    where id::text = %s and locked_by = %s
+                      and published_at is null and dead_lettered_at is null
+                    returning id
+                    """,
+                    (event_id, worker_id),
+                )
+                if cur.fetchone() is None:
+                    raise RuntimeError("Projection lease is missing, expired or already completed.")
+            conn.commit()
+
+    def mark_projection_failed(
+        self,
+        event_id: str,
+        *,
+        worker_id: str,
+        error: str,
+        retry_delay_seconds: int,
+        max_attempts: int,
+    ) -> dict[str, Any]:
+        error = error.strip()[:4000] or "Projection failed without an error message."
+        retry_delay_seconds = max(1, min(int(retry_delay_seconds), 86400))
+        max_attempts = max(1, min(int(max_attempts), 100))
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    update strategyos_claim_projection_outbox
+                    set last_error = %s,
+                        locked_at = null,
+                        locked_by = null,
+                        available_at = now() + (%s * interval '1 second'),
+                        dead_lettered_at = case
+                            when publish_attempts >= %s then now()
+                            else dead_lettered_at
+                        end
+                    where id::text = %s and locked_by = %s
+                      and published_at is null and dead_lettered_at is null
+                    returning publish_attempts, dead_lettered_at
+                    """,
+                    (
+                        error,
+                        retry_delay_seconds,
+                        max_attempts,
+                        event_id,
+                        worker_id,
+                    ),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise RuntimeError("Projection lease is missing, expired or already completed.")
+            conn.commit()
+        return {
+            "attempts": int(row[0]),
+            "dead_lettered": row[1] is not None,
+        }
+
+    def projection_record(self, claim_revision_id: str, *, tenant_id: str) -> dict[str, Any]:
+        """Hydrate a claim for internal projections; PostgreSQL remains authority."""
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                resolved_tenant_id = self._tenant_uuid(cur, tenant_id)
+                cur.execute(
+                    """
+                    select r.*, f.family_key, f.assertion_namespace, f.subject_type,
+                           f.subject_key, f.metric_key, f.business_unit, f.dimensions,
+                           f.period_start, f.period_end, f.scenario_key
+                    from strategyos_claim_revisions r
+                    join strategyos_claim_families f on f.id = r.claim_family_id
+                    where r.id::text = %s and r.tenant_id = %s
+                    """,
+                    (claim_revision_id, resolved_tenant_id),
+                )
+                raw = cur.fetchone()
+                if raw is None:
+                    raise KeyError("Claim revision not found.")
+                row = _record(cur, raw)
+                row["source_occurrence_keys"] = self._occurrence_keys(cur, row["id"])
+                row["input_revision_ids"] = self._input_revision_ids(cur, row["id"])
+                claim = self._hydrate_claim(row)
+                record = provenance_view(
+                    claim,
+                    source_details=self._source_details(cur, claim.revision_id),
+                    assessments=self._assessments(cur, claim.revision_id),
+                )
+            conn.commit()
+        record["tenant_id"] = str(resolved_tenant_id)
+        return record
+
+    def upsert_projection_cache(self, record: Mapping[str, Any]) -> None:
+        tenant_id = str(record.get("tenant_id") or "")
+        revision_id = str(record.get("claim_revision_id") or "")
+        if not tenant_id or not revision_id:
+            raise ValueError("Projection cache records require tenant and revision IDs.")
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                resolved_tenant_id = self._tenant_uuid(cur, tenant_id)
+                cur.execute(
+                    """
+                    insert into strategyos_claim_projection_cache
+                        (tenant_id, claim_revision_id, family_key, metric_key,
+                         claim_kind, business_unit, payload)
+                    values (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                    on conflict (claim_revision_id) do update set
+                        family_key = excluded.family_key,
+                        metric_key = excluded.metric_key,
+                        claim_kind = excluded.claim_kind,
+                        business_unit = excluded.business_unit,
+                        payload = excluded.payload,
+                        projected_at = now()
+                    """,
+                    (
+                        resolved_tenant_id,
+                        revision_id,
+                        record.get("family_key"),
+                        record.get("metric_key"),
+                        str(record.get("claim_kind") or ""),
+                        record.get("business_unit"),
+                        _json(dict(record)),
+                    ),
+                )
+            conn.commit()
+
+    def delete_projection_cache(self, claim_revision_id: str, *, tenant_id: str) -> None:
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                resolved_tenant_id = self._tenant_uuid(cur, tenant_id)
+                cur.execute(
+                    """
+                    delete from strategyos_claim_projection_cache
+                    where tenant_id = %s and claim_revision_id::text = %s
+                    """,
+                    (resolved_tenant_id, claim_revision_id),
+                )
+            conn.commit()
+
+    def projection_health(self) -> dict[str, Any]:
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select
+                        count(*) filter (where published_at is null and dead_lettered_at is null),
+                        count(*) filter (where published_at is null and locked_at is not null),
+                        count(*) filter (
+                            where published_at is null and locked_at < now() - interval '5 minutes'
+                        ),
+                        count(*) filter (where dead_lettered_at is not null),
+                        extract(epoch from now() - min(created_at)) filter (
+                            where published_at is null and dead_lettered_at is null
+                        )
+                    from strategyos_claim_projection_outbox
+                    """
+                )
+                pending, leased, stale_leases, dead_lettered, oldest_age = cur.fetchone()
+            conn.commit()
+        status = "failed" if dead_lettered or stale_leases else "ready"
+        return {
+            "status": status,
+            "pending": int(pending),
+            "leased": int(leased),
+            "stale_leases": int(stale_leases),
+            "dead_lettered": int(dead_lettered),
+            "oldest_pending_seconds": (
+                round(float(oldest_age), 3) if oldest_age is not None else None
+            ),
+        }
+
     def _require_connection(self) -> Any:
         connection, skipped = self._connection_factory()
         if connection is None:
@@ -565,11 +948,13 @@ class ClaimRepository:
             raise RuntimeError(reason)
         return connection
 
-    @staticmethod
-    def _ensure_schema(conn: Any) -> None:
+    def _ensure_schema(self, conn: Any) -> None:
+        if self._schema_ready:
+            return
         from .state_store import ensure_data_schema
 
         ensure_data_schema(conn)
+        self._schema_ready = True
 
     @staticmethod
     def _tenant_uuid(cur: Any, tenant: str) -> Any:
@@ -602,10 +987,22 @@ class ClaimRepository:
         return [row[0] for row in cur.fetchall()]
 
     @staticmethod
-    def _assessments(cur: Any, revision_id: str) -> list[ClaimAssessment]:
+    def _assessments(
+        cur: Any,
+        revision_id: str,
+        *,
+        as_of_at: datetime | None = None,
+    ) -> list[ClaimAssessment]:
         cur.execute(
-            "select claim_revision_id, assessment_type, result, rule_version, assessed_by, assessed_at, reasons, scope_key from strategyos_claim_assessments where claim_revision_id = %s order by assessed_at",
-            (revision_id,),
+            """
+            select claim_revision_id, assessment_type, result, rule_version,
+                   assessed_by, assessed_at, reasons, scope_key
+            from strategyos_claim_assessments
+            where claim_revision_id = %s
+              and (%s::timestamptz is null or assessed_at <= %s)
+            order by assessed_at
+            """,
+            (revision_id, as_of_at, as_of_at),
         )
         out: list[ClaimAssessment] = []
         for row in cur.fetchall():
@@ -655,15 +1052,23 @@ class ClaimRepository:
     def _source_details(cur: Any, revision_id: str) -> dict[str, dict[str, Any]]:
         cur.execute(
             """
+            with recursive lineage(id) as (
+                select %s::uuid
+                union
+                select d.input_claim_revision_id
+                from strategyos_claim_dependencies d
+                join lineage l on d.derived_claim_revision_id = l.id
+            )
             select eo.occurrence_key, ss.source_key, ss.name as display_name,
                    ss.origin_category, ss.capture_method, ss.provider_name,
                    ss.license_policy_ref, ed.sensitivity_class, ed.retention_class,
-                   eo.author_identity, eo.published_at, eo.received_at, eo.source_locator
-            from strategyos_claim_evidence_links cel
+                   eo.author_identity, eo.published_at, eo.received_at,
+                   coalesce(cel.source_locator, eo.source_locator) as source_locator
+            from lineage l
+            join strategyos_claim_evidence_links cel on cel.claim_revision_id = l.id
             join strategyos_evidence_occurrences eo on eo.id = cel.evidence_occurrence_id
             join strategyos_source_systems ss on ss.id = eo.source_system_id
             join strategyos_evidence_documents ed on ed.id = eo.evidence_document_id
-            where cel.claim_revision_id = %s
             order by ss.source_key, eo.occurrence_key
             """,
             (revision_id,),
