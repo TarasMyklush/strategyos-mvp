@@ -4916,10 +4916,20 @@
       var period = claim.period && typeof claim.period === 'object' ? claim.period : {};
       var sources = safeArray(claim.sources).map(function (source) {
         if (!source || typeof source !== 'object') return '';
-        var origin = firstDefined(source.origin_category, 'unknown source');
+        var originLabels = {
+          internal_system: 'Internal source',
+          public_web: 'Public web · untrusted',
+          licensed_external: 'Licensed external source',
+          correspondence: 'Correspondence · reported by author',
+          unknown: 'Unclassified source'
+        };
+        var origin = originLabels[source.origin_category] || 'Unclassified source';
         var name = firstDefined(source.display_name, source.source_key, 'source');
         var locator = firstDefined(source.locator, '');
-        return String(name) + ' · ' + String(origin).replace(/_/g, ' ') + (locator ? ' · ' + String(locator) : '');
+        return String(name) + ' · ' + origin
+          + (source.provider_name ? ' · Provider: ' + String(source.provider_name) : '')
+          + (source.license_policy_ref ? ' · License: ' + String(source.license_policy_ref) : '')
+          + (locator ? ' · ' + String(locator) : '');
       }).filter(Boolean);
       var periodLabel = period.start || period.end
         ? String(firstDefined(period.start, '—')) + ' to ' + String(firstDefined(period.end, '—'))
@@ -4928,6 +4938,12 @@
         + escapeHtml(firstDefined(claim.label, claim.claim_kind, 'Claim'))
         + ' · ' + escapeHtml(firstDefined(claim.claim_revision_id, 'revision unavailable'))
         + '<small>' + escapeHtml(periodLabel) + (sources.length ? ' · ' + escapeHtml(sources.join(' | ')) : '') + '</small>'
+        + '<small>' + escapeHtml('Unit: ' + firstDefined(claim.unit, 'not supplied') + ' · Scale: ' + firstDefined(claim.scale, '1')) + '</small>'
+        + (claim.author ? '<small>Attributed to ' + escapeHtml(claim.author) + '</small>' : '')
+        + (period.valid_until ? '<small>Valid until ' + escapeHtml(period.valid_until) + '</small>' : '')
+        + (claim.claim_kind === 'forecast' ? '<small>Forecast — subject to change; not an actual.</small>' : '')
+        + (claim.formula ? '<small>Calculation: ' + escapeHtml(claim.formula.key) + ' · version ' + escapeHtml(claim.formula.version)
+          + ' · inputs ' + escapeHtml(safeArray(claim.formula.inputs).join(', ')) + '</small>' : '')
         + '</strong></div>';
     }
 

@@ -12,6 +12,22 @@ import strategyos_mvp.auth as auth_module
 import strategyos_mvp.run_registry as run_registry_module
 import strategyos_mvp.state_store as state_store
 from strategyos_mvp.config import load_config
+
+
+@pytest.fixture(autouse=True)
+def authorized_summary_boundary_for_routing_unit_tests(monkeypatch):
+    """This module injects synthetic run contexts to test routing, not storage.
+
+    The canonical authorization boundary is exercised without this stub in
+    test_governed_claim_adoption and with real storage in the service proofs.
+    Do not make production fall back to ungoverned values for these fixtures.
+    """
+    monkeypatch.setattr(
+        api_module, "_summary_with_governed_claim_snapshot",
+        lambda summary, *, principal: dict(summary),
+    )
+
+
 def _apply_env(env_updates: dict[str, str | None]):
     original = {key: os.environ.get(key) for key in env_updates}
     for key, value in env_updates.items():

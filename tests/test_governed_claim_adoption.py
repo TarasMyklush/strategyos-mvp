@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from strategyos_mvp import api
+import pytest
+from fastapi import HTTPException
 
 
 def test_authenticated_summary_uses_policy_filtered_snapshot_without_legacy_leak(monkeypatch):
     class FakeRepository:
+        def run_source_access(self, *args, **kwargs):
+            return {"allowed": True}
+
         def snapshot(self, snapshot_key, *, context, metric_keys=None):
             assert snapshot_key == "run:run-1"
             assert context.roles == frozenset({"executive"})
@@ -15,7 +20,7 @@ def test_authenticated_summary_uses_policy_filtered_snapshot_without_legacy_leak
                 "snapshot_key": snapshot_key,
                 "analysis_as_of": "2026-07-01T00:00:00+00:00",
                 "policy_version": "source-claim-v1",
-                "denied_count": 1,
+                "denied_count": 0,
                 "records": [
                     {
                         "claim_revision_id": "revenue-actual-1",
@@ -59,11 +64,14 @@ def test_authenticated_summary_uses_policy_filtered_snapshot_without_legacy_leak
 
     assert result["canonical_claim_status"] == "ready"
     assert result["finance_kpi"]["components"] == {"revenue_actual": "100"}
-    assert result["finance_kpi"]["claim_snapshot"]["denied_count"] == 1
+    assert result["finance_kpi"]["claim_snapshot"]["denied_count"] == 0
 
 
-def test_missing_snapshot_keeps_pre_cutover_payload_and_reports_status(monkeypatch):
+def test_missing_snapshot_never_returns_pre_cutover_payload(monkeypatch):
     class MissingRepository:
+        def run_source_access(self, *args, **kwargs):
+            return {"allowed": True}
+
         def snapshot(self, snapshot_key, *, context, metric_keys=None):
             raise KeyError(snapshot_key)
 
@@ -76,10 +84,62 @@ def test_missing_snapshot_keeps_pre_cutover_payload_and_reports_status(monkeypat
             "components": {"revenue_actual": "90"},
         },
     }
-    result = api._summary_with_governed_claim_snapshot(
-        legacy,
-        principal={"tenant_id": "tenant-1", "role": "executive"},
-    )
+    with pytest.raises(HTTPException) as error:
+        api._summary_with_governed_claim_snapshot(
+            legacy,
+            principal={"tenant_id": "tenant-1", "role": "executive"},
+        )
+    assert error.value.status_code == 503
 
-    assert result["canonical_claim_status"] == "not_materialized"
-    assert result["finance_kpi"] == legacy["finance_kpi"]
+
+@pytest.mark.parametrize("denied,records,reconciliation,expected", [
+    (1, [{"value": "100"}], "passed", 403),
+    (0, [], "passed", 503),
+    (0, [{"value": "100"}], "partial", 503),
+    (0, [{"value": "100"}], "failed", 503),
+])
+def test_incomplete_access_or_reconciliation_blocks_entire_briefing(
+    monkeypatch, denied, records, reconciliation, expected
+):
+    class Repository:
+        def run_source_access(self, *args, **kwargs):
+            return {"allowed": True}
+
+        def snapshot(self, *args, **kwargs):
+            return {"denied_count": denied, "records": records}
+
+        def reconciliation(self, *args, **kwargs):
+            return {"status": reconciliation}
+
+    monkeypatch.setattr(api, "ClaimRepository", Repository)
+    with pytest.raises(HTTPException) as error:
+        api._summary_with_governed_claim_snapshot(
+            {"run_id": "run-1", "finance_kpi": {"trend": ["restricted value"]}},
+            principal={"tenant_id": "tenant-1", "role": "executive"},
+        )
+    assert error.value.status_code == expected
+
+
+@pytest.mark.parametrize("endpoint", ["/assistant/chat", "/qa"])
+@pytest.mark.parametrize("allowed,expected", [(False, 403), (True, 503)])
+def test_chat_entrypoints_do_not_bypass_canonical_source_gate(monkeypatch, endpoint, allowed, expected):
+    from tests.test_qa_api import _client_with_auth, _restore_env
+
+    class Repository:
+        def run_source_access(self, *args, **kwargs):
+            return {"allowed": allowed}
+
+        def snapshot(self, *args, **kwargs):
+            raise KeyError("missing")
+
+    monkeypatch.setattr(api, "ClaimRepository", Repository)
+    monkeypatch.setattr(api, "_resolve_qa_context", lambda _run: {
+        "bundle": None, "findings": [], "kg_nodes": [], "kg_edges": [],
+        "summary": {"run_id": "fixture-run"}, "run_id": "fixture-run", "run_mode": "full",
+    })
+    original, client = _client_with_auth()
+    try:
+        response = client.post(endpoint, headers={"X-API-Key": "operator-key"}, json={"question": "Explain current revenue", "mode": "auto"})
+        assert response.status_code == expected
+    finally:
+        _restore_env(original)

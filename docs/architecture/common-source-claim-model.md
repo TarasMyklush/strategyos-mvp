@@ -13,8 +13,10 @@ The current finance calculation remains the ingestion projection, while its
 headline components are materialized into an immutable run snapshot. Authenticated
 CEO and Hermes reads remove the legacy headline values and repopulate them only
 from policy-eligible snapshot claims. A missing snapshot, policy or reconciliation
-fails closed to the pre-cutover surface and is reported as not materialized; a
-denied claim is never borrowed back from the legacy summary.
+blocks the authenticated briefing with an explicit unavailable response; it does
+not return pre-cutover values. Whole-run source authorization additionally
+protects legacy narrative and trend siblings. A partially authorized user must
+use claim-level reads rather than receive a partially redacted bulk view.
 
 ## Independent dimensions
 
@@ -31,6 +33,9 @@ validation and review are independent:
 Paid, internal and executive-authored sources are not automatically verified.
 Imported source text is never an instruction to the runtime. A scenario acceptance
 does not turn a forecast into an actual.
+Calculated actuals cannot take plan, forecast, assumption or reported inputs.
+Licensed-source registration requires both provider identity and a license-policy
+reference, including direct repository callers that bypass the upload UI.
 
 ## Identity and revisions
 
@@ -54,6 +59,16 @@ Every source has a versioned policy covering roles, purposes, business units,
 export, quotation and external-model use. Every contributing source policy is
 intersected, including sources inherited through calculated-claim dependencies.
 Missing policy fails closed.
+Quotation is an explicit use purpose with a separate permission. Query purpose
+must equal authenticated context purpose, and repository tenant normalization
+must not replace a caller's tenant with a requested tenant.
+
+Authenticated canonical Hermes evidence is checked for external-model permission
+before source retrieval or transport. Application-level provider enablement is
+not source consent. Denied or unavailable policy returns an explicit local
+policy response without sending evidence. Public-packet and noncanonical legacy
+provider paths require separate assessment; this is not a claim that every model
+invocation in the repository has migrated.
 
 A claim query explicitly states tenant, metric, requested kinds, business unit,
 scenario, purpose and as-of timestamp. Selection never substitutes a forecast for

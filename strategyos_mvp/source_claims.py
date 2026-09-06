@@ -68,6 +68,7 @@ class UsePurpose(StrEnum):
     SCENARIO = "scenario"
     EXPORT = "export"
     EXTERNAL_MODEL = "external_model"
+    QUOTATION = "quotation"
 
 
 def _text(value: Any) -> str | None:
@@ -128,6 +129,9 @@ class SourceRegistration:
         object.__setattr__(self, "source_key", _identifier(self.source_key, field_name="source_key"))
         object.__setattr__(self, "origin_category", _enum_value(OriginCategory, self.origin_category))
         object.__setattr__(self, "capture_method", _enum_value(CaptureMethod, self.capture_method))
+        if self.origin_category == OriginCategory.LICENSED_EXTERNAL:
+            if not _text(self.provider_name) or not _text(self.license_policy_ref):
+                raise ValueError("Licensed sources require a provider and license policy reference.")
 
     @property
     def fingerprint(self) -> str:
@@ -450,7 +454,7 @@ def policy_allows(
     ):
         reasons.append("principal_business_unit_denied")
     policies = list(source_policies)
-    if claim.draft.source_occurrence_keys and not policies:
+    if not policies:
         reasons.append("source_policy_missing")
     for policy in policies:
         if not context.roles.intersection(policy.allowed_roles):
@@ -465,6 +469,8 @@ def policy_allows(
             reasons.append(f"export_denied:{policy.source_key}")
         if context.purpose == UsePurpose.EXTERNAL_MODEL and not policy.external_model_allowed:
             reasons.append(f"external_model_denied:{policy.source_key}")
+        if context.purpose == UsePurpose.QUOTATION and not policy.quote_allowed:
+            reasons.append(f"quotation_denied:{policy.source_key}")
     return EligibilityResult(not reasons, tuple(sorted(set(reasons))))
 
 
@@ -477,6 +483,8 @@ def claim_is_eligible(
     assessments: Iterable[ClaimAssessment] = (),
 ) -> EligibilityResult:
     reasons: list[str] = []
+    if query.purpose != context.purpose:
+        reasons.append("purpose_mismatch")
     if claim.draft.tenant_id != query.tenant_id or context.tenant_id != query.tenant_id:
         reasons.append("tenant_mismatch")
     if claim.draft.metric_key != query.metric_key:

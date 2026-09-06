@@ -50,8 +50,12 @@ must report zero created claims and zero created snapshots.
 - A missing source policy blocks retrieval.
 - An unresolved KPI source leaves the claim traceability incomplete and excludes
   it from authenticated snapshot reads.
-- A missing snapshot or reconciliation keeps the legacy read path active and
-  exposes a machine-readable `canonical_claim_status`; no partial cutover occurs.
+- A missing snapshot, empty eligible headline set or failed reconciliation blocks
+  the authenticated briefing with HTTP 503. No legacy financial fallback is sent.
+- A denied headline or bulk source policy blocks the complete briefing with HTTP
+  403; chart and narrative siblings must not leak the restricted source.
+- External-model permission is checked separately before canonical Hermes sends
+  evidence. Existing source policies are not automatically upgraded to consent.
 - Projection failure does not mutate the source claim. It remains retryable in the
   outbox and becomes a visible dead letter at the retry ceiling.
 

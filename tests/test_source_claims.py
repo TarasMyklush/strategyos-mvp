@@ -113,6 +113,7 @@ def test_source_registration_keeps_origin_separate_from_capture_channel():
         origin_category=OriginCategory.LICENSED_EXTERNAL,
         capture_method=CaptureMethod.EMAIL,
         provider_name="Provider",
+        license_policy_ref="contract:provider-1",
     )
     assert source.origin_category is OriginCategory.LICENSED_EXTERNAL
     assert source.capture_method is CaptureMethod.EMAIL

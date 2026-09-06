@@ -292,6 +292,32 @@ def answer_question(
 
     public_packet = dict(public_context_packet or {})
     public_mode = bool(public_packet)
+    if not public_mode and (summary.get("canonical_claim_status") or summary.get("tenant_context")):
+        from .claim_store import ClaimRepository
+        from .source_claims import PolicyContext, UsePurpose
+
+        policy_context = summary.get("_claim_policy_context") or {}
+        try:
+            access = ClaimRepository().run_source_access(
+                str(summary.get("_backing_run_id") or summary.get("run_id") or ""),
+                context=PolicyContext(
+                    tenant_id=str(policy_context.get("tenant_id") or ""),
+                    principal_id=str(policy_context.get("principal_id") or ""),
+                    roles=frozenset(policy_context.get("roles") or ()),
+                    business_units=frozenset(policy_context.get("business_units") or ()),
+                    purpose=UsePurpose.EXTERNAL_MODEL,
+                ),
+            )
+        except (KeyError, ValueError, RuntimeError):
+            access = {"allowed": False}
+        if not access["allowed"]:
+            return {
+                "matched": False,
+                "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+                "basis": "Source access policy — no evidence sent to an external model.",
+                "citations": [], "suggestions": [], "policy_denied": True,
+                "llm_status": {**status, "enabled": False, "reason": "Source policy denies external-model use."},
+            }
     transport_trace: list[dict[str, Any]] = []
     if not public_mode:
         from .source_search import retrieve, targeted_financial_records

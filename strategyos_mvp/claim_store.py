@@ -184,6 +184,20 @@ class ClaimRepository:
                 occurrence = replace(occurrence, tenant_id=str(tenant_id))
                 source_id = self._source_uuid(cur, tenant_id, occurrence.source_key)
                 cur.execute(
+                    "select source_hash from strategyos_evidence_documents where id = %s and tenant_id = %s",
+                    (evidence_document_id, tenant_id),
+                )
+                artifact = cur.fetchone()
+                if artifact is None or artifact[0] != occurrence.artifact_hash:
+                    raise ValueError("Evidence artifact must belong to the tenant and match the occurrence hash.")
+                if ingestion_batch_id is not None:
+                    cur.execute(
+                        "select id from strategyos_ingestion_batches where id = %s and tenant_id = %s",
+                        (ingestion_batch_id, tenant_id),
+                    )
+                    if cur.fetchone() is None:
+                        raise ValueError("Ingestion batch must belong to the occurrence tenant.")
+                cur.execute(
                     """
                     insert into strategyos_evidence_occurrences
                         (tenant_id, source_system_id, evidence_document_id, ingestion_batch_id,
@@ -341,11 +355,14 @@ class ClaimRepository:
                     )
                 for input_id in draft.input_revision_ids:
                     cur.execute(
-                        "select 1 from strategyos_claim_revisions where id = %s and tenant_id = %s",
+                        "select claim_kind from strategyos_claim_revisions where id = %s and tenant_id = %s",
                         (input_id, tenant_id),
                     )
-                    if cur.fetchone() is None:
+                    input_row = cur.fetchone()
+                    if input_row is None:
                         raise ValueError("Derived inputs must be existing claim revisions in the same tenant.")
+                    if draft.claim_kind == ClaimKind.ACTUAL and input_row[0] != ClaimKind.ACTUAL:
+                        raise ValueError("Calculated actuals cannot contain forecast, plan or unclassified inputs.")
                     cur.execute(
                         """
                         insert into strategyos_claim_dependencies
@@ -503,14 +520,76 @@ class ClaimRepository:
         )
         return version, True
 
+    def run_source_access(self, run_id: str, *, context: PolicyContext) -> dict[str, Any]:
+        """Authorize a whole-run projection before legacy prose or tables are read.
+
+        Bulk projections cannot safely honor row-level BU restrictions. They are
+        denied rather than guessing which parts of the prose are restricted.
+        Granular callers should use query()/snapshot() instead.
+        """
+        connection = self._require_connection()
+        with connection as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                tenant_id = self._tenant_uuid(cur, context.tenant_id)
+                cur.execute(
+                    """
+                    with run_sources as (
+                        select b.source_system_id from strategyos_ingestion_batches b
+                        where b.tenant_id = %s and b.run_id::text = %s
+                        union
+                        select d.source_system_id from strategyos_ingestion_batches b
+                        join strategyos_ingestion_batch_documents bd on bd.batch_id = b.id
+                        join strategyos_evidence_documents d on d.id = bd.evidence_document_id
+                        where b.tenant_id = %s and b.run_id::text = %s
+                        union
+                        select eo.source_system_id from strategyos_ingestion_batches b
+                        join strategyos_evidence_occurrences eo on eo.ingestion_batch_id = b.id
+                        where b.tenant_id = %s and b.run_id::text = %s
+                    )
+                    select ss.source_key, p.allowed_roles, p.allowed_purposes,
+                           p.allowed_business_units, p.export_allowed,
+                           p.external_model_allowed, p.quote_allowed
+                    from run_sources r
+                    join strategyos_source_systems ss on ss.id = r.source_system_id
+                    left join strategyos_source_access_policies p
+                      on p.source_system_id = ss.id and p.effective_to is null
+                    """,
+                    (tenant_id, run_id, tenant_id, run_id, tenant_id, run_id),
+                )
+                sources = [_record(cur, row) for row in cur.fetchall()]
+        reasons: set[str] = set()
+        if not sources:
+            reasons.add("source_policy_missing")
+        if context.business_units:
+            reasons.add("bulk_business_unit_scope_denied")
+        for source in sources:
+            if not context.roles.intersection(source.get("allowed_roles") or ()):
+                reasons.add("source_role_denied")
+            if context.purpose not in (source.get("allowed_purposes") or ()):
+                reasons.add("source_purpose_denied")
+            if source.get("allowed_business_units"):
+                reasons.add("bulk_business_unit_scope_denied")
+            for purpose, field in (
+                (UsePurpose.EXPORT, "export_allowed"),
+                (UsePurpose.EXTERNAL_MODEL, "external_model_allowed"),
+                (UsePurpose.QUOTATION, "quote_allowed"),
+            ):
+                if context.purpose == purpose and not source.get(field):
+                    reasons.add(f"{field}_denied")
+        return {"allowed": not reasons, "source_count": len(sources), "reasons": sorted(reasons)}
+
     def query(self, query: ClaimQuery, *, context: PolicyContext) -> list[dict[str, Any]]:
         connection = self._require_connection()
         with connection as conn:
             self._ensure_schema(conn)
             with conn.cursor() as cur:
                 tenant_id = self._tenant_uuid(cur, query.tenant_id)
+                principal_tenant_id = self._tenant_uuid(cur, context.tenant_id)
+                if str(tenant_id) != str(principal_tenant_id):
+                    raise ValueError("Query tenant must match the authenticated tenant.")
                 query = replace(query, tenant_id=str(tenant_id))
-                context = replace(context, tenant_id=str(tenant_id))
+                context = replace(context, tenant_id=str(principal_tenant_id))
                 cur.execute(
                     """
                     select r.*, f.family_key, f.assertion_namespace, f.subject_type, f.subject_key, f.metric_key,

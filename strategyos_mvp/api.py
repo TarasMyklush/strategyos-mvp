@@ -4845,6 +4845,12 @@ def _summary_with_governed_claim_snapshot(
     )
     repository = ClaimRepository()
     try:
+        source_access = repository.run_source_access(run_id, context=context)
+        if not source_access["allowed"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Source permissions do not allow this complete briefing. Use authorized claim-level views.",
+            )
         snapshot = repository.snapshot(
             f"run:{run_id}",
             context=context,
@@ -4852,11 +4858,33 @@ def _summary_with_governed_claim_snapshot(
         )
         reconciliation = repository.reconciliation(run_id, tenant_id=tenant_id)
     except KeyError:
-        result["canonical_claim_status"] = "not_materialized"
-        return result
+        raise HTTPException(
+            status_code=503,
+            detail="The governed briefing is not materialized yet. No legacy financial data was returned.",
+        ) from None
     except RuntimeError:
-        result["canonical_claim_status"] = "temporarily_unavailable"
-        return result
+        raise HTTPException(
+            status_code=503,
+            detail="The governed briefing is temporarily unavailable. Please retry.",
+        ) from None
+    if reconciliation.get("status") != "passed":
+        raise HTTPException(
+            status_code=503,
+            detail="The governed briefing has not passed reconciliation.",
+        )
+    # The legacy narrative/trend projection has no per-claim ACL boundary yet.
+    # A partial headline overlay would expose denied data through those siblings.
+    # Deny the whole briefing until all of its headline sources are accessible.
+    if snapshot.get("denied_count"):
+        raise HTTPException(
+            status_code=403,
+            detail="Your source permissions do not allow this complete briefing.",
+        )
+    if not snapshot.get("records"):
+        raise HTTPException(
+            status_code=503,
+            detail="No eligible governed headline claims are available for this briefing.",
+        )
     result["finance_kpi"] = finance_payload_from_claim_snapshot(
         result.get("finance_kpi") if isinstance(result.get("finance_kpi"), Mapping) else {},
         snapshot,
@@ -4867,6 +4895,13 @@ def _summary_with_governed_claim_snapshot(
     }
     result["claim_reconciliation"] = reconciliation
     result["canonical_claim_status"] = "ready"
+    # Server-created context, never taken from question text or client metadata.
+    result["_claim_policy_context"] = {
+        "tenant_id": context.tenant_id,
+        "principal_id": context.principal_id,
+        "roles": sorted(context.roles),
+        "business_units": sorted(context.business_units),
+    }
     return result
 
 
@@ -16323,6 +16358,10 @@ def data_qa(
             "run_id": None,
             "run_mode": "no-run",
         }
+    if isinstance(context.get("summary"), Mapping):
+        context["summary"] = _summary_with_governed_claim_snapshot(
+            context["summary"], principal=_,
+        )
     orchestrator = get_orchestrator()
 
     def _risk_payload(response_mode: str, basis: str, matched: bool, status_payload: dict[str, Any] | None = None) -> dict[str, Any]:
