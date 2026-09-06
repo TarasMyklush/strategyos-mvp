@@ -2,17 +2,53 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status, File, Form, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from .auth import require_role
 from .claim_store import ClaimRepository
-from .source_claims import ClaimDraft, ClaimKind, ClaimQuery, PolicyContext, UsePurpose
+from .source_claims import ClaimAssessment, ClaimDraft, ClaimKind, ClaimQuery, PolicyContext, UsePurpose
 
 
 router = APIRouter(prefix="/api/claims", tags=["governed-claims"])
+
+
+class ForecastReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["accepted", "rejected"]
+    scope_key: str = Field(min_length=1, max_length=160)
+    review_due_at: datetime | None = None
+    rationale: str = Field(min_length=1, max_length=2000)
+    effect_key: str = Field(min_length=1, max_length=160)
+
+
+@router.post("/{revision_id}/forecast-review")
+def review_forecast(revision_id: str, request: ForecastReviewRequest,
+                    principal: dict[str, Any] = require_role("executive", "reviewer", "tenant_admin")) -> dict[str, Any]:
+    from uuid import UUID
+    context = _policy_context(principal, UsePurpose.OPERATIONS)
+    try:
+        revision_id = str(UUID(revision_id))
+        assessment = ClaimAssessment(claim_revision_id=revision_id, assessment_type="forecast_review",
+            result=request.decision, rule_version="scoped-forecast-review-v1",
+            assessed_by=context.principal_id, assessed_at=datetime.now(UTC),
+            scope_key=request.scope_key, valid_until=request.review_due_at, reasons=(request.rationale,))
+        if not request.rationale.strip():
+            raise ValueError("A review rationale is required.")
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    try:
+        recorded = ClaimRepository().assess_claim(assessment, effect_key=request.effect_key, context=context)
+    except (KeyError, ValueError):
+        raise HTTPException(403, "This forecast or review request is not available under your current authority.") from None
+    except RuntimeError:
+        raise HTTPException(503, "Forecast review is temporarily unavailable.") from None
+    return {"status":"recorded", **recorded, "claim_kind":"forecast", "scope_key":request.scope_key,
+            "review_due_at":request.review_due_at.isoformat() if request.review_due_at else None,
+            "outbound_delivery":False, "assignment_created":False,
+            "notice":"Recorded for this scope only. This remains a forecast, not an actual."}
 
 
 @router.post("/intake/workbook")
@@ -97,6 +133,8 @@ def search_governed_claims(
     scenario_key: str | None = Query(default=None, max_length=160),
     as_of: str | None = Query(default=None, max_length=80),
     limit: int = Query(default=10, ge=1, le=50),
+    forecast_scope_key: str | None = None,
+    require_forecast_acceptance: bool = False,
     principal: dict[str, Any] = require_role("executive", "bu", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system"),
 ) -> dict[str, Any]:
     from .claim_retrieval import search_claims
@@ -105,7 +143,9 @@ def search_governed_claims(
         query = ClaimQuery(tenant_id=context.tenant_id, metric_key=metric_key,
                            purpose=purpose, as_of_at=_timestamp(as_of),
                            allowed_claim_kinds=frozenset(claim_kind),
-                           business_unit=business_unit, scenario_key=scenario_key)
+                           business_unit=business_unit, scenario_key=scenario_key,
+                           forecast_scope_key=forecast_scope_key,
+                           require_forecast_acceptance=require_forecast_acceptance)
         records = search_claims(text, query=query, context=context, limit=limit)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
@@ -160,6 +200,8 @@ def query_claims(
     business_unit: str | None = Query(default=None, max_length=160),
     scenario_key: str | None = Query(default=None, max_length=160),
     as_of: str | None = Query(default=None, max_length=80),
+    forecast_scope_key: str | None = None,
+    require_forecast_acceptance: bool = False,
     principal: dict[str, Any] = require_role(
         "executive", "bu", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system"
     ),
@@ -176,6 +218,8 @@ def query_claims(
             allowed_claim_kinds=frozenset(claim_kind),
             business_unit=business_unit,
             scenario_key=scenario_key,
+            forecast_scope_key=forecast_scope_key,
+            require_forecast_acceptance=require_forecast_acceptance,
         )
         records = ClaimRepository().query(query, context=context)
     except ValueError as exc:

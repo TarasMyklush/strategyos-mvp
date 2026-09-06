@@ -129,6 +129,28 @@ idempotent on replay.
 
 ## Projection delivery
 
+### Scoped forecast review
+
+`POST /api/claims/{revision_id}/forecast-review` records an authenticated
+executive/reviewer/tenant-admin decision for one exact forecast revision and
+one explicitly named analysis scope. Source operations permissions are checked
+again in the same transaction. The actor and assessment time come from the
+runtime, not the request payload. Revised, withdrawn or expired forecasts cannot
+receive new acceptance. Retries use an actor-bound command fingerprint and do
+not create duplicate reviews or projection events.
+
+Acceptance never changes the claim kind. A missing review deadline is recorded
+as missing, and that forecast is ineligible for accepted-only analysis. A passed
+deadline, different scope, conflicting review, or future review likewise cannot
+satisfy the query. Both exact and semantic queries accept the same explicit
+`forecast_scope_key` and `require_forecast_acceptance` contract. Inspection can
+still show an unreviewed forecast with its qualifications. Review events enqueue
+the affected claim and calculated descendants for projection refresh.
+
+The evidence workspace offers compact review controls only when the current
+source policy and authenticated role permit review. Recording is local to the
+ledger: no assignment, email, external delivery or source-system update occurs.
+
 ### Explicit mixed-workbook interpretation
 
 Operators can use `/claims/intake` and `POST /api/claims/intake/workbook` to preview

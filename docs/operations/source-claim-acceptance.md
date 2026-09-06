@@ -49,6 +49,8 @@ It is not yet a full per-claim rewrite of every legacy presentation component.
 | Mixed workbook types, ambiguous cells, missing values, exact row locators and mapping revisions | `test_tabular_claims.py` |
 | Atomic batch rollback, artifact binding, idempotent receipt and current-policy replay checks | `test_tabular_claims_postgres_e2e.py` |
 | Multipart preview-first endpoint and operator screen | `test_workbook_intake_api.py`; browser acceptance required |
+| Scoped forecast acceptance remains forecast, with missing/expired review dates failing closed | `test_forecast_review.py`, `test_forecast_review_postgres_e2e.py` |
+| Review actor/time runtime binding, no self-authorization payload and no foreign-claim existence leak | `test_forecast_review_api.py` |
 | Independent claim workspace, safe source rendering and explicit claim types | `test_claim_workspace.py`; browser acceptance required |
 
 Run the complete suite against dedicated disposable PostgreSQL, Neo4j and Qdrant,

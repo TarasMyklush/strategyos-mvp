@@ -33,6 +33,7 @@ def test_explicit_kinds_and_zero_are_preserved_without_inference():
     assert [str(d.claim_kind) for d in result["drafts"]] == ["actual", "plan", "forecast"]
     assert [d.value_numeric for d in result["drafts"]] == [0, 5, -3]
     assert result["issues"] == []
+    assert all(d.business_unit == "retail" for d in result["drafts"])
 
 
 @pytest.mark.parametrize("changes,reason", [

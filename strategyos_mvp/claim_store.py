@@ -303,7 +303,8 @@ class ClaimRepository:
                             "period_end": str(d.period_end) if d.period_end else None,
                             "locator": d.metadata["source_locator"]} for d in drafts]}
                 contract = mapping.model_dump(mode="json")
-                key = stable_key("table-intake", tenant, occurrence_key, source_hash, contract)
+                key = stable_key("table-intake", tenant, occurrence_key, source_hash, contract,
+                                 result["mapping_engine_version"])
                 cur.execute("select pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,))
                 cur.execute("select id, result from strategyos_claim_intake_receipts where tenant_id=%s and effect_key=%s",
                     (tenant, key))
@@ -534,7 +535,8 @@ class ClaimRepository:
         if missing or not policy_allows(context=context, claim=claim, source_policies=policies).eligible:
             raise ValueError("Source policy does not authorize this claim intake.")
 
-    def assess_claim(self, assessment: ClaimAssessment, *, effect_key: str) -> dict[str, Any]:
+    def assess_claim(self, assessment: ClaimAssessment, *, effect_key: str,
+                     context: PolicyContext | None = None) -> dict[str, Any]:
         if not effect_key.strip():
             raise ValueError("effect_key is required for idempotent assessment writes.")
         connection = self._require_connection()
@@ -549,6 +551,43 @@ class ClaimRepository:
                 if row is None:
                     raise KeyError("Claim revision not found.")
                 tenant_id = row[0]
+                fingerprint = assessment.fingerprint
+                if context is not None:
+                    resolved = str(self._tenant_uuid(cur, context.tenant_id))
+                    if (resolved != str(tenant_id) or context.purpose != UsePurpose.OPERATIONS
+                            or not context.roles.intersection({"executive", "reviewer", "tenant_admin"})
+                            or assessment.assessment_type != "forecast_review"
+                            or assessment.assessed_by != context.principal_id):
+                        raise ValueError("Forecast review requires authenticated review authority in this tenant.")
+                    context = replace(context, tenant_id=resolved)
+                    cur.execute("""select r.*, f.family_key, f.assertion_namespace, f.subject_type,
+                        f.subject_key, f.metric_key, f.business_unit, f.dimensions, f.period_start,
+                        f.period_end, f.scenario_key from strategyos_claim_revisions r
+                        join strategyos_claim_families f on f.id=r.claim_family_id
+                        where r.id=%s""", (assessment.claim_revision_id,))
+                    data = _record(cur, cur.fetchone())
+                    data["source_occurrence_keys"] = self._occurrence_keys(cur, assessment.claim_revision_id)
+                    data["input_revision_ids"] = self._input_revision_ids(cur, assessment.claim_revision_id)
+                    claim = self._hydrate_claim(data)
+                    if claim.draft.claim_kind != "forecast":
+                        raise ValueError("Only a forecast can receive scoped forecast acceptance.")
+                    self._authorize_intake(cur, claim.draft, claim.revision_id, context)
+                    cur.execute("""select exists(select 1 from strategyos_claim_revisions
+                        where claim_family_id=%s and revision_number>%s)""",
+                        (data["claim_family_id"],claim.revision_number))
+                    if cur.fetchone()[0] or (claim.draft.valid_until and claim.draft.valid_until <= datetime.now(UTC)):
+                        raise ValueError("A revised or expired forecast cannot receive new acceptance.")
+                    cur.execute("""select exists(select 1 from strategyos_claim_assessments
+                        where claim_revision_id=%s and assessment_type='lifecycle'
+                          and result in ('retracted','rejected','superseded') and assessed_at<=now())""",
+                        (claim.revision_id,))
+                    if cur.fetchone()[0]:
+                        raise ValueError("Withdrawn evidence cannot receive forecast acceptance.")
+                    # HTTP retries receive a new server timestamp, but represent
+                    # the same actor-authored command. Never trust a client time.
+                    fingerprint = stable_key("forecast-review-command", claim.revision_id,
+                        assessment.result, assessment.scope_key, assessment.valid_until,
+                        assessment.reasons, assessment.assessed_by, assessment.rule_version)
                 cur.execute(
                     """
                     select id, payload_fingerprint
@@ -559,7 +598,7 @@ class ClaimRepository:
                 )
                 existing = cur.fetchone()
                 if existing is not None:
-                    if str(existing[1]) != assessment.fingerprint:
+                    if str(existing[1]) != fingerprint:
                         raise ValueError(
                             "Idempotency effect_key cannot be reused for a different assessment."
                         )
@@ -573,8 +612,8 @@ class ClaimRepository:
                     """
                     insert into strategyos_claim_assessments
                         (tenant_id, claim_revision_id, assessment_type, result, rule_version,
-                         assessed_by, assessed_at, scope_key, reasons, payload_fingerprint, effect_key)
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
+                         assessed_by, assessed_at, scope_key, reasons, payload_fingerprint, effect_key, valid_until)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
                     returning id
                     """,
                     (
@@ -587,11 +626,23 @@ class ClaimRepository:
                         assessment.assessed_at,
                         assessment.scope_key,
                         _json(list(assessment.reasons)),
-                        assessment.fingerprint,
+                        fingerprint,
                         effect_key,
+                        assessment.valid_until,
                     ),
                 )
                 assessment_id = cur.fetchone()[0]
+                cur.execute("""with recursive affected(id) as (
+                    select %s::uuid union
+                    select d.derived_claim_revision_id from strategyos_claim_dependencies d
+                    join affected a on d.input_claim_revision_id=a.id)
+                    insert into strategyos_claim_projection_outbox
+                      (tenant_id,claim_revision_id,projection_type,operation,payload,idempotency_key)
+                    select %s,a.id,p.kind,'upsert',jsonb_build_object('assessment_id',%s::text),
+                           'assessment:' || %s::text || ':' || a.id::text || ':' || p.kind
+                    from affected a cross join (values ('graph'),('vector'),('cache')) p(kind)
+                    on conflict(tenant_id,projection_type,idempotency_key) do nothing""",
+                    (assessment.claim_revision_id, tenant_id, str(assessment_id), str(assessment_id)))
             conn.commit()
         return {
             "assessment_id": str(assessment_id),
@@ -815,13 +866,19 @@ class ClaimRepository:
                         assessments=assessments,
                     )
                     if eligibility.eligible:
-                        results.append(
-                            provenance_view(
+                        record = provenance_view(
                                 claim,
                                 source_details=source_details,
                                 assessments=assessments,
+                                analysis_at=query.as_of_at,
+                                forecast_scope_key=query.forecast_scope_key,
                             )
-                        )
+                        record["forecast_review_allowed"] = (
+                            claim.draft.claim_kind == "forecast"
+                            and bool(context.roles.intersection({"executive", "reviewer", "tenant_admin"}))
+                            and policy_allows(context=replace(context, purpose=UsePurpose.OPERATIONS),
+                                claim=claim, source_policies=policies).eligible)
+                        results.append(record)
             conn.commit()
         return results
 
@@ -1351,7 +1408,7 @@ class ClaimRepository:
         cur.execute(
             """
             select claim_revision_id, assessment_type, result, rule_version,
-                   assessed_by, assessed_at, reasons, scope_key
+                   assessed_by, assessed_at, reasons, scope_key, valid_until
             from strategyos_claim_assessments
             where claim_revision_id = %s
               and (%s::timestamptz is null or assessed_at <= %s
@@ -1373,6 +1430,7 @@ class ClaimRepository:
                     assessed_at=item["assessed_at"],
                     reasons=tuple(item.get("reasons") or []),
                     scope_key=item.get("scope_key"),
+                    valid_until=item.get("valid_until"),
                 )
             )
         return out

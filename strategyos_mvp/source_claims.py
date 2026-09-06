@@ -304,8 +304,10 @@ class ClaimDraft:
         # Preserve legacy fingerprints. A newly versioned mapping changes the
         # extraction revision, not the assertion family or its business meaning.
         if self.metadata.get("mapping_key") and self.metadata.get("mapping_version"):
-            return stable_key("mapped-claim-revision", base,
+            mapped = stable_key("mapped-claim-revision", base,
                 self.metadata["mapping_key"], self.metadata["mapping_version"])
+            engine = self.metadata.get("mapping_engine_version")
+            return stable_key("mapped-engine-revision", mapped, engine) if engine else mapped
         return base
 
 
@@ -337,6 +339,7 @@ class ClaimAssessment:
     reasons: tuple[str, ...] = ()
     scope_key: str | None = None
     evidence_occurrence_keys: tuple[str, ...] = ()
+    valid_until: datetime | None = None
 
     def __post_init__(self) -> None:
         for name in ("claim_revision_id", "assessment_type", "result", "rule_version", "assessed_by"):
@@ -344,10 +347,16 @@ class ClaimAssessment:
                 raise ValueError(f"{name} is required.")
         if self.assessed_at.tzinfo is None:
             raise ValueError("assessed_at must include a timezone.")
+        if self.valid_until is not None:
+            if self.valid_until.tzinfo is None or self.valid_until <= self.assessed_at:
+                raise ValueError("Review expiry must be timezone-aware and after its assessment.")
+        if self.assessment_type == "forecast_review":
+            if not _text(self.scope_key) or self.result not in {"accepted", "rejected"}:
+                raise ValueError("Forecast review requires an explicit scope and accepted/rejected decision.")
 
     @property
     def fingerprint(self) -> str:
-        return stable_key(
+        base = stable_key(
             "claim-assessment",
             self.claim_revision_id,
             self.assessment_type,
@@ -359,6 +368,7 @@ class ClaimAssessment:
             self.scope_key,
             self.evidence_occurrence_keys,
         )
+        return stable_key("expiring-assessment", base, self.valid_until) if self.valid_until else base
 
 
 @dataclass(frozen=True)
@@ -424,6 +434,8 @@ class ClaimQuery:
     business_unit: str | None = None
     scenario_key: str | None = None
     require_traceability: bool = True
+    require_forecast_acceptance: bool = False
+    forecast_scope_key: str | None = None
 
     def __post_init__(self) -> None:
         if not _text(self.tenant_id):
@@ -439,6 +451,10 @@ class ClaimQuery:
         )
         if not self.allowed_claim_kinds or ClaimKind.UNKNOWN in self.allowed_claim_kinds:
             raise ValueError("Queries must request explicit, non-unknown claim kinds.")
+        if self.require_forecast_acceptance and not _text(self.forecast_scope_key):
+            raise ValueError("Accepted forecast use requires an explicit analysis scope.")
+        if self.forecast_scope_key is not None and len(self.forecast_scope_key) > 160:
+            raise ValueError("Forecast review scope is limited to 160 characters.")
 
 
 @dataclass(frozen=True)
@@ -490,6 +506,7 @@ def claim_is_eligible(
     source_policies: Iterable[SourceAccessPolicy],
     assessments: Iterable[ClaimAssessment] = (),
 ) -> EligibilityResult:
+    assessments = list(assessments)
     reasons: list[str] = []
     if query.purpose != context.purpose:
         reasons.append("purpose_mismatch")
@@ -522,7 +539,48 @@ def claim_is_eligible(
             reasons.append(f"lifecycle:{assessment.result}")
     access = policy_allows(context=context, claim=claim, source_policies=source_policies)
     reasons.extend(access.reasons)
+    if claim.draft.claim_kind == ClaimKind.FORECAST and query.require_forecast_acceptance:
+        review = forecast_use_status(claim, assessments=assessments,
+            scope_key=query.forecast_scope_key, at=query.as_of_at)
+        if not review["eligible_for_scoped_use"]:
+            reasons.append("forecast_review:" + review["status"])
     return EligibilityResult(not reasons, tuple(sorted(set(reasons))))
+
+
+def forecast_use_status(claim: ClaimRevision, *, assessments: Iterable[ClaimAssessment],
+                        scope_key: str | None, at: datetime) -> dict[str, Any]:
+    """Review is scoped permission to use an estimate, never a promotion to fact."""
+    base = {"claim_kind": str(claim.draft.claim_kind), "scope_key": scope_key,
+            "eligible_for_scoped_use": False, "review_due_at": None}
+    if claim.draft.claim_kind != ClaimKind.FORECAST:
+        return {**base, "status": "not_a_forecast"}
+    assessments = list(assessments)
+    if any(a.claim_revision_id == claim.revision_id and a.assessment_type == "lifecycle"
+           and a.result in {"retracted", "rejected", "superseded"}
+           and a.assessed_at <= datetime.now(UTC) for a in assessments):
+        return {**base, "status": "forecast_withdrawn"}
+    if claim.draft.valid_until and claim.draft.valid_until <= at:
+        return {**base, "status": "forecast_expired"}
+    if not scope_key:
+        return {**base, "status": "scope_required"}
+    reviews = [a for a in assessments if a.claim_revision_id == claim.revision_id
+        and a.assessment_type == "forecast_review" and a.scope_key == scope_key and a.assessed_at <= at]
+    if not reviews:
+        return {**base, "status": "not_reviewed_for_scope"}
+    latest_at = max(a.assessed_at for a in reviews)
+    latest = [a for a in reviews if a.assessed_at == latest_at]
+    if len({(a.result, a.valid_until) for a in latest}) != 1:
+        return {**base, "status": "conflicting_reviews"}
+    review = latest[0]
+    base.update(review_due_at=review.valid_until.isoformat() if review.valid_until else None,
+                reviewed_by=review.assessed_by, reviewed_at=review.assessed_at.isoformat())
+    if review.result != "accepted":
+        return {**base, "status": "rejected_for_scope"}
+    if review.valid_until is None:
+        return {**base, "status": "review_date_not_supplied"}
+    if review.valid_until <= at:
+        return {**base, "status": "review_expired"}
+    return {**base, "status": "accepted_for_scope", "eligible_for_scoped_use": True}
 
 
 def provenance_view(
@@ -530,9 +588,12 @@ def provenance_view(
     *,
     source_details: Mapping[str, Mapping[str, Any]] | None = None,
     assessments: Iterable[ClaimAssessment] = (),
+    analysis_at: datetime | None = None,
+    forecast_scope_key: str | None = None,
 ) -> dict[str, Any]:
     draft = claim.draft
     source_details = source_details or {}
+    assessments = list(assessments)
     assessment_items = [
         {
             "type": item.assessment_type,
@@ -541,6 +602,7 @@ def provenance_view(
             "assessed_by": item.assessed_by,
             "assessed_at": item.assessed_at.isoformat(),
             "scope_key": item.scope_key,
+            "valid_until": item.valid_until.isoformat() if item.valid_until else None,
             "reasons": list(item.reasons),
         }
         for item in assessments
@@ -571,6 +633,9 @@ def provenance_view(
         },
         "author": draft.author_identity,
         "scenario": draft.scenario_key,
+        "forecast_review": forecast_use_status(claim, assessments=assessments,
+            scope_key=forecast_scope_key, at=analysis_at or datetime.now(UTC))
+            if draft.claim_kind == ClaimKind.FORECAST else None,
         "traceability": claim.traceability,
         "sources": [
             {"occurrence_key": key, **dict(source_details.get(key) or {})}
@@ -583,7 +648,7 @@ def provenance_view(
         "assumptions": list(draft.assumptions),
         "interpretation": {
             key: draft.metadata[key] for key in (
-                "mapping_key", "mapping_version", "mapping_rationale", "recorded_by", "quarantine_reasons"
+                "mapping_key", "mapping_version", "mapping_engine_version", "mapping_rationale", "recorded_by", "quarantine_reasons"
             ) if key in draft.metadata
         },
         "formula": (

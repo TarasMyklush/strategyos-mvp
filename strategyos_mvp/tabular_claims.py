@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .source_claims import ClaimDraft, ClaimKind, explicit_claim_kind
 
+INTERPRETER_VERSION = "2"
+
 
 class ColumnClaimMapping(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -151,21 +153,26 @@ def map_table(rows: list[dict[str, Any]], mapping: TableClaimMapping, *,
             if reasons:
                 kind = ClaimKind.UNKNOWN
                 issues.extend({"locator": locator, "reason": reason, "disposition": "quarantined"} for reason in reasons)
+            business_unit = str(row.get(mapping.business_unit_column) or "").strip() or None
+            if mapping.subject_type in {"business_unit", "bu"} and not mapping.business_unit_column:
+                business_unit = subject
             drafts.append(ClaimDraft(tenant_id=tenant_id,
                 assertion_namespace=f"table:{source_key}:{mapping.mapping_key}",
                 subject_type=mapping.subject_type, subject_key=subject,
                 metric_key=column.metric_key, claim_kind=kind, production_method="extracted",
                 value_numeric=value, value_text=str(raw) if value is None else None,
                 unit=column.unit, scale=column.scale, currency=column.currency,
-                business_unit=str(row.get(mapping.business_unit_column) or "").strip() or None,
+                business_unit=business_unit,
                 period_start=start, period_end=end, author_identity=author,
                 scenario_key=str(row.get(mapping.scenario_column) or "").strip() or None,
                 dimensions={"source_column": column.column, "source_sheet": mapping.sheet},
                 source_occurrence_keys=(occurrence_key,),
                 metadata={"mapping_key": mapping.mapping_key, "mapping_version": mapping.mapping_version,
+                    "mapping_engine_version": INTERPRETER_VERSION,
                     "mapping_rationale": mapping.rationale, "recorded_by": recorded_by,
                     "source_locator": locator, "quarantine_reasons": reasons}))
-    return {"drafts": drafts, "issues": issues, "source_cell_count": len(rows) * len(mapping.columns),
+    return {"drafts": drafts, "issues": issues, "mapping_engine_version": INTERPRETER_VERSION,
+            "source_cell_count": len(rows) * len(mapping.columns),
             "claim_count": len(drafts), "missing_count": missing,
             "quarantined_count": sum(draft.claim_kind == ClaimKind.UNKNOWN for draft in drafts),
             "unmapped_count": len(rows) * len(mapping.columns) - len(drafts)}
