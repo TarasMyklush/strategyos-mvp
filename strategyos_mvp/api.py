@@ -7497,6 +7497,15 @@ def _enforce_artifact_access(
         )
 
     restriction_reasons = _artifact_restriction_reasons(artifact_key, artifact_path)
+    try:
+        _require_run_source_use(run_id, principal, UsePurpose.EXPORT)
+    except HTTPException as exc:
+        _audit_artifact_access(
+            principal=principal, artifact_key=artifact_key, artifact_path=resolved,
+            scope=scope, run_id=run_id, checkpoint_id=checkpoint_id,
+            allowed=False, restriction_reasons=["source_policy"], detail=str(exc.detail),
+        )
+        raise
     if not restriction_reasons:
         _audit_artifact_access(
             principal=principal,
@@ -10433,6 +10442,25 @@ def _principal_tenant_id(principal: Mapping[str, Any]) -> str:
     return str(principal.get("tenant_id") or CONFIG.tenant_slug)
 
 
+def _require_run_source_use(run_id: str, principal: Mapping[str, Any], purpose: UsePurpose) -> None:
+    """Shared source authorization for legacy bulk read/export routes."""
+    try:
+        access = ClaimRepository().run_source_access(
+            run_id,
+            context=PolicyContext(
+                tenant_id=_principal_tenant_id(principal),
+                principal_id=str(principal.get("subject") or "authenticated"),
+                roles=frozenset({str(principal.get("role") or "")}),
+                purpose=purpose,
+                business_units=frozenset(principal.get("business_units") or ()),
+            ),
+        )
+    except (KeyError, ValueError, RuntimeError):
+        raise HTTPException(503, "Source authorization is unavailable; no file was returned.") from None
+    if not access["allowed"]:
+        raise HTTPException(403, "Source policy does not permit this read or export.")
+
+
 @app.get("/executive/files")
 def executive_review_files(
     principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
@@ -10497,6 +10525,11 @@ def download_executive_review_file(
         path = resolve_uploaded_review_file(_principal_tenant_id(principal), file_id)
         filename = str(matching[0].get("filename") or path.name)
     else:
+        _require_run_source_use(
+            str((summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or ""),
+            principal,
+            UsePurpose.EXECUTIVE_BRIEFING if normalized_disposition == "inline" else UsePurpose.EXPORT,
+        )
         source_pack_id = _latest_source_pack_id(summary)
         if not source_pack_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found.")

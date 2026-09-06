@@ -1,5 +1,6 @@
 import os
 import json
+import pytest
 from dataclasses import replace
 from pathlib import Path
 
@@ -13,6 +14,16 @@ import strategyos_mvp.run_registry as run_registry_module
 import strategyos_mvp.state_store as state_store
 import strategyos_mvp.storage as storage
 from strategyos_mvp.config import load_config
+
+
+@pytest.fixture(autouse=True)
+def authorized_sources_for_artifact_routing_unit_tests(monkeypatch):
+    """Artifact fixtures test path/reviewer rules, independently of the ledger.
+
+    Real source denials are covered in test_governed_claim_adoption; these local
+    file fixtures intentionally have no canonical ingestion batch.
+    """
+    monkeypatch.setattr(api_module, "_require_run_source_use", lambda *args: None)
 
 
 def _artifact_access_audit_lines(output_root: Path) -> list[dict]:

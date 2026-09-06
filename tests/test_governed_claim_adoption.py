@@ -143,3 +143,42 @@ def test_chat_entrypoints_do_not_bypass_canonical_source_gate(monkeypatch, endpo
         assert response.status_code == expected
     finally:
         _restore_env(original)
+
+
+def test_raw_file_export_enforces_source_export_permission(monkeypatch):
+    from strategyos_mvp.source_claims import UsePurpose
+
+    class Repository:
+        def run_source_access(self, run_id, *, context):
+            assert run_id == "run-1"
+            assert context.purpose == UsePurpose.EXPORT
+            return {"allowed": False}
+
+    monkeypatch.setattr(api, "ClaimRepository", Repository)
+    monkeypatch.setattr(api, "_latest_summary", lambda: {"run_id": "run-1"})
+    with pytest.raises(HTTPException) as error:
+        api.download_executive_review_file(
+            "file-1", principal={"tenant_id": "tenant-1", "role": "executive"},
+        )
+    assert error.value.status_code == 403
+
+
+def test_artifact_preview_source_denial_is_audited(monkeypatch, tmp_path):
+    from dataclasses import replace
+    artifact = tmp_path / "summary.json"
+    artifact.write_text("{}")
+    monkeypatch.setattr(api, "CONFIG", replace(api.CONFIG, output_root=tmp_path))
+    calls = []
+    monkeypatch.setattr(api, "_audit_artifact_access", lambda **event: calls.append(event))
+    class Repository:
+        def run_source_access(self, *args, **kwargs):
+            return {"allowed": False}
+    monkeypatch.setattr(api, "ClaimRepository", Repository)
+    with pytest.raises(HTTPException) as error:
+        api._enforce_artifact_access(
+            principal={"tenant_id": "tenant-1", "role": "operator"},
+            artifact_key="summary", artifact_path=artifact, scope="run", run_id="run-1",
+        )
+    assert error.value.status_code == 403
+    assert calls[0]["allowed"] is False
+    assert calls[0]["restriction_reasons"] == ["source_policy"]

@@ -29,12 +29,14 @@ It is not yet a full per-claim rewrite of every legacy presentation component.
 | Evidence artifact tenant/hash validation | `test_cross_source_postgres_e2e.py` |
 | Source revocation affects granular and bulk reads | `test_cross_source_postgres_e2e.py` |
 | Export, external-model and quotation permissions | `test_cross_source_claims.py`, `test_cross_source_postgres_e2e.py` |
+| Raw source downloads and artifact previews enforce export policy and audit denial | `test_governed_claim_adoption.py` |
 | No external model request on denied/unavailable source policy | `test_cross_source_claims.py` |
 | Missing snapshot/reconciliation cannot return legacy financial values | `test_governed_claim_adoption.py` |
 | Both `/qa` and `/assistant/chat` enforce the boundary | `test_governed_claim_adoption.py` |
 | Real Neo4j projection and idempotency across source categories | `test_cross_source_postgres_e2e.py` |
 | Projection retries, leases, cache and vector serialization | `test_claim_projection.py`, `test_claim_store_postgres_e2e.py` |
 | Public-web untrusted label, provider/license, forecast and units in audit UI | `executive.js:governedClaimAuditMarkup`; browser acceptance required |
+| Failed briefing refresh hides stale views and offers Retry | `test_frontend_shell.py` |
 
 Run the complete suite against dedicated disposable PostgreSQL and Neo4j:
 
